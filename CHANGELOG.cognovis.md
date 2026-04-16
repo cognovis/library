@@ -5,6 +5,30 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ---
 
+## [v2026.04.2] - 2026-04-16
+
+### Added
+
+- `docs/research/codex-prompts.md` (324 lines): CL-qzw research on Codex Layer 3
+  (prompts/skills) parity. Scope expanded during research to cover all 4 layers +
+  Hooks + Observability because findings cross-cut multiple epic deliverables.
+  Key findings:
+  - Codex modern Layer 3 primitive is Skills (`.agents/skills/<name>/SKILL.md`),
+    not custom prompts (`~/.codex/prompts/` is deprecated).
+  - Codex has 3 hook events vs Claude Code's 13 — observability is asymmetric.
+  - No `--bead` flag in Codex CLI; `cdx` wrapper must inject bead context via prompt.
+  - `tools:` frontmatter is Claude-Code-only; Codex uses coarser `sandbox_mode`.
+  - Go/No-Go confirmed for CL-6hg, CL-tap, CL-06x.
+- New bead CL-7hp: Adapt indydevdan multi-agent observability pattern (P2, blocked
+  by CL-xcm + CL-06x).
+- Research notes injected into CL-6hg, CL-tap, CL-06x, CL-xcm.
+
+### Changed
+
+- `.gitignore`: Added `.claude/anatomy.json` (tool-internal open-brain cache).
+
+---
+
 ## [v2026.04.1] - 2026-04-16
 
 ### Added
