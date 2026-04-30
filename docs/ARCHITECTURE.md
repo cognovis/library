@@ -15,7 +15,7 @@ Each layer builds on the one below (terminology from disler / IndyDevDan):
 | # | Layer | Purpose | Claude Code path | Codex path |
 |---|-------|---------|------------------|------------|
 | 1 | **Skills** | Capability | `.claude/skills/<name>/SKILL.md` | `.agents/skills/<name>/SKILL.md` |
-| 2 | **Agents** | Scale + parallelism | `.claude/agents/<name>.md` (YAML frontmatter) | `~/.codex/agents/<name>.toml` (TOML) |
+| 2 | **Agents** | Scale + parallelism | `.claude/agents/<name>.md` (YAML frontmatter) | `.codex/agents/<name>.toml` (TOML) — per-repo; `~/.codex/agents/<name>.toml` is global/personal |
 | 3 | **Prompts** | Orchestration | `.claude/commands/<name>.md` (slash cmds) | TBD — research bead `CL-qzw` |
 | 4 | **Justfile** | Terminal access (non-interactive) | `claude --dangerously-skip-permissions ...` | `codex exec ...` |
 
@@ -150,12 +150,12 @@ required.
 | Primitive | Claude Code | Codex CLI | Pi | OpenCode | Portability |
 |-----------|-------------|-----------|-----|----------|-------------|
 | **Skill** | `.claude/skills/<name>/SKILL.md` | `.agents/skills/<name>/SKILL.md` | own skill loader | TBD | **Portable** — shared SKILL.md format (Open Agent Skills Standard); only install path differs |
-| **Agent** | YAML frontmatter `.claude/agents/<name>.md` | TOML `~/.codex/agents/<name>.toml` | N/A | TBD | **Per-harness translation** — same concept, divergent formats; translation spec: bead `CL-11p` |
+| **Agent** | YAML frontmatter `.claude/agents/<name>.md` | TOML `.codex/agents/<name>.toml` (per-repo; `~/.codex/agents/<name>.toml` for global/personal) | N/A | TBD | **Per-harness translation** — same concept, divergent formats; translation spec: bead `CL-11p` |
 | **Command / Prompt** | `.claude/commands/<name>.md` (slash cmds) | Deprecated in Codex — use skills instead | N/A | TBD | **Per-harness** — Claude Code has first-class slash commands; Codex deprecated custom prompts (bead `CL-qzw`) |
-| **Guardrail / Hook** | `hooks.json` + 13 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | TBD | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
+| **Guardrail / Hook** | `.claude/settings.json` `hooks` section (scripts in `.claude/hooks/`) + 13 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | TBD | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
 | **Standard** | SessionStart hook injection via `standards/index.yml` | Future: `.agents/standards/<name>.md` file convention | TBD | TBD | **Library-managed** — not an invocation primitive; injected as context by the harness |
-| **MCP-Server** | Per-harness config (`mcp_servers` in settings.json) | Per-harness config | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config is not portable |
-| **Plugin** | Bundle installed via `/install-plugin` | N/A (no plugin mechanism yet) | N/A | TBD | **Claude Code only** today — atomically installs skills + commands + hooks |
+| **MCP-Server** | `mcpServers` in `.mcp.json` (or `--mcp-config`) | `mcp_servers` TOML in `~/.codex/config.toml` | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config syntax is not portable |
+| **Plugin** | Bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | TBD | **Per-harness** — both harnesses now support plugins; bundle formats and install commands differ |
 | **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
 
 **Reading the table:**
