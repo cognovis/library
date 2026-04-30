@@ -70,10 +70,10 @@ Every Claude Code frontmatter field vs. its Codex TOML counterpart.
 **1:1 (lossless):**
 - `name`, `description`, body → `developer_instructions`
 
-**Lossy — Claude Claude Code → Codex (forward):**
+**Lossy — Claude Code → Codex (forward):**
 - `tools` → `sandbox_mode` (granular → coarse)
 - `disallowedTools` → `sandbox_mode` (no direct equivalent)
-- `mcpServers` → (dropped; noted as comment — global inheritance)
+- `mcpServers` → comment block only (no enforcement; global `config.toml` inheritance assumed)
 - `color` → (dropped silently)
 - `system_prompt_file` → (must inline; file reference lost)
 
@@ -149,7 +149,7 @@ Split at `---` delimiters:
 - Frontmatter: YAML between first and second `---`
 - Body: Markdown text after second `---`
 
-If `system_prompt_file` is set in frontmatter, read the referenced file — that is the authoritative body content, not the inline stub.
+If `system_prompt_file` is set in frontmatter, read the referenced file — that is the authoritative body content, not the inline stub. If the referenced file is not readable at translation time, fall back to the inline body content. Log a warning that the external file reference semantics are lost.
 
 ### Step 2: Map direct fields
 
@@ -161,11 +161,11 @@ If `system_prompt_file` is set in frontmatter, read the referenced file — that
 
 ### Step 3: Map model
 
-Use the following lookup table. INFERRED — no official mapping exists; this reflects observed practice across the three production agents:
+Use the following lookup table. INFERRED — no official mapping exists. The `sonnet → gpt-5.4` mapping is observed in three production agents; `haiku` and `opus` mappings are best-guess and have no observed precedent:
 
 | Claude Code `model` | Codex `model` | Notes |
 |--------------------|--------------|-------|
-| `haiku` | `gpt-5.4` (or `gpt-5.5`) | Haiku = lightweight; map to fastest available Codex model |
+| `haiku` | `gpt-5.4` | Haiku = lightweight; mapped to `gpt-5.4` (same as sonnet). This reflects current practice — may be revisited as Codex model identifiers stabilize and a distinct lightweight model becomes available. |
 | `sonnet` | `gpt-5.4` | Default production model |
 | `opus` | `gpt-5.5` | Heavy reasoning tasks; map to most capable Codex model |
 | *(unset)* | `gpt-5.4` | Default |
@@ -289,11 +289,11 @@ Extract all fields. Identify which were originally derived vs. extended.
 
 ### Step 3: Reverse-map model
 
-| Codex `model` | Claude Code `model` |
-|--------------|-------------------|
-| `gpt-5.4` | `sonnet` (default) |
-| `gpt-5.5` | `opus` |
-| *(any other)* | `sonnet` (default; emit warning) |
+| Codex `model` | Claude Code `model` | Notes |
+|--------------|-------------------|-------|
+| `gpt-5.4` | `sonnet` (default) | Both `haiku` and `sonnet` forward to `gpt-5.4`, so the reverse is always `sonnet`. A `haiku` selection can only be preserved if `codex_model: haiku` is set in the extended frontmatter. |
+| `gpt-5.5` | `opus` | |
+| *(any other)* | `sonnet` (default; emit warning) | |
 
 ### Step 4: Handle Codex-only fields
 
@@ -379,14 +379,14 @@ optimized for speed and result quality over token efficiency.
 - `color`: cyan (UI hint)
 - `mcpServers`: 4 servers listed
 
-**Note:** The body present in the `.md` file IS the system prompt — `system_prompt_file` field appears to reference an alternate (possibly personalized) system prompt path. For the translation sample, the inline body is treated as the authoritative system prompt, as it is what is actually deployed in the plugin cache.
+**Note:** The body present in the `.md` file is a candidate system prompt — `system_prompt_file` references an alternate (possibly personalized) path at `malte/system-prompts/agents/researcher.md`. Because that file is not accessible in this translation context, the inline body is used as a fallback per the algorithm's fallback rule (§4 Step 1). In production, the external file should be resolved first.
 
 ### 6b. Translation Walkthrough (Step by Step)
 
 **Step 1 — Parse:**
 - Frontmatter: parsed above
 - Body: "# Research Agent\n\nSpecialized agent for web research tasks..." (full content)
-- No external file available at `malte/system-prompts/agents/researcher.md` in this context → use inline body
+- External file `malte/system-prompts/agents/researcher.md` is not accessible in this translation context → fall back to inline body per §4 Step 1 fallback rule; warning: external file reference semantics are lost
 
 **Step 2 — Direct fields:**
 - `name: researcher` → `name = "researcher"`
@@ -407,7 +407,7 @@ optimized for speed and result quality over token efficiency.
 **Step 6 — Codex-only fields:**
 - No `codex_*` fields in source frontmatter
 - `model_reasoning_effort`: sonnet maps to `high` (INFERRED default)
-- `nickname_candidates`: generated from name + description → `["research", "web research", "investigate"]`
+- `nickname_candidates`: generated from name + description → `["research", "web research", "investigate", "research topic"]`
 
 **Step 7 — Dropped fields:**
 - `color: cyan` — dropped silently
@@ -570,6 +570,8 @@ This agent handles research ONLY. It does not:
 
 2. **`model_reasoning_effort`.** Chain-of-thought depth control has no Claude Code equivalent field. Claude Code manages reasoning depth via model selection (`sonnet` vs `opus`) rather than a separate effort parameter. NORMATIVE — confirmed in Codex documentation.
 
+3. **`haiku` → `gpt-5.4` → `sonnet` round-trip model loss.** Because both `haiku` and `sonnet` forward-translate to `gpt-5.4`, the reverse mapping always produces `sonnet`. An agent originally configured with `model: haiku` silently loses its model selection on round-trip. This can only be prevented if `codex_model: haiku` is set in the Claude source's extended frontmatter — in that case, §5 Step 3 should use the `codex_model` value as the reverse-mapping target. INFERRED — no observed production agent uses `haiku`.
+
 ---
 
 ## 8. Recommendations for `sync-codex-agents`
@@ -623,7 +625,7 @@ This agent handles research ONLY. It does not:
 
 2. The `sandbox_mode` derivation decision tree (§4, Step 4) required judgment calls: blocking `Write, Edit` → `read-only` is correct, but blocking `Agent` has no Codex equivalent. Documented as a comment in the generated TOML — runtime enforcement cannot be preserved.
 
-3. The `system_prompt_file` field in `researcher.md` creates an ambiguity: does the inline body or the external file represent the deployed system prompt? Treated the inline body as authoritative since the plugin cache copies contain the inline body. The file-reference semantics are a personalization feature that cannot be translated.
+3. The `system_prompt_file` field in `researcher.md` creates an ambiguity: the external file at `malte/system-prompts/agents/researcher.md` may be the deployed system prompt, but it was not accessible during this translation. The inline body was used as a fallback per §4 Step 1. In production, the external file should be resolved first. The file-reference semantics are a personalization feature that cannot be translated.
 
 **Challenges:**
 
