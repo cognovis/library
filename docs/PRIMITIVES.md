@@ -82,10 +82,10 @@ and follows its instructions.
 | Harness | Startup cost | Runtime cost |
 |---------|-------------|--------------|
 | Claude Code | Full SKILL.md text loaded at session start for every installed skill. High static context cost. NORMATIVE — confirmed behavior. | Skill content already in context; no per-invocation fetch. |
-| Codex CLI | Name, description, and path only loaded at startup (NOT full text). Much lower static cost. NORMATIVE — from CL-qzw research. | Full SKILL.md fetched on first use. Per-invocation fetch cost. |
+| Codex CLI | Name, description, and path only loaded at startup (NOT full text). Much lower static cost. INFERRED — consistent with CL-qzw research findings on Codex skill discovery; pending direct vendor confirmation. | Full SKILL.md fetched on first use. Per-invocation fetch cost. |
 
 **Format.** SKILL.md — shared format (Open Agent Skills Standard). Install paths
-differ: `.claude/skills/<n>/SKILL.md` (Claude Code) vs `.agents/skills/<n>/SKILL.md`
+differ: `.claude/skills/<name>/SKILL.md` (Claude Code) vs `.agents/skills/<name>/SKILL.md`
 (Codex). NORMATIVE for both tools.
 
 **When to choose it.** Use a skill when:
@@ -124,7 +124,7 @@ the workflow defined in the template.
 **Cost.** Command templates are injected only on explicit invocation — no standing
 context cost between invocations.
 
-**Format (Claude Code).** `.claude/commands/<n>.md` with YAML frontmatter. NORMATIVE.
+**Format (Claude Code).** `.claude/commands/<name>.md` with YAML frontmatter. NORMATIVE.
 
 **Format (Codex).** Custom prompts/commands are DEPRECATED in Codex. Use skills
 instead. NORMATIVE — per CL-qzw research.
@@ -168,9 +168,9 @@ The agent runs to completion and returns a result.
 for complex tasks. Use agents for tasks that genuinely need isolation, not for simple
 lookups.
 
-**Format (Claude Code).** YAML frontmatter in `.claude/agents/<n>.md`. NORMATIVE.
+**Format (Claude Code).** YAML frontmatter in `.claude/agents/<name>.md`. NORMATIVE.
 
-**Format (Codex).** TOML in `.codex/agents/<n>.toml` (or `~/.codex/agents/<n>.toml`
+**Format (Codex).** TOML in `.codex/agents/<name>.toml` (or `~/.codex/agents/<name>.toml`
 for global). NORMATIVE — Codex has first-class subagents (default/worker/explorer
 built-ins plus custom TOML).
 
@@ -427,35 +427,6 @@ tool-use block. The MCP server responds with a tool result.
 
 ---
 
-### Design Principle: Scripts (not a primitive)
-
-Scripts are not an agentic primitive — they are the preferred implementation substrate
-for deterministic logic inside any primitive.
-
-**The rule:** Maximize deterministic script logic; minimize model decisions.
-
-- Logic that is deterministic, testable, and >50 lines MUST be extracted to a script
-  (bash or Python via `uv`). Do not embed it inline in a skill's prompt.
-- The model is expensive and non-deterministic. Anything the model decides that a
-  script could decide reliably is wasted tokens and added variance.
-- Standard runtime: `bash` for simple orchestration; `uv`-managed Python for anything
-  requiring libraries or structured data.
-
-**Where scripts live.**
-
-| Context | Script location |
-|---------|----------------|
-| Skill implementation | `skills/<n>/bin/` alongside SKILL.md |
-| Hook implementation | `hooks/<event>/<name>.py` or `.sh` |
-| Plugin shared logic | `plugins/<name>/scripts/` |
-| Standalone Justfile tasks | `justfile` (tool-agnostic shell) |
-
-**Anti-pattern.** A 200-line shell pipeline embedded in a skill's prompt is a smell.
-The model will hallucinate flags, get argument order wrong, and produce non-reproducible
-results. Extract to a script and have the skill call it.
-
----
-
 ### 10. Model-Standard
 
 **Definition.** A markdown document containing model-specific behavioral guidance
@@ -485,8 +456,8 @@ Layer 1: Cognovis Base Golden Prompt
       content isolation, core skill access. Applies to all agents.
 
 Layer 2: Agent Persona
-  └── The agent's own system prompt (from .claude/agents/<n>.md
-      or .codex/agents/<n>.toml). Defines the agent's specific
+  └── The agent's own system prompt (from .claude/agents/<name>.md
+      or .codex/agents/<name>.toml). Defines the agent's specific
       purpose, tool grants, and domain expertise.
 
 Layer 3: Model-Standard (optional)
@@ -499,7 +470,7 @@ Layer 3: Model-Standard (optional)
 **Decision-rule frontmatter fields.**
 
 ```yaml
-# In an agent's frontmatter (.claude/agents/<n>.md):
+# In an agent's frontmatter (.claude/agents/<name>.md):
 golden_prompt_extends: cognovis-base   # which base golden prompt to use
 model: claude-sonnet-4-6               # triggers model-standard lookup
 model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrides
@@ -519,14 +490,44 @@ model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrid
 
 ---
 
+### 9. Design Principle: Scripts (not a primitive)
+
+Scripts are not an agentic primitive — they are the preferred implementation substrate
+for deterministic logic inside any primitive.
+
+**The rule:** Maximize deterministic script logic; minimize model decisions.
+
+- Logic that is deterministic, testable, and >50 lines MUST be extracted to a script
+  (bash or Python via `uv`). Do not embed it inline in a skill's prompt.
+- The model is expensive and non-deterministic. Anything the model decides that a
+  script could decide reliably is wasted tokens and added variance.
+- Standard runtime: `bash` for simple orchestration; `uv`-managed Python for anything
+  requiring libraries or structured data.
+
+**Where scripts live.**
+
+| Context | Script location |
+|---------|----------------|
+| Skill implementation | `skills/<name>/bin/` alongside SKILL.md |
+| Hook implementation | `hooks/<event>/<name>.py` or `.sh` |
+| Plugin shared logic | `plugins/<name>/scripts/` |
+| Standalone Justfile tasks | `justfile` (tool-agnostic shell) |
+
+**Anti-pattern.** A 200-line shell pipeline embedded in a skill's prompt is a smell.
+The model will hallucinate flags, get argument order wrong, and produce non-reproducible
+results. Extract to a script and have the skill call it.
+
+---
+
 ## Cross-References
 
 - **ARCHITECTURE.md**: Layer stack, operational workflow, repo split, marketplaces.
   See [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Primitive Definitions**: This file (PRIMITIVES.md) is the source of truth for all
   primitive type definitions.
-- **Audit doc**: Per-harness behavior claims in this document are labeled NORMATIVE
-  or INFERRED to support future validation.
+- **Audit doc** (`docs/audit/skills-origin.md`, CL-23z — pending): This doc's taxonomy
+  is used to classify the intent of every existing artifact. PRIMITIVES.md definitions
+  will be consumed by that audit. Back-reference will be added when CL-23z is implemented.
 - **Research beads**:
   - `CL-qzw` — Codex Layer 3 (prompts/skills) parity research (source of Codex
     NORMATIVE claims in this doc)
