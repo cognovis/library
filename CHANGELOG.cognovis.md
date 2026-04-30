@@ -10,6 +10,7 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 ### Changed
 
 - **Architecture Documentation** (`docs/ARCHITECTURE.md`): Expanded Primitive Definitions section with decision rule for new artifacts (4-question workflow) and harness portability matrix (8 primitive types × 4 harnesses). Fixed factual errors in Codex paths, hook configuration, and MCP syntax; corrected placeholder inconsistency in install paths.
+- **Library Use Cookbook** (`cookbook/use.md`): Extended with tool-awareness detection and dual-install strategy for Claude Code and Codex. Detects target tool(s) via marker files, handles path resolution from `library.yaml`, and creates symlinks for skills to avoid duplicates. Includes translation warnings for incompatible frontmatter (`tools:`, `model:`) and graceful fallback to Claude Code when project context is ambiguous.
 
 ### Added
 
@@ -18,10 +19,6 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 - **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table (13 fields), canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies lossy fields and proposes `codex_*` extended frontmatter convention for round-trip fidelity. Closes CL-11p.
 - **MCP Server Audit** (`docs/audit/mcp-servers.md`): Classification of 11 installed MCP servers across all harnesses (Codex, Claude Desktop, Claude Code) against the PRIMITIVES.md decision matrix. Per-server migration recommendations (convert to CLI+Skill vs. keep MCP for stateful/mobile use) with 8 follow-up implementation beads identified.
 - **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table, canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies 3 lossy fields (tools→sandbox_mode, mcpServers→comment, system_prompt_file→inline) and proposes `codex_*` extended frontmatter convention for round-trip fidelity.
-
-### Changed
-
-- **Architecture Documentation** (`docs/ARCHITECTURE.md`): Expanded Primitive Definitions section with decision rule for new artifacts (4-question workflow) and harness portability matrix (8 primitive types × 4 harnesses). Fixed factual errors in Codex paths, hook configuration, and MCP syntax; corrected placeholder inconsistency in install paths.
 
 ---
 
