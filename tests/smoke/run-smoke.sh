@@ -294,21 +294,25 @@ smoke_codex() {
         "${global_agents_skills}" \
         "codex/discovery-order"
 
-    # CHECK 4: Name collision with Claude Code path
-    # Codex uses .agents/skills; Claude Code uses .claude/skills
-    # When symlink .claude/skills/foo -> ../../.agents/skills/foo exists, both read same file
-    local claude_symlink_dir="${tmpdir}/project/.claude/skills/${FIXTURE_NAME}"
-    mkdir -p "$(dirname "${claude_symlink_dir}")"
-    ln -sf "../../.agents/skills/${FIXTURE_NAME}" "${claude_symlink_dir}"
-    check_symlink "${claude_symlink_dir}" ".agents/skills/${FIXTURE_NAME}" "codex/cross-harness-symlink"
+    # CHECK 4: Bridge direction per CL-b4o policy:
+    # Canonical = .claude/skills/<name>/ (real dir, Claude Code)
+    # Bridge    = .agents/skills/<name>  (symlink -> canonical, Codex)
+    # The bridge must point FROM Codex (.agents) TO Claude Code (.claude), NOT the reverse.
+    local claude_canonical_dir="${tmpdir}/project/.claude/skills/${FIXTURE_NAME}"
+    mkdir -p "${claude_canonical_dir}"
+    cp "${fixture_src}/SKILL.md" "${claude_canonical_dir}/SKILL.md"
+    # Remove the Codex real dir installed above; replace with bridge symlink
+    rm -rf "${proj_agents_skills}"
+    ln -sfn "$(realpath "${claude_canonical_dir}")" "${proj_agents_skills}"
+    check_symlink "${proj_agents_skills}" ".claude/skills/${FIXTURE_NAME}" "codex/cross-harness-bridge"
 
-    # CHECK 5: Verify the symlink resolves to the SKILL.md
+    # CHECK 5: Verify the bridge symlink resolves to the SKILL.md (single source of truth)
     local resolved_skill
-    resolved_skill="$(readlink -f "${claude_symlink_dir}")/SKILL.md"
+    resolved_skill="$(readlink -f "${proj_agents_skills}")/SKILL.md"
     if [[ -f "${resolved_skill}" ]]; then
-        pass "codex/symlink-skill-reachable: SKILL.md reachable via symlink at ${resolved_skill}"
+        pass "codex/symlink-skill-reachable: SKILL.md reachable via bridge at ${resolved_skill}"
     else
-        fail "codex/symlink-skill-reachable: SKILL.md NOT reachable via symlink"
+        fail "codex/symlink-skill-reachable: SKILL.md NOT reachable via bridge"
     fi
 
     # CHECK 6: Runtime discovery note

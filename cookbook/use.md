@@ -119,16 +119,22 @@ When installing skills to **both** tools simultaneously:
    ```
    Codex officially follows symlinked skill directories, so this avoids maintaining two separate copies. The `ln -sfn` flag force-replaces any existing symlink at `$codex_target`. The explicit `rm -rf` guard above handles the case where a previous install left a real (non-symlink) directory there — without it, `ln -sfn` would create a nested symlink inside that directory instead of replacing it.
 
-#### 5d. Name Collision Check (MANDATORY for dual-install)
+#### 5d. Name Collision Check (MANDATORY for any install that touches skills)
 
 > **Policy reference**: `docs/policy/name-collision.md` (CL-b4o). Run this check
-> whenever `target_tool = both` (dual-install). For single-harness installs, skip.
+> whenever `target_tool` includes skills (i.e. `both`, `claude`, or `codex`).
+> Use the **resolved paths from Step 5b** — do NOT hard-code `.claude/skills/` or
+> `.agents/skills/`; the user may have specified global or custom paths.
 
 Before proceeding with installation, detect and handle cross-harness name collisions:
 
 ```bash
-claude_path=".claude/skills/<name>"
-codex_path=".agents/skills/<name>"
+# Use paths resolved in Step 5b — <claude_path> and <codex_path> are the
+# base dirs + skill name (e.g. ".claude/skills/foo" and ".agents/skills/foo"
+# for local installs, or "~/.claude/skills/foo" and "~/.agents/skills/foo"
+# for global installs).
+claude_path="<claude_path><name>"   # resolved in Step 5b
+codex_path="<codex_path><name>"     # resolved in Step 5b
 
 claude_real=false
 codex_real=false

@@ -95,7 +95,7 @@ This table documents every architectural claim from `docs/ARCHITECTURE.md` and
 | 8 | Skill install path is `.agents/skills/<name>/SKILL.md` | CONFIRMED | `smoke_codex` check 1: SKILL.md copied to project `.agents/skills/hello-world/SKILL.md` and verified |
 | 9 | Global Codex skill path is `~/.agents/skills/<name>/SKILL.md` | CONFIRMED | `smoke_codex` check 3: global skill installed and verified alongside project-local |
 | 10 | Project-local Codex skills override global | PARTIAL | Structure confirmed. Runtime precedence follows Open Agent Skills Standard — PARTIAL (needs live Codex session) |
-| 11 | Symlink `.claude/skills/<name>` → `../../.agents/skills/<name>` allows Claude Code to read the same skill file | CONFIRMED | `smoke_codex` checks 4+5: symlink created, `readlink -f` resolves to `.agents/skills/hello-world`, SKILL.md reachable via resolved path |
+| 11 | Bridge symlink `.agents/skills/<name>` → `.claude/skills/<name>` allows Codex to read the canonical skill file (CL-b4o policy: Codex is bridge, Claude Code is canonical) | CONFIRMED | `smoke_codex` checks 4+5: bridge symlink created at `.agents/skills/<name>` pointing to `.claude/skills/<name>`, SKILL.md reachable via resolved path |
 | 12 | SKILL.md format is identical between harnesses (Open Agent Skills Standard) | CONFIRMED | Both `claude-code/fixtures/hello-world/SKILL.md` and `codex/fixtures/hello-world/SKILL.md` use identical YAML frontmatter + markdown format; only the `FIXTURE_HARNESS` marker differs |
 | 13 | Runtime Codex skill discovery requires a live Codex session | CONFIRMED (trivially) | Documented as NOTE in test output |
 
