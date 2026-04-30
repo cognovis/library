@@ -321,22 +321,34 @@ cmd_generate_adapter() {
     # Deduplication: if the same standard name appears multiple times in requires_list
     # (e.g., declared by multiple nested skills), load it exactly once.
     # First declaration wins per the merge order contract in docs/research/standards-loading.md.
-    local tmpfile
+    #
+    # Note: we use a plain string variable (not declare -A associative array) for
+    # deduplication because macOS ships bash 3.2 which does not support associative
+    # arrays. A colon-delimited "seen" sentinel string is portable across bash 3.2+.
+    #
+    # tmpfile is initialized to empty string before mktemp so that the EXIT trap
+    # below does not hit an unbound variable under set -u.
+    local tmpfile=""
     tmpfile="$(mktemp)"
-    trap 'rm -f "${tmpfile}"' EXIT
+    # Register cleanup in a subshell-safe way: capture the value at trap-definition
+    # time so the variable is not looked up (and potentially unbound) later.
+    local _tmpfile_to_clean="${tmpfile}"
+    # shellcheck disable=SC2064
+    trap "rm -f '${_tmpfile_to_clean}'" EXIT
 
     local first=true
-    declare -A seen_standards  # associative array for O(1) dedup lookup
+    local seen_standards=""  # colon-delimited list of already-seen standard names
 
     while IFS= read -r standard_name; do
         [[ -z "${standard_name}" ]] && continue
 
-        # Skip duplicates — first declaration wins
-        if [[ -n "${seen_standards[${standard_name}]+x}" ]]; then
+        # Skip duplicates — first declaration wins.
+        # Check: does ":name:" appear in ":seen_standards:"?
+        if [[ ":${seen_standards}:" == *":${standard_name}:"* ]]; then
             info "Deduplicating standard '${standard_name}' — already included once."
             continue
         fi
-        seen_standards["${standard_name}"]=1
+        seen_standards="${seen_standards}:${standard_name}"
 
         local path
         if path="$(resolve_standard "${standard_name}" 2>/dev/null)"; then
