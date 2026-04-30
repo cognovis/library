@@ -114,6 +114,27 @@ def main() -> int:
             print(f"FAIL: {len(errors)} validation error(s) in {yaml_path}")
         return 1
 
+    # Additional semantic check: each catalog entry must have a resolvable source
+    semantic_errors = []
+    for section in ('skills', 'agents', 'prompts'):
+        for i, entry in enumerate(data.get('library', {}).get(section, [])):
+            name = entry.get('name', f'<entry {i}>')
+            has_source = bool(entry.get('source'))
+            has_marketplace_ref = bool(entry.get('from_marketplace') and entry.get('repo') and entry.get('path'))
+            if not has_source and not has_marketplace_ref:
+                semantic_errors.append(
+                    f"  [library.{section}[{i}] '{name}'] Entry has no resolvable source: "
+                    "provide either 'source' or 'from_marketplace + repo + path'"
+                )
+    if semantic_errors:
+        if not args.quiet:
+            print(f"FAIL: {yaml_path} has {len(semantic_errors)} semantic error(s):\n")
+            for err in semantic_errors:
+                print(err)
+        else:
+            print(f"FAIL: {len(semantic_errors)} semantic error(s) in {yaml_path}")
+        return 1
+
     if not args.quiet:
         print(f"PASS: {yaml_path} is valid against {schema_path}")
     else:

@@ -21,7 +21,7 @@ marketplaces:
     source: https://github.com/anthropics
     description: Anthropic-curated Claude plugins and extensions
   - name: cognovis-samurai
-    source: https://github.com/cognovis/samurai-skills
+    source: https://github.com/cognovis
     description: Cognovis Samurai skills collection
   - name: disler
     source: https://github.com/disler

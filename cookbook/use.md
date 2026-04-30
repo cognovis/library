@@ -23,15 +23,16 @@ git pull
 - If no match, tell the user and suggest `/library search`
 
 ### 3. Resolve Marketplace Reference
-If the matched catalog entry has a `from_marketplace` field:
+If the matched catalog entry has a `source` field, skip this step — use the explicit `source` directly in Step 6.
+
+If the entry has a `from_marketplace` field (and no `source`):
 - Look up the marketplace by name in `library.yaml` → `marketplaces`
 - If not found, warn the user: "Marketplace '<name>' is not registered in library.yaml" and stop
-- Construct the full browser-form GitHub URL from the marketplace fields:
-  - For a skill: `<marketplace.source>/<repo>/blob/main/<path>/SKILL.md`
+- Construct the full browser-form GitHub URL:
+  - `<marketplace.source>/<repo>/blob/main/<path>/SKILL.md`
   - Example: `https://github.com/disler/claude-code-hooks-mastery/blob/main/.claude/skills/ruff/SKILL.md`
   - If the entry's `path` already includes the filename, use it directly
-- Use this resolved URL as the effective `source` for the remaining steps (treat it as a GitHub browser URL)
-- If the entry also has an explicit `source` field, the explicit `source` takes precedence over the marketplace-derived URL
+- Use this resolved URL as the effective `source` for the remaining steps
 
 ### 4. Resolve Dependencies
 If the entry has a `requires` field:
