@@ -22,7 +22,19 @@ git pull
 - If multiple matches, show them and ask the user to pick one
 - If no match, tell the user and suggest `/library search`
 
-### 3. Resolve Dependencies
+### 3. Resolve Marketplace Reference
+If the matched catalog entry has a `source` field, skip this step — use the explicit `source` directly in Step 6.
+
+If the entry has a `from_marketplace` field (and no `source`):
+- Look up the marketplace by name in `library.yaml` → `marketplaces`
+- If not found, warn the user: "Marketplace '<name>' is not registered in library.yaml" and stop
+- Construct the full browser-form GitHub URL:
+  - `<marketplace.source>/<repo>/blob/main/<path>/SKILL.md`
+  - Example: `https://github.com/disler/claude-code-hooks-mastery/blob/main/.claude/skills/ruff/SKILL.md`
+  - If the entry's `path` already includes the filename, use it directly
+- Use this resolved URL as the effective `source` for the remaining steps
+
+### 4. Resolve Dependencies
 If the entry has a `requires` field:
 - For each typed reference (`skill:name`, `agent:name`, `prompt:name`):
   - Look it up in `library.yaml`
@@ -30,9 +42,9 @@ If the entry has a `requires` field:
   - If not found, warn the user: "Dependency <ref> not found in library catalog"
 - Process all dependencies before the requested item
 
-### 4. Determine Target Directory
+### 5. Determine Target Directory
 
-#### 4a. Detect the Target Tool
+#### 5a. Detect the Target Tool
 
 Determine which tool(s) to install into using the following priority order:
 
@@ -61,7 +73,7 @@ Detection rules (in order):
 **Priority 3 — Fall back:**
 - If detection is ambiguous, ask the user. Default answer is "Claude Code only".
 
-#### 4b. Select the Target Path
+#### 5b. Select the Target Path
 
 Read `default_dirs` from `library.yaml`. Select the correct section based on type (skills/agents/prompts), then pick the path key based on target tool and scope:
 
@@ -85,16 +97,16 @@ Scope rules:
 - `<claude_path>`: value resolved by finding the `default` entry under `default_dirs.skills` (e.g. `.claude/skills/`)
 - `<codex_path>`: value resolved by finding the `default_codex` entry under `default_dirs.skills` (e.g. `.agents/skills/`)
 
-#### 4c. Dual-Install Symlink Strategy
+#### 5c. Dual-Install Symlink Strategy
 
 > **Note:** Dual-install via symlink applies to **skills only**. For agents and prompts, `default_codex`/`global_codex` path keys are not yet defined in `library.yaml` — install to the Claude Code path only for those types.
 
 When installing skills to **both** tools simultaneously:
-1. Install to the Claude Code path first using Step 5, then create the symlink below (Step 5 must complete before the symlink can be created)
-2. Create a symlink from the Codex path pointing to the Claude Code installation (using paths resolved in 4b):
+1. Install to the Claude Code path first using Step 6, then create the symlink below (Step 6 must complete before the symlink can be created)
+2. Create a symlink from the Codex path pointing to the Claude Code installation (using paths resolved in 5b):
    ```bash
    # After installing to Claude Code path:
-   # <claude_path> and <codex_path> are the base dirs resolved in 4b
+   # <claude_path> and <codex_path> are the base dirs resolved in 5b
    claude_target="<claude_path><name>"
    codex_target="<codex_path><name>"
    mkdir -p "$(dirname "$codex_target")"
@@ -107,7 +119,7 @@ When installing skills to **both** tools simultaneously:
    ```
    Codex officially follows symlinked skill directories, so this avoids maintaining two separate copies. The `ln -sfn` flag force-replaces any existing symlink at `$codex_target`. The explicit `rm -rf` guard above handles the case where a previous install left a real (non-symlink) directory there — without it, `ln -sfn` would create a nested symlink inside that directory instead of replacing it.
 
-#### 4d. Translation Warnings
+#### 5d. Translation Warnings
 
 > **Only perform this check if `target_tool` includes Codex** (i.e. `target_tool = codex` or `target_tool = both`). Skip this section entirely for Claude-only installs.
 
@@ -132,15 +144,15 @@ What will be created:
 model: "<model-value>"
 ```
 
-If the user confirms, create the file at `<resolved-codex-path>/<name>/agents/openai.yaml` with the `model:` value from the frontmatter. (Use the `<codex_path>` resolved in Step 4b.)
+If the user confirms, create the file at `<resolved-codex-path>/<name>/agents/openai.yaml` with the `model:` value from the frontmatter. (Use the `<codex_path>` resolved in Step 5b.)
 
 **Advisory 3 — `$ARGUMENTS` substitution:**
 If the skill's SKILL.md body contains `$ARGUMENTS`:
 > "Advisory: This skill uses `$ARGUMENTS` substitution (Claude Code invocation style). Codex skills receive input via prompt context rather than `$ARGUMENTS` substitution. The skill should still work, but `$ARGUMENTS` will not be replaced — the literal string will appear in the prompt. Consider adapting the skill for Codex if precise argument handling is needed."
 
-### 5. Fetch from Source
+### 6. Fetch from Source
 
-> If `target_tool = both` (dual-install), run this step once targeting the Claude Code path (`<claude_path>`). After this step completes, create the symlink as described in Step 4c to complete the Codex-side installation.
+> If `target_tool = both` (dual-install), run this step once targeting the Claude Code path (`<claude_path>`). After this step completes, create the symlink as described in Step 5c to complete the Codex-side installation.
 
 **If source is a local path** (starts with `/` or `~`):
 - Resolve `~` to the home directory
@@ -184,12 +196,12 @@ If the skill's SKILL.md body contains `$ARGUMENTS`:
   git clone --depth 1 --branch <branch> git@github.com:<org>/<repo>.git "$tmp_dir"
   ```
 
-### 6. Verify Installation
+### 7. Verify Installation
 - Confirm the target directory exists
 - Confirm the main file (SKILL.md, AGENT.md, or prompt file) exists in it
 - Report success with the installed path
 
-### 7. Confirm
+### 8. Confirm
 Tell the user:
 - What was installed and where
 - Any dependencies that were also installed

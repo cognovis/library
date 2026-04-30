@@ -74,9 +74,12 @@
       "additionalProperties": true
     },
     "marketplaces": {
-      "description": "Third-party source references for external libraries (stub — populated by CL-7ii).",
-      "type": "object",
-      "additionalProperties": true
+      "description": "Third-party source references for external libraries.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/marketplace_entry"
+      },
+      "default": []
     },
     "plugins": {
       "description": "Plugin bundle declarations (stub).",
@@ -115,9 +118,9 @@
       "examples": ["skill:firecrawl", "agent:video-processor", "prompt:caption-style"]
     },
     "base_entry": {
-      "description": "Common fields shared by all catalog entry types.",
+      "description": "Common fields shared by all catalog entry types. Either `source` or `from_marketplace + repo + path` is required.",
       "type": "object",
-      "required": ["name", "source"],
+      "required": ["name"],
       "properties": {
         "name": {
           "description": "Unique identifier for this catalog entry.",
@@ -154,10 +157,53 @@
         }
       }
     },
+    "marketplace_ref": {
+      "description": "Optional marketplace reference fields for catalog entries sourced from a marketplace.",
+      "type": "object",
+      "properties": {
+        "from_marketplace": {
+          "description": "Short name of the marketplace this entry is sourced from (must match a name in the marketplaces list).",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Repository name within the marketplace (e.g. 'claude-code-hooks-mastery').",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path within the repository to the skill/agent/prompt directory.",
+          "type": "string"
+        }
+      },
+      "dependentRequired": {
+        "from_marketplace": ["repo", "path"]
+      }
+    },
+    "marketplace_entry": {
+      "description": "A marketplace source reference for external skill/agent/prompt libraries.",
+      "type": "object",
+      "required": ["name", "source"],
+      "properties": {
+        "name": {
+          "description": "Short identifier for this marketplace.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "description": "Base GitHub URL or organization URL for this marketplace.",
+          "type": "string"
+        },
+        "description": {
+          "description": "Human-readable description of what this marketplace provides.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "skill_entry": {
       "description": "A skill catalog entry with install path information.",
       "allOf": [
         { "$ref": "#/$defs/base_entry" },
+        { "$ref": "#/$defs/marketplace_ref" },
         {
           "type": "object",
           "properties": {
@@ -179,6 +225,7 @@
       "description": "An agent catalog entry with format-translation hints.",
       "allOf": [
         { "$ref": "#/$defs/base_entry" },
+        { "$ref": "#/$defs/marketplace_ref" },
         {
           "type": "object",
           "properties": {
@@ -199,6 +246,7 @@
       "description": "A prompt/command catalog entry.",
       "allOf": [
         { "$ref": "#/$defs/base_entry" },
+        { "$ref": "#/$defs/marketplace_ref" },
         {
           "type": "object",
           "properties": {
