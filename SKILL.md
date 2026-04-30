@@ -113,19 +113,24 @@ By default, items are installed to the **default** directory from `library.yaml`
 ```yaml
 default_dirs:
     skills:
-        - default: .claude/skills/
-        - global: ~/.claude/skills/
+        - default: .claude/skills/           # Claude Code project-local
+        - default_codex: .agents/skills/     # Codex project-local
+        - global: ~/.claude/skills/           # Claude Code user-global
+        - global_codex: ~/.agents/skills/     # Codex user-global
     agents:
         - default: .claude/agents/
         - global: ~/.claude/agents/
+        # Codex: agents are embedded as agents/openai.yaml inside skill bundles — no separate install dir
     prompts:
         - default: .claude/commands/
         - global: ~/.claude/commands/
+        # Codex: no commands layer — modern skills replace prompts
 ```
 
-- If the user says "global" or "globally", use the `global` directory.
+- If the user says "global" or "globally", use the `global` directory for Claude Code, or `global_codex` for Codex.
+- If the user says "codex" or "for codex", use the `default_codex` or `global_codex` directory.
 - If the user specifies a custom path, use that path.
-- Otherwise, use the `default` directory.
+- Otherwise, use the `default` directory (Claude Code).
 
 ## Library Repo Sync
 
@@ -142,7 +147,9 @@ This keeps the catalog in sync across devices.
 default_dirs:
   skills:
     - default: .claude/skills/
+    - default_codex: .agents/skills/
     - global: ~/.claude/skills/
+    - global_codex: ~/.agents/skills/
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/
