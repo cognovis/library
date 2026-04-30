@@ -1952,6 +1952,20 @@
       "tier": "domain",
       "plugin": "beads-workflow",
       "notes": ""
+    },
+    {
+      "path": "~/.claude/skills/open-brain/people-query/SKILL.md",
+      "current_type": "skill",
+      "origin": "ORIGINAL",
+      "intent": "skill",
+      "correct_type": "skill",
+      "type_correct": true,
+      "wrapper_of": "open-brain MCP",
+      "source": "no canonical source in category dirs",
+      "migration_action": "add_canonical_source_to_core_or_meta_skills",
+      "tier": "domain",
+      "plugin": null,
+      "notes": "Auto-triggered on people/contact context queries; WRAPPER around open-brain memory store"
     }
   ],
   "standards_inventory": {
@@ -1965,7 +1979,7 @@
     }
   },
   "summary": {
-    "total_artifacts_classified": 155,
+    "total_artifacts_classified": 156,
     "origin_breakdown": {
       "ORIGINAL": 120,
       "PERSONAL": 22,

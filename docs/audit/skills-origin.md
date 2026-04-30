@@ -19,7 +19,7 @@ This audit classifies every skill, agent, hook, command, and standard across:
 | `~/code/claude-code-plugins/.claude/` (standards/, commands/) | Project-local standards and commands tracked in git |
 | `~/.claude/standards/` | Global user standards (legacy path, see CL-v56) |
 | `~/.claude/hooks/` | Installed global hooks |
-| `~/.claude/skills/open-brain/` | Single globally-installed skill (sub-dir with no SKILL.md — people-query subdir) |
+| `~/.claude/skills/open-brain/people-query/` | Single globally-installed skill with SKILL.md |
 | `~/.codex/agents/` | 3 Codex agent TOML files (installed copies, source in dev-tools/codex-agents/) |
 | `~/.agents/`, `~/.codex/vendor_imports/skills/` | Empty — no artifacts |
 | `cognovis/library-core`, `sussdorff/library-core` | Not cloned locally — empty until CL-1rr |
@@ -337,6 +337,14 @@ These are **gitignored local install copies** (`.claude/*` is in `.gitignore`; `
 | `powershell-pragmatic` | Not in category dirs | ORIGINAL | skill (PowerShell best practices) | skill | Add to dev-tools/skills/ as canonical source | domain |
 | `skill-tester` | Not in category dirs | ORIGINAL | skill (test skills in local dev) | skill | Add to meta/skills/ as canonical source | domain |
 | `slash-command-creator` | Not in category dirs | ORIGINAL | skill (guide for creating slash commands) | skill — DUPLICATE functionality with `command-creator` | Consolidate into command-creator; remove slash-command-creator | domain |
+
+---
+
+## Section 9b: ~/.claude/skills/open-brain/people-query (Globally Installed)
+
+| Path | Current Type | Origin | Intent | Correct Type | Migration Action | Tier |
+|------|-------------|--------|--------|-------------|-----------------|------|
+| `~/.claude/skills/open-brain/people-query/SKILL.md` | skill | ORIGINAL | skill (query open-brain memory for people/contact context; auto-triggered on social/contact queries) | skill — correct | Add canonical source to core/skills/ or meta/skills/; WRAPPER around open-brain MCP | domain |
 
 ---
 
