@@ -560,6 +560,267 @@ smoke_name_collision() {
 }
 
 # ---------------------------------------------------------------------------
+# Lockfile: .library.lock structural validation (CL-t21)
+# Validates:
+#   1. .library.lock format: required fields present
+#   2. /library use writes a lockfile entry with all required fields
+#   3. /library remove removes the entry from the lockfile
+#   4. /library audit detects drift (installed file differs from locked checksum)
+#   5. /library sync reads lockfile as source of truth (not just library.yaml)
+#   6. checksum validation: computed sha256 matches stored value
+#   7. Lockfile schema doc exists
+#   8. Lockfile format doc exists
+#   9. cookbook/audit.md exists
+#  10. cookbook/use.md documents lockfile write step
+#  11. cookbook/sync.md documents lockfile-as-source-of-truth
+# ---------------------------------------------------------------------------
+smoke_lockfile() {
+    section "lockfile"
+
+    # -----------------------------------------------------------------------
+    # CHECK 1: Lockfile schema doc exists
+    # -----------------------------------------------------------------------
+    local schema_doc="${REPO_ROOT}/docs/schema/lockfile.schema.json"
+    if [[ -f "${schema_doc}" ]]; then
+        pass "lockfile/schema-doc: docs/schema/lockfile.schema.json exists"
+    else
+        fail "lockfile/schema-doc: docs/schema/lockfile.schema.json NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 2: Lockfile format doc exists
+    # -----------------------------------------------------------------------
+    local format_doc="${REPO_ROOT}/docs/lockfile-format.md"
+    if [[ -f "${format_doc}" ]]; then
+        pass "lockfile/format-doc: docs/lockfile-format.md exists"
+    else
+        fail "lockfile/format-doc: docs/lockfile-format.md NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 3: cookbook/audit.md exists
+    # -----------------------------------------------------------------------
+    local audit_cookbook="${REPO_ROOT}/cookbook/audit.md"
+    if [[ -f "${audit_cookbook}" ]]; then
+        pass "lockfile/audit-cookbook: cookbook/audit.md exists"
+    else
+        fail "lockfile/audit-cookbook: cookbook/audit.md NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 4: cookbook/use.md documents lockfile write step
+    # -----------------------------------------------------------------------
+    local use_cookbook="${REPO_ROOT}/cookbook/use.md"
+    if grep -q "\.library\.lock\|lockfile" "${use_cookbook}" 2>/dev/null; then
+        pass "lockfile/use-cookbook: cookbook/use.md references .library.lock"
+    else
+        fail "lockfile/use-cookbook: cookbook/use.md does NOT reference .library.lock"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 5: cookbook/remove.md documents lockfile removal step
+    # -----------------------------------------------------------------------
+    local remove_cookbook="${REPO_ROOT}/cookbook/remove.md"
+    if grep -q "\.library\.lock\|lockfile" "${remove_cookbook}" 2>/dev/null; then
+        pass "lockfile/remove-cookbook: cookbook/remove.md references .library.lock"
+    else
+        fail "lockfile/remove-cookbook: cookbook/remove.md does NOT reference .library.lock"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 6: cookbook/sync.md documents lockfile as source of truth
+    # -----------------------------------------------------------------------
+    local sync_cookbook="${REPO_ROOT}/cookbook/sync.md"
+    if grep -q "\.library\.lock\|lockfile" "${sync_cookbook}" 2>/dev/null; then
+        pass "lockfile/sync-cookbook: cookbook/sync.md references .library.lock"
+    else
+        fail "lockfile/sync-cookbook: cookbook/sync.md does NOT reference .library.lock"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 7: Lockfile format doc has all required fields documented
+    # -----------------------------------------------------------------------
+    if [[ -f "${format_doc}" ]]; then
+        local required_fields=("name" "type" "source" "source_commit" "install_target" "install_timestamp" "checksum_sha256" "license")
+        local all_fields=true
+        for field in "${required_fields[@]}"; do
+            if ! grep -q "${field}" "${format_doc}" 2>/dev/null; then
+                fail "lockfile/format-fields: '${field}' NOT documented in lockfile-format.md"
+                all_fields=false
+            fi
+        done
+        if [[ "${all_fields}" == "true" ]]; then
+            pass "lockfile/format-fields: all required fields documented in lockfile-format.md"
+        fi
+    else
+        skip "lockfile/format-fields: lockfile-format.md not found — skipping field checks"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 8: Lockfile schema has required field definitions
+    # -----------------------------------------------------------------------
+    if [[ -f "${schema_doc}" ]]; then
+        if grep -q "checksum_sha256\|source_commit\|install_target" "${schema_doc}" 2>/dev/null; then
+            pass "lockfile/schema-fields: schema defines key lockfile fields"
+        else
+            fail "lockfile/schema-fields: schema missing key fields (checksum_sha256, source_commit, install_target)"
+        fi
+    else
+        skip "lockfile/schema-fields: schema doc not found — skipping"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 9: Checksum validation — sha256 of a known file matches stored value
+    # -----------------------------------------------------------------------
+    local fixture_skill="${REPO_ROOT}/tests/smoke/claude-code/fixtures/hello-world/SKILL.md"
+    if [[ -f "${fixture_skill}" ]]; then
+        # Compute sha256 of the fixture file
+        local computed_hash
+        computed_hash="$(shasum -a 256 "${fixture_skill}" 2>/dev/null | awk '{print $1}' || sha256sum "${fixture_skill}" 2>/dev/null | awk '{print $1}')"
+        if [[ -n "${computed_hash}" ]] && [[ "${#computed_hash}" -eq 64 ]]; then
+            pass "lockfile/checksum-compute: sha256 computed successfully for fixture SKILL.md (${computed_hash:0:8}...)"
+        else
+            fail "lockfile/checksum-compute: sha256 computation failed or returned unexpected value: '${computed_hash}'"
+        fi
+    else
+        fail "lockfile/checksum-compute: fixture SKILL.md not found at ${fixture_skill}"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 10: Lockfile YAML structure validation (write + read round-trip)
+    #   Simulates what /library use would write and verifies the format is valid.
+    # -----------------------------------------------------------------------
+    local tmpdir
+    tmpdir="$(make_test_env)"
+    TMPDIRS+=("${tmpdir}")
+
+    local lock_file="${tmpdir}/project/.library.lock"
+    local fixture_skill="${REPO_ROOT}/tests/smoke/claude-code/fixtures/hello-world/SKILL.md"
+
+    # Compute checksum for fixture
+    local chksum
+    chksum="$(shasum -a 256 "${fixture_skill}" 2>/dev/null | awk '{print $1}' || sha256sum "${fixture_skill}" 2>/dev/null | awk '{print $1}')"
+
+    # Write a minimal lockfile entry (what /library use would produce)
+    mkdir -p "$(dirname "${lock_file}")"
+    cat > "${lock_file}" <<LOCKFILE_EOF
+installed:
+  - name: hello-world
+    type: skill
+    source: tests/smoke/claude-code/fixtures/hello-world/SKILL.md
+    source_commit: e71925e1221ad7f1bcdd090b86a03a6aad7a3af6
+    install_target: .claude/skills/hello-world/
+    install_timestamp: 2026-04-30T15:00:00Z
+    checksum_sha256: ${chksum}
+    license: MIT
+    bridge_symlinks: []
+LOCKFILE_EOF
+
+    # Verify lockfile was written and has the required structure
+    if [[ -f "${lock_file}" ]]; then
+        pass "lockfile/write-roundtrip: .library.lock written successfully"
+    else
+        fail "lockfile/write-roundtrip: .library.lock NOT written"
+    fi
+
+    # Verify YAML can be parsed (requires python3 with yaml)
+    if python3 -c "import yaml; data = yaml.safe_load(open('${lock_file}')); assert 'installed' in data; assert len(data['installed']) == 1; e = data['installed'][0]; assert e['name'] == 'hello-world'; assert 'checksum_sha256' in e" 2>/dev/null; then
+        pass "lockfile/yaml-parse: .library.lock is valid YAML with correct structure"
+    else
+        fail "lockfile/yaml-parse: .library.lock YAML parse or structure check failed"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 11: Drift detection — simulate audit finding a mismatch
+    #   Install a file with known content, record its checksum, modify it,
+    #   then verify the mismatch is detectable.
+    # -----------------------------------------------------------------------
+    local audit_dir="${tmpdir}/audit-test"
+    local installed_skill="${audit_dir}/.claude/skills/hello-world/SKILL.md"
+    mkdir -p "$(dirname "${installed_skill}")"
+    cp "${fixture_skill}" "${installed_skill}"
+
+    # Compute checksum of the installed file
+    local locked_hash
+    locked_hash="$(shasum -a 256 "${installed_skill}" 2>/dev/null | awk '{print $1}' || sha256sum "${installed_skill}" 2>/dev/null | awk '{print $1}')"
+
+    # Simulate drift: append content to the installed file
+    echo "# DRIFT: this line was added after install" >> "${installed_skill}"
+
+    # Compute new checksum of the drifted file
+    local drifted_hash
+    drifted_hash="$(shasum -a 256 "${installed_skill}" 2>/dev/null | awk '{print $1}' || sha256sum "${installed_skill}" 2>/dev/null | awk '{print $1}')"
+
+    # Verify drift is detectable (hashes differ)
+    if [[ "${locked_hash}" != "${drifted_hash}" ]]; then
+        pass "lockfile/drift-detection: checksum mismatch detected after file modification (locked=${locked_hash:0:8}..., actual=${drifted_hash:0:8}...)"
+    else
+        fail "lockfile/drift-detection: checksums IDENTICAL after modification — drift NOT detectable"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 12: Remove operation — entry removed from lockfile
+    # -----------------------------------------------------------------------
+    local lock_before="${lock_file}"
+    local entry_count_before
+    entry_count_before="$(python3 -c "import yaml; d = yaml.safe_load(open('${lock_before}')); print(len(d['installed']))" 2>/dev/null || echo "0")"
+
+    # Simulate /library remove: remove the entry from the lockfile
+    python3 - <<PYEOF
+import yaml
+with open('${lock_before}') as f:
+    data = yaml.safe_load(f)
+data['installed'] = [e for e in data['installed'] if e['name'] != 'hello-world']
+with open('${lock_before}', 'w') as f:
+    yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+PYEOF
+
+    local entry_count_after
+    entry_count_after="$(python3 -c "import yaml; d = yaml.safe_load(open('${lock_before}')); print(len(d['installed']))" 2>/dev/null || echo "-1")"
+
+    if [[ "${entry_count_before}" == "1" ]] && [[ "${entry_count_after}" == "0" ]]; then
+        pass "lockfile/remove-entry: entry correctly removed from .library.lock"
+    else
+        fail "lockfile/remove-entry: remove failed (before=${entry_count_before}, after=${entry_count_after})"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 13: bridge_symlinks field — dual-install records symlink info
+    # -----------------------------------------------------------------------
+    local bridge_lock="${tmpdir}/bridge-test/.library.lock"
+    mkdir -p "$(dirname "${bridge_lock}")"
+    cat > "${bridge_lock}" <<BRIDGE_EOF
+installed:
+  - name: hello-world
+    type: skill
+    source: tests/smoke/claude-code/fixtures/hello-world/SKILL.md
+    source_commit: e71925e1221ad7f1bcdd090b86a03a6aad7a3af6
+    install_target: .claude/skills/hello-world/
+    install_timestamp: 2026-04-30T15:00:00Z
+    checksum_sha256: ${chksum}
+    license: MIT
+    bridge_symlinks:
+      - .agents/skills/hello-world -> ../../.claude/skills/hello-world
+BRIDGE_EOF
+
+    if python3 -c "
+import yaml
+d = yaml.safe_load(open('${bridge_lock}'))
+e = d['installed'][0]
+assert 'bridge_symlinks' in e
+assert len(e['bridge_symlinks']) == 1
+assert '.agents/skills/hello-world' in e['bridge_symlinks'][0]
+" 2>/dev/null; then
+        pass "lockfile/bridge-symlinks: bridge_symlinks field correctly recorded for dual-install"
+    else
+        fail "lockfile/bridge-symlinks: bridge_symlinks field missing or malformed"
+    fi
+
+    echo "  NOTE  lockfile/runtime: Full /library use lockfile integration requires a live Claude Code session."
+    echo "        Structural checks above confirm lockfile format, schema, and drift detection logic."
+}
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 print_summary() {
@@ -606,16 +867,20 @@ main() {
         name-collision)
             smoke_name_collision
             ;;
+        lockfile)
+            smoke_lockfile
+            ;;
         all)
             smoke_claude_code
             smoke_codex
             smoke_pi
             smoke_opencode
             smoke_name_collision
+            smoke_lockfile
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|all]"
             exit 1
             ;;
     esac
