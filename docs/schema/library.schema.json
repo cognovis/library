@@ -4,6 +4,7 @@
   "title": "Library Catalog Schema",
   "description": "JSON Schema for library.yaml — the catalog file for the cognovis-library private skill distribution system.",
   "type": "object",
+  "required": ["default_dirs", "library"],
   "properties": {
     "default_dirs": {
       "description": "Default installation directories per primitive type and harness.",
@@ -116,7 +117,7 @@
     "base_entry": {
       "description": "Common fields shared by all catalog entry types.",
       "type": "object",
-      "required": ["name"],
+      "required": ["name", "source"],
       "properties": {
         "name": {
           "description": "Unique identifier for this catalog entry.",
