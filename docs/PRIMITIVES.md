@@ -513,8 +513,23 @@ sub-type of standards scoped to a particular model's characteristics.
 standards (which apply to any model), a model-standard is keyed to a specific model
 ID and adjusts the agent's behavior for that model's strengths and limitations.
 
-**Storage.** `.agents/model-standards/<model-name>.md`
+**Storage.** `.agents/model-standards/<model-name>.md` (project-local) or
+`~/.agents/model-standards/<model-name>.md` (user-global).
 Example: `.agents/model-standards/claude-sonnet-4-6.md`
+
+**Loading.** Model-standards use the SAME loader as project-standards — no parallel
+mechanism. `scripts/standards-loader.sh --load-model-standard <name>` resolves via the
+same project-local > user-global precedence rule and emits the file content to stdout.
+At install time, the Library composer calls this to inline the model-standard content
+into the effective agent system prompt. See `docs/research/standards-loading.md` for
+the full loader contract.
+
+**Path resolution (same precedence rules as Standards):**
+
+| Priority | Path | Scope |
+|----------|------|-------|
+| 1 (wins) | `.agents/model-standards/<name>.md` | Project-local |
+| 2 | `~/.agents/model-standards/<name>.md` | User-global |
 
 **Trigger semantics.** Injected at agent instantiation time when the agent's
 frontmatter specifies a `model` field matching this model-standard's filename. The
@@ -551,6 +566,41 @@ model: claude-sonnet-4-6               # triggers model-standard lookup
 model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrides
 ```
 
+**Composition algorithm (install-time, NOT runtime).**
+
+The Library executes this composition once when the agent is installed or synced.
+There is no runtime composition — the harness receives the fully-composed prompt.
+
+```
+1. Load Layer 1: read .agents/golden-prompts/<golden_prompt_extends>.md
+2. Load Layer 2: read the agent's persona body (below --- in the .md file)
+3. Load Layer 3: for each name in model_standards[], call
+      standards-loader.sh --load-model-standard <name>
+   Concatenate results in declaration order.
+4. Compose: Layer1 + "\n---\n" + Layer2 + "\n---\n" + Layer3
+5. Write composed prompt to harness-native location:
+   - Claude Code: replace the .claude/agents/<name>.md body (keep frontmatter)
+   - Codex: set developer_instructions in .codex/agents/<name>.toml
+   - OpenCode: replace .opencode/agents/<name>.md body
+   - Pi: export as TypeScript string from the extension module
+```
+
+**Tool constraint encoding.** Per-agent tool grants (`tools:`, `disallowedTools:`) are
+NOT enforced by all harnesses at the sandbox level (Codex global sandbox semantics
+ignore per-agent tool constraints). Therefore, the Library MUST encode the agent's
+effective tool grant in the composed system prompt body, not rely on frontmatter alone.
+The Cognovis Base Golden Prompt (`Layer 1`) includes a "Tool Constraints" section that
+instructs the agent to honor its declared tool list behaviorally even when the harness
+would technically allow broader access.
+
+**Canonical source locations (CL-9b1).**
+
+- Golden prompts: `.agents/golden-prompts/<name>.md`
+  - Cognovis base: `.agents/golden-prompts/cognovis-base.md`
+- Model standards: `.agents/model-standards/<model-name>.md`
+  - Sonnet conciseness: `.agents/model-standards/claude-sonnet-4-6.md`
+  - Opus thinking budget: `.agents/model-standards/claude-opus-4-7.md`
+
 **When to choose it.** Create a model-standard when:
 - A specific model has known behaviors (verbosity, thinking defaults, tool-call
   patterns) that require project-wide adjustment.
@@ -562,6 +612,8 @@ model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrid
   persona to one model and makes model-swapping harder.
 - Do NOT create a model-standard for a behavior that applies to all models — that
   belongs in the base golden prompt or a general standard.
+- Do NOT introduce a parallel loader for model-standards — reuse
+  `scripts/standards-loader.sh --load-model-standard <name>` (same contract).
 
 ---
 
@@ -618,12 +670,21 @@ Library treats managed skills as read-only and does not override them.
   primitive type definitions.
 - **Name Collision Policy**: `docs/policy/name-collision.md` (CL-b4o) — authoritative
   policy for collision handling, symlink lifecycle, and uninstall completeness.
-- **Audit doc** (`docs/audit/skills-origin.md`, CL-23z — pending): This doc's taxonomy
-  is used to classify the intent of every existing artifact. PRIMITIVES.md definitions
-  will be consumed by that audit. Back-reference will be added when CL-23z is implemented.
+- **Standards Loading** (`docs/research/standards-loading.md`, CL-v56): Design and
+  prototype for cross-harness standards loading. Model-Standards reuse the same loader
+  mechanism (`scripts/standards-loader.sh --load-model-standard <name>`).
+- **Audit doc** (`docs/audit/skills-origin.md`, CL-23z): This doc's taxonomy is used to
+  classify the intent of every existing artifact. CL-23z inventory uses PRIMITIVES.md
+  definitions to classify all 44 agents in scope.
+- **Agent Format Mapping** (`docs/research/agents-format-mapping.md`, CL-11p): Field
+  mapping for Claude Code ↔ Codex agent translation. Covers new frontmatter fields
+  `golden_prompt_extends` and `model_standards` introduced in CL-9b1.
+- **Golden Prompts** (CL-9b1): Canonical sources at `.agents/golden-prompts/` and
+  `.agents/model-standards/`. See §10 Model-Standard for composition algorithm.
 - **Research beads**:
   - `CL-qzw` — Codex Layer 3 (prompts/skills) parity research (source of Codex
     NORMATIVE claims in this doc)
   - `CL-xcm` — Hook distribution across harnesses
   - `CL-11p` — Agent format translation spec (Claude Code ↔ Codex)
   - `CL-7ii` — Marketplace implementation
+  - `CL-9b1` — Golden Prompt composition + Model-Standards (§10 implementation)

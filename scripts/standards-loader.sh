@@ -376,6 +376,82 @@ cmd_generate_adapter() {
 }
 
 # ---------------------------------------------------------------------------
+# resolve_model_standard <name>
+#   Resolves a model-standard name to a file path using project>global precedence.
+#   Model-standards live in .agents/model-standards/ (parallel to .agents/standards/).
+#   Prints the resolved path to stdout.
+#   Exits 0 on success, 1 if not found.
+# ---------------------------------------------------------------------------
+resolve_model_standard() {
+    local name="$1"
+
+    # Priority 1: project-local
+    local proj_path="${PROJ_ROOT}/.agents/model-standards/${name}.md"
+    if [[ -f "${proj_path}" ]]; then
+        echo "${proj_path}"
+        return 0
+    fi
+
+    # Priority 2: user-global
+    local global_path="${HOME}/.agents/model-standards/${name}.md"
+    if [[ -f "${global_path}" ]]; then
+        echo "${global_path}"
+        return 0
+    fi
+
+    # Not found — model-standards have no legacy fallback path
+    return 1
+}
+
+# ---------------------------------------------------------------------------
+# cmd_load_model_standard <name>
+#   Loads a model-standard by name, resolving via project>global precedence.
+#   Same warn-and-continue policy as cmd_load.
+#   Uses the same frontmatter validation as cmd_load.
+# ---------------------------------------------------------------------------
+cmd_load_model_standard() {
+    local name="$1"
+    local path
+
+    if path="$(resolve_model_standard "${name}" 2>/dev/null)"; then
+        # Validate frontmatter before emitting content (same check as cmd_load).
+        python3 - "${path}" "${name}" >&2 <<'PYEOF'
+import sys, re
+
+standard_file = sys.argv[1]
+standard_name = sys.argv[2]
+required_fields = ['name', 'version', 'description']
+
+with open(standard_file) as f:
+    content = f.read()
+
+m = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
+if not m:
+    print(f"[standards-loader] WARNING: model-standard '{standard_name}' has no YAML frontmatter. "
+          f"Required fields: {required_fields}. Proceeding anyway.")
+    sys.exit(0)
+
+frontmatter_text = m.group(1)
+missing = []
+for field in required_fields:
+    if not re.search(rf'^{re.escape(field)}\s*:', frontmatter_text, re.MULTILINE):
+        missing.append(field)
+
+if missing:
+    print(f"[standards-loader] WARNING: model-standard '{standard_name}' frontmatter missing required fields: "
+          f"{missing}. Proceeding anyway.")
+PYEOF
+        cat "${path}"
+    else
+        warn "model-standard '${name}' not found. Checked:"
+        warn "  - ${PROJ_ROOT}/.agents/model-standards/${name}.md"
+        warn "  - ${HOME}/.agents/model-standards/${name}.md"
+        warn "Proceeding without this model-standard."
+        # Exit 0: warn-and-continue per loader contract
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # cmd_list
 #   Lists all available standards by scanning project-local and global directories.
 # ---------------------------------------------------------------------------
@@ -383,6 +459,8 @@ cmd_list() {
     local proj_dir="${PROJ_ROOT}/.agents/standards"
     local global_dir="${HOME}/.agents/standards"
     local legacy_dir="${HOME}/.claude/standards"
+    local proj_ms_dir="${PROJ_ROOT}/.agents/model-standards"
+    local global_ms_dir="${HOME}/.agents/model-standards"
 
     echo "Available standards:"
     echo ""
@@ -437,6 +515,42 @@ print(Path(sys.argv[1]).relative_to(sys.argv[2]))
         echo "  .agents/standards/<name>.md     (project-local)"
         echo "  ~/.agents/standards/<name>.md   (user-global)"
     fi
+
+    echo ""
+    echo "Available model-standards:"
+    echo ""
+
+    local ms_found=false
+
+    if [[ -d "${proj_ms_dir}" ]]; then
+        echo "Project-local (${proj_ms_dir}):"
+        while IFS= read -r f; do
+            local name
+            name="$(basename "${f}" .md)"
+            echo "  - ${name}"
+            ms_found=true
+        done < <(find "${proj_ms_dir}" -name "*.md" -maxdepth 1 2>/dev/null | sort)
+        echo ""
+    fi
+
+    if [[ -d "${global_ms_dir}" ]]; then
+        echo "User-global (${global_ms_dir}):"
+        while IFS= read -r f; do
+            local name
+            name="$(basename "${f}" .md)"
+            echo "  - ${name}"
+            ms_found=true
+        done < <(find "${global_ms_dir}" -name "*.md" -maxdepth 1 2>/dev/null | sort)
+        echo ""
+    fi
+
+    if [[ "${ms_found}" != "true" ]]; then
+        echo "  (none found)"
+        echo ""
+        echo "To add a model-standard, create a markdown file at:"
+        echo "  .agents/model-standards/<model-name>.md     (project-local)"
+        echo "  ~/.agents/model-standards/<model-name>.md   (user-global)"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -450,9 +564,13 @@ main() {
         echo "  --proj-root <path>   Override project root (default: \$PWD)" >&2
         echo "" >&2
         echo "Commands:" >&2
-        echo "  --load <name>                         Load a standard (mechanism b)" >&2
+        echo "  --load <name>                          Load a project-standard (mechanism b)" >&2
+        echo "  --load-model-standard <name>           Load a model-standard from .agents/model-standards/" >&2
         echo "  --generate-adapter <skill> [--target <file>]  Generate AGENTS.md adapter (mechanism a)" >&2
-        echo "  --list                                List available standards" >&2
+        echo "  --list                                 List available standards and model-standards" >&2
+        echo "" >&2
+        echo "Path resolution for standards:       .agents/standards/<name>.md (project) > ~/.agents/standards/<name>.md (global)" >&2
+        echo "Path resolution for model-standards: .agents/model-standards/<name>.md (project) > ~/.agents/model-standards/<name>.md (global)" >&2
         exit 1
     fi
 
@@ -484,6 +602,13 @@ main() {
                 exit 1
             fi
             cmd_load "$1"
+            ;;
+        --load-model-standard)
+            if [[ $# -eq 0 ]]; then
+                echo "Usage: standards-loader.sh --load-model-standard <model-standard-name>" >&2
+                exit 1
+            fi
+            cmd_load_model_standard "$1"
             ;;
         --generate-adapter)
             if [[ $# -eq 0 ]]; then

@@ -64,6 +64,8 @@ Every Claude Code frontmatter field vs. its Codex TOML counterpart.
 | *(no equivalent)* | — | `model_reasoning_effort` | string (`high`, `xhigh`, `medium`, `low`) | **Codex-only** | Chain-of-thought depth control. No Claude Code equivalent. Dropped on reverse translation. NORMATIVE — confirmed in all three production agents. |
 | *(no equivalent)* | — | `sandbox_mode` | string enum | **Codex-only (primary)** | No Claude Code equivalent. Set on forward translation based on tool analysis (see §4). NORMATIVE. |
 | *(no equivalent)* | — | `mcp_servers` (TOML table) | table | **Lossy forward — comment only; no per-agent enforcement** | No per-agent `mcp_servers` override exists in Codex — all three production agents omit this section and inherit from global `~/.codex/config.toml`. `mcpServers` from the Claude source translates to a comment block only (see §4 Step 5). NORMATIVE. |
+| `golden_prompt_extends` | string (`cognovis-base` or `from-scratch`) | *(no Codex field)* | — | **Metadata-comment on forward** | Library-managed composition field. Declares which base golden prompt to extend. Has no Codex TOML equivalent. On forward translation: write as a comment in the TOML header (`# golden_prompt_extends: cognovis-base`). The COMPOSED prompt body already reflects the golden prompt — this field is only needed to track composition metadata. INFERRED — Codex has no equivalent concept; the composition is resolved before the TOML is written. |
+| `model_standards` | YAML list of strings | *(no Codex field)* | — | **Metadata-comment on forward** | Library-managed composition field. Lists which model-standards to apply. Has no Codex TOML equivalent. On forward translation: write as a comment in the TOML header (`# model_standards: [conciseness]`). The applied model-standard content is already inlined into `developer_instructions` by the Library composer at install time. INFERRED — same reasoning as `golden_prompt_extends`. |
 
 ### Summary: Fields by Category
 
@@ -79,6 +81,10 @@ Every Claude Code frontmatter field vs. its Codex TOML counterpart.
 
 **Vocabulary gap:**
 - `model` → model identifier requires lookup table
+
+**Library composition fields — metadata comment on forward (no Codex runtime equivalent):**
+- `golden_prompt_extends` → comment header only (composed prompt already reflects the golden prompt)
+- `model_standards` → comment header only (model-standard content already inlined by composer)
 
 **Codex-only (no reverse mapping):**
 - `nickname_candidates`
