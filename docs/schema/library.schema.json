@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cognovis/cognovis-library/docs/schema/library.schema.json",
+  "title": "Library Catalog Schema",
+  "description": "JSON Schema for library.yaml — the catalog file for the cognovis-library private skill distribution system.",
+  "type": "object",
+  "properties": {
+    "default_dirs": {
+      "description": "Default installation directories per primitive type and harness.",
+      "type": "object",
+      "properties": {
+        "skills": {
+          "description": "Directory mappings for skills across harnesses.",
+          "$ref": "#/$defs/dir_list"
+        },
+        "agents": {
+          "description": "Directory mappings for agents across harnesses.",
+          "$ref": "#/$defs/dir_list"
+        },
+        "prompts": {
+          "description": "Directory mappings for prompts/commands across harnesses.",
+          "$ref": "#/$defs/dir_list"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/dir_list"
+      }
+    },
+    "library": {
+      "description": "The catalog of available skills, agents, and prompts.",
+      "type": "object",
+      "properties": {
+        "skills": {
+          "description": "Catalog of skill entries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/skill_entry"
+          },
+          "default": []
+        },
+        "agents": {
+          "description": "Catalog of agent entries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/agent_entry"
+          },
+          "default": []
+        },
+        "prompts": {
+          "description": "Catalog of prompt/command entries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/prompt_entry"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "guardrails": {
+      "description": "Capability matrix per harness (stub — populated by CL-xcm).",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "standards": {
+      "description": "Storage convention and loader-mechanism reference (stub — populated by CL-v56).",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "mcp_servers": {
+      "description": "Canonical MCP server model definitions (stub — populated by CL-mfz).",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "marketplaces": {
+      "description": "Third-party source references for external libraries (stub — populated by CL-7ii).",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "plugins": {
+      "description": "Plugin bundle declarations (stub).",
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "dir_list": {
+      "description": "A list of named directory mappings (key: path pairs).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "additionalProperties": {
+          "type": "string",
+          "description": "Path to the directory (absolute, relative, or ~ prefix)."
+        }
+      }
+    },
+    "source_ref": {
+      "description": "Source reference for a catalog entry — local path or GitHub URL.",
+      "type": "string",
+      "examples": [
+        "/absolute/path/to/SKILL.md",
+        "https://github.com/org/repo/blob/main/skills/my-skill/SKILL.md",
+        "https://raw.githubusercontent.com/org/repo/main/skills/my-skill/SKILL.md"
+      ]
+    },
+    "typed_dependency": {
+      "description": "A typed dependency reference using 'type:name' format.",
+      "type": "string",
+      "pattern": "^(skill|agent|prompt):.+$",
+      "examples": ["skill:firecrawl", "agent:video-processor", "prompt:caption-style"]
+    },
+    "base_entry": {
+      "description": "Common fields shared by all catalog entry types.",
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this catalog entry.",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Human-readable description of what this entry provides.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Location of the source file (local path or GitHub URL).",
+          "$ref": "#/$defs/source_ref"
+        },
+        "requires": {
+          "description": "Typed dependencies that must be installed before this entry.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/typed_dependency"
+          },
+          "default": []
+        },
+        "version": {
+          "description": "Optional semantic version or tag of the entry.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Optional tags for search and filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "skill_entry": {
+      "description": "A skill catalog entry with install path information.",
+      "allOf": [
+        { "$ref": "#/$defs/base_entry" },
+        {
+          "type": "object",
+          "properties": {
+            "install_path": {
+              "description": "Override the default install directory for this skill.",
+              "type": "string"
+            },
+            "harness": {
+              "description": "Target harness for this skill (claude, codex, or both).",
+              "type": "string",
+              "enum": ["claude", "codex", "both"],
+              "default": "both"
+            }
+          }
+        }
+      ]
+    },
+    "agent_entry": {
+      "description": "An agent catalog entry with format-translation hints.",
+      "allOf": [
+        { "$ref": "#/$defs/base_entry" },
+        {
+          "type": "object",
+          "properties": {
+            "install_path": {
+              "description": "Override the default install directory for this agent.",
+              "type": "string"
+            },
+            "format": {
+              "description": "Agent file format (for translation hints between harnesses).",
+              "type": "string",
+              "enum": ["claude", "openai", "generic"]
+            }
+          }
+        }
+      ]
+    },
+    "prompt_entry": {
+      "description": "A prompt/command catalog entry.",
+      "allOf": [
+        { "$ref": "#/$defs/base_entry" },
+        {
+          "type": "object",
+          "properties": {
+            "install_path": {
+              "description": "Override the default install directory for this prompt.",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

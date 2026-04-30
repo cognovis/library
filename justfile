@@ -35,3 +35,7 @@ list:
 # Search the catalog by keyword
 search keyword:
     claude --dangerously-skip-permissions --model opus "/library search {{keyword}}"
+
+# Validate library.yaml against the JSON Schema
+validate-library:
+    python3 scripts/validate-library.py
