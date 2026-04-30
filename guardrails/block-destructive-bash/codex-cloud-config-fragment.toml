@@ -1,0 +1,39 @@
+# block-destructive-bash — Codex Cloud config fragment
+#
+# Codex Cloud has no event-level hook system. The nearest equivalent is
+# the approval_policy setting, which controls whether tool calls require
+# human approval before execution.
+#
+# Installation:
+#   Merge this fragment into ~/.codex/config.toml (or your project-local
+#   config.toml). This sets approval_policy = "all", requiring human
+#   approval for EVERY tool call — blunt but effective.
+#
+# CAPABILITY NOTE: This is a blunt-instrument installation.
+#   - approval_policy = "all" requires approval for ALL tool calls,
+#     not just destructive ones. This is more restrictive than the
+#     Claude Code implementation which only blocks specific patterns.
+#   - If you want less friction, consider approval_policy = "auto"
+#     (Codex decides) and rely on other guardrails for specific blocking.
+#
+# To merge into existing config.toml:
+#   1. Open ~/.codex/config.toml
+#   2. Set or add: approval_policy = "all"
+#   3. Optionally add the sandbox_permissions restrictions below
+#
+# References:
+#   - https://github.com/openai/codex (Codex CLI config docs)
+#   - docs/research/guardrails-mapping.md
+#   - library.yaml guardrails[block-destructive-bash]
+
+# Require human approval before every tool call.
+# Change to "auto" to let Codex decide (reduces friction, reduces protection).
+approval_policy = "all"
+
+# Optional: Restrict sandbox permissions to further limit destructive operations.
+# These are applied at the sandbox level, independently of approval_policy.
+# Uncomment and adjust as needed:
+#
+# [sandbox_permissions]
+# network = false          # Disable network access in sandboxed commands
+# write_outside_cwd = false  # Prevent writes outside the current working directory
