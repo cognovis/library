@@ -39,3 +39,7 @@ search keyword:
 # Validate library.yaml against the JSON Schema
 validate-library:
     python3 scripts/validate-library.py
+
+# Run cross-harness smoke tests (harness: claude-code | codex | pi | opencode | all)
+test-smoke harness="all":
+    bash tests/smoke/run-smoke.sh {{harness}}
