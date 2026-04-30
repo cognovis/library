@@ -2161,12 +2161,11 @@
     }
   },
   "summary": {
-    "total_artifacts_classified": 167,
-    "total_in_json_artifacts_array": 156,
-    "plus_dotclaude_skills_gitignored": 11,
-    "note_on_count": "156 classified in the artifacts array; 11 additional .claude/skills entries are gitignored local install copies documented in the orphaned_skills_needing_canonical_source list",
+    "total_artifacts_classified": 169,
+    "total_in_json_artifacts_array": 169,
+    "note_on_count": "169 artifacts classified in the array, including 14 .claude/skills gitignored local install copies (flagged with '(gitignored local install)' in path)",
     "origin_breakdown": {
-      "ORIGINAL": 142,
+      "ORIGINAL": 156,
       "PERSONAL": 13,
       "WRAPPER": 0,
       "ADOPTED": 0,
@@ -2174,8 +2173,8 @@
     },
     "notes_on_wrapper_adopted": "WRAPPER and ADOPTED are listed as origin=ORIGINAL with wrapper_of field where applicable. No external content was copied verbatim (ADOPTED). nbj-audit requires license confirmation.",
     "type_correctness": {
-      "total_in_artifacts_array": 156,
-      "correct_type": 152,
+      "total_in_artifacts_array": 169,
+      "correct_type": 165,
       "needs_reclassification": 4,
       "reclassification_items": [
         "infra/skills/infra-principles/SKILL.md (may be standard not skill — evaluate content)",
