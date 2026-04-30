@@ -132,6 +132,72 @@ default_dirs:
 - If the user specifies a custom path, use that path.
 - Otherwise, use the `default` directory (Claude Code).
 
+## Validating library.yaml
+
+The `library.yaml` catalog is validated against a formal JSON Schema at `docs/schema/library.schema.json`.
+
+### Running validation
+
+```bash
+# Via just (recommended)
+just validate-library
+
+# Via Python directly
+python3 scripts/validate-library.py
+
+# With custom paths
+python3 scripts/validate-library.py --yaml /path/to/library.yaml --schema /path/to/schema.json
+```
+
+Exit code `0` means PASS; exit code `1` means FAIL (errors printed to stdout).
+
+### Schema coverage
+
+The schema (`docs/schema/library.schema.json`) covers:
+
+| Section | Status | Description |
+|---------|--------|-------------|
+| `default_dirs` | Defined | Per-primitive directory mappings per harness |
+| `library.skills` | Defined | Skill catalog entries with source, requires, install paths |
+| `library.agents` | Defined | Agent catalog entries with format-translation hints |
+| `library.prompts` | Defined | Command/prompt catalog entries |
+| `guardrails` | Stub | Capability matrix per harness (CL-xcm) |
+| `standards` | Stub | Storage convention + loader-mechanism reference (CL-v56) |
+| `mcp_servers` | Stub | Canonical MCP server model (CL-mfz) |
+| `marketplaces` | Stub | Third-party source references (CL-7ii) |
+| `plugins` | Stub | Bundle declarations |
+
+Stub sections use `additionalProperties: true` so they pass validation when new beads (CL-xcm, CL-v56, CL-mfz, CL-7ii) add their content.
+
+### Pre-commit hook integration
+
+Add this to `.git/hooks/pre-commit` (or `scripts/pre-commit`):
+
+```bash
+#!/bin/sh
+python3 scripts/validate-library.py --quiet
+if [ $? -ne 0 ]; then
+  echo "library.yaml validation failed. Fix errors before committing."
+  exit 1
+fi
+```
+
+Or install automatically:
+
+```bash
+echo 'python3 scripts/validate-library.py --quiet || exit 1' >> .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+### Extending the schema
+
+When a new bead adds a section to `library.yaml`:
+
+1. Edit `docs/schema/library.schema.json`
+2. Replace the stub `additionalProperties: true` with a proper `$defs` entry
+3. Run `just validate-library` to confirm the new schema accepts the updated `library.yaml`
+4. Commit schema + `library.yaml` changes together
+
 ## Library Repo Sync
 
 The library skill itself lives in `<LIBRARY_SKILL_DIR>` as a cloned git repo. When running `add` (which modifies `library.yaml`), always:
