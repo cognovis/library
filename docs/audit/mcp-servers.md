@@ -13,7 +13,7 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 
 | # | Server | Harness | Stateless | Has CLI | Mobile-relevant | Recommendation |
 |---|--------|---------|-----------|---------|-----------------|----------------|
-| 1 | `open-brain` | Codex (`~/.codex/config.toml`) | yes | yes (hooks) | **yes** | Ship both: CLI+Skill already in place (hooks); keep MCP for claude.ai/iOS |
+| 1 | `open-brain` | Codex (`~/.codex/config.toml`) | yes | partial (hooks only; no on-demand CLI) | **yes** | Ship both: hooks cover automatic capture; build `ob` CLI for on-demand queries; keep MCP for claude.ai/iOS |
 | 2 | `searxng` | Codex | yes | partial (`crwl`) | no | Build CLI wrapper (`srx`), then convert; drop MCP |
 | 3 | `markitdown` | Codex | yes | **yes** (`markitdown` binary) | no | Convert to CLI+Skill, drop MCP |
 | 4 | `playwright` | Codex | no (browser sessions) | yes (`playwright-cli`) | no | Keep MCP (stateful browser sessions) |
@@ -39,13 +39,17 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 
 **Stateless:** Yes — each API call is independent; the server itself holds state but individual calls are stateless HTTP.
 
-**Has CLI:** Yes — the open-brain plugin for Claude Code is implemented as **hooks** (SessionStart, PostToolUse, etc.), not as MCP. Hooks fire automatically in Claude Code harness.
+**Has CLI:** Partial — the open-brain plugin for Claude Code is implemented as **hooks** (SessionStart, PostToolUse, etc.), which fire automatically in the Claude Code harness for context capture and injection. However, hooks are **not** a CLI replacement: there is no `ob search "query"`, `ob save`, or other on-demand CLI for scripting, ad-hoc queries, or use outside an active Claude Code session. This is partial CLI coverage, not full — analogous to `executive-circle`, where the MCP works for mobile but the coding harness still needs a CLI wrapper.
 
 **Mobile-relevant:** Yes — `claude.ai` web and Claude iOS have no hook mechanism; MCP is the only path for memory access on those harnesses.
 
-**Recommendation:** Ship both. The hooks-based integration already serves the coding harness. The MCP server must be retained for claude.ai/iOS access.
+**Recommendation:** Ship both: hooks already cover automatic context capture for coding harnesses; build a CLI tool for on-demand queries (e.g. `ob search "query"`, `ob save`); keep MCP for claude.ai/iOS where hooks are unavailable.
 
-**Migration plan:** No action needed. Current dual-path setup is correct per PRIMITIVES.md §8.
+**Migration plan:**
+1. Build an `ob` CLI wrapper (thin client against the open-brain HTTP API at `https://open-brain.sussdorff.org`) exposing on-demand subcommands such as `ob search "query"`, `ob save`, `ob context`, `ob wake-up`.
+2. Create or extend a skill (e.g. `open-brain:ob-cli`) that wraps the CLI for scripted/ad-hoc use outside hook-driven flows.
+3. Retain the existing hooks for automatic capture/injection inside Claude Code sessions.
+4. Retain the MCP server for claude.ai web and Claude iOS, where neither hooks nor a local CLI are available.
 
 ---
 
@@ -288,7 +292,7 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 | Server | Action |
 |--------|--------|
 | `executive-circle` | Build `ec` CLI + `content:executive-circle-cli` skill; retain MCP for claude.ai/iOS |
-| `open-brain` | No action — hooks already cover coding harness; MCP already covers mobile |
+| `open-brain` | Build `ob` CLI for on-demand queries (`ob search`, `ob save`); retain hooks for automatic capture; retain MCP for claude.ai/iOS |
 
 ### Keep MCP (state, encrypted format, or harness constraint)
 
@@ -318,4 +322,5 @@ The following implementation beads should be created from this audit:
 4. **Build `skill-seeker` CLI** and skill, drop `skill-seeker` from Claude Code MCP config
 5. **Investigate `heypresto`** — determine CLI viability, build if feasible
 6. **Build `executive-circle` CLI** (`ec`) for coding harnesses
-7. **Update `library.yaml`** — reflect `crawl4ai` as CLI-only, add MCP registry entries per CL-mfz schema
+7. **Build `open-brain` CLI** (`ob`) for on-demand memory queries (`ob search`, `ob save`, etc.); hooks remain for automatic capture, MCP remains for claude.ai/iOS
+8. **Update `library.yaml`** — reflect `crawl4ai` as CLI-only, add MCP registry entries per CL-mfz schema
