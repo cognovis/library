@@ -74,15 +74,25 @@ matching context.
 field is what the model matches against. No user slash command required.
 
 **Trigger semantics.** The harness surfaces available skills to the model. When the
-model infers a skill is relevant (via description matching), it reads the full SKILL.md
-and follows its instructions.
+model infers a skill is relevant (via description matching), it applies the skill's
+instructions. The mechanics of *how* the SKILL.md text reaches the model differ per
+harness — see Cost table below:
+
+- **Claude Code**: full SKILL.md text is loaded into context at session start for
+  every installed skill. When the model infers relevance, the content is already
+  present; no fresh read occurs.
+- **Codex CLI**: only the skill name and description are loaded at startup. When
+  the model infers relevance, the harness fetches the full SKILL.md on first use.
+
+In both harnesses, the `description` field is what the model matches against to
+decide relevance — only the timing of the full-text load differs.
 
 **Cost (per harness).**
 
 | Harness | Startup cost | Runtime cost |
 |---------|-------------|--------------|
-| Claude Code | Full SKILL.md text loaded at session start for every installed skill. High static context cost. NORMATIVE — confirmed behavior. | Skill content already in context; no per-invocation fetch. |
-| Codex CLI | Name, description, and path only loaded at startup (NOT full text). Much lower static cost. INFERRED — consistent with CL-qzw research findings on Codex skill discovery; pending direct vendor confirmation. | Full SKILL.md fetched on first use. Per-invocation fetch cost. |
+| Claude Code | Full SKILL.md text loaded at session start for every installed skill. High static context cost. NORMATIVE — confirmed behavior. | Skill content already in context; no per-invocation fetch. NORMATIVE — direct consequence of session-start loading. |
+| Codex CLI | Name, description, and path only loaded at startup (NOT full text). Much lower static cost. INFERRED — consistent with CL-qzw research findings on Codex skill discovery; pending direct vendor confirmation. | Full SKILL.md fetched on first use. Per-invocation fetch cost. INFERRED — consistent with CL-qzw research findings; pending direct vendor confirmation. |
 
 **Format.** SKILL.md — shared format (Open Agent Skills Standard). Install paths
 differ: `.claude/skills/<name>/SKILL.md` (Claude Code) vs `.agents/skills/<name>/SKILL.md`
@@ -254,8 +264,9 @@ distributing collections of invokable primitives.
 ### 5. Plugin
 
 **Definition.** An installable unit that bundles multiple primitives (skills,
-commands, agents, hooks, scripts) into a single versioned package distributed from
-one source.
+commands, agents, hooks) into a single versioned package distributed from
+one source. (Scripts are not a primitive — they are an implementation substrate
+used inside skills/hooks/agents; see "Design Principle: Scripts" below.)
 
 **Key constitutive feature.** Composite installable: a plugin is defined by its
 bundling — it contains multiple primitive types that work together as a coherent
@@ -285,7 +296,7 @@ skill/hook for its standing context or latency cost.
 | Plugin | Why it is a plugin |
 |--------|-------------------|
 | `reference-file-compactor` | Bundles a skill + a command + hooks into one installable. The skill alone would not work without the companion hooks; atomicity is required. |
-| `beads-workflow` | Bundles multiple agents + scripts + hooks. The bead orchestration workflow only works when all parts are co-installed. |
+| `beads-workflow` | Bundles multiple agents + hooks (with internal scripts as implementation detail of each). The bead orchestration workflow only works when all parts are co-installed. |
 
 ---
 
@@ -427,6 +438,35 @@ tool-use block. The MCP server responds with a tool result.
 
 ---
 
+### 9. Design Principle: Scripts (not a primitive)
+
+Scripts are not an agentic primitive — they are the preferred implementation substrate
+for deterministic logic inside any primitive.
+
+**The rule:** Maximize deterministic script logic; minimize model decisions.
+
+- Logic that is deterministic, testable, and >50 lines MUST be extracted to a script
+  (bash or Python via `uv`). Do not embed it inline in a skill's prompt.
+- The model is expensive and non-deterministic. Anything the model decides that a
+  script could decide reliably is wasted tokens and added variance.
+- Standard runtime: `bash` for simple orchestration; `uv`-managed Python for anything
+  requiring libraries or structured data.
+
+**Where scripts live.**
+
+| Context | Script location |
+|---------|----------------|
+| Skill implementation | `skills/<name>/bin/` alongside SKILL.md |
+| Hook implementation | `hooks/<event>/<name>.py` or `.sh` |
+| Plugin shared logic | `plugins/<name>/scripts/` |
+| Standalone Justfile tasks | `justfile` (tool-agnostic shell) |
+
+**Anti-pattern.** A 200-line shell pipeline embedded in a skill's prompt is a smell.
+The model will hallucinate flags, get argument order wrong, and produce non-reproducible
+results. Extract to a script and have the skill call it.
+
+---
+
 ### 10. Model-Standard
 
 **Definition.** A markdown document containing model-specific behavioral guidance
@@ -487,35 +527,6 @@ model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrid
   persona to one model and makes model-swapping harder.
 - Do NOT create a model-standard for a behavior that applies to all models — that
   belongs in the base golden prompt or a general standard.
-
----
-
-### 9. Design Principle: Scripts (not a primitive)
-
-Scripts are not an agentic primitive — they are the preferred implementation substrate
-for deterministic logic inside any primitive.
-
-**The rule:** Maximize deterministic script logic; minimize model decisions.
-
-- Logic that is deterministic, testable, and >50 lines MUST be extracted to a script
-  (bash or Python via `uv`). Do not embed it inline in a skill's prompt.
-- The model is expensive and non-deterministic. Anything the model decides that a
-  script could decide reliably is wasted tokens and added variance.
-- Standard runtime: `bash` for simple orchestration; `uv`-managed Python for anything
-  requiring libraries or structured data.
-
-**Where scripts live.**
-
-| Context | Script location |
-|---------|----------------|
-| Skill implementation | `skills/<name>/bin/` alongside SKILL.md |
-| Hook implementation | `hooks/<event>/<name>.py` or `.sh` |
-| Plugin shared logic | `plugins/<name>/scripts/` |
-| Standalone Justfile tasks | `justfile` (tool-agnostic shell) |
-
-**Anti-pattern.** A 200-line shell pipeline embedded in a skill's prompt is a smell.
-The model will hallucinate flags, get argument order wrong, and produce non-reproducible
-results. Extract to a script and have the skill call it.
 
 ---
 
