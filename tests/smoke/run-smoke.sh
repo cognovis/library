@@ -1114,7 +1114,11 @@ smoke_migration() {
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 6: At least one SKILL.md in claude-code-plugins has requires_standards:
+    # CHECK 6: SKILL.md files in claude-code-plugins have requires_standards:
+    # Note: This check requires ~/code/claude-code-plugins to be cloned locally.
+    # It fails (not skips) if the directory is missing — the smoke_migration harness
+    # is designed to run only on machines where the full migration has been applied.
+    # Run 'all' harness for CI-safe checks that don't depend on user-global state.
     # -----------------------------------------------------------------------
     if [[ -d "${ccp_skills_root}" ]]; then
         local skills_with_requires
@@ -1128,7 +1132,7 @@ smoke_migration() {
             fail "migration/skills-have-requires-standards: only ${skills_with_requires} skills have requires_standards: (expected >= 50)"
         fi
     else
-        skip "migration/skills-have-requires-standards: claude-code-plugins not cloned at ${ccp_skills_root}"
+        fail "migration/skills-have-requires-standards: claude-code-plugins not found at ${ccp_skills_root} — clone it or skip this harness"
     fi
 
     # -----------------------------------------------------------------------
@@ -1330,6 +1334,10 @@ main() {
             smoke_migration
             ;;
         all)
+            # Note: smoke_migration is intentionally excluded from 'all'.
+            # It validates user-global state (~/.agents/standards/, ~/code/claude-code-plugins)
+            # and would fail on clean CI/dev homes that have not run the CL-717 migration.
+            # Run explicitly: ./run-smoke.sh migration
             smoke_claude_code
             smoke_codex
             smoke_pi
@@ -1338,7 +1346,6 @@ main() {
             smoke_lockfile
             smoke_standards
             smoke_golden_prompts
-            smoke_migration
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
