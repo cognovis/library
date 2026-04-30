@@ -63,7 +63,7 @@ Every Claude Code frontmatter field vs. its Codex TOML counterpart.
 | *(no equivalent)* | — | `nickname_candidates` | array of strings | **Codex-only** | Natural-language aliases for agent invocation matching. No Claude Code equivalent. Preserved on round-trip as a comment in the `.md` frontmatter or dropped. NORMATIVE — confirmed in all three production agents. |
 | *(no equivalent)* | — | `model_reasoning_effort` | string (`high`, `xhigh`, `medium`, `low`) | **Codex-only** | Chain-of-thought depth control. No Claude Code equivalent. Dropped on reverse translation. NORMATIVE — confirmed in all three production agents. |
 | *(no equivalent)* | — | `sandbox_mode` | string enum | **Codex-only (primary)** | No Claude Code equivalent. Set on forward translation based on tool analysis (see §4). NORMATIVE. |
-| *(no equivalent)* | — | `mcp_servers` (TOML table) | table | **Codex-only (optional)** | Per-agent MCP server override. Rarely used — all three production agents omit it, inheriting global config. NORMATIVE. |
+| *(no equivalent)* | — | `mcp_servers` (TOML table) | table | **Lossy forward — comment only; no per-agent enforcement** | No per-agent `mcp_servers` override exists in Codex — all three production agents omit this section and inherit from global `~/.codex/config.toml`. `mcpServers` from the Claude source translates to a comment block only (see §4 Step 5). NORMATIVE. |
 
 ### Summary: Fields by Category
 
@@ -119,7 +119,8 @@ model: sonnet
 color: purple
 
 # Codex-specific metadata (preserved for sync-codex-agents round-trip)
-codex_model: gpt-5.4
+codex_model: gpt-5.4          # TARGET Codex model identifier (Codex vocabulary, e.g. gpt-5.4)
+codex_claude_model: sonnet    # Original Claude model name for reverse translation (Claude vocabulary)
 codex_model_reasoning_effort: high
 codex_sandbox_mode: workspace-write
 codex_nickname_candidates:
@@ -131,6 +132,11 @@ codex_nickname_candidates:
 ```
 
 The `codex_*` prefix namespace isolates Codex-specific fields from Claude Code frontmatter, preventing Claude Code from attempting to interpret them. INFERRED — this pattern is not yet in use but follows the extended frontmatter convention.
+
+**Field vocabulary contract:**
+- `codex_model` — stores the **Codex** model identifier (e.g. `gpt-5.4`, `gpt-5.5`). This is Codex vocabulary, not Claude vocabulary.
+- `codex_claude_model` — stores the **original Claude** model name (e.g. `haiku`, `sonnet`, `opus`) for lossless reverse translation. Without this field, reverse translation from `gpt-5.4` always falls back to `sonnet` (see §5 Step 3).
+- Do NOT store Claude model names in `codex_model` — that would mix vocabularies and break both forward and reverse translation.
 
 ---
 
@@ -161,14 +167,18 @@ If `system_prompt_file` is set in frontmatter, read the referenced file — that
 
 ### Step 3: Map model
 
-Use the following lookup table. INFERRED — no official mapping exists. The `sonnet → gpt-5.4` mapping is observed in three production agents; `haiku` and `opus` mappings are best-guess and have no observed precedent:
+If `codex_model` is set in the frontmatter, use that value directly as the Codex `model` field — it already contains the Codex model identifier (e.g. `gpt-5.4`).
+
+If `codex_model` is absent, use the following lookup table. INFERRED — no official mapping exists. The `sonnet → gpt-5.4` mapping is observed in three production agents; `haiku` and `opus` mappings are best-guess and have no observed precedent:
 
 | Claude Code `model` | Codex `model` | Notes |
 |--------------------|--------------|-------|
-| `haiku` | `gpt-5.4` | Haiku = lightweight; mapped to `gpt-5.4` (same as sonnet). This reflects current practice — may be revisited as Codex model identifiers stabilize and a distinct lightweight model becomes available. |
+| `haiku` | `gpt-5.4` | INFERRED — best-guess, no observed precedent. Haiku = lightweight; mapped to `gpt-5.4` (same as sonnet) as the closest available Codex model. May be revisited as Codex model identifiers stabilize and a distinct lightweight model becomes available. |
 | `sonnet` | `gpt-5.4` | Default production model |
 | `opus` | `gpt-5.5` | Heavy reasoning tasks; map to most capable Codex model |
 | *(unset)* | `gpt-5.4` | Default |
+
+Also store the original Claude model name in `codex_claude_model` extended frontmatter (if not already set) to enable lossless reverse translation. This is especially important when `model: haiku` is set, because both `haiku` and `sonnet` map to `gpt-5.4` and the reverse translation cannot distinguish them without this field.
 
 Emit a translation comment in the generated TOML:
 ```toml
@@ -220,9 +230,13 @@ Check the Claude `.md` frontmatter for `codex_*` extended fields:
 | `codex_sandbox_mode` | `sandbox_mode` (overrides Step 4 derivation) |
 | `codex_nickname_candidates` | `nickname_candidates` |
 
-If no `codex_*` fields are present, apply defaults:
-- `model_reasoning_effort`: derive from model → `high` for opus, `high` for sonnet, `medium` for haiku. INFERRED.
-- `nickname_candidates`: generate from `name` and first sentence of `description`. INFERRED.
+For each `codex_*` field, check and default **independently** — the presence of one `codex_*` field does NOT suppress defaults for others that are absent:
+
+- `codex_model_reasoning_effort` absent → derive from model: `high` for opus, `high` for sonnet, `medium` for haiku. INFERRED.
+- `codex_nickname_candidates` absent → generate from `name` and first sentence of `description`. INFERRED.
+- `codex_sandbox_mode` absent → use the result from Step 4 derivation.
+
+Each field is checked and defaulted individually regardless of whether other `codex_*` fields are present.
 
 ### Step 7: Drop non-translatable fields
 
@@ -289,9 +303,13 @@ Extract all fields. Identify which were originally derived vs. extended.
 
 ### Step 3: Reverse-map model
 
+First check whether `codex_claude_model` is set in the canonical `.md` frontmatter (or was preserved as a comment in the `.toml`). If present, use that value as the Claude `model` field directly — it contains the original Claude model name (e.g. `haiku`, `sonnet`, `opus`) in Claude vocabulary.
+
+If `codex_claude_model` is absent, fall back to the lookup table below:
+
 | Codex `model` | Claude Code `model` | Notes |
 |--------------|-------------------|-------|
-| `gpt-5.4` | `sonnet` (default) | Both `haiku` and `sonnet` forward to `gpt-5.4`, so the reverse is always `sonnet`. A `haiku` selection can only be preserved if `codex_model: haiku` is set in the extended frontmatter. |
+| `gpt-5.4` | `sonnet` (default) | Both `haiku` and `sonnet` forward to `gpt-5.4`, so the reverse is always `sonnet` when `codex_claude_model` is not set. To preserve a `haiku` selection, set `codex_claude_model: haiku` in the canonical `.md` frontmatter — the forward algorithm (§4 Step 3) should set this automatically. |
 | `gpt-5.5` | `opus` | |
 | *(any other)* | `sonnet` (default; emit warning) | |
 
@@ -570,7 +588,7 @@ This agent handles research ONLY. It does not:
 
 2. **`model_reasoning_effort`.** Chain-of-thought depth control has no Claude Code equivalent field. Claude Code manages reasoning depth via model selection (`sonnet` vs `opus`) rather than a separate effort parameter. NORMATIVE — confirmed in Codex documentation.
 
-3. **`haiku` → `gpt-5.4` → `sonnet` round-trip model loss.** Because both `haiku` and `sonnet` forward-translate to `gpt-5.4`, the reverse mapping always produces `sonnet`. An agent originally configured with `model: haiku` silently loses its model selection on round-trip. This can only be prevented if `codex_model: haiku` is set in the Claude source's extended frontmatter — in that case, §5 Step 3 should use the `codex_model` value as the reverse-mapping target. INFERRED — no observed production agent uses `haiku`.
+3. **`haiku` → `gpt-5.4` → `sonnet` round-trip model loss.** Because both `haiku` and `sonnet` forward-translate to `gpt-5.4`, the reverse mapping always produces `sonnet`. An agent originally configured with `model: haiku` silently loses its model selection on round-trip. This loss CAN be avoided by setting `codex_claude_model: haiku` in the canonical `.md` frontmatter — `codex_claude_model` stores the original Claude model name (Claude vocabulary) and is used by §5 Step 3 for lossless reverse mapping. Note: `codex_model` stores the Codex model identifier (e.g. `gpt-5.4`) and must NOT be set to a Claude model name like `haiku`. INFERRED — no observed production agent uses `haiku`.
 
 ---
 
