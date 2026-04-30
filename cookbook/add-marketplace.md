@@ -59,8 +59,17 @@ git push
 ```
 
 ### 6. Confirm
-Tell the user the marketplace has been registered. They can now reference it in catalog entries:
+Tell the user the marketplace has been registered. They can now reference it in catalog entries using one of two approaches:
 
+**Option A: Explicit source URL (no marketplace reference)**
+```yaml
+library:
+  skills:
+    - name: some-skill
+      source: https://github.com/<org>/<repo-name>/blob/main/.claude/skills/some-skill/SKILL.md
+```
+
+**Option B: Marketplace reference (source derived at install time)**
 ```yaml
 library:
   skills:
@@ -68,5 +77,6 @@ library:
       from_marketplace: <name>
       repo: <repo-name>
       path: .claude/skills/some-skill
-      source: https://github.com/<org>/<repo-name>/blob/main/.claude/skills/some-skill/SKILL.md
 ```
+
+You may provide either `source` (explicit URL) or `from_marketplace + repo + path` (derived at install time), but not both — if both are present, `source` takes precedence.

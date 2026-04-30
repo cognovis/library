@@ -18,16 +18,14 @@ git pull
 - If the `marketplaces:` key is absent or the list is empty, report: "No marketplaces registered."
 
 ### 3. Display as Table
-Format the output as a table:
+Format the output as a table (example output — actual entries reflect library.yaml):
 
 ```
 ## Marketplaces
 | Name | Source | Description |
 |------|--------|-------------|
-| anthropic-official | https://github.com/anthropics | Anthropic-curated Claude plugins and extensions |
-| cognovis-samurai | https://github.com/cognovis/samurai-skills | Cognovis Samurai skills collection |
-| disler | https://github.com/disler | Public skill/agent/hooks repos for Claude Code and AI agents |
-| thadenorigar | https://github.com/ThadeNorigar | Private K2SO and related agent repos |
+| <name> | <source-url> | <description> |
+| <name> | <source-url> | <description> |
 ```
 
 - Sort rows alphabetically by `Name`

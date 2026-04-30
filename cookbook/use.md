@@ -15,21 +15,23 @@ cd <LIBRARY_SKILL_DIR>
 git pull
 ```
 
-### 2. Resolve Marketplace Reference
-If the matched catalog entry has a `from_marketplace` field:
-- Look up the marketplace by name in `library.yaml` → `marketplaces`
-- If not found, warn the user: "Marketplace '<name>' is not registered in library.yaml" and stop
-- Construct the full source URL from the marketplace fields:
-  - `<marketplace.source>/<repo>/<path>` (e.g. `https://github.com/disler/claude-code-hooks-mastery/.claude/skills/ruff`)
-- Use this resolved URL as the effective `source` for the remaining steps (treat it as a GitHub URL)
-- If the entry also has an explicit `source` field, the `from_marketplace`-derived URL takes precedence
-
-### 3. Find the Entry
+### 2. Find the Entry
 - Read `library.yaml`
 - Search across `library.skills`, `library.agents`, and `library.prompts`
 - Match by name (exact) or description (fuzzy/keyword match)
 - If multiple matches, show them and ask the user to pick one
 - If no match, tell the user and suggest `/library search`
+
+### 3. Resolve Marketplace Reference
+If the matched catalog entry has a `from_marketplace` field:
+- Look up the marketplace by name in `library.yaml` → `marketplaces`
+- If not found, warn the user: "Marketplace '<name>' is not registered in library.yaml" and stop
+- Construct the full browser-form GitHub URL from the marketplace fields:
+  - For a skill: `<marketplace.source>/<repo>/blob/main/<path>/SKILL.md`
+  - Example: `https://github.com/disler/claude-code-hooks-mastery/blob/main/.claude/skills/ruff/SKILL.md`
+  - If the entry's `path` already includes the filename, use it directly
+- Use this resolved URL as the effective `source` for the remaining steps (treat it as a GitHub browser URL)
+- If the entry also has an explicit `source` field, the explicit `source` takes precedence over the marketplace-derived URL
 
 ### 4. Resolve Dependencies
 If the entry has a `requires` field:
