@@ -20,10 +20,10 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 | 5 | `executive-circle` | Codex | yes | no | **yes** | Ship both: build CLI wrapper for coding harnesses; keep MCP for claude.ai/iOS |
 | 6 | `pencil` | Codex + Claude Desktop | no (editor state, encrypted files) | no | no | Keep MCP (stateful, encrypted .pen format) |
 | 7 | `heypresto` | Codex | yes | unknown | potentially yes | Investigate CLI; if none, build; ship both if mobile-relevant |
-| 8 | `stringer` | Codex | yes (assumed) | **yes** (`stringer` binary) | no | Convert to CLI+Skill, drop MCP |
+| 8 | `stringer` | Codex | yes (assumed) | removed | no | Removed: unused third-party tool; MCP, CLI, and skill retired |
 | 9 | `lsp` | Codex | no (LSP sessions) | n/a | no | Keep MCP (stateful LSP sessions) |
 | 10 | `FileSystem` | Claude Desktop | yes | n/a (no shell in Desktop) | no | Keep MCP (Desktop has no shell access; this is the only path) |
-| 11 | `skill-seeker` | Claude Code (`~/.config/claude-code/mcp.json`) | yes | could be built | no | Build CLI wrapper, then convert; drop MCP |
+| 11 | `skill-seeker` | Claude Code (`~/.config/claude-code/mcp.json`) | yes | n/a | no | Removed: Claude Code native skill discovery is sufficient |
 | 12 | `crawl4ai` | — (not in MCP configs) | yes | **yes** (`crwl`) | no | Already converted; no MCP to drop. Note in registry. |
 | 13 | `claude-in-chrome` | — (Chrome extension, not MCP) | no (browser session) | no | no | Not an MCP server; extension model; no action needed. |
 
@@ -176,20 +176,20 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 
 **Harness:** Codex CLI, command stdio MCP.
 
-**Capabilities:** Purpose was unclear from config alone. The `stringer` binary exists in PATH. The `beads-workflow:stringer` skill description mentions "Codebase archaeology."
+**Capabilities:** Purpose was unclear from config alone. Before removal, the `beads-workflow:stringer` skill described it as "Codebase archaeology."
 
 **Stateless:** Yes (assumed).
 
-**Has CLI:** Yes — `stringer` binary exists.
+**Has CLI:** Removed — the Homebrew-installed `stringer` binary was retired with the MCP entry.
 
 **Mobile-relevant:** No — codebase analysis is a coding-harness-only concern.
 
-**Recommendation:** Convert to CLI + Skill. The binary already exists; the `beads-workflow:stringer` skill may already wrap it. Verify the skill uses the binary directly; if so, drop the MCP server.
+**Status:** Removed in `CL-ao5`. `stringer` was unused and came from a third-party Homebrew tap, so the CLI, Codex MCP entry, and `beads-workflow:stringer` skill were removed instead of preserving a CLI-only path.
 
-**Migration plan:**
-1. Audit `beads-workflow:stringer` skill to confirm it invokes the `stringer` binary.
-2. If confirmed: remove `stringer` MCP from `~/.codex/config.toml`.
-3. If skill calls MCP: update skill to call binary directly.
+**Removal plan:**
+1. Uninstall the `stringer` Homebrew formula.
+2. Remove `[mcp_servers.stringer]` from `~/.codex/config.toml`.
+3. Delete the `beads-workflow:stringer` skill directory.
 
 ---
 
@@ -233,16 +233,15 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 
 **Stateless:** Yes — search queries are independent.
 
-**Has CLI:** Not built yet, but straightforward to create (Python script querying the same index).
+**Has CLI:** Not needed — Claude Code native skill discovery covers the use case.
 
 **Mobile-relevant:** No — skill discovery is a coding-harness concern.
 
-**Recommendation:** Build a CLI wrapper, create a Skill, then drop MCP. Claude Code already has the `skill-seeker` available natively; the MCP adds process overhead.
+**Status:** Removed in `CL-byh`. The MCP entry duplicated Claude Code's native skill discovery and added local process overhead without an active workflow need.
 
-**Migration plan:**
-1. Extract the search logic from `~/code/ai/Skill_Seekers/mcp/server.py` into a standalone CLI (`skill-seek "query"`).
-2. Create or extend a skill that invokes this CLI.
-3. Remove `skill-seeker` from `~/.config/claude-code/mcp.json`.
+**Removal plan:**
+1. Remove `skill-seeker` from `~/.config/claude-code/mcp.json`.
+2. Keep the source repository disposition as a separate user decision.
 
 ---
 
@@ -277,14 +276,12 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 | Server | Action | CLI to use | Skill to create/extend |
 |--------|--------|------------|------------------------|
 | `markitdown` | Remove from `~/.codex/config.toml`; decommission `~/code/ai/markitdown-mcp/` | `markitdown` binary | `dev-tools:markitdown` |
-| `stringer` | Verify `beads-workflow:stringer` uses binary; remove from `~/.codex/config.toml` | `stringer` binary | `beads-workflow:stringer` (verify/update) |
 
 ### Short-term: Build CLI wrapper, then convert
 
 | Server | Action | CLI to build | Skill to create |
 |--------|--------|--------------|-----------------|
 | `searxng` | Build `srx` CLI → create skill → drop MCP from Codex | `srx "query"` (SearXNG HTTP API) | `dev-tools:web-search` |
-| `skill-seeker` | Extract CLI from Python server → create skill → drop MCP from Claude Code | `skill-seek "query"` | extend existing or new `dev-tools:skill-seeker` |
 | `heypresto` | Investigate API → build `hp` CLI → create skill → evaluate mobile | `hp "text"` | `dev-tools:heypresto` |
 
 ### Ship both (build CLI for coding harness, keep MCP for mobile)
@@ -303,6 +300,13 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 | `lsp` | Stateful LSP sessions |
 | `FileSystem` (Desktop) | Desktop harness has no shell |
 
+### Removed
+
+| Entry | Rationale |
+|-------|-----------|
+| `stringer` | Removed entirely: unused third-party Homebrew tool; Codex MCP entry, CLI, and `beads-workflow:stringer` skill retired. |
+| `skill-seeker` | Removed from Claude Code MCP config: native skill discovery is sufficient; repo disposition remains separate. |
+
 ### No action (not an MCP server / already converted)
 
 | Entry | Status |
@@ -317,10 +321,8 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 The following implementation beads should be created from this audit:
 
 1. **Convert `markitdown` to CLI+Skill** — build `dev-tools:markitdown` skill, drop MCP
-2. **Verify and clean up `stringer` MCP** — confirm `beads-workflow:stringer` skill uses binary directly
-3. **Build `searxng` CLI wrapper** (`srx`) and `dev-tools:web-search` skill, drop MCP
-4. **Build `skill-seeker` CLI** and skill, drop `skill-seeker` from Claude Code MCP config
-5. **Investigate `heypresto`** — determine CLI viability, build if feasible
-6. **Build `executive-circle` CLI** (`ec`) for coding harnesses
-7. **Build `open-brain` CLI** (`ob`) for on-demand memory queries (`ob search`, `ob save`, etc.); hooks remain for automatic capture, MCP remains for claude.ai/iOS
-8. **Update `library.yaml`** — reflect `crawl4ai` as CLI-only, add MCP registry entries per CL-mfz schema
+2. **Build `searxng` CLI wrapper** (`srx`) and `dev-tools:web-search` skill, drop MCP
+3. **Investigate `heypresto`** — determine CLI viability, build if feasible
+4. **Build `executive-circle` CLI** (`ec`) for coding harnesses
+5. **Build `open-brain` CLI** (`ob`) for on-demand memory queries (`ob search`, `ob save`, etc.); hooks remain for automatic capture, MCP remains for claude.ai/iOS
+6. **Update `library.yaml`** — reflect `crawl4ai` as CLI-only, add MCP registry entries per CL-mfz schema
