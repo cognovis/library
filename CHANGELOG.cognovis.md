@@ -5,6 +5,14 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Agentic Primitives Glossary** (`docs/PRIMITIVES.md`): Comprehensive v0 taxonomy defining 9 primitive types (skill, command, agent, guardrail, plugin, marketplace, standard, mcp-server, plus design principle on scripts) with decision tree, worked examples, and per-harness capability matrix labeled as NORMATIVE or INFERRED claims. Cross-referenced from `docs/ARCHITECTURE.md`.
+
+---
+
 ## [v2026.04.2] - 2026-04-16
 
 ### Added
