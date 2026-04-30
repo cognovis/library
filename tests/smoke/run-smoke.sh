@@ -1319,8 +1319,7 @@ smoke_fleet_migration() {
     local init_agent_script="${plugins_root}/meta/skills/agent-forge/scripts/init-agent.py"
 
     if [[ ! -d "${plugins_root}" ]]; then
-        echo "  SKIP  fleet-migration: ~/code/claude-code-plugins not found (not a developer machine)"
-        SKIP_COUNT=$((SKIP_COUNT + 1))
+        skip "fleet-migration: ~/code/claude-code-plugins not found — all agent migration checks require the developer clone"
         return
     fi
 
@@ -1388,7 +1387,12 @@ smoke_fleet_migration() {
     local required_plugins=("beads-workflow" "core" "dev-tools")
     for plugin in "${required_plugins[@]}"; do
         local sample_file
-        sample_file="$(find "${plugins_root}/${plugin}/agents" -name "*.md" 2>/dev/null | grep -v worktrees | head -1)"
+        # Collect candidates without relying on pipe exit code (safe under set -e)
+        local candidates=()
+        while IFS= read -r f; do
+            candidates+=("$f")
+        done < <(find "${plugins_root}/${plugin}/agents" -name "*.md" 2>/dev/null | grep -v worktrees || true)
+        sample_file="${candidates[0]:-}"
         if [[ -z "${sample_file}" ]]; then
             fail "fleet-migration/cross-harness-${plugin}: no agents found under ${plugin}/agents/"
             continue
