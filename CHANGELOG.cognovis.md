@@ -10,6 +10,7 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 ### Added
 
 - **Agentic Primitives Glossary** (`docs/PRIMITIVES.md`): Comprehensive v0 taxonomy defining 9 primitive types (skill, command, agent, guardrail, plugin, marketplace, standard, mcp-server, plus design principle on scripts) with decision tree, worked examples, and per-harness capability matrix labeled as NORMATIVE or INFERRED claims. Cross-referenced from `docs/ARCHITECTURE.md`.
+- **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table (13 fields), canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies lossy fields and proposes `codex_*` extended frontmatter convention for round-trip fidelity. Closes CL-11p.
 
 ---
 
