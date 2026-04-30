@@ -1295,6 +1295,141 @@ smoke_golden_prompts() {
 }
 
 # ---------------------------------------------------------------------------
+# smoke_fleet_migration
+#  Validates that all agents in claude-code-plugins have been migrated to the
+#  Golden-Prompt composition model (CL-xpg).
+#
+#  Checks per agent file in ~/code/claude-code-plugins/**/agents/*.md:
+#  1. golden_prompt_extends field is present in YAML frontmatter
+#  2. model_standards field is present in YAML frontmatter
+#
+#  Cross-harness validation: verifies at least 3 agents across different plugins
+#  (beads-workflow, core, dev-tools) have both fields.
+#
+#  agent-forge: init-agent.py template emits golden_prompt_extends and model_standards.
+#
+#  Note: This smoke uses ~/code/claude-code-plugins as the source of truth.
+#  It is excluded from 'all' (same pattern as smoke_migration) because it relies
+#  on the developer's local clone. Run explicitly: ./run-smoke.sh fleet-migration
+# ---------------------------------------------------------------------------
+smoke_fleet_migration() {
+    section "fleet-migration"
+
+    local plugins_root="${HOME}/code/claude-code-plugins"
+    local init_agent_script="${plugins_root}/meta/skills/agent-forge/scripts/init-agent.py"
+
+    if [[ ! -d "${plugins_root}" ]]; then
+        echo "  SKIP  fleet-migration: ~/code/claude-code-plugins not found (not a developer machine)"
+        SKIP_COUNT=$((SKIP_COUNT + 1))
+        return
+    fi
+
+    # Collect all agent .md files (excluding worktrees and test fixtures)
+    local agent_files=()
+    while IFS= read -r f; do
+        agent_files+=("$f")
+    done < <(find "${plugins_root}" -name "*.md" -path "*/agents/*" \
+        | grep -v "worktrees" \
+        | grep -v "token-cost" \
+        | sort)
+
+    local total="${#agent_files[@]}"
+    if [[ "${total}" -eq 0 ]]; then
+        fail "fleet-migration/agent-count: no agent .md files found under ~/code/claude-code-plugins"
+        return
+    fi
+
+    pass "fleet-migration/agent-count: found ${total} agent .md files in claude-code-plugins"
+
+    # -----------------------------------------------------------------------
+    # CHECK 1+2: All agents have golden_prompt_extends and model_standards
+    # -----------------------------------------------------------------------
+    local missing_golden=0
+    local missing_std=0
+    local missing_list_golden=()
+    local missing_list_std=()
+
+    for f in "${agent_files[@]}"; do
+        local rel
+        rel="$(echo "${f}" | sed "s|${plugins_root}/||")"
+        if ! grep -q "^golden_prompt_extends:" "${f}" 2>/dev/null; then
+            missing_golden=$((missing_golden + 1))
+            missing_list_golden+=("${rel}")
+        fi
+        if ! grep -q "^model_standards:" "${f}" 2>/dev/null; then
+            missing_std=$((missing_std + 1))
+            missing_list_std+=("${rel}")
+        fi
+    done
+
+    if [[ "${missing_golden}" -eq 0 ]]; then
+        pass "fleet-migration/golden-prompt-extends: all ${total} agents have golden_prompt_extends frontmatter"
+    else
+        fail "fleet-migration/golden-prompt-extends: ${missing_golden} of ${total} agents missing golden_prompt_extends"
+        for m in "${missing_list_golden[@]}"; do
+            echo "    MISSING: ${m}"
+        done
+    fi
+
+    if [[ "${missing_std}" -eq 0 ]]; then
+        pass "fleet-migration/model-standards: all ${total} agents have model_standards frontmatter"
+    else
+        fail "fleet-migration/model-standards: ${missing_std} of ${total} agents missing model_standards"
+        for m in "${missing_list_std[@]}"; do
+            echo "    MISSING: ${m}"
+        done
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 3: Cross-harness validation — at least 3 agents from different plugins
+    # have both fields (beads-workflow, core, dev-tools minimum)
+    # -----------------------------------------------------------------------
+    local cross_ok=0
+    local required_plugins=("beads-workflow" "core" "dev-tools")
+    for plugin in "${required_plugins[@]}"; do
+        local sample_file
+        sample_file="$(find "${plugins_root}/${plugin}/agents" -name "*.md" 2>/dev/null | grep -v worktrees | head -1)"
+        if [[ -z "${sample_file}" ]]; then
+            fail "fleet-migration/cross-harness-${plugin}: no agents found under ${plugin}/agents/"
+            continue
+        fi
+        local rel
+        rel="$(echo "${sample_file}" | sed "s|${plugins_root}/||")"
+        local has_golden=false
+        local has_std=false
+        grep -q "^golden_prompt_extends:" "${sample_file}" 2>/dev/null && has_golden=true
+        grep -q "^model_standards:" "${sample_file}" 2>/dev/null && has_std=true
+        if [[ "${has_golden}" == "true" && "${has_std}" == "true" ]]; then
+            pass "fleet-migration/cross-harness-${plugin}: ${rel} has golden_prompt_extends + model_standards"
+            cross_ok=$((cross_ok + 1))
+        else
+            fail "fleet-migration/cross-harness-${plugin}: ${rel} missing golden_prompt_extends=${has_golden} model_standards=${has_std}"
+        fi
+    done
+
+    if [[ "${cross_ok}" -ge 3 ]]; then
+        pass "fleet-migration/cross-harness-validation: ${cross_ok}/3 required plugins validated"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 4: agent-forge init-agent.py template emits composition frontmatter
+    # -----------------------------------------------------------------------
+    if [[ -f "${init_agent_script}" ]]; then
+        local has_gp_template=false
+        local has_ms_template=false
+        grep -q "golden_prompt_extends" "${init_agent_script}" 2>/dev/null && has_gp_template=true
+        grep -q "model_standards" "${init_agent_script}" 2>/dev/null && has_ms_template=true
+        if [[ "${has_gp_template}" == "true" && "${has_ms_template}" == "true" ]]; then
+            pass "fleet-migration/agent-forge-template: init-agent.py template emits golden_prompt_extends + model_standards"
+        else
+            fail "fleet-migration/agent-forge-template: init-agent.py template missing golden_prompt_extends=${has_gp_template} model_standards=${has_ms_template}"
+        fi
+    else
+        fail "fleet-migration/agent-forge-template: init-agent.py not found at ${init_agent_script}"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -1333,11 +1468,14 @@ main() {
         migration)
             smoke_migration
             ;;
+        fleet-migration)
+            smoke_fleet_migration
+            ;;
         all)
-            # Note: smoke_migration is intentionally excluded from 'all'.
-            # It validates user-global state (~/.agents/standards/, ~/code/claude-code-plugins)
-            # and would fail on clean CI/dev homes that have not run the CL-717 migration.
-            # Run explicitly: ./run-smoke.sh migration
+            # Note: smoke_migration and smoke_fleet_migration are intentionally excluded from 'all'.
+            # They validate user-global state (~/.agents/standards/, ~/code/claude-code-plugins)
+            # and would fail on clean CI/dev homes.
+            # Run explicitly: ./run-smoke.sh migration | ./run-smoke.sh fleet-migration
             smoke_claude_code
             smoke_codex
             smoke_pi
@@ -1349,7 +1487,7 @@ main() {
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|fleet-migration|all]"
             exit 1
             ;;
     esac
