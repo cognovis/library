@@ -59,9 +59,12 @@
       "additionalProperties": false
     },
     "guardrails": {
-      "description": "Capability matrix per harness (stub — populated by CL-xcm).",
-      "type": "object",
-      "additionalProperties": true
+      "description": "Guardrail catalog entries — deterministic enforcement primitives that compile to per-harness native format (hooks, permission rules, approval policies). Each entry declares capability per harness so the installer can emit mismatch warnings.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/guardrail_entry"
+      },
+      "default": []
     },
     "standards": {
       "description": "Storage convention and loader-mechanism reference (stub — populated by CL-v56).",
@@ -406,6 +409,96 @@
                 }
               },
               "additionalProperties": false
+            }
+          }
+        },
+        "tags": {
+          "description": "Optional tags for search and filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "guardrail_entry": {
+      "description": "A guardrail catalog entry — a deterministic enforcement primitive that compiles to per-harness native format. Guardrails run outside the LLM loop and cannot be bypassed by the model.",
+      "type": "object",
+      "required": ["name", "description", "purpose"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this guardrail (kebab-case recommended).",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Human-readable description of what this guardrail enforces.",
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "description": "Lifecycle class of this guardrail. Determines which harnesses can support it natively vs. via workaround.",
+          "type": "string",
+          "enum": ["pre-tool-veto", "post-tool-reaction", "session-init", "cleanup", "audit-log"]
+        },
+        "capability": {
+          "description": "Per-harness capability declarations. Only harnesses listed here are supported. The installer uses this to emit mismatch warnings when a target harness lacks the required event.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "claude_code": {
+              "description": "Capability declaration for Claude Code (hooks via settings.json). Supports 13+ events.",
+              "type": "object",
+              "additionalProperties": true
+            },
+            "codex_cli": {
+              "description": "Capability declaration for Codex CLI (hooks.json, Node .mjs). Supports 3 events: SessionStart, SessionEnd, Stop.",
+              "type": "object",
+              "additionalProperties": true
+            },
+            "codex_cloud": {
+              "description": "Capability declaration for Codex cloud (sandbox_mode + approval_policy in config.toml). Pre-tool only.",
+              "type": "object",
+              "additionalProperties": true
+            },
+            "pi": {
+              "description": "Capability declaration for Pi harness (TypeScript extensions in .pi/extensions/*.ts).",
+              "type": "object",
+              "additionalProperties": true
+            },
+            "opencode": {
+              "description": "Capability declaration for OpenCode (permission rules in opencode.json). Pre-tool gates.",
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "sources": {
+          "description": "Per-harness source file paths (relative to repo root). Points to the handler file that implements the guardrail for each harness.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "claude_code": {
+              "description": "Path to the Claude Code hook script (bash/python).",
+              "type": "string"
+            },
+            "codex_cli": {
+              "description": "Path to the Codex CLI hook script (Node .mjs).",
+              "type": "string"
+            },
+            "codex_cloud": {
+              "description": "Path to the Codex cloud config fragment (TOML).",
+              "type": "string"
+            },
+            "pi": {
+              "description": "Path to the Pi TypeScript extension file (.ts).",
+              "type": "string"
+            },
+            "opencode": {
+              "description": "Path to the OpenCode permission rule fragment (JSON).",
+              "type": "string"
             }
           }
         },

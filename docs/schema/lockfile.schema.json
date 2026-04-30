@@ -38,7 +38,7 @@
         "type": {
           "description": "Primitive type of the installed item.",
           "type": "string",
-          "enum": ["skill", "agent", "prompt"]
+          "enum": ["skill", "agent", "prompt", "guardrail"]
         },
         "source": {
           "description": "Origin URL or local path from which the item was fetched. For GitHub sources, this is the browser-form URL (https://github.com/<org>/<repo>/blob/<branch>/<path>). For local sources, the absolute or relative file path.",
