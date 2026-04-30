@@ -116,10 +116,56 @@ a third installer target later (it implements its own skill loading); not in sco
 
 ## Primitive Definitions
 
-See [docs/PRIMITIVES.md](PRIMITIVES.md) for definitions of all primitive types
-(skill, command, agent, guardrail, plugin, marketplace, standard, mcp-server,
-model-standard). Includes per-harness NORMATIVE/INFERRED claim labels, a decision
-tree, and worked examples from real codebase items.
+### Decision rule for new artifacts
+
+When adding a new capability to the stack, answer these four questions in order:
+
+1. **Should the model auto-decide to use it?** → **Skill**
+   The model picks it up from context without user intervention. Use when the
+   capability is context-sensitive and reusable across projects.
+
+2. **Should only the user invoke it?** → **Command**
+   The user types `/name` explicitly. Use when the workflow requires deliberate
+   intent, accepts user-supplied arguments, or would be dangerous if auto-triggered.
+
+3. **Does it need its own context window or restricted tool permissions?** → **Agent**
+   Each invocation gets a fresh context and its own tool grant. Use when the subtask
+   needs isolation, parallelism, or a different permission set than the parent.
+
+4. **Must it run regardless of what the model wants?** → **Guardrail / Hook**
+   Runs outside the LLM loop at harness lifecycle events. The model cannot skip or
+   suppress it. Use for enforcement, audit logging, and mandatory context injection.
+
+If the answer is "none of the above", the capability is likely a bundling concern
+(Plugin), a discovery surface (Marketplace), injected context (Standard or
+Model-Standard), or an external protocol provider (MCP-Server) — see the full
+decision tree in [docs/PRIMITIVES.md](PRIMITIVES.md).
+
+### Harness portability matrix
+
+Not all primitives travel equally well across harnesses. The table below shows which
+primitive types are portable and where per-harness translation or adaptation is
+required.
+
+| Primitive | Claude Code | Codex CLI | Pi | OpenCode | Portability |
+|-----------|-------------|-----------|-----|----------|-------------|
+| **Skill** | `.claude/skills/<n>/SKILL.md` | `.agents/skills/<n>/SKILL.md` | own skill loader | TBD | **Portable** — shared SKILL.md format (Open Agent Skills Standard); only install path differs |
+| **Agent** | YAML frontmatter `.claude/agents/<n>.md` | TOML `~/.codex/agents/<n>.toml` | N/A | TBD | **Per-harness translation** — same concept, divergent formats; translation spec: bead `CL-11p` |
+| **Command / Prompt** | `.claude/commands/<n>.md` (slash cmds) | Deprecated in Codex — use skills instead | N/A | TBD | **Per-harness** — Claude Code has first-class slash commands; Codex deprecated custom prompts (bead `CL-qzw`) |
+| **Guardrail / Hook** | `hooks.json` + 13 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | TBD | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
+| **Standard** | SessionStart hook injection via `standards/index.yml` | Future: `.agents/standards/<n>.md` file convention | TBD | TBD | **Library-managed** — not an invocation primitive; injected as context by the harness |
+| **MCP-Server** | Per-harness config (`mcp_servers` in settings.json) | Per-harness config | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config is not portable |
+| **Plugin** | Bundle installed via `/install-plugin` | N/A (no plugin mechanism yet) | N/A | TBD | **Claude Code only** today — atomically installs skills + commands + hooks |
+| **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
+
+**Reading the table:**
+- *Portable* means the same artifact file works across all harnesses that support the primitive.
+- *Per-harness translation* means the concept is supported everywhere but the file format must be converted.
+- *Harness-specific* means the implementation is tied to one harness's event model or config syntax.
+- *Library-managed* means the Library (not the model or user) provisions these as dependencies.
+
+For full definitions, per-harness NORMATIVE/INFERRED claim labels, a full decision
+tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRIMITIVES.md).
 
 ## Open beads
 
