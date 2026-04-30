@@ -62,8 +62,11 @@ trap 'rm -rf "${TMPDIRS[@]}"' EXIT
 make_test_env() {
     local tmpdir
     tmpdir="$(mktemp -d)"
-    # Register in global array; single EXIT trap at script top handles cleanup
-    TMPDIRS+=("${tmpdir}")
+    # NOTE: Do NOT add TMPDIRS+=() here — this function is called via command
+    # substitution (tmpdir="$(make_test_env)"), which runs in a subshell.
+    # Any array mutation here is discarded. Callers must do TMPDIRS+=("$tmpdir")
+    # in the parent shell after the assignment. The single EXIT trap at script
+    # top then handles cleanup of all registered directories.
     echo "${tmpdir}"
 }
 
@@ -184,6 +187,7 @@ smoke_claude_code() {
     local fixture_src="${SCRIPT_DIR}/claude-code/fixtures/${FIXTURE_NAME}"
     local tmpdir
     tmpdir="$(make_test_env)"
+    TMPDIRS+=("${tmpdir}")  # Register for cleanup in parent shell (subshell side-effect would be lost)
 
     # Set up fake project structure in tmpdir
     local proj_claude_skills="${tmpdir}/project/.claude/skills/${FIXTURE_NAME}"
@@ -243,7 +247,12 @@ smoke_claude_code() {
         skip "claude-code/git-symlink: no .claude/skills symlinks found in repo yet — create one to test git tracking"
     fi
 
-    # CHECK 7: Runtime discovery — structural only (cannot run Claude Code in test)
+    # CHECK 7: Runtime discovery — by-design SKIP, not a regression.
+    # Verifying that a harness (Claude Code / Codex) actually discovers and loads a
+    # skill requires starting a live session, which is outside the scope of a bash
+    # smoke test. This limitation is documented in tests/smoke/README.md (Known
+    # Limitations). The structural checks above (file existence, content, symlinks,
+    # git tracking, discovery-order) are the maximum that can be automated here.
     echo "  NOTE  claude-code/runtime: Runtime skill discovery requires a live Claude Code session."
     echo "        Structural checks above confirm install paths are correct."
     echo "        To verify runtime: start a Claude Code session and invoke /hello-world"
@@ -258,6 +267,7 @@ smoke_codex() {
     local fixture_src="${SCRIPT_DIR}/codex/fixtures/${FIXTURE_NAME}"
     local tmpdir
     tmpdir="$(make_test_env)"
+    TMPDIRS+=("${tmpdir}")  # Register for cleanup in parent shell (subshell side-effect would be lost)
 
     # Set up fake project structure in tmpdir
     local proj_agents_skills="${tmpdir}/project/.agents/skills/${FIXTURE_NAME}"
