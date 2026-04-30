@@ -43,3 +43,31 @@ validate-library:
 # Run cross-harness smoke tests (harness: claude-code | codex | pi | opencode | all)
 test-smoke harness="all":
     bash tests/smoke/run-smoke.sh {{harness}}
+
+# ── cdx: Codex launcher with beads workflow integration ──────────
+
+# Install the cdx script to ~/.local/bin/cdx (Codex parallel to cld)
+install-cdx:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    INSTALL_DIR="${HOME}/.local/bin"
+    mkdir -p "${INSTALL_DIR}"
+    cp scripts/cdx "${INSTALL_DIR}/cdx"
+    chmod +x "${INSTALL_DIR}/cdx"
+    echo "cdx installed to ${INSTALL_DIR}/cdx"
+    if ! echo "${PATH}" | grep -q "${INSTALL_DIR}"; then
+        echo "NOTE: ${INSTALL_DIR} is not in your PATH. Add it to your shell profile:"
+        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
+
+# Launch Codex on a specific bead (orchestrator mode, equivalent to cld -b)
+cdx bead-id:
+    cdx -b {{bead-id}}
+
+# Launch Codex in quick-fix mode for a bead (equivalent to cld -bq)
+cdx-quick bead-id:
+    cdx -bq {{bead-id}}
+
+# Launch Codex in review mode for a bead (equivalent to cld -br; warns about limitations)
+cdx-review bead-id:
+    cdx -br {{bead-id}}

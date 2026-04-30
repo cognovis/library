@@ -1,0 +1,164 @@
+#!/usr/bin/env zsh
+# cdx - Codex launcher with beads workflow integration
+#
+# Usage: cdx [wrapper-flags] [codex-args...]
+#        cdx -h | --help        Show wrapper flag help, then fall through to codex --help
+#
+# Wrapper flags (not passed to codex):
+#   --no-full-auto  → Launch codex without the default --full-auto wrapper
+#   -b, --bead ID   → launch with bead orchestrator for the given bead ID
+#                     (injects full bead context via prompt, no --bead flag in Codex)
+#   -bq, --bead-quick ID → launch with quick-fix prompt for XS/S beads (bug, chore, task)
+#   -br, --bead-review ID → cmux-review mode (warns if Codex equivalent missing)
+#
+# Install: cp this script to ~/.local/bin/cdx && chmod +x ~/.local/bin/cdx
+#          Or use: just install-cdx (from the cognovis-library justfile)
+#
+# Note: Codex has no --bead flag equivalent. cdx synthesizes bead context via
+#       prompt injection using 'codex exec'. See docs/research/codex-prompts.md.
+
+set -euo pipefail
+
+CODEX_BIN="${CODEX_BIN:-$(command -v codex 2>/dev/null)}"
+if [[ -z "${CODEX_BIN}" ]]; then
+    echo "ERROR: codex not found in PATH. Install Codex first: https://github.com/openai/codex"
+    exit 1
+fi
+
+BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
+if [[ -z "${BD_BIN}" ]] && [[ "${1:-}" == "-b" || "${1:-}" == "--bead" || "${1:-}" == "-bq" || "${1:-}" == "--bead-quick" || "${1:-}" == "-br" || "${1:-}" == "--bead-review" ]]; then
+    echo "ERROR: bd not found in PATH. Install the beads CLI first."
+    exit 1
+fi
+
+# ── Parse wrapper flags ──────────────────────────────────────────
+
+use_full_auto=true
+show_help=false
+bead_id=""
+bead_quick_id=""
+bead_review_id=""
+codex_args=()
+
+while (( $# > 0 )); do
+    case "$1" in
+        -h|--help)
+            show_help=true
+            shift
+            ;;
+        --no-full-auto)
+            use_full_auto=false
+            shift
+            ;;
+        -b|--bead)
+            bead_id="$2"
+            shift 2
+            ;;
+        -bq|--bead-quick)
+            bead_quick_id="$2"
+            shift 2
+            ;;
+        -br|--bead-review)
+            bead_review_id="$2"
+            shift 2
+            ;;
+        *)
+            codex_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# ── Help ──────────────────────────────────────────────────────────
+
+if ${show_help}; then
+    cat <<'HELP'
+cdx - Codex launcher with beads workflow integration
+
+Usage: cdx [wrapper-flags] [codex-args...]
+
+Wrapper flags (consumed by cdx, not passed to codex):
+
+  Bead workflows:
+    -b,  --bead ID              Launch bead-orchestrator for single bead
+                                (injects full bead context via prompt injection)
+    -bq, --bead-quick ID        Launch quick-fix prompt for XS/S beads
+    -br, --bead-review ID       Review mode (warns: Codex has no cmux-review equivalent)
+
+  Session:
+         --no-full-auto          Launch codex without the default --full-auto wrapper
+    -h,  --help                  Show this help, then codex --help
+
+────────────────────────────────────────────────────────────
+Note: Codex has no --bead flag equivalent. bead context is injected
+via 'codex exec' as an initial prompt. The bead-orchestrator skill
+is invoked by natural language reference in the prompt.
+────────────────────────────────────────────────────────────
+Forwarding to 'codex --help':
+HELP
+    exec "${CODEX_BIN}" --help
+fi
+
+# ── Bead orchestrator mode: cdx -b <id> ─────────────────────────
+
+if [[ -n "$bead_id" ]]; then
+    bead_context=$("${BD_BIN}" show "${bead_id}" 2>/dev/null) || {
+        echo "ERROR: Could not fetch bead context for ${bead_id}. Is the bead ID correct?"
+        exit 1
+    }
+
+    prompt="Work on bead ${bead_id}. Use the bead-orchestrator skill to run the full orchestration workflow end-to-end (Phase 0 through Phase 16, including session-close). Do not stop after any intermediate phase.
+
+## Bead Context
+
+${bead_context}"
+
+    exec "${CODEX_BIN}" exec "${prompt}"
+fi
+
+# ── Quick-fix mode: cdx -bq <id> ────────────────────────────────
+
+if [[ -n "$bead_quick_id" ]]; then
+    bead_context=$("${BD_BIN}" show "${bead_quick_id}" 2>/dev/null) || {
+        echo "ERROR: Could not fetch bead context for ${bead_quick_id}. Is the bead ID correct?"
+        exit 1
+    }
+
+    prompt="Quick-fix bead ${bead_quick_id}. This is a small/micro bead (XS/S effort). Use the quick-fix skill to implement a targeted fix. Complete all acceptance criteria and commit.
+
+## Bead Context
+
+${bead_context}"
+
+    exec "${CODEX_BIN}" exec "${prompt}"
+fi
+
+# ── Review mode: cdx -br <id> ───────────────────────────────────
+
+if [[ -n "$bead_review_id" ]]; then
+    echo "WARNING: cdx -br (review mode) has no full cmux-review equivalent in Codex." >&2
+    echo "  Codex has no multi-pane cmux integration. Launching basic code review instead." >&2
+    echo "  For full review workflow, use: cld -br ${bead_review_id}" >&2
+    echo ""
+
+    bead_context=$("${BD_BIN}" show "${bead_review_id}" 2>/dev/null) || {
+        echo "ERROR: Could not fetch bead context for ${bead_review_id}. Is the bead ID correct?"
+        exit 1
+    }
+
+    prompt="Review the implementation for bead ${bead_review_id}. Check all acceptance criteria are met. Run 'codex exec review' patterns to validate code quality.
+
+## Bead Context
+
+${bead_context}"
+
+    exec "${CODEX_BIN}" exec "${prompt}"
+fi
+
+# ── Default: plain Codex launch ─────────────────────────────────
+
+if ${use_full_auto}; then
+    exec "${CODEX_BIN}" --full-auto "${codex_args[@]}"
+else
+    exec "${CODEX_BIN}" "${codex_args[@]}"
+fi

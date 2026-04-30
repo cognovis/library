@@ -231,6 +231,73 @@ just search "keyword"
 
 > **Note:** Justfile recipes use `--dangerously-skip-permissions` because the agent needs filesystem and git access to clone, copy, and push. Review the `justfile` if you want to modify this behavior.
 
+## cdx — Codex Launcher with Beads Workflow
+
+`cdx` is the Codex parallel to `cld`. It wraps the `codex` CLI with beads workflow integration,
+using prompt injection to pass bead context (since Codex has no `--bead` flag equivalent).
+
+### Install cdx
+
+```bash
+# From this repo
+just install-cdx
+
+# Or manually
+cp scripts/cdx ~/.local/bin/cdx && chmod +x ~/.local/bin/cdx
+```
+
+Ensure `~/.local/bin` is in your `PATH`:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"  # Add to ~/.zshrc or ~/.bashrc
+```
+
+### Usage
+
+```bash
+# Plain Codex launch (full-auto by default)
+cdx
+
+# Bead orchestrator mode — equivalent to cld -b <id>
+cdx -b <bead-id>
+just cdx <bead-id>
+
+# Quick-fix mode — equivalent to cld -bq <id>
+cdx -bq <bead-id>
+just cdx-quick <bead-id>
+
+# Review mode (warns: no cmux equivalent in Codex)
+cdx -br <bead-id>
+just cdx-review <bead-id>
+```
+
+### How It Works
+
+Codex has no `--bead` flag. `cdx` synthesizes bead context by:
+
+1. Calling `bd show <bead-id>` to fetch the full bead description and acceptance criteria
+2. Injecting this context as an initial prompt to `codex exec`
+3. The bead-orchestrator skill is invoked by natural-language reference in the prompt
+
+```bash
+# Under the hood, cdx -b <id> is equivalent to:
+codex exec "Work on bead <id>. Use the bead-orchestrator skill. [bead context injected here]"
+```
+
+See `docs/research/codex-prompts.md` for the full rationale and prompt-injection vs flag-dispatch
+analysis.
+
+### Justfile Targets
+
+| Target | Equivalent | Description |
+|--------|-----------|-------------|
+| `just install-cdx` | — | Install cdx to ~/.local/bin |
+| `just cdx <id>` | `cld -b <id>` | Bead orchestrator mode |
+| `just cdx-quick <id>` | `cld -bq <id>` | Quick-fix mode |
+| `just cdx-review <id>` | `cld -br <id>` | Review mode (warns about limitations) |
+
+---
+
 ## Architecture
 
 ```
