@@ -358,12 +358,45 @@ behavioral guidance scoped to a project or domain.
 standard is surfaced to the model by the harness at session start or on demand via
 the standards injection mechanism — the model does not autonomously "call" a standard.
 
-**Trigger semantics.** Injected via SessionStart hook (Claude Code today — NORMATIVE).
-Future migration target: file-convention at `.agents/standards/<name>.md` readable by
-any harness. Discovery is via `standards/index.yml` which maps trigger conditions to
-standard files.
+**Trigger semantics.** Two mechanisms are supported (see `docs/research/standards-loading.md`,
+CL-v56 for full loader contract and comparison):
 
-**Current examples (from `~/.claude/standards/index.yml`).**
+1. **SessionStart hook (Claude Code — NORMATIVE, legacy):** Injected via `~/.claude/settings.json`
+   SessionStart hook. Reads from `~/.claude/standards/<domain>/<name>.md`. Claude Code-only.
+   Retained for backward compatibility during migration.
+
+2. **Adapter generation into `AGENTS.md` (cross-harness — NORMATIVE for Claude Code + Codex):**
+   At `/library use` install time, `scripts/standards-loader.sh --generate-adapter <skill>`
+   reads the skill's `requires_standards` frontmatter and writes a delimited section into
+   `AGENTS.md`. This file is read by both Claude Code and Codex at session start — no
+   harness-specific hook configuration required.
+
+**Standard file paths (cross-harness convention, CL-v56).**
+
+| Priority | Path | Scope |
+|----------|------|-------|
+| 1 (wins) | `.agents/standards/<name>.md` | Project-local |
+| 2 | `~/.agents/standards/<name>.md` | User-global |
+| 3 (legacy) | `~/.claude/standards/<domain>/<name>.md` | Claude Code fallback |
+
+**Skills declare dependencies** via `requires_standards` frontmatter:
+
+```yaml
+---
+name: dolt
+description: Dolt version-controlled database skill.
+requires_standards: [dolt-server, branch-naming]
+---
+```
+
+**Runtime loading (skill-script-side, mechanism b):** Individual skill scripts can
+load a specific standard at invocation time via:
+
+```bash
+STANDARD=$(bash scripts/standards-loader.sh --load <name>)
+```
+
+**Current examples (from `~/.claude/standards/index.yml` — legacy path).**
 
 | Standard | Domain |
 |----------|--------|
@@ -373,6 +406,8 @@ standard files.
 | `dev-tools/execution-result-envelope` | Structured tool result format |
 | `dev-tools/python-default-bash-exception` | Python exception handling in bash contexts |
 | `integrations/open-brain-http-client` | HTTP client patterns for open-brain |
+
+Migration target: move these to `.agents/standards/<name>.md` after CL-717 completes.
 
 **When to choose it.** Create a standard when:
 - A project has coding conventions, architectural decisions, or integration patterns
