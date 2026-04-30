@@ -66,4 +66,12 @@ _Add a brief overview of your project architecture_
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+### library.yaml schema ownership
+
+Schema extensions to `library.yaml` are **serialized**. Per top-level section
+(`mcp_servers:`, `guardrails:`, `marketplaces:`, `hooks:`, …) at most one
+extending bead may be active at a time. While that bead is open, other beads
+must not modify the same section in parallel — file an explicit
+`bd dep add <new-bead> <active-bead>` instead.
+
+Validator tests (`CL-wud`) run on every schema change.
