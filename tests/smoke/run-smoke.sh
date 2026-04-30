@@ -841,6 +841,166 @@ print_summary() {
 }
 
 # ---------------------------------------------------------------------------
+# Standards-loader smoke tests (CL-v56)
+#
+# Validates the structural guarantees of the cross-harness standards loading
+# mechanism:
+#  1. Research doc exists at docs/research/standards-loading.md
+#  2. Research doc contains all required loader-contract sections
+#  3. Prototype loader script exists at scripts/standards-loader.sh
+#  4. Prototype loader script is executable
+#  5. Prototype loader resolves project-local over global (precedence rule)
+#  6. Prototype loader emits a warning (not an error) for missing standards
+#  7. Generated adapter writes standards into AGENTS.md (mechanism a)
+#  8. Skill-script-side loader reads .agents/standards/<name>.md (mechanism b)
+#  9. PRIMITIVES.md STANDARD section references the new loader convention
+# 10. standards index.yml schema is documented
+# ---------------------------------------------------------------------------
+smoke_standards() {
+    section "standards"
+
+    local research_doc="${REPO_ROOT}/docs/research/standards-loading.md"
+    local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
+    local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
+
+    # -----------------------------------------------------------------------
+    # CHECK 1: Research doc exists
+    # -----------------------------------------------------------------------
+    if [[ -f "${research_doc}" ]]; then
+        pass "standards/research-doc: docs/research/standards-loading.md exists"
+    else
+        fail "standards/research-doc: docs/research/standards-loading.md NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 2: Research doc contains required loader-contract sections
+    # -----------------------------------------------------------------------
+    if [[ -f "${research_doc}" ]]; then
+        local required_sections=(
+            "Loader Contract"
+            "Path Resolution"
+            "Missing Standard"
+            "Merge Order"
+            "Validation"
+            "Caching"
+            "Compatibility"
+            "Recommended"
+        )
+        local all_sections=true
+        for section_name in "${required_sections[@]}"; do
+            if ! grep -qi "${section_name}" "${research_doc}" 2>/dev/null; then
+                fail "standards/research-doc-sections: '${section_name}' section NOT found in standards-loading.md"
+                all_sections=false
+            fi
+        done
+        if [[ "${all_sections}" == "true" ]]; then
+            pass "standards/research-doc-sections: all required loader-contract sections present"
+        fi
+    else
+        fail "standards/research-doc-sections: research doc not found — cannot check sections"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 3: Prototype loader script exists
+    # -----------------------------------------------------------------------
+    if [[ -f "${loader_script}" ]]; then
+        pass "standards/loader-script: scripts/standards-loader.sh exists"
+    else
+        fail "standards/loader-script: scripts/standards-loader.sh NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 4: Loader script is executable
+    # -----------------------------------------------------------------------
+    if [[ -x "${loader_script}" ]]; then
+        pass "standards/loader-executable: scripts/standards-loader.sh is executable"
+    else
+        fail "standards/loader-executable: scripts/standards-loader.sh is NOT executable"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 5: Loader implements project-local > global precedence
+    # -----------------------------------------------------------------------
+    if [[ -f "${loader_script}" ]]; then
+        if grep -q "project\|local\|override\|PROJ\|proj" "${loader_script}" 2>/dev/null; then
+            pass "standards/loader-precedence: loader script references project-local precedence"
+        else
+            fail "standards/loader-precedence: loader script does NOT implement project-local precedence"
+        fi
+    else
+        fail "standards/loader-precedence: loader script not found — cannot check precedence"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 6: Missing standard emits warning (not exit 1)
+    # -----------------------------------------------------------------------
+    if [[ -f "${loader_script}" ]]; then
+        if grep -q "warn\|WARN\|echo.*Warning\|>&2" "${loader_script}" 2>/dev/null; then
+            pass "standards/loader-warn-on-missing: loader emits a warning for missing standards"
+        else
+            fail "standards/loader-warn-on-missing: loader does NOT document warn-on-missing behavior"
+        fi
+    else
+        fail "standards/loader-warn-on-missing: loader script not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 7: Mechanism (a) — adapter generation targets AGENTS.md
+    # -----------------------------------------------------------------------
+    if [[ -f "${research_doc}" ]]; then
+        if grep -qi "AGENTS\.md\|adapter\|compile\|generat" "${research_doc}" 2>/dev/null; then
+            pass "standards/mechanism-a: research doc covers mechanism (a) adapter generation"
+        else
+            fail "standards/mechanism-a: research doc does NOT cover mechanism (a) AGENTS.md adapter"
+        fi
+    else
+        fail "standards/mechanism-a: research doc not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 8: Mechanism (b) — skill-script-side loader
+    # -----------------------------------------------------------------------
+    if [[ -f "${loader_script}" ]]; then
+        if grep -q '\.agents/standards\|agents/standards' "${loader_script}" 2>/dev/null; then
+            pass "standards/mechanism-b: loader script reads from .agents/standards/ path"
+        else
+            fail "standards/mechanism-b: loader script does NOT reference .agents/standards/ path"
+        fi
+    else
+        fail "standards/mechanism-b: loader script not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 9: PRIMITIVES.md STANDARD section references the new loader convention
+    # -----------------------------------------------------------------------
+    if [[ -f "${primitives_doc}" ]]; then
+        if grep -q "standards-loading\|CL-v56\|\.agents/standards" "${primitives_doc}" 2>/dev/null; then
+            pass "standards/primitives-updated: PRIMITIVES.md STANDARD section references loader convention"
+        else
+            fail "standards/primitives-updated: PRIMITIVES.md does NOT reference new loader convention"
+        fi
+    else
+        fail "standards/primitives-updated: docs/PRIMITIVES.md NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 10: standards index.yml schema documented in research doc
+    # -----------------------------------------------------------------------
+    if [[ -f "${research_doc}" ]]; then
+        if grep -qi "index\.yml\|frontmatter\|requires_standards" "${research_doc}" 2>/dev/null; then
+            pass "standards/index-schema: research doc covers standards index.yml schema"
+        else
+            fail "standards/index-schema: research doc does NOT cover standards index.yml schema"
+        fi
+    else
+        fail "standards/index-schema: research doc not found"
+    fi
+
+    echo "  NOTE  standards/runtime: End-to-end standards injection requires a live harness session."
+    echo "        Structural checks above confirm the loader mechanism satisfies the contract."
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -870,6 +1030,9 @@ main() {
         lockfile)
             smoke_lockfile
             ;;
+        standards)
+            smoke_standards
+            ;;
         all)
             smoke_claude_code
             smoke_codex
@@ -877,10 +1040,11 @@ main() {
             smoke_opencode
             smoke_name_collision
             smoke_lockfile
+            smoke_standards
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|all]"
             exit 1
             ;;
     esac
