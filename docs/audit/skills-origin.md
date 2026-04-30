@@ -246,7 +246,7 @@ This audit classifies every skill, agent, hook, command, and standard across:
 |------|-------------|--------|--------|-------------|-----------------|------|
 | `infra/skills/hetzner-cloud/SKILL.md` | skill | PERSONAL | skill (personal Hetzner Cloud infra management) | skill — correct; WRAPPER around hcloud CLI | Move to sussdorff/library-core | project |
 | `infra/skills/home-infra/SKILL.md` | skill | PERSONAL | skill (personal home infrastructure — Proxmox, UniFi, HA) | skill — correct | Move to sussdorff/library-core | project |
-| `infra/skills/infra-principles/SKILL.md` | skill | ORIGINAL | skill (Cognovis infrastructure principles) | skill — correct; consider standard (it's context, not workflow) | Evaluate: if purely principles/context → standard. If workflow → skill. Keep in cognovis/library-core | domain |
+| `infra/skills/infra-principles/SKILL.md` | skill | ORIGINAL | skill (Cognovis infrastructure principles) | RECLASSIFY: evaluate if purely principles/context → reclassify as standard | Evaluate: if content is purely factual guidance → reclassify as standard (not invokable). If contains workflow steps → keep as skill. Keep in cognovis/library-core | domain |
 | `infra/skills/local-vm/SKILL.md` | skill | PERSONAL | skill (personal local VM management) | skill — correct | Move to sussdorff/library-core | project |
 | `infra/skills/paperless-cli/SKILL.md` | skill | PERSONAL | skill (personal Paperless-ngx document management) | skill — correct; WRAPPER around Paperless CLI | Move to sussdorff/library-core | project |
 | `infra/skills/piler-cli/SKILL.md` | skill | PERSONAL | skill (personal Piler email archive CLI) | skill — correct; WRAPPER around Piler CLI | Move to sussdorff/library-core | project |
@@ -402,7 +402,7 @@ These are hooks installed to the user's global Claude Code config. Each is class
 
 Per CL-v56, the canonical path is `.agents/standards/<name>.md`. These files are at the legacy `~/.claude/standards/<domain>/<name>.md` path and should migrate to `.agents/standards/` during CL-717.
 
-All 63 standards here are classified as ORIGINAL (created by Malte for Cognovis/personal workflows). Below are grouped by domain:
+All 63 standards here are classified as ORIGINAL (created by Malte for Cognovis/personal workflows). Below are grouped by domain. Note: `~/.claude/standards/README.md` is included in the count as a documentation file but not a standard artifact — the 62 actionable standards are detailed below.
 
 ### agents/ (3 standards)
 
@@ -501,7 +501,7 @@ All 63 standards here are classified as ORIGINAL (created by Malte for Cognovis/
 | `~/.claude/standards/skills/token-budget-tiers.md` | ORIGINAL | standard (token budget tier guidance) | standard — correct | `.agents/standards/token-budget-tiers.md` | domain |
 | `~/.claude/standards/skills/upstream-watchdog.md` | ORIGINAL | standard (upstream dependency watchdog patterns) | standard — correct | `.agents/standards/upstream-watchdog.md` | domain |
 
-### workflow/ (21 standards)
+### workflow/ (24 standards)
 
 All workflow standards are ORIGINAL, type=standard, correct type. Migration target: `.agents/standards/<name>.md`. Tier: domain (except noted).
 
@@ -527,6 +527,10 @@ All workflow standards are ORIGINAL, type=standard, correct type. Migration targ
 | `systematic-debugging.md` | Systematic debugging methodology | domain |
 | `tdd-discipline.md` | TDD RED-GREEN-REFACTOR discipline | domain |
 | `test-quality.md` | Test quality checklist | domain |
+| `uat-config-schema.md` | UAT configuration schema | domain |
+| `verification-discipline.md` | Verification discipline patterns | domain |
+| `workflow-guide.md` | Workflow guide reference | domain |
+| `workflow-phases.md` | Workflow phases specification | domain |
 
 ### writing/ (1 standard)
 
@@ -566,6 +570,7 @@ These artifacts have broad generalizability and would benefit from marketplace p
 | `architecture-trinity` | `meta/plugins/architecture-trinity/` | Plugin bundle; strong architectural governance use case |
 | `collmex-cli` | `business/skills/collmex-cli/SKILL.md` | Collmex ERP niche marketplace |
 | `mail-send` | `business/skills/mail-send/SKILL.md` | macOS mail automation community |
+| `op-credentials` | `business/skills/op-credentials/SKILL.md` | 1Password CLI automation; broad DevOps community |
 
 ---
 
