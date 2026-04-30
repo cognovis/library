@@ -35,7 +35,16 @@ set -euo pipefail
 # Constants
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJ_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# PROJ_ROOT: the invoking project root, not the script's parent directory.
+# Using the script's parent would silently ignore project-local standards when
+# the script is invoked from a different project (e.g., via an absolute path).
+# Resolution order:
+#   1. --proj-root <path> flag (explicit override)
+#   2. $PWD (caller's working directory — the project being operated on)
+# The script's parent is NOT a valid default here; it's only correct when the
+# script is invoked from its own repository, which is not the general case.
+PROJ_ROOT="${PWD}"
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -96,6 +105,37 @@ cmd_load() {
     local path
 
     if path="$(resolve_standard "${name}" 2>/dev/null)"; then
+        # Validate frontmatter before emitting content.
+        # Required fields: name, version, description.
+        # Invalid frontmatter produces a warning but the standard is still loaded
+        # (warn-and-continue per loader contract — a malformed standard should not
+        # block context delivery).
+        python3 - "${path}" "${name}" >&2 <<'PYEOF'
+import sys, re
+
+standard_file = sys.argv[1]
+standard_name = sys.argv[2]
+required_fields = ['name', 'version', 'description']
+
+with open(standard_file) as f:
+    content = f.read()
+
+m = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
+if not m:
+    print(f"[standards-loader] WARNING: standard '{standard_name}' has no YAML frontmatter. "
+          f"Required fields: {required_fields}. Proceeding anyway.")
+    sys.exit(0)
+
+frontmatter_text = m.group(1)
+missing = []
+for field in required_fields:
+    if not re.search(rf'^{re.escape(field)}\s*:', frontmatter_text, re.MULTILINE):
+        missing.append(field)
+
+if missing:
+    print(f"[standards-loader] WARNING: standard '{standard_name}' frontmatter missing required fields: "
+          f"{missing}. Proceeding anyway.")
+PYEOF
         cat "${path}"
     else
         warn "standard '${name}' not found. Checked:"
@@ -277,14 +317,26 @@ cmd_generate_adapter() {
         return 0
     fi
 
-    # Build combined content in a temp file
+    # Build combined content in a temp file.
+    # Deduplication: if the same standard name appears multiple times in requires_list
+    # (e.g., declared by multiple nested skills), load it exactly once.
+    # First declaration wins per the merge order contract in docs/research/standards-loading.md.
     local tmpfile
     tmpfile="$(mktemp)"
     trap 'rm -f "${tmpfile}"' EXIT
 
     local first=true
+    declare -A seen_standards  # associative array for O(1) dedup lookup
+
     while IFS= read -r standard_name; do
         [[ -z "${standard_name}" ]] && continue
+
+        # Skip duplicates — first declaration wins
+        if [[ -n "${seen_standards[${standard_name}]+x}" ]]; then
+            info "Deduplicating standard '${standard_name}' — already included once."
+            continue
+        fi
+        seen_standards["${standard_name}"]=1
 
         local path
         if path="$(resolve_standard "${standard_name}" 2>/dev/null)"; then
@@ -351,7 +403,15 @@ cmd_list() {
         echo "Legacy Claude Code (${legacy_dir}):"
         while IFS= read -r f; do
             local name
-            name="$(realpath --relative-to="${legacy_dir}" "${f}")"
+            # Use Python for portable relative path computation.
+            # GNU realpath --relative-to is not available on macOS (BSD realpath
+            # does not support that flag), so we use Python's pathlib which is
+            # cross-platform and available on all supported platforms.
+            name="$(python3 -c "
+import sys
+from pathlib import Path
+print(Path(sys.argv[1]).relative_to(sys.argv[2]))
+" "${f}" "${legacy_dir}" 2>/dev/null || basename "${f}")"
             echo "  - ${name}"
             found=true
         done < <(find "${legacy_dir}" -name "*.md" -maxdepth 3 2>/dev/null | sort)
@@ -372,12 +432,33 @@ cmd_list() {
 # ---------------------------------------------------------------------------
 main() {
     if [[ $# -eq 0 ]]; then
-        echo "Usage: standards-loader.sh <command> [args]" >&2
+        echo "Usage: standards-loader.sh [--proj-root <path>] <command> [args]" >&2
+        echo "" >&2
+        echo "Global options:" >&2
+        echo "  --proj-root <path>   Override project root (default: \$PWD)" >&2
         echo "" >&2
         echo "Commands:" >&2
         echo "  --load <name>                         Load a standard (mechanism b)" >&2
         echo "  --generate-adapter <skill> [--target <file>]  Generate AGENTS.md adapter (mechanism a)" >&2
         echo "  --list                                List available standards" >&2
+        exit 1
+    fi
+
+    # Parse optional global --proj-root flag before the subcommand.
+    # This allows callers in other projects to specify their project root explicitly:
+    #   bash /path/to/standards-loader.sh --proj-root /my/project --load dolt
+    while [[ $# -gt 0 && "$1" == --proj-root ]]; do
+        shift
+        if [[ $# -eq 0 ]]; then
+            echo "--proj-root requires a path argument" >&2
+            exit 1
+        fi
+        PROJ_ROOT="$(cd "$1" && pwd)"
+        shift
+    done
+
+    if [[ $# -eq 0 ]]; then
+        echo "No command given after --proj-root. Use --load, --generate-adapter, or --list." >&2
         exit 1
     fi
 
