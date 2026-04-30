@@ -1001,6 +1001,155 @@ smoke_standards() {
 }
 
 # ---------------------------------------------------------------------------
+# smoke_migration (CL-717)
+#  Validates that the CL-717 skills-to-standards-loader migration completed:
+#  1. ~/.agents/standards/ directory exists
+#  2. ~/.agents/standards/ contains at least 60 standards files
+#  3. Required core standards are present in ~/.agents/standards/
+#  4. Each present standard has valid YAML frontmatter (name, version, description)
+#  5. standards-loader.sh --load resolves core standards from ~/.agents/standards/
+#  6. At least one SKILL.md in claude-code-plugins has requires_standards: frontmatter
+#  7. inject-subagent-standards.py is marked DEPRECATED
+# ---------------------------------------------------------------------------
+smoke_migration() {
+    section "migration"
+
+    local global_standards_dir="${HOME}/.agents/standards"
+    local ccp_skills_root="${HOME}/code/claude-code-plugins"
+    local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
+
+    # -----------------------------------------------------------------------
+    # CHECK 1: ~/.agents/standards/ directory exists
+    # -----------------------------------------------------------------------
+    if [[ -d "${global_standards_dir}" ]]; then
+        pass "migration/global-standards-dir: ~/.agents/standards/ exists"
+    else
+        fail "migration/global-standards-dir: ~/.agents/standards/ NOT found — run CL-717 migration"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 2: ~/.agents/standards/ contains at least 60 standards files
+    # -----------------------------------------------------------------------
+    if [[ -d "${global_standards_dir}" ]]; then
+        local count
+        count="$(find "${global_standards_dir}" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')"
+        if [[ "${count}" -ge 60 ]]; then
+            pass "migration/global-standards-count: ${count} standards found (>= 60 required)"
+        else
+            fail "migration/global-standards-count: only ${count} standards found (expected >= 60)"
+        fi
+    else
+        fail "migration/global-standards-count: directory not found — cannot count"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 3: Required core standards are present
+    # -----------------------------------------------------------------------
+    if [[ -d "${global_standards_dir}" ]]; then
+        local required_standards=(
+            "english-only.md"
+            "no-emoji.md"
+            "tool-standards.md"
+            "healthcare-control-areas.md"
+            "conventional-commits.md"
+            "debrief-contract.md"
+            "tool-boundaries.md"
+        )
+        local all_present=true
+        for std in "${required_standards[@]}"; do
+            if [[ ! -f "${global_standards_dir}/${std}" ]]; then
+                fail "migration/core-standard-present: ${std} NOT found in ~/.agents/standards/"
+                all_present=false
+            fi
+        done
+        if [[ "${all_present}" == "true" ]]; then
+            pass "migration/core-standards-present: all ${#required_standards[@]} required core standards present"
+        fi
+    else
+        fail "migration/core-standards-present: directory not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 4: Standards have valid YAML frontmatter
+    # -----------------------------------------------------------------------
+    if [[ -d "${global_standards_dir}" ]]; then
+        local missing_fm=0
+        for std_file in "${global_standards_dir}"/*.md; do
+            [[ -f "${std_file}" ]] || continue
+            if ! grep -q "^name:" "${std_file}" 2>/dev/null || \
+               ! grep -q "^version:" "${std_file}" 2>/dev/null || \
+               ! grep -q "^description:" "${std_file}" 2>/dev/null; then
+                missing_fm=$((missing_fm + 1))
+            fi
+        done
+        if [[ "${missing_fm}" -eq 0 ]]; then
+            pass "migration/standards-frontmatter: all standards have valid YAML frontmatter"
+        else
+            fail "migration/standards-frontmatter: ${missing_fm} standards missing required frontmatter fields"
+        fi
+    else
+        fail "migration/standards-frontmatter: directory not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 5: Loader resolves core standards from ~/.agents/standards/
+    # -----------------------------------------------------------------------
+    if [[ -f "${loader_script}" ]]; then
+        local loaded_content
+        if loaded_content="$(bash "${loader_script}" --load english-only 2>/dev/null)" && \
+           echo "${loaded_content}" | grep -q "English"; then
+            pass "migration/loader-resolves-english-only: loader resolves english-only from ~/.agents/standards/"
+        else
+            fail "migration/loader-resolves-english-only: loader failed to resolve english-only standard"
+        fi
+
+        if loaded_content="$(bash "${loader_script}" --load tool-standards 2>/dev/null)" && \
+           echo "${loaded_content}" | grep -q "tool\|Tool"; then
+            pass "migration/loader-resolves-tool-standards: loader resolves tool-standards from ~/.agents/standards/"
+        else
+            fail "migration/loader-resolves-tool-standards: loader failed to resolve tool-standards"
+        fi
+    else
+        fail "migration/loader-resolves-standards: loader script not found at ${loader_script}"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 6: At least one SKILL.md in claude-code-plugins has requires_standards:
+    # -----------------------------------------------------------------------
+    if [[ -d "${ccp_skills_root}" ]]; then
+        local skills_with_requires
+        skills_with_requires="$(grep -rl "requires_standards:" "${ccp_skills_root}" \
+            --include="SKILL.md" --include="skill.md" \
+            --exclude-dir=".git" --exclude-dir="worktrees" \
+            2>/dev/null | wc -l | tr -d ' ')"
+        if [[ "${skills_with_requires}" -ge 50 ]]; then
+            pass "migration/skills-have-requires-standards: ${skills_with_requires} skills have requires_standards: frontmatter"
+        else
+            fail "migration/skills-have-requires-standards: only ${skills_with_requires} skills have requires_standards: (expected >= 50)"
+        fi
+    else
+        skip "migration/skills-have-requires-standards: claude-code-plugins not cloned at ${ccp_skills_root}"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 7: inject-subagent-standards.py is marked DEPRECATED
+    # -----------------------------------------------------------------------
+    local hook_file="${HOME}/.claude/hooks/inject-subagent-standards.py"
+    if [[ -f "${hook_file}" ]]; then
+        if grep -q "DEPRECATED" "${hook_file}" 2>/dev/null; then
+            pass "migration/hook-deprecated: inject-subagent-standards.py is marked DEPRECATED"
+        else
+            fail "migration/hook-deprecated: inject-subagent-standards.py is NOT marked DEPRECATED — run CL-717 migration"
+        fi
+    else
+        pass "migration/hook-deprecated: inject-subagent-standards.py not present (already removed)"
+    fi
+
+    echo "  NOTE  migration/phase3: Hook removal (Phase 3 per docs/research/standards-loading.md)"
+    echo "        is deferred until all projects have migrated. See CL-717 ADR for removal checklist."
+}
+
+# ---------------------------------------------------------------------------
 # smoke_golden_prompts
 #  1. .agents/golden-prompts/cognovis-base.md exists
 #  2. cognovis-base.md has YAML frontmatter with name, version, description
@@ -1177,6 +1326,9 @@ main() {
         golden-prompts)
             smoke_golden_prompts
             ;;
+        migration)
+            smoke_migration
+            ;;
         all)
             smoke_claude_code
             smoke_codex
@@ -1186,10 +1338,11 @@ main() {
             smoke_lockfile
             smoke_standards
             smoke_golden_prompts
+            smoke_migration
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|all]"
             exit 1
             ;;
     esac
