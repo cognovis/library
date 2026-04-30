@@ -9,3 +9,6 @@
 
 # Claude Code tool-internal cache
 .claude/anatomy.json
+
+# Codex/external session tracking (tool-internal, not project state)
+.context/
