@@ -114,6 +114,13 @@ a third installer target later (it implements its own skill loading); not in sco
 - [Codex skills docs](https://developers.openai.com/codex/skills) — confirms shared
   SKILL.md format with Claude Code (open agent skills standard)
 
+## Primitive Definitions
+
+See [docs/PRIMITIVES.md](PRIMITIVES.md) for definitions of all primitive types
+(skill, command, agent, guardrail, plugin, marketplace, standard, mcp-server,
+model-standard). Includes per-harness NORMATIVE/INFERRED claim labels, a decision
+tree, and worked examples from real codebase items.
+
 ## Open beads
 
 See `bd ready` and `bd show CL-36o` for the active epic + sub-beads.
