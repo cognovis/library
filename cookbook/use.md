@@ -65,7 +65,7 @@ Determine which tool(s) to install into using the following priority order:
 ```
 
 Detection rules (in order):
-1. Both `.claude/` AND (`.agents/` or `.codex/`) present → **dual-install** (both tools); check for skill name collisions per Step 5e below
+1. Both `.claude/` AND (`.agents/` or `.codex/`) present → **dual-install** (both tools); check for skill name collisions per Step 5d below
 2. Only `.claude/` present → **Claude Code** target
 3. Only `.agents/` or `.codex/` present → **Codex** target
 4. Neither present → **prompt user**: "This doesn't appear to be a Claude Code or Codex project. Install for Claude Code (creates `.claude/skills/`), Codex (creates `.agents/skills/`), or both?" Default suggestion: **Claude Code only**.
