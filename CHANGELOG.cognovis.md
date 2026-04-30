@@ -9,6 +9,8 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ### Added
 
+- **MCP Server Canonical Schema** (`docs/schema/library.schema.json`, `library.yaml`, `cookbook/add-mcp.md`): Extended `library.schema.json` with a fully typed `mcp_server_entry` definition replacing the former stub. Each entry captures `name`, `description`, `coding_strategy`, `mobile_strategy`, `capabilities` (stateless, streaming, auth), and per-harness `install` metadata (cli package + manager, mcp config_path + snippet per harness). Added canonical `open-brain` entry to `library.yaml` as reference example. New cookbook `cookbook/add-mcp.md` documents the schema, strategy decision rules, and registration steps. Per-harness translator logic is explicitly out of scope (follow-up bead). JSON-schema validator passes. Closes CL-mfz.
+
 - **Standards Loading Mechanism** (`docs/research/standards-loading.md`, `scripts/standards-loader.sh`): Design ADR and working prototype for cross-harness standards loading. Defines loader contract: path resolution (project-local `.agents/standards/<name>.md` overrides user-global), warn-and-continue on missing standards, merge order (first-declaration-wins deduplication), frontmatter validation schema, re-read-on-invoke caching policy, and 4-phase compatibility migration timeline. Prototype implements mechanism (a) adapter generation into `AGENTS.md` (`--generate-adapter`) and mechanism (b) skill-script-side runtime loader (`--load`). Recommends mechanism (d) Hybrid (a+b) as primary approach. Portable across macOS and Linux. Closes CL-v56.
 
 ### Changed
