@@ -261,8 +261,100 @@ If the skill's SKILL.md body contains `$ARGUMENTS`:
 - Confirm the main file (SKILL.md, AGENT.md, or prompt file) exists in it
 - Report success with the installed path
 
-### 8. Confirm
+### 8. Update .library.lock
+
+After a successful install (Step 7 confirms the primary artifact exists), write or update the
+lockfile entry in `.library.lock` at the project root.
+
+#### 8a. Compute the checksum of the primary artifact
+
+Determine the primary artifact path based on type:
+
+| `type` | Primary artifact |
+|--------|-----------------|
+| `skill` | `<install_target>/SKILL.md` |
+| `agent` | `<install_target>/<name>.md` |
+| `prompt` | `<install_target>/<name>.md` |
+
+```bash
+# macOS
+checksum=$(shasum -a 256 "<primary_artifact_path>" | awk '{print $1}')
+
+# Linux
+checksum=$(sha256sum "<primary_artifact_path>" | awk '{print $1}')
+```
+
+#### 8b. Resolve the source commit
+
+If the source is a GitHub URL (cloned via `git clone`):
+```bash
+source_commit=$(git -C "$tmp_dir" rev-parse HEAD)
+```
+
+If the source is a local path (copied via `cp`):
+```bash
+# Try to get the git commit if the source is inside a git repo
+source_commit=$(git -C "$(dirname '<source_path>')" rev-parse HEAD 2>/dev/null || echo "local")
+```
+
+#### 8c. Build the lockfile entry
+
+```yaml
+- name: <name>
+  type: <type>          # skill | agent | prompt
+  source: <source>      # the URL or path from Step 2 / 3
+  source_commit: <sha>  # from 8b, or "local"
+  install_target: <install_target>/  # trailing slash required; from Step 5b
+  install_timestamp: <ISO 8601 UTC>  # e.g. 2026-04-30T10:23:00Z
+  checksum_sha256: <checksum>
+  license: <license>    # from SKILL.md/agent frontmatter, or "unknown"
+  bridge_symlinks:      # from Step 5c; empty list if no bridge was created
+    - "<link-path> -> <target-path>"
+```
+
+#### 8d. Write/update the lockfile
+
+Read `.library.lock` (create with `installed: []` if it does not exist). Find the existing
+entry by `name` and replace it in place; or append if not found. Write back to `.library.lock`.
+
+```python
+import yaml, os
+from datetime import datetime, timezone
+
+lock_path = '.library.lock'
+if os.path.exists(lock_path):
+    with open(lock_path) as f:
+        lock = yaml.safe_load(f) or {}
+else:
+    lock = {}
+lock.setdefault('installed', [])
+
+entry = {
+    'name': '<name>',
+    'type': '<type>',
+    'source': '<source>',
+    'source_commit': '<source_commit>',
+    'install_target': '<install_target>/',
+    'install_timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+    'checksum_sha256': '<checksum>',
+    'license': '<license>',
+    'bridge_symlinks': ['<link> -> <target>'],  # or [] if no bridge
+}
+
+# Replace existing or append
+lock['installed'] = [e for e in lock['installed'] if e.get('name') != entry['name']]
+lock['installed'].append(entry)
+
+with open(lock_path, 'w') as f:
+    yaml.dump(lock, f, default_flow_style=False, allow_unicode=True)
+```
+
+See `docs/lockfile-format.md` for the full field reference and `docs/schema/lockfile.schema.json`
+for machine-readable validation.
+
+### 9. Confirm
 Tell the user:
 - What was installed and where
 - Any dependencies that were also installed
 - If this was a refresh (overwrite), mention that
+- Confirm that `.library.lock` was updated

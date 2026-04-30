@@ -1,7 +1,9 @@
 # Sync All Installed Items
 
 ## Context
-Refresh every locally installed skill, agent, and prompt by re-pulling from its source. A fast, lazy "make sure everything is up to date" command.
+Refresh every locally installed skill, agent, and prompt by re-pulling from its source. Uses
+`.library.lock` as the authoritative source of truth for what is installed and where — two
+clones with the same `.library.lock` end up with identical installed content.
 
 ## Steps
 
@@ -12,36 +14,52 @@ cd <LIBRARY_SKILL_DIR>
 git pull
 ```
 
-### 2. Read the Catalog
-- Read `library.yaml`
-- Parse all entries from `library.skills`, `library.agents`, and `library.prompts`
+### 2. Read .library.lock (Source of Truth)
 
-### 3. Find All Installed Items
-For each entry in the catalog:
-- Determine the type (skill, agent, prompt) and corresponding directories from `default_dirs`
-- Check if a directory or file matching the entry name exists in the **default** directory
-- Check if a directory or file matching the entry name exists in the **global** directory
-- Search recursively for name matches
-- Collect every entry that is installed locally (either default or global)
-- If nothing is installed, tell the user and exit
+Read `.library.lock` from the project root. This file lists every item that was installed
+via `/library use`, with its source URL, source commit, and install target.
+
+If `.library.lock` does not exist:
+> "No .library.lock found. Nothing has been installed via /library use. Run /library use <name>
+> to install items."
+Then exit.
+
+If `.library.lock` is empty (no entries):
+> "No items recorded in .library.lock. Nothing to sync."
+Then exit.
+
+**Why the lockfile, not library.yaml?**
+
+`library.yaml` is the catalog — it lists what is *available*. `.library.lock` lists what is
+*installed in this project*, with the exact source URL and commit. Syncing from the lockfile
+guarantees that two developers with the same `.library.lock` get bit-for-bit identical installs.
+
+### 3. Determine Items to Sync
+
+All entries in `.library.lock` are synced. `/library sync` is a full re-pull of the locked state.
+To sync a single item, use `/library use <name>` instead.
 
 ### 4. Re-pull Each Installed Item
-For each installed entry, fetch the latest from its source:
+
+For each entry in `.library.lock`, fetch fresh content from `source`:
+
+**Use the `install_target` from the lockfile** — do NOT re-derive the path from `default_dirs`.
+This ensures the item is refreshed at the same location it was originally installed to.
 
 **If source is a local path** (starts with `/` or `~`):
 - Resolve `~` to the home directory
 - Get the parent directory of the referenced file
 - For skills: copy the entire parent directory to the target:
   ```bash
-  cp -R <parent_directory>/ <target_directory>/<name>/
+  cp -R <parent_directory>/ <install_target>
   ```
 - For agents: copy just the agent file to the target:
   ```bash
-  cp <agent_file> <target_directory>/<agent_name>.md
+  cp <agent_file> <install_target>/<name>.md
   ```
 - For prompts: copy just the prompt file to the target:
   ```bash
-  cp <prompt_file> <target_directory>/<prompt_name>.md
+  cp <prompt_file> <install_target>/<name>.md
   ```
 
 **If source is a GitHub URL**:
@@ -55,9 +73,9 @@ For each installed entry, fetch the latest from its source:
   tmp_dir=$(mktemp -d)
   git clone --depth 1 --branch <branch> https://github.com/<org>/<repo>.git "$tmp_dir"
   ```
-- Copy the parent directory of the file to the target:
+- Copy the parent directory of the file to the `install_target`:
   ```bash
-  cp -R "$tmp_dir/<parent_path>/" <target_directory>/<name>/
+  cp -R "$tmp_dir/<parent_path>/" <install_target>
   ```
 - Clean up:
   ```bash
@@ -69,13 +87,53 @@ For each installed entry, fetch the latest from its source:
   git clone --depth 1 --branch <branch> git@github.com:<org>/<repo>.git "$tmp_dir"
   ```
 
-### 5. Resolve Dependencies
-For each installed entry that has a `requires` field:
-- Check if each dependency is also installed
-- If a dependency is not installed, pull it as well
+### 5. Recreate Bridge Symlinks
+
+For each entry that has non-empty `bridge_symlinks`:
+- Parse each bridge string (format: `<link-path> -> <target-path>`)
+- Recreate the symlink:
+  ```bash
+  mkdir -p "$(dirname "<link-path>")"
+  if [ -d "<link-path>" ] && [ ! -L "<link-path>" ]; then
+    rm -rf "<link-path>"
+  fi
+  ln -sfn "$(realpath "<install_target>")" "<link-path>"
+  ```
+- This ensures cross-harness bridges are restored after a fresh clone.
+
+### 6. Update .library.lock After Sync
+
+After re-pulling each item, update its lockfile entry:
+- Recompute `checksum_sha256` from the primary artifact file
+- Update `source_commit` to the new HEAD of the cloned repo (or keep `local`)
+- Update `install_timestamp` to the current UTC time
+
+```python
+import yaml, os
+from datetime import datetime, timezone
+
+lock_path = '.library.lock'
+with open(lock_path) as f:
+    lock = yaml.safe_load(f) or {'installed': []}
+
+for entry in lock.get('installed', []):
+    # Update entry fields for this item after re-pull
+    # (source_commit, install_timestamp, checksum_sha256)
+    pass  # implementation fills in the updated values
+
+with open(lock_path, 'w') as f:
+    yaml.dump(lock, f, default_flow_style=False, allow_unicode=True)
+```
+
+### 7. Resolve Dependencies
+
+For each entry that has a `requires` field in `library.yaml`:
+- Check if each dependency is also in `.library.lock`
+- If a dependency is not in the lockfile, run `/library use <dep>` to install it
 - Process dependencies before the items that require them
 
-### 6. Report Results
+### 8. Report Results
+
 Display a summary table:
 
 ```
@@ -89,6 +147,7 @@ Display a summary table:
 
 Synced: X items
 Failed: Y items
+.library.lock updated
 ```
 
 If any items failed (e.g., network error, missing source), list them with the reason so the user can fix individually.

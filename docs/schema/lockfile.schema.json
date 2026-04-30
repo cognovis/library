@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cognovis/cognovis-library/docs/schema/lockfile.schema.json",
+  "title": "Library Lockfile Schema",
+  "description": "JSON Schema for .library.lock — the per-project lockfile recording every installed library item with its source provenance, checksum, and license.",
+  "type": "object",
+  "required": ["installed"],
+  "properties": {
+    "installed": {
+      "description": "Ordered list of installed library items. Each entry records one canonical install (skills, agents, or prompts).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lockfile_entry"
+      },
+      "default": []
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "lockfile_entry": {
+      "description": "A single installed library item with full provenance metadata.",
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "source",
+        "source_commit",
+        "install_target",
+        "install_timestamp",
+        "checksum_sha256"
+      ],
+      "properties": {
+        "name": {
+          "description": "Unique name of the installed item. Must match the catalog entry name in library.yaml.",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "description": "Primitive type of the installed item.",
+          "type": "string",
+          "enum": ["skill", "agent", "prompt"]
+        },
+        "source": {
+          "description": "Origin URL or local path from which the item was fetched. For GitHub sources, this is the browser-form URL (https://github.com/<org>/<repo>/blob/<branch>/<path>). For local sources, the absolute or relative file path.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source_commit": {
+          "description": "Git commit SHA of the source repository at install time. Provides reproducibility: re-running /library sync with this SHA yields identical content. Use 'local' for non-git local sources.",
+          "type": "string",
+          "minLength": 1
+        },
+        "install_target": {
+          "description": "Relative path of the installation directory within the project (e.g. .claude/skills/dolt/ for a project-local skill). Trailing slash is required.",
+          "type": "string",
+          "minLength": 1
+        },
+        "install_timestamp": {
+          "description": "ISO 8601 UTC timestamp of when the item was installed or last refreshed.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "checksum_sha256": {
+          "description": "SHA-256 checksum of the primary artifact file (SKILL.md for skills, the .md file for agents/prompts). Used by /library audit to detect drift between the lockfile record and the current on-disk state.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "license": {
+          "description": "SPDX license identifier of the installed item (e.g. MIT, Apache-2.0, proprietary). Use 'unknown' when no license information is available.",
+          "type": "string",
+          "default": "unknown"
+        },
+        "bridge_symlinks": {
+          "description": "List of symlink bridges created during dual-install (per CL-b4o name-collision policy). Each string is a human-readable description of the form '<link-path> -> <target-path>'. Empty list means no bridge was created (single-harness install).",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
