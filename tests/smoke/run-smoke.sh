@@ -1001,6 +1001,147 @@ smoke_standards() {
 }
 
 # ---------------------------------------------------------------------------
+# smoke_golden_prompts
+#  1. .agents/golden-prompts/cognovis-base.md exists
+#  2. cognovis-base.md has YAML frontmatter with name, version, description
+#  3. .agents/model-standards/ directory exists with at least 2 .md files
+#  4. Each model-standard has YAML frontmatter
+#  5. standards-loader.sh supports --load-model-standard operation
+#  6. PRIMITIVES.md §10 cross-references standards-loader and model-standards path
+#  7. agents-format-mapping.md documents golden_prompt_extends and model_standards fields
+# ---------------------------------------------------------------------------
+smoke_golden_prompts() {
+    section "golden-prompts"
+
+    local golden_prompts_dir="${REPO_ROOT}/.agents/golden-prompts"
+    local model_standards_dir="${REPO_ROOT}/.agents/model-standards"
+    local cognovis_base="${golden_prompts_dir}/cognovis-base.md"
+    local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
+    local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
+    local format_mapping_doc="${REPO_ROOT}/docs/research/agents-format-mapping.md"
+
+    # -----------------------------------------------------------------------
+    # CHECK 1: cognovis-base.md exists
+    # -----------------------------------------------------------------------
+    if [[ -f "${cognovis_base}" ]]; then
+        pass "golden-prompts/cognovis-base: .agents/golden-prompts/cognovis-base.md exists"
+    else
+        fail "golden-prompts/cognovis-base: .agents/golden-prompts/cognovis-base.md NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 2: cognovis-base.md has required YAML frontmatter fields
+    # -----------------------------------------------------------------------
+    if [[ -f "${cognovis_base}" ]]; then
+        local all_frontmatter=true
+        for field in "name" "version" "description"; do
+            if ! grep -q "^${field}:" "${cognovis_base}" 2>/dev/null; then
+                fail "golden-prompts/cognovis-base-frontmatter: '${field}' field NOT found in cognovis-base.md frontmatter"
+                all_frontmatter=false
+            fi
+        done
+        if [[ "${all_frontmatter}" == "true" ]]; then
+            pass "golden-prompts/cognovis-base-frontmatter: cognovis-base.md has required frontmatter (name, version, description)"
+        fi
+    else
+        fail "golden-prompts/cognovis-base-frontmatter: cognovis-base.md not found — cannot check frontmatter"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 3: model-standards directory has at least 2 .md files
+    # -----------------------------------------------------------------------
+    if [[ -d "${model_standards_dir}" ]]; then
+        local ms_count
+        ms_count="$(find "${model_standards_dir}" -name "*.md" -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+        if [[ "${ms_count}" -ge 2 ]]; then
+            pass "golden-prompts/model-standards-count: .agents/model-standards/ has ${ms_count} model-standard(s) (>= 2 required)"
+        else
+            fail "golden-prompts/model-standards-count: .agents/model-standards/ has only ${ms_count} model-standard(s) — at least 2 required"
+        fi
+    else
+        fail "golden-prompts/model-standards-dir: .agents/model-standards/ directory NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 4: Each model-standard has YAML frontmatter
+    # -----------------------------------------------------------------------
+    if [[ -d "${model_standards_dir}" ]]; then
+        local all_ms_frontmatter=true
+        while IFS= read -r ms_file; do
+            local ms_name
+            ms_name="$(basename "${ms_file}" .md)"
+            for field in "name" "version" "description"; do
+                if ! grep -q "^${field}:" "${ms_file}" 2>/dev/null; then
+                    fail "golden-prompts/model-standard-frontmatter: '${ms_name}.md' missing '${field}' in frontmatter"
+                    all_ms_frontmatter=false
+                fi
+            done
+        done < <(find "${model_standards_dir}" -name "*.md" -maxdepth 1 2>/dev/null)
+        if [[ "${all_ms_frontmatter}" == "true" ]]; then
+            pass "golden-prompts/model-standard-frontmatter: all model-standards have required frontmatter"
+        fi
+    else
+        fail "golden-prompts/model-standard-frontmatter: model-standards dir not found — cannot check frontmatter"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 5: standards-loader.sh supports --load-model-standard
+    # -----------------------------------------------------------------------
+    if [[ -f "${loader_script}" ]]; then
+        if grep -q "load-model-standard\|model.standard\|model_standard" "${loader_script}" 2>/dev/null; then
+            pass "golden-prompts/loader-model-standard: standards-loader.sh supports model-standard loading"
+        else
+            fail "golden-prompts/loader-model-standard: standards-loader.sh does NOT support --load-model-standard"
+        fi
+    else
+        fail "golden-prompts/loader-model-standard: standards-loader.sh not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 6: PRIMITIVES.md §10 cross-references standards-loader and model-standards path
+    # -----------------------------------------------------------------------
+    if [[ -f "${primitives_doc}" ]]; then
+        local cross_ref_ok=true
+        if ! grep -q "standards-loader\|model-standards" "${primitives_doc}" 2>/dev/null; then
+            fail "golden-prompts/primitives-model-standard: PRIMITIVES.md §10 does NOT cross-reference standards-loader or model-standards path"
+            cross_ref_ok=false
+        fi
+        if ! grep -q "three.layer\|three layer\|Layer 1\|Layer 2\|Layer 3\|composition" "${primitives_doc}" 2>/dev/null; then
+            fail "golden-prompts/primitives-composition: PRIMITIVES.md does NOT document three-layer composition"
+            cross_ref_ok=false
+        fi
+        if [[ "${cross_ref_ok}" == "true" ]]; then
+            pass "golden-prompts/primitives-model-standard: PRIMITIVES.md §10 references standards-loader and composition model"
+        fi
+    else
+        fail "golden-prompts/primitives-model-standard: docs/PRIMITIVES.md NOT found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 7: agents-format-mapping.md documents new frontmatter fields
+    # -----------------------------------------------------------------------
+    if [[ -f "${format_mapping_doc}" ]]; then
+        local mapping_ok=true
+        if ! grep -q "golden_prompt_extends\|golden-prompt-extends" "${format_mapping_doc}" 2>/dev/null; then
+            fail "golden-prompts/format-mapping-golden: agents-format-mapping.md does NOT document golden_prompt_extends field"
+            mapping_ok=false
+        fi
+        if ! grep -q "model_standards\|model-standards" "${format_mapping_doc}" 2>/dev/null; then
+            fail "golden-prompts/format-mapping-model-standards: agents-format-mapping.md does NOT document model_standards field"
+            mapping_ok=false
+        fi
+        if [[ "${mapping_ok}" == "true" ]]; then
+            pass "golden-prompts/format-mapping: agents-format-mapping.md documents golden_prompt_extends and model_standards fields"
+        fi
+    else
+        fail "golden-prompts/format-mapping: docs/research/agents-format-mapping.md NOT found"
+    fi
+
+    echo "  NOTE  golden-prompts/runtime: End-to-end composition (install-time write to harness-native) requires a live library install session."
+    echo "        Structural checks above confirm the files, frontmatter, and loader support satisfy the composition contract."
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -1033,6 +1174,9 @@ main() {
         standards)
             smoke_standards
             ;;
+        golden-prompts)
+            smoke_golden_prompts
+            ;;
         all)
             smoke_claude_code
             smoke_codex
@@ -1041,10 +1185,11 @@ main() {
             smoke_name_collision
             smoke_lockfile
             smoke_standards
+            smoke_golden_prompts
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|all]"
             exit 1
             ;;
     esac
