@@ -286,12 +286,18 @@ checksum=$(sha256sum "<primary_artifact_path>" | awk '{print $1}')
 
 #### 8b. Resolve the source commit
 
-If the source is a GitHub URL (cloned via `git clone`):
+> **IMPORTANT — timing**: For GitHub sources, the source commit must be resolved from
+> `$tmp_dir` BEFORE the `rm -rf "$tmp_dir"` cleanup in Step 6. The clone directory is deleted
+> in Step 6 after copying — capture the SHA immediately after the copy, before cleanup.
+
+For a **GitHub source** (resolve while `$tmp_dir` still exists, before `rm -rf`):
 ```bash
+# Capture immediately after cp in Step 6, before rm -rf "$tmp_dir"
 source_commit=$(git -C "$tmp_dir" rev-parse HEAD)
+rm -rf "$tmp_dir"   # cleanup happens AFTER sha capture
 ```
 
-If the source is a local path (copied via `cp`):
+For a **local path source** (copied via `cp`):
 ```bash
 # Try to get the git commit if the source is inside a git repo
 source_commit=$(git -C "$(dirname '<source_path>')" rev-parse HEAD 2>/dev/null || echo "local")

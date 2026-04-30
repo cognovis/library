@@ -68,24 +68,36 @@ This ensures the item is refreshed at the same location it was originally instal
   - Raw URL pattern: `https://raw.githubusercontent.com/<org>/<repo>/<branch>/<path>`
 - Determine the clone URL: `https://github.com/<org>/<repo>.git`
 - Determine the parent directory path within the repo (everything before the filename)
-- Clone into a temporary directory:
+- Clone into a temporary directory, then **pin to `source_commit`** from the lockfile entry
+  to guarantee reproducibility (the branch HEAD may have moved since the original install):
   ```bash
   tmp_dir=$(mktemp -d)
-  git clone --depth 1 --branch <branch> https://github.com/<org>/<repo>.git "$tmp_dir"
+  git clone https://github.com/<org>/<repo>.git "$tmp_dir"
+  git -C "$tmp_dir" checkout <entry.source_commit>
   ```
+  > **Why pin?** A shallow `--depth 1` clone always fetches the current branch tip.
+  > Pinning to `source_commit` ensures two clones of the same `.library.lock` produce
+  > bit-for-bit identical content, regardless of upstream changes since the original install.
+  > Use a full clone (no `--depth 1`) so that `git checkout <sha>` succeeds.
 - Copy the parent directory of the file to the `install_target`:
   ```bash
   cp -R "$tmp_dir/<parent_path>/" <install_target>
   ```
-- Clean up:
+- Capture the new commit SHA and clean up:
   ```bash
+  new_commit=$(git -C "$tmp_dir" rev-parse HEAD)   # should equal entry.source_commit
   rm -rf "$tmp_dir"
   ```
 
 **If clone fails (private repo)**, try SSH:
   ```bash
-  git clone --depth 1 --branch <branch> git@github.com:<org>/<repo>.git "$tmp_dir"
+  git clone git@github.com:<org>/<repo>.git "$tmp_dir"
+  git -C "$tmp_dir" checkout <entry.source_commit>
   ```
+
+**Upgrade behavior** — if the user explicitly requests an upgrade (e.g. `/library upgrade <name>`),
+omit the `git checkout <source_commit>` pin and use the current branch HEAD instead. Then update
+`source_commit` in the lockfile to the new HEAD SHA.
 
 ### 5. Recreate Bridge Symlinks
 
