@@ -6,29 +6,38 @@
 #
 # Installation:
 #   Merge this fragment into ~/.codex/config.toml (or your project-local
-#   config.toml). This sets approval_policy = "all", requiring human
+#   config.toml). This sets approval_policy = "always", requiring human
 #   approval for EVERY tool call — blunt but effective.
 #
 # CAPABILITY NOTE: This is a blunt-instrument installation.
-#   - approval_policy = "all" requires approval for ALL tool calls,
+#   - approval_policy = "always" requires approval for ALL tool calls,
 #     not just destructive ones. This is more restrictive than the
 #     Claude Code implementation which only blocks specific patterns.
-#   - If you want less friction, consider approval_policy = "auto"
-#     (Codex decides) and rely on other guardrails for specific blocking.
+#   - If you want less friction, use approval_policy = "unless-allow-listed"
+#     (default behavior — Codex auto-approves safe-looking commands) and
+#     rely on other guardrails for specific blocking.
+#
+# Codex CLI approval_policy valid values:
+#   - "always"              — require human approval for every tool call
+#   - "unless-allow-listed" — auto-approve commands that match Codex's
+#                             allow list; require approval for others
 #
 # To merge into existing config.toml:
 #   1. Open ~/.codex/config.toml
-#   2. Set or add: approval_policy = "all"
+#   2. Set or add: approval_policy = "always"
 #   3. Optionally add the sandbox_permissions restrictions below
 #
 # References:
 #   - https://github.com/openai/codex (Codex CLI config docs)
 #   - docs/research/guardrails-mapping.md
 #   - library.yaml guardrails[block-destructive-bash]
+#
+# INFERRED: approval_policy values confirmed from Codex CLI README at time of
+# writing. Validate against current docs before deploying.
 
 # Require human approval before every tool call.
-# Change to "auto" to let Codex decide (reduces friction, reduces protection).
-approval_policy = "all"
+# Change to "unless-allow-listed" to reduce friction (Codex approves safe commands).
+approval_policy = "always"
 
 # Optional: Restrict sandbox permissions to further limit destructive operations.
 # These are applied at the sandbox level, independently of approval_policy.

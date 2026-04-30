@@ -39,7 +39,7 @@ Legend:
 |---------|-----------|-------------|----------------|---------------|
 | **Claude Code** | hooks | `settings.json` (project or global) | Any executable (bash, python, etc.) | 13+ events — see below |
 | **Codex CLI** | hooks (limited) | `hooks.json` | Node ESM `.mjs` | 3 events only: SessionStart, SessionEnd, Stop |
-| **Codex Cloud** | `sandbox_mode` + `approval_policy` | `config.toml` | static TOML policy | Pre-tool only via approval gate (all/auto) |
+| **Codex Cloud** | `sandbox_mode` + `approval_policy` | `config.toml` | static TOML policy | Pre-tool only via approval gate (always/unless-allow-listed) |
 | **Pi** | TypeScript Extensions | `.pi/extensions/*.ts` | TypeScript code | Tool-call events; `pi.on("event", handler)` |
 | **OpenCode** | permission rules | `opencode.json` | JSON rules array | Pre-tool-call gates only |
 
@@ -86,8 +86,8 @@ injection via `SessionStart` is the nearest workaround.
 ### Codex Cloud (static policy, NORMATIVE)
 
 Codex Cloud uses a declarative policy model, not event hooks:
-- `approval_policy = "all"` — require human approval for every tool call
-- `approval_policy = "auto"` — Codex decides what to approve
+- `approval_policy = "always"` — require human approval for every tool call
+- `approval_policy = "unless-allow-listed"` — Codex decides what to approve
 - `sandbox_mode` — restrict which filesystem paths and network access are available
 
 There is no per-tool-call hook; policy applies globally to all tool calls.
@@ -119,13 +119,13 @@ Goal: block a tool call before it executes.
 |---------|---------|--------------|---------------|
 | Claude Code | NATIVE | `PreToolUse` hook (exit 2 to block) | Hard block — model cannot proceed |
 | Codex CLI | WORKAROUND | `SessionStart` advisory injection | Advisory only — model is warned, not blocked |
-| Codex Cloud | BLUNT | `approval_policy = "all"` in config.toml | Hard gate — but applies to ALL tool calls |
+| Codex Cloud | BLUNT | `approval_policy = "always"` in config.toml | Hard gate — but applies to ALL tool calls |
 | Pi | NATIVE | TypeScript extension `tool_call` handler | Hard block |
 | OpenCode | NATIVE | JSON `rules` with `action: "deny"` | Hard block for matched patterns |
 
 **Mismatch warning triggers:**
 - Codex CLI: emit warning, offer SessionStart workaround or skip
-- Codex Cloud: emit warning, offer approval_policy=all or skip
+- Codex Cloud: emit warning, offer approval_policy=always or skip
 
 ### `post-tool-reaction`
 
@@ -186,7 +186,7 @@ The `use-guardrail` cookbook emits mismatch warnings based on this table:
 | Guardrail purpose | Target harness | Warning type | Default action |
 |-------------------|----------------|--------------|----------------|
 | `pre-tool-veto` | `codex_cli` | WORKAROUND — install as SessionStart advisory? | Skip |
-| `pre-tool-veto` | `codex_cloud` | BLUNT — install as approval_policy=all? | Skip |
+| `pre-tool-veto` | `codex_cloud` | BLUNT — install as approval_policy=always? | Skip |
 | `post-tool-reaction` | `codex_cli` | NOT SUPPORTED — skip? | Skip |
 | `post-tool-reaction` | `codex_cloud` | NOT SUPPORTED — skip? | Skip |
 | `post-tool-reaction` | `opencode` | NOT SUPPORTED — skip? | Skip |
@@ -212,7 +212,7 @@ This guardrail has `purpose: pre-tool-veto` and targets destructive Bash command
 |---------|-------------|---------------|----------------|
 | Claude Code | `PreToolUse` hook (bash script) | Hard block — exit 2 | `settings.json` hooks section |
 | Codex CLI | `SessionStart` advisory hook | Advisory only | `hooks.json` SessionStart |
-| Codex Cloud | `approval_policy = "all"` | Hard gate (all tools) | `config.toml` |
+| Codex Cloud | `approval_policy = "always"` | Hard gate (all tools) | `config.toml` |
 | OpenCode | JSON permission rules | Hard block (matched patterns) | `opencode.json` rules array |
 | Pi | Not implemented yet | — | — |
 
@@ -220,7 +220,7 @@ This guardrail has `purpose: pre-tool-veto` and targets destructive Bash command
 1. `codex_cli`: Requested `pre-tool-veto` but Codex CLI only supports `SessionStart`.
    Installs as advisory injection (reduced effectiveness).
 2. `codex_cloud`: Requested `pre-tool-veto` but Codex Cloud only has `approval_policy`.
-   Installs as `approval_policy = "all"` (blunt — affects ALL tool calls).
+   Installs as `approval_policy = "always"` (blunt — affects ALL tool calls).
 
 ---
 

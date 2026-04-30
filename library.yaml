@@ -50,14 +50,14 @@ guardrails:
       codex_cloud:
         mechanism: approval_policy
         config_key: approval_policy
-        supported_values: [all, auto]
-        recommended_value: all
+        supported_values: [always, unless-allow-listed]
+        recommended_value: always
         note: >-
-          No event-level veto in Codex cloud. Setting approval_policy=all requires human
+          No event-level veto in Codex cloud. Setting approval_policy=always requires human
           approval for every tool call — blunt but effective. Alternatively configure
           sandbox_mode restrictions.
         mismatch_warning: >-
-          codex_cloud has no per-tool-call hook. Installing sets approval_policy=all in
+          codex_cloud has no per-tool-call hook. Installing sets approval_policy=always in
           config.toml, which requires approval for ALL tool calls (not just destructive ones).
       opencode:
         mechanism: permission-rule

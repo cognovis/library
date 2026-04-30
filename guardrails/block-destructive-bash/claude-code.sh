@@ -12,7 +12,7 @@
 # Register in settings.json under hooks.PreToolUse with matcher "Bash"
 #
 # Claude Code hook contract:
-#   Input:  $CLAUDE_TOOL_INPUT (JSON) — { "command": "<bash command>" }
+#   Input:  JSON object on STDIN — { "tool_name": "Bash", "tool_input": { "command": "..." } }
 #   Output: Exit 0 → allow; Exit 2 → block (print JSON message to stdout)
 #
 # References:
@@ -21,8 +21,8 @@
 
 set -euo pipefail
 
-# Read tool input from environment variable
-TOOL_INPUT="${CLAUDE_TOOL_INPUT:-}"
+# Read tool input from STDIN (Claude Code hook contract)
+TOOL_INPUT=$(cat)
 
 if [[ -z "$TOOL_INPUT" ]]; then
     # No input — not a Bash tool call or called directly; allow
@@ -30,11 +30,16 @@ if [[ -z "$TOOL_INPUT" ]]; then
 fi
 
 # Extract the command string from the JSON input
+# Claude Code passes: { "tool_name": "Bash", "tool_input": { "command": "..." } }
 COMMAND=$(echo "$TOOL_INPUT" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
-    print(data.get('command', ''))
+    # Support both direct input and nested tool_input wrapper
+    if 'tool_input' in data:
+        print(data['tool_input'].get('command', ''))
+    else:
+        print(data.get('command', ''))
 except Exception:
     print('')
 ")
@@ -50,35 +55,47 @@ fi
 BLOCKED_REASON=""
 
 # Pattern 1: rm with recursive + force flags (any order, with optional paths)
-# Matches: rm -rf, rm -fr, rm -rf /, rm --recursive --force, etc.
-if echo "$COMMAND" | grep -qiE '(^|\s|;|\|)rm\s+(-[a-z]*r[a-z]*f|--recursive\s+--force|--force\s+--recursive|-rf|-fr)\s'; then
+# Matches: rm -rf, rm -fr, rm -rf /, rm --recursive --force, rm -rf path, etc.
+# Also matches end of command and common separators (;, &&, |)
+if echo "$COMMAND" | grep -qiE '(^|[[:space:]];|&&|\|)rm[[:space:]]+(-[a-z]*r[a-z]*f[a-z]*|--recursive[[:space:]]+--force|--force[[:space:]]+--recursive)([[:space:]]|$)'; then
     BLOCKED_REASON="Recursive forced delete (rm -rf) detected. This irreversibly deletes files."
 fi
 
 # Pattern 2: git push with force flags
-# Matches: git push --force, git push -f, git push --force-with-lease (still potentially destructive)
-if echo "$COMMAND" | grep -qiE '(^|\s|;|\|)git\s+push\s+.*(\s--force\s|\s-f\s|\s--force$|\s-f$)'; then
+# Matches:
+#   git push --force
+#   git push -f
+#   git push --force origin main
+#   git push origin main --force
+#   git push origin --force
+#   git push -f origin
+# Requires "git push" followed anywhere by --force or -f (as a standalone flag)
+if echo "$COMMAND" | grep -qiE 'git[[:space:]]+push([[:space:]]+[^[:space:]]+)*[[:space:]]+(--force|-f)([[:space:]]|$)'; then
+    BLOCKED_REASON="Force push to git remote detected. This can overwrite remote history irreversibly."
+fi
+# Also catch --force appearing before the remote/branch
+if echo "$COMMAND" | grep -qiE 'git[[:space:]]+push[[:space:]]+(--force|-f)([[:space:]]|$)'; then
     BLOCKED_REASON="Force push to git remote detected. This can overwrite remote history irreversibly."
 fi
 
 # Pattern 3: SQL DROP TABLE / DROP DATABASE
-if echo "$COMMAND" | grep -qiE '(DROP\s+(TABLE|DATABASE|SCHEMA)\s)'; then
+if echo "$COMMAND" | grep -qiE '(DROP[[:space:]]+(TABLE|DATABASE|SCHEMA)[[:space:]])'; then
     BLOCKED_REASON="SQL DROP TABLE/DATABASE/SCHEMA detected. This irreversibly destroys data."
 fi
 
 # Pattern 4: SQL TRUNCATE TABLE
-if echo "$COMMAND" | grep -qiE '(TRUNCATE\s+(TABLE\s)?[a-zA-Z])'; then
+if echo "$COMMAND" | grep -qiE '(TRUNCATE[[:space:]]+(TABLE[[:space:]])?[a-zA-Z])'; then
     BLOCKED_REASON="SQL TRUNCATE TABLE detected. This irreversibly removes all rows from a table."
 fi
 
 # Pattern 5: dd writing to block devices or disk images
 # Matches: dd if=... of=/dev/sda, dd if=... of=/dev/disk, etc.
-if echo "$COMMAND" | grep -qiE '(^|\s|;|\|)dd\s+.*of=/dev/'; then
+if echo "$COMMAND" | grep -qiE '(^|[[:space:]]|;|&&|\|)dd[[:space:]]+.*of=/dev/'; then
     BLOCKED_REASON="dd writing to a block device detected. This can irreversibly overwrite disk data."
 fi
 
 # Pattern 6: Windows drive format (format c: or similar)
-if echo "$COMMAND" | grep -qiE '(^|\s|;|\|)format\s+[a-zA-Z]:'; then
+if echo "$COMMAND" | grep -qiE '(^|[[:space:]]|;|&&|\|)format[[:space:]]+[a-zA-Z]:'; then
     BLOCKED_REASON="Windows drive format command detected. This irreversibly destroys all data on the drive."
 fi
 
@@ -88,14 +105,12 @@ fi
 
 if [[ -n "$BLOCKED_REASON" ]]; then
     # Exit 2 = block the tool call, show message to user
+    REASON_ESCAPED=$(echo "$BLOCKED_REASON" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read().strip()))")
     python3 -c "
-import json, sys
+import json
 message = {
     'decision': 'block',
-    'reason': '''$BLOCKED_REASON
-
-If this operation is truly needed, ask the user for explicit permission
-and have them run the command manually.'''
+    'reason': $REASON_ESCAPED + '\n\nIf this operation is truly needed, ask the user for explicit permission and have them run the command manually.'
 }
 print(json.dumps(message))
 "

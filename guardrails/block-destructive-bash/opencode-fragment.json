@@ -19,20 +19,20 @@
     {
       "tool": "bash",
       "pattern": "\\brm\\s+-[a-zA-Z]*r[a-zA-Z]*f|\\brm\\s+--recursive\\s+--force|\\brm\\s+--force\\s+--recursive",
-      "action": "ask",
-      "message": "Recursive forced delete detected. This irreversibly deletes files. Confirm you intend this operation."
+      "action": "deny",
+      "message": "Recursive forced delete detected. This irreversibly deletes files and is blocked by the block-destructive-bash guardrail."
     },
     {
       "tool": "bash",
-      "pattern": "\\bgit\\s+push\\s+.*\\s(--force|-f)(\\s|$)",
-      "action": "ask",
-      "message": "Force push to git remote detected. This can overwrite remote history irreversibly. Confirm you intend this operation."
+      "pattern": "\\bgit\\s+push(\\s+[^\\s]+)*\\s+(--force|-f)(\\s|$)|\\bgit\\s+push\\s+(--force|-f)(\\s|$)",
+      "action": "deny",
+      "message": "Force push to git remote detected. This can overwrite remote history irreversibly and is blocked by the block-destructive-bash guardrail."
     },
     {
       "tool": "bash",
       "pattern": "\\b(DROP\\s+(TABLE|DATABASE|SCHEMA)|TRUNCATE\\s+(TABLE\\s+)?\\w)",
-      "action": "ask",
-      "message": "SQL destructive DDL detected (DROP TABLE / TRUNCATE). This irreversibly destroys data. Confirm you intend this operation."
+      "action": "deny",
+      "message": "SQL destructive DDL detected (DROP TABLE / TRUNCATE). This irreversibly destroys data and is blocked by the block-destructive-bash guardrail."
     },
     {
       "tool": "bash",
