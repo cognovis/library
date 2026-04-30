@@ -69,9 +69,12 @@
       "additionalProperties": true
     },
     "mcp_servers": {
-      "description": "Canonical MCP server model definitions (stub — populated by CL-mfz).",
-      "type": "object",
-      "additionalProperties": true
+      "description": "Canonical MCP server model definitions. Each entry describes a server once; per-harness translator logic (install config mutation) is a separate follow-up bead (CL-mfz successor).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mcp_server_entry"
+      },
+      "default": []
     },
     "marketplaces": {
       "description": "Third-party source references for external libraries.",
@@ -257,6 +260,164 @@
           }
         }
       ]
+    },
+    "mcp_server_entry": {
+      "description": "Canonical definition of one MCP server. Describes what the server does and how it should be installed per harness — translation logic is a follow-up bead.",
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this MCP server (kebab-case recommended).",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Human-readable description of what this MCP server provides.",
+          "type": "string",
+          "minLength": 1
+        },
+        "coding_strategy": {
+          "description": "How coding harnesses (Claude Code, Codex, OpenCode) should consume this server: cli = install the CLI wrapper package, mcp = add to harness MCP config.",
+          "type": "string",
+          "enum": ["cli", "mcp"]
+        },
+        "mobile_strategy": {
+          "description": "How mobile/web harnesses (claude.ai, claude.ios) consume this server.",
+          "type": "string",
+          "enum": ["cli", "mcp"]
+        },
+        "capabilities": {
+          "description": "Runtime characteristics of this MCP server.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stateless": {
+              "description": "True if the server holds no persistent state between calls.",
+              "type": "boolean"
+            },
+            "streaming": {
+              "description": "True if the server supports streaming responses.",
+              "type": "boolean"
+            },
+            "auth": {
+              "description": "Authentication mechanism required by this server.",
+              "type": "string",
+              "enum": ["token", "oauth", "none"]
+            }
+          }
+        },
+        "install": {
+          "description": "Per-harness install metadata. Does NOT include translator code — that is a follow-up bead.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cli": {
+              "description": "Install metadata when coding_strategy is cli.",
+              "type": "object",
+              "required": ["package", "manager"],
+              "additionalProperties": false,
+              "properties": {
+                "package": {
+                  "description": "Package name to install (e.g. npm package or PyPI name).",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "manager": {
+                  "description": "Package manager to use.",
+                  "type": "string",
+                  "enum": ["npm", "pip", "cargo", "brew", "none"]
+                }
+              }
+            },
+            "mcp": {
+              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are harness names (claude_code, codex, opencode, claude_ai, claude_ios). Values are open objects — the translator bead will define stricter schemas.",
+              "type": "object",
+              "properties": {
+                "claude_code": {
+                  "description": "Config hints for Claude Code (~/.claude/settings.json).",
+                  "type": "object",
+                  "properties": {
+                    "config_path": {
+                      "description": "Path to the harness config file that receives the snippet.",
+                      "type": "string"
+                    },
+                    "snippet": {
+                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "codex": {
+                  "description": "Config hints for Codex (~/.codex/config.toml).",
+                  "type": "object",
+                  "properties": {
+                    "config_path": {
+                      "description": "Path to the harness config file that receives the snippet.",
+                      "type": "string"
+                    },
+                    "snippet": {
+                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "opencode": {
+                  "description": "Config hints for OpenCode (~/.config/opencode/opencode.json).",
+                  "type": "object",
+                  "properties": {
+                    "config_path": {
+                      "description": "Path to the harness config file that receives the snippet.",
+                      "type": "string"
+                    },
+                    "snippet": {
+                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "claude_ai": {
+                  "description": "Config hints for claude.ai (web — manual install via URL).",
+                  "type": "object",
+                  "properties": {
+                    "install_url": {
+                      "description": "URL the user opens to add this server to claude.ai.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "claude_ios": {
+                  "description": "Config hints for Claude iOS (manual install via URL).",
+                  "type": "object",
+                  "properties": {
+                    "install_url": {
+                      "description": "URL the user opens to add this server to Claude iOS.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "tags": {
+          "description": "Optional tags for search and filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
     }
   }
 }

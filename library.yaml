@@ -16,6 +16,38 @@ library:
   agents: []
   prompts: []
 
+mcp_servers:
+  - name: open-brain
+    description: Stateless memory store via search/save/get — persists observations across sessions
+    coding_strategy: cli
+    mobile_strategy: mcp
+    capabilities:
+      stateless: true
+      streaming: false
+      auth: token
+    install:
+      cli:
+        package: '@cognovis/open-brain-cli'
+        manager: npm
+      mcp:
+        claude_code:
+          config_path: ~/.claude/settings.json
+          snippet:
+            type: stdio
+            command: open-brain
+        codex:
+          config_path: ~/.codex/config.toml
+          snippet:
+            command: open-brain
+        opencode:
+          config_path: ~/.config/opencode/opencode.json
+          snippet:
+            command: open-brain
+        claude_ai:
+          install_url: https://claude.ai/add-mcp/open-brain
+        claude_ios:
+          install_url: https://claude.ai/add-mcp/open-brain
+
 marketplaces:
   - name: anthropic-official
     source: https://github.com/anthropics
