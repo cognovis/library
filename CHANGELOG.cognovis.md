@@ -9,6 +9,15 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ### Added
 
+- **Standards Loading Mechanism** (`docs/research/standards-loading.md`, `scripts/standards-loader.sh`): Design ADR and working prototype for cross-harness standards loading. Defines loader contract: path resolution (project-local `.agents/standards/<name>.md` overrides user-global), warn-and-continue on missing standards, merge order (first-declaration-wins deduplication), frontmatter validation schema, re-read-on-invoke caching policy, and 4-phase compatibility migration timeline. Prototype implements mechanism (a) adapter generation into `AGENTS.md` (`--generate-adapter`) and mechanism (b) skill-script-side runtime loader (`--load`). Recommends mechanism (d) Hybrid (a+b) as primary approach. Portable across macOS and Linux. Closes CL-v56.
+
+### Changed
+
+- **Agentic Primitives Glossary** (`docs/PRIMITIVES.md`): Updated STANDARD primitive §7 trigger semantics to describe both the legacy SessionStart hook (Claude Code only) and the new cross-harness convention (`.agents/standards/<name>.md` + adapter generation into `AGENTS.md`). Added `requires_standards` frontmatter documentation. Closes CL-v56.
+- **Smoke Tests** (`tests/smoke/run-smoke.sh`): Added `smoke_standards()` function (10 structural checks) validating research doc existence, all loader contract sections, prototype script existence/executability, precedence rules, warn-on-missing behavior, mechanism (a) and (b) implementation, PRIMITIVES.md update, and index.yml schema documentation. Runnable via `just test-smoke standards`. Closes CL-v56.
+
+### Added
+
 - **Library Lockfile** (`.library.lock` format — `docs/lockfile-format.md`, `docs/schema/lockfile.schema.json`): Introduced `.library.lock` as the per-project provenance manifest for all installed library items. Records name, type, source URL, source commit SHA, install target, ISO 8601 timestamp, SHA-256 checksum, SPDX license, and bridge symlinks per entry. JSON Schema provided for machine validation. Closes CL-t21.
 - **Audit Cookbook** (`cookbook/audit.md`): New `/library audit` procedure that reads `.library.lock`, recomputes SHA-256 checksums of installed primary artifact files, and reports CLEAN / DRIFT / MISSING / BRIDGE-BROKEN / UNLOCKED status per item. Detects on-disk modifications made outside the Library without auto-fixing. Closes CL-t21.
 - **Lockfile Smoke Tests** (`tests/smoke/run-smoke.sh`): Added `smoke_lockfile()` (13 structural checks) validating schema presence, format docs, cookbook references, checksum computation, write/read round-trip, drift detection, remove-entry, and bridge_symlinks field. Runnable via `just test-smoke lockfile`. Closes CL-t21.
