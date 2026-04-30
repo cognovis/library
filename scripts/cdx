@@ -25,10 +25,10 @@ if [[ -z "${CODEX_BIN}" ]]; then
     exit 1
 fi
 
-BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
-if [[ -z "${BD_BIN}" ]] && [[ "${1:-}" == "-b" || "${1:-}" == "--bead" || "${1:-}" == "-bq" || "${1:-}" == "--bead-quick" || "${1:-}" == "-br" || "${1:-}" == "--bead-review" ]]; then
-    echo "ERROR: bd not found in PATH. Install the beads CLI first."
-    exit 1
+# Resolve bd lazily to avoid set -e exit when bd is not installed (only needed for bead modes)
+BD_BIN="${BD_BIN:-}"
+if [[ -z "${BD_BIN}" ]]; then
+    BD_BIN="$(command -v bd 2>/dev/null || true)"
 fi
 
 # ── Parse wrapper flags ──────────────────────────────────────────
@@ -118,7 +118,7 @@ if [[ -n "$bead_id" ]]; then
 
 ${bead_context}"
 
-    exec "${CODEX_BIN}" exec "${prompt}"
+    exec "${CODEX_BIN}" exec "${codex_args[@]}" "${prompt}"
 fi
 
 # ── Quick-fix mode: cdx -bq <id> ────────────────────────────────
@@ -140,7 +140,7 @@ if [[ -n "$bead_quick_id" ]]; then
 
 ${bead_context}"
 
-    exec "${CODEX_BIN}" exec "${prompt}"
+    exec "${CODEX_BIN}" exec "${codex_args[@]}" "${prompt}"
 fi
 
 # ── Review mode: cdx -br <id> ───────────────────────────────────
@@ -167,7 +167,7 @@ if [[ -n "$bead_review_id" ]]; then
 
 ${bead_context}"
 
-    exec "${CODEX_BIN}" exec "${prompt}"
+    exec "${CODEX_BIN}" exec "${codex_args[@]}" "${prompt}"
 fi
 
 # ── Default: plain Codex launch ─────────────────────────────────
