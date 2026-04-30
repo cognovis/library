@@ -170,8 +170,12 @@ SKIP: 11  (MANUAL_VERIFICATION_REQUIRED — Pi + OpenCode runtime unavailable)
    Claude Code or Codex within a shell script to test actual skill loading.
 2. **Git symlink tracking** — requires at least one committed symlink in the repo.
    Once `.claude/skills/<name>` symlinks are committed, the test will verify mode 120000.
-3. **Pi and OpenCode** — runtimes not available locally. Structural stubs are provided
-   as a scaffold for when those runtimes become available.
-4. **Global path tests** — the test uses a tmpdir fake home; it does not verify
-   `~/.claude/skills/` or `~/.agents/skills/` in the actual home directory (by design,
-   to avoid polluting real global state).
+3. **Pi and OpenCode** — runtimes not available locally; tests are stubs pending when
+   those runtimes become available locally. Structural stubs are provided as a scaffold.
+
+## Intentional Non-Goals
+
+4. **Global path tests** — the test uses a tmpdir fake home and deliberately does NOT
+   verify `~/.claude/skills/` or `~/.agents/skills/` in the actual home directory.
+   This is by design to avoid polluting real global state. Home-directory isolation is
+   a permanent design constraint, not a deferred capability.

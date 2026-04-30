@@ -25,6 +25,7 @@ PASS_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
 OVERALL_EXIT=0
+TMPDIRS=()
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -52,19 +53,22 @@ section() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
+# Single EXIT trap registered once at script start — cleans all tmpdirs
+trap 'rm -rf "${TMPDIRS[@]}"' EXIT
+
 # ---------------------------------------------------------------------------
 # Utility: make a temp dir, copy fixture, register cleanup
 # ---------------------------------------------------------------------------
 make_test_env() {
     local tmpdir
     tmpdir="$(mktemp -d)"
-    # Always clean up on exit
-    trap "rm -rf '${tmpdir}'" EXIT
+    # Register in global array; single EXIT trap at script top handles cleanup
+    TMPDIRS+=("${tmpdir}")
     echo "${tmpdir}"
 }
 
 # ---------------------------------------------------------------------------
-# check_skill_file <dir> <skill_name> <label>
+# check_skill_file <dir> <label>
 #   Verifies that <dir>/SKILL.md exists and is readable.
 # ---------------------------------------------------------------------------
 check_skill_file() {
@@ -161,7 +165,7 @@ check_name_collision() {
     local agents_skill="${agents_dir}/SKILL.md"
 
     if [[ -f "${claude_skill}" && -f "${agents_skill}" ]]; then
-        pass "${label}: name collision scenario present — .claude/skills wins for Claude Code (harness-native path has priority); .agents/skills wins for Codex"
+        pass "${label}: name collision scenario set up — both .claude/skills and .agents/skills present; runtime precedence not verified (see README claim 6, marked PARTIAL)"
     elif [[ -f "${claude_skill}" ]]; then
         pass "${label}: only .claude/skills present — no collision"
     elif [[ -f "${agents_skill}" ]]; then
@@ -226,14 +230,14 @@ smoke_claude_code() {
     # Look for any .claude/skills symlinks already in this repo
     local real_symlink_check=0
     while IFS= read -r line; do
-        # line format: mode hash stage\tpath
+        # line format: mode SP hash SP stage TAB path — extract path after the tab
         local rel_path
-        rel_path="$(echo "${line}" | awk '{print $NF}')"
+        rel_path="$(printf '%s' "${line}" | cut -f2)"
         if [[ -n "${rel_path}" ]]; then
             pass "claude-code/git-symlink: repo symlink ${rel_path} tracked as mode 120000"
             real_symlink_check=1
         fi
-    done < <(git -C "${REPO_ROOT}" ls-files --stage 2>/dev/null | grep "^120000" | grep ".claude/skills" || true)
+    done < <(git -C "${REPO_ROOT}" ls-files --stage 2>/dev/null | grep "^120000" | grep -E '(^|/)\.claude/skills/' || true)
 
     if [[ "${real_symlink_check}" -eq 0 ]]; then
         skip "claude-code/git-symlink: no .claude/skills symlinks found in repo yet — create one to test git tracking"
@@ -243,9 +247,6 @@ smoke_claude_code() {
     echo "  NOTE  claude-code/runtime: Runtime skill discovery requires a live Claude Code session."
     echo "        Structural checks above confirm install paths are correct."
     echo "        To verify runtime: start a Claude Code session and invoke /hello-world"
-
-    rm -rf "${tmpdir}"
-    trap - EXIT
 }
 
 # ---------------------------------------------------------------------------
@@ -304,9 +305,6 @@ smoke_codex() {
     echo "  NOTE  codex/runtime: Runtime skill discovery requires a live Codex session."
     echo "        Structural checks above confirm install paths are correct."
     echo "        To verify runtime: run 'codex' and invoke the hello-world skill"
-
-    rm -rf "${tmpdir}"
-    trap - EXIT
 }
 
 # ---------------------------------------------------------------------------
