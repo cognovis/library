@@ -12,3 +12,7 @@
 
 # Codex/external session tracking (tool-internal, not project state)
 .context/
+
+# Beads orchestrator transient IPC files
+.worktree-handoff.json
+.wave-orchestrator.lock
