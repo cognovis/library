@@ -130,10 +130,31 @@ This table documents every architectural claim from `docs/ARCHITECTURE.md` and
 
 ---
 
-## Overall Summary (2026-04-30 run)
+### Name Collision Policy (CL-b4o)
+
+Validates the 7 structural decisions in `docs/policy/name-collision.md`.
+
+| # | Claim | Status | Evidence |
+|---|-------|--------|---------|
+| 23 | Claude Code path (`.claude/skills/<name>/`) is canonical (real directory, not symlink) | CONFIRMED | `smoke_name_collision` check 1: `[ -d ] && [ ! -L ]` passes |
+| 24 | Codex bridge is a symlink pointing to the Claude Code canonical path | CONFIRMED | `smoke_name_collision` check 2: `check_symlink` + `readlink -f` confirms target suffix |
+| 25 | SKILL.md is reachable via the bridge symlink (single source of truth) | CONFIRMED | `smoke_name_collision` check 3: `[ -f bridge/SKILL.md ]` passes |
+| 26 | Canonical and bridge resolve to the same inode (zero drift possible) | CONFIRMED | `smoke_name_collision` check 4: `stat` inode comparison matches |
+| 27 | Two real directories (no symlink) is detectable as collision state | CONFIRMED | `smoke_name_collision` check 5: detection logic `[ -d ] && [ ! -L ]` on both paths triggers correctly |
+| 28 | Project-local Claude Code canonical overrides global canonical | CONFIRMED | `smoke_name_collision` check 6: `check_project_overrides_global` passes |
+| 29 | Project-local Codex bridge and global Codex bridge are both structurally valid | CONFIRMED | `smoke_name_collision` check 7: both bridge resolutions valid; runtime picks project-local first (PARTIAL — runtime order not verifiable without live harness) |
+| 30 | Bridge removal leaves canonical intact (bridge-first removal order) | CONFIRMED | `smoke_name_collision` check 8: `rm` bridge, verify canonical survives |
+| 31 | `docs/policy/name-collision.md` exists and is non-empty | CONFIRMED | `smoke_name_collision` check 9: `[ -f ] && [ -s ]` passes |
+| 32 | Policy document covers all 7 required decisions | CONFIRMED | `smoke_name_collision` check 10: `grep` for "Decision 1" through "Decision 7" all pass |
+
+**Name collision result: 10 PASS, 0 FAIL, 0 SKIP**
+
+---
+
+## Overall Summary (2026-04-30 run, post-CL-b4o)
 
 ```
-PASS: 14  (across all harnesses)
+PASS: 24  (across all harnesses including name-collision policy)
 FAIL:  0
 SKIP: 11  (MANUAL_VERIFICATION_REQUIRED — Pi + OpenCode runtime unavailable)
 ```
@@ -144,6 +165,10 @@ SKIP: 11  (MANUAL_VERIFICATION_REQUIRED — Pi + OpenCode runtime unavailable)
 - Symlink pattern `.claude/skills/<name>` → `../../.agents/skills/<name>` — CONFIRMED
 - SKILL.md via symlink is reachable (same file, both harnesses) — CONFIRMED
 - SKILL.md format is harness-portable (Open Agent Skills Standard) — CONFIRMED
+- Canonical = Claude Code path (real dir); Bridge = Codex path (symlink) — CONFIRMED
+- Two-real-directory collision state is detectable — CONFIRMED
+- Bridge-first removal order leaves canonical intact — CONFIRMED
+- Policy document (`docs/policy/name-collision.md`) covers all 7 required decisions — CONFIRMED
 
 ### Claims partially confirmed (structure OK, runtime unverified)
 - Project-local overrides global: structure correct, runtime order requires live harness

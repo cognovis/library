@@ -530,12 +530,59 @@ model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrid
 
 ---
 
+## Precedence and Name Collision Policy
+
+> Full policy: `docs/policy/name-collision.md` (CL-b4o). This section is a summary
+> for primitive-taxonomy consumers. The policy document is authoritative.
+
+### Install path precedence (within a harness)
+
+For every harness, **project-local always overrides global** for the same skill name.
+
+| Harness | Wins | Loses |
+|---------|------|-------|
+| Claude Code | `.claude/skills/<name>/` | `~/.claude/skills/<name>/` |
+| Codex CLI | `.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
+
+### Canonical vs. bridge (dual-install)
+
+When a skill is installed for both harnesses simultaneously:
+
+| Role | Path |
+|------|------|
+| **Canonical** (real file) | `.claude/skills/<name>/SKILL.md` |
+| **Bridge** (symlink) | `.agents/skills/<name>` → `../../.claude/skills/<name>` |
+
+The Claude Code path is always canonical. The Codex path is always the bridge symlink.
+This prevents two independent file copies from drifting apart.
+
+### Name uniqueness requirement
+
+Skill names MUST be globally unique within a project across all harnesses. Two real
+directories at `.claude/skills/foo` and `.agents/skills/foo` (non-symlink) are a
+policy violation — bug reports from that state will be untriageable.
+
+### Uninstall completeness
+
+`/library remove` MUST remove both the canonical AND all bridge symlinks. Removing
+only the canonical leaves a dangling bridge. The removal sequence: remove bridge
+first, then canonical.
+
+### Admin override
+
+Anthropic's marketplace force-enable operates outside Library's path rules.
+Library treats managed skills as read-only and does not override them.
+
+---
+
 ## Cross-References
 
 - **ARCHITECTURE.md**: Layer stack, operational workflow, repo split, marketplaces.
   See [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Primitive Definitions**: This file (PRIMITIVES.md) is the source of truth for all
   primitive type definitions.
+- **Name Collision Policy**: `docs/policy/name-collision.md` (CL-b4o) — authoritative
+  policy for collision handling, symlink lifecycle, and uninstall completeness.
 - **Audit doc** (`docs/audit/skills-origin.md`, CL-23z — pending): This doc's taxonomy
   is used to classify the intent of every existing artifact. PRIMITIVES.md definitions
   will be consumed by that audit. Back-reference will be added when CL-23z is implemented.

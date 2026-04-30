@@ -65,7 +65,7 @@ Determine which tool(s) to install into using the following priority order:
 ```
 
 Detection rules (in order):
-1. Both `.claude/` AND (`.agents/` or `.codex/`) present → **dual-install** (both tools); warn on skill name collisions
+1. Both `.claude/` AND (`.agents/` or `.codex/`) present → **dual-install** (both tools); check for skill name collisions per Step 5e below
 2. Only `.claude/` present → **Claude Code** target
 3. Only `.agents/` or `.codex/` present → **Codex** target
 4. Neither present → **prompt user**: "This doesn't appear to be a Claude Code or Codex project. Install for Claude Code (creates `.claude/skills/`), Codex (creates `.agents/skills/`), or both?" Default suggestion: **Claude Code only**.
@@ -119,7 +119,61 @@ When installing skills to **both** tools simultaneously:
    ```
    Codex officially follows symlinked skill directories, so this avoids maintaining two separate copies. The `ln -sfn` flag force-replaces any existing symlink at `$codex_target`. The explicit `rm -rf` guard above handles the case where a previous install left a real (non-symlink) directory there — without it, `ln -sfn` would create a nested symlink inside that directory instead of replacing it.
 
-#### 5d. Translation Warnings
+#### 5d. Name Collision Check (MANDATORY for dual-install)
+
+> **Policy reference**: `docs/policy/name-collision.md` (CL-b4o). Run this check
+> whenever `target_tool = both` (dual-install). For single-harness installs, skip.
+
+Before proceeding with installation, detect and handle cross-harness name collisions:
+
+```bash
+claude_path=".claude/skills/<name>"
+codex_path=".agents/skills/<name>"
+
+claude_real=false
+codex_real=false
+codex_is_bridge=false
+
+[ -d "$claude_path" ] && [ ! -L "$claude_path" ] && claude_real=true
+[ -d "$codex_path" ] && [ ! -L "$codex_path" ] && codex_real=true
+[ -L "$codex_path" ] && codex_is_bridge=true
+```
+
+**Collision decision table**:
+
+| claude_real | codex_real | codex_is_bridge | Action |
+|-------------|------------|-----------------|--------|
+| false | false | false | Fresh install — proceed |
+| true | false | false | Claude-only was installed — add Codex bridge in Step 5c |
+| false/true | false | true | Bridge already set — refresh canonical in Step 6; bridge auto-updates |
+| true | true | false | **COLLISION** — emit warning, prompt user (see below) |
+| false | true | false | Orphaned Codex install — warn and offer to set up canonical |
+
+**Collision warning** (for the `true / true / false` case):
+
+```
+Warning: Name collision detected for skill '<name>':
+  .claude/skills/<name>/ exists (real directory)
+  .agents/skills/<name>/ exists (real directory, NOT a symlink)
+
+These are two independent copies that may have diverged.
+Policy: Claude Code path is canonical; Codex path should be a symlink bridge.
+
+Options:
+  1. Overwrite Codex path with symlink bridge (recommended — eliminates drift)
+  2. Keep both as separate files (not recommended — you must maintain them manually)
+  3. Cancel and inspect manually
+
+Default: option 1.
+```
+
+If user selects option 1: replace the Codex real directory with a bridge symlink
+(Step 5c) after writing to the canonical path in Step 6.
+
+If user selects option 2: install to both real directories independently; warn that
+sync drift is the user's responsibility.
+
+#### 5e. Translation Warnings
 
 > **Only perform this check if `target_tool` includes Codex** (i.e. `target_tool = codex` or `target_tool = both`). Skip this section entirely for Claude-only installs.
 

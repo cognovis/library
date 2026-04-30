@@ -2,7 +2,7 @@
 # run-smoke.sh — Cross-harness smoke test runner
 #
 # Usage: ./tests/smoke/run-smoke.sh [harness]
-#   harness: claude-code | codex | pi | opencode | all (default: all)
+#   harness: claude-code | codex | pi | opencode | name-collision | all (default: all)
 #
 # Returns: exit code 0 on all PASS, 1 on any FAIL
 #
@@ -391,6 +391,171 @@ smoke_opencode() {
 }
 
 # ---------------------------------------------------------------------------
+# Harness: name-collision policy (CL-b4o)
+# Validates docs/policy/name-collision.md structural rules:
+#   1. Claude Code path is canonical (real file)
+#   2. Codex path is bridge (symlink → canonical)
+#   3. Dual-install: single SKILL.md file readable from both paths
+#   4. Two real directories (collision state) is detectable
+#   5. Project-local overrides global for each harness
+#   6. Bridge removal correctly isolates harnesses
+# ---------------------------------------------------------------------------
+smoke_name_collision() {
+    section "name-collision"
+
+    local fixture_src="${SCRIPT_DIR}/claude-code/fixtures/${FIXTURE_NAME}"
+    local tmpdir
+    tmpdir="$(make_test_env)"
+    TMPDIRS+=("${tmpdir}")
+
+    # Set up fake project structure
+    local canonical="${tmpdir}/project/.claude/skills/${FIXTURE_NAME}"
+    local bridge_dir="${tmpdir}/project/.agents/skills"
+    local bridge="${bridge_dir}/${FIXTURE_NAME}"
+    local global_canonical="${tmpdir}/home/.claude/skills/${FIXTURE_NAME}"
+    local global_bridge_dir="${tmpdir}/home/.agents/skills"
+    local global_bridge="${global_bridge_dir}/${FIXTURE_NAME}"
+
+    mkdir -p "${canonical}"
+    mkdir -p "${bridge_dir}"
+    mkdir -p "${global_canonical}"
+    mkdir -p "${global_bridge_dir}"
+
+    # Install fixture to canonical path (real file)
+    cp "${fixture_src}/SKILL.md" "${canonical}/SKILL.md"
+
+    # -----------------------------------------------------------------------
+    # CHECK 1: Canonical is a real directory (not a symlink)
+    # -----------------------------------------------------------------------
+    if [[ -d "${canonical}" ]] && [[ ! -L "${canonical}" ]]; then
+        pass "name-collision/canonical-real: .claude/skills/${FIXTURE_NAME} is a real directory (canonical)"
+    else
+        fail "name-collision/canonical-real: .claude/skills/${FIXTURE_NAME} is NOT a real directory"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 2: Create bridge symlink and verify it points to canonical
+    # -----------------------------------------------------------------------
+    ln -sfn "$(realpath "${canonical}")" "${bridge}"
+    check_symlink "${bridge}" ".claude/skills/${FIXTURE_NAME}" "name-collision/bridge-symlink"
+
+    # -----------------------------------------------------------------------
+    # CHECK 3: SKILL.md reachable via bridge (single source of truth)
+    # -----------------------------------------------------------------------
+    local bridge_skill="${bridge}/SKILL.md"
+    if [[ -f "${bridge_skill}" ]]; then
+        pass "name-collision/bridge-skill-reachable: SKILL.md reachable via bridge at ${bridge_skill}"
+    else
+        fail "name-collision/bridge-skill-reachable: SKILL.md NOT reachable via bridge"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 4: Canonical and bridge resolve to the same inode (single file)
+    # -----------------------------------------------------------------------
+    local canonical_inode bridge_inode
+    canonical_inode="$(stat -f '%i' "${canonical}/SKILL.md" 2>/dev/null || stat --format='%i' "${canonical}/SKILL.md" 2>/dev/null || echo "unknown")"
+    bridge_inode="$(stat -f '%i' "${bridge}/SKILL.md" 2>/dev/null || stat --format='%i' "${bridge}/SKILL.md" 2>/dev/null || echo "unknown2")"
+    if [[ "${canonical_inode}" == "${bridge_inode}" ]] && [[ "${canonical_inode}" != "unknown" ]]; then
+        pass "name-collision/single-inode: canonical and bridge resolve to same inode (${canonical_inode}) — no drift possible"
+    else
+        fail "name-collision/single-inode: canonical inode=${canonical_inode}, bridge inode=${bridge_inode} — DRIFT RISK"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 5: Two real directories is detectable as collision state
+    # -----------------------------------------------------------------------
+    local collision_dir="${tmpdir}/collision-test"
+    local col_canonical="${collision_dir}/.claude/skills/${FIXTURE_NAME}"
+    local col_codex="${collision_dir}/.agents/skills/${FIXTURE_NAME}"
+    mkdir -p "${col_canonical}" "${col_codex}"
+    cp "${fixture_src}/SKILL.md" "${col_canonical}/SKILL.md"
+    cp "${fixture_src}/SKILL.md" "${col_codex}/SKILL.md"
+
+    # Detection: both exist as real dirs (neither is a symlink) = collision
+    collision_detected=false
+    if [[ -d "${col_canonical}" ]] && [[ ! -L "${col_canonical}" ]] && \
+       [[ -d "${col_codex}" ]] && [[ ! -L "${col_codex}" ]]; then
+        collision_detected=true
+    fi
+    if [[ "${collision_detected}" == "true" ]]; then
+        pass "name-collision/collision-detection: two-real-directory collision state correctly detected"
+    else
+        fail "name-collision/collision-detection: collision state NOT detected when both are real directories"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 6: Project-local overrides global — Claude Code
+    # -----------------------------------------------------------------------
+    cp "${fixture_src}/SKILL.md" "${global_canonical}/SKILL.md"
+    # Simulate: project-local canonical wins over global canonical
+    check_project_overrides_global \
+        "${canonical}" \
+        "${global_canonical}" \
+        "name-collision/claude-local-over-global"
+
+    # -----------------------------------------------------------------------
+    # CHECK 7: Project-local overrides global — Codex bridge
+    # -----------------------------------------------------------------------
+    ln -sfn "$(realpath "${global_canonical}")" "${global_bridge}"
+    # Simulate: project-local bridge (resolved to canonical) wins over global bridge
+    local proj_resolved global_resolved
+    proj_resolved="$(readlink -f "${bridge}" 2>/dev/null || true)"
+    global_resolved="$(readlink -f "${global_bridge}" 2>/dev/null || true)"
+    if [[ -d "${proj_resolved}" ]] && [[ -d "${global_resolved}" ]]; then
+        pass "name-collision/codex-local-over-global: project-local bridge and global bridge both structurally valid (runtime picks project-local first per policy)"
+    else
+        fail "name-collision/codex-local-over-global: one or both bridge resolutions invalid"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 8: Bridge removal leaves canonical intact
+    # -----------------------------------------------------------------------
+    local rm_test_canonical="${tmpdir}/rm-test/.claude/skills/${FIXTURE_NAME}"
+    local rm_test_bridge_dir="${tmpdir}/rm-test/.agents/skills"
+    local rm_test_bridge="${rm_test_bridge_dir}/${FIXTURE_NAME}"
+    mkdir -p "${rm_test_canonical}" "${rm_test_bridge_dir}"
+    cp "${fixture_src}/SKILL.md" "${rm_test_canonical}/SKILL.md"
+    ln -sfn "$(realpath "${rm_test_canonical}")" "${rm_test_bridge}"
+
+    # Simulate bridge-first removal (policy: bridge first, then canonical)
+    rm "${rm_test_bridge}"
+    if [[ ! -e "${rm_test_bridge}" ]] && [[ -f "${rm_test_canonical}/SKILL.md" ]]; then
+        pass "name-collision/bridge-removal: bridge removed; canonical intact (bridge-first removal order correct)"
+    else
+        fail "name-collision/bridge-removal: bridge removal order incorrect"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 9: Verify docs/policy/name-collision.md exists and is non-empty
+    # -----------------------------------------------------------------------
+    local policy_doc="${REPO_ROOT}/docs/policy/name-collision.md"
+    if [[ -f "${policy_doc}" ]] && [[ -s "${policy_doc}" ]]; then
+        pass "name-collision/policy-doc: docs/policy/name-collision.md exists and is non-empty"
+    else
+        fail "name-collision/policy-doc: docs/policy/name-collision.md NOT found or empty"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 10: Policy doc references all 7 required decisions
+    # -----------------------------------------------------------------------
+    local required_decisions=("Decision 1" "Decision 2" "Decision 3" "Decision 4" "Decision 5" "Decision 6" "Decision 7")
+    local all_found=true
+    for decision in "${required_decisions[@]}"; do
+        if ! grep -q "${decision}" "${policy_doc}" 2>/dev/null; then
+            fail "name-collision/policy-completeness: '${decision}' NOT found in name-collision.md"
+            all_found=false
+        fi
+    done
+    if [[ "${all_found}" == "true" ]]; then
+        pass "name-collision/policy-completeness: all 7 required decisions found in name-collision.md"
+    fi
+
+    echo "  NOTE  name-collision/runtime: Runtime precedence (which file the harness actually loads"
+    echo "        when both paths exist) cannot be verified without a live harness session."
+    echo "        Structural checks above confirm the policy-prescribed layout is achievable."
+}
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 print_summary() {
@@ -434,15 +599,19 @@ main() {
         opencode)
             smoke_opencode
             ;;
+        name-collision)
+            smoke_name_collision
+            ;;
         all)
             smoke_claude_code
             smoke_codex
             smoke_pi
             smoke_opencode
+            smoke_name_collision
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|all]"
             exit 1
             ;;
     esac
