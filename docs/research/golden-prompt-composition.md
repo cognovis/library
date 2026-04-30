@@ -95,9 +95,11 @@ receives the fully-composed prompt — there is no runtime composition.
 
 ```
 INPUT:
-  agent_file   = .claude/agents/<name>.md
-  golden_prompt_extends = frontmatter field value (default: cognovis-base)
-  model_standards       = frontmatter field value (default: [])
+  source_agent_file = library copy of agent (e.g., plugin-bundle/agents/<name>.md)
+                      This is the SOURCE — it is NEVER overwritten by composition.
+  golden_prompt_extends = frontmatter field value from source_agent_file (default: cognovis-base)
+  model_standards       = frontmatter field value from source_agent_file (default: [])
+  model                 = frontmatter model field from source_agent_file (used for alias lookup)
 
 ALGORITHM:
   1. Load Layer 1:
@@ -106,24 +108,37 @@ ALGORITHM:
      Skip if golden_prompt_extends = from-scratch OR path not found (warn)
 
   2. Load Layer 2:
-       L2 = body of agent_file (content below the --- frontmatter marker)
+       L2 = body of source_agent_file (content below the --- frontmatter marker)
+       NOTE: This reads the SOURCE file body. The SOURCE is never modified. The
+       COMPOSED prompt is always written to a SEPARATE target path (see step 5).
 
-  3. Load Layer 3 (for each name in model_standards):
-       path  = standards-loader.sh --load-model-standard <name>
-       L3[i] = content at path (empty if not found, with warning)
-       L3    = concat(L3[i], separator="---")
+  3. Load Layer 3:
+     a) If model_standards is non-empty: for each name in model_standards:
+          path  = standards-loader.sh --load-model-standard <name>
+          L3[i] = content (empty if not found, with warning)
+     b) If model_standards is empty AND model is set: try alias-based lookup:
+          path  = standards-loader.sh --load-model-standard <model>
+          (the loader resolves via alias scanning if direct filename lookup fails)
+          L3[0] = content (empty if not found — silently skip, model alias unknown)
+     c) L3 = concat(L3[i], separator="---")
 
   4. Compose:
        composed = L1 + "\n---\n" + L2 + (L3 if L3 is non-empty: "\n---\n" + L3)
 
-  5. Write to harness-native location:
-     Claude Code: replace body of .claude/agents/<name>.md (keep frontmatter)
-     Codex:       set developer_instructions in .codex/agents/<name>.toml
+  5. Write composed prompt to SEPARATE target path (never the source):
+     Claude Code: target = .claude/agents/<name>.md (installed copy)
+                  Write: frontmatter from source (unchanged) + composed body
+     Codex:       target = .codex/agents/<name>.toml
+                  developer_instructions = composed
                   add composition metadata as comment headers:
                     # golden_prompt_extends: <value>
                     # model_standards: <list>
-     OpenCode:    replace body of .opencode/agents/<name>.md
+     OpenCode:    target = .opencode/agents/<name>.md (installed copy)
      Pi:          export composed string from TypeScript extension module
+
+  IMPORTANT: The source_agent_file is NEVER overwritten. On repeat installs,
+  Layer 2 always reads the original unmodified agent persona body from the source.
+  Only the INSTALLED COPY (target) is written with the composed prompt.
 ```
 
 **Tool constraint encoding in composed prompt:** Because Codex ignores per-agent tool

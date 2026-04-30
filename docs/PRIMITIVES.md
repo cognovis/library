@@ -571,17 +571,31 @@ model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrid
 The Library executes this composition once when the agent is installed or synced.
 There is no runtime composition — the harness receives the fully-composed prompt.
 
+Source and target are always SEPARATE paths. The source agent file (library copy) is
+never overwritten — the composed prompt is written to the installed copy only.
+
 ```
 1. Load Layer 1: read .agents/golden-prompts/<golden_prompt_extends>.md
-2. Load Layer 2: read the agent's persona body (below --- in the .md file)
-3. Load Layer 3: for each name in model_standards[], call
-      standards-loader.sh --load-model-standard <name>
-   Concatenate results in declaration order.
-4. Compose: Layer1 + "\n---\n" + Layer2 + "\n---\n" + Layer3
-5. Write composed prompt to harness-native location:
-   - Claude Code: replace the .claude/agents/<name>.md body (keep frontmatter)
-   - Codex: set developer_instructions in .codex/agents/<name>.toml
-   - OpenCode: replace .opencode/agents/<name>.md body
+   (skip if golden_prompt_extends=from-scratch or file not found)
+
+2. Load Layer 2: read the SOURCE agent file body (library copy, never the installed copy)
+   This reads the original unmodified persona. Repeat installs always read the same source.
+
+3. Load Layer 3:
+   a) If model_standards is non-empty: load each name via
+         standards-loader.sh --load-model-standard <name>
+      Concatenate results in declaration order.
+   b) If model_standards is empty AND model is set: attempt alias-based lookup via
+         standards-loader.sh --load-model-standard <model>
+      (the loader resolves by alias if direct filename lookup fails; silent skip on miss)
+
+4. Compose: Layer1 + "\n---\n" + Layer2 + ("\n---\n" + Layer3 if Layer3 non-empty)
+
+5. Write composed prompt to INSTALLED copy (separate from source):
+   - Claude Code: .claude/agents/<name>.md body (keep frontmatter from source)
+   - Codex: developer_instructions in .codex/agents/<name>.toml
+     (add composition metadata as header comments)
+   - OpenCode: .opencode/agents/<name>.md body
    - Pi: export as TypeScript string from the extension module
 ```
 

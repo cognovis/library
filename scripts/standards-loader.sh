@@ -379,28 +379,128 @@ cmd_generate_adapter() {
 # resolve_model_standard <name>
 #   Resolves a model-standard name to a file path using project>global precedence.
 #   Model-standards live in .agents/model-standards/ (parallel to .agents/standards/).
+#
+#   Resolution order:
+#   1. Exact filename match: .agents/model-standards/<name>.md
+#   2. Alias scan: search all .md files in .agents/model-standards/ for a
+#      model_aliases frontmatter field containing <name> as a value.
+#      (Supports short names like 'sonnet' resolving to 'claude-sonnet-4-6.md')
+#
+#   For each priority tier (project-local, then user-global), try exact then alias.
+#
 #   Prints the resolved path to stdout.
 #   Exits 0 on success, 1 if not found.
 # ---------------------------------------------------------------------------
 resolve_model_standard() {
     local name="$1"
 
-    # Priority 1: project-local
+    # Priority 1: project-local — exact filename
     local proj_path="${PROJ_ROOT}/.agents/model-standards/${name}.md"
     if [[ -f "${proj_path}" ]]; then
         echo "${proj_path}"
         return 0
     fi
 
-    # Priority 2: user-global
+    # Priority 2: project-local — alias scan
+    if [[ -d "${PROJ_ROOT}/.agents/model-standards" ]]; then
+        local alias_match
+        alias_match="$(resolve_model_standard_by_alias "${name}" "${PROJ_ROOT}/.agents/model-standards")"
+        if [[ -n "${alias_match}" ]]; then
+            echo "${alias_match}"
+            return 0
+        fi
+    fi
+
+    # Priority 3: user-global — exact filename
     local global_path="${HOME}/.agents/model-standards/${name}.md"
     if [[ -f "${global_path}" ]]; then
         echo "${global_path}"
         return 0
     fi
 
+    # Priority 4: user-global — alias scan
+    if [[ -d "${HOME}/.agents/model-standards" ]]; then
+        local alias_match
+        alias_match="$(resolve_model_standard_by_alias "${name}" "${HOME}/.agents/model-standards")"
+        if [[ -n "${alias_match}" ]]; then
+            echo "${alias_match}"
+            return 0
+        fi
+    fi
+
     # Not found — model-standards have no legacy fallback path
     return 1
+}
+
+# ---------------------------------------------------------------------------
+# resolve_model_standard_by_alias <alias> <search_dir>
+#   Scans all .md files in <search_dir> for a model_aliases frontmatter field
+#   containing <alias> as a value. Returns the first matching file path.
+#   Used as a fallback when exact filename lookup fails.
+#   Prints the matched path to stdout (empty if not found).
+# ---------------------------------------------------------------------------
+resolve_model_standard_by_alias() {
+    local alias_name="$1"
+    local search_dir="$2"
+
+    # Use Python for YAML frontmatter parsing — portable across bash 3.2+.
+    python3 - "${alias_name}" "${search_dir}" <<'PYEOF'
+import sys, re
+from pathlib import Path
+
+alias = sys.argv[1]
+search_dir = Path(sys.argv[2])
+
+if not search_dir.is_dir():
+    sys.exit(0)
+
+for md_file in sorted(search_dir.glob('*.md')):
+    try:
+        content = md_file.read_text(encoding='utf-8')
+    except OSError:
+        continue
+
+    m = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
+    if not m:
+        continue
+
+    frontmatter = m.group(1)
+
+    # Check for model_aliases field.
+    # Supports both inline: model_aliases: [a, b, c]
+    # and block:
+    #   model_aliases:
+    #     - a
+    #     - b
+    lines = frontmatter.split('\n')
+    in_aliases = False
+    aliases = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('model_aliases:'):
+            rest = stripped[len('model_aliases:'):].strip()
+            if rest.startswith('['):
+                inner = rest.strip('[]')
+                aliases = [n.strip().strip('"\'') for n in inner.split(',') if n.strip()]
+                break
+            elif rest:
+                aliases = [rest.strip().strip('"\'')]
+                break
+            else:
+                in_aliases = True
+        elif in_aliases:
+            if stripped.startswith('- '):
+                aliases.append(stripped[2:].strip().strip('"\''))
+            elif stripped and not stripped.startswith('#'):
+                break
+
+    if alias in aliases:
+        print(str(md_file))
+        sys.exit(0)
+
+sys.exit(0)
+PYEOF
 }
 
 # ---------------------------------------------------------------------------
