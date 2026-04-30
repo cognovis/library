@@ -15,3 +15,17 @@ library:
   skills: []
   agents: []
   prompts: []
+
+marketplaces:
+  - name: anthropic-official
+    source: https://github.com/anthropics
+    description: Anthropic-curated Claude plugins and extensions
+  - name: cognovis-samurai
+    source: https://github.com/cognovis/samurai-skills
+    description: Cognovis Samurai skills collection
+  - name: disler
+    source: https://github.com/disler
+    description: Public skill/agent/hooks repos for Claude Code and AI agents
+  - name: thadenorigar
+    source: https://github.com/ThadeNorigar
+    description: Private K2SO and related agent repos

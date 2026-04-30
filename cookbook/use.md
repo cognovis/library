@@ -15,14 +15,23 @@ cd <LIBRARY_SKILL_DIR>
 git pull
 ```
 
-### 2. Find the Entry
+### 2. Resolve Marketplace Reference
+If the matched catalog entry has a `from_marketplace` field:
+- Look up the marketplace by name in `library.yaml` → `marketplaces`
+- If not found, warn the user: "Marketplace '<name>' is not registered in library.yaml" and stop
+- Construct the full source URL from the marketplace fields:
+  - `<marketplace.source>/<repo>/<path>` (e.g. `https://github.com/disler/claude-code-hooks-mastery/.claude/skills/ruff`)
+- Use this resolved URL as the effective `source` for the remaining steps (treat it as a GitHub URL)
+- If the entry also has an explicit `source` field, the `from_marketplace`-derived URL takes precedence
+
+### 3. Find the Entry
 - Read `library.yaml`
 - Search across `library.skills`, `library.agents`, and `library.prompts`
 - Match by name (exact) or description (fuzzy/keyword match)
 - If multiple matches, show them and ask the user to pick one
 - If no match, tell the user and suggest `/library search`
 
-### 3. Resolve Dependencies
+### 4. Resolve Dependencies
 If the entry has a `requires` field:
 - For each typed reference (`skill:name`, `agent:name`, `prompt:name`):
   - Look it up in `library.yaml`
@@ -30,14 +39,14 @@ If the entry has a `requires` field:
   - If not found, warn the user: "Dependency <ref> not found in library catalog"
 - Process all dependencies before the requested item
 
-### 4. Determine Target Directory
+### 5. Determine Target Directory
 - Read `default_dirs` from `library.yaml`
 - If user said "global" or "globally" → use the `global` path
 - If user specified a custom path → use that path
 - Otherwise → use the `default` path
 - Select the correct section based on type (skills/agents/prompts)
 
-### 5. Fetch from Source
+### 6. Fetch from Source
 
 **If source is a local path** (starts with `/` or `~`):
 - Resolve `~` to the home directory
@@ -81,12 +90,12 @@ If the entry has a `requires` field:
   git clone --depth 1 --branch <branch> git@github.com:<org>/<repo>.git "$tmp_dir"
   ```
 
-### 6. Verify Installation
+### 7. Verify Installation
 - Confirm the target directory exists
 - Confirm the main file (SKILL.md, AGENT.md, or prompt file) exists in it
 - Report success with the installed path
 
-### 7. Confirm
+### 8. Confirm
 Tell the user:
 - What was installed and where
 - Any dependencies that were also installed
