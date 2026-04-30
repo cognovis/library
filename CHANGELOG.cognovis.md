@@ -7,7 +7,17 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Added
+
+- **Library Lockfile** (`.library.lock` format — `docs/lockfile-format.md`, `docs/schema/lockfile.schema.json`): Introduced `.library.lock` as the per-project provenance manifest for all installed library items. Records name, type, source URL, source commit SHA, install target, ISO 8601 timestamp, SHA-256 checksum, SPDX license, and bridge symlinks per entry. JSON Schema provided for machine validation. Closes CL-t21.
+- **Audit Cookbook** (`cookbook/audit.md`): New `/library audit` procedure that reads `.library.lock`, recomputes SHA-256 checksums of installed primary artifact files, and reports CLEAN / DRIFT / MISSING / BRIDGE-BROKEN / UNLOCKED status per item. Detects on-disk modifications made outside the Library without auto-fixing. Closes CL-t21.
+- **Lockfile Smoke Tests** (`tests/smoke/run-smoke.sh`): Added `smoke_lockfile()` (13 structural checks) validating schema presence, format docs, cookbook references, checksum computation, write/read round-trip, drift detection, remove-entry, and bridge_symlinks field. Runnable via `just test-smoke lockfile`. Closes CL-t21.
+
 ### Changed
+
+- **Library Use Cookbook** (`cookbook/use.md`): Added Step 8 (Update .library.lock) — after a successful install, computes SHA-256 checksum of the primary artifact, resolves `source_commit` from the cloned repo (before `rm -rf` cleanup), and writes/updates the lockfile entry. Closes CL-t21.
+- **Library Remove Cookbook** (`cookbook/remove.md`): Step 5 now reads `install_target` and `bridge_symlinks` from `.library.lock` before deletion, removes bridge symlinks first (per CL-b4o policy), removes the canonical directory, then removes the lockfile entry. Closes CL-t21.
+- **Library Sync Cookbook** (`cookbook/sync.md`): Rewritten to use `.library.lock` as source of truth instead of `library.yaml`. Pins each re-fetch to `entry.source_commit` (full clone + `git checkout`) for reproducible installs. Documents upgrade behavior (omit pin when explicitly upgrading). Closes CL-t21.
 
 - **Architecture Documentation** (`docs/ARCHITECTURE.md`): Expanded Primitive Definitions section with decision rule for new artifacts (4-question workflow) and harness portability matrix (8 primitive types × 4 harnesses). Fixed factual errors in Codex paths, hook configuration, and MCP syntax; corrected placeholder inconsistency in install paths.
 - **Library Use Cookbook** (`cookbook/use.md`): Added Step 5d (Name Collision Check) — mandatory collision detection for all skill installs using Step 5b resolved paths. Detects two-real-directory collision state, emits warning with three resolution options, enforces bridge-first ordering. Former Step 5d (Translation Warnings) renumbered to 5e. Closes CL-b4o.
