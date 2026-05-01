@@ -30,7 +30,7 @@ EXPECTED_SKILL_FILES = [
     (".claude/skills/business/google-invoice/SKILL.md", "google-invoice"),
     (".claude/skills/business/mm-cli/SKILL.md", "mm-cli"),
     (".claude/skills/content/linkedin/SKILL.md", "linkedin"),
-    (".claude/skills/content/transcribe/skill.md", "transcribe"),
+    (".claude/skills/content/transcribe/SKILL.md", "transcribe"),
     (".claude/skills/infra/hetzner-cloud/SKILL.md", "hetzner-cloud"),
     (".claude/skills/infra/home-infra/SKILL.md", "home-infra"),
     (".claude/skills/infra/local-vm/SKILL.md", "local-vm"),
