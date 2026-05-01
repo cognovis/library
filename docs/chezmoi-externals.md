@@ -51,13 +51,14 @@ These repos contain configuration and skill definitions. Runtime state, caches, 
 | `.beads/backup/` | runtime | gitignore (via `.beads/` internal .gitignore) | Dolt backup files |
 | `anatomy.json`, `buglog.json` | cache | gitignore | Rebuilt each session |
 | `__pycache__/`, `*.pyc` | cache | gitignore | Python bytecode |
+| `*.sqlite`, `*.sqlite-shm`, `*.sqlite-wal` | runtime | gitignore | SQLite database and WAL/SHM companion files |
 | `.DS_Store` | OS artifact | gitignore | macOS metadata |
 
 ## ~/.codex Categorization
 
 | Path pattern | Category | Action | Reason |
 |---|---|---|---|
-| `config.toml` | machine-specific | gitignore | Local Codex configuration (machine paths, model overrides) |
+| `config.toml` | machine-specific | gitignore | Chezmoi-rendered from a 1Password-backed template; gitignored to prevent committing secrets |
 | `AGENTS.md` | config | commit | Agent definitions |
 | `RTK.md` | config | commit | Runtime knowledge |
 | `hooks.json` | config | commit | Hook definitions |
@@ -80,8 +81,11 @@ These repos contain configuration and skill definitions. Runtime state, caches, 
 | `models_cache.json` | cache | gitignore | Downloaded model metadata |
 | `.codex-global-state.json` | runtime | gitignore | Machine runtime state |
 | `.codex-global-state.json.bak` | runtime | gitignore | Backup of runtime state |
+| `*.bak`, `*.bak.*` | runtime | gitignore | Timestamp-suffixed auto-backups |
 | `.personality_migration` | runtime | gitignore | Migration marker file |
 | `vendor_imports/` | cache | gitignore | Vendored dependency cache |
+| `projects/` | runtime | gitignore (defensive) | Not currently used by Codex, but gitignored to mirror ~/.claude structure and prevent accidental future leaks |
+| `compaction-state/` | runtime | gitignore (defensive) | Not currently used by Codex, but gitignored defensively |
 
 ## What Belongs Where
 
