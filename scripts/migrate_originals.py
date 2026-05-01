@@ -118,11 +118,11 @@ def copy_plugin(src_dir: Path, dest_dir: Path, dry_run: bool) -> None:
 
 def create_bridge_symlink(link: Path, target: Path, dry_run: bool) -> None:
     """Create a relative symlink from link to target."""
-    # Compute relative target from link's parent
+    # Compute relative target from link's parent (Python 3.12+ pathlib, walk_up=True)
     try:
-        rel_target = os.path.relpath(target, link.parent)
-    except ValueError:
-        # On Windows (unlikely but safe), fall back to absolute
+        rel_target = str(Path(target).relative_to(link.parent, walk_up=True))
+    except (TypeError, ValueError):
+        # Fallback for older Python or cross-drive paths
         rel_target = str(target)
 
     if dry_run:
