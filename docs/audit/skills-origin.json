@@ -1534,10 +1534,10 @@
       "intent": "plugin",
       "correct_type": "plugin",
       "type_correct": true,
-      "migration_action": "move_to_cognovis_library_core",
+      "migration_action": "pending_creation",
       "tier": "domain",
       "plugin": "workflow",
-      "notes": "plugin not yet on disk \u2014 pending creation"
+      "notes": "Plugin not yet created \u2014 migration deferred until plugin content is written"
     },
     {
       "path": "meta/plugins/bead-orchestrator.toml",

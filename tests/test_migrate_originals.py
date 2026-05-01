@@ -196,3 +196,22 @@ def test_five_skills_content_match(skill_name: str, audit_artifacts: list[dict])
         f"Bridge symlink {bridge_link} resolves to {resolved}, "
         f"expected {expected_dir}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 4 (AK1): Plugin artefacts migrated to library-core plugins/
+# ---------------------------------------------------------------------------
+
+
+def test_plugin_migration() -> None:
+    """AK1: Verify architecture-trinity plugin was migrated to library-core plugins/."""
+    plugins_dir = LIBRARY_CORE / "plugins"
+    trinity_dir = plugins_dir / "architecture-trinity"
+
+    # The architecture-trinity plugin should have been migrated
+    assert trinity_dir.exists(), f"plugins/architecture-trinity not found in library-core at {trinity_dir}"
+    assert trinity_dir.is_dir(), "architecture-trinity should be a directory"
+
+    # Should have a README
+    readme = trinity_dir / "README.md"
+    assert readme.exists(), f"architecture-trinity/README.md missing at {readme}"
