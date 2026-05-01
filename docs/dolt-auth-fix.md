@@ -1,4 +1,9 @@
-# Dolt Auth (CL-6cl)
+# Dolt Persistent Auth (CL-6cl)
 
-If `bd dolt push` fails with "must set DOLT_REMOTE_PASSWORD" after reboot:
--> Load `core:dolt` skill and follow the "Persistent Auth Setup" section.
+**Implementation:** `~/Library/LaunchAgents/com.cognovis.dolt-auth.plist` (created + loaded).
+At login: reads `~/.dolt-remote-password`, calls `launchctl setenv DOLT_REMOTE_PASSWORD`,
+restarts brew dolt daemon. Daemon then authenticates persistently via its env.
+
+Skill updated: `core:dolt` → "Persistent Auth Setup" section.
+
+If `bd dolt push` fails after reboot: see `core:dolt` skill → "Persistent Auth Setup".
