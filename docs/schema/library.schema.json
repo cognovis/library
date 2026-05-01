@@ -99,6 +99,14 @@
         "$ref": "#/$defs/catalog_entry"
       },
       "default": []
+    },
+    "project_tooling": {
+      "description": "Fleet-wide per-project file/hook distribution entries. Each entry declares a target that should be synced into every matching project at SessionStart. Supports file copy, git hook installation, JSON field enforcement, and more.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/project_tooling_entry"
+      },
+      "default": []
     }
   },
   "additionalProperties": false,
@@ -569,6 +577,154 @@
             },
             "opencode": {
               "description": "Path to the OpenCode permission rule fragment (JSON).",
+              "type": "string"
+            }
+          }
+        },
+        "tags": {
+          "description": "Optional tags for search and filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "tooling_condition": {
+      "type": "object",
+      "description": "A condition that must be true for this target to be applied. Exactly one key per condition object.",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "dir_exists": {
+          "type": "string",
+          "description": "Path (relative to project root) that must be a directory"
+        },
+        "file_exists": {
+          "type": "string",
+          "description": "Path (relative to project root) that must be a file"
+        },
+        "command_available": {
+          "type": "string",
+          "description": "Command name that must be on PATH (via which)"
+        },
+        "env_set": {
+          "type": "string",
+          "description": "Environment variable name that must be set"
+        }
+      },
+      "additionalProperties": false
+    },
+    "project_tooling_entry": {
+      "description": "A project tooling distribution entry — declares a target (file, git hook, JSON field block, etc.) that should be synced into matching projects at SessionStart.",
+      "type": "object",
+      "required": ["name", "description", "target_kind", "target_path"],
+      "additionalProperties": false,
+      "if": {
+        "properties": { "target_kind": { "enum": ["file", "git_hook"] } },
+        "required": ["target_kind"]
+      },
+      "then": {
+        "required": ["source"]
+      },
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this tooling entry (kebab-case recommended).",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Human-readable description of what this entry does and why it exists.",
+          "type": "string",
+          "minLength": 1
+        },
+        "target_kind": {
+          "description": "Type of target this entry manages. Determines which sync logic is applied.",
+          "type": "string",
+          "enum": ["file", "file_section", "git_hook", "gitignore_patch", "json_field_enforce"]
+        },
+        "target_path": {
+          "description": "Path to the target location, relative to the project root.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Source path relative to the library root. Required for file, file_section, git_hook, and gitignore_patch target_kinds.",
+          "type": "string"
+        },
+        "conditions": {
+          "description": "List of conditions that must all be true before this entry is applied. Supported keys: dir_exists, file_exists, command_available, env_set.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tooling_condition"
+          },
+          "default": []
+        },
+        "sync_strategy": {
+          "description": "How to apply the target when syncing. overwrite_if_source_newer: copy only when content differs. overwrite_always: always overwrite. append_if_missing: append content if not already present. replace_section: replace a marked section between begin/end markers. repair_fields: for json_field_enforce, apply ensure/remove field operations.",
+          "type": "string",
+          "enum": [
+            "overwrite_if_source_newer",
+            "overwrite_always",
+            "append_if_missing",
+            "replace_section",
+            "repair_fields"
+          ]
+        },
+        "conflict_policy": {
+          "description": "What to do when the target has been locally modified. canonical_wins: always overwrite with canonical source. user_wins: skip if target exists and has local changes. warn_only: log a warning but do not overwrite.",
+          "type": "string",
+          "enum": ["canonical_wins", "user_wins", "warn_only"],
+          "default": "canonical_wins"
+        },
+        "consumed_by": {
+          "description": "Optional hint about which tool and command reads this target after it is synced.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tool": {
+              "description": "Name of the tool that reads this target (e.g. bd, git, node).",
+              "type": "string"
+            },
+            "command": {
+              "description": "Specific command invocation that reads this target (e.g. bd prime).",
+              "type": "string"
+            }
+          }
+        },
+        "fields": {
+          "description": "For json_field_enforce target_kind: declares fields to ensure/set and field names to remove.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ensure": {
+              "description": "Key/value pairs that must be present (and equal) in the target JSON file.",
+              "type": "object"
+            },
+            "remove": {
+              "description": "Field names that must be absent from the target JSON file.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "hook_name": {
+          "description": "For git_hook target_kind: the git hook name (e.g. post-commit, pre-commit, pre-push).",
+          "type": "string"
+        },
+        "section_markers": {
+          "description": "For file_section and gitignore_patch target_kinds: begin/end comment markers that delimit the managed section.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "begin": {
+              "description": "Start marker comment (e.g. # BEGIN cognovis-managed).",
+              "type": "string"
+            },
+            "end": {
+              "description": "End marker comment (e.g. # END cognovis-managed).",
               "type": "string"
             }
           }

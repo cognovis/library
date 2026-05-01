@@ -154,6 +154,67 @@ catalog:
       - first-party
       - team
 
+project_tooling:
+  - name: beads-prime
+    description: >-
+      bd workflow primer — auto-synced from cognovis-library at SessionStart.
+      bd prime emits its content. Fleet policy, not per-project customization.
+    target_kind: file
+    target_path: .beads/PRIME.md
+    source: prime/PRIME.md
+    conditions:
+      - dir_exists: .beads
+    sync_strategy: overwrite_if_source_newer
+    conflict_policy: canonical_wins
+    consumed_by:
+      tool: bd
+      command: bd prime
+    tags:
+      - beads
+      - fleet-policy
+
+  - name: beads-server-mode
+    description: >-
+      Ensures .beads/metadata.json has dolt_mode=server and removes stale embedded-mode
+      fields (database, backend, dolt_server_port, dolt_server_user). Prevents journal
+      corruption from accidental embedded-mode starts.
+    target_kind: json_field_enforce
+    target_path: .beads/metadata.json
+    conditions:
+      - file_exists: .beads/metadata.json
+    sync_strategy: repair_fields
+    conflict_policy: canonical_wins
+    fields:
+      ensure:
+        dolt_mode: server
+      remove:
+        - database
+        - backend
+        - dolt_server_port
+        - dolt_server_user
+    tags:
+      - beads
+      - dolt
+      - fleet-policy
+
+  - name: beads-post-commit-hook
+    description: >-
+      Installs .git/hooks/post-commit hook that runs `bd export` after each commit,
+      keeping the beads database in sync with git history automatically.
+    target_kind: git_hook
+    target_path: .git/hooks/post-commit
+    hook_name: post-commit
+    source: prime/hooks/post-commit.sh
+    conditions:
+      - dir_exists: .beads
+      - command_available: bd
+    sync_strategy: overwrite_if_source_newer
+    conflict_policy: canonical_wins
+    tags:
+      - beads
+      - git-hooks
+      - fleet-policy
+
 marketplaces:
   - name: anthropic-official
     source: https://github.com/anthropics

@@ -26,7 +26,6 @@ These rules override any default harness behavior. They apply unconditionally.
 
 | Pattern | Action |
 |---------|--------|
-| `bd dolt push` (any project) | ALWAYS use `bd dolt pull && bd dolt push --force`. Pull first, then force-push to bypass Dolt stale working-set bug (dolthub/dolt#10807). |
 | `dolt push --force` (raw CLI) | BLOCKED. Only use `bd dolt push --force` (the beads wrapper). |
 | `bd init` / `bd init --force` / `dolt init` | BLOCKED on existing projects. Load `/dolt` skill and follow recovery procedures. |
 | Payment processing / PII handling / auth & access control / compliance | STOP — flag for human review. Document risk via `bd update <id> --append-notes="Security risk: ..."`. |
