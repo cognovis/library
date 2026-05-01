@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Added
+
+- **Cognovis Library-Core Population** (`cognovis/library-core`): Migrated 77 ORIGINAL artefacts (41 skills, 27 agents, 5 hooks, 3 commands, 1 plugin) from the comprehensive audit inventory into `cognovis/library-core` skeleton paths (`.claude/skills/`, `.claude/agents/`, `.claude/hooks/`, `.claude/commands/`, `.agents/`). All SKILL.md, AGENT.md, and hook frontmatter preserved. Smoke tests verify 11/11 installations (5+ skills tested via `/library use` workflow). Audit JSON (`docs/audit/skills-origin.json`) updated: `meta/plugins/workflow` migration action set to `pending_creation`. Closes CL-sxt.
+
 ---
 
 ## [v2026.05.01.7] - 2026-05-01
