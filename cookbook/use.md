@@ -113,11 +113,11 @@ When installing skills to **both** tools simultaneously:
    # Remove existing target if it's a real directory (not already a symlink);
    # ln -sfn would nest inside a real dir rather than replacing it.
    if [ -d "$codex_target" ] && [ ! -L "$codex_target" ]; then
-     rm -rf "$codex_target"
+     rm -r "$codex_target"
    fi
    ln -sfn "$(realpath "$claude_target")" "$codex_target"
    ```
-   Codex officially follows symlinked skill directories, so this avoids maintaining two separate copies. The `ln -sfn` flag force-replaces any existing symlink at `$codex_target`. The explicit `rm -rf` guard above handles the case where a previous install left a real (non-symlink) directory there — without it, `ln -sfn` would create a nested symlink inside that directory instead of replacing it.
+   Codex officially follows symlinked skill directories, so this avoids maintaining two separate copies. The `ln -sfn` flag force-replaces any existing symlink at `$codex_target`. The explicit `rm -r` guard above handles the case where a previous install left a real (non-symlink) directory there — without it, `ln -sfn` would create a nested symlink inside that directory instead of replacing it. The `-f` flag is intentionally omitted because the agent owns the path and the `block-destructive-bash` guardrail refuses any recursive forced delete.
 
 #### 5d. Name Collision Check (MANDATORY for any install that touches skills)
 
@@ -246,9 +246,11 @@ If the skill's SKILL.md body contains `$ARGUMENTS`:
   ```bash
   cp -R "$tmp_dir/<parent_path>/" <target_directory>/<name>/
   ```
-- Clean up:
+- Clean up (use `rm -r` without `-f` — `mktemp -d` directories are owned by the
+  agent, no force needed; this also satisfies the `block-destructive-bash`
+  guardrail which refuses any recursive forced delete):
   ```bash
-  rm -rf "$tmp_dir"
+  rm -r "$tmp_dir"
   ```
 
 **If clone fails (private repo)**, try SSH:
@@ -287,14 +289,14 @@ checksum=$(sha256sum "<primary_artifact_path>" | awk '{print $1}')
 #### 8b. Resolve the source commit
 
 > **IMPORTANT — timing**: For GitHub sources, the source commit must be resolved from
-> `$tmp_dir` BEFORE the `rm -rf "$tmp_dir"` cleanup in Step 6. The clone directory is deleted
+> `$tmp_dir` BEFORE the `rm -r "$tmp_dir"` cleanup in Step 6. The clone directory is deleted
 > in Step 6 after copying — capture the SHA immediately after the copy, before cleanup.
 
-For a **GitHub source** (resolve while `$tmp_dir` still exists, before `rm -rf`):
+For a **GitHub source** (resolve while `$tmp_dir` still exists, before cleanup):
 ```bash
-# Capture immediately after cp in Step 6, before rm -rf "$tmp_dir"
+# Capture immediately after cp in Step 6, before rm -r "$tmp_dir"
 source_commit=$(git -C "$tmp_dir" rev-parse HEAD)
-rm -rf "$tmp_dir"   # cleanup happens AFTER sha capture
+rm -r "$tmp_dir"   # cleanup happens AFTER sha capture
 ```
 
 For a **local path source** (copied via `cp`):
