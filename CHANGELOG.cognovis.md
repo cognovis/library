@@ -7,7 +7,13 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+---
+
+## [v2026.05.01.3] - 2026-04-30
+
 ### Added
+
+- **Provisional Canonical Home for bd Workflow Primer** (`prime/PRIME.md`, `prime/README.md`): Established `cognovis-library/prime/PRIME.md` as the provisional single source of truth for the bd workflow primer (formerly scattered across `~/.claude/templates/PRIME.md`, the beads SKILL, and AGENTS.md blocks). The beads SKILL has been deleted from claude-code-plugins; AGENTS.md beads blocks trimmed to 12-line stubs pointing to `bd prime`. PRIME.md rewritten with all 9 bd built-in types, Priority/Effort taxonomy, MoC-at-create-time pattern, and memory routing exclusively to open-brain. Distribution chain: SessionStart hooks in both Claude Code and Codex harnesses now sync PRIME.md from this library to `$XDG_CACHE_HOME/cognovis-prime/PRIME.md` (content-based, not mtime) and from there to each project's `.beads/PRIME.md`. This provisional setup will be superseded by `project_tooling` schema entries when CL-3fh is implemented. Refs CL-3fh.
 
 - **Bootstrap First-Party Content Repos** (`library.yaml`, `docs/schema/library.schema.json`): Created `sussdorff/library-core` (private, personal agentic content) and `cognovis/library-core` (private, team agentic content). Each repo is initialized with a full skeleton: `.claude/{agents,skills,commands,hooks}/`, `.agents/{skills,standards}/`, `.codex/agents/`. Each README documents audience, directory structure, contribution model, lockfile reference (CL-t21), and canonical-vs-bridge convention per name-collision policy (CL-b4o). Both repos registered in `library.yaml` under a new `catalog:` section (first-party, distinct from `marketplaces:`). `library.schema.json` extended with `catalog_entry` definition including typed `content_types`, `skeleton`, `visibility`, `audience`, and `owner` fields. JSON-schema validator and all 22 schema tests pass. Last bead in epic CL-36o. Closes CL-1rr.
 
@@ -60,6 +66,11 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 - **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table (13 fields), canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies lossy fields and proposes `codex_*` extended frontmatter convention for round-trip fidelity. Closes CL-11p.
 - **MCP Server Audit** (`docs/audit/mcp-servers.md`): Classification of 11 installed MCP servers across all harnesses (Codex, Claude Desktop, Claude Code) against the PRIMITIVES.md decision matrix. Per-server migration recommendations (convert to CLI+Skill vs. keep MCP for stateful/mobile use) with 8 follow-up implementation beads identified.
 - **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table, canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies 3 lossy fields (tools→sandbox_mode, mcpServers→comment, system_prompt_file→inline) and proposes `codex_*` extended frontmatter convention for round-trip fidelity.
+
+### Changed
+
+- **Golden Prompt Safety Rules** (`.agents/golden-prompts/cognovis-base.md`): Removed the `bd dolt push` confirmation-gate row from the safety rules table. The rule is retained in `~/.claude/CLAUDE.md` (the authoritative source). The golden prompt now defers to the harness-level CLAUDE.md rather than duplicating it, reducing drift risk.
+- **Gitignore** (`.gitignore`): Added runtime artifact patterns: `.claude/buglog.json`, `.claude/worktrees/`, `tests/__pycache__/`, and `**/__pycache__/` to prevent tool-generated files from appearing as untracked.
 
 ---
 

@@ -16,3 +16,10 @@
 # Beads orchestrator transient IPC files
 .worktree-handoff.json
 .wave-orchestrator.lock
+
+# Runtime artifacts (tool-generated, not project state)
+.claude/buglog.json
+.claude/worktrees/
+tests/__pycache__/
+**/__pycache__/
+.session-close.lock
