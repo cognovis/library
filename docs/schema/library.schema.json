@@ -593,18 +593,41 @@
     },
     "tooling_condition": {
       "type": "object",
-      "description": "A single condition that must evaluate to true before a project_tooling entry is applied. Exactly one key is allowed: dir_exists, file_exists, command_available, or env_set.",
+      "description": "A condition that must be true for this target to be applied. Exactly one key per condition object.",
       "minProperties": 1,
       "maxProperties": 1,
-      "additionalProperties": {
-        "type": "string"
-      }
+      "properties": {
+        "dir_exists": {
+          "type": "string",
+          "description": "Path (relative to project root) that must be a directory"
+        },
+        "file_exists": {
+          "type": "string",
+          "description": "Path (relative to project root) that must be a file"
+        },
+        "command_available": {
+          "type": "string",
+          "description": "Command name that must be on PATH (via which)"
+        },
+        "env_set": {
+          "type": "string",
+          "description": "Environment variable name that must be set"
+        }
+      },
+      "additionalProperties": false
     },
     "project_tooling_entry": {
       "description": "A project tooling distribution entry — declares a target (file, git hook, JSON field block, etc.) that should be synced into matching projects at SessionStart.",
       "type": "object",
       "required": ["name", "description", "target_kind", "target_path"],
       "additionalProperties": false,
+      "if": {
+        "properties": { "target_kind": { "enum": ["file", "git_hook"] } },
+        "required": ["target_kind"]
+      },
+      "then": {
+        "required": ["source"]
+      },
       "properties": {
         "name": {
           "description": "Unique identifier for this tooling entry (kebab-case recommended).",

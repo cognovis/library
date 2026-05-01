@@ -20,6 +20,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,38 @@ def find_library_root() -> Path | None:
 def find_project_root() -> Path:
     """Return the current working directory as the project root."""
     return Path.cwd()
+
+
+def resolve_hooks_dir(project_root: Path) -> Path | None:
+    """Resolve the real git hooks directory, handling worktrees where .git is a file.
+
+    In a git worktree, .git is a plain file (not a directory) pointing to the
+    worktree-specific gitdir.  We must install hooks into the *common* git dir
+    (the main worktree's .git/hooks/) so they apply to every worktree.
+
+    Returns the resolved hooks Path, or None if project_root is not a git repo.
+    """
+    git_path = project_root / ".git"
+    if not git_path.exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_root),
+        )
+        if result.returncode == 0:
+            common_dir = result.stdout.strip()
+            # common_dir may be absolute or relative to project_root
+            common_path = Path(common_dir)
+            if not common_path.is_absolute():
+                common_path = (project_root / common_path).resolve()
+            return common_path / "hooks"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    # Fallback: direct .git/hooks (works for regular repos)
+    return project_root / ".git" / "hooks"
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +189,9 @@ def sync_git_hook(
 ) -> str:
     """Handle target_kind=git_hook.
 
-    Writes the hook file to .git/hooks/<hook_name> and makes it executable.
+    Writes the hook file to the common git hooks directory and makes it executable.
+    In worktrees, .git is a file — hooks are always installed in the main worktree's
+    .git/hooks/ (the git common dir) so they apply to every worktree.
     Returns: 'synced', 'skipped', or 'error:<msg>'
     """
     source_rel = entry.get("source")
@@ -167,7 +202,14 @@ def sync_git_hook(
     if not source_path.is_file():
         return f"error:source not found: {source_path}"
 
-    target_path = project_root / entry["target_path"]
+    # Resolve the real hooks directory, handling worktrees where .git is a file.
+    hooks_dir = resolve_hooks_dir(project_root)
+    if hooks_dir is None:
+        return "error:not a git repository (no .git found)"
+
+    # Derive hook filename from the target_path basename and place it in hooks_dir.
+    hook_name = Path(entry["target_path"]).name
+    target_path = hooks_dir / hook_name
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
     source_content = source_path.read_bytes()

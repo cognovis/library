@@ -94,12 +94,17 @@ def assert_invalid(data: dict, schema: dict, label: str) -> None:
 
 
 def minimal_tooling_entry(**overrides) -> dict:
-    """Return a minimal valid project_tooling entry."""
+    """Return a minimal valid project_tooling entry.
+
+    Includes source because target_kind=file (the default) requires it per schema.
+    Pass target_kind="json_field_enforce" to get an entry without source.
+    """
     entry = {
         "name": "test-entry",
         "description": "A test tooling entry",
         "target_kind": "file",
         "target_path": ".beads/PRIME.md",
+        "source": "prime/PRIME.md",
     }
     entry.update(overrides)
     return entry
@@ -222,7 +227,7 @@ def test_conflict_policy_enum():
 
 
 def test_conditions_language():
-    """conditions array with dir_exists/file_exists/command_available/env_set accepted."""
+    """conditions array with dir_exists/file_exists/command_available/env_set accepted; invalid key rejected."""
     schema = load_schema()
     data = minimal_library({
         "project_tooling": [
@@ -235,7 +240,47 @@ def test_conditions_language():
         ]
     })
     assert_valid(data, schema, "conditions with all valid condition types")
+
+    # Invalid condition key (typo: file_exist instead of file_exists)
+    data_invalid = minimal_library({
+        "project_tooling": [
+            minimal_tooling_entry(conditions=[
+                {"file_exist": ".beads/metadata.json"},
+            ])
+        ]
+    })
+    assert_invalid(data_invalid, schema, "conditions with invalid key 'file_exist' (typo)")
     print("PASS test_conditions_language")
+
+
+def test_file_target_requires_source():
+    """A target_kind=file entry without a source field should fail validation."""
+    schema = load_schema()
+    entry = {
+        "name": "test-entry",
+        "description": "A test tooling entry",
+        "target_kind": "file",
+        "target_path": ".beads/PRIME.md",
+        # source intentionally omitted
+    }
+    data = minimal_library({"project_tooling": [entry]})
+    assert_invalid(data, schema, "target_kind=file without source (invalid)")
+    print("PASS test_file_target_requires_source")
+
+
+def test_git_hook_target_requires_source():
+    """A target_kind=git_hook entry without a source field should fail validation."""
+    schema = load_schema()
+    entry = {
+        "name": "test-entry",
+        "description": "A test tooling entry",
+        "target_kind": "git_hook",
+        "target_path": ".git/hooks/post-commit",
+        # source intentionally omitted
+    }
+    data = minimal_library({"project_tooling": [entry]})
+    assert_invalid(data, schema, "target_kind=git_hook without source (invalid)")
+    print("PASS test_git_hook_target_requires_source")
 
 
 def test_json_field_enforce_fields():
@@ -540,6 +585,8 @@ ALL_TESTS = [
     test_sync_strategy_enum,
     test_conflict_policy_enum,
     test_conditions_language,
+    test_file_target_requires_source,
+    test_git_hook_target_requires_source,
     test_json_field_enforce_fields,
     test_full_beads_prime_example,
     test_library_yaml_has_project_tooling,
