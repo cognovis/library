@@ -24,6 +24,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LIST_COOKBOOK = REPO_ROOT / "cookbook" / "list.md"
 
@@ -252,8 +254,7 @@ def test_parse_full_installed_plugins_json():
     """Parse the real installed_plugins.json (if present) and verify 16 plugins."""
     real_path = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
     if not real_path.exists():
-        print("SKIP test_parse_full_installed_plugins_json: file not found")
-        return
+        pytest.skip("installed_plugins.json not found")
     with real_path.open() as f:
         data = json.load(f)
     results = parse_installed_plugins(data)

@@ -30,7 +30,7 @@ Read `~/.claude/plugins/installed_plugins.json`:
 
 - If the file does not exist or is missing, record an empty plugin list and note "No plugin-marketplace installs found" for Section 2 output.
 - Parse the `plugins` object (version 2 format): each key is `name@marketplace`.
-  - Strip the `@marketplace` suffix to get the plugin name.
+  - Split the key at the **last** `@` — everything before it is the plugin name, everything after it is the marketplace id.
   - Collect: `name`, `marketplace`, `version`, `scope` (user or project).
   - If `scope == "project"`, also collect `projectPath`.
 - Build a set of installed plugin names (without marketplace suffix) for use in catalog annotation.
@@ -51,7 +51,10 @@ Output all three sections in sequence.
 **Section 1: Catalog**
 
 Format the output as a table grouped by type.
-For each catalog entry whose `name` appears in the installed plugin names set (from Step 4), append `[also: plugin-marketplace]` to the Status column.
+For each catalog entry whose `name` appears in the installed plugin names set (from Step 4):
+- If the catalog status is `installed (default)` or `installed (global)`: append `[also: plugin-marketplace]` to the Status column.
+- If the catalog status is `not installed`: append `[via plugin-marketplace]` to the Status column instead.
+- If the catalog status is `not installed` and the entry is NOT in the installed plugin names set: no annotation.
 
 ```
 ## Section 1: Catalog
@@ -61,7 +64,8 @@ For each catalog entry whose `name` appears in the installed plugin names set (f
 |------|-------------|--------|--------|
 | skill-name | skill-description | /local/path/... | installed (default) |
 | other-skill | other-description | github.com/... | not installed |
-| beads | beads skill | ... | not installed [also: plugin-marketplace] |
+| beads | beads skill | ... | installed (default) [also: plugin-marketplace] |
+| open-brain | open-brain skill | ... | not installed [via plugin-marketplace] |
 
 ### Agents
 | Name | Description | Source | Status |
