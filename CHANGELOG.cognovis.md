@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Added
+
+- **Personal Agentic Content Repository** (`sussdorff/library-core`): Migrated 13 personal artefacts (skills and agents for MoneyMoney CLI, Amazon utils, Career Check, Google Invoice, LinkedIn, Transcription, Hetzner Cloud, Home Infra, Local VM, Paperless, Piler, and Home agent) from `claude-code-plugins` into `sussdorff/library-core` at skeleton paths (`.claude/skills/business/`, `.claude/skills/content/`, `.claude/skills/infra/`, `.claude/agents/`). Enables selective skill loading via `/library use` on new devices without cloning the full plugins repo. All SKILL.md/AGENT.md frontmatter preserved; e2e install simulation verified for mm-cli and home-infra. Closes CL-4mt.
+
 ---
 
 ## [v2026.05.01.7] - 2026-05-01
