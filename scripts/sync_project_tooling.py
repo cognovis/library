@@ -96,6 +96,10 @@ def evaluate_condition(condition: dict[str, str], project_root: Path) -> bool:
         return bool(os.environ.get(value))
     else:
         # Unknown condition key — conservative: return False
+        print(
+            f"[sync_project_tooling] WARN: unknown condition key '{key}' — skipping entry",
+            file=sys.stderr,
+        )
         return False
 
 
@@ -257,7 +261,13 @@ def apply_entry(
         return sync_json_field_enforce(entry, project_root)
     else:
         # file_section, gitignore_patch — not yet implemented
-        return f"skipped:target_kind={target_kind} not yet implemented"
+        entry_name = entry.get("name", "<unnamed>")
+        print(
+            f"[sync_project_tooling] WARN: target_kind='{target_kind}' not yet implemented "
+            f"(entry '{entry_name}'). Registered but no-op.",
+            file=sys.stderr,
+        )
+        return "skipped:not_implemented"
 
 
 # ---------------------------------------------------------------------------

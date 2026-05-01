@@ -49,9 +49,9 @@ project_tooling:
 | Value | What it does |
 |-------|-------------|
 | `file` | Copies a file from library source to project target. Content-based comparison. |
-| `file_section` | Replaces a delimited section within an existing file. Uses `section_markers`. |
+| `file_section` | Replaces a delimited section within an existing file. Uses `section_markers`. (not yet implemented in runtime) |
 | `git_hook` | Copies a shell script to `.git/hooks/<hook_name>` and sets executable bit. |
-| `gitignore_patch` | Appends or replaces a section in `.gitignore`. Uses `section_markers`. |
+| `gitignore_patch` | Appends or replaces a section in `.gitignore`. Uses `section_markers`. (not yet implemented in runtime) |
 | `json_field_enforce` | Reads a JSON file, sets `fields.ensure` keys, removes `fields.remove` keys. |
 
 ### Conditions language

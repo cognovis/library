@@ -35,15 +35,15 @@ from pathlib import Path
 try:
     import yaml
 except ImportError:
-    print("SKIP: PyYAML not installed. Run: pip install PyYAML", file=sys.stderr)
-    sys.exit(0)
+    import pytest
+    pytest.skip("PyYAML not installed", allow_module_level=True)
 
 try:
     import jsonschema
     from jsonschema import validate, ValidationError
 except ImportError:
-    print("SKIP: jsonschema not installed. Run: pip install jsonschema", file=sys.stderr)
-    sys.exit(0)
+    import pytest
+    pytest.skip("jsonschema not installed", allow_module_level=True)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -424,6 +424,60 @@ def test_sync_runtime_json_field_enforce():
     print("PASS test_sync_runtime_json_field_enforce")
 
 
+def test_sync_runtime_git_hook():
+    """sync_project_tooling.py: git_hook target writes executable hook and is idempotent."""
+    import os
+    sync = _import_sync_script()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        lib_root = tmp / "library"
+        project_root = tmp / "project"
+        lib_root.mkdir()
+        project_root.mkdir()
+
+        # Create source hook file in library
+        hook_content = "#!/usr/bin/env bash\ncommand -v bd &>/dev/null || exit 0\n"
+        source_file = lib_root / "prime" / "hooks" / "post-commit.sh"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text(hook_content)
+
+        # Create .git/hooks/ and .beads/ in project (conditions require both)
+        (project_root / ".git" / "hooks").mkdir(parents=True)
+        (project_root / ".beads").mkdir()
+
+        entries = [
+            {
+                "name": "beads-post-commit-hook",
+                "description": "Test git hook entry",
+                "target_kind": "git_hook",
+                "target_path": ".git/hooks/post-commit",
+                "source": "prime/hooks/post-commit.sh",
+                "conditions": [
+                    {"dir_exists": ".beads"},
+                    {"dir_exists": ".git/hooks"},
+                ],
+                "sync_strategy": "overwrite_if_source_newer",
+            }
+        ]
+
+        # First run — should sync
+        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        assert result["synced"] >= 1, f"Expected at least 1 synced entry, got: {result}"
+
+        hook_path = project_root / ".git" / "hooks" / "post-commit"
+        assert hook_path.exists(), "Hook file was not created"
+        assert hook_path.read_text() == hook_content, "Hook content does not match source"
+        assert os.access(hook_path, os.X_OK), "Hook file is not executable"
+
+        # Second run — idempotency: same result, content unchanged
+        result2 = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        assert hook_path.read_text() == hook_content, "Idempotency: hook content changed on second run"
+        assert os.access(hook_path, os.X_OK), "Hook file lost executable bit on second run"
+
+    print("PASS test_sync_runtime_git_hook")
+
+
 def test_sync_runtime_idempotent():
     """sync_project_tooling.py: running sync twice produces the same result."""
     sync = _import_sync_script()
@@ -491,6 +545,7 @@ ALL_TESTS = [
     test_library_yaml_has_project_tooling,
     test_sync_runtime_file_target,
     test_sync_runtime_json_field_enforce,
+    test_sync_runtime_git_hook,
     test_sync_runtime_idempotent,
 ]
 
