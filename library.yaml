@@ -107,6 +107,53 @@ mcp_servers:
         claude_ios:
           install_url: https://claude.ai/add-mcp/open-brain
 
+catalog:
+  - name: sussdorff-library-core
+    source: https://github.com/sussdorff/library-core
+    description: Malte Sussdorff personal agentic content (skills, agents, commands, hooks)
+    visibility: private
+    owner: sussdorff
+    audience: personal
+    content_types:
+      - skills
+      - agents
+      - commands
+      - hooks
+      - standards
+    skeleton:
+      claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
+      codex: [.agents/skills/, .agents/standards/, .codex/agents/]
+    notes: >-
+      First-party personal library. Content targets personal workflows identified in
+      docs/audit/skills-origin.json (personal_to_sussdorff_library_core list).
+      Installs tracked via .library.lock per CL-t21.
+    tags:
+      - first-party
+      - personal
+
+  - name: cognovis-library-core
+    source: https://github.com/cognovis/library-core
+    description: Cognovis team agentic content (skills, agents, commands, hooks)
+    visibility: private
+    owner: cognovis
+    audience: team
+    content_types:
+      - skills
+      - agents
+      - commands
+      - hooks
+      - standards
+    skeleton:
+      claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
+      codex: [.agents/skills/, .agents/standards/, .codex/agents/]
+    notes: >-
+      First-party team library. Content covers original Cognovis team skills (origin=ORIGINAL
+      per docs/audit/skills-origin.json). Name-collision and canonical-vs-bridge convention
+      applies per docs/policy/name-collision.md. Installs tracked via .library.lock per CL-t21.
+    tags:
+      - first-party
+      - team
+
 marketplaces:
   - name: anthropic-official
     source: https://github.com/anthropics

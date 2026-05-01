@@ -91,10 +91,81 @@
       "description": "Plugin bundle declarations (stub).",
       "type": "object",
       "additionalProperties": true
+    },
+    "catalog": {
+      "description": "First-party content repo registrations. These are owned repos (personal or team) that serve as canonical sources for skills, agents, commands, hooks, and standards. Distinct from marketplaces (third-party sources).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/catalog_entry"
+      },
+      "default": []
     }
   },
   "additionalProperties": false,
   "$defs": {
+    "catalog_entry": {
+      "description": "A first-party content repo (personal or team) registered as a canonical source.",
+      "type": "object",
+      "required": ["name", "source", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this catalog repo (kebab-case recommended).",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "description": "GitHub URL for this repo.",
+          "type": "string"
+        },
+        "description": {
+          "description": "Human-readable description of the repo's purpose.",
+          "type": "string",
+          "minLength": 1
+        },
+        "visibility": {
+          "description": "Repo visibility on GitHub.",
+          "type": "string",
+          "enum": ["private", "public", "internal"]
+        },
+        "owner": {
+          "description": "GitHub user or org that owns this repo.",
+          "type": "string"
+        },
+        "audience": {
+          "description": "Intended audience: personal, team, or public.",
+          "type": "string",
+          "enum": ["personal", "team", "public"]
+        },
+        "content_types": {
+          "description": "Types of content that live in this repo.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["skills", "agents", "commands", "hooks", "standards", "guardrails", "prompts"]
+          },
+          "default": []
+        },
+        "skeleton": {
+          "description": "Directory skeleton per harness — documents what directories exist in this repo.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "notes": {
+          "description": "Free-form notes about this catalog entry.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Optional tags for search and filtering.",
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
+      }
+    },
     "dir_list": {
       "description": "A list of named directory mappings (key: path pairs).",
       "type": "array",
