@@ -22,3 +22,4 @@
 .claude/worktrees/
 tests/__pycache__/
 **/__pycache__/
+.session-close.lock
