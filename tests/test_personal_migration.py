@@ -65,6 +65,18 @@ def decode_content(api_response: dict) -> str:
     return base64.b64decode(raw).decode("utf-8", errors="replace")
 
 
+def get_frontmatter(content: str) -> str:
+    """Extract YAML frontmatter block from a file.
+
+    Returns the text between the opening and closing '---' delimiters,
+    or an empty string if no valid frontmatter is present.
+    """
+    if not content.startswith("---"):
+        return ""
+    parts = content.split("---", 2)
+    return parts[1] if len(parts) >= 2 else ""
+
+
 class TestAllArtefactsExist:
     """Test 1: All 13 PERSONAL artefacts exist at correct skeleton paths."""
 
@@ -87,25 +99,33 @@ class TestFrontmatterPreserved:
 
     @pytest.mark.parametrize("path,name", EXPECTED_SKILL_FILES)
     def test_skill_has_description(self, path, name):
-        """Each skill file must have description: in its frontmatter."""
+        """Each skill file must have description: in its YAML frontmatter block."""
         data = gh_api(path)
         content = decode_content(data)
         assert content.startswith("---"), (
             f"{name}: SKILL.md does not start with YAML frontmatter (---)"
         )
-        assert "description:" in content, (
-            f"{name}: SKILL.md missing 'description:' field"
+        frontmatter = get_frontmatter(content)
+        assert frontmatter, (
+            f"{name}: SKILL.md has no parseable YAML frontmatter block"
+        )
+        assert "description:" in frontmatter, (
+            f"{name}: SKILL.md missing 'description:' field in frontmatter"
         )
 
     def test_agent_has_description(self):
-        """Agent home.md must have description: in its frontmatter."""
+        """Agent home.md must have description: in its YAML frontmatter block."""
         data = gh_api(AGENT_FILE)
         content = decode_content(data)
         assert content.startswith("---"), (
             "home.md does not start with YAML frontmatter (---)"
         )
-        assert "description:" in content, (
-            "home.md missing 'description:' field"
+        frontmatter = get_frontmatter(content)
+        assert frontmatter, (
+            "home.md has no parseable YAML frontmatter block"
+        )
+        assert "description:" in frontmatter, (
+            "home.md missing 'description:' field in frontmatter"
         )
 
 
@@ -113,23 +133,85 @@ class TestSmokeInstallable:
     """Test 3 & 4: mm-cli and home-infra smoke tests — accessible + valid frontmatter."""
 
     def test_mm_cli_smoke(self):
-        """mm-cli SKILL.md must be accessible and have name: + description: frontmatter."""
+        """mm-cli SKILL.md must be accessible and have name: + description: in frontmatter."""
         path = ".claude/skills/business/mm-cli/SKILL.md"
         data = gh_api(path)
         content = decode_content(data)
-        assert "name:" in content, "mm-cli SKILL.md missing 'name:' field"
-        assert "description:" in content, "mm-cli SKILL.md missing 'description:' field"
-        # Verify name value
+        frontmatter = get_frontmatter(content)
+        assert frontmatter, "mm-cli SKILL.md has no parseable YAML frontmatter block"
+        assert "name:" in frontmatter, "mm-cli SKILL.md missing 'name:' field in frontmatter"
+        assert "description:" in frontmatter, "mm-cli SKILL.md missing 'description:' field in frontmatter"
+        # Verify name value appears in the file
         assert "mm-cli" in content, "mm-cli SKILL.md doesn't reference mm-cli"
 
     def test_home_infra_smoke(self):
-        """home-infra SKILL.md must be accessible and have name: + description: frontmatter."""
+        """home-infra SKILL.md must be accessible and have name: + description: in frontmatter."""
         path = ".claude/skills/infra/home-infra/SKILL.md"
         data = gh_api(path)
         content = decode_content(data)
-        assert "name:" in content, "home-infra SKILL.md missing 'name:' field"
-        assert "description:" in content, "home-infra SKILL.md missing 'description:' field"
+        frontmatter = get_frontmatter(content)
+        assert frontmatter, "home-infra SKILL.md has no parseable YAML frontmatter block"
+        assert "name:" in frontmatter, "home-infra SKILL.md missing 'name:' field in frontmatter"
+        assert "description:" in frontmatter, "home-infra SKILL.md missing 'description:' field in frontmatter"
         assert "home-infra" in content, "home-infra SKILL.md doesn't reference home-infra"
+
+    def test_mm_cli_e2e_install(self, tmp_path):
+        """Simulate /library use mm-cli — clone source, install to target, verify."""
+        import shutil
+
+        # Clone source repo
+        src_dir = tmp_path / "library-core"
+        result = subprocess.run(
+            ["gh", "repo", "clone", REPO, str(src_dir)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"gh repo clone failed: {result.stderr.strip()}"
+        )
+        # Simulate install: copy skill directory to target (mirrors what /library use does)
+        skill_src = src_dir / ".claude" / "skills" / "business" / "mm-cli"
+        skill_dst = tmp_path / "installed-skills" / "mm-cli"
+        assert skill_src.exists(), f"mm-cli skill not found at {skill_src}"
+        shutil.copytree(str(skill_src), str(skill_dst))
+        # Verify install
+        installed_skill_md = skill_dst / "SKILL.md"
+        assert installed_skill_md.exists(), "SKILL.md not found after install"
+        content = installed_skill_md.read_text(encoding="utf-8")
+        frontmatter = get_frontmatter(content)
+        assert frontmatter, "Installed mm-cli SKILL.md has no parseable YAML frontmatter"
+        assert "description:" in frontmatter, (
+            "Installed mm-cli SKILL.md missing 'description:' in frontmatter after install"
+        )
+
+    def test_home_infra_e2e_install(self, tmp_path):
+        """Simulate /library use home-infra — clone source, install to target, verify."""
+        import shutil
+
+        # Clone source repo
+        src_dir = tmp_path / "library-core"
+        result = subprocess.run(
+            ["gh", "repo", "clone", REPO, str(src_dir)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"gh repo clone failed: {result.stderr.strip()}"
+        )
+        # Simulate install: copy skill directory to target (mirrors what /library use does)
+        skill_src = src_dir / ".claude" / "skills" / "infra" / "home-infra"
+        skill_dst = tmp_path / "installed-skills" / "home-infra"
+        assert skill_src.exists(), f"home-infra skill not found at {skill_src}"
+        shutil.copytree(str(skill_src), str(skill_dst))
+        # Verify install
+        installed_skill_md = skill_dst / "SKILL.md"
+        assert installed_skill_md.exists(), "SKILL.md not found after install"
+        content = installed_skill_md.read_text(encoding="utf-8")
+        frontmatter = get_frontmatter(content)
+        assert frontmatter, "Installed home-infra SKILL.md has no parseable YAML frontmatter"
+        assert "description:" in frontmatter, (
+            "Installed home-infra SKILL.md missing 'description:' in frontmatter after install"
+        )
 
 
 class TestMigrationCommit:
