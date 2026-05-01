@@ -9,6 +9,14 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ---
 
+## [v2026.05.01.7] - 2026-05-01
+
+### Fixed
+
+- **Cookbook Cleanup Commands: Drop Force Flag** (`cookbook/use.md`, `push.md`, `sync.md`, `remove.md`): Dropped the `-f` (force) flag from 8 recursive-delete cleanup commands across the bd cookbook. Commands now use `rm -r` instead of `rm -rf`, consistent with the dcg guardrail that already enforces non-forced recursive deletes. The guardrail itself was unchanged. Closes CL-qwt.
+
+---
+
 ## [v2026.05.01.6] - 2026-05-01
 
 ### Changed
