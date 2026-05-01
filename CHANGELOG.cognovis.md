@@ -9,6 +9,8 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ### Changed
 
+- **Dolt Persistent Remote Authentication** (LaunchAgent + skill documentation): Implemented persistent Dolt remote authentication via macOS LaunchAgent that loads `DOLT_REMOTE_PASSWORD` environment variable at login. Users can now run `bd dolt pull` and `bd dolt push --force` reliably after system reboot without manual `launchctl setenv` steps. Documented setup in `core:dolt` skill. Refs CL-6cl.
+
 - **Chezmoi Externals Cleanup and Gitignore Audit** (`docs/chezmoi-externals.md`, `.gitignore` in sussdorff/claude and sussdorff/codex): Audited `~/.claude/` and `~/.codex/` for runtime artifacts that should not be version-tracked; added `.gitignore` entries covering session transcripts, backups, SQLite files, caches, and OS artifacts. Cleaned existing drift (untracked session JSONL files, backup files, runtime state). Documented file categorization guide (`docs/chezmoi-externals.md`) defining boundaries between config, templates, runtime, caches, and machine-specific files for fleet adoption. `chezmoi update` now runs without dirty-tree warnings on both externals. Refs CL-wn8.
 
 ### Added
