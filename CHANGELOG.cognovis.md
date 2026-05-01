@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Added
+
+- **Three-Section /library List Output** (`/library list` command, `cookbook/list.md`): Extended `/library list` to display three sections: (1) Catalog (existing library.yaml inventory), (2) Plugin-Marketplace Installs (reading from `~/.claude/plugins/installed_plugins.json` with plugin name, version, scope, and marketplace), (3) /Library Use Installs (reading from `.library.lock` files in current directory for project-level lockfile installs). Catalog entries are annotated with `[also: plugin-marketplace]` or `[also: /library use (project-local)]` when the entry is also covered by an installed plugin or project-local lockfile. Updated `cookbook/list.md` with the new three-section layout and annotation logic. Closes CL-2x4.
+
 ---
 
 ## [v2026.05.01.7] - 2026-05-01
