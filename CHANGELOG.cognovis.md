@@ -67,6 +67,11 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 - **MCP Server Audit** (`docs/audit/mcp-servers.md`): Classification of 11 installed MCP servers across all harnesses (Codex, Claude Desktop, Claude Code) against the PRIMITIVES.md decision matrix. Per-server migration recommendations (convert to CLI+Skill vs. keep MCP for stateful/mobile use) with 8 follow-up implementation beads identified.
 - **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table, canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies 3 lossy fields (tools→sandbox_mode, mcpServers→comment, system_prompt_file→inline) and proposes `codex_*` extended frontmatter convention for round-trip fidelity.
 
+### Changed
+
+- **Golden Prompt Safety Rules** (`.agents/golden-prompts/cognovis-base.md`): Removed the `bd dolt push` confirmation-gate row from the safety rules table. The rule is retained in `~/.claude/CLAUDE.md` (the authoritative source). The golden prompt now defers to the harness-level CLAUDE.md rather than duplicating it, reducing drift risk.
+- **Gitignore** (`.gitignore`): Added runtime artifact patterns: `.claude/buglog.json`, `.claude/worktrees/`, `tests/__pycache__/`, and `**/__pycache__/` to prevent tool-generated files from appearing as untracked.
+
 ---
 
 ## [v2026.04.2] - 2026-04-16
