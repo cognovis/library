@@ -18,12 +18,18 @@ instead of the hardcoded fallback chain in the hook scripts.
 ## How the distribution chain works today
 
 ```
-cognovis-library/prime/PRIME.md          ← canonical (this file's sibling)
+cognovis-library/prime/PRIME.md            ← canonical (this file's sibling)
                   ↓ SessionStart hook reads
-~/.claude/templates/PRIME.md              ← bootstrap cache (refreshed on read)
+$XDG_CACHE_HOME/cognovis-prime/PRIME.md    ← per-machine bootstrap cache (~/.cache/cognovis-prime/)
                   ↓ SessionStart hook copies
-<project>/.beads/PRIME.md                 ← per-project (bd prime reads this)
+<project>/.beads/PRIME.md                   ← per-project (bd prime reads this)
 ```
+
+The cache lives under `$XDG_CACHE_HOME` (default `~/.cache/`) — explicitly NOT in
+`~/.claude/templates/`. With `~/.claude/` managed as a chezmoi external
+(`sussdorff/claude`), writing to it would dirty the working tree on every cache
+refresh and stop chezmoi from pulling cleanly. XDG cache is per-machine and
+outside chezmoi's scope.
 
 Hooks involved:
 - `~/.claude/scripts/beads-session-start.zsh` (Claude SessionStart)
@@ -44,7 +50,16 @@ Edit `prime/PRIME.md` here. On the next SessionStart in any
 
 ## Bootstrap on a fresh machine
 
-If `cognovis-library` is not yet checked out, the hooks fall back to
-`~/.claude/templates/PRIME.md` (which travels in the `~/.claude` dotfiles
-repo). After `cognovis-library` is cloned, the next SessionStart syncs the
-cache from the library and the chain resumes.
+The XDG cache (`~/.cache/cognovis-prime/PRIME.md`) is per-machine and starts
+empty. On a fresh machine without `cognovis-library` checked out yet, the
+hook chain has no source — the per-project `.beads/PRIME.md` falls back to
+whatever `bd onboard` last wrote (or the bd default).
+
+For a clean bootstrap, clone `cognovis-library` before running anything in
+beads-managed projects. The first SessionStart afterwards seeds the XDG
+cache and per-project `.beads/PRIME.md`.
+
+(The previous design used `~/.claude/templates/PRIME.md` as a chezmoi-synced
+bootstrap cache, but that conflicts with chezmoi externals — the cache
+needed to be writable by automation, which dirties the chezmoi-managed
+working tree. Moved to XDG.)
