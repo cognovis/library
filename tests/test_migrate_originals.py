@@ -21,8 +21,8 @@ import pytest
 
 WORKTREE_ROOT = Path(__file__).parent.parent
 AUDIT_JSON = WORKTREE_ROOT / "docs" / "audit" / "skills-origin.json"
-LIBRARY_CORE = Path("/tmp/cognovis-library-core")
-SOURCE_PLUGINS = Path("/Users/malte/code/claude-code-plugins")
+LIBRARY_CORE = Path(os.environ.get("LIBRARY_CORE", "/tmp/cognovis-library-core"))
+SOURCE_PLUGINS = Path(os.environ.get("SOURCE_PLUGINS", "/Users/malte/code/claude-code-plugins"))
 
 # The 5 specific skills chosen for spot-check (AK3).
 # All of these must exist on disk in SOURCE_PLUGINS.
@@ -58,26 +58,25 @@ def audit_artifacts() -> list[dict]:
 
 def test_expected_files_present(audit_artifacts: list[dict]) -> None:
     """
-    Verify that after migration, library-core has at least:
-    - 41 .claude/skills/*/SKILL.md files
+    Verify that after migration, library-core has exactly:
+    - 41 .claude/skills/*/SKILL.md files (including beads from worktree)
     - 27 .claude/agents/*.md files
-    - 5  .claude/hooks/* files
-    - 3  .claude/commands/*.md files
+    - 5+ .claude/hooks/* files
+    - 3+ .claude/commands/*.md files
     """
-    # Count skills.
-    # Note: audit lists 41 skills but 1 (beads) has no source file on disk — so 40 is the realistic max.
+    # Count skills (audit lists 41 skills including beads copied from worktree).
     # Some skills use lowercase 'skill.md' — count both variants.
     skills_dir = LIBRARY_CORE / ".claude" / "skills"
     skill_files = list(skills_dir.glob("*/SKILL.md")) + list(skills_dir.glob("*/skill.md"))
-    assert len(skill_files) >= 40, (
-        f"Expected >= 40 SKILL.md files under {skills_dir}, found {len(skill_files)}"
+    assert len(skill_files) == 41, (
+        f"Expected == 41 SKILL.md files under {skills_dir}, found {len(skill_files)}"
     )
 
     # Count agents
     agents_dir = LIBRARY_CORE / ".claude" / "agents"
     agent_files = list(agents_dir.glob("*.md"))
-    assert len(agent_files) >= 27, (
-        f"Expected >= 27 agent .md files under {agents_dir}, found {len(agent_files)}"
+    assert len(agent_files) == 27, (
+        f"Expected == 27 agent .md files under {agents_dir}, found {len(agent_files)}"
     )
 
     # Count hooks

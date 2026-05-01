@@ -26,21 +26,9 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 
-def source_path_for(artifact: dict, source_root: Path) -> Path:
-    """Compute the source path for an artifact on disk.
-
-    For commands: source is at .claude/commands/<filename> under source_root.
-    For everything else: source is at <artifact_path> under source_root.
-    """
-    path = artifact["path"]
-    current_type = artifact["current_type"]
-
-    if current_type == "command":
-        # path is like ".claude/commands/compact-reference.md"
-        # source is directly under source_root at this relative path
-        return source_root / path
-    else:
-        return source_root / path
+def source_path_for(source_root: Path, artifact: dict) -> Path:
+    """Return absolute source path for an artifact."""
+    return source_root / artifact["path"]
 
 
 def dest_path_for(artifact: dict, library_core: Path) -> Path | None:
@@ -180,7 +168,7 @@ def migrate(
         path_str = artifact["path"]
         current_type = artifact["current_type"]
 
-        src = source_path_for(artifact, source_root)
+        src = source_path_for(source_root, artifact)
         dest = dest_path_for(artifact, library_core)
 
         if dest is None:
@@ -234,7 +222,7 @@ def migrate(
             copy_single_file(src, dest, dry_run)
 
         elif current_type == "plugin":
-            src_dir = source_root / path_str
+            src_dir = src  # src already computed as source_root / artifact["path"]
             if not src_dir.exists():
                 warnings.append(f"Plugin source not found (skipping): {src_dir}")
                 skipped += 1
@@ -252,7 +240,7 @@ def migrate(
     # Print summary
     print()
     print("━" * 60)
-    print(f"Summary:")
+    print("Summary:")
     print(f"  Copied:   {copied}")
     print(f"  Skipped:  {skipped}")
     print(f"  Warnings: {len(warnings)}")
@@ -263,7 +251,8 @@ def migrate(
             print(f"  WARNING: {w}")
     print("━" * 60)
 
-    return 0
+    # Return 1 if any items were skipped (to surface the gap)
+    return 1 if skipped > 0 else 0
 
 
 # ---------------------------------------------------------------------------
@@ -283,14 +272,14 @@ def main() -> None:
     parser.add_argument(
         "--library-core",
         type=Path,
-        default=Path("/tmp/cognovis-library-core"),
-        help="Path to library-core clone",
+        default=Path(os.environ.get("LIBRARY_CORE", "/tmp/cognovis-library-core")),
+        help="Path to library-core clone (override with LIBRARY_CORE env var)",
     )
     parser.add_argument(
         "--source",
         type=Path,
-        default=Path("/Users/malte/code/claude-code-plugins"),
-        help="Path to claude-code-plugins source",
+        default=Path(os.environ.get("SOURCE_PLUGINS", "/Users/malte/code/claude-code-plugins")),
+        help="Path to claude-code-plugins source (override with SOURCE_PLUGINS env var)",
     )
     parser.add_argument(
         "--audit",
