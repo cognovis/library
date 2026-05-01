@@ -9,6 +9,8 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ### Added
 
+- **Personal Agentic Content Repository** (`sussdorff/library-core`): Migrated 13 personal artefacts (skills and agents for MoneyMoney CLI, Amazon utils, Google Invoice, LinkedIn, Transcription, Hetzner Cloud, Home Infra, Paperless, Piler, and others) from the main claude-code-plugins audit into a dedicated personal repository. Enables selective dependency loading via `/library use` without requiring the full library checkout. Frontmatter preserved; spot-check verification passed for mm-cli and home-infra skills. Closes CL-4mt.
+
 - **Three-Section /library List Output** (`/library list` command, `cookbook/list.md`): Extended `/library list` to display three sections: (1) Catalog (existing library.yaml inventory), (2) Plugin-Marketplace Installs (reading from `~/.claude/plugins/installed_plugins.json` with plugin name, version, scope, and marketplace), (3) /Library Use Installs (reading from `.library.lock` files in current directory for project-level lockfile installs). Catalog entries are annotated with `[also: plugin-marketplace]` or `[also: /library use (project-local)]` when the entry is also covered by an installed plugin or project-local lockfile. Updated `cookbook/list.md` with the new three-section layout and annotation logic. Closes CL-2x4.
 
 ---
