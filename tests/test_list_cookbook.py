@@ -251,15 +251,17 @@ def test_annotation_no_match():
 
 
 def test_parse_full_installed_plugins_json():
-    """Parse the real installed_plugins.json (if present) and verify 16 plugins."""
+    """Parse the real installed_plugins.json (if present) and verify the parser returns the correct count."""
     real_path = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
     if not real_path.exists():
         pytest.skip("installed_plugins.json not found")
     with real_path.open() as f:
         data = json.load(f)
+    expected_count = sum(len(entries) for entries in data.get("plugins", {}).values())
     results = parse_installed_plugins(data)
-    assert len(results) == 16, (
-        f"Expected 16 plugins in installed_plugins.json, got {len(results)}: "
+    assert len(results) >= 1, "Expected at least one plugin in installed_plugins.json"
+    assert len(results) == expected_count, (
+        f"Expected {expected_count} parsed records (matching file contents), got {len(results)}: "
         f"{[r['name'] for r in results]}"
     )
     print(f"PASS test_parse_full_installed_plugins_json ({len(results)} plugins)")
@@ -290,6 +292,7 @@ ALL_TESTS = [
 def main() -> int:
     pass_count = 0
     fail_count = 0
+    skip_count = 0
     for test_fn in ALL_TESTS:
         try:
             test_fn()
@@ -298,10 +301,14 @@ def main() -> int:
             print(f"FAIL {test_fn.__name__}: {e}")
             fail_count += 1
         except Exception as e:
-            print(f"ERROR {test_fn.__name__}: {type(e).__name__}: {e}")
-            fail_count += 1
+            if "Skipped" in type(e).__name__ or "skip" in str(e).lower():
+                print(f"SKIPPED {test_fn.__name__}: {e}")
+                skip_count += 1
+            else:
+                print(f"ERROR {test_fn.__name__}: {type(e).__name__}: {e}")
+                fail_count += 1
 
-    print(f"\n{pass_count} passed, {fail_count} failed")
+    print(f"\n{pass_count} passed, {fail_count} failed, {skip_count} skipped")
     return 0 if fail_count == 0 else 1
 
 

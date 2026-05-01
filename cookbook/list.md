@@ -6,6 +6,8 @@ Show the full library catalog with install status, plugin-marketplace installs, 
 ## Steps
 
 ### 1. Sync the Library Repo
+Before changing directories, remember the **original working directory** (the directory where the user invoked `/library list`) — you will need it in Step 5 to read the lockfile.
+
 Pull the latest catalog before reading:
 ```bash
 cd <LIBRARY_SKILL_DIR>
@@ -37,7 +39,7 @@ Read `~/.claude/plugins/installed_plugins.json`:
 
 ### 5. Read /library use Installs (Lockfile)
 
-Read `.library.lock` from the **current working directory** (the user's project root):
+Read `.library.lock` from the **original working directory** (where the user invoked the command, saved in Step 1 — NOT from `<LIBRARY_SKILL_DIR>`):
 
 - If the file does not exist, record an empty install list and note "No /library use installs found (no .library.lock in current directory)" for Section 3 output.
 - Parse the YAML `installed` list. For each entry collect: `name`, `type`, `install_target`, `install_timestamp` (date portion only, e.g. `2026-04-30`).
