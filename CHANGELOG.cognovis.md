@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Changed
+
+- **Chezmoi Externals Cleanup and Gitignore Audit** (`docs/chezmoi-externals.md`, `.gitignore` in sussdorff/claude and sussdorff/codex): Audited `~/.claude/` and `~/.codex/` for runtime artifacts that should not be version-tracked; added `.gitignore` entries covering session transcripts, backups, SQLite files, caches, and OS artifacts. Cleaned existing drift (untracked session JSONL files, backup files, runtime state). Documented file categorization guide (`docs/chezmoi-externals.md`) defining boundaries between config, templates, runtime, caches, and machine-specific files for fleet adoption. `chezmoi update` now runs without dirty-tree warnings on both externals. Refs CL-wn8.
+
 ### Added
 
 - **Bootstrap First-Party Content Repos** (`library.yaml`, `docs/schema/library.schema.json`): Created `sussdorff/library-core` (private, personal agentic content) and `cognovis/library-core` (private, team agentic content). Each repo is initialized with a full skeleton: `.claude/{agents,skills,commands,hooks}/`, `.agents/{skills,standards}/`, `.codex/agents/`. Each README documents audience, directory structure, contribution model, lockfile reference (CL-t21), and canonical-vs-bridge convention per name-collision policy (CL-b4o). Both repos registered in `library.yaml` under a new `catalog:` section (first-party, distinct from `marketplaces:`). `library.schema.json` extended with `catalog_entry` definition including typed `content_types`, `skeleton`, `visibility`, `audience`, and `owner` fields. JSON-schema validator and all 22 schema tests pass. Last bead in epic CL-36o. Closes CL-1rr.
