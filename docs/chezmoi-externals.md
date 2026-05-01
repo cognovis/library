@@ -109,7 +109,7 @@ These repos contain configuration and skill definitions. Runtime state, caches, 
 ### Store in XDG paths (outside chezmoi)
 
 - `~/.cache/` — tool caches that should never be committed
-- `~/.local/share/` — application data (e.g., beads Dolt database)
+- `~/.local/share/` — application data for tools that follow XDG conventions
 - `~/.config/` — application config that is not chezmoi-managed
 
 The beads Dolt database and server state live under `~/.claude/.beads/` which has its own `.gitignore` that excludes runtime files. The beads config (`config.yaml`) and templates are tracked.
