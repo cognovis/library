@@ -18,7 +18,26 @@ default_dirs:
     - default_opencode: .opencode/guardrails/
 
 library:
-  skills: []
+  skills:
+    - name: impeccable
+      description: >-
+        Frontend design skill (Apache-2.0, third-party). Single user-invocable
+        /impeccable command with 23 sub-flows: craft, shape, audit, critique,
+        polish, harden, animate, colorize, distill, optimize, adapt, and more.
+        7 reference files cover typography, color, spatial design, motion,
+        interaction, responsive design, and UX writing. Built on Anthropic's
+        frontend-design skill with explicit anti-patterns. Use for any UI work
+        in mira, polaris, or other web/app projects.
+      from_marketplace: pbakaus
+      repo: impeccable
+      path: .claude/skills/impeccable
+      harness: both
+      tags:
+        - third-party
+        - frontend
+        - design
+        - ui
+        - apache-2.0
   agents: []
   prompts: []
 
@@ -225,6 +244,9 @@ marketplaces:
   - name: disler
     source: https://github.com/disler
     description: Public skill/agent/hooks repos for Claude Code and AI agents
+  - name: pbakaus
+    source: https://github.com/pbakaus
+    description: Paul Bakaus' public agentic content (Impeccable frontend design skill)
   - name: thadenorigar
     source: https://github.com/ThadeNorigar
     description: Private K2SO and related agent repos
