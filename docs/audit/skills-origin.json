@@ -700,7 +700,7 @@
       "migration_action": "move_to_cognovis_library_core",
       "tier": "domain",
       "plugin": null,
-      "notes": "Creative brainstorming mode; name 'vision' may conflict with standard vision semantics — consider rename"
+      "notes": "Creative brainstorming mode; name 'vision' may conflict with standard vision semantics \u2014 consider rename"
     },
     {
       "path": "core/agents/branch-synchronizer.md",
@@ -1217,7 +1217,7 @@
       "migration_action": "evaluate_reclassify_to_standard",
       "tier": "domain",
       "plugin": null,
-      "notes": "Content is principles/context; if purely factual guidance → reclassify as standard"
+      "notes": "Content is principles/context; if purely factual guidance \u2192 reclassify as standard"
     },
     {
       "path": "infra/skills/local-vm/SKILL.md",
@@ -1534,10 +1534,10 @@
       "intent": "plugin",
       "correct_type": "plugin",
       "type_correct": true,
-      "migration_action": "move_to_cognovis_library_core",
+      "migration_action": "pending_creation",
       "tier": "domain",
       "plugin": "workflow",
-      "notes": ""
+      "notes": "Plugin not yet created \u2014 migration deferred until plugin content is written"
     },
     {
       "path": "meta/plugins/bead-orchestrator.toml",
@@ -1856,7 +1856,7 @@
       "migration_action": "deduplicate_and_add_to_beads-workflow_hooks",
       "tier": "domain",
       "plugin": "beads-workflow",
-      "notes": "DUPLICATE: both prefetch_beads.py and prefetch-beads.py exist — deduplicate"
+      "notes": "DUPLICATE: both prefetch_beads.py and prefetch-beads.py exist \u2014 deduplicate"
     },
     {
       "path": "~/.claude/hooks/read-before-edit.py",
@@ -1987,7 +1987,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_meta_skills",
       "tier": "domain",
       "plugin": null,
@@ -2013,7 +2013,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_meta_skills",
       "tier": "domain",
       "plugin": null,
@@ -2026,7 +2026,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_dev-tools_or_core_skills",
       "tier": "domain",
       "plugin": null,
@@ -2052,7 +2052,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_meta_skills",
       "tier": "domain",
       "plugin": null,
@@ -2065,7 +2065,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "evaluate_merge_with_playwright-cli_or_add_canonical",
       "tier": "domain",
       "plugin": null,
@@ -2078,7 +2078,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "merge_into_playwright-mcp-usage",
       "tier": "domain",
       "plugin": null,
@@ -2091,7 +2091,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_meta_skills",
       "tier": "domain",
       "plugin": null,
@@ -2104,7 +2104,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_meta_skills",
       "tier": "domain",
       "plugin": null,
@@ -2117,7 +2117,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_dev-tools_skills",
       "tier": "domain",
       "plugin": null,
@@ -2130,7 +2130,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "add_canonical_source_to_meta_skills",
       "tier": "domain",
       "plugin": null,
@@ -2143,7 +2143,7 @@
       "intent": "skill",
       "correct_type": "skill",
       "type_correct": true,
-      "canonical_source": "none — not in category dirs",
+      "canonical_source": "none \u2014 not in category dirs",
       "migration_action": "merge_into_command-creator",
       "tier": "domain",
       "plugin": null,
@@ -2153,10 +2153,36 @@
   "standards_inventory": {
     "note": "All ~68 standards in ~/.claude/standards/ are ORIGINAL, type=standard, correct_type=standard. Migration target: .agents/standards/<name>.md per CL-v56. See skills-origin.md Section 13 for full per-file table.",
     "total_count": 63,
-    "domains": ["agents", "dev-tools", "flet", "frontend", "git", "healthcare", "powershell", "project", "python", "release", "security", "skills", "workflow", "writing"],
+    "domains": [
+      "agents",
+      "dev-tools",
+      "flet",
+      "frontend",
+      "git",
+      "healthcare",
+      "powershell",
+      "project",
+      "python",
+      "release",
+      "security",
+      "skills",
+      "workflow",
+      "writing"
+    ],
     "tier_distribution": {
-      "core": ["debrief-contract.md", "prompt-caching-strategy.md", "tool-boundaries.md", "conventional-commits.md", "content-isolation.md", "english-only.md", "no-emoji.md"],
-      "project": ["clinical-ux-style-guide.md", "control-areas.md"],
+      "core": [
+        "debrief-contract.md",
+        "prompt-caching-strategy.md",
+        "tool-boundaries.md",
+        "conventional-commits.md",
+        "content-isolation.md",
+        "english-only.md",
+        "no-emoji.md"
+      ],
+      "project": [
+        "clinical-ux-style-guide.md",
+        "control-areas.md"
+      ],
       "domain": "all others"
     }
   },
@@ -2177,7 +2203,7 @@
       "correct_type": 165,
       "needs_reclassification": 4,
       "reclassification_items": [
-        "infra/skills/infra-principles/SKILL.md (may be standard not skill — evaluate content)",
+        "infra/skills/infra-principles/SKILL.md (may be standard not skill \u2014 evaluate content)",
         "meta/plugins/bead-orchestrator.toml (miscfile in plugins/, should be in dev-tools/codex-agents/)",
         "meta/plugins/session-close.toml (same)",
         "meta/plugins/wave-orchestrator.toml (same)"
