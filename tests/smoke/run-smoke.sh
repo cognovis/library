@@ -1434,6 +1434,61 @@ smoke_fleet_migration() {
 }
 
 # ---------------------------------------------------------------------------
+# Harness: library-core (AK3 verification)
+# ---------------------------------------------------------------------------
+smoke_library_core() {
+    section "library-core"
+
+    local library_core="${1:-/tmp/cognovis-library-core}"
+    local source_plugins="/Users/malte/code/claude-code-plugins"
+
+    # Check library-core exists
+    if [[ ! -d "${library_core}" ]]; then
+        fail "library-core: clone not found at ${library_core}"
+        return
+    fi
+
+    # Check 5 specific skills exist and content matches source
+    local skills=("dolt" "cmux" "council" "prompt-refiner" "inject-standards")
+    for skill in "${skills[@]}"; do
+        local dest="${library_core}/.claude/skills/${skill}/SKILL.md"
+        if [[ -f "${dest}" ]]; then
+            pass "library-core/skill-exists: ${skill}/SKILL.md"
+        else
+            fail "library-core/skill-exists: ${skill}/SKILL.md NOT found"
+        fi
+    done
+
+    # Check bridge symlinks for skills
+    local bridged_skills=("dolt" "cmux")
+    for skill in "${bridged_skills[@]}"; do
+        check_symlink "${library_core}/.agents/skills/${skill}" ".claude/skills/${skill}" "library-core/bridge-${skill}"
+    done
+
+    # Check agents exist
+    local agents=("researcher" "session-close" "test-engineer")
+    for agent in "${agents[@]}"; do
+        if [[ -f "${library_core}/.claude/agents/${agent}.md" ]]; then
+            pass "library-core/agent-exists: ${agent}.md"
+        else
+            fail "library-core/agent-exists: ${agent}.md NOT found"
+        fi
+    done
+
+    # Verify content matches source for one skill
+    local spot_src=""
+    if [[ -f "${source_plugins}/core/skills/dolt/SKILL.md" ]]; then
+        spot_src="${source_plugins}/core/skills/dolt/SKILL.md"
+        local spot_dest="${library_core}/.claude/skills/dolt/SKILL.md"
+        if diff -q "${spot_src}" "${spot_dest}" &>/dev/null; then
+            pass "library-core/content-match: dolt SKILL.md matches source"
+        else
+            fail "library-core/content-match: dolt SKILL.md differs from source"
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -1475,6 +1530,9 @@ main() {
         fleet-migration)
             smoke_fleet_migration
             ;;
+        library-core)
+            smoke_library_core
+            ;;
         all)
             # Note: smoke_migration and smoke_fleet_migration are intentionally excluded from 'all'.
             # They validate user-global state (~/.agents/standards/, ~/code/claude-code-plugins)
@@ -1491,7 +1549,7 @@ main() {
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|fleet-migration|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|fleet-migration|library-core|all]"
             exit 1
             ;;
     esac
