@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+---
+
+## [v2026.05.01.3] - 2026-04-30
+
 ### Added
 
 - **Provisional Canonical Home for bd Workflow Primer** (`prime/PRIME.md`, `prime/README.md`): Established `cognovis-library/prime/PRIME.md` as the provisional single source of truth for the bd workflow primer (formerly scattered across `~/.claude/templates/PRIME.md`, the beads SKILL, and AGENTS.md blocks). The beads SKILL has been deleted from claude-code-plugins; AGENTS.md beads blocks trimmed to 12-line stubs pointing to `bd prime`. PRIME.md rewritten with all 9 bd built-in types, Priority/Effort taxonomy, MoC-at-create-time pattern, and memory routing exclusively to open-brain. Distribution chain: SessionStart hooks in both Claude Code and Codex harnesses now sync PRIME.md from this library to `$XDG_CACHE_HOME/cognovis-prime/PRIME.md` (content-based, not mtime) and from there to each project's `.beads/PRIME.md`. This provisional setup will be superseded by `project_tooling` schema entries when CL-3fh is implemented. Refs CL-3fh.
