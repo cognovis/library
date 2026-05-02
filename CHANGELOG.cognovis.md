@@ -15,6 +15,8 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 - **Three-Section /library List Output** (`/library list` command, `cookbook/list.md`): Extended `/library list` to display three sections: (1) Catalog (existing library.yaml inventory), (2) Plugin-Marketplace Installs (reading from `~/.claude/plugins/installed_plugins.json` with plugin name, version, scope, and marketplace), (3) /Library Use Installs (reading from `.library.lock` files in current directory for project-level lockfile installs). Catalog entries are annotated with `[also: plugin-marketplace]` or `[also: /library use (project-local)]` when the entry is also covered by an installed plugin or project-local lockfile. Updated `cookbook/list.md` with the new three-section layout and annotation logic. Closes CL-2x4.
 
+- **Library Catalog Registration** (`library.yaml`, `scripts/check-coverage.py`): Registered all 95 migrated artefacts from cognovis/library-core and sussdorff/library-core in `library.yaml`. Added 44 cognovis skills (tier: core/domain/project), 12 sussdorff personal skills (tier: project), 37 cognovis agents, 1 sussdorff agent (home), 3 commands as prompts, and 9 standards as prompts — 107 total entries. All entries include source URL (GitHub blob URL pointing to library-core), description (from SKILL.md/agent.md frontmatter), requires (typed dependencies as `prompt:name` strings), and tags (origin:original/personal + tier:core/domain/project). Added `scripts/check-coverage.py` to verify audit JSON vs library.yaml coverage for CI use. Schema validator passes. Closes CL-yko.
+
 ---
 
 ## [v2026.05.01.7] - 2026-05-01
