@@ -38,8 +38,1120 @@ library:
         - design
         - ui
         - apache-2.0
-  agents: []
-  prompts: []
+    - name: agent-forge
+      description: >-
+        Create and review agents (subagents). Use when creating specialized AI assistants,
+        reviewing/auditing existing agents, deciding between agent vs skill vs command,
+        or asking about agent best practices, multi-agent pipelines, and model selection.
+        MUST BE USED when the user says "create agent", "new subagent", "review agent",
+        "audit agent", "agent vs skill", or asks about multi-agent architecture.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/agent-forge/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:core
+    - name: angebotserstellung
+      description: >-
+        Professionelle Angebote fuer IT-Projekte und Beratungsleistungen erstellen.
+        Use when writing proposals, revising offers, or calculating project pricing.
+        Triggers on Angebot, proposal, Preiskalkulation, Angebotserstellung, offer, Beratungsangebot.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/angebotserstellung/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:project
+    - name: beads
+      description: >-
+        Dispatch bead implementation to the full implementation orchestrator (Phase 0-16
+        end-to-end including final closeout) or a quick-fix agent (lightweight, Phase 0-5
+        end-to-end including final closeout). Use when implementing a bead by ID, or to
+        list ready beads. Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/beads/SKILL.md
+      harness: both
+      tags:
+        - origin:original
+        - tier:core
+    - name: billing-reviewer
+      description: >-
+        Billing reviewer agent for evaluating MIRA billing UI as Abrechnungsspezialistin.
+        Use when reviewing billing features or running scenario-based evaluations.
+        Triggers on billing review, Abrechnungsprueferin, billing UI review.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/billing-reviewer/SKILL.md
+      requires:
+        - "prompt:healthcare-control-areas"
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:project
+    - name: binary-explorer
+      description: >-
+        Reverse-engineer desktop apps to understand how they work under the hood: APIs
+        called, internal flow, models/providers, feature flags, config constants, embedded
+        prompts, IPC. Covers Electron apps, macOS .app bundles, single-executable bundles,
+        and raw binaries. Triggers when pointed at a desktop app path or asked how does
+        X work under the hood.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/binary-explorer/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: brand-forge
+      description: >-
+        Create, review, and manage voice/brand profiles for Claude Code skills.
+        Use when creating brands, reviewing quality, or applying voice profiles.
+        Triggers on create brand, voice profile, review brand, change tone. Not for skill creation.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/brand-forge/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: bug-triage
+      description: >-
+        Structured 4-phase bug investigation: Reproduce, Root Cause, Fix, Regression Test.
+        Use when a bug is reported, something is broken, or regression detected.
+        Guides through systematic investigation instead of guessing.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/bug-triage/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: claude-md-pruner
+      description: >-
+        Review CLAUDE.md files for instructions that newer models handle natively and
+        suggest removals. Use after model updates to prune outdated instructions.
+        Triggers on prune claude-md, post-update review, prune instructions, model update cleanup.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/claude-md-pruner/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: cmux
+      description: >-
+        End-user control of cmux topology and routing (windows, workspaces, panes/surfaces,
+        focus, moves, reorder, identify, trigger flash). Use when automation needs deterministic
+        placement and navigation in a multi-pane cmux layout.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/cmux/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: cmux-browser
+      description: >-
+        End-user browser automation with cmux. Use when you need to open sites, interact with
+        pages, wait for state changes, and extract data from cmux browser surfaces.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/cmux-browser/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: cmux-markdown
+      description: >-
+        Open markdown files in a formatted viewer panel with live reload. Use when you need
+        to display plans, documentation, or notes alongside the terminal with rich rendering
+        (headings, code blocks, tables, lists).
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/cmux-markdown/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: codex
+      description: >-
+        OpenAI Codex CLI wrapper: three modes. Code review (independent diff review with pass/fail
+        gate), Challenge (adversarial mode that tries to break your code), Consult (ask codex
+        anything with session continuity). The second opinion tool. Use when asked to codex review,
+        codex challenge, ask codex, second opinion, or consult codex.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/codex/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: collmex-cli
+      description: >-
+        CLI wrapper for Collmex Buchhaltung Pro API. Use when managing vendors, invoices,
+        open items, bookings, or generating ZUGFeRD XML. Triggers on Collmex, accounting,
+        invoices, payables, vendors, Buchhaltung.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/collmex-cli/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:project
+    - name: council
+      description: >-
+        Multi-perspective sequential document review. Orchestrates 4 specialized Haiku subagents
+        that critique a document from different angles. Produces a consolidated findings table
+        sorted by severity. Use when reviewing specs, requirements, deliverables, or training materials.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/council/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: daily-brief
+      description: >-
+        Generate and manage daily project briefs. Reads from and writes to open-brain as the
+        system of record. Use for daily summaries of git activity, bead progress, and open-brain
+        entries across tracked projects.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/daily-brief/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: dolt
+      description: >-
+        Troubleshoot beads Dolt failures: bd dolt push/pull errors, merge conflicts,
+        embedded/shared-server mode problems, remote auth issues, local DB recovery, re-clone,
+        reflog restore, broken .beads Dolt config, and brew-services Dolt lifecycle.
+        Use whenever beads sync or Dolt infrastructure is failing.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/dolt/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: entropy-scan
+      description: >-
+        Scan the agent harness (skills, hooks, agents, standards) for invariant violations
+        and entropy. Produces a violation report with actionable fix instructions.
+        Triggers on entropy scan, harness check, harness validate, invariants check.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/entropy-scan/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: event-log
+      description: >-
+        Query the structured event log for any project. Shows tool use history, session starts,
+        permission decisions, and errors from the centralized harness events database.
+        Use when investigating session activity or debugging tool usage patterns.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/event-log/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: hook-creator
+      description: >-
+        Create and manage Claude Code hooks across all 8 hook types. Use when adding automated
+        behaviors, troubleshooting hooks, or learning best practices. Triggers on create hook,
+        hooks, PreToolUse, PostToolUse, security hook.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/hook-creator/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: infra-principles
+      description: >-
+        Infrastructure engineering principles for server work, deployments, and multi-agent
+        collaboration. Use when working on servers, deploying services, writing deployment
+        scripts, or coordinating parallel agent edits.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/infra-principles/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: inject-standards
+      description: >-
+        Load and merge global and project-specific coding standards into current context.
+        Use when applying standards, patterns, or compliance requirements.
+        Triggers on inject standards, load standards, standards, check patterns, apply patterns.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/inject-standards/SKILL.md
+      harness: both
+      tags:
+        - origin:original
+        - tier:core
+    - name: mail-send
+      description: >-
+        Send emails with attachments via Apple Mail AppleScript automation. Prepares a visible
+        draft for user review before sending. Use when sending emails with file attachments.
+        Triggers on send email, mail send, email with attachment, mail schicken.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/mail-send/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: mira-aidbox
+      description: >-
+        Mira-specific Aidbox configuration, infrastructure, billing catalogs, flat tables,
+        IG testing, and accumulated learnings. MUST USE whenever connecting to mira's Aidbox
+        instance, working with mira's billing catalogs, flat tables, or AidboxTriggers.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/mira-aidbox/SKILL.md
+      requires:
+        - "prompt:healthcare-control-areas"
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:project
+    - name: nbj-audit
+      description: >-
+        Audit a codebase against Nate's 12 NBJ agent primitives and produce a scored scorecard
+        with risk levels and delta tracking. Triggers on nbj audit, agent primitives audit,
+        harness audit, 12 primitives check.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/nbj-audit/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: op-credentials
+      description: >-
+        Read, list, and create service credentials in 1Password. Use when needing API keys,
+        service passwords, or creating credentials. Triggers on 1password, op credentials,
+        api key, service credentials.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/op-credentials/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: pencil
+      description: >-
+        Design UI screens and components in Pencil .pen files via MCP tools. Use when creating
+        designs, editing .pen files, or working with design systems. Triggers on pencil, pen file,
+        design system, design screen.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/pencil/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: people-query
+      description: >-
+        Query open-brain people-aware MCP tools to find discussions, stale contacts, and
+        mentions for a named person.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/people-query/SKILL.md
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: playwright-cli
+      description: >-
+        Browser automation via playwright-cli. ALWAYS use instead of Chrome MCP tools. Use when
+        opening websites, scraping pages, filling forms, or interacting with web UIs. Triggers on
+        any URL, website name, open page, browse, navigate, scrape, fill form.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/playwright-cli/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: plugin-management
+      description: >-
+        Create, test, and distribute Claude Code plugins. Use when building plugins, converting
+        skills to packages, or managing marketplace distribution. Triggers on create plugin,
+        plugin, marketplace, distribute plugin, test plugin.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/plugin-management/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: portless
+      description: >-
+        Set up named local dev server URLs via portless proxy. Use when configuring dev server
+        names, resolving port conflicts, or setting up .localhost domains. Triggers on portless,
+        EADDRINUSE, dev server URL, localhost, dev proxy.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/portless/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: project-context
+      description: >-
+        Generate docs/project-context.md (Constitution Pattern) from an existing codebase.
+        Analyzes CLAUDE.md, architecture docs, and directory structure to produce a readable,
+        editable, git-versioned context document. Triggers on project context, generate
+        project context, constitution document.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/project-context/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: project-health
+      description: >-
+        Run a quick quality assessment on a project and produce a traffic-light scorecard.
+        Triggers on project health, projekt check, health check, project quality,
+        wie gesund ist das projekt, code health check.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/project-health/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: project-setup
+      description: >-
+        Set up new projects and upgrade existing ones to current standards. Handles scaffolding,
+        beads init, Dolt remote, CLAUDE.md generation, .gitignore, and standards injection for
+        all project types. Use when creating a new project, onboarding an existing repo, or
+        upgrading project setup to current conventions.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/project-setup/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: prompt-refiner
+      description: >-
+        Refine raw, unstructured, or dictated user input into a structured prompt via HeyPresto
+        MCP, then EXECUTE the refined prompt immediately. Use when the user provides messy
+        dictated text or vague task descriptions.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/prompt-refiner/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: skill-auditor
+      description: >-
+        Audit and score agent skills fleet-wide; validate or check a single skill for
+        EXTRACTABLE_CODE; improve weak skills surgically. Triggers on audit skills, skill health
+        check, fleet quality, improve skill, fix skill, rewrite skill.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/skill-auditor/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: spec-developer
+      description: >-
+        Deep feature specification through adaptive Q&A. Use when planning complex features
+        needing thorough requirements exploration before implementation. Triggers on spec developer,
+        feature spec, deep spec, requirements spec.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/spec-developer/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: standards
+      description: >-
+        Manage coding standards lifecycle: list, inject, create, sync, review. Use when loading
+        standards, checking compliance, creating new standards, or syncing standards to projects.
+        Triggers on standards, inject standards, load standards, check compliance.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/standards/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: summarize
+      description: >-
+        Content extraction and summarization via summarize CLI and Crawl4AI. Use for extracting
+        web content, YouTube transcripts, podcasts, and generating AI summaries.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/summarize/skill.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: sync-standards
+      description: >-
+        Synchronize global standards and commands into the current project for team sharing.
+        Use when sharing standards with a team or copying conventions to a project.
+        Triggers on sync standards, share standards, team standards, sync conventions.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/sync-standards/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: system-prompt-audit
+      description: >-
+        Audit Anthropic system prompt changes against the local baseline and review custom prompts
+        for compatibility. Use when checking for new Claude versions, running system prompt audit,
+        or checking for prompt updates.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/system-prompt-audit/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: token-cost
+      description: >-
+        Measure static context token overhead for agent sessions. Use when auditing context window
+        usage, checking skill/agent/conventions token costs, or generating a ranked report of
+        heaviest context contributors.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/token-cost/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: ui-cli
+      description: >-
+        CLI for querying UniFi network infrastructure. Use when finding devices, looking up
+        client MAC/IP, checking network config, or listing WLANs. Triggers on UniFi, network
+        clients, WiFi, AP, switch, gateway, device IP, device MAC.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/ui-cli/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: vision
+      description: >-
+        Unconstrained creative brainstorming and lateral thinking mode. No quality gates, no
+        feasibility checks, no task tracking: pure idea generation. Use when the user says
+        vision, brainstorm, Kreativmodus, what if, or wants to explore possibilities without constraints.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/vision/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: vision-author
+      description: >-
+        Guided PO-grade 7-question dialogue producing a structured, present-tense-enforced
+        vision.md with locked sections and 4-column boundary table. Use when starting a new
+        project or formalizing a vision. Triggers on vision author, author vision, create vision.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/vision-author/SKILL.md
+      requires:
+        - "prompt:tool-standards"
+        - "prompt:english-only"
+        - "prompt:no-emoji"
+      harness: both
+      tags:
+        - origin:original
+        - tier:domain
+    - name: ai-readiness
+      description: >-
+        Structured AI-Readiness Self-Assessment across 6 dimensions. Use for career planning or
+        evaluating AI capability readiness. Triggers on AI readiness, self assessment, AI capability
+        check, career readiness.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/business/ai-readiness/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: amazon
+      description: >-
+        Amazon.de automation via playwright-cli with local purchases database. Use for downloading
+        invoices, searching order history, or querying past purchases. Triggers on amazon rechnung,
+        amazon bestellung, amazon order, was habe ich gekauft.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/business/amazon/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: career-check
+      description: >-
+        Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment.
+        Use when evaluating career positioning or assessing AI impact. Triggers on career check,
+        career analysis, career collapse, AI career, role assessment.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/business/career-check/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: google-invoice
+      description: >-
+        Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML,
+        and send to accounting. Triggers on google rechnung, google invoice, google one beleg.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/business/google-invoice/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: mm-cli
+      description: >-
+        CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts,
+        balances, transactions, cashflow, or spending. Triggers on MoneyMoney, bank accounts,
+        transactions, cashflow, spending, balance.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/business/mm-cli/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: linkedin
+      description: >-
+        LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles,
+        reading feeds, writing recommendations, or searching people. Triggers on LinkedIn,
+        profile extraction, connections, feed, LinkedIn search, recommendation.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/content/linkedin/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: transcribe
+      description: >-
+        Transcribe audio files with speaker diarization via AssemblyAI. Supports local files
+        and Plaud AI cloud recordings.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/content/transcribe/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: hetzner-cloud
+      description: >-
+        Manage Hetzner Cloud infrastructure via hcloud CLI and Robot. Use when creating/modifying
+        DNS records, managing servers, switching projects, or transferring domains. Triggers on
+        hetzner, hcloud, dns zone, domain transfer.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/infra/hetzner-cloud/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: home-infra
+      description: >-
+        Home infrastructure overview: hardware, network, services, and CLI tools. Use when finding
+        what runs where, choosing CLI tools, or planning infra changes. Triggers on home infra,
+        home network, what devices, home server.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/infra/home-infra/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: local-vm
+      description: >-
+        Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when
+        SSH fails due to stopped VMs, or to start/stop/check VM status. Triggers on VM not
+        running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/infra/local-vm/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: paperless-cli
+      description: >-
+        Interact with Paperless-ngx document management via REST API. Use when searching
+        documents, downloading PDFs, uploading scans, or querying tags. Triggers on paperless,
+        scanned document, document archive.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/infra/paperless-cli/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+    - name: piler-cli
+      description: >-
+        CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when
+        querying archived emails, searching mail history, or reading past messages. Triggers
+        on mailpiler, mail archive, piler search, alte mails, email archiv.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/skills/infra/piler-cli/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:personal
+        - tier:project
+  agents:
+    - name: bead-orchestrator
+      description: >-
+        Autonomous orchestrator for single-bead implementation. Runs Phase 0-16: sizing/claim,
+        context, implementation (Sonnet), review (Opus, 1 fix cycle), Codex adversarial,
+        verification (Opus VETO), MoC, UAT, constraints, changelog, session-close.
+        Does NOT close beads — session-close handles closing after merge+push.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/bead-orchestrator.md
+      tags:
+        - origin:original
+        - tier:core
+    - name: branch-synchronizer
+      description: >-
+        Synchronizes branches with main: fetch, rebase, handle conflicts intelligently.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/branch-synchronizer.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: changelog-updater
+      description: >-
+        Updates CHANGELOG.md based on closed beads. Analyzes branch changes and generates
+        properly formatted changelog entries.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/changelog-updater.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: chrome-devtools-tester
+      description: >-
+        Execute browser tests using agent-browser CLI: UI testing, form interaction, visual
+        verification. Use after writing browser test code or when troubleshooting browser-based tests.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/chrome-devtools-tester.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: ci-monitor
+      description: >-
+        Watches GitHub Actions CI pipeline for a specific pushed commit. Blocks silently until
+        pipeline completes. Handles parallel session-closes by filtering on commit SHA.
+        Returns a single structured verdict line.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/ci-monitor.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: codex-guide
+      description: >-
+        Use when the user asks questions about OpenAI Codex CLI, Codex subagents, or Codex
+        skills and MCP integration. Do NOT use to RUN Codex — answers documentation questions only.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/codex-guide.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: compliance-reviewer
+      description: >-
+        Healthcare regulatory and security compliance reviewer. Audits code changes against
+        GDPR, EU AI Act, NIS2, and healthcare privacy control areas. Read-only — produces
+        structured findings report.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/compliance-reviewer.md
+      tags:
+        - origin:original
+        - tier:project
+    - name: constraint-checker
+      description: >-
+        Verifies SLOs, security defaults, and performance constraints against a built artifact.
+        Use proactively after holdout validation to check non-functional requirements.
+        Read-only and execute-only: never modifies code.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/constraint-checker.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: convention-reviewer
+      description: >-
+        Scans projects for undocumented conventions and proposes new standards (HITL).
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/convention-reviewer.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: doc-changelog-updater
+      description: >-
+        Analyzes branch changes and updates documentation and changelog files. Use after
+        implementing features or when user requests documentation updates or changelog entries.
+        Detects changes in current branch via git diff.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/doc-changelog-updater.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: feature-doc-updater
+      description: >-
+        Updates feature documentation across 5 doc layers after bead implementation. Reads
+        project-local .claude/doc-config.yml for targets and routing. Two modes: draft
+        (pre-dev) and verify (post-dev).
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/feature-doc-updater.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: feedback-extractor
+      description: >-
+        Extracts user feedback from Claude Code conversation histories. Analyzes JSONL
+        conversation files, classifies feedback types, identifies affected skills/agents,
+        and stores structured learnings.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/feedback-extractor.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: file-analyzer
+      description: >-
+        Analyzes changed files in a branch: find modified files, detect version numbers,
+        categorize changes.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/file-analyzer.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: git-operations
+      description: >-
+        Performs git operations: commit, push, force-push, merge, tag.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/git-operations.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: gui-review
+      description: >-
+        Visually verifies UI changes with playwright-cli and optional Pencil design comparison.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/gui-review.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: holdout-validator
+      description: >-
+        Runs holdout scenarios from tests/holdout/ against a built artifact. Use proactively
+        after implementer completes the Green phase. Read-only and execute-only: never modifies code.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/holdout-validator.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: human-factors-reviewer
+      description: >-
+        Healthcare clinical UX and human-factors reviewer. Audits UI components against NIST,
+        FDA, IEC 62366, ISO 9241, WCAG 2.1, and clinical safety standards. Read-only.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/human-factors-reviewer.md
+      tags:
+        - origin:original
+        - tier:project
+    - name: implementer
+      description: >-
+        Develops production code to make existing failing unit tests pass (Green phase of TDD).
+        Use after test-author completes the Red phase. Reads test files only.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/implementer.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: integration-test-runner
+      description: >-
+        Autonomous agent that analyzes code changes, determines appropriate test targets, and
+        executes integration tests to validate user-facing behavior.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/integration-test-runner.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: learning-extractor
+      description: >-
+        Extracts learnings and session insights from conversation history and project context.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/learning-extractor.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: pester-test-engineer
+      description: >-
+        Expert Pester test engineer for Charly Server PowerShell unit testing. Writes and reviews
+        Pester test cases with proper mocking, executes test runs on Windows servers, debugs test
+        failures systematically.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/pester-test-engineer.md
+      tags:
+        - origin:original
+        - tier:project
+    - name: plan-reviewer
+      description: >-
+        Independent reviewer for implementation plans. Provides a second perspective on plans,
+        identifying missing requirements, edge cases, and technical concerns.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/plan-reviewer.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: playwright-tester
+      description: >-
+        Executes a single bounded Playwright browser test scenario using playwright-cli.
+        Receives a specific test scenario, runs it step-by-step, and returns a structured
+        pass/fail report with screenshot evidence.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/playwright-tester.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: prd-generator
+      description: >-
+        Generates type-specific PRDs (Product Requirements Documents) from scout analysis.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/prd-generator.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: quick-fix
+      description: >-
+        Lightweight orchestrator for XS/micro beads (bugs, chores, tasks). Claims bead, spawns
+        Sonnet implementer, triggers Codex review, handles fix loop (max 2 iterations), then
+        hands off to session-close.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/quick-fix.md
+      tags:
+        - origin:original
+        - tier:core
+    - name: researcher
+      description: >-
+        Web research agent that uses SearXNG for search and summarize skill for deep content
+        extraction. Returns structured research summaries.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/researcher.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: review-agent
+      description: >-
+        Post-implementation code reviewer for bead workflows. Reads git diff, checks code quality,
+        verifies MoC coverage, and validates acceptance criteria. Returns structured CLEAN or
+        FINDINGS report.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/review-agent.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: scenario-generator
+      description: >-
+        Generates test scenarios and acceptance criteria from feature descriptions and bead specifications.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/scenario-generator.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: session-close
+      description: >-
+        Orchestrates a full session close with double-merge strategy for parallel safety. Commits,
+        generates changelog, version tags, extracts learnings, saves session summary, and pushes.
+        Use when ending a session or releasing. Triggers on session-close, session close, release.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/session-close.md
+      tags:
+        - origin:original
+        - tier:core
+    - name: skill-auditor
+      description: >-
+        Audit and score agent skills fleet-wide against quality standards. Produces grade tables
+        with token costs and findings. Triggers on audit skills, skill health check, fleet quality.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/skill-auditor.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: spellcheck-test-engineer
+      description: >-
+        Expert spellcheck engineer for Charly Server using typos CLI tool. Runs spellcheck,
+        analyzes spelling errors, updates .typos.toml configuration with legitimate words.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/spellcheck-test-engineer.md
+      tags:
+        - origin:original
+        - tier:project
+    - name: test-author
+      description: >-
+        Writes TDD tests from spec intent and acceptance criteria. Use when a bead's acceptance
+        criteria must be translated into failing unit tests BEFORE implementation begins (Red phase).
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/test-author.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: test-engineer
+      description: >-
+        Framework-agnostic test engineer that writes, reviews, and executes unit tests. Detects
+        the project's test framework automatically and applies appropriate patterns.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/test-engineer.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: uat-validator
+      description: >-
+        Runs user acceptance tests against a deployed artifact from an external-user perspective.
+        Use after implementer completes a feature (PAUL mode only). Information barrier: must NOT
+        access source code, unit tests, or implementation history.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/uat-validator.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: verification-agent
+      description: >-
+        Independent verification of implementation claims. Spawned after implementation to verify
+        that completion reports are accurate, tests actually pass, and acceptance criteria are
+        genuinely met. Read-only except for running tests.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/verification-agent.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: wave-monitor
+      description: >-
+        Long-lived Haiku subagent that polls wave completion status on behalf of the
+        wave-orchestrator. Returns a structured JSON verdict when the wave reaches a terminal state.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/wave-monitor.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: wave-orchestrator
+      description: >-
+        Orchestrate parallel implementation of multiple beads across cmux panes in
+        dependency-aware waves. Use when implementing a whole feature area or dispatching
+        multiple beads at once.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/agents/wave-orchestrator.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: home
+      description: >-
+        Home infrastructure and smart home agent. Manages Proxmox VMs/LXCs, UniFi network,
+        Home Assistant, Homematic CCU3, and local VMs. Baked-in topology knowledge eliminates
+        repeated skill loading.
+      source: https://github.com/sussdorff/library-core/blob/main/.claude/agents/home.md
+      tags:
+        - origin:personal
+        - tier:project
+  prompts:
+    - name: compact-reference
+      description: >-
+        Compact reference file(s) using validation-driven workflow (single file or whole skill).
+      source: https://github.com/cognovis/library-core/blob/main/.claude/commands/compact-reference.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:command
+    - name: install-playwright
+      description: >-
+        Install and verify Playwright MCP with Microsoft Edge browser automation. Handles
+        extension installation, token extraction, Claude Code configuration, and comprehensive
+        verification. Use when setting up Playwright MCP for the first time.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/commands/install-playwright.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:command
+    - name: install-plugin
+      description: >-
+        Install a complete plugin locally by unpacking all components (skills, commands, agents,
+        hooks) to target project.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/commands/install-plugin.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:command
+    - name: adr-location
+      description: >-
+        Architecture Decision Records (ADRs) live at /docs/adr/ in the project root.
+        Standard for consistent ADR placement across projects.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/adr-location.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: english-only
+      description: >-
+        All source code MUST be in English — including comments, identifiers, log messages,
+        and string literals. This standard applies even when the user prompt is in German.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/english-only.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: execution-result-envelope
+      description: >-
+        Execution-Result Envelope Contract for agent-facing helper scripts in claude-code-plugins.
+        Defines the structured JSON output format for all agent helper scripts.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/execution-result-envelope.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: healthcare-control-areas
+      description: >-
+        Healthcare privacy and security control areas adapted from reason-healthcare/health-skills.
+        Required for all medical/healthcare agents and skills.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/healthcare-control-areas.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: no-emoji
+      description: >-
+        Do not add emojis to source code files, configuration files, or technical documentation.
+        Emojis degrade diff readability and cause encoding issues in some terminals.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/no-emoji.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: open-brain-http-client
+      description: >-
+        open-brain HTTP Client quick reference — REST vs MCP decision tree for accessing
+        the open-brain memory store.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/open-brain-http-client.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: python-default-bash-exception
+      description: >-
+        Python is the default implementation language for scripts in claude-code-plugins;
+        Bash only by exception. Applies to all scripts under scripts/, skills/, agents/.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/python-default-bash-exception.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: script-first-rule
+      description: >-
+        Script-First Rule: prefer scripts over inline LLM text generation for deterministic
+        output. Applies to all SKILL.md, agent .md, and helper script authoring.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/script-first-rule.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+    - name: tool-standards
+      description: >-
+        Dev-tools agent tool standards — constraints for implementers, test authors, and
+        validators. Defines allowed tools and information barrier rules.
+      source: https://github.com/cognovis/library-core/blob/main/.agents/standards/tool-standards.md
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
 
 guardrails:
   - name: block-destructive-bash
