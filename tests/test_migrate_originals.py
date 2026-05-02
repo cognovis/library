@@ -68,15 +68,16 @@ def test_expected_files_present(audit_artifacts: list[dict]) -> None:
     # Some skills use lowercase 'skill.md' — count both variants.
     skills_dir = LIBRARY_CORE / ".claude" / "skills"
     skill_files = list(skills_dir.glob("*/SKILL.md")) + list(skills_dir.glob("*/skill.md"))
-    assert len(skill_files) == 41, (
-        f"Expected == 41 SKILL.md files under {skills_dir}, found {len(skill_files)}"
+    # CL-8vb added 3 misc skills (infra-principles, nbj-audit, people-query) → now 44
+    assert len(skill_files) == 44, (
+        f"Expected == 44 SKILL.md files under {skills_dir}, found {len(skill_files)}"
     )
 
-    # Count agents
+    # Count agents — CL-8vb added 10 beads-workflow agents → now 37
     agents_dir = LIBRARY_CORE / ".claude" / "agents"
     agent_files = list(agents_dir.glob("*.md"))
-    assert len(agent_files) == 27, (
-        f"Expected == 27 agent .md files under {agents_dir}, found {len(agent_files)}"
+    assert len(agent_files) == 37, (
+        f"Expected == 37 agent .md files under {agents_dir}, found {len(agent_files)}"
     )
 
     # Count hooks
