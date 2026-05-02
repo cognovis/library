@@ -171,7 +171,8 @@ tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRI
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [ADR-0001](adr/sussdorff-plugins-retirement.md) | Replace sussdorff-plugins marketplace with per-project /library use | Accepted |
+| [ADR-0001](adr/sussdorff-plugins-retirement.md) | Replace sussdorff-plugins marketplace with per-project /library use | Superseded by ADR-0002 |
+| [ADR-0002](adr/canonical-library-architecture.md) | Library-core repos as canonical source; harness dirs as deployment targets; full marketplace retirement | Accepted |
 
 ## Open beads
 

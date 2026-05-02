@@ -1,17 +1,26 @@
 ---
 adr: "0001"
 title: "Replace sussdorff-plugins marketplace with per-project /library use"
-status: accepted
+status: superseded
 date: 2026-05-01
 bead: CL-0va
 epic: CL-36o
 deciders:
   - Malte Sussdorff
 supersedes: []
-superseded_by: []
+superseded_by: ["0002"]
 ---
 
 # ADR-0001: Replace sussdorff-plugins marketplace with per-project /library use
+
+> **SUPERSEDED by ADR-0002 (2026-05-02).** This ADR's Hybrid retention
+> model is reversed in favor of full retirement. ADR-0001's argument
+> for keeping `core`/`beads-workflow`/`infra` bundles in the
+> marketplace was based on those artefacts being unique to the
+> marketplace bundle. CL-8vb subsequently migrated all of those
+> artefacts to `cognovis/library-core`, eliminating the uniqueness
+> premise. ADR-0002 documents the revised end state. ADR-0001 is
+> retained as historical context.
 
 ## Status
 
