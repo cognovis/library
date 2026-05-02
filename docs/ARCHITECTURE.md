@@ -167,6 +167,12 @@ required.
 For full definitions, per-harness NORMATIVE/INFERRED claim labels, a full decision
 tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRIMITIVES.md).
 
+## Architecture Decision Records
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [ADR-0001](adr/sussdorff-plugins-retirement.md) | Replace sussdorff-plugins marketplace with per-project /library use | Accepted |
+
 ## Open beads
 
 See `bd ready` and `bd show CL-36o` for the active epic + sub-beads.
