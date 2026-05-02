@@ -3,9 +3,9 @@
 migrate_missing.py — CL-8vb: Migrate ~40 missing artefacts to cognovis/library-core.
 
 Groups:
-  A: beads-workflow plugin (14 skills, 10 agents, 5 hooks)
+  A: beads-workflow plugin (15 skills, 10 agents, 5 hooks)
   B: 3 codex .toml bridges
-  C: 5 standards
+  C: 5 plugin standards + 4 personal standards required by migrated skills
   D: 4 misc items (vision-review, infra-principles, nbj-audit, people-query)
 
 Usage:
@@ -16,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 from pathlib import Path
 
@@ -28,7 +27,7 @@ from pathlib import Path
 BEADS_WORKFLOW_SKILLS = [
     "bd-release-notes", "bead-metrics", "compound", "create", "epic-init",
     "factory-check", "impl", "intake", "plan", "refactor-note", "retro",
-    "review-conventions", "wave-orchestrator", "workplan",
+    "review-conventions", "wave-orchestrator", "wave-reviewer", "workplan",
 ]
 
 BEADS_WORKFLOW_AGENTS = [
@@ -55,18 +54,32 @@ STANDARDS = [
     (".claude/standards/dev-tools/script-first-rule.md", "script-first-rule.md"),
 ]
 
+# Personal standards required by migrated skills (referenced via requires_standards: in SKILL.md).
+# These live under ~/.claude/standards/, not under claude-code-plugins.
+# Format: (absolute_source_path, destination_filename_in_agents_standards)
+PERSONAL_STANDARDS = [
+    ("/Users/malte/.claude/standards/workflow/english-only.md", "english-only.md"),
+    ("/Users/malte/.claude/standards/dev-tools/tool-standards.md", "tool-standards.md"),
+    ("/Users/malte/.claude/standards/workflow/no-emoji.md", "no-emoji.md"),
+    ("/Users/malte/.claude/standards/healthcare/control-areas.md", "healthcare-control-areas.md"),
+]
+
 
 # ---------------------------------------------------------------------------
 # Helper utilities
 # ---------------------------------------------------------------------------
 
 def copy_dir(src: Path, dst: Path, label: str = "") -> None:
-    """Copy a directory recursively, removing dst first if it exists."""
+    """Copy a directory recursively, removing dst first if it exists.
+
+    Python bytecode artefacts (__pycache__, *.pyc, *.pyo) are never copied
+    into library-core — they are machine-specific and must not be committed.
+    """
     if not src.exists():
         raise FileNotFoundError(f"Source not found: {src}")
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
     print(f"  [dir]  {label or dst.name}: {src} -> {dst}")
 
 
@@ -153,13 +166,17 @@ def migrate_group_b(source: Path, library_core: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def migrate_group_c(source: Path, library_core: Path) -> None:
-    print("\n=== Group C: 5 standards ===")
+    print("\n=== Group C: standards ===")
     standards_dst = library_core / ".agents" / "standards"
     standards_dst.mkdir(parents=True, exist_ok=True)
 
     for src_rel, dst_name in STANDARDS:
         src = source / src_rel
         copy_file(src, standards_dst / dst_name, f"standard:{dst_name}")
+
+    # Personal standards required by migrated skills
+    for src_abs, dst_name in PERSONAL_STANDARDS:
+        copy_file(Path(src_abs), standards_dst / dst_name, f"personal-standard:{dst_name}")
 
 
 # ---------------------------------------------------------------------------

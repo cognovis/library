@@ -13,7 +13,7 @@ PEOPLE_QUERY_SOURCE = Path("/Users/malte/.claude/skills/open-brain/people-query"
 BEADS_WORKFLOW_SKILLS = [
     "bd-release-notes", "bead-metrics", "compound", "create", "epic-init",
     "factory-check", "impl", "intake", "plan", "refactor-note", "retro",
-    "review-conventions", "wave-orchestrator", "workplan"
+    "review-conventions", "wave-orchestrator", "wave-reviewer", "workplan"
 ]
 
 BEADS_WORKFLOW_AGENTS = [
@@ -33,7 +33,9 @@ CODEX_TOML_BRIDGES = [
 
 STANDARDS = [
     "adr-location.md", "execution-result-envelope.md", "open-brain-http-client.md",
-    "python-default-bash-exception.md", "script-first-rule.md"
+    "python-default-bash-exception.md", "script-first-rule.md",
+    # Personal standards required by migrated skills (referenced via requires_standards:)
+    "english-only.md", "tool-standards.md", "no-emoji.md", "healthcare-control-areas.md",
 ]
 
 
@@ -180,3 +182,33 @@ class TestFrontmatter:
             if "description:" not in content:
                 missing.append(str(p))
         assert not missing, f"Missing 'description:' in:\n" + "\n".join(missing)
+
+
+# ---------------------------------------------------------------------------
+# AK1: Audit-diff — nothing missing between source and library-core
+# ---------------------------------------------------------------------------
+
+class TestAuditDiff:
+    """AK1: Audit-diff for beads-workflow plugin artefacts should show nothing missing."""
+
+    def test_audit_diff_empty(self):
+        """All skills present in source must exist in library-core plugins/beads-workflow/skills/."""
+        bw_skills_dir = LIBRARY_CORE / "plugins" / "beads-workflow" / "skills"
+        migrated_skills = {d.name for d in bw_skills_dir.iterdir() if d.is_dir()}
+
+        source_skills_dir = SOURCE / "beads-workflow" / "skills"
+        source_skills = {d.name for d in source_skills_dir.iterdir() if d.is_dir()}
+
+        missing = source_skills - migrated_skills
+        assert not missing, f"Skills present in source but missing from library-core: {sorted(missing)}"
+
+    def test_audit_diff_agents_empty(self):
+        """All agents present in source must exist in library-core plugins/beads-workflow/agents/."""
+        bw_agents_dir = LIBRARY_CORE / "plugins" / "beads-workflow" / "agents"
+        migrated_agents = {f.name for f in bw_agents_dir.iterdir() if f.suffix == ".md"}
+
+        source_agents_dir = SOURCE / "beads-workflow" / "agents"
+        source_agents = {f.name for f in source_agents_dir.iterdir() if f.suffix == ".md"}
+
+        missing_agents = source_agents - migrated_agents
+        assert not missing_agents, f"Agents missing from library-core plugin: {sorted(missing_agents)}"
