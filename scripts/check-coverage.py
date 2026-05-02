@@ -124,10 +124,12 @@ def main(argv: list[str] | None = None) -> int:
     artifacts = audit_data.get("artifacts", [])
     registered_skills, registered_agents, registered_prompts = get_registered_names(library_data)
 
-    # Filter to items that should be in library-core
+    # Filter to items that should be in library-core (as skills/agents)
+    # or migrated to .agents/standards (as prompts in library.prompts)
     target_actions = {
         "move_to_cognovis_library_core",
         "move_to_sussdorff_library_core",
+        "migrate_to_agents_standards",
     }
     migrated = [a for a in artifacts if a.get("migration_action") in target_actions]
 
@@ -136,6 +138,19 @@ def main(argv: list[str] | None = None) -> int:
         path = artifact.get("path", "")
         current_type = artifact.get("current_type", "")
         action = artifact.get("migration_action", "")
+
+        # For standards migrated to .agents/standards, derive canonical name from path
+        if action == "migrate_to_agents_standards" and current_type == "standard":
+            # path: .claude/standards/<domain>/<name>.md
+            parts = path.split("/")
+            filename = parts[-1]
+            if filename.endswith(".md"):
+                name = filename[:-3]
+            else:
+                continue
+            if name not in registered_prompts:
+                missing.append(f"MISSING: prompt '{name}' (standard, from {action}) — path: {path}")
+            continue
 
         name = extract_canonical_name(path, current_type)
         if not name:
