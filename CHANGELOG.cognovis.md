@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Added
+
+- **Compose-on-Resync + End-to-End Use-Cookbook Smoke Test** (`cookbook/sync.md`, `tests/smoke/use-agent-cookbook-path.sh`, `tests/smoke/run-smoke.sh`): Closed two gaps left by CL-08n. (1) Added Step 4.5 "Compose Agent Body on Resync" to `cookbook/sync.md`, inserted between Step 4 (Re-pull) and Step 5 (Recreate Bridge Symlinks). The step mirrors `use.md` Step 6.5: for each agent entry with `golden_prompt_extends: <non-from-scratch>`, locates `scripts/compose-agent.py`, runs it for the target harness (claude/codex), replaces the body on success, and gracefully degrades (warn + keep uncomposed body) on missing Layer 1 or Layer 3. Updates `composed_sha` and `composed_layers` lockfile fields. (2) Added `tests/smoke/use-agent-cookbook-path.sh` — a self-contained end-to-end smoke test for the full `/library use` cookbook path (fetch → compose → write). Covers: cognovis-base marker present in installed file; idempotent re-run produces zero diff; graceful degradation when Layer 1 absent; `cookbook/use.md` Step 6.5 wording unchanged (AK7 guard). Registered as `use-cookbook-path` harness in `run-smoke.sh` and included in the `all` suite. 7/7 smoke checks passing. Closes CL-o16.
+
 ---
 
 ## [v2026.05.23] - 2026-05-12
