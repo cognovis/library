@@ -1256,7 +1256,7 @@ mcp_servers:
               - '--extension'
 
   - name: pencil
-    description: Stateful design editor for .pen files — encrypted file format requires MCP; tools include batch_design, get_editor_state, export_nodes; installed in Codex CLI and Claude Desktop (claude_desktop not a schema key — install shown for codex only)
+    description: Stateful design editor for .pen files — encrypted file format requires MCP; tools include batch_design, get_editor_state, export_nodes; installed in Codex CLI and Claude Desktop
     coding_strategy: mcp
     capabilities:
       stateless: false
@@ -1290,7 +1290,7 @@ mcp_servers:
               - lsp-mcp-server
 
   - name: filesystem
-    description: Filesystem read/write access for Claude Desktop — the only path for file operations in Claude Desktop which has no shell access; not applicable to coding harnesses (Claude Code and Codex have native shell); desktop-only, no harness install config
+    description: Filesystem read/write access for Claude Desktop — required because Claude Desktop has no shell access; stateless per-call file operations via npx @modelcontextprotocol/server-filesystem
     coding_strategy: mcp
     capabilities:
       stateless: true
@@ -1316,7 +1316,7 @@ mcp_servers:
             url: 'https://www.contentmasterpro.limited/api/mcp/subscriber/<subscriber-token>'
 
   - name: heypresto
-    description: Prompt expansion tool — expand_prompt tool for enhancing prompts; HTTP stateless API; CLI wrapper (hp) to be built for coding harnesses; MCP retained for claude.ai/iOS if mobile-relevant (status under investigation)
+    description: Prompt expansion tool — expand_prompt tool for enhancing prompts; HTTP stateless API; CLI wrapper (hp) to be built for coding harnesses; MCP retained for claude.ai/iOS
     coding_strategy: cli
     mobile_strategy: mcp
     capabilities:
