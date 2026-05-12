@@ -368,7 +368,7 @@ Before removal:
 .claude/skills/researcher/SKILL.md   ← canonical (real file)
 .agents/skills/researcher            ← bridge (symlink)
 ~/.claude/skills/researcher/         ← global canonical (if globally installed)
-~/.agents/skills/researcher          ← global bridge (if globally installed)
+~/.codex/skills/researcher/          ← global Codex primary (r0, if globally installed)
 ```
 
 After `/library remove researcher`:
@@ -379,7 +379,7 @@ After `/library remove researcher`:
 After `/library remove researcher --local-only`:
 ```
 ~/.claude/skills/researcher/         ← still present
-~/.agents/skills/researcher          ← still present
+~/.codex/skills/researcher/          ← still present
 ```
 
 ---
