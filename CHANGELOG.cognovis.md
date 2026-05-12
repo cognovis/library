@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Fixed
+
+- **CalVer version.sh: 4-part tag crash fixed** (`claude-code-plugins` commit `c263a7a`): The inline CalVer fallback in `version.sh` crashed with `Arithmetic syntax error` when the latest tag was a legacy 4-part `vYYYY.MM.DD.MICRO` tag. Fix: (1) `grep -E` filter now matches only strict 3-part `vYYYY.MM.MICRO` tags, ignoring 4-part legacy tags; (2) defensive `CURRENT_MICRO="${CURRENT_MICRO%%.*}"` truncation; (3) `$((10#${CURRENT_MICRO:-0}))` prevents octal-parsing of leading-zero values like `01`. Verified: `version.sh --dry-run` in cognovis-library produces `v2026.05.N` (3-part) without crash. Recent tags in this repo confirm: `v2026.05.13`, `v2026.05.14`, `v2026.05.15`. Closes CL-xlz.
+
 ### Changed
 
 - **Lockfile Schema Extension for Three-Layer Model** (`docs/schema/lockfile.schema.json`, `docs/lockfile-format.md`, `cookbook/use.md`, `cookbook/sync.md`, `cookbook/audit.md`, `cookbook/remove.md`, `scripts/migrate-lockfile.py`): Extended `.library.lock` schema with two required fields (`marketplace` and `cache_path`) to support ADR-0003 Three-Layer deployment model (Source/Cache/Harness). Updated `lockfile-format.md` with field documentation, Three-Layer architecture explanation, and global lockfile path (`~/.config/library/global.lock`). Added migration script (`scripts/migrate-lockfile.py`) to auto-derive `marketplace` from existing source URLs and update all four cookbooks with Three-Layer workflow steps (cache materialization in use.md, cache reconciliation in sync.md, symlink verification in audit.md, garbage-collection notes in remove.md). 11 new validator tests added; ADR-0003 success criterion #7 fulfilled.
