@@ -2,9 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/cognovis/cognovis-library/docs/schema/library.schema.json",
   "title": "Library Catalog Schema",
-  "description": "JSON Schema for library.yaml — the catalog file for the cognovis-library private skill distribution system.",
+  "description": "JSON Schema for library.yaml \u2014 the catalog file for the cognovis-library private skill distribution system.",
   "type": "object",
-  "required": ["default_dirs", "library"],
+  "required": [
+    "default_dirs",
+    "library"
+  ],
   "properties": {
     "default_dirs": {
       "description": "Default installation directories per primitive type and harness.",
@@ -67,7 +70,7 @@
       "additionalProperties": false
     },
     "guardrails": {
-      "description": "Guardrail catalog entries — deterministic enforcement primitives that compile to per-harness native format (hooks, permission rules, approval policies). Each entry declares capability per harness so the installer can emit mismatch warnings.",
+      "description": "Guardrail catalog entries \u2014 deterministic enforcement primitives that compile to per-harness native format (hooks, permission rules, approval policies). Each entry declares capability per harness so the installer can emit mismatch warnings.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/guardrail_entry"
@@ -75,7 +78,7 @@
       "default": []
     },
     "standards": {
-      "description": "Storage convention and loader-mechanism reference (stub — populated by CL-v56).",
+      "description": "Storage convention and loader-mechanism reference (stub \u2014 populated by CL-v56).",
       "type": "object",
       "additionalProperties": true
     },
@@ -122,7 +125,11 @@
     "catalog_entry": {
       "description": "A first-party content repo (personal or team) registered as a canonical source.",
       "type": "object",
-      "required": ["name", "source", "description"],
+      "required": [
+        "name",
+        "source",
+        "description"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -142,7 +149,11 @@
         "visibility": {
           "description": "Repo visibility on GitHub.",
           "type": "string",
-          "enum": ["private", "public", "internal"]
+          "enum": [
+            "private",
+            "public",
+            "internal"
+          ]
         },
         "owner": {
           "description": "GitHub user or org that owns this repo.",
@@ -151,23 +162,37 @@
         "audience": {
           "description": "Intended audience: personal, team, or public.",
           "type": "string",
-          "enum": ["personal", "team", "public"]
+          "enum": [
+            "personal",
+            "team",
+            "public"
+          ]
         },
         "content_types": {
           "description": "Types of content that live in this repo.",
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["skills", "agents", "commands", "hooks", "standards", "guardrails", "prompts"]
+            "enum": [
+              "skills",
+              "agents",
+              "commands",
+              "hooks",
+              "standards",
+              "guardrails",
+              "prompts"
+            ]
           },
           "default": []
         },
         "skeleton": {
-          "description": "Directory skeleton per harness — documents what directories exist in this repo.",
+          "description": "Directory skeleton per harness \u2014 documents what directories exist in this repo.",
           "type": "object",
           "additionalProperties": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         },
         "notes": {
@@ -177,7 +202,9 @@
         "tags": {
           "description": "Optional tags for search and filtering.",
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": []
         }
       }
@@ -196,7 +223,7 @@
       }
     },
     "source_ref": {
-      "description": "Source reference for a catalog entry — local path or GitHub URL.",
+      "description": "Source reference for a catalog entry \u2014 local path or GitHub URL.",
       "type": "string",
       "examples": [
         "/absolute/path/to/SKILL.md",
@@ -208,12 +235,21 @@
       "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2: skill, agent, prompt, standard, hook, mcp.",
       "type": "string",
       "pattern": "^(skill|agent|prompt|standard|hook|mcp):.+$",
-      "examples": ["skill:firecrawl", "agent:video-processor", "prompt:caption-style", "standard:english-only", "hook:block-destructive-bash", "mcp:open-brain"]
+      "examples": [
+        "skill:firecrawl",
+        "agent:video-processor",
+        "prompt:caption-style",
+        "standard:english-only",
+        "hook:block-destructive-bash",
+        "mcp:open-brain"
+      ]
     },
     "base_entry": {
       "description": "Common fields shared by all catalog entry types. Either `source` or `from_marketplace + repo + path` is required.",
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
         "name": {
           "description": "Unique identifier for this catalog entry.",
@@ -268,13 +304,20 @@
         }
       },
       "dependentRequired": {
-        "from_marketplace": ["repo", "path"]
+        "from_marketplace": [
+          "repo",
+          "path"
+        ]
       }
     },
     "marketplace_entry": {
       "description": "A marketplace source reference for external skill/agent/prompt libraries.",
       "type": "object",
-      "required": ["name", "source", "type"],
+      "required": [
+        "name",
+        "source",
+        "type"
+      ],
       "properties": {
         "name": {
           "description": "Short identifier for this marketplace.",
@@ -292,12 +335,20 @@
         "type": {
           "description": "Distribution mechanism for this marketplace.",
           "type": "string",
-          "enum": ["git", "skills-sh", "http-tarball"]
+          "enum": [
+            "git",
+            "skills-sh",
+            "http-tarball"
+          ]
         },
         "auth": {
           "description": "Authentication method required to access this marketplace.",
           "type": "string",
-          "enum": ["none", "bearer", "basic"],
+          "enum": [
+            "none",
+            "bearer",
+            "basic"
+          ],
           "default": "none"
         }
       },
@@ -306,8 +357,12 @@
     "skill_entry": {
       "description": "A skill catalog entry with install path information.",
       "allOf": [
-        { "$ref": "#/$defs/base_entry" },
-        { "$ref": "#/$defs/marketplace_ref" },
+        {
+          "$ref": "#/$defs/base_entry"
+        },
+        {
+          "$ref": "#/$defs/marketplace_ref"
+        },
         {
           "type": "object",
           "properties": {
@@ -318,7 +373,11 @@
             "harness": {
               "description": "Target harness for this skill (claude, codex, or both).",
               "type": "string",
-              "enum": ["claude", "codex", "both"],
+              "enum": [
+                "claude",
+                "codex",
+                "both"
+              ],
               "default": "both"
             }
           }
@@ -328,8 +387,12 @@
     "agent_entry": {
       "description": "An agent catalog entry with format-translation hints.",
       "allOf": [
-        { "$ref": "#/$defs/base_entry" },
-        { "$ref": "#/$defs/marketplace_ref" },
+        {
+          "$ref": "#/$defs/base_entry"
+        },
+        {
+          "$ref": "#/$defs/marketplace_ref"
+        },
         {
           "type": "object",
           "properties": {
@@ -340,7 +403,26 @@
             "format": {
               "description": "Agent file format (for translation hints between harnesses).",
               "type": "string",
-              "enum": ["claude", "openai", "generic"]
+              "enum": [
+                "claude",
+                "openai",
+                "generic"
+              ]
+            },
+            "sources": {
+              "description": "Per-harness source file paths. Keys are harness names (claude, codex). Values are relative paths in the source repo. Use instead of the singular source: field when the agent ships multiple harness-specific files. Backward compat: singular source: still works for Claude-only agents.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "claude": {
+                  "description": "Path or URL to the Claude-format agent file (.md with YAML frontmatter).",
+                  "type": "string"
+                },
+                "codex": {
+                  "description": "Path or URL to the Codex-format agent file (.toml with developer_instructions).",
+                  "type": "string"
+                }
+              }
             }
           }
         }
@@ -349,8 +431,12 @@
     "prompt_entry": {
       "description": "A prompt/command catalog entry.",
       "allOf": [
-        { "$ref": "#/$defs/base_entry" },
-        { "$ref": "#/$defs/marketplace_ref" },
+        {
+          "$ref": "#/$defs/base_entry"
+        },
+        {
+          "$ref": "#/$defs/marketplace_ref"
+        },
         {
           "type": "object",
           "properties": {
@@ -363,10 +449,14 @@
       ]
     },
     "standard_entry": {
-      "description": "A standard catalog entry — a policy/convention document or bundle of related convention docs. Cross-harness; install path defaults to .agents/standards/<name>/ (bundle = directory) or .agents/standards/<name>.md (single file). Source may be a GitHub blob URL (single file) or tree URL (directory bundle).",
+      "description": "A standard catalog entry \u2014 a policy/convention document or bundle of related convention docs. Cross-harness; install path defaults to .agents/standards/<name>/ (bundle = directory) or .agents/standards/<name>.md (single file). Source may be a GitHub blob URL (single file) or tree URL (directory bundle).",
       "allOf": [
-        { "$ref": "#/$defs/base_entry" },
-        { "$ref": "#/$defs/marketplace_ref" },
+        {
+          "$ref": "#/$defs/base_entry"
+        },
+        {
+          "$ref": "#/$defs/marketplace_ref"
+        },
         {
           "type": "object",
           "properties": {
@@ -375,9 +465,11 @@
               "type": "string"
             },
             "triggers": {
-              "description": "Keywords/patterns matched (case-insensitive substring) against project context — file extensions, paths, CLAUDE.md content, project name. When any trigger matches, the standard (or all files in a bundle) is loaded into context. Use [\"*\"] for always-on.",
+              "description": "Keywords/patterns matched (case-insensitive substring) against project context \u2014 file extensions, paths, CLAUDE.md content, project name. When any trigger matches, the standard (or all files in a bundle) is loaded into context. Use [\"*\"] for always-on.",
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "default": []
             }
           }
@@ -385,9 +477,12 @@
       ]
     },
     "mcp_server_entry": {
-      "description": "Canonical definition of one MCP server. Describes what the server does and how it should be installed per harness — translation logic is a follow-up bead.",
+      "description": "Canonical definition of one MCP server. Describes what the server does and how it should be installed per harness \u2014 translation logic is a follow-up bead.",
       "type": "object",
-      "required": ["name", "description"],
+      "required": [
+        "name",
+        "description"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -403,12 +498,18 @@
         "coding_strategy": {
           "description": "How coding harnesses (Claude Code, Codex, OpenCode) should consume this server: cli = install the CLI wrapper package, mcp = add to harness MCP config.",
           "type": "string",
-          "enum": ["cli", "mcp"]
+          "enum": [
+            "cli",
+            "mcp"
+          ]
         },
         "mobile_strategy": {
           "description": "How mobile/web harnesses (claude.ai, claude.ios) consume this server.",
           "type": "string",
-          "enum": ["cli", "mcp"]
+          "enum": [
+            "cli",
+            "mcp"
+          ]
         },
         "capabilities": {
           "description": "Runtime characteristics of this MCP server.",
@@ -426,19 +527,26 @@
             "auth": {
               "description": "Authentication mechanism required by this server.",
               "type": "string",
-              "enum": ["token", "oauth", "none"]
+              "enum": [
+                "token",
+                "oauth",
+                "none"
+              ]
             }
           }
         },
         "install": {
-          "description": "Per-harness install metadata. Does NOT include translator code — that is a follow-up bead.",
+          "description": "Per-harness install metadata. Does NOT include translator code \u2014 that is a follow-up bead.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "cli": {
               "description": "Install metadata when coding_strategy is cli.",
               "type": "object",
-              "required": ["package", "manager"],
+              "required": [
+                "package",
+                "manager"
+              ],
               "additionalProperties": false,
               "properties": {
                 "package": {
@@ -449,12 +557,18 @@
                 "manager": {
                   "description": "Package manager to use.",
                   "type": "string",
-                  "enum": ["npm", "pip", "cargo", "brew", "none"]
+                  "enum": [
+                    "npm",
+                    "pip",
+                    "cargo",
+                    "brew",
+                    "none"
+                  ]
                 }
               }
             },
             "mcp": {
-              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are harness names (claude_code, codex, opencode, claude_ai, claude_ios). Values are open objects — the translator bead will define stricter schemas.",
+              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are harness names (claude_code, codex, opencode, claude_ai, claude_ios). Values are open objects \u2014 the translator bead will define stricter schemas.",
               "type": "object",
               "properties": {
                 "claude_code": {
@@ -466,7 +580,7 @@
                       "type": "string"
                     },
                     "snippet": {
-                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
+                      "description": "Canonical MCP server descriptor. Structure is harness-specific \u2014 translator bead enforces exact shape.",
                       "type": "object",
                       "additionalProperties": true
                     }
@@ -482,7 +596,7 @@
                       "type": "string"
                     },
                     "snippet": {
-                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
+                      "description": "Canonical MCP server descriptor. Structure is harness-specific \u2014 translator bead enforces exact shape.",
                       "type": "object",
                       "additionalProperties": true
                     }
@@ -498,7 +612,7 @@
                       "type": "string"
                     },
                     "snippet": {
-                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
+                      "description": "Canonical MCP server descriptor. Structure is harness-specific \u2014 translator bead enforces exact shape.",
                       "type": "object",
                       "additionalProperties": true
                     }
@@ -506,7 +620,7 @@
                   "additionalProperties": false
                 },
                 "claude_ai": {
-                  "description": "Config hints for claude.ai (web — manual install via URL).",
+                  "description": "Config hints for claude.ai (web \u2014 manual install via URL).",
                   "type": "object",
                   "properties": {
                     "install_url": {
@@ -543,9 +657,12 @@
       }
     },
     "guardrail_entry": {
-      "description": "A guardrail catalog entry — a deterministic enforcement primitive that compiles to per-harness native format. Guardrails run outside the LLM loop and cannot be bypassed by the model.",
+      "description": "A guardrail catalog entry \u2014 a deterministic enforcement primitive that compiles to per-harness native format. Guardrails run outside the LLM loop and cannot be bypassed by the model.",
       "type": "object",
-      "required": ["name", "description"],
+      "required": [
+        "name",
+        "description"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -559,9 +676,12 @@
           "minLength": 1
         },
         "kind": {
-          "description": "Installation shape per ADR-0004 Phase 2. 'single-hook' (default) is one script bound to one event/harness (sources field used). 'hooks-manifest' is a multi-event manifest file (source field used) — install logic merges all declared hooks into harness config.",
+          "description": "Installation shape per ADR-0004 Phase 2. 'single-hook' (default) is one script bound to one event/harness (sources field used). 'hooks-manifest' is a multi-event manifest file (source field used) \u2014 install logic merges all declared hooks into harness config.",
           "type": "string",
-          "enum": ["single-hook", "hooks-manifest"],
+          "enum": [
+            "single-hook",
+            "hooks-manifest"
+          ],
           "default": "single-hook"
         },
         "source": {
@@ -572,7 +692,9 @@
         "requires": {
           "description": "Transitive dependencies on other library primitives (skill:, agent:, prompt:, hook:, mcp:). Authoritative source is the artefact's frontmatter; this mirror is for offline lookup.",
           "type": "array",
-          "items": { "$ref": "#/$defs/typed_dependency" },
+          "items": {
+            "$ref": "#/$defs/typed_dependency"
+          },
           "default": []
         },
         "harness": {
@@ -582,7 +704,13 @@
         "purpose": {
           "description": "Lifecycle class of this guardrail (single-hook entries). Determines which harnesses can support it natively vs. via workaround.",
           "type": "string",
-          "enum": ["pre-tool-veto", "post-tool-reaction", "session-init", "cleanup", "audit-log"]
+          "enum": [
+            "pre-tool-veto",
+            "post-tool-reaction",
+            "session-init",
+            "cleanup",
+            "audit-log"
+          ]
         },
         "capability": {
           "description": "Per-harness capability declarations. Only harnesses listed here are supported. The installer uses this to emit mismatch warnings when a target harness lacks the required event.",
@@ -679,16 +807,32 @@
       "additionalProperties": false
     },
     "project_tooling_entry": {
-      "description": "A project tooling distribution entry — declares a target (file, git hook, JSON field block, etc.) that should be synced into matching projects at SessionStart.",
+      "description": "A project tooling distribution entry \u2014 declares a target (file, git hook, JSON field block, etc.) that should be synced into matching projects at SessionStart.",
       "type": "object",
-      "required": ["name", "description", "target_kind", "target_path"],
+      "required": [
+        "name",
+        "description",
+        "target_kind",
+        "target_path"
+      ],
       "additionalProperties": false,
       "if": {
-        "properties": { "target_kind": { "enum": ["file", "git_hook"] } },
-        "required": ["target_kind"]
+        "properties": {
+          "target_kind": {
+            "enum": [
+              "file",
+              "git_hook"
+            ]
+          }
+        },
+        "required": [
+          "target_kind"
+        ]
       },
       "then": {
-        "required": ["source"]
+        "required": [
+          "source"
+        ]
       },
       "properties": {
         "name": {
@@ -704,7 +848,13 @@
         "target_kind": {
           "description": "Type of target this entry manages. Determines which sync logic is applied.",
           "type": "string",
-          "enum": ["file", "file_section", "git_hook", "gitignore_patch", "json_field_enforce"]
+          "enum": [
+            "file",
+            "file_section",
+            "git_hook",
+            "gitignore_patch",
+            "json_field_enforce"
+          ]
         },
         "target_path": {
           "description": "Path to the target location, relative to the project root.",
@@ -736,7 +886,11 @@
         "conflict_policy": {
           "description": "What to do when the target has been locally modified. canonical_wins: always overwrite with canonical source. user_wins: skip if target exists and has local changes. warn_only: log a warning but do not overwrite.",
           "type": "string",
-          "enum": ["canonical_wins", "user_wins", "warn_only"],
+          "enum": [
+            "canonical_wins",
+            "user_wins",
+            "warn_only"
+          ],
           "default": "canonical_wins"
         },
         "consumed_by": {

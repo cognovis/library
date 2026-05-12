@@ -157,7 +157,7 @@ def test_all_entries_have_source_urls():
             # Skip impeccable (from_marketplace) and any other marketplace entries
             if "from_marketplace" in entry:
                 continue
-            if "source" not in entry:
+            if "source" not in entry and "sources" not in entry:
                 errors.append(f"{section_name}/{name}: missing source URL")
 
     assert not errors, f"Entries without source URLs:\n" + "\n".join(errors)
