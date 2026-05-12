@@ -9,6 +9,8 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ### Added
 
+- **MCP Servers Registry** (`library.yaml`): Populated `mcp_servers:` section with 6 canonical registry entries from CL-p91 audit — playwright, pencil, lsp, filesystem (keep-mcp: stateful sessions or Desktop-only) and executive-circle, heypresto (ship-both: CLI to be built, MCP retained for mobile). All entries validated against CL-mfz canonical schema with capabilities, coding\_strategy, mobile\_strategy, and per-harness install snippets.
+
 - **Canonical CLI Launchers: cld and cdx** (`cognovis-library/bin/cld`, `cognovis-library/bin/cdx`, `cognovis-library/bin/lib/cld-system-prompt.zsh`, `cognovis-library/scripts/install-bin.sh`): Established canonical home for Claude Code (`cld`) and Codex (`cdx`) launchers in `cognovis-library/bin/`, implementing Phase 1 of ADR-0002. Created idempotent install script (`install-bin.sh`) that symlinks both launchers from `~/.local/bin/` into the canonical source. Updated `CLAUDE.md` and `docs/ARCHITECTURE.md` to document canonical home and install procedure. Removed `~/.claude/scripts/` from `$PATH`. Smoke test confirms `cld -b <bead-id>` launches worktree sessions cleanly via single editable source.
 
 ### Fixed
