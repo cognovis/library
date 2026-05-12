@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Changed
+
+- **Lockfile Schema Extension for Three-Layer Model** (`docs/schema/lockfile.schema.json`, `docs/lockfile-format.md`, `cookbook/use.md`, `cookbook/sync.md`, `cookbook/audit.md`, `cookbook/remove.md`, `scripts/migrate-lockfile.py`): Extended `.library.lock` schema with two required fields (`marketplace` and `cache_path`) to support ADR-0003 Three-Layer deployment model (Source/Cache/Harness). Updated `lockfile-format.md` with field documentation, Three-Layer architecture explanation, and global lockfile path (`~/.config/library/global.lock`). Added migration script (`scripts/migrate-lockfile.py`) to auto-derive `marketplace` from existing source URLs and update all four cookbooks with Three-Layer workflow steps (cache materialization in use.md, cache reconciliation in sync.md, symlink verification in audit.md, garbage-collection notes in remove.md). 11 new validator tests added; ADR-0003 success criterion #7 fulfilled.
+
 ---
 
 ## [v2026.05.11] - 2026-05-02

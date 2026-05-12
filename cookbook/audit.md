@@ -70,6 +70,45 @@ For each bridge listed in `bridge_symlinks`:
   - Status: **BRIDGE-BROKEN**
   - Note: "Bridge symlink `<link-path>` is missing or replaced by a real directory."
 
+#### 4f. Verify symlink target against cache_path (ADR-0003)
+
+Check `install_target` against `cache_path`, distinguishing legacy (no cache_path) from
+symlink-missing (cache_path set but install_target is not a symlink):
+
+```bash
+install_target="<entry.install_target trimmed of trailing slash>"
+cache_path="<entry.cache_path trimmed of trailing slash>"
+
+if [ -L "$install_target" ]; then
+  actual_target=$(readlink "$install_target")
+  if [ "$actual_target" != "$cache_path" ]; then
+    # Status: SYMLINK-MISMATCH
+    echo "install_target symlink points to: $actual_target"
+    echo "expected (cache_path):            $cache_path"
+  else
+    # Symlink target is correct — Layer C → Layer B intact
+    :
+  fi
+elif [ -d "$install_target" ] && [ ! -L "$install_target" ]; then
+  if [ -z "$cache_path" ]; then
+    # Status: LEGACY — real directory and no cache_path (migration pending)
+    echo "Note: install_target is a real directory, cache_path is empty. Migration pending."
+  else
+    # Status: SYMLINK-MISSING — real directory but cache_path is set (needs upgrade)
+    echo "Note: install_target is a real directory but cache_path is set. Three-layer not active — needs upgrade."
+  fi
+fi
+```
+
+Statuses for `4f`:
+
+| Condition | Status |
+|-----------|--------|
+| Symlink resolves to correct `cache_path` | **SYMLINK-OK** |
+| Symlink resolves to wrong path | **SYMLINK-MISMATCH** |
+| `install_target` is a real directory, `cache_path` empty | **LEGACY** (migration pending) |
+| `install_target` is a real directory, `cache_path` set | **SYMLINK-MISSING** (needs upgrade) |
+
 ### 5. Check for Unlocked Installs (optional)
 For completeness, scan the default install directories for items NOT present in `.library.lock`:
 
@@ -100,17 +139,20 @@ Display a summary table:
 
 | Name | Type | Status | Detail |
 |------|------|--------|--------|
-| dolt | skill | CLEAN | — |
+| dolt | skill | CLEAN | Symlink → cache OK |
 | researcher | skill | DRIFT | Checksum mismatch (locked=aaaa..., actual=bbbb...) |
 | old-agent | agent | MISSING | Expected at .claude/agents/old-agent.md |
 | manual-skill | skill | UNLOCKED | Found in .claude/skills/ but not in .library.lock |
+| legacy-skill | skill | LEGACY | Real directory, cache_path empty — migration pending |
 
-Audited: 3 locked entries + 1 unlocked installs found
+Audited: 4 locked entries + 1 unlocked installs found
 
 CLEAN: 1
 DRIFT: 1  ← these need /library use <name> to refresh
 MISSING: 1  ← these need /library use <name> to reinstall
 BRIDGE-BROKEN: 0
+SYMLINK-MISMATCH: 0
+LEGACY: 1  ← these need /library sync to materialize cache
 UNLOCKED: 1  ← these need /library use <name> to add to lockfile
 ```
 
@@ -120,11 +162,14 @@ After reporting, offer the user remediation options:
 
 | Status | Suggested action |
 |--------|-----------------|
+| CLEAN / SYMLINK-OK | No action needed |
 | DRIFT | `/library use <name>` to refresh from source and re-lock |
 | MISSING | `/library use <name>` to reinstall and add to lockfile |
 | BRIDGE-BROKEN | `/library use <name>` to recreate the bridge symlink |
+| SYMLINK-MISMATCH | `/library use <name>` to reinstall — cache_path and install_target are out of sync |
+| LEGACY | `/library sync` to materialize the Layer-B cache and update `cache_path` |
+| SYMLINK-MISSING | `/library use <name>` to reinstall with three-layer symlink model |
 | UNLOCKED | `/library use <name>` to create a lockfile entry (will overwrite the existing install) |
-| CLEAN | No action needed |
 
 Do NOT automatically fix drift. Always report and let the user decide — the modification may
 be intentional (e.g. a local patch the user wants to keep).
