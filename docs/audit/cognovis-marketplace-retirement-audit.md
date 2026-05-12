@@ -61,13 +61,13 @@ duplicate/overlap detection examples, and a `requires_standards` frontmatter fie
 | Field | Value |
 |---|---|
 | Marketplace path | `cognovis-workflow/skills/session-close/SKILL.md` + `handlers/` (4 files) |
-| Canonical location | `cognovis-core/.claude/agents/session-close.md` (agent, not skill) |
+| Canonical location | `cognovis-core/.claude/agents/core/session-close.md` (agent, not skill) |
 | Status | **SUPERSEDED** — marketplace version is a skill stub; canonical is a full agent |
 | Handlers | All 4 handler scripts (`beads-close.sh`, `changelog.sh`, `docs-check.sh`, `version.sh`) are byte-identical to `beads-workflow/skills/session-close/handlers/` |
-| Action | None required — canonical agent is deployed to `~/.claude/agents/` |
+| Action | None required — canonical agent is deployed to `~/.claude/agents/core/` |
 
 Drift summary: the marketplace `SKILL.md` (142 lines at origin, 35 lines after CL-l22e
-trimming) is a pure-trigger wrapper. The agent (`~/.claude/agents/session-close.md`)
+trimming) is a pure-trigger wrapper. The agent (`~/.claude/agents/core/session-close.md`)
 contains all logic. Handlers are identical. No content is lost in retirement.
 
 ### Artefact 4 — Agent: `bead-orchestrator`
