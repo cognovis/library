@@ -59,7 +59,7 @@ If the entry has a `from_marketplace` field (and no `source`):
 
 ### 4. Resolve Dependencies
 If the entry has a `requires` field:
-- For each typed reference (`skill:name`, `agent:name`, `prompt:name`):
+- For each typed reference (`skill:name`, `agent:name`, `prompt:name`, `standard:name`):
   - Look it up in `library.yaml`
   - If found, recursively run the `use` workflow for that dependency first
   - If not found, warn the user: "Dependency <ref> not found in library catalog"
@@ -67,34 +67,69 @@ If the entry has a `requires` field:
 
 ### 5. Determine Target Directory
 
-#### 5a. Detect the Target Tool
+#### 5a. Determine harness coverage (NOT a user choice for cross-platform primitives)
 
-Determine which tool(s) to install into using the following priority order:
+**Foundational principle**: The library is **cross-platform by construction**.
+Which harnesses a primitive installs to is determined by **what file format the
+primitive ships in**, not by user preference.
 
-**Priority 1 — Explicit user instruction (highest priority):**
-| User says | Target |
-|-----------|--------|
-| "for claude" / "claude only" / "in claude" | Claude Code only |
-| "for codex" / "codex only" / "in codex" | Codex only |
-| "for both" / "both tools" | Both tools |
+| Primitive's source file | Reaches which harnesses |
+|-------------------------|--------------------------|
+| `SKILL.md` (agentskills.io standard) | **Claude Code AND Codex CLI** (and any future harness that loads SKILL.md). This is the dominant case. Never harness-restricted. |
+| Agent file `.md` (YAML frontmatter) | Claude Code (native). Codex needs `.toml`. If both ship as siblings → both harnesses. |
+| Agent file `.toml` | Codex (native). Claude needs `.md`. If both ship → both. |
+| Slash-command `.md` (no SKILL.md format) | Claude Code today. Codex equivalents TBD. |
+| Hook script + per-harness adapter | Whichever harnesses the entry's `capability:` map declares. |
+| MCP server | All harnesses listed under `mcp_servers.<name>.install.mcp.*` in library.yaml. |
 
-**Priority 2 — Marker-file detection (check in cwd):**
-```bash
-# Check which tool directories are present
-[ -d ".claude" ] && echo "found: .claude/"
-[ -d ".agents" ] && echo "found: .agents/"
-[ -d ".codex" ] && echo "found: .codex/"
-[ -f "$HOME/.codex/config.toml" ] && echo "found: ~/.codex/config.toml"
-```
+**For SKILL.md specifically: it is a violation to mark it `harness: claude`
+or `harness: codex`.** The format is harness-neutral by agentskills.io
+specification (see ADR-0003 Decision 1). Any registry entry pointing at
+a SKILL.md must use `harness: both` (or omit the field — `both` is the
+default for skills).
 
-Detection rules (in order):
-1. Both `.claude/` AND (`.agents/` or `.codex/`) present → **dual-install** (both tools); check for skill name collisions per Step 5d below
-2. Only `.claude/` present → **Claude Code** target
-3. Only `.agents/` or `.codex/` present → **Codex** target
-4. Neither present → **prompt user**: "This doesn't appear to be a Claude Code or Codex project. Install for Claude Code (creates `.claude/skills/`), Codex (creates `.agents/skills/`), or both?" Default suggestion: **Claude Code only**.
+**Decision sequence:**
 
-**Priority 3 — Fall back:**
-- If detection is ambiguous, ask the user. Default answer is "Claude Code only".
+**1 — Derive coverage from `source:` URL** (primary, authoritative):
+
+| URL pattern | Coverage |
+|-------------|----------|
+| `.../SKILL.md` | `{claude, codex}` — agentskills.io universal |
+| `.../agents/<X>.md` | `{claude}` natively. **Convert to `.toml` and also install to Codex** via `scripts/convert-agent.py` (if available); otherwise emit Codex-coverage gap warning |
+| `.../agents/<X>.toml` | `{codex}` natively. **Convert to `.md` and also install to Claude** via converter |
+| `.../prompts/<X>.md` or `.../commands/<X>.md` | `{claude}` today; `{codex}` once Codex slash-command adapter lands |
+| Hook manifest (`kind: hooks-manifest`, handled separately in Step 2b) | per `capability:` map |
+| MCP entry (`mcp_servers:` section) | per `install.mcp.*` map |
+
+**2 — Legacy `harness:` field (transitional, deprecated for skills):**
+If an entry still carries `harness:` (legacy from pre-ADR-0004 era), respect it
+as a hard override only when it NARROWS the URL-derived set (you can't widen).
+The field is being phased out — new entries should not set it; resolver should
+prefer URL derivation.
+
+**2 — Detect deployment scope (global vs. project-local).** This IS a user
+question, but framed by scope not harness:
+- Default: **global** install. Most library primitives are useful cross-project.
+- Switch to **project-local** if: the user says "in this project" / "local",
+  OR the entry's `tags:` include `tier:project` (e.g. FHIR-only tools).
+
+**3 — Install to ALL harnesses in the coverage set.** No partial installs by
+default. If the user has only `.claude/` and no `.codex/` configured, install
+into `.claude/skills/` AND create the `.agents/skills/` mirror for Codex
+preemptively (cheap, no harm — if the user adopts Codex later it's already
+seeded).
+
+**The only legitimate user prompt** is global-vs-local scope when the request
+is ambiguous. Example:
+
+> "Install ob-search globally (cross-project, recommended) or only in this
+> project's `.claude/skills/`?"
+
+**Never** generate prompts that look like:
+- ❌ "Install for Claude Code only or both tools?" (for a SKILL.md)
+- ❌ "Which harness do you want?" (when the primitive declares `both`)
+
+Those are architectural violations of cross-platform-by-default.
 
 #### 5b. Select the Target Path
 

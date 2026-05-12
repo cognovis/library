@@ -103,6 +103,7 @@ The `requires` field uses typed references to avoid ambiguity:
 - `skill:name` — references a skill in the library catalog
 - `agent:name` — references an agent in the library catalog
 - `prompt:name` — references a prompt in the library catalog
+- `standard:name` — references a standard in the library catalog
 
 When resolving dependencies: look up each reference in `library.yaml`, fetch all dependencies first (recursively), then fetch the requested item.
 

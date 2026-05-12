@@ -54,6 +54,14 @@
             "$ref": "#/$defs/prompt_entry"
           },
           "default": []
+        },
+        "standards": {
+          "description": "Catalog of standard entries. Standards are policy/convention documents that apply across harnesses (e.g. coding rules, control-area baselines). Cross-harness storage convention: .agents/standards/<name>.md (project) and ~/.agents/standards/<name>.md (global).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/standard_entry"
+          },
+          "default": []
         }
       },
       "additionalProperties": false
@@ -197,10 +205,10 @@
       ]
     },
     "typed_dependency": {
-      "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2: skill, agent, prompt, hook, mcp.",
+      "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2: skill, agent, prompt, standard, hook, mcp.",
       "type": "string",
-      "pattern": "^(skill|agent|prompt|hook|mcp):.+$",
-      "examples": ["skill:firecrawl", "agent:video-processor", "prompt:caption-style", "hook:block-destructive-bash", "mcp:open-brain"]
+      "pattern": "^(skill|agent|prompt|standard|hook|mcp):.+$",
+      "examples": ["skill:firecrawl", "agent:video-processor", "prompt:caption-style", "standard:english-only", "hook:block-destructive-bash", "mcp:open-brain"]
     },
     "base_entry": {
       "description": "Common fields shared by all catalog entry types. Either `source` or `from_marketplace + repo + path` is required.",
@@ -348,6 +356,22 @@
           "properties": {
             "install_path": {
               "description": "Override the default install directory for this prompt.",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "standard_entry": {
+      "description": "A standard catalog entry — a policy/convention document (e.g. english-only, no-emoji, tool-standards). Cross-harness; install path defaults to .agents/standards/<name>.md.",
+      "allOf": [
+        { "$ref": "#/$defs/base_entry" },
+        { "$ref": "#/$defs/marketplace_ref" },
+        {
+          "type": "object",
+          "properties": {
+            "install_path": {
+              "description": "Override the default install directory for this standard.",
               "type": "string"
             }
           }

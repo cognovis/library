@@ -10,6 +10,9 @@ default_dirs:
   prompts:
     - default: .claude/commands/
     - global: ~/.claude/commands/
+  standards:
+    - default: .agents/standards/
+    - global: ~/.agents/standards/
   guardrails:
     - default: .claude/hooks/
     - global: ~/.claude/hooks/
@@ -31,7 +34,6 @@ library:
       from_marketplace: pbakaus
       repo: impeccable
       path: .claude/skills/impeccable
-      harness: both
       tags:
         - third-party
         - frontend
@@ -47,8 +49,7 @@ library:
         "audit agent", "agent vs skill", or asks about multi-agent architecture.
       source: https://github.com/cognovis/library-core/blob/main/skills/agent-forge/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -59,8 +60,7 @@ library:
         Triggers on Angebot, proposal, Preiskalkulation, Angebotserstellung, offer, Beratungsangebot.
       source: https://github.com/cognovis/library-core/blob/main/skills/angebotserstellung/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:project
@@ -71,7 +71,6 @@ library:
         end-to-end including final closeout). Use when implementing a bead by ID, or to
         list ready beads. Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
       source: https://github.com/cognovis/library-core/blob/main/skills/beads/SKILL.md
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -82,9 +81,8 @@ library:
         Triggers on billing review, Abrechnungsprueferin, billing UI review.
       source: https://github.com/cognovis/library-core/blob/main/skills/billing-reviewer/SKILL.md
       requires:
-        - "prompt:healthcare-control-areas"
-        - "prompt:english-only"
-      harness: both
+        - "standard:healthcare-control-areas"
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:project
@@ -97,10 +95,9 @@ library:
         X work under the hood.
       source: https://github.com/cognovis/library-core/blob/main/skills/binary-explorer/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -111,8 +108,7 @@ library:
         Triggers on create brand, voice profile, review brand, change tone. Not for skill creation.
       source: https://github.com/cognovis/library-core/blob/main/skills/brand-forge/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -123,10 +119,9 @@ library:
         Guides through systematic investigation instead of guessing.
       source: https://github.com/cognovis/library-core/blob/main/skills/bug-triage/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -137,8 +132,7 @@ library:
         Triggers on prune claude-md, post-update review, prune instructions, model update cleanup.
       source: https://github.com/cognovis/library-core/blob/main/skills/claude-md-pruner/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -149,8 +143,7 @@ library:
         placement and navigation in a multi-pane cmux layout.
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -160,8 +153,7 @@ library:
         pages, wait for state changes, and extract data from cmux browser surfaces.
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux-browser/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -172,8 +164,7 @@ library:
         (headings, code blocks, tables, lists).
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux-markdown/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -185,10 +176,9 @@ library:
         codex challenge, ask codex, second opinion, or consult codex.
       source: https://github.com/cognovis/library-core/blob/main/skills/codex/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -199,8 +189,7 @@ library:
         invoices, payables, vendors, Buchhaltung.
       source: https://github.com/cognovis/library-core/blob/main/skills/collmex-cli/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:project
@@ -211,8 +200,7 @@ library:
         sorted by severity. Use when reviewing specs, requirements, deliverables, or training materials.
       source: https://github.com/cognovis/library-core/blob/main/skills/council/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -223,8 +211,7 @@ library:
         entries across tracked projects.
       source: https://github.com/cognovis/library-core/blob/main/skills/daily-brief/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -236,8 +223,7 @@ library:
         Use whenever beads sync or Dolt infrastructure is failing.
       source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -248,8 +234,7 @@ library:
         Triggers on entropy scan, harness check, harness validate, invariants check.
       source: https://github.com/cognovis/library-core/blob/main/skills/entropy-scan/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -260,8 +245,7 @@ library:
         Use when investigating session activity or debugging tool usage patterns.
       source: https://github.com/cognovis/library-core/blob/main/skills/event-log/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -272,8 +256,7 @@ library:
         hooks, PreToolUse, PostToolUse, security hook.
       source: https://github.com/cognovis/library-core/blob/main/skills/hook-creator/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -284,8 +267,7 @@ library:
         scripts, or coordinating parallel agent edits.
       source: https://github.com/cognovis/library-core/blob/main/skills/infra-principles/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -295,7 +277,6 @@ library:
         Use when applying standards, patterns, or compliance requirements.
         Triggers on inject standards, load standards, standards, check patterns, apply patterns.
       source: https://github.com/cognovis/library-core/blob/main/skills/inject-standards/SKILL.md
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -306,8 +287,7 @@ library:
         Triggers on send email, mail send, email with attachment, mail schicken.
       source: https://github.com/cognovis/library-core/blob/main/skills/mail-send/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -318,9 +298,8 @@ library:
         instance, working with mira's billing catalogs, flat tables, or AidboxTriggers.
       source: https://github.com/cognovis/library-core/blob/main/skills/mira-aidbox/SKILL.md
       requires:
-        - "prompt:healthcare-control-areas"
-        - "prompt:english-only"
-      harness: both
+        - "standard:healthcare-control-areas"
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:project
@@ -331,8 +310,7 @@ library:
         harness audit, 12 primitives check.
       source: https://github.com/cognovis/library-core/blob/main/skills/nbj-audit/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -343,7 +321,6 @@ library:
         save, context, timeline), use MCP for mobile (claude.ai/iOS) and admin operations.
         Triggers on memory, open-brain, ob CLI, recall, past work, save observation.
       source: https://github.com/cognovis/library-core/blob/main/skills/ob-cli/SKILL.md
-      harness: claude
       tags:
         - origin:original
         - tier:core
@@ -355,8 +332,7 @@ library:
         api key, service credentials.
       source: https://github.com/cognovis/library-core/blob/main/skills/op-credentials/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -367,8 +343,7 @@ library:
         design system, design screen.
       source: https://github.com/cognovis/library-core/blob/main/skills/pencil/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -377,7 +352,6 @@ library:
         Query open-brain people-aware MCP tools to find discussions, stale contacts, and
         mentions for a named person.
       source: https://github.com/cognovis/library-core/blob/main/skills/people-query/SKILL.md
-      harness: both
       tags:
         - origin:original
         - tier:domain
@@ -388,10 +362,9 @@ library:
         any URL, website name, open page, browse, navigate, scrape, fill form.
       source: https://github.com/cognovis/library-core/blob/main/skills/playwright-cli/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -402,8 +375,7 @@ library:
         plugin, marketplace, distribute plugin, test plugin.
       source: https://github.com/cognovis/library-core/blob/main/skills/plugin-management/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -414,8 +386,7 @@ library:
         EADDRINUSE, dev server URL, localhost, dev proxy.
       source: https://github.com/cognovis/library-core/blob/main/skills/portless/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -427,10 +398,9 @@ library:
         project context, constitution document.
       source: https://github.com/cognovis/library-core/blob/main/skills/project-context/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -441,10 +411,9 @@ library:
         wie gesund ist das projekt, code health check.
       source: https://github.com/cognovis/library-core/blob/main/skills/project-health/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -456,10 +425,9 @@ library:
         upgrading project setup to current conventions.
       source: https://github.com/cognovis/library-core/blob/main/skills/project-setup/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -470,8 +438,7 @@ library:
         dictated text or vague task descriptions.
       source: https://github.com/cognovis/library-core/blob/main/skills/prompt-refiner/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -482,8 +449,7 @@ library:
         check, fleet quality, improve skill, fix skill, rewrite skill.
       source: https://github.com/cognovis/library-core/blob/main/skills/skill-auditor/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -494,10 +460,9 @@ library:
         feature spec, deep spec, requirements spec.
       source: https://github.com/cognovis/library-core/blob/main/skills/spec-developer/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -508,8 +473,7 @@ library:
         Triggers on standards, inject standards, load standards, check compliance.
       source: https://github.com/cognovis/library-core/blob/main/skills/standards/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -519,8 +483,7 @@ library:
         web content, YouTube transcripts, podcasts, and generating AI summaries.
       source: https://github.com/cognovis/library-core/blob/main/skills/summarize/skill.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -531,8 +494,7 @@ library:
         Triggers on sync standards, share standards, team standards, sync conventions.
       source: https://github.com/cognovis/library-core/blob/main/skills/sync-standards/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -543,8 +505,7 @@ library:
         or checking for prompt updates.
       source: https://github.com/cognovis/library-core/blob/main/skills/system-prompt-audit/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -555,8 +516,7 @@ library:
         heaviest context contributors.
       source: https://github.com/cognovis/library-core/blob/main/skills/token-cost/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -567,8 +527,7 @@ library:
         clients, WiFi, AP, switch, gateway, device IP, device MAC.
       source: https://github.com/cognovis/library-core/blob/main/skills/ui-cli/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -579,8 +538,7 @@ library:
         vision, brainstorm, Kreativmodus, what if, or wants to explore possibilities without constraints.
       source: https://github.com/cognovis/library-core/blob/main/skills/vision/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:domain
@@ -591,10 +549,9 @@ library:
         project or formalizing a vision. Triggers on vision author, author vision, create vision.
       source: https://github.com/cognovis/library-core/blob/main/skills/vision-author/SKILL.md
       requires:
-        - "prompt:tool-standards"
-        - "prompt:english-only"
-        - "prompt:no-emoji"
-      harness: both
+        - "standard:tool-standards"
+        - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -605,8 +562,7 @@ library:
         check, career readiness.
       source: https://github.com/sussdorff/library-core/blob/main/skills/business/ai-readiness/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -617,8 +573,7 @@ library:
         amazon bestellung, amazon order, was habe ich gekauft.
       source: https://github.com/sussdorff/library-core/blob/main/skills/business/amazon/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -629,8 +584,7 @@ library:
         career analysis, career collapse, AI career, role assessment.
       source: https://github.com/sussdorff/library-core/blob/main/skills/business/career-check/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -640,8 +594,7 @@ library:
         and send to accounting. Triggers on google rechnung, google invoice, google one beleg.
       source: https://github.com/sussdorff/library-core/blob/main/skills/business/google-invoice/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -652,8 +605,7 @@ library:
         transactions, cashflow, spending, balance.
       source: https://github.com/sussdorff/library-core/blob/main/skills/business/mm-cli/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -664,8 +616,7 @@ library:
         profile extraction, connections, feed, LinkedIn search, recommendation.
       source: https://github.com/sussdorff/library-core/blob/main/skills/content/linkedin/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -675,8 +626,7 @@ library:
         and Plaud AI cloud recordings.
       source: https://github.com/sussdorff/library-core/blob/main/skills/content/transcribe/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -687,8 +637,7 @@ library:
         hetzner, hcloud, dns zone, domain transfer.
       source: https://github.com/sussdorff/library-core/blob/main/skills/infra/hetzner-cloud/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -699,8 +648,7 @@ library:
         home network, what devices, home server.
       source: https://github.com/sussdorff/library-core/blob/main/skills/infra/home-infra/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -711,8 +659,7 @@ library:
         running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox.
       source: https://github.com/sussdorff/library-core/blob/main/skills/infra/local-vm/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -723,8 +670,7 @@ library:
         scanned document, document archive.
       source: https://github.com/sussdorff/library-core/blob/main/skills/infra/paperless-cli/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -735,8 +681,7 @@ library:
         on mailpiler, mail archive, piler search, alte mails, email archiv.
       source: https://github.com/sussdorff/library-core/blob/main/skills/infra/piler-cli/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:personal
         - tier:project
@@ -746,8 +691,7 @@ library:
         Show beads (bd) release notes and changelog from the bd CLI.
       source: https://github.com/cognovis/library-core/blob/main/skills/bd-release-notes/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -758,8 +702,7 @@ library:
         Triggers on bead metrics, token cost report, bead costs, /bead-metrics.
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-metrics/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -770,9 +713,8 @@ library:
         artifacts. Use when debriefing a bead or running a compound retrospective.
       source: https://github.com/cognovis/library-core/blob/main/skills/compound/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -783,9 +725,8 @@ library:
         Triggers on create bead, neuer bead, file a bead.
       source: https://github.com/cognovis/library-core/blob/main/skills/create/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "skill:epic-init"
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -796,8 +737,7 @@ library:
         Triggers on epic init, plan epic, create epic, plan feature, break down feature.
       source: https://github.com/cognovis/library-core/blob/main/skills/epic-init/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -807,8 +747,7 @@ library:
         Evaluate factory-ready spec quality for a bead before autonomous execution.
       source: https://github.com/cognovis/library-core/blob/main/skills/factory-check/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -819,10 +758,9 @@ library:
         /impl, autonomous implementation.
       source: https://github.com/cognovis/library-core/blob/main/skills/impl/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "skill:plan"
         - "skill:factory-check"
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -832,9 +770,8 @@ library:
         Transkript zu Beads Pipeline — converts unstructured intake into validated beads.
       source: https://github.com/cognovis/library-core/blob/main/skills/intake/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "skill:create"
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -845,9 +782,8 @@ library:
         Triggers on plan bead, implementation plan, /plan.
       source: https://github.com/cognovis/library-core/blob/main/skills/plan/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "agent:plan-reviewer"
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -857,8 +793,7 @@ library:
         Capture refactoring observations as queued follow-up beads instead of inline rewrites.
       source: https://github.com/cognovis/library-core/blob/main/skills/refactor-note/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -869,10 +804,9 @@ library:
         and git history. Triggers on running a retro, sprint review, bi-weekly reflection.
       source: https://github.com/cognovis/library-core/blob/main/skills/retro/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
         - "skill:bead-metrics"
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -882,8 +816,7 @@ library:
         Review code conventions and naming choices against project standards.
       source: https://github.com/cognovis/library-core/blob/main/skills/review-conventions/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -895,9 +828,8 @@ library:
         ADR-0004 to disambiguate from the agent of the same name).
       source: https://github.com/cognovis/library-core/blob/main/skills/wave-dispatch/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "agent:wave-orchestrator"
-      harness: both
       tags:
         - origin:original
         - tier:core
@@ -908,8 +840,7 @@ library:
         misses — dependency ordering, ownership collisions, lifecycle contradictions.
       source: https://github.com/cognovis/library-core/blob/main/skills/wave-reviewer/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -920,8 +851,7 @@ library:
         workplan from the current backlog state.
       source: https://github.com/cognovis/library-core/blob/main/skills/workplan/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: both
+        - "standard:english-only"
       tags:
         - origin:original
         - tier:core
@@ -934,9 +864,8 @@ library:
         extraction_date, and content_type metadata.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ingest-content/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:core
@@ -947,9 +876,8 @@ library:
         standards or skills. Use when processing session insights or materializing learnings.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/learnings-pipeline/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:core
@@ -960,9 +888,8 @@ library:
         work hours, generates daily digest at end-of-day, weekly summary on Fridays.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/memory-heartbeat/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:core
@@ -973,9 +900,8 @@ library:
         or batch (JSONL / Obsidian/Markdown file) mode.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-migrate/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:domain
@@ -986,9 +912,8 @@ library:
         Use when "what did I learn", "past sessions", "recall", "remember".
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-search/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:core
@@ -999,9 +924,8 @@ library:
         numbers. Use when "outline file", "show structure", "what's in this file".
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-outline/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:domain
@@ -1012,9 +936,8 @@ library:
         Use when "where is X defined", "find function X", "find symbol".
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-search/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:domain
@@ -1025,9 +948,8 @@ library:
         cuts). Use when "unfold symbol", "show function X", "extract class X".
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-unfold/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:domain
@@ -1038,9 +960,8 @@ library:
         keep/merge/archive/delete/promote and asks for approval before executing.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-triage/SKILL.md
       requires:
-        - "prompt:english-only"
+        - "standard:english-only"
         - "mcp:open-brain"
-      harness: both
       tags:
         - origin:personal
         - tier:core
@@ -1053,8 +974,7 @@ library:
         terminology, profiles, AccessPolicy, SearchParameter.
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox/skills/aidbox/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:third-party
         - tier:project
@@ -1066,8 +986,7 @@ library:
         SUSHI/FSH, $validate, $expand, $validate-code, $fhir-package-install.
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-ig-development/skills/aidbox-ig-development/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:third-party
         - tier:project
@@ -1078,8 +997,7 @@ library:
         flattening FHIR data into SQL tables, dashboard queries, analytics.
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-sql-on-fhir/skills/aidbox-sql-on-fhir/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:third-party
         - tier:project
@@ -1090,8 +1008,7 @@ library:
         Supports TypeScript, Python, and C#.
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/atomic-generate-types/skills/atomic-generate-types/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:third-party
         - tier:project
@@ -1102,8 +1019,7 @@ library:
         and Health Samurai products.
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/hs-search/skills/hs-search/SKILL.md
       requires:
-        - "prompt:english-only"
-      harness: claude
+        - "standard:english-only"
       tags:
         - origin:third-party
         - tier:project
@@ -1451,6 +1367,7 @@ library:
         - origin:original
         - tier:domain
         - category:command
+  standards:
     - name: adr-location
       description: >-
         Architecture Decision Records (ADRs) live at /docs/adr/ in the project root.

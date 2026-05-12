@@ -29,7 +29,7 @@ Figure out the type from the user's prompt or the source path:
 
 ### 4. Parse Dependencies
 Detect dependencies by looking through the skill/agent/prompt files, format them as typed references:
-- `skill:name`, `agent:name`, `prompt:name`
+- `skill:name`, `agent:name`, `prompt:name`, `standard:name`
 - Verify each dependency already exists in `library.yaml` if or warn the user
   - If they don't exist add them to `library.yaml` first. If those files have dependencies, add them recursively.
   - You can detect these sometimes by looking at the frontmatter, and then in the file content look for `/<prompt|agent|skill>:name` references. If you're not sure, ask the user the user if they have any dependencies.
