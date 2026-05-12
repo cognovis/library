@@ -926,6 +926,188 @@ library:
         - origin:original
         - tier:core
         - workflow:beads
+    # ─── open-brain skills (registered 2026-05-12 per ADR-0004; source-provider marketplace) ───
+    - name: ingest-content
+      description: >-
+        Save any URL to open-brain memory as curated_content. Detects content type
+        (video/article/doc), extracts via the right tool, and persists with source_url,
+        extraction_date, and content_type metadata.
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ingest-content/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:core
+        - workflow:memory
+    - name: learnings-pipeline
+      description: >-
+        Extract, review, and materialize learnings from conversation histories into
+        standards or skills. Use when processing session insights or materializing learnings.
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/learnings-pipeline/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:core
+        - workflow:memory
+    - name: memory-heartbeat
+      description: >-
+        Periodic memory maintenance for open-brain. Runs lifecycle pipeline during
+        work hours, generates daily digest at end-of-day, weekly summary on Fridays.
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/memory-heartbeat/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:core
+        - workflow:memory
+    - name: ob-migrate
+      description: >-
+        Migrate knowledge into open-brain memory. Interactive (extract from prior chat)
+        or batch (JSONL / Obsidian/Markdown file) mode.
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-migrate/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:domain
+        - workflow:memory
+    - name: ob-search
+      description: >-
+        Search open-brain memory for past observations, session summaries, learnings.
+        Use when "what did I learn", "past sessions", "recall", "remember".
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-search/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:core
+        - workflow:memory
+    - name: ob-smart-outline
+      description: >-
+        Show the structural skeleton of a file: classes, methods, functions with line
+        numbers. Use when "outline file", "show structure", "what's in this file".
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-outline/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:domain
+        - workflow:codenav
+    - name: ob-smart-search
+      description: >-
+        Find symbols (functions, classes, methods) across a codebase using AST analysis.
+        Use when "where is X defined", "find function X", "find symbol".
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-search/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:domain
+        - workflow:codenav
+    - name: ob-smart-unfold
+      description: >-
+        Extract a complete function or class from a file, AST-bounded (no mid-function
+        cuts). Use when "unfold symbol", "show function X", "extract class X".
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-unfold/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:domain
+        - workflow:codenav
+    - name: ob-triage
+      description: >-
+        Triage open-brain memories with human-in-the-loop review. Classifies into
+        keep/merge/archive/delete/promote and asks for approval before executing.
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-triage/SKILL.md
+      requires:
+        - "prompt:english-only"
+        - "mcp:open-brain"
+      harness: both
+      tags:
+        - origin:personal
+        - tier:core
+        - workflow:memory
+    # ─── samurai-skills (registered 2026-05-12 — was a global plugin, now project-local-only) ───
+    - name: aidbox
+      description: >-
+        Aidbox FHIR platform by Health Samurai. Use for FHIR REST API, search,
+        transactions, bundles, access policies, subscriptions, custom resources,
+        terminology, profiles, AccessPolicy, SearchParameter.
+      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox/skills/aidbox/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:third-party
+        - tier:project
+        - domain:fhir
+    - name: aidbox-ig-development
+      description: >-
+        FHIR Implementation Guide development lifecycle with Aidbox — CodeSystems,
+        ValueSets, profiles, extensions, terminology, IG Publisher, QA reports,
+        SUSHI/FSH, $validate, $expand, $validate-code, $fhir-package-install.
+      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-ig-development/skills/aidbox-ig-development/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:third-party
+        - tier:project
+        - domain:fhir
+    - name: aidbox-sql-on-fhir
+      description: >-
+        SQL on FHIR with Aidbox — ViewDefinitions, $materialize, sof schema,
+        flattening FHIR data into SQL tables, dashboard queries, analytics.
+      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-sql-on-fhir/skills/aidbox-sql-on-fhir/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:third-party
+        - tier:project
+        - domain:fhir
+    - name: atomic-generate-types
+      description: >-
+        Generate or update FHIR types using @atomic-ehr/codegen with tree-shaking.
+        Supports TypeScript, Python, and C#.
+      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/atomic-generate-types/skills/atomic-generate-types/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:third-party
+        - tier:project
+        - domain:fhir
+    - name: hs-search
+      description: >-
+        Search health-samurai.io — docs, blog, case studies, examples for Aidbox
+        and Health Samurai products.
+      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/hs-search/skills/hs-search/SKILL.md
+      requires:
+        - "prompt:english-only"
+      harness: claude
+      tags:
+        - origin:third-party
+        - tier:project
+        - domain:fhir
   agents:
     - name: bead-orchestrator
       description: >-
@@ -1647,8 +1829,12 @@ marketplaces:
     description: Anthropic-curated Claude plugins and extensions
     type: git
   - name: cognovis-samurai
-    source: https://github.com/cognovis
-    description: Cognovis Samurai skills collection
+    source: https://github.com/cognovis/samurai-skills
+    description: Cognovis Samurai skills collection (FHIR/Aidbox tooling, ex-global plugin)
+    type: git
+  - name: open-brain
+    source: https://github.com/sussdorff/open-brain
+    description: Open-Brain memory store with skills+hooks for memory capture across coding sessions
     type: git
   - name: disler
     source: https://github.com/disler
