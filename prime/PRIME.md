@@ -9,7 +9,9 @@
 
 - Use `bd` for ALL task tracking. No `TodoWrite`, no `TaskCreate`, no `MEMORY.md`.
 - Create a bead BEFORE writing code. Mark `in_progress` when starting.
-- Memory lives in **open-brain**. Use `mcp__open-brain__save_memory`. Do NOT use
+- Memory lives in **open-brain**. **Coding harness (Claude Code / Codex CLI):** use
+  `ob save` / `ob search` (direct connection, no MCP round-trip). **Mobile / admin
+  (claude.ai, iOS):** use `mcp__open-brain__save_memory`. Do NOT use
   `bd remember` / `bd memories` / `bd forget` — they exist in the bd CLI but are
   not part of this workflow.
 - Source code is English (comments, identifiers, log messages). User-facing
@@ -182,8 +184,8 @@ Bad: `"Done"`, `"Fixed"`, `"Closed"`.
 | What you want to save | Where |
 |---|---|
 | Decision/fact specific to *this bead's work* | `bd update <id> --append-notes "..."` |
-| Session summary at end of bead run | open-brain `mcp__open-brain__save_memory` (type: `session_summary`) |
-| Cross-project learning, person/topic insight, architectural pattern | open-brain `mcp__open-brain__save_memory` |
+| Session summary at end of bead run | coding harness: `ob save "<text>" --type=session_summary --project=<proj>` · mobile/admin: `mcp__open-brain__save_memory` |
+| Cross-project learning, person/topic insight, architectural pattern | coding harness: `ob save "<text>" --type=observation --project=<proj>` · mobile/admin: `mcp__open-brain__save_memory` |
 | Per-session scratch | conversation context only — don't persist |
 
 Rule of thumb: if the next agent (in this repo or another) would benefit from
