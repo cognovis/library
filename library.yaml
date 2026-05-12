@@ -1840,7 +1840,7 @@ library:
       description: >-
         All source code MUST be in English — including comments, identifiers, log messages,
         and string literals. This standard applies even when the user prompt is in German.
-      source: https://github.com/cognovis/library-core/blob/main/standards/english-only.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/english-only.md
       tags:
         - origin:original
         - tier:domain
@@ -1858,7 +1858,7 @@ library:
       description: >-
         Healthcare privacy and security control areas adapted from reason-healthcare/health-skills.
         Required for all medical/healthcare agents and skills.
-      source: https://github.com/cognovis/library-core/blob/main/standards/healthcare-control-areas.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/healthcare/control-areas.md
       tags:
         - origin:original
         - tier:domain
@@ -1867,7 +1867,7 @@ library:
       description: >-
         Do not add emojis to source code files, configuration files, or technical documentation.
         Emojis degrade diff readability and cause encoding issues in some terminals.
-      source: https://github.com/cognovis/library-core/blob/main/standards/no-emoji.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/no-emoji.md
       tags:
         - origin:original
         - tier:domain
@@ -1903,7 +1903,7 @@ library:
       description: >-
         Dev-tools agent tool standards — constraints for implementers, test authors, and
         validators. Defines allowed tools and information barrier rules.
-      source: https://github.com/cognovis/library-core/blob/main/standards/tool-standards.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/dev-tools/tool-standards.md
       tags:
         - origin:original
         - tier:domain
