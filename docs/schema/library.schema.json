@@ -515,7 +515,7 @@
     "guardrail_entry": {
       "description": "A guardrail catalog entry — a deterministic enforcement primitive that compiles to per-harness native format. Guardrails run outside the LLM loop and cannot be bypassed by the model.",
       "type": "object",
-      "required": ["name", "description", "purpose"],
+      "required": ["name", "description"],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -528,8 +528,29 @@
           "type": "string",
           "minLength": 1
         },
+        "kind": {
+          "description": "Installation shape per ADR-0004 Phase 2. 'single-hook' (default) is one script bound to one event/harness (sources field used). 'hooks-manifest' is a multi-event manifest file (source field used) — install logic merges all declared hooks into harness config.",
+          "type": "string",
+          "enum": ["single-hook", "hooks-manifest"],
+          "default": "single-hook"
+        },
+        "source": {
+          "description": "URL of the manifest file (required when kind=hooks-manifest). For single-hook entries use the 'sources' map instead. Typically a hooks.json from a marketplace repo.",
+          "type": "string",
+          "format": "uri"
+        },
+        "requires": {
+          "description": "Transitive dependencies on other library primitives (skill:, agent:, prompt:, hook:, mcp:). Authoritative source is the artefact's frontmatter; this mirror is for offline lookup.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/typed_dependency" },
+          "default": []
+        },
+        "harness": {
+          "description": "Which harnesses this guardrail targets (claude, codex, both, all).",
+          "type": "string"
+        },
         "purpose": {
-          "description": "Lifecycle class of this guardrail. Determines which harnesses can support it natively vs. via workaround.",
+          "description": "Lifecycle class of this guardrail (single-hook entries). Determines which harnesses can support it natively vs. via workaround.",
           "type": "string",
           "enum": ["pre-tool-veto", "post-tool-reaction", "session-init", "cleanup", "audit-log"]
         },

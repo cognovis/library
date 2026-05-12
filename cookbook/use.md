@@ -17,10 +17,33 @@ git pull
 
 ### 2. Find the Entry
 - Read `library.yaml`
-- Search across `library.skills`, `library.agents`, and `library.prompts`
+- Search across `library.skills`, `library.agents`, `library.prompts`, and top-level `guardrails:`
 - Match by name (exact) or description (fuzzy/keyword match)
 - If multiple matches, show them and ask the user to pick one
 - If no match, tell the user and suggest `/library search`
+
+### 2b. Branch on Entry Kind
+
+Some entries are not skills/agents/prompts but **hook-manifest guardrails** —
+e.g. `open-brain-hooks` (per ADR-0004 Decision 8). These get installed via
+a dedicated script, not the skill-style copy workflow.
+
+If the entry comes from `guardrails:` AND has `kind: hooks-manifest`:
+1. **Skip Steps 3–8 entirely.** They do not apply (no SKILL.md to copy, no
+   skills-dir target, no symlinks).
+2. Shell out to the installer:
+   ```bash
+   python3 <LIBRARY_SKILL_DIR>/scripts/install-hook.py <entry-name>
+   ```
+   The installer handles fetch + cache + settings.json merge atomically
+   and is idempotent.
+3. Confirm the user: "<n> hook(s) across <m> event(s) installed to
+   `~/.claude/settings.json`. Use `python3 .../scripts/install-hook.py
+   <entry-name> --remove` to uninstall."
+4. Skip directly to Step 9 (Confirm).
+
+For all other entries (skills, agents, prompts, single-hook guardrails),
+continue with Step 3.
 
 ### 3. Resolve Marketplace Reference
 If the matched catalog entry has a `source` field, skip this step — use the explicit `source` directly in Step 6.

@@ -1586,6 +1586,22 @@ guardrails:
       - destructive-prevention
       - pre-tool-veto
 
+  - name: open-brain-hooks
+    description: >-
+      Open-brain memory-capture hooks: SessionStart context injection,
+      Stop/SubagentStop turn logging, SessionEnd summary, periodic memory sync.
+      Replaces the Claude-Code-plugin distribution of open-brain hooks per ADR-0004
+      (the plugin manifest was retired; hooks now install via /library use).
+    kind: hooks-manifest
+    source: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
+    requires:
+      - "mcp:open-brain"
+    harness: claude
+    tags:
+      - origin:personal
+      - workflow:memory
+      - hooks-manifest
+
 mcp_servers:
   - name: open-brain
     description: Stateless memory store via search/save/get — persists observations across sessions
