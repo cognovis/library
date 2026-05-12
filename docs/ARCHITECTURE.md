@@ -44,6 +44,21 @@ differs. The `cdx` wrapper (bead `CL-tap`) parallels `cld`.
 Plus the return path: `library push <name>` sends local edits back upstream;
 `library sync` pulls latest for all installed items.
 
+## Launchers (cld/cdx)
+
+Per **ADR-0002 Decision 2**, the canonical source for all CLI launchers is `cognovis-library/bin/`:
+
+| File | Description |
+|------|-------------|
+| `bin/cld` | Claude Code launcher — full-featured zsh wrapper (~500 lines) |
+| `bin/cdx` | Codex CLI launcher — zsh wrapper, parallel to `cld` (bead `CL-tap`) |
+
+**Deployment:** `bash scripts/install-bin.sh` creates symlinks from `~/.local/bin/{cld,cdx}` into `bin/`.
+The installer is idempotent and uses `ln -sfn` so updates to this repo are immediately reflected.
+
+`~/.local/bin/` must be in `$PATH`. The legacy `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
+(only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).
+
 ## Repo split
 
 | Repo | Purpose | Visibility |

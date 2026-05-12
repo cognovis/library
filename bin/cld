@@ -1,0 +1,502 @@
+#!/usr/bin/env zsh
+# cld - Claude Code launcher with beads workflow integration
+#
+# Usage: cld [wrapper-flags] [claude-args...]
+#        cld -h | --help        Show wrapper flag help, then fall through to claude --help
+#
+# Wrapper flags (not passed to claude):
+#   --skip-perms    → translates to --dangerously-skip-permissions (overrides default auto mode)
+#   --force-check   → force update check even if cache is fresh
+#   --no-check      → skip update check entirely
+#   -v, --verbose   → enable verbose mode (reasoning traces + token counts)
+#   -c, --caveman   → enable caveman mode for this session (exports CAVEMAN_MODE=1)
+#   -b, --bead ID   → launch with bead orchestrator for the given bead ID
+#                     (refuses if ID has children — use -bw instead)
+#   -bq, --bead-quick ID → launch with quick-fix agent for XS/S beads (bug, chore, task)
+#   -bp, --plan-label LABEL → launch with /plan --label LABEL as initial prompt
+#   -bw, --bead-wave ID → dispatch wave-orchestrator for a parent bead's children
+#   -bl, --bead-label LABELS → dispatch wave-orchestrator for beads with LABELS (comma-separated, AND)
+#   -bi, --bead-ids IDS → dispatch wave-orchestrator for explicit bead IDs (comma-separated)
+#
+# Optional: claude-updater (uv tool install claude-updater) for pre-launch update checks
+
+set -uo pipefail
+
+# Auto-detect claude binary
+CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude 2>/dev/null)}"
+if [[ -z "${CLAUDE_BIN}" ]]; then
+    echo "ERROR: claude not found in PATH. Install Claude Code first."
+    exit 1
+fi
+
+# ── Parse wrapper flags ──────────────────────────────────────────
+
+caveman=false
+skip_perms=false
+force_check=false
+no_check=false
+verbose=false
+bead_id=""
+bead_quick_id=""
+bead_wave_id=""
+bead_labels=""
+bead_ids=""
+plan_label=""
+show_help=false
+claude_args=()
+
+while (( $# > 0 )); do
+    case "$1" in
+        -h|--help)
+            show_help=true
+            shift
+            ;;
+        -c|--caveman)
+            caveman=true
+            shift
+            ;;
+        --skip-perms)
+            skip_perms=true
+            shift
+            ;;
+        --force-check)
+            force_check=true
+            shift
+            ;;
+        --no-check)
+            no_check=true
+            shift
+            ;;
+        -v|--verbose)
+            verbose=true
+            shift
+            ;;
+        -b|--bead)
+            bead_id="$2"
+            shift 2
+            ;;
+        -bq|--bead-quick)
+            bead_quick_id="$2"
+            shift 2
+            ;;
+        -bp|--plan-label)
+            plan_label="$2"
+            shift 2
+            ;;
+        -bw|--bead-wave)
+            bead_wave_id="$2"
+            shift 2
+            ;;
+        -bl|--bead-label)
+            bead_labels="$2"
+            shift 2
+            ;;
+        -bi|--bead-ids)
+            bead_ids="$2"
+            shift 2
+            ;;
+        *)
+            claude_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# ── Help: print wrapper flags, then fall through to claude --help ─
+if ${show_help}; then
+    cat <<'EOF'
+cld - Claude Code launcher with beads workflow integration
+
+Usage: cld [wrapper-flags] [claude-args...]
+
+Wrapper flags (consumed by cld, not passed to claude):
+
+  Bead workflows:
+    -b,  --bead ID              Launch bead-orchestrator for single bead
+                                (refuses if ID has children — use -bw)
+    -bq, --bead-quick ID        Launch quick-fix agent (XS/S beads)
+    -bp, --plan-label LABEL     Launch with /plan --label LABEL
+    -bw, --bead-wave ID         Dispatch wave-orchestrator for parent's children
+    -bl, --bead-label LABELS    Dispatch wave-orchestrator for labelled beads
+                                (comma-separated, AND semantics)
+    -bi, --bead-ids IDS         Dispatch wave-orchestrator for explicit bead IDs
+                                (comma-separated, e.g. fpde-11j,fpde-95b)
+
+  Session:
+    -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
+    -v,  --verbose              Pass --verbose to claude
+         --skip-perms           Use --dangerously-skip-permissions
+         --force-check          Force claude-updater check
+         --no-check              Skip claude-updater check
+    -h,  --help                 Show this help, then claude --help
+
+────────────────────────────────────────────────────────────
+Forwarding to 'claude --help':
+EOF
+    exec "${CLAUDE_BIN}" --help
+fi
+
+# Export CAVEMAN_MODE if -c/--caveman was passed
+if ${caveman}; then
+    export CAVEMAN_MODE=1
+fi
+
+# Build final claude args — default to bypass until auto mode is available on plan
+if ${skip_perms}; then
+    claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
+else
+    # claude_args=("--permission-mode" "auto" "${claude_args[@]}")
+    claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
+fi
+
+if ${verbose}; then
+    claude_args=("--verbose" "${claude_args[@]}")
+fi
+
+# ── System Prompt Injection ──────────────────────────────────────
+source "${0:A:h}/lib/cld-system-prompt.zsh"
+
+_sp_registry_dir="${0:A:h}/../system-prompts"
+_sp_registry="${_sp_registry_dir}/registry.yml"
+
+if [[ -f "$_sp_registry" ]]; then
+    _sp_result=$(_cld_resolve_system_prompt "$_sp_registry" "${PWD}")
+    if [[ -n "$_sp_result" ]]; then
+        # Wire format: "file:<relative-path> mode:<replace|append>"
+        # Assumes no spaces in the filename (all paths are relative to registry dir)
+        _sp_file="${_sp_result#file:}"
+        _sp_file="${_sp_file% mode:*}"
+        _sp_mode="${_sp_result##* mode:}"
+        _sp_path="${_sp_registry_dir}/${_sp_file}"
+        # Resolve to absolute path using python3 (portable; realpath -m is GNU-only)
+        _sp_path_real=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$_sp_path" 2>/dev/null || echo "$_sp_path")
+        _sp_registry_dir_real=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$_sp_registry_dir" 2>/dev/null || echo "$_sp_registry_dir")
+
+        if [[ "$_sp_path_real" != "${_sp_registry_dir_real}/"* ]]; then
+            echo "[cld] ERROR: System prompt file path escapes registry dir: $_sp_file" >&2
+            # Skip injection — refuse path traversal attempt
+        elif [[ ! -f "$_sp_path_real" ]]; then
+            echo "[cld] ERROR: System prompt file not found: $_sp_path_real" >&2
+            # Skip injection — continue without system prompt flag
+        else
+            _sp_path="$_sp_path_real"
+            if [[ "$_sp_mode" == "replace" ]]; then
+                claude_args=("--system-prompt-file" "$_sp_path" "${claude_args[@]}")
+            elif [[ "$_sp_mode" == "append" ]]; then
+                claude_args=("--append-system-prompt-file" "$_sp_path" "${claude_args[@]}")
+            else
+                echo "[cld] ERROR: Unknown system prompt mode: $_sp_mode (expected: replace or append)" >&2
+            fi
+
+            if [[ "$_sp_mode" == "replace" || "$_sp_mode" == "append" ]] && [[ "${CLD_DEBUG:-}" == "1" ]]; then
+                echo "[cld] System prompt: ${_sp_file} (mode: ${_sp_mode})" >&2
+            fi
+        fi
+    else
+        if [[ "${CLD_DEBUG:-}" == "1" ]]; then
+            echo "[cld] System prompt: none (no match, no default)" >&2
+        fi
+    fi
+fi
+
+# ── Auto-expand short bead IDs ──────────────────────────────────
+# e.g. "oms3" → "mira-oms3" when issue_prefix is "mira"
+local bead_prefix
+bead_prefix=$(bd config get issue_prefix 2>/dev/null)
+
+_expand_bead_id() {
+    local id="$1"
+    # Only expand short slugs (no hyphen). IDs containing a hyphen are
+    # treated as already-qualified bead IDs (possibly with a non-default
+    # prefix in multi-prefix projects) and passed through unchanged.
+    if [[ -n "$bead_prefix" ]] && [[ "$id" != *-* ]]; then
+        echo "${bead_prefix}-${id}"
+    else
+        echo "$id"
+    fi
+}
+
+# Extract short name for display (strip prefix): "mira-oms3" → "oms3"
+_bead_short() {
+    local id="$1"
+    if [[ -n "$bead_prefix" ]] && [[ "$id" == "${bead_prefix}-"* ]]; then
+        echo "${id#${bead_prefix}-}"
+    else
+        echo "$id"
+    fi
+}
+
+# Count children of a bead (0 if none / bead not found). Requires jq.
+_bead_child_count() {
+    local id="$1"
+    if ! command -v jq &>/dev/null; then
+        echo "0"
+        return
+    fi
+    # Index by the actual bead ID key. When bd cannot resolve the bead it
+    # still emits {"schema_version": 1} on stdout — picking by key (rather
+    # than to_entries[0]) avoids the false-positive "1 child" caused by
+    # jq's `length` on a number returning |n|.
+    bd show "$id" --children --json 2>/dev/null \
+        | jq -r --arg id "$id" '(.[$id] // []) | length' 2>/dev/null \
+        || echo "0"
+}
+
+# List IDs of beads matching labels (comma-separated, AND semantics) with status=open
+_beads_by_labels() {
+    local labels_csv="$1"
+    local -a label_args=()
+    local IFS=','
+    for l in ${=labels_csv}; do
+        [[ -n "$l" ]] && label_args+=("-l" "$l")
+    done
+    bd list "${label_args[@]}" --status=open --json 2>/dev/null \
+        | jq -r '.[].id' 2>/dev/null
+}
+
+# Sanitize a string for use as a worktree/branch name (keep alnum + -_)
+_sanitize_name() {
+    echo "$1" | tr -cs 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//'
+}
+
+# Rename cmux surface if running inside cmux
+_cmux_rename() {
+    local label="$1"
+    if command -v cmux &>/dev/null; then
+        local surface_ref
+        surface_ref=$(cmux identify --json 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['caller']['surface_ref'])" 2>/dev/null)
+        if [[ -n "$surface_ref" ]]; then
+            cmux rename-tab --surface "$surface_ref" "$label" 2>/dev/null || true
+        fi
+    fi
+}
+
+if [[ -n "$bead_id" ]]; then
+    bead_id=$(_expand_bead_id "$bead_id")
+    local bead_short=$(_bead_short "$bead_id")
+
+    # ── Epic guard: refuse parent beads (has children) ────────────
+    local _child_count
+    _child_count=$(_bead_child_count "$bead_id")
+    if [[ "$_child_count" -gt 0 ]]; then
+        echo -e "\033[0;31m✗ ${bead_id} has ${_child_count} children.\033[0m" >&2
+        echo "  For parallel wave dispatch of children:" >&2
+        echo "    cld -bw ${bead_id}" >&2
+        echo "  To work on a single child, use its own ID with cld -b." >&2
+        exit 2
+    fi
+
+    # ── Claim gate: refuse if bead is already in_progress or closed ──
+    local _STATUS
+    _STATUS=$(bd show "$bead_id" --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('status',''))" 2>/dev/null || echo "")
+    if [[ "$_STATUS" == "in_progress" || "$_STATUS" == "closed" ]]; then
+        echo -e "\033[0;31m✗ ${bead_id} is ${_STATUS}.\033[0m" >&2
+        echo "  Cannot launch: bead is already ${_STATUS}." >&2
+        if [[ "$_STATUS" == "in_progress" ]]; then
+            echo "  To take over: bd update ${bead_id} --status=open" >&2
+        fi
+        exit 2
+    fi
+
+    # ── Sync: pull latest git + dolt state before worktree creation ──
+    echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
+    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
+    bd dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
+
+    # ── Worktree isolation via Claude Code native --worktree ──────
+    local worktree_name="bead-${bead_id}"
+    claude_args+=("--worktree" "$worktree_name")
+    claude_args+=("--agent" "beads-workflow:bead-orchestrator")
+    # ── Force full plugin registry in the worktree session ────────
+    # CCP-9xy: guarantees core:session-close is spawnable at Phase 16 handoff,
+    # even if a project-level .claude/settings overrides setting-sources.
+    claude_args+=("--setting-sources" "user,project,local")
+
+    # ── Set terminal tab title + cmux pane name ──────────────────
+    printf '\033]1;%s\033\\' "$bead_id"
+    printf '\033]2;%s\033\\' "cld: $bead_id"
+    _cmux_rename "${bead_short}-impl"
+
+    # ── Derive portless namespace from bead prefix + number ───────
+    local bead_ns=""
+    if [[ -n "$bead_prefix" ]]; then
+        local bead_num="${bead_id##*-}"
+        bead_ns="${bead_prefix}-${bead_num}"
+    fi
+
+    # Execute the COMPLETE workflow (phases 0-16 including Phase 16 session-close).
+    # Never stop at "Phase 0-5" — that scope does not exist for the full orchestrator.
+    local prompt="Bead ID: $bead_id. Execute the full orchestration workflow end-to-end: Phase 0 through Phase 16 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 16."
+
+    if [[ -n "$bead_ns" ]]; then
+        prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
+    fi
+
+    claude_args+=("$prompt")
+fi
+
+if [[ -n "$bead_quick_id" ]]; then
+    bead_quick_id=$(_expand_bead_id "$bead_quick_id")
+    local bead_quick_short=$(_bead_short "$bead_quick_id")
+
+    # ── Claim gate: refuse if bead is already in_progress or closed ──
+    local _QF_STATUS
+    _QF_STATUS=$(bd show "$bead_quick_id" --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('status',''))" 2>/dev/null || echo "")
+    if [[ "$_QF_STATUS" == "in_progress" || "$_QF_STATUS" == "closed" ]]; then
+        echo -e "\033[0;31m✗ ${bead_quick_id} is ${_QF_STATUS}.\033[0m" >&2
+        echo "  Cannot launch: bead is already ${_QF_STATUS}." >&2
+        if [[ "$_QF_STATUS" == "in_progress" ]]; then
+            echo "  To take over: bd update ${bead_quick_id} --status=open" >&2
+        fi
+        exit 2
+    fi
+
+    # ── Sync: pull latest git + dolt state before worktree creation ──
+    echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
+    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
+    bd dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
+
+    # ── Worktree isolation via Claude Code native --worktree ──────
+    local worktree_name="bead-${bead_quick_id}"
+    claude_args+=("--worktree" "$worktree_name")
+    claude_args+=("--agent" "beads-workflow:quick-fix")
+    # ── Force full plugin registry in the worktree session ────────
+    # CCP-9xy: guarantees core:session-close is spawnable at Phase 5 handoff,
+    # even if a project-level .claude/settings overrides setting-sources.
+    claude_args+=("--setting-sources" "user,project,local")
+
+    # ── Set terminal tab title + cmux pane name ──────────────────
+    printf '\033]1;%s\033\\' "$bead_quick_id"
+    printf '\033]2;%s\033\\' "cld-qf: $bead_quick_id"
+    _cmux_rename "${bead_quick_short}-qf"
+
+    # ── Derive portless namespace from bead prefix + number ───────
+    local bead_ns=""
+    if [[ -n "$bead_prefix" ]]; then
+        local bead_num="${bead_quick_id##*-}"
+        bead_ns="${bead_prefix}-${bead_num}"
+    fi
+
+    # Execute the COMPLETE quick-fix workflow (phases 0-5 including Phase 5 session-close).
+    local prompt="Bead ID: $bead_quick_id. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5."
+
+    if [[ -n "$bead_ns" ]]; then
+        prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
+    fi
+
+    claude_args+=("$prompt")
+fi
+
+if [[ -n "$plan_label" ]]; then
+    claude_args+=("/plan --label $plan_label")
+fi
+
+# ── Wave dispatch: parent bead with children ─────────────────────
+if [[ -n "$bead_wave_id" ]]; then
+    bead_wave_id=$(_expand_bead_id "$bead_wave_id")
+    local bead_wave_short=$(_bead_short "$bead_wave_id")
+
+    local _wave_child_count
+    _wave_child_count=$(_bead_child_count "$bead_wave_id")
+    if [[ "$_wave_child_count" -eq 0 ]]; then
+        echo -e "\033[0;31m✗ ${bead_wave_id} has no children.\033[0m" >&2
+        echo "  For single-bead work use: cld -b ${bead_wave_id}" >&2
+        echo "  -bw requires a parent bead with child beads attached." >&2
+        exit 2
+    fi
+
+    echo -e "\033[0;36m⟳ Dispatching wave for ${bead_wave_id} (${_wave_child_count} children)...\033[0m"
+
+    # Terminal tab + cmux pane name
+    printf '\033]1;wave:%s\033\\' "$bead_wave_id"
+    printf '\033]2;%s\033\\' "cld wave: $bead_wave_id"
+    _cmux_rename "${bead_wave_short}-wave"
+
+    # Wave-orchestrator runs from main, not inside a worktree — it spawns
+    # per-bead child sessions that create their own worktrees via cld -b.
+    local prompt="Wave orchestration request: parent bead ${bead_wave_id} has ${_wave_child_count} child beads. Invoke the beads-workflow:wave-orchestrator skill to dispatch them in dependency-aware waves across cmux panes. Use 'bd show ${bead_wave_id} --children --json' to enumerate children."
+    claude_args+=("$prompt")
+fi
+
+# ── Wave dispatch: label-scoped ──────────────────────────────────
+if [[ -n "$bead_labels" ]]; then
+    local _wave_ids
+    _wave_ids=$(_beads_by_labels "$bead_labels")
+    if [[ -z "$_wave_ids" ]]; then
+        echo -e "\033[0;31m✗ No open beads match labels: ${bead_labels}\033[0m" >&2
+        echo "  Labels are matched with AND semantics (comma-separated)." >&2
+        echo "  Check with: bd list -l <label> --status=open" >&2
+        exit 2
+    fi
+
+    local _wave_count
+    _wave_count=$(echo "$_wave_ids" | wc -l | tr -d ' ')
+    local _wave_id_list
+    _wave_id_list=$(echo "$_wave_ids" | tr '\n' ',' | sed 's/,$//')
+
+    # Worktree name uses first label, sanitized
+    local _first_label="${bead_labels%%,*}"
+    local _first_label_safe
+    _first_label_safe=$(_sanitize_name "$_first_label")
+
+    echo -e "\033[0;36m⟳ Dispatching wave for labels [${bead_labels}] (${_wave_count} beads)...\033[0m"
+
+    printf '\033]1;wave:%s\033\\' "$_first_label_safe"
+    printf '\033]2;%s\033\\' "cld wave: $bead_labels"
+    _cmux_rename "${_first_label_safe}-wave"
+
+    local prompt="Wave orchestration request: ${_wave_count} open beads match labels [${bead_labels}] (AND). Invoke the beads-workflow:wave-orchestrator skill to dispatch them in dependency-aware waves across cmux panes. Bead IDs: ${_wave_id_list}."
+    claude_args+=("$prompt")
+fi
+
+# ── Wave dispatch: explicit bead IDs ────────────────────────────
+if [[ -n "$bead_ids" ]]; then
+    # Expand short IDs and normalize to comma-separated list
+    local _raw_ids _expanded_ids=()
+    IFS=',' read -rA _raw_ids <<< "$bead_ids"
+    for _id in "${_raw_ids[@]}"; do
+        _id="${_id// /}"  # strip accidental spaces
+        [[ -z "$_id" ]] && continue
+        _expanded_ids+=("$(_expand_bead_id "$_id")")
+    done
+
+    local _wave_count=${#_expanded_ids[@]}
+    if [[ "$_wave_count" -eq 0 ]]; then
+        echo -e "\033[0;31m✗ No bead IDs provided after parsing: ${bead_ids}\033[0m" >&2
+        exit 2
+    fi
+
+    local _wave_id_list
+    _wave_id_list=$(IFS=','; echo "${_expanded_ids[*]}")
+
+    # Use first bead's short name for tab/pane label
+    local _first_short
+    _first_short=$(_bead_short "${_expanded_ids[1]}")
+
+    echo -e "\033[0;36m⟳ Dispatching wave for ${_wave_count} explicit beads: ${_wave_id_list}...\033[0m"
+
+    printf '\033]1;wave:%s\033\\' "$_first_short"
+    printf '\033]2;%s\033\\' "cld wave: ${_wave_id_list}"
+    _cmux_rename "${_first_short}-wave"
+
+    local prompt="Wave orchestration request: dispatch ${_wave_count} explicit beads in dependency-aware waves across cmux panes. Invoke the beads-workflow:wave-orchestrator skill. Bead IDs: ${_wave_id_list}."
+    claude_args+=("$prompt")
+fi
+
+# ── Update check via claude-updater (optional) ───────────────────
+
+if ! ${no_check}; then
+    if command -v claude-updater &>/dev/null; then
+        if ${force_check}; then
+            claude-updater check --force 2>&1
+        else
+            claude-updater check 2>&1
+        fi
+    fi
+fi
+
+# ── Launch claude ────────────────────────────────────────────────
+# Ensure cmux-shim is used for Stop hook notifications (prevents cmux wrapper override)
+export CMUX_BUNDLED_CLI_PATH="${HOME}/.claude/scripts/cmux-shim.sh"
+
+exec "${CLAUDE_BIN}" "${claude_args[@]}"
