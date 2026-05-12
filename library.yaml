@@ -1032,6 +1032,8 @@ library:
         verification (Opus VETO), MoC, UAT, constraints, changelog, session-close.
         Does NOT close beads — session-close handles closing after merge+push.
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
+      requires:
+        - "mcp:open-brain"
       tags:
         - origin:original
         - tier:core
@@ -1106,6 +1108,8 @@ library:
         implementing features or when user requests documentation updates or changelog entries.
         Detects changes in current branch via git diff.
       source: https://github.com/cognovis/library-core/blob/main/agents/doc-changelog-updater.md
+      requires:
+        - "mcp:open-brain"
       tags:
         - origin:original
         - tier:domain
@@ -1178,6 +1182,8 @@ library:
         Autonomous agent that analyzes code changes, determines appropriate test targets, and
         executes integration tests to validate user-facing behavior.
       source: https://github.com/cognovis/library-core/blob/main/agents/integration-test-runner.md
+      requires:
+        - "mcp:open-brain"
       tags:
         - origin:original
         - tier:domain
@@ -1260,6 +1266,8 @@ library:
         generates changelog, version tags, extracts learnings, saves session summary, and pushes.
         Use when ending a session or releasing. Triggers on session-close, session close, release.
       source: https://github.com/cognovis/library-core/blob/main/agents/session-close.md
+      requires:
+        - "mcp:open-brain"
       tags:
         - origin:original
         - tier:core
@@ -1292,6 +1300,8 @@ library:
         Framework-agnostic test engineer that writes, reviews, and executes unit tests. Detects
         the project's test framework automatically and applies appropriate patterns.
       source: https://github.com/cognovis/library-core/blob/main/agents/test-engineer.md
+      requires:
+        - "mcp:open-brain"
       tags:
         - origin:original
         - tier:domain
