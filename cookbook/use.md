@@ -24,9 +24,10 @@ git pull
 
 ### 2b. Branch on Entry Kind
 
-Some entries are not skills/agents/prompts but **hook-manifest guardrails** —
-e.g. `open-brain-hooks` (per ADR-0004 Decision 8). These get installed via
-a dedicated script, not the skill-style copy workflow.
+Some entries are not skills/agents/prompts but installed via dedicated
+scripts. The Step 3–8 catalog workflow does not apply to them.
+
+**(i) hook-manifest guardrails** (e.g. `open-brain-hooks`, per ADR-0004 Decision 8):
 
 If the entry comes from `guardrails:` AND has `kind: hooks-manifest`:
 1. **Skip Steps 3–8 entirely.** They do not apply (no SKILL.md to copy, no
@@ -40,6 +41,35 @@ If the entry comes from `guardrails:` AND has `kind: hooks-manifest`:
 3. Confirm the user: "<n> hook(s) across <m> event(s) installed to
    `~/.claude/settings.json`. Use `python3 .../scripts/install-hook.py
    <entry-name> --remove` to uninstall."
+4. Skip directly to Step 9 (Confirm).
+
+**(ii) MCP servers** (`mcp_servers:` section, per CL-l0c Deliverable D):
+
+If the entry comes from the top-level `mcp_servers:` list:
+1. **Skip Steps 3–8 entirely.** MCP servers have no SKILL.md and no
+   skills-dir; the per-harness snippet under `install.mcp.<harness>` is
+   what gets merged into each harness's MCP config file.
+2. Shell out to the installer:
+   ```bash
+   python3 <LIBRARY_SKILL_DIR>/scripts/install-mcp.py <entry-name>
+   #   --harness claude_code|codex|opencode|claude_ai|claude_ios|all   (default: all)
+   #   --dry-run     (preview only, no writes)
+   #   --remove      (uninstall library-managed entries by _origin tag)
+   ```
+   The installer writes the snippet into the harness's config file:
+   - `claude_code` → `~/.claude/settings.json` under `mcpServers.<name>`
+   - `codex` → `~/.codex/config.toml` under `[mcp_servers.<name>]`
+   - `opencode` → `~/.config/opencode/opencode.json` under `mcp.<name>`
+   - `claude_ai` / `claude_ios` → emit the manual install URL (no
+     programmatic install; user must open the URL in the app)
+
+   Every library-managed entry is tagged with `_origin = "library:mcp:<name>"`
+   so re-runs are idempotent (refresh in place, no duplicates) and
+   `--remove` drops only what the library installed (leaves manual entries
+   alone).
+3. Confirm the user: "MCP server `<entry-name>` registered with
+   `<n>` harness(es). Use `python3 .../scripts/install-mcp.py <entry-name> --remove`
+   to uninstall."
 4. Skip directly to Step 9 (Confirm).
 
 For all other entries (skills, agents, prompts, single-hook guardrails),
