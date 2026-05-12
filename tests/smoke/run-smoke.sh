@@ -1435,6 +1435,36 @@ smoke_fleet_migration() {
 }
 
 # ---------------------------------------------------------------------------
+# smoke_use_cookbook_path (CL-o16)
+#  Delegates to tests/smoke/use-agent-cookbook-path.sh for a self-contained
+#  end-to-end test of the /library use cookbook path (fetch -> compose -> write).
+#  That script exercises:
+#    1. Full fetch+compose produces cognovis-base marker in installed file
+#    2. Idempotent re-run: zero diff between run1 and run2
+#    3. Graceful degradation when Layer 1 is absent (warn + keep uncomposed)
+#    4. cookbook/use.md Step 6.5 wording unchanged (AK7 guard)
+# ---------------------------------------------------------------------------
+smoke_use_cookbook_path() {
+    section "use-cookbook-path"
+
+    local ext_script="${SCRIPT_DIR}/use-agent-cookbook-path.sh"
+    if [[ ! -f "${ext_script}" ]]; then
+        fail "use-cookbook-path/script-exists: use-agent-cookbook-path.sh not found at ${ext_script}"
+        return
+    fi
+
+    local ext_rc=0
+    bash "${ext_script}" || ext_rc=$?
+
+    if [[ "${ext_rc}" -eq 0 ]]; then
+        pass "use-cookbook-path/all-tests: use-agent-cookbook-path.sh exited 0 (all checks passed)"
+    else
+        fail "use-cookbook-path/all-tests: use-agent-cookbook-path.sh exited ${ext_rc} (one or more checks failed)"
+        OVERALL_EXIT=1
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Harness: library-core (AK3 verification)
 # ---------------------------------------------------------------------------
 smoke_library_core() {
@@ -1534,6 +1564,9 @@ main() {
         library-core)
             smoke_library_core
             ;;
+        use-cookbook-path)
+            smoke_use_cookbook_path
+            ;;
         all)
             # Note: smoke_migration and smoke_fleet_migration are intentionally excluded from 'all'.
             # They validate user-global state (~/.agents/standards/, ~/code/claude-code-plugins)
@@ -1547,10 +1580,11 @@ main() {
             smoke_lockfile
             smoke_standards
             smoke_golden_prompts
+            smoke_use_cookbook_path
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|fleet-migration|library-core|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|fleet-migration|library-core|use-cookbook-path|all]"
             exit 1
             ;;
     esac

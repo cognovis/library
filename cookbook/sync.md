@@ -100,6 +100,85 @@ This ensures the item is refreshed at the same location it was originally instal
 omit the `git checkout <source_commit>` pin and use the current branch HEAD instead. Then update
 `source_commit` in the lockfile to the new HEAD SHA.
 
+### 4.5. Compose Agent Body on Resync (compose-on-resync)
+
+> **Applies to agent entries only.** Skills, prompts, and guardrails are not composed.
+
+After re-pulling a fresh agent body in Step 4, check whether the agent requires composition
+before restoring bridge symlinks or updating the lockfile.
+
+For each entry in `.library.lock` where `type` is `agent`:
+
+1. **Read the freshly re-pulled agent file** at `install_target/<name>.md` (or the `.toml`
+   sibling for Codex).
+
+2. **Check the YAML frontmatter**: if `golden_prompt_extends:` is present AND the value is
+   NOT `from-scratch`, the agent requires composition.
+
+3. **Locate the composer script** in the library root (the same directory that contains
+   `library.yaml`):
+   ```bash
+   LIBRARY_ROOT="<path to the library checkout>"
+   COMPOSE_SCRIPT="${LIBRARY_ROOT}/scripts/compose-agent.py"
+   ```
+
+4. **Run the composer for the target harness**:
+   ```bash
+   # For Claude Code (default):
+   python3 "${COMPOSE_SCRIPT}" "<install_target>/<name>.md"
+
+   # For Codex (when a .toml sibling exists):
+   python3 "${COMPOSE_SCRIPT}" "<install_target>/<name>.md" --harness=codex
+   ```
+
+5. **On success** (exit code 0): replace the body of the fetched agent file (everything
+   after the closing `---` of the frontmatter) with the composed output:
+   ```bash
+   # Read the frontmatter (everything up to and including the second ---)
+   frontmatter=$(awk '/^---$/{n++; print; if(n==2) exit; next} {print}' "<install_target>/<name>.md")
+   composed_body=$(python3 "${COMPOSE_SCRIPT}" "<install_target>/<name>.md")
+   printf '%s\n\n%s\n' "${frontmatter}" "${composed_body}" > "<install_target>/<name>.md"
+   ```
+
+6. **On failure** (non-zero exit — missing Layer 1 or Layer 3):
+   - Warn the user:
+     ```
+     Warning: Compose failed for <name>: <error>.
+     Keeping uncomposed agent body. Run /library use <name> after installing the required
+     base/model-standard (cognovis-base, model-standard).
+     ```
+   - Continue with the original fetched body (graceful degradation). Do NOT abort
+     the sync — an uncomposed agent still works with the harness system prompt.
+
+7. **Update the lockfile `composed_sha` and `composed_layers` fields** for the entry
+   (these will be written out in Step 7):
+   ```python
+   import hashlib
+
+   # After successful composition:
+   with open("<install_target>/<name>.md") as f:
+       body_after_frontmatter = f.read().split("---", 2)[-1].lstrip("\n")
+
+   entry["composed_sha"] = hashlib.sha256(body_after_frontmatter.encode()).hexdigest()
+   entry["composed_layers"] = {
+       "layer1": "<golden_prompt_extends value>",   # e.g. "cognovis-base"
+       "layer3": "<model_standards list or []>",    # e.g. ["claude-haiku-4-5"]
+   }
+
+   # On failure: leave composed_sha and composed_layers unchanged (keep prior values
+   # or omit if never composed).
+   ```
+
+> **Idempotency**: The composer is deterministic given the same layer files. Re-running
+> `/library sync` on an already-composed agent produces the same body byte-for-byte.
+> If a Layer 1 (`cognovis-base`) or Layer 3 (model-standard) source file changes, the
+> `composed_sha` in the lockfile will differ from the recomputed SHA after the next sync,
+> which triggers re-composition automatically.
+
+> **Layer resolution search order** for `compose-agent.py`:
+> 1. `<proj_root>/.agents/golden-prompts/<name>.md` (project-local)
+> 2. `~/.agents/golden-prompts/<name>.md` (user-global)
+
 ### 5. Recreate Bridge Symlinks
 
 For each entry that has non-empty `bridge_symlinks`:
