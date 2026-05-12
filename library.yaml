@@ -1049,7 +1049,7 @@ library:
         Does NOT close beads — session-close handles closing after merge+push.
       sources:
         claude: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
-        codex: https://github.com/cognovis/library-core/blob/main/.codex/agents/bead-orchestrator.toml
+        codex: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.toml
       requires:
         - "mcp:open-brain"
       tags:
@@ -1285,7 +1285,7 @@ library:
         Use when ending a session or releasing. Triggers on session-close, session close, release.
       sources:
         claude: https://github.com/cognovis/library-core/blob/main/agents/session-close.md
-        codex: https://github.com/cognovis/library-core/blob/main/.codex/agents/session-close.toml
+        codex: https://github.com/cognovis/library-core/blob/main/agents/session-close.toml
       requires:
         - "mcp:open-brain"
       tags:
@@ -1358,7 +1358,7 @@ library:
         multiple beads at once.
       sources:
         claude: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.md
-        codex: https://github.com/cognovis/library-core/blob/main/.codex/agents/wave-orchestrator.toml
+        codex: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.toml
       tags:
         - origin:original
         - tier:domain
@@ -2006,15 +2006,15 @@ guardrails:
           Primary implementation. Reads $CLAUDE_TOOL_INPUT JSON, checks command string for
           destructive patterns, exits 2 to block with a message. Full PreToolUse semantics.
       codex_cli:
-        events: [SessionStart]
+        events: [PreToolUse]
+        matcher: Bash
         handler: node-mjs
         note: >-
-          Codex CLI has no PreToolUse event. SessionStart hook injects a system-level
-          WARNING into the session context to discourage destructive commands.
-          Effectiveness is advisory, not hard-blocking.
+          Codex CLI command hook. Reads PreToolUse JSON from stdin and blocks
+          destructive Bash commands with decision=block.
         mismatch_warning: >-
-          codex_cli supports only SessionStart/SessionEnd/Stop. The pre-tool-veto purpose
-          cannot be fully enforced; this installs a SessionStart advisory instead.
+          codex_cli supports PreToolUse in current Codex CLI releases; older
+          Codex versions may require a SessionStart advisory fallback.
       codex_cloud:
         mechanism: approval_policy
         config_key: approval_policy
