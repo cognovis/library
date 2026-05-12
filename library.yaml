@@ -1262,6 +1262,7 @@ mcp_servers:
       stateless: false
       streaming: false
       auth: none
+    # Note: also installed in Claude Desktop (no claude_desktop schema key in CL-mfz v1)
     install:
       mcp:
         codex:
@@ -1296,6 +1297,7 @@ mcp_servers:
       stateless: true
       streaming: false
       auth: none
+    # Note: also installed in Claude Desktop (no claude_desktop schema key in CL-mfz v1)
 
   - name: executive-circle
     description: Read-only content library lookup — search posts, guides, and prompt kits from Nate's Newsletter archives; HTTP stateless API; CLI wrapper (ec) to be built for coding harnesses; MCP retained for claude.ai/iOS
