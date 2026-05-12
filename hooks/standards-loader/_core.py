@@ -103,33 +103,85 @@ def _project_context(cwd: Path) -> str:
     return "\n".join(parts)
 
 
+_WORD_TRIGGER = re.compile(r"^[a-zA-Z]+$")
+
+
+def _trigger_matches(trig: str, context: str) -> bool:
+    if trig == "*":
+        return True
+    if _WORD_TRIGGER.match(trig):
+        # Pure-alphabetic single-word trigger — whole-word match avoids
+        # 'python' matching 'pythonic' or 'agent' matching 'agentic'.
+        pattern = re.compile(r"\b" + re.escape(trig) + r"\b", re.IGNORECASE)
+        return bool(pattern.search(context))
+    # Phrases, code constants, paths, extensions, identifiers: substring.
+    # These are distinctive enough that substring rarely false-matches.
+    return trig.lower() in context
+
+
 def _match(entry: StandardEntry, context: str) -> bool:
     if not entry.triggers:
         return False
-    for trig in entry.triggers:
-        if trig == "*":
-            return True
-        if trig.lower() in context:
-            return True
-    return False
+    return any(_trigger_matches(t, context) for t in entry.triggers)
 
 
-def _read_entry(entry: StandardEntry) -> str | None:
+def _read_bundle_triggers(bundle_dir: Path) -> dict | None:
+    """Read <bundle_dir>/_triggers.yml. Return None if missing or unreadable.
+
+    Format:
+        files:
+          style.md: [python, .py, ...]
+          ...
+    """
+    triggers_yml = bundle_dir / "_triggers.yml"
+    if not triggers_yml.is_file():
+        return None
+    try:
+        import yaml
+        data = yaml.safe_load(triggers_yml.read_text())
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    files = data.get("files") or {}
+    if not isinstance(files, dict):
+        return None
+    return files
+
+
+def _read_entry(entry: StandardEntry, context: str) -> str | None:
     """Read installed content for an entry from the first install root found.
 
-    Bundles: read all .md files in <root>/<name>/ (sorted).
+    Bundles: read <root>/<name>/_triggers.yml; for each file listed, evaluate
+      its per-file triggers against the project context; include only matching
+      files. STRICT MODE: files without an _triggers.yml entry are skipped.
+      A bundle with no _triggers.yml contributes nothing.
     Single files: read <root>/<name>.md.
-    Project-local roots override global ones.
+    Project-local roots override global ones (first install root wins per
+    bundle); within a bundle the project-local _triggers.yml is authoritative.
     """
     for root in INSTALL_ROOTS:
         if entry.is_bundle:
             bundle_dir = root / entry.name
-            if bundle_dir.is_dir():
-                pieces = []
-                for md in sorted(bundle_dir.glob("*.md")):
-                    pieces.append(f"### {entry.name}/{md.name}\n\n{md.read_text(errors='ignore')}")
-                if pieces:
-                    return "\n\n".join(pieces)
+            if not bundle_dir.is_dir():
+                continue
+            file_triggers = _read_bundle_triggers(bundle_dir)
+            if file_triggers is None:
+                # Strict mode: no _triggers.yml -> nothing loads from this bundle
+                continue
+            pieces = []
+            for fname, triggers in file_triggers.items():
+                if not triggers:
+                    continue
+                if not any(_trigger_matches(t, context) for t in triggers):
+                    continue
+                file_path = bundle_dir / fname
+                if not file_path.is_file():
+                    continue
+                pieces.append(f"### {entry.name}/{fname}\n\n{file_path.read_text(errors='ignore')}")
+            if pieces:
+                return "\n\n".join(pieces)
+            return None
         else:
             single = root / f"{entry.name}.md"
             if single.is_file():
@@ -147,19 +199,26 @@ def collect_matched_standards(cwd: Path | None = None) -> str:
 
     blocks: list[str] = []
     matched_names: list[str] = []
+    file_count = 0
     for entry in _entries(catalog):
-        if _match(entry, context):
-            content = _read_entry(entry)
-            if content:
-                blocks.append(content)
-                matched_names.append(entry.name)
+        if not _match(entry, context):
+            continue
+        content = _read_entry(entry, context)
+        if not content:
+            continue
+        blocks.append(content)
+        matched_names.append(entry.name)
+        # Count only the per-file section markers we inject ("### <bundle>/<name>.md").
+        # Other "### " lines inside the standards content are subheadings.
+        file_count += len(re.findall(r"^### \S+/\S+\.md", content, re.MULTILINE))
 
     if not blocks:
         return ""
 
     header = (
-        f"<!-- standards-loader: matched {len(matched_names)} entr"
-        f"{'y' if len(matched_names) == 1 else 'ies'} "
+        f"<!-- standards-loader: {file_count} file"
+        f"{'' if file_count == 1 else 's'} from "
+        f"{len(matched_names)} entr{'y' if len(matched_names) == 1 else 'ies'} "
         f"({', '.join(matched_names)}) -->"
     )
     return header + "\n\n" + "\n\n---\n\n".join(blocks)
