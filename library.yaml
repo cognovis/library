@@ -3,7 +3,7 @@ default_dirs:
     - default: .claude/skills/
     - default_codex: .agents/skills/
     - global: ~/.claude/skills/
-    - global_codex: ~/.agents/skills/
+    - global_codex: ~/.codex/skills/
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/
