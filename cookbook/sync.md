@@ -135,7 +135,7 @@ For each entry in `.library.lock` where `type` is `agent`:
    after the closing `---` of the frontmatter) with the composed output:
    ```bash
    # Read the frontmatter (everything up to and including the second ---)
-   frontmatter=$(awk '/^---$/{if(++n==2){print;exit}else print}' "<install_target>/<name>.md")
+   frontmatter=$(awk '/^---$/{n++; print; if(n==2) exit; next} {print}' "<install_target>/<name>.md")
    composed_body=$(python3 "${COMPOSE_SCRIPT}" "<install_target>/<name>.md")
    printf '%s\n\n%s\n' "${frontmatter}" "${composed_body}" > "<install_target>/<name>.md"
    ```
