@@ -23,8 +23,10 @@
       "required": [
         "name",
         "type",
+        "marketplace",
         "source",
         "source_commit",
+        "cache_path",
         "install_target",
         "install_timestamp",
         "checksum_sha256"
@@ -40,6 +42,11 @@
           "type": "string",
           "enum": ["skill", "agent", "prompt", "guardrail"]
         },
+        "marketplace": {
+          "description": "Name of the source-provider marketplace entry in library.yaml.marketplaces. Identifies which marketplace this item was fetched from. Use 'local' for local-path sources and 'unknown' for sources that cannot be matched to a registered marketplace.",
+          "type": "string",
+          "minLength": 1
+        },
         "source": {
           "description": "Origin URL or local path from which the item was fetched. For GitHub sources, this is the browser-form URL (https://github.com/<org>/<repo>/blob/<branch>/<path>). For local sources, the absolute or relative file path.",
           "type": "string",
@@ -49,6 +56,10 @@
           "description": "Git commit SHA of the source repository at install time. Provides reproducibility: re-running /library sync with this SHA yields identical content. Use 'local' for non-git local sources.",
           "type": "string",
           "minLength": 1
+        },
+        "cache_path": {
+          "description": "Absolute path to the Layer-B (cache) directory for this item, format: ~/.local/share/library/skills/<marketplace>/<name>@<source_commit>/. Set to empty string for entries migrated from older lockfile versions — will be populated on next 'library sync'.",
+          "type": "string"
         },
         "install_target": {
           "description": "Relative path of the installation directory within the project (e.g. .claude/skills/dolt/ for a project-local skill). Trailing slash is required.",

@@ -267,8 +267,10 @@ def test_lockfile_type_includes_guardrail():
             {
                 "name": "block-destructive-bash",
                 "type": "guardrail",
+                "marketplace": "cognovis-core",
                 "source": "guardrails/block-destructive-bash/claude-code.sh",
                 "source_commit": "local",
+                "cache_path": "",
                 "install_target": ".claude/hooks/block-destructive-bash/",
                 "install_timestamp": "2026-04-30T12:00:00Z",
                 "checksum_sha256": "a" * 64,
