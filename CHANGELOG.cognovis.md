@@ -9,9 +9,15 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ### Added
 
-- **MCP Servers Registry** (`library.yaml`): Populated `mcp_servers:` section with 6 canonical registry entries from CL-p91 audit — playwright, pencil, lsp, filesystem (keep-mcp: stateful sessions or Desktop-only) and executive-circle, heypresto (ship-both: CLI to be built, MCP retained for mobile). All entries validated against CL-mfz canonical schema with capabilities, coding\_strategy, mobile\_strategy, and per-harness install snippets.
+- **MCP Servers Registry Population** (`library.yaml`): Populated `mcp_servers:` section with 6 canonical registry entries (playwright, pencil, lsp, filesystem, executive-circle, heypresto) from CL-p91 audit. All keep-mcp (stateful browser/editor/LSP/Desktop) and ship-both (executive-circle, heypresto) servers now registered with capabilities, coding_strategy, mobile_strategy, and per-harness install snippets validated against the CL-mfz canonical schema.
 
 - **Canonical CLI Launchers: cld and cdx** (`cognovis-library/bin/cld`, `cognovis-library/bin/cdx`, `cognovis-library/bin/lib/cld-system-prompt.zsh`, `cognovis-library/scripts/install-bin.sh`): Established canonical home for Claude Code (`cld`) and Codex (`cdx`) launchers in `cognovis-library/bin/`, implementing Phase 1 of ADR-0002. Created idempotent install script (`install-bin.sh`) that symlinks both launchers from `~/.local/bin/` into the canonical source. Updated `CLAUDE.md` and `docs/ARCHITECTURE.md` to document canonical home and install procedure. Removed `~/.claude/scripts/` from `$PATH`. Smoke test confirms `cld -b <bead-id>` launches worktree sessions cleanly via single editable source.
+
+### Changed
+
+- **Skills/Hooks Migration to ob CLI Dual-Mode Pattern** (`library.yaml`, `prime/PRIME.md`, `cognovis/library-core/.claude/skills/ob-cli/SKILL.md`, `~/.claude/standards/workflow/agent-session-capture.md`, `~/.claude/.beads/PRIME.md`, `~/.claude/skills/open-brain/people-query/SKILL.md`): Migrated three skills and hooks from MCP-only (`mcp__open-brain__*`) to ob CLI dual-mode pattern for coding-harness sessions, retaining MCP for mobile + admin operations. New wrapper skill `ob-cli` (cognovis/library-core) documents routing logic (prefer CLI for coding harnesses; fallback to MCP for interactive/mobile). Updated `prime/PRIME.md` memory routing to prefer ob CLI for SessionStart sessions. Migrated `people-query` skill to call ob CLI for coding harness. Updated agent-session-capture standard to use ob CLI. MCP entry retained for non-coding contexts. Closes CL-l4f.
+
+- **Sussdorff-Plugins Marketplace Retirement** (Phase 2a of ADR-0002): Completed content-equivalence audit for all 8 `sussdorff-plugins` bundles (core, beads-workflow, infra, business, content, meta, medical, dev-tools) and verified parity with canonical sources in `cognovis/library-core` and `sussdorff/library-core`. Uninstalled all bundles, deregistered the marketplace from `known_marketplaces.json`, and cleaned library catalog. Fresh session smoke test confirms hooks, agents, and skills resolve cleanly from deployed locations. Audit report committed to `docs/audit/sussdorff-plugins-retirement-audit.md`. Filed 7 follow-up beads for drift resolution in canonical repos.
 
 ### Fixed
 

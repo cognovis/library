@@ -336,6 +336,18 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: ob-cli
+      description: >-
+        ob CLI skill wrapper for open-brain memory operations in coding harnesses.
+        Provides dual-mode routing guidance: use `ob` CLI for coding sessions (search,
+        save, context, timeline), use MCP for mobile (claude.ai/iOS) and admin operations.
+        Triggers on memory, open-brain, ob CLI, recall, past work, save observation.
+      source: https://github.com/cognovis/library-core/blob/main/.claude/skills/ob-cli/SKILL.md
+      harness: claude
+      tags:
+        - origin:original
+        - tier:core
+        - memory
     - name: op-credentials
       description: >-
         Read, list, and create service credentials in 1Password. Use when needing API keys,
