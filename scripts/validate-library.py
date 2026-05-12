@@ -120,8 +120,9 @@ def main() -> int:
         for i, entry in enumerate(data.get('library', {}).get(section, [])):
             name = entry.get('name', f'<entry {i}>')
             has_source = bool(entry.get('source'))
+            has_sources_map = bool(entry.get('sources'))  # per-harness map (CL-l0c)
             has_marketplace_ref = bool(entry.get('from_marketplace') and entry.get('repo') and entry.get('path'))
-            if not has_source and not has_marketplace_ref:
+            if not has_source and not has_sources_map and not has_marketplace_ref:
                 semantic_errors.append(
                     f"  [library.{section}[{i}] '{name}'] Entry has no resolvable source: "
                     "provide either 'source' or 'from_marketplace + repo + path'"

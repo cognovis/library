@@ -46,6 +46,35 @@ For all other entries (skills, agents, prompts, single-hook guardrails),
 continue with Step 3.
 
 ### 3. Resolve Marketplace Reference
+
+#### 3a. Handle `sources:` map (per-harness file paths)
+
+If the entry has a `sources:` map instead of (or in addition to) a singular `source:`,
+resolve files per harness:
+
+```yaml
+# Example: agent with both Claude and Codex files
+sources:
+  claude: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
+  codex: https://github.com/cognovis/library-core/blob/main/.codex/agents/bead-orchestrator.toml
+```
+
+- **`sources.claude`**: Install the `.md` file to the Claude agents directory
+  (e.g. `~/.claude/agents/<name>.md` for global install).
+- **`sources.codex`**: Install the `.toml` file to the Codex agents directory
+  (e.g. `~/.codex/agents/<name>.toml` for global install).
+- **Codex coverage gap**: If the entry has `sources.claude` but no `sources.codex`
+  (or a singular `source:` pointing to a `.md` file only), emit:
+  > "Codex coverage gap: agent `<name>` has no Codex `.toml` sibling.
+  > Claude install complete. To add Codex coverage: author a `.toml` file
+  > and add it to `library.yaml` under `sources.codex:`."
+  Do NOT auto-convert `.md` to `.toml` — they have different runtime semantics.
+- Fetch each file in `sources:` separately using the normal GitHub clone flow.
+
+If the entry has a singular `source:` field, skip step 3a and continue.
+
+#### 3b. (Original Step 3) Marketplace Reference
+
 If the matched catalog entry has a `source` field, skip this step — use the explicit `source` directly in Step 6.
 
 If the entry has a `from_marketplace` field (and no `source`):
@@ -642,3 +671,42 @@ Tell the user:
 - Any dependencies that were also installed
 - If this was a refresh (overwrite), mention that
 - Confirm that `.library.lock` was updated
+
+
+---
+
+## Codex Slash-Commands: Coverage Gap Documentation
+
+> **Spike date:** 2026-05-12 | **Codex CLI version:** 0.130.0 | **Bead:** CL-l0c (Deliverable C)
+
+### Is slash-command install to Codex supported?
+
+**Short answer: Not via the same mechanism as Claude Code.**
+
+| Feature | Claude Code | Codex CLI 0.130.0 |
+|---------|-------------|-------------------|
+| User-defined slash commands | `~/.claude/commands/<name>.md` (YAML frontmatter) | Not directly supported via `.md` files |
+| User-defined "commands" equivalent | -- | **Skills** (`~/.codex/skills/<name>/SKILL.md`) |
+| Built-in slash commands | `/beads`, `/library`, `/dispatch`, ... | `/model`, `/review`, `/plan`, `/skills`, ... |
+| Custom prompt format | Single `.md` file, YAML frontmatter, `$ARGUMENTS` | Deprecated: `~/.codex/prompts/<name>.md` |
+
+### Resolution path
+
+- **For SKILL.md-based primitives:** The library already handles cross-harness install via
+  the dual-install symlink mechanism (Step 5c). Skills work in both harnesses today.
+- **For slash-commands (.md in commands/):** These are Claude-Code-only today. Library
+  entries pointing to `commands/*.md` files should have `harness: claude` until Codex
+  adds native slash-command support.
+- **For agents with Codex `.toml` siblings:** Use the `sources:` map pattern
+  (see Step 3a). This is the ship-both-files pattern implemented in CL-l0c.
+
+### Follow-up recommendation
+
+If Codex CLI adds a dedicated slash-command mechanism in a future version, a follow-up
+bead should:
+1. Research the format (likely `~/.codex/commands/` or inline in `config.toml`).
+2. Add `sources.codex_command:` key to the `prompt_entry` schema.
+3. Update the resolver (Step 3a) to handle prompt entries with Codex sources.
+
+Until then, prompt entries in `library.yaml` are **Claude-only** and should not claim
+Codex coverage.
