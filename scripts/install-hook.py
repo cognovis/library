@@ -12,9 +12,11 @@ Supported harnesses:
   codex   -- merges into ~/.codex/hooks.json (Codex CLI)
   all     -- installs to all supported harnesses (default when --harness omitted)
 
-Codex CLI supports only 3 hook events: SessionStart, SessionEnd, Stop.
-For any other event (PreToolUse, SubagentStop, etc.), a mismatch_warning is
-emitted per the guardrail's capability.codex_cli field and the event is skipped.
+Codex CLI 0.130.0 supports command hooks for PreToolUse, PermissionRequest,
+PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, and Stop.
+For unsupported Claude-only events (SubagentStop, TaskCreated, etc.), a
+mismatch_warning is emitted per the guardrail's capability.codex_cli field and
+the event is skipped.
 
 Usage:
     install-hook.py <guardrail-name>                        # install to all harnesses
@@ -31,6 +33,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -48,9 +51,20 @@ GUARDRAILS_HOME = LIBRARY_HOME / "guardrails"
 
 CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
-# Codex CLI supports only these 3 hook events.
-# All other Claude events must be skipped with a mismatch_warning.
-CODEX_SUPPORTED_EVENTS = frozenset({"SessionStart", "SessionEnd", "Stop"})
+# Codex CLI 0.130.0 hook events. Keep this in sync with OpenAI Codex's
+# HookEventsToml in codex-rs/config/src/hook_config.rs.
+CODEX_SUPPORTED_EVENTS = frozenset(
+    {
+        "PreToolUse",
+        "PermissionRequest",
+        "PostToolUse",
+        "PreCompact",
+        "PostCompact",
+        "SessionStart",
+        "UserPromptSubmit",
+        "Stop",
+    }
+)
 
 # Allow override via environment variable for testing.
 CODEX_HOOKS_FILE = Path(
@@ -214,16 +228,24 @@ def remove_hooks(settings: dict, guardrail_name: str) -> dict:
 # Codex harness (hooks.json) — CL-l0c
 # ---------------------------------------------------------------------------
 
-CODEX_HOOKS = Path.home() / ".codex" / "hooks.json"
-
 HARNESS_SETTINGS = {
     "claude_code": CLAUDE_SETTINGS,
-    "codex_cli": CODEX_HOOKS,
+    "codex_cli": CODEX_HOOKS_FILE,
 }
+
+
+def _selected_harness_keys(harness: str) -> set[str]:
+    if harness == "claude":
+        return {"claude_code"}
+    if harness == "codex":
+        return {"codex_cli"}
+    return set(HARNESS_SETTINGS)
 
 
 def _load_json(path: Path) -> dict:
     if not path.is_file():
+        return {}
+    if path.stat().st_size == 0:
         return {}
     with path.open() as f:
         return json.load(f)
@@ -239,7 +261,33 @@ def _write_json(path: Path, data: dict) -> None:
         f.write("\n")
 
 
-def install_single_hook(entry: dict, dry_run: bool = False) -> int:
+def _command_for_hook(path: Path, handler: str | None) -> str:
+    """Build the command string for a single-hook source."""
+    quoted = shlex.quote(str(path))
+    if handler in {"python", "python3"} or path.suffix == ".py":
+        return f"python3 {quoted}"
+    if handler in {"node", "node-mjs"} or path.suffix == ".mjs":
+        return f"node {quoted}"
+    if handler in {"bash", "bash-script", "sh"} or path.suffix in {".sh", ".bash"}:
+        return f"bash {quoted}"
+    return quoted
+
+
+def _normalize_codex_group(group: dict) -> dict:
+    """Normalize a hook group for Codex hooks.json."""
+    normalized = dict(group)
+    hooks = []
+    for hook in normalized.get("hooks", []):
+        hook = dict(hook)
+        timeout_sec = hook.pop("timeoutSec", None)
+        if timeout_sec is not None and "timeout" not in hook:
+            hook["timeout"] = timeout_sec
+        hooks.append(hook)
+    normalized["hooks"] = hooks
+    return normalized
+
+
+def install_single_hook(entry: dict, harness: str, dry_run: bool = False) -> int:
     """Install a kind=single-hook guardrail per-harness.
 
     For each harness key in entry.sources, register the source path as a hook
@@ -252,8 +300,11 @@ def install_single_hook(entry: dict, dry_run: bool = False) -> int:
     if not sources:
         sys.exit(f"{name!r}: kind=single-hook but no sources: map")
 
+    selected = _selected_harness_keys(harness)
     total = 0
     for harness, rel_path in sources.items():
+        if harness not in selected:
+            continue
         if harness not in HARNESS_SETTINGS:
             print(f"  skip: unknown harness {harness!r}")
             continue
@@ -266,7 +317,8 @@ def install_single_hook(entry: dict, dry_run: bool = False) -> int:
         if not abs_path.is_file():
             sys.exit(f"  ERROR: {abs_path} missing on disk")
 
-        command = f"python3 {abs_path}"
+        harness_capability = capability.get(harness, {})
+        command = _command_for_hook(abs_path, harness_capability.get("handler"))
 
         settings_path = HARNESS_SETTINGS[harness]
         settings = _load_json(settings_path)
@@ -279,17 +331,20 @@ def install_single_hook(entry: dict, dry_run: bool = False) -> int:
                 h.get("_origin") == name
                 for h in (g.get("hooks", []) if isinstance(g, dict) else [])
             )]
-            timeout_key = "timeoutSec" if harness == "codex_cli" else "timeout"
-            group_list.append({
+            hook_group = {
                 "hooks": [
                     {
                         "type": "command",
                         "command": command,
-                        timeout_key: 15,
+                        "timeout": 15,
                         "_origin": name,
                     }
                 ]
-            })
+            }
+            matcher = harness_capability.get("matcher")
+            if matcher:
+                hook_group["matcher"] = matcher
+            group_list.append(hook_group)
             total += 1
 
         if dry_run:
@@ -302,11 +357,14 @@ def install_single_hook(entry: dict, dry_run: bool = False) -> int:
     return 0
 
 
-def remove_single_hook(entry: dict, dry_run: bool = False) -> int:
+def remove_single_hook(entry: dict, harness: str, dry_run: bool = False) -> int:
     name = entry["name"]
     sources = entry.get("sources", {})
+    selected = _selected_harness_keys(harness)
     removed_total = 0
     for harness in sources:
+        if harness not in selected:
+            continue
         settings_path = HARNESS_SETTINGS.get(harness)
         if not settings_path or not settings_path.is_file():
             continue
@@ -366,7 +424,7 @@ def _filter_manifest_for_codex(
 
     for event, groups in manifest.get("hooks", {}).items():
         if event in CODEX_SUPPORTED_EVENTS:
-            codex_hooks[event] = groups
+            codex_hooks[event] = [_normalize_codex_group(group) for group in groups]
         else:
             # Emit mismatch_warning -- event not supported by Codex CLI
             mismatch_msg = codex_capability.get(
@@ -402,7 +460,7 @@ def merge_codex_hooks(
             for group in target_event
             for h in group.get("hooks", [])
         }
-        for src_group in manifest_groups:
+        for src_group in (_normalize_codex_group(group) for group in manifest_groups):
             new_hooks = []
             for h in src_group.get("hooks", []):
                 sig = _hook_signature(h)
@@ -552,8 +610,8 @@ def main() -> int:
 
     if kind == "single-hook":
         if args.remove:
-            return remove_single_hook(entry, dry_run=args.dry_run)
-        return install_single_hook(entry, dry_run=args.dry_run)
+            return remove_single_hook(entry, args.harness, dry_run=args.dry_run)
+        return install_single_hook(entry, args.harness, dry_run=args.dry_run)
 
     if kind != "hooks-manifest":
         sys.exit(f"{args.name!r} has unsupported kind={kind!r}")

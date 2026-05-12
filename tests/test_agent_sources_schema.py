@@ -271,12 +271,46 @@ def test_install_hook_codex_dry_run_shows_sessionstart():
         )
         combined = result.stdout + result.stderr
         assert result.returncode == 0, (
-            f"install-hook.py --harness codex --dry-run failed:\n{combined}"
+            f"install-hook.py --harness codex failed:\n{combined}"
         )
         assert "SessionStart" in combined, (
             f"Expected SessionStart in codex dry-run output. Got:\n{combined}"
         )
     print("PASS test_install_hook_codex_dry_run_shows_sessionstart")
+
+
+def test_install_hook_codex_single_hook_uses_current_schema():
+    """Codex single-hook install uses current hook events, command runner, matcher, and timeout."""
+    with tempfile.TemporaryDirectory() as tmp:
+        fake_codex_hooks = Path(tmp) / "codex-hooks.json"
+        env = {**os.environ, "CODEX_HOOKS_FILE": str(fake_codex_hooks)}
+
+        result = subprocess.run(
+            [
+                "python3", str(INSTALL_HOOK_PATH),
+                "block-destructive-bash",
+                "--harness", "codex",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, (
+            f"install-hook.py --harness codex failed:\n{combined}"
+        )
+        data = json.loads(fake_codex_hooks.read_text())
+        serialized = json.dumps(data)
+        assert "claude_code" not in combined, combined
+        assert "PreToolUse" in data["hooks"], data
+        group = data["hooks"]["PreToolUse"][0]
+        hook = group["hooks"][0]
+        assert group["matcher"] == "Bash", data
+        assert hook["command"].startswith("node "), data
+        assert hook["timeout"] == 15, data
+        assert "timeoutSec" not in serialized, data
+        assert not hook["command"].startswith("python3 "), data
+    print("PASS test_install_hook_codex_single_hook_uses_current_schema")
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +336,7 @@ def test_mismatch_warning_for_subagent_stop():
             env=env,
         )
         combined = result.stdout + result.stderr
-        # SubagentStop is unsupported in Codex (only SessionStart/SessionEnd/Stop supported)
+        # SubagentStop is unsupported in Codex and should not be written to hooks.json.
         # The script must emit a mismatch_warning for it
         assert "SubagentStop" in combined or "mismatch" in combined.lower(), (
             f"Expected SubagentStop mismatch warning in output. Got:\n{combined}"
@@ -328,6 +362,7 @@ if __name__ == "__main__":
         test_library_yaml_still_valid_after_sources_migration,
         test_install_hook_accepts_harness_flag,
         test_install_hook_codex_dry_run_shows_sessionstart,
+        test_install_hook_codex_single_hook_uses_current_schema,
         test_mismatch_warning_for_subagent_stop,
     ]
 

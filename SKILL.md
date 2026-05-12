@@ -1,7 +1,7 @@
 ---
 name: library
 description: Private skill distribution system. Use when the user wants to install, use, add, push, remove, sync, list, or search for skills, agents, or prompts from their private library catalog. Triggers on /library commands or mentions of library, skill distribution, or agentic management.
-argument-hint: [command or prompt] [name or details]
+argument-hint: "[command or prompt] [name or details]"
 ---
 
 # The Library

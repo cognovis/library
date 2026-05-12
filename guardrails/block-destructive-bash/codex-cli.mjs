@@ -1,62 +1,78 @@
+#!/usr/bin/env node
 /**
- * block-destructive-bash — Codex CLI SessionStart guardrail
+ * block-destructive-bash -- Codex CLI PreToolUse guardrail.
  *
- * Codex CLI has no PreToolUse event (only SessionStart, SessionEnd, Stop).
- * This hook injects a WARNING into the session context at startup to
- * discourage destructive commands. Effectiveness is advisory, not hard-blocking.
- *
- * Installation:
- *   1. Copy this file to your Codex hooks directory
- *   2. Register in hooks.json:
- *      {
- *        "hooks": {
- *          "SessionStart": [
- *            { "matcher": "", "script": ".codex/hooks/block-destructive-bash.mjs" }
- *          ]
- *        }
- *      }
- *
- * Codex CLI hook contract:
- *   - SessionStart hooks run at session initialization
- *   - Hooks can output text that is prepended to the system context
- *   - No exit-code blocking (Codex CLI lacks PreToolUse gate)
- *
- * References:
- *   - docs/research/codex-prompts.md (CL-qzw)
- *   - library.yaml guardrails[block-destructive-bash]
- *
- * CAPABILITY NOTE: This is a reduced-capability installation.
- * Claude Code's PreToolUse hook provides hard blocking; this provides
- * advisory injection only. See docs/research/guardrails-mapping.md for
- * the capability mismatch table.
+ * Codex runs command hooks with a JSON payload on stdin. For PreToolUse, a
+ * hook may block by exiting 0 and printing {"decision":"block","reason":"..."}
+ * to stdout.
  */
 
-export default {
-  name: "block-destructive-bash",
+import process from "node:process";
 
-  async onSessionStart(context) {
-    const warningMessage = `
-GUARDRAIL ACTIVE: block-destructive-bash
-=========================================
-The following operations require explicit human approval before execution:
-  - Recursive forced deletes (rm -rf)
-  - Force-pushes to git remotes (git push --force / git push -f)
-  - SQL DDL that destroys data (DROP TABLE, DROP DATABASE, TRUNCATE TABLE)
-  - Low-level disk writes (dd if=... of=/dev/...)
-  - Drive formatting commands (format C: or equivalent)
+const input = await new Promise((resolve) => {
+  let data = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk) => {
+    data += chunk;
+  });
+  process.stdin.on("end", () => resolve(data));
+});
 
-If you need to run any of these operations, STOP and ask the user for
-explicit permission. The user must confirm and run the command manually.
+if (!input.trim()) {
+  process.exit(0);
+}
 
-Rationale: These operations cannot be undone. The model may not have full
-context about the consequences — always defer to human judgment.
-=========================================
-`.trim();
+let payload;
+try {
+  payload = JSON.parse(input);
+} catch {
+  process.exit(0);
+}
 
-    // Inject the warning into session context
-    // Codex CLI will prepend this to the model's system context
-    return {
-      systemContextAddition: warningMessage,
-    };
+if (payload.tool_name !== "Bash") {
+  process.exit(0);
+}
+
+const command = payload.tool_input?.command;
+if (typeof command !== "string" || !command.trim()) {
+  process.exit(0);
+}
+
+const checks = [
+  {
+    pattern: /(^|[\s;]|\|\||&&|\|)rm\s+(-[a-z]*r[a-z]*f[a-z]*|--recursive\s+--force|--force\s+--recursive)(\s|$)/i,
+    reason: "Recursive forced delete (rm -rf) detected. This irreversibly deletes files.",
   },
-};
+  {
+    pattern: /git\s+push(\s+\S+)*\s+(--force|-f)(\s|$)/i,
+    reason: "Force push to git remote detected. This can overwrite remote history irreversibly.",
+  },
+  {
+    pattern: /DROP\s+(TABLE|DATABASE|SCHEMA)\s/i,
+    reason: "SQL DROP TABLE/DATABASE/SCHEMA detected. This irreversibly destroys data.",
+  },
+  {
+    pattern: /TRUNCATE\s+(TABLE\s+)?[a-zA-Z]/i,
+    reason: "SQL TRUNCATE TABLE detected. This irreversibly removes all rows from a table.",
+  },
+  {
+    pattern: /(^|[\s;]|\|\||&&|\|)dd\s+.*of=\/dev\//i,
+    reason: "dd writing to a block device detected. This can irreversibly overwrite disk data.",
+  },
+  {
+    pattern: /(^|[\s;]|\|\||&&|\|)format\s+[a-zA-Z]:/i,
+    reason: "Windows drive format command detected. This irreversibly destroys all data on the drive.",
+  },
+];
+
+const match = checks.find((check) => check.pattern.test(command));
+if (!match) {
+  process.exit(0);
+}
+
+console.log(
+  JSON.stringify({
+    decision: "block",
+    reason: `${match.reason}\n\nIf this operation is truly needed, ask the user for explicit permission and have them run the command manually.`,
+  }),
+);

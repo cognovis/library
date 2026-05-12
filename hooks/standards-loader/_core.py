@@ -26,6 +26,13 @@ INSTALL_ROOTS = [
 ]
 
 CLAUDE_MD_NAMES = ("CLAUDE.md", "AGENTS.md")
+CONTEXT_DOTFILE_NAMES = {
+    ".env",
+    ".env.example",
+    ".python-version",
+    ".nvmrc",
+    ".node-version",
+}
 PROJECT_FILE_HINTS = (
     "pyproject.toml", "package.json", "tsconfig.json", "Cargo.toml",
     "go.mod", "Gemfile", "composer.json", "build.gradle", "pom.xml",
@@ -41,6 +48,13 @@ class StandardEntry:
     source: str
     triggers: list[str]
     is_bundle: bool
+
+
+@dataclass
+class MatchedStandardFile:
+    entry_name: str
+    relative_name: str
+    path: Path
 
 
 def _find_library_yaml() -> Path:
@@ -77,13 +91,17 @@ def _entries(catalog: dict) -> list[StandardEntry]:
 def _project_context(cwd: Path) -> str:
     """Build a single lowercase string scanned for trigger substrings.
 
-    Combines: project basename, listing of top-level filenames,
-    contents of CLAUDE.md/AGENTS.md (up to 8 KB each).
+    Combines project basename and top-level filenames. Instruction files
+    (CLAUDE.md/AGENTS.md) are intentionally not scanned by default: they contain
+    generic words such as "agent", "git", "test", and "view", which otherwise
+    trigger broad standards bundles for nearly every project.
     """
     parts: list[str] = [cwd.name.lower()]
 
     try:
         for entry in cwd.iterdir():
+            if entry.name.startswith(".") and entry.name not in CONTEXT_DOTFILE_NAMES:
+                continue
             parts.append(entry.name.lower())
     except OSError:
         pass
@@ -92,13 +110,14 @@ def _project_context(cwd: Path) -> str:
         if (cwd / hint).exists():
             parts.append(hint.lower())
 
-    for fname in CLAUDE_MD_NAMES:
-        p = cwd / fname
-        if p.is_file():
-            try:
-                parts.append(p.read_text(errors="ignore")[:8192].lower())
-            except OSError:
-                pass
+    if os.environ.get("STANDARDS_LOADER_SCAN_INSTRUCTIONS") == "1":
+        for fname in CLAUDE_MD_NAMES:
+            p = cwd / fname
+            if p.is_file():
+                try:
+                    parts.append(p.read_text(errors="ignore")[:8192].lower())
+                except OSError:
+                    pass
 
     return "\n".join(parts)
 
@@ -149,14 +168,14 @@ def _read_bundle_triggers(bundle_dir: Path) -> dict | None:
     return files
 
 
-def _read_entry(entry: StandardEntry, context: str) -> str | None:
-    """Read installed content for an entry from the first install root found.
+def _matched_files_for_entry(entry: StandardEntry, context: str) -> list[MatchedStandardFile]:
+    """Return installed files for a matched entry from the first install root found.
 
     Bundles: read <root>/<name>/_triggers.yml; for each file listed, evaluate
       its per-file triggers against the project context; include only matching
       files. STRICT MODE: files without an _triggers.yml entry are skipped.
       A bundle with no _triggers.yml contributes nothing.
-    Single files: read <root>/<name>.md.
+    Single files: return <root>/<name>.md.
     Project-local roots override global ones (first install root wins per
     bundle); within a bundle the project-local _triggers.yml is authoritative.
     """
@@ -169,7 +188,7 @@ def _read_entry(entry: StandardEntry, context: str) -> str | None:
             if file_triggers is None:
                 # Strict mode: no _triggers.yml -> nothing loads from this bundle
                 continue
-            pieces = []
+            matches: list[MatchedStandardFile] = []
             for fname, triggers in file_triggers.items():
                 if not triggers:
                     continue
@@ -178,39 +197,42 @@ def _read_entry(entry: StandardEntry, context: str) -> str | None:
                 file_path = bundle_dir / fname
                 if not file_path.is_file():
                     continue
-                pieces.append(f"### {entry.name}/{fname}\n\n{file_path.read_text(errors='ignore')}")
-            if pieces:
-                return "\n\n".join(pieces)
-            return None
+                matches.append(MatchedStandardFile(entry.name, fname, file_path))
+            return matches
         else:
             single = root / f"{entry.name}.md"
             if single.is_file():
-                return f"### {entry.name}\n\n{single.read_text(errors='ignore')}"
-    return None
+                return [MatchedStandardFile(entry.name, f"{entry.name}.md", single)]
+    return []
+
+
+def _matched_standard_files(cwd: Path) -> list[MatchedStandardFile]:
+    library_yaml = _find_library_yaml()
+    catalog = _load_yaml(library_yaml) or {}
+    context = _project_context(cwd)
+
+    files: list[MatchedStandardFile] = []
+    for entry in _entries(catalog):
+        if not _match(entry, context):
+            continue
+        files.extend(_matched_files_for_entry(entry, context))
+    return files
 
 
 def collect_matched_standards(cwd: Path | None = None) -> str:
     """Public entry point. Returns the assembled markdown text, or empty."""
     if cwd is None:
         cwd = Path.cwd()
-    library_yaml = _find_library_yaml()
-    catalog = _load_yaml(library_yaml) or {}
-    context = _project_context(cwd)
+    files = _matched_standard_files(cwd)
+    if not files:
+        return ""
 
-    blocks: list[str] = []
-    matched_names: list[str] = []
-    file_count = 0
-    for entry in _entries(catalog):
-        if not _match(entry, context):
-            continue
-        content = _read_entry(entry, context)
-        if not content:
-            continue
-        blocks.append(content)
-        matched_names.append(entry.name)
-        # Count only the per-file section markers we inject ("### <bundle>/<name>.md").
-        # Other "### " lines inside the standards content are subheadings.
-        file_count += len(re.findall(r"^### \S+/\S+\.md", content, re.MULTILINE))
+    blocks = [
+        f"### {match.entry_name}/{match.relative_name}\n\n{match.path.read_text(errors='ignore')}"
+        for match in files
+    ]
+    matched_names = sorted({match.entry_name for match in files})
+    file_count = len(files)
 
     if not blocks:
         return ""
@@ -222,6 +244,30 @@ def collect_matched_standards(cwd: Path | None = None) -> str:
         f"({', '.join(matched_names)}) -->"
     )
     return header + "\n\n" + "\n\n---\n\n".join(blocks)
+
+
+def collect_matched_standards_index(cwd: Path | None = None) -> str:
+    """Return a compact index of matched standards without injecting full content."""
+    if cwd is None:
+        cwd = Path.cwd()
+    files = _matched_standard_files(cwd)
+    if not files:
+        return ""
+
+    matched_names = sorted({match.entry_name for match in files})
+    lines = [
+        f"<!-- standards-loader: {len(files)} matched file"
+        f"{'' if len(files) == 1 else 's'} from "
+        f"{len(matched_names)} entr{'y' if len(matched_names) == 1 else 'ies'} "
+        f"({', '.join(matched_names)}); full content not auto-injected -->",
+        "",
+        "Relevant standards are available on disk. Load only the specific file that directly applies to the current task:",
+    ]
+    for match in files:
+        lines.append(f"- {match.entry_name}/{match.relative_name}: {match.path}")
+    lines.append("")
+    lines.append("Set STANDARDS_LOADER_MODE=full to inject full matched standard content.")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
