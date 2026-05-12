@@ -65,6 +65,12 @@ class TestBeadsWorkflowPlugin:
         agent_path = LIBRARY_CORE / ".claude" / "agents" / agent_name
         assert agent_path.exists(), f"Missing bridge agent in .claude/agents/: {agent_path}"
 
+    @pytest.mark.skip(
+        reason="Superseded by ADR-0004 Decision 6 (sibling layout). "
+        "Claude .md agents are no longer mirrored into .codex/agents/. "
+        "Codex coverage requires a sibling .toml under agents/, validated by "
+        "TestCodexTomlBridges.test_toml_sibling_in_agents."
+    )
     @pytest.mark.parametrize("agent_name", BEADS_WORKFLOW_AGENTS)
     def test_agent_in_codex_agents(self, agent_name):
         agent_path = LIBRARY_CORE / ".codex" / "agents" / agent_name
@@ -85,12 +91,18 @@ class TestBeadsWorkflowPlugin:
 # ---------------------------------------------------------------------------
 
 class TestCodexTomlBridges:
-    """Group B: 3 codex .toml bridges."""
+    """Group B: 3 codex .toml agent files.
+
+    Per ADR-0004 Decision 6 (sibling layout) Codex .toml agents live next
+    to their Claude .md siblings under `agents/<name>.toml`, not in a
+    separate `.codex/agents/` bridge directory. The bridge-directory
+    convention from the original CL-8vb plan was superseded by CL-8qr.
+    """
 
     @pytest.mark.parametrize("toml_name", CODEX_TOML_BRIDGES)
-    def test_toml_bridge_in_codex(self, toml_name):
-        toml_path = LIBRARY_CORE / ".codex" / "agents" / toml_name
-        assert toml_path.exists(), f"Missing .toml bridge: {toml_path}"
+    def test_toml_sibling_in_agents(self, toml_name):
+        toml_path = LIBRARY_CORE / "agents" / toml_name
+        assert toml_path.exists(), f"Missing .toml sibling: {toml_path}"
 
 
 # ---------------------------------------------------------------------------

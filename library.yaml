@@ -458,6 +458,18 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: session-close
+      description: >-
+        Handler bundle for the session-close agent. Ships bash/python scripts implementing
+        the double-merge close workflow: changelog, CalVer/SemVer versioning, doc-gap
+        detection, beads close, phase-B prepare/ship/close, pipeline-watch, CI monitor,
+        lockfile, render-summary, turn-log upload, plugin-cache sync. Consumed by the
+        `session-close` agent (Claude .md + Codex .toml) — not invoked directly by users.
+      source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
+      tags:
+        - origin:original
+        - tier:core
+        - kind:handler-bundle
     - name: skill-auditor
       description: >-
         Audit and score agent skills fleet-wide; validate or check a single skill for
@@ -1084,6 +1096,8 @@ library:
         pipeline completes. Handles parallel session-closes by filtering on commit SHA.
         Returns a single structured verdict line.
       source: https://github.com/cognovis/library-core/blob/main/agents/ci-monitor.md
+      requires:
+        - "skill:session-close"
       tags:
         - origin:original
         - tier:domain
@@ -1251,6 +1265,10 @@ library:
         Sonnet implementer, triggers Codex review, handles fix loop (max 2 iterations), then
         hands off to session-close.
       source: https://github.com/cognovis/library-core/blob/main/agents/quick-fix.md
+      requires:
+        - "agent:review-agent"
+        - "agent:session-close"
+        - "skill:factory-check"
       tags:
         - origin:original
         - tier:core
@@ -1288,6 +1306,7 @@ library:
         codex: https://github.com/cognovis/library-core/blob/main/agents/session-close.toml
       requires:
         - "mcp:open-brain"
+        - "skill:session-close"
       tags:
         - origin:original
         - tier:core
@@ -1978,8 +1997,9 @@ guardrails:
         events: [SessionStart]
         handler: python
         note: >-
-          Writes matched standards content to stdout; Codex injects it into
-          session preamble.
+          Writes a compact matched-standards index to stdout; Codex injects it
+          into the session preamble. Full content injection is opt-in via
+          STANDARDS_LOADER_MODE=full.
     sources:
       claude_code: hooks/standards-loader/claude-code.py
       codex_cli: hooks/standards-loader/codex-cli.py
@@ -2203,7 +2223,7 @@ catalog:
       - standards
     skeleton:
       claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
-      codex: [.agents/skills/, .agents/standards/, .codex/agents/]
+      codex: [.agents/skills/, .agents/standards/, agents/]
     notes: >-
       First-party personal library. Content targets personal workflows identified in
       docs/audit/skills-origin.json (personal_to_sussdorff_library_core list).
@@ -2226,7 +2246,7 @@ catalog:
       - standards
     skeleton:
       claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
-      codex: [.agents/skills/, .agents/standards/, .codex/agents/]
+      codex: [.agents/skills/, .agents/standards/, agents/]
     notes: >-
       First-party team library. Content covers original Cognovis team skills (origin=ORIGINAL
       per docs/audit/skills-origin.json). Name-collision and canonical-vs-bridge convention

@@ -7,6 +7,12 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Fixed
+
+- **`library.yaml` Codex source URL drift + marketplace skeleton** (`library.yaml`, `tests/test_missing_migration.py`): Updated `sources.codex` URL for `session-close` agent entry to point at `agents/session-close.toml` (sibling of the Claude `.md`), matching the existing `bead-orchestrator` and `wave-orchestrator` entries and the ADR-0004 Decision 6 sibling layout. Updated both `sussdorff-library-core` and `cognovis-library-core` catalog skeletons in `library.yaml` to list `agents/` instead of `.codex/agents/` for the Codex content_type — the latter directory has been retired in both first-party content repos. Skipped the obsolete `TestBeadsWorkflowPlugin.test_agent_in_codex_agents` test (which still asserted on the deprecated `.codex/agents/<name>.md` bridge mirror) and updated `TestCodexTomlBridges` to assert on `agents/<name>.toml` instead of `.codex/agents/<name>.toml`. Paired with `cognovis/library-core` which `git rm`d `.codex/agents/` entirely (37 stale Markdown shadows + 3 TOML files relocated to `agents/`).
+
+- **`session-close` agent: handler resolution moved out of plugin cache, into skill** (paired change in `cognovis/library-core`): The Claude `.md` and Codex `.toml` source-of-truth agent files now resolve handler scripts from `~/.agents/skills/session-close/handlers/` (canonical, Codex-native) with a Claude-bridge fallback at `~/.claude/skills/session-close/handlers/`, instead of the now-unpopulated `~/.claude/plugins/cache/sussdorff-plugins/core/<version>/agents/session-close-handlers/` path. Added a `session-close` skill entry to `library.yaml` (handler bundle, 19 scripts: bash phase-B prepare/ship/close, changelog, version, docs-check, beads-close, merge in/out, pipeline-watch, ci-monitor, lockfile, render-summary, turn-log-upload, plugin-cache sync, JSON schemas). Added `skill:session-close` to the `session-close` agent's `requires:` field so `/library use session-close` resolves the skill dependency atomically.
+
 ---
 
 ## [v2026.05.23] - 2026-05-12
