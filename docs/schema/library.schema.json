@@ -197,10 +197,10 @@
       ]
     },
     "typed_dependency": {
-      "description": "A typed dependency reference using 'type:name' format.",
+      "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2: skill, agent, prompt, hook, mcp.",
       "type": "string",
-      "pattern": "^(skill|agent|prompt):.+$",
-      "examples": ["skill:firecrawl", "agent:video-processor", "prompt:caption-style"]
+      "pattern": "^(skill|agent|prompt|hook|mcp):.+$",
+      "examples": ["skill:firecrawl", "agent:video-processor", "prompt:caption-style", "hook:block-destructive-bash", "mcp:open-brain"]
     },
     "base_entry": {
       "description": "Common fields shared by all catalog entry types. Either `source` or `from_marketplace + repo + path` is required.",

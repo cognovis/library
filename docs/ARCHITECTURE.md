@@ -191,6 +191,7 @@ tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRI
 | [ADR-0001](adr/sussdorff-plugins-retirement.md) | Replace sussdorff-plugins marketplace with per-project /library use | Superseded by ADR-0002 |
 | [ADR-0002](adr/canonical-library-architecture.md) | Library-core repos as canonical source; harness dirs as deployment targets; full marketplace retirement | Accepted |
 | [ADR-0003](adr/three-layer-cache-architecture.md) | Three-layer skill deployment: Source/Cache/Harness Symlink + marketplace-symmetric primitives | Accepted |
+| [ADR-0004](adr/frontmatter-dependency-resolution.md) | Frontmatter-driven dependency resolution for library primitives | Accepted |
 
 ## Open beads
 
