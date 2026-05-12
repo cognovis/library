@@ -305,13 +305,48 @@ For a **local path source** (copied via `cp`):
 source_commit=$(git -C "$(dirname '<source_path>')" rev-parse HEAD 2>/dev/null || echo "local")
 ```
 
-#### 8c. Build the lockfile entry
+#### 8c. Materialize the cache entry (Layer B)
+
+Per ADR-0003, the fetched content must be placed in the Layer-B cache directory before
+the harness install directory (Layer C) is created as a symlink.
+
+Determine the `cache_path`:
+
+```
+~/.local/share/library/skills/<marketplace>/<name>@<source_commit_short>/
+```
+
+Where `<source_commit_short>` is the first 14 hex characters of `source_commit` (or `local`
+for local-path sources). For GitHub sources, derive `<marketplace>` from the URL using
+the mapping in `scripts/migrate-lockfile.py` or from `library.yaml.marketplaces`.
+
+```bash
+cache_base="${HOME}/.local/share/library/skills"
+cache_path="${cache_base}/<marketplace>/<name>@${source_commit:0:14}/"
+mkdir -p "$cache_path"
+cp -R <fetched_source_dir>/ "$cache_path"
+```
+
+After materialize, the `install_target` directory should be a symlink into `cache_path`:
+
+```bash
+# Create harness symlink pointing into cache (Layer C → Layer B)
+ln -sfn "$cache_path" "<install_target_parent>/<name>"
+```
+
+> **Note**: If `cache_path` materialization is not yet implemented by the tool,
+> set `cache_path: ""` in the lockfile entry. It will be populated on next
+> `/library sync` once the three-layer architecture is active.
+
+#### 8d. Build the lockfile entry
 
 ```yaml
 - name: <name>
-  type: <type>          # skill | agent | prompt
+  type: <type>          # skill | agent | prompt | guardrail
+  marketplace: <marketplace>  # from library.yaml.marketplaces[].name, or "local" / "unknown"
   source: <source>      # the URL or path from Step 2 / 3
   source_commit: <sha>  # from 8b, or "local"
+  cache_path: <cache_path>  # from 8c; empty string if not yet materialized
   install_target: <install_target>/  # trailing slash required; from Step 5b
   install_timestamp: <ISO 8601 UTC>  # e.g. 2026-04-30T10:23:00Z
   checksum_sha256: <checksum>
@@ -320,7 +355,7 @@ source_commit=$(git -C "$(dirname '<source_path>')" rev-parse HEAD 2>/dev/null |
     - "<link-path> -> <target-path>"
 ```
 
-#### 8d. Write/update the lockfile
+#### 8e. Write/update the lockfile
 
 Read `.library.lock` (create with `installed: []` if it does not exist). Find the existing
 entry by `name` and replace it in place; or append if not found. Write back to `.library.lock`.
@@ -340,8 +375,10 @@ lock.setdefault('installed', [])
 entry = {
     'name': '<name>',
     'type': '<type>',
+    'marketplace': '<marketplace>',   # from library.yaml.marketplaces[].name
     'source': '<source>',
     'source_commit': '<source_commit>',
+    'cache_path': '<cache_path>',     # from 8c; empty string if not materialized
     'install_target': '<install_target>/',
     'install_timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
     'checksum_sha256': '<checksum>',

@@ -114,11 +114,37 @@ For each entry that has non-empty `bridge_symlinks`:
   ```
 - This ensures cross-harness bridges are restored after a fresh clone.
 
-### 6. Update .library.lock After Sync
+### 6. Reconcile Cache Against Lockfile (ADR-0003)
+
+Before updating the lockfile, reconcile the Layer-B cache with each entry's `cache_path`:
+
+For each entry in `.library.lock`:
+
+1. **If `cache_path` is empty** (migrated entry): derive and materialize the cache path:
+   ```bash
+   cache_path="${HOME}/.local/share/library/skills/<marketplace>/<name>@${source_commit:0:14}/"
+   mkdir -p "$cache_path"
+   cp -R <install_target>/ "$cache_path"
+   ```
+   Update the entry's `cache_path` to the materialized path.
+
+2. **If `cache_path` is set**: verify the cache directory exists and matches `checksum_sha256`.
+   If the cache is missing (e.g. after a clean install on a new machine):
+   ```bash
+   mkdir -p "<cache_path>"
+   cp -R <install_target>/ "<cache_path>"
+   ```
+
+3. **Verify install_target is a symlink** pointing into `cache_path` (Layer C → Layer B).
+   If it is a real directory instead of a symlink, the three-layer model is not yet active
+   for this entry — this is acceptable during the migration period.
+
+### 7. Update .library.lock After Sync
 
 After re-pulling each item, update its lockfile entry:
 - Recompute `checksum_sha256` from the primary artifact file
 - Update `source_commit` to the new HEAD of the cloned repo (or keep `local`)
+- Update `cache_path` if it was empty (populated in Step 6)
 - Update `install_timestamp` to the current UTC time
 
 ```python
@@ -138,14 +164,14 @@ with open(lock_path, 'w') as f:
     yaml.dump(lock, f, default_flow_style=False, allow_unicode=True)
 ```
 
-### 7. Resolve Dependencies
+### 8. Resolve Dependencies
 
 For each entry that has a `requires` field in `library.yaml`:
 - Check if each dependency is also in `.library.lock`
 - If a dependency is not in the lockfile, run `/library use <dep>` to install it
 - Process dependencies before the items that require them
 
-### 8. Report Results
+### 9. Report Results
 
 Display a summary table:
 

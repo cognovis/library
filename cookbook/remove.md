@@ -80,6 +80,30 @@ with open(lock_path, 'w') as f:
 
 If `.library.lock` does not exist, skip this step (no lockfile to update).
 
+#### 5e. GC hint — cache entry is retained (not deleted)
+
+When removing an item, the Layer-B cache directory (`cache_path` from the lockfile entry)
+is **NOT deleted** by `/library remove`. The cache is managed by `library gc` which uses
+reference-counting across all lockfiles (per-project + global).
+
+**Why retain the cache?**
+- Other projects may reference the same `cache_path` via their own lockfiles.
+- Rollback to a previous version remains possible as long as the cache entry exists.
+- The cache retains up to **N=3 versions** per `<marketplace>/<name>` before `library gc`
+  evicts older entries.
+
+**To free disk space**, run:
+```bash
+library gc
+```
+
+This scans all lockfiles, reference-counts each `cache_path`, and removes cache entries
+with zero references that exceed the N=3 retention limit.
+
+> **Note**: The cache directory at `~/.local/share/library/skills/<marketplace>/<name>@<commit>/`
+> will be listed as unreferenced after `/library remove` and will be a candidate for GC
+> on the next `library gc` run.
+
 ### 6. Commit and Push
 ```bash
 cd <LIBRARY_SKILL_DIR>
