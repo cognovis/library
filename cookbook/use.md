@@ -467,6 +467,50 @@ default_dirs:
   git clone --depth 1 --branch <branch> git@github.com:<org>/<repo>.git "$tmp_dir"
   ```
 
+### 6.5: Compose Agent Body (compose-on-install)
+
+> **Applies to agent entries only.** Skills, prompts, and guardrails are not composed.
+
+If the installed entry is an `agent` AND the fetched file's YAML frontmatter contains
+`golden_prompt_extends:` AND the value is NOT `from-scratch`:
+
+1. Locate `scripts/compose-agent.py` in the library root (same directory as `library.yaml`).
+
+2. Run the composer for the target harness:
+   ```bash
+   # For Claude Code (default):
+   python3 <LIBRARY_ROOT>/scripts/compose-agent.py <fetched-agent-file>
+
+   # For Codex:
+   python3 <LIBRARY_ROOT>/scripts/compose-agent.py <fetched-agent-file> --harness=codex
+   ```
+
+3. **On success** (exit code 0): replace the body of the fetched agent file (everything
+   after the closing `---` of the frontmatter) with the composed output.
+
+4. **On failure** (non-zero exit — missing Layer 1 or Layer 3):
+   - Warn the user: "Compose failed: <error>. Installing uncomposed agent body.
+     Run `/library sync` after installing the required base/model-standard."
+   - Continue with the original fetched body (graceful degradation). Do NOT abort
+     the install — an uncomposed agent still works with the harness system prompt.
+
+5. **For Codex agents** (`.toml` format): write the composed body into the
+   `developer_instructions` field in the TOML file.
+
+6. Continue with Step 7 (Verify Installation).
+
+> **Idempotency**: The composer is deterministic given the same input files.
+> Re-running install produces the same composed body. If a Layer 1 (`cognovis-base`)
+> or Layer 3 (model-standard) source file changes, the tree-SHA in the lockfile
+> changes and `/library sync` re-composes automatically.
+
+> **Layer resolution search order** for `compose-agent.py`:
+> 1. `<proj_root>/.agents/golden-prompts/<name>.md` (project-local)
+> 2. `~/.agents/golden-prompts/<name>.md` (user-global)
+>
+> Install the required layers first: `/library use cognovis-base` and
+> `/library use claude-haiku-4-5` (or whichever model-standard the agent declares).
+
 ### 7. Verify Installation
 - Confirm the target directory exists
 - Confirm the main file (SKILL.md, AGENT.md, or prompt file) exists in it

@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""
+test_compose_agent.py — Unit tests for scripts/compose-agent.py
+
+Bead: CL-08n
+Tests:
+  1. Compose agent with golden_prompt_extends: cognovis-base — Layer1+Layer2 in output
+  2. Compose agent with model_standards: [claude-sonnet-4-6] — Layer3 appended
+  3. from-scratch → no Layer 1 in output
+  4. empty model_standards: [] and no model: field → no Layer 3
+  5. --harness=codex produces TOML-safe output (no raw triple-quotes breaking TOML)
+  6. Composer exits non-zero when golden_prompt base is missing
+  7. Layer separators are present in composed output
+
+Run with:
+    python3 -m pytest tests/compose/test_compose_agent.py -v
+  or:
+    python3 tests/compose/test_compose_agent.py
+"""
+
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+COMPOSE_SCRIPT = REPO_ROOT / "scripts" / "compose-agent.py"
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+def run_compose(
+    agent_file: Path,
+    base_dir: Path,
+    model_standard_dir: Path | None = None,
+    harness: str | None = None,
+    expect_success: bool = True,
+) -> tuple[int, str, str]:
+    """Run compose-agent.py against agent_file with given base dirs.
+
+    Returns (returncode, stdout, stderr).
+    """
+    env = os.environ.copy()
+    env["GOLDEN_PROMPTS_DIR"] = str(base_dir)
+    if model_standard_dir:
+        env["MODEL_STANDARDS_DIR"] = str(model_standard_dir)
+
+    cmd = [sys.executable, str(COMPOSE_SCRIPT), str(agent_file)]
+    if harness:
+        cmd.append(f"--harness={harness}")
+
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return result.returncode, result.stdout, result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Test helpers
+# ---------------------------------------------------------------------------
+
+def make_base_dir(tmp_path: Path) -> Path:
+    """Create a temp golden-prompts dir with the test fixture base."""
+    base_dir = tmp_path / "golden-prompts"
+    base_dir.mkdir()
+    fixture_base = FIXTURES_DIR / "base-cognovis-base.md"
+    (base_dir / "cognovis-base.md").write_text(fixture_base.read_text())
+    return base_dir
+
+
+def make_model_standard_dir(tmp_path: Path) -> Path:
+    """Create a temp model-standards dir with the test fixture standard."""
+    std_dir = tmp_path / "model-standards"
+    std_dir.mkdir()
+    fixture_std = FIXTURES_DIR / "model-standard-claude-sonnet-4-6.md"
+    (std_dir / "claude-sonnet-4-6.md").write_text(fixture_std.read_text())
+    return std_dir
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+def test_compose_with_base_contains_layer1(tmp_path):
+    """Composing an agent that extends cognovis-base includes Layer 1 marker."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout, (
+        f"Layer 1 marker not found in output.\nstdout: {stdout}\nstderr: {stderr}"
+    )
+    print("PASS test_compose_with_base_contains_layer1")
+
+
+def test_compose_with_base_contains_layer2(tmp_path):
+    """Composed output includes Layer 2 (agent persona body)."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "Test Agent" in stdout, (
+        f"Layer 2 body not found in output.\nstdout: {stdout}\nstderr: {stderr}"
+    )
+    print("PASS test_compose_with_base_contains_layer2")
+
+
+def test_compose_layer_order(tmp_path):
+    """Layer 1 must appear before Layer 2 in composed output."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    l1_pos = stdout.find("COGNOVIS_BASE_LAYER1_MARKER")
+    l2_pos = stdout.find("Test Agent")
+    assert l1_pos < l2_pos, (
+        f"Layer 1 should appear before Layer 2. L1 pos={l1_pos}, L2 pos={l2_pos}"
+    )
+    print("PASS test_compose_layer_order")
+
+
+def test_compose_with_model_standard_contains_layer3(tmp_path):
+    """Composing an agent with model_standards: [claude-sonnet-4-6] includes Layer 3."""
+    base_dir = make_base_dir(tmp_path)
+    std_dir = make_model_standard_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-explicit-standard.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir, std_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "SONNET_LAYER3_MARKER" in stdout, (
+        f"Layer 3 marker not found in output.\nstdout: {stdout}\nstderr: {stderr}"
+    )
+    print("PASS test_compose_with_model_standard_contains_layer3")
+
+
+def test_from_scratch_no_layer1(tmp_path):
+    """from-scratch golden_prompt_extends produces no Layer 1 content."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-from-scratch.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "COGNOVIS_BASE_LAYER1_MARKER" not in stdout, (
+        f"Layer 1 marker should NOT appear in from-scratch output.\nstdout: {stdout}"
+    )
+    assert "Test Agent (from-scratch)" in stdout, (
+        f"Layer 2 body missing from from-scratch output.\nstdout: {stdout}"
+    )
+    print("PASS test_from_scratch_no_layer1")
+
+
+def test_empty_model_standards_no_layer3(tmp_path):
+    """Empty model_standards: [] and no model: field → no Layer 3."""
+    base_dir = make_base_dir(tmp_path)
+    std_dir = make_model_standard_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-no-model.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir, std_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "SONNET_LAYER3_MARKER" not in stdout, (
+        f"Layer 3 marker should NOT appear when model_standards is empty.\nstdout: {stdout}"
+    )
+    print("PASS test_empty_model_standards_no_layer3")
+
+
+def test_codex_harness_toml_safe(tmp_path):
+    """--harness=codex output is TOML-safe: no raw triple-quotes that break TOML."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir, harness="codex")
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    # TOML triple-quoted strings would break if output contains unescaped '''
+    assert "'''" not in stdout, (
+        f"Output contains unescaped TOML triple-quotes '''.\nstdout: {stdout}"
+    )
+    print("PASS test_codex_harness_toml_safe")
+
+
+def test_layer_separators_present(tmp_path):
+    """Composed output contains the layer separator markers."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "--- AGENT PERSONA ---" in stdout, (
+        f"AGENT PERSONA separator not found.\nstdout: {stdout}"
+    )
+    print("PASS test_layer_separators_present")
+
+
+def test_layer3_separator_present(tmp_path):
+    """Composed output contains MODEL STANDARD separator when Layer 3 is included."""
+    base_dir = make_base_dir(tmp_path)
+    std_dir = make_model_standard_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-explicit-standard.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir, std_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "--- MODEL STANDARD ---" in stdout, (
+        f"MODEL STANDARD separator not found.\nstdout: {stdout}"
+    )
+    print("PASS test_layer3_separator_present")
+
+
+def test_missing_base_exits_nonzero(tmp_path):
+    """Composer exits non-zero when the required golden_prompt base is missing."""
+    empty_base_dir = tmp_path / "empty-golden-prompts"
+    empty_base_dir.mkdir()
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(agent_file, empty_base_dir, expect_success=False)
+    assert rc != 0, (
+        f"Expected non-zero exit when base is missing, got rc={rc}.\nstdout: {stdout}\nstderr: {stderr}"
+    )
+    print("PASS test_missing_base_exits_nonzero")
+
+
+# ---------------------------------------------------------------------------
+# Main runner (no pytest required)
+# ---------------------------------------------------------------------------
+
+ALL_TESTS = [
+    test_compose_with_base_contains_layer1,
+    test_compose_with_base_contains_layer2,
+    test_compose_layer_order,
+    test_compose_with_model_standard_contains_layer3,
+    test_from_scratch_no_layer1,
+    test_empty_model_standards_no_layer3,
+    test_codex_harness_toml_safe,
+    test_layer_separators_present,
+    test_layer3_separator_present,
+    test_missing_base_exits_nonzero,
+]
+
+
+def main() -> int:
+    import tempfile as _tempfile
+
+    pass_count = 0
+    fail_count = 0
+    for test_fn in ALL_TESTS:
+        with _tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            try:
+                test_fn(tmp_path)
+                pass_count += 1
+            except AssertionError as e:
+                print(f"FAIL {test_fn.__name__}: {e}")
+                fail_count += 1
+            except Exception as e:
+                print(f"ERROR {test_fn.__name__}: {type(e).__name__}: {e}")
+                fail_count += 1
+
+    print(f"\n{pass_count} passed, {fail_count} failed")
+    return 0 if fail_count == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

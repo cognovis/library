@@ -29,6 +29,12 @@ default_dirs:
     - default_codex: .codex/hooks/
     - global_codex: ~/.codex/hooks/
     - default_opencode: .opencode/guardrails/
+  model_standards:
+    - default: .agents/model-standards/
+    - global: ~/.agents/model-standards/
+  golden_prompts:
+    - default: .agents/golden-prompts/
+    - global: ~/.agents/golden-prompts/
 
 library:
   skills:
@@ -2228,6 +2234,30 @@ catalog:
     tags:
       - first-party
       - team
+
+model_standards:
+  - name: claude-sonnet-4-6
+    description: >-
+      Layer 3 model-standard for Claude Sonnet 4.6 — conciseness, lower
+      tool-hopping bias.
+    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-sonnet-4-6.md
+  - name: claude-opus-4-7
+    description: >-
+      Layer 3 model-standard for Claude Opus 4.7 — thinking-budget discipline,
+      avoid over-deliberation on trivial steps.
+    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-7.md
+  - name: claude-haiku-4-5
+    description: >-
+      Layer 3 model-standard for Claude Haiku 4.5 — avoid under-scoping
+      multi-step plans, no terse-skip on verification steps.
+    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-haiku-4-5.md
+
+golden_prompts:
+  - name: cognovis-base
+    description: >-
+      Layer 1 of the three-layer agent composition model. Safety, confirmation
+      gates, content isolation, source-language, session-close protocol.
+    source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
 
 project_tooling:
   - name: beads-prime
