@@ -363,7 +363,7 @@
       ]
     },
     "standard_entry": {
-      "description": "A standard catalog entry — a policy/convention document (e.g. english-only, no-emoji, tool-standards). Cross-harness; install path defaults to .agents/standards/<name>.md.",
+      "description": "A standard catalog entry — a policy/convention document or bundle of related convention docs. Cross-harness; install path defaults to .agents/standards/<name>/ (bundle = directory) or .agents/standards/<name>.md (single file). Source may be a GitHub blob URL (single file) or tree URL (directory bundle).",
       "allOf": [
         { "$ref": "#/$defs/base_entry" },
         { "$ref": "#/$defs/marketplace_ref" },
@@ -373,6 +373,12 @@
             "install_path": {
               "description": "Override the default install directory for this standard.",
               "type": "string"
+            },
+            "triggers": {
+              "description": "Keywords/patterns matched (case-insensitive substring) against project context — file extensions, paths, CLAUDE.md content, project name. When any trigger matches, the standard (or all files in a bundle) is loaded into context. Use [\"*\"] for always-on.",
+              "type": "array",
+              "items": { "type": "string" },
+              "default": []
             }
           }
         }

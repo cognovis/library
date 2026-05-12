@@ -1368,6 +1368,455 @@ library:
         - tier:domain
         - category:command
   standards:
+    - name: agents
+      description: >-
+        Agent-authoring conventions: tool boundaries, frontmatter rules, prompt caching strategy for sub-agents.
+      source: https://github.com/cognovis/library-core/tree/main/standards/agents/
+      triggers:
+        - agent capability
+        - agent tools
+        - cache-eligible
+        - cache_control
+        - disallowedTools
+        - ephemeral
+        - prompt caching
+        - token cost
+        - tool boundaries
+        - tool restriction
+        - tools frontmatter
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: dev-tools
+      description: >-
+        Dev-tools usage conventions: command substitutions (jq/yq/uv), .claude dir access, hooks, ast-grep reference, generalization patterns.
+      source: https://github.com/cognovis/library-core/tree/main/standards/dev-tools/
+      triggers:
+        - .claude/agents
+        - .claude/commands
+        - .claude/hooks
+        - .claude/skills
+        - API response
+        - CI release
+        - Chrome MCP
+        - ETL
+        - IG Publisher
+        - ImplementationGuide
+        - InstructionsLoaded
+        - JSON parse
+        - PostToolUse
+        - PreToolUse
+        - QA report
+        - SKILL.md
+        - SessionStart hook
+        - adapter
+        - ast-grep
+        - ci gate
+        - class definition
+        - claude -p
+        - csv import
+        - exit code
+        - fail-open
+        - fail-secure
+        - fixture
+        - gate
+        - git .claude
+        - hook
+        - hook-creator
+        - html-to-
+        - jq
+        - oauth
+        - op item
+        - op read
+        - parser
+        - playwright
+        - qa report
+        - qa.html
+        - release gate
+        - scrape
+        - sg -p
+        - sk-ant-oat
+        - ssh
+        - structural search
+        - symlink
+        - sys.exit
+        - uv run
+        - validator
+        - yq
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: flet
+      description: >-
+        Flet (Python UI framework) conventions: accessibility patterns, web-mode constraints.
+      source: https://github.com/cognovis/library-core/tree/main/standards/flet/
+      triggers:
+        - accessibility
+        - flet
+        - playwright
+        - run_app_web
+        - zahnrad
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: frontend
+      description: >-
+        Frontend-development conventions: Next.js app router, view-impact checks, dev-loop patterns, image-grid usage.
+      source: https://github.com/cognovis/library-core/tree/main/standards/frontend/
+      triggers:
+        - .tsx
+        - app router
+        - badge
+        - browser
+        - cmux
+        - component
+        - dev-loop
+        - frontend
+        - indicator
+        - layout.tsx
+        - metadata
+        - next.js
+        - nextjs
+        - page.tsx
+        - use client
+        - view
+        - visual verification
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: git
+      description: >-
+        Git conventions: conventional commits.
+      source: https://github.com/cognovis/library-core/tree/main/standards/git/
+      triggers:
+        - commit
+        - conventional
+        - git
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: healthcare
+      description: >-
+        Healthcare/medical conventions: privacy/security control areas, clinical UX style guide.
+      source: https://github.com/cognovis/library-core/tree/main/standards/healthcare/
+      triggers:
+        - AI Act
+        - Art. 9
+        - DPA
+        - DPIA
+        - DSGVO
+        - GDPR
+        - NIS2
+        - WCAG
+        - accessibility
+        - alert fatigue
+        - audit
+        - billing UI
+        - clinical UX
+        - compliance
+        - dual-coding
+        - health data
+        - human factors
+        - patient data
+        - patient header
+        - patient safety
+        - special-category
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: powershell
+      description: >-
+        PowerShell coding style and conventions.
+      source: https://github.com/cognovis/library-core/tree/main/standards/powershell/
+      triggers:
+        - .ps1
+        - .psm1
+        - powershell
+        - windows
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: project
+      description: >-
+        Project-level conventions: no mock data, centralized config, team workflow, factory-ready criteria.
+      source: https://github.com/cognovis/library-core/tree/main/standards/project/
+      triggers:
+        - .env
+        - DUMMY_
+        - LaunchAgent
+        - MOCK_
+        - SAMPLE_
+        - URL
+        - agent
+        - config
+        - credentials
+        - cronjob
+        - dotenv
+        - empty state
+        - environment
+        - fake data
+        - fixture
+        - hardcoded
+        - hardcoded data
+        - launchctl
+        - launchd
+        - mock
+        - nightly
+        - orchestrat
+        - os.environ
+        - parallel
+        - plist
+        - process.env
+        - seed
+        - swarm
+        - team
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: python
+      description: >-
+        Python 3.14+ conventions: style, modern patterns (PEP 695, dataclasses), third-party SDK compatibility, CLI patterns, dependency injection, security defaults.
+      source: https://github.com/cognovis/library-core/tree/main/standards/python/
+      triggers:
+        - --help
+        - .py
+        - APPDATA
+        - CommandRunner
+        - allowlist
+        - api_key
+        - argparse
+        - authorization
+        - authorize
+        - auto-open
+        - blocklist
+        - calver
+        - cli
+        - cli projekt
+        - cli script
+        - cli tool
+        - click
+        - command
+        - dataclass
+        - datetime
+        - deny
+        - enum
+        - fail-closed
+        - force-include
+        - guardrail
+        - hatchling
+        - httpx
+        - install-skill
+        - key_command
+        - langfuse
+        - mock
+        - observability
+        - project.scripts
+        - pydantic.v1
+        - pypi
+        - pyproject.toml
+        - python
+        - release.yml
+        - runner
+        - sdk
+        - secret
+        - security
+        - self-check
+        - setup wizard
+        - subprocess
+        - system-call
+        - trusted publishing
+        - typing
+        - update checker
+        - uv
+        - uv build
+        - uv publish
+        - uv tool
+        - uv tool install
+        - version check
+        - xdg-config
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: release
+      description: >-
+        Release-process conventions: changelog discipline.
+      source: https://github.com/cognovis/library-core/tree/main/standards/release/
+      triggers:
+        - changelog
+        - deploy
+        - release
+        - tag
+        - version
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: security
+      description: >-
+        Security conventions: untrusted-content isolation.
+      source: https://github.com/cognovis/library-core/tree/main/standards/security/
+      triggers:
+        - content-processor
+        - external content
+        - mail body
+        - prompt injection
+        - untrusted
+        - user-generated
+        - web scrape
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: skills
+      description: >-
+        Skill-authoring conventions: quality criteria, token-budget tiers, upstream-watchdog patterns, skill-development workflow.
+      source: https://github.com/cognovis/library-core/tree/main/standards/skills/
+      triggers:
+        - SKILL.md
+        - create skill
+        - github sha
+        - improve skill
+        - new skill
+        - review skill
+        - skill
+        - skill bead
+        - skill monitoring
+        - skill size
+        - skill tier
+        - skill-auditor
+        - skill-creator
+        - skill-forge
+        - token budget
+        - token efficiency
+        - upstream
+        - watchdog
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: workflow
+      description: >-
+        Cross-cutting workflow conventions: code review, definition-of-done, planning personas, pragmatic development, retrospective patterns, test quality, UAT process, verification discipline, agent-quality gates, debrief contract, session capture, hook exit codes, launchd patterns, production feedback, etl, agent patterns, bead spec, generalization notes.
+      source: https://github.com/cognovis/library-core/tree/main/standards/workflow/
+      triggers:
+        - .claude/agents
+        - /impl
+        - /plan
+        - DoD
+        - FHIR mapping
+        - Row interface
+        - YAGNI
+        - acceptance criteria
+        - adapter
+        - agent
+        - agent closing
+        - agent session
+        - agent-forge
+        - assertion
+        - bd create
+        - bd show
+        - bead spec
+        - beads
+        - behavioral drift
+        - best practice
+        - branch
+        - bug fix
+        - code review
+        - completion
+        - coverage
+        - data pipeline
+        - debug
+        - debugging
+        - development principles
+        - done
+        - engineering
+        - error investigation
+        - etl
+        - evidence
+        - failing test
+        - feedback extraction
+        - feedback loop
+        - feedback-extractor
+        - fix attempt
+        - force-push
+        - git workflow
+        - holdout
+        - impl command
+        - implementation workflow
+        - mapper
+        - merge conflict
+        - migration
+        - mock
+        - nlspec
+        - open-brain agent
+        - plan command
+        - playwright
+        - pragmatic
+        - production feedback
+        - production signal
+        - pvs
+        - quality gate
+        - rebase
+        - red green
+        - review
+        - root cause
+        - satisfaction regression
+        - session capture
+        - signal classification
+        - smoke test
+        - software factory
+        - spec amendment
+        - spec evolution
+        - spec-driven
+        - specification gap
+        - staging
+        - sync
+        - tdd
+        - test
+        - test driven
+        - test first
+        - test quality
+        - test-engineer
+        - uat
+        - uat-config
+        - unit test
+        - user acceptance
+        - uv tool install
+        - verification
+        - verify
+        - werkzeugbox
+        - workflow
+        - wrapper
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: writing
+      description: >-
+        Writing conventions: brand voice and tone (Cognovis Angebot style).
+      source: https://github.com/cognovis/library-core/tree/main/standards/writing/
+      triggers:
+        - Angebot
+        - Empfehlung
+        - brand
+        - email schreiben
+        - proposal
+        - recommendation
+        - tone
+        - voice
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
     - name: adr-location
       description: >-
         Architecture Decision Records (ADRs) live at /docs/adr/ in the project root.
