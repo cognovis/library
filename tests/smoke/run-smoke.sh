@@ -1435,9 +1435,6 @@ smoke_fleet_migration() {
 }
 
 # ---------------------------------------------------------------------------
-# Harness: library-core (AK3 verification)
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # smoke_use_cookbook_path (CL-o16)
 #  Delegates to tests/smoke/use-agent-cookbook-path.sh for a self-contained
 #  end-to-end test of the /library use cookbook path (fetch -> compose -> write).
@@ -1467,6 +1464,9 @@ smoke_use_cookbook_path() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# Harness: library-core (AK3 verification)
+# ---------------------------------------------------------------------------
 smoke_library_core() {
     section "library-core"
 
