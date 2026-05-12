@@ -1846,7 +1846,7 @@ library:
       description: >-
         All source code MUST be in English — including comments, identifiers, log messages,
         and string literals. This standard applies even when the user prompt is in German.
-      source: https://github.com/cognovis/library-core/blob/main/standards/english-only.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/english-only.md
       tags:
         - origin:original
         - tier:domain
@@ -1864,7 +1864,7 @@ library:
       description: >-
         Healthcare privacy and security control areas adapted from reason-healthcare/health-skills.
         Required for all medical/healthcare agents and skills.
-      source: https://github.com/cognovis/library-core/blob/main/standards/healthcare-control-areas.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/healthcare/control-areas.md
       tags:
         - origin:original
         - tier:domain
@@ -1873,7 +1873,7 @@ library:
       description: >-
         Do not add emojis to source code files, configuration files, or technical documentation.
         Emojis degrade diff readability and cause encoding issues in some terminals.
-      source: https://github.com/cognovis/library-core/blob/main/standards/no-emoji.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/no-emoji.md
       tags:
         - origin:original
         - tier:domain
@@ -1909,13 +1909,72 @@ library:
       description: >-
         Dev-tools agent tool standards — constraints for implementers, test authors, and
         validators. Defines allowed tools and information barrier rules.
-      source: https://github.com/cognovis/library-core/blob/main/standards/tool-standards.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/dev-tools/tool-standards.md
       tags:
         - origin:original
         - tier:domain
         - category:standard
 
 guardrails:
+  - name: inject-subagent-standards
+    description: >-
+      TaskCreated hook (Claude-only) that injects standard file paths into a
+      subagent's system prompt based on its agent_label. Reads
+      ~/.claude/agent-standards.yml (pattern -> standards list mapping) and
+      resolves each entry project-local first, then user-global
+      (.agents/standards/<rel> wins over ~/.agents/standards/<rel>).
+      Companion to standards-loader: standards-loader fires once per session;
+      this fires once per subagent spawn with agent-specific scoping.
+    kind: single-hook
+    capability:
+      claude_code:
+        events: [TaskCreated]
+        handler: python
+        note: >-
+          Outputs hookSpecificOutput.additionalSystemPrompt with absolute
+          standards paths. Fail-open: any error short-circuits to exit 0.
+    sources:
+      claude_code: hooks/inject-subagent-standards/claude-code.py
+    tags:
+      - origin:original
+      - subagent-init
+      - standards
+      - context-injection
+
+  - name: standards-loader
+    description: >-
+      SessionStart context-injector that reads the library catalog's
+      standards entries, matches their triggers against project context
+      (cwd, filenames, CLAUDE.md/AGENTS.md content), and injects matched
+      standards content from ~/.agents/standards/ into the session.
+      Replaces the legacy ~/.claude/standards/index.yml + trigger-injection
+      mechanism with a catalog-driven, cross-harness equivalent.
+    kind: single-hook
+    purpose: session-init
+    capability:
+      claude_code:
+        events: [SessionStart]
+        handler: python
+        note: >-
+          Outputs JSON hookSpecificOutput.additionalContext with matched
+          standards content. Fail-open: any error short-circuits to empty.
+      codex_cli:
+        events: [SessionStart]
+        handler: python
+        note: >-
+          Writes matched standards content to stdout; Codex injects it into
+          session preamble.
+    sources:
+      claude_code: hooks/standards-loader/claude-code.py
+      codex_cli: hooks/standards-loader/codex-cli.py
+    requires:
+      - "standard:workflow"
+    tags:
+      - origin:original
+      - session-init
+      - standards
+      - context-injection
+
   - name: block-destructive-bash
     description: >-
       Blocks destructive bash commands (force-pushes, recursive deletes, DROP TABLE, etc.)

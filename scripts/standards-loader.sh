@@ -25,7 +25,7 @@
 # Path resolution (project-local ALWAYS overrides global):
 #   1. ${PROJ_ROOT}/.agents/standards/<name>.md   (project-local)
 #   2. ~/.agents/standards/<name>.md               (user-global)
-#   3. ~/.claude/standards/**/<name>.md            (legacy Claude Code fallback)
+#   3. ~/.agents/standards/**/<name>.md            (bundle subdir layout, recursive)
 #
 # See docs/research/standards-loading.md for the full loader contract.
 
@@ -73,19 +73,20 @@ resolve_standard() {
         return 0
     fi
 
-    # Priority 2: user-global
+    # Priority 2: user-global (flat lookup)
     local global_path="${HOME}/.agents/standards/${name}.md"
     if [[ -f "${global_path}" ]]; then
         echo "${global_path}"
         return 0
     fi
 
-    # Priority 3: legacy Claude Code fallback (compatibility mode)
-    # Scan ~/.claude/standards/**/<name>.md — the legacy path uses domain subdirs.
-    local legacy_path
-    if legacy_path="$(find "${HOME}/.claude/standards" -name "${name}.md" -maxdepth 3 2>/dev/null | head -1)"; then
-        if [[ -n "${legacy_path}" ]]; then
-            echo "${legacy_path}"
+    # Priority 3: user-global recursive lookup — bundle layout
+    # Scan ~/.agents/standards/**/<name>.md so requires_standards: tool-standards
+    # resolves to ~/.agents/standards/dev-tools/tool-standards.md, etc.
+    local nested_path
+    if nested_path="$(find "${HOME}/.agents/standards" -name "${name}.md" -maxdepth 3 2>/dev/null | head -1)"; then
+        if [[ -n "${nested_path}" ]]; then
+            echo "${nested_path}"
             return 0
         fi
     fi
@@ -141,7 +142,6 @@ PYEOF
         warn "standard '${name}' not found. Checked:"
         warn "  - ${PROJ_ROOT}/.agents/standards/${name}.md"
         warn "  - ${HOME}/.agents/standards/${name}.md"
-        warn "  - ${HOME}/.claude/standards/ (legacy)"
         warn "Proceeding without this standard."
         # Exit 0: warn-and-continue per loader contract
     fi
@@ -362,8 +362,7 @@ cmd_generate_adapter() {
             warn "standard '${standard_name}' not found. Checked:"
             warn "  - ${PROJ_ROOT}/.agents/standards/${standard_name}.md"
             warn "  - ${HOME}/.agents/standards/${standard_name}.md"
-            warn "  - ${HOME}/.claude/standards/ (legacy)"
-            warn "Proceeding without this standard."
+                warn "Proceeding without this standard."
         fi
     done <<< "${requires_list}"
 
@@ -558,7 +557,6 @@ PYEOF
 cmd_list() {
     local proj_dir="${PROJ_ROOT}/.agents/standards"
     local global_dir="${HOME}/.agents/standards"
-    local legacy_dir="${HOME}/.claude/standards"
     local proj_ms_dir="${PROJ_ROOT}/.agents/model-standards"
     local global_ms_dir="${HOME}/.agents/model-standards"
 
@@ -589,23 +587,27 @@ cmd_list() {
         echo ""
     fi
 
-    if [[ -d "${legacy_dir}" ]]; then
-        echo "Legacy Claude Code (${legacy_dir}):"
+    # Bundle subdirs under user-global (workflow/, python/, dev-tools/, …)
+    if [[ -d "${global_dir}" ]]; then
+        local has_nested=false
+        local nested_label="User-global bundles (${global_dir}):"
         while IFS= read -r f; do
-            local name
-            # Use Python for portable relative path computation.
-            # GNU realpath --relative-to is not available on macOS (BSD realpath
-            # does not support that flag), so we use Python's pathlib which is
-            # cross-platform and available on all supported platforms.
-            name="$(python3 -c "
+            if [[ "${has_nested}" != "true" ]]; then
+                echo "${nested_label}"
+                has_nested=true
+            fi
+            local rel
+            rel="$(python3 -c "
 import sys
 from pathlib import Path
 print(Path(sys.argv[1]).relative_to(sys.argv[2]))
-" "${f}" "${legacy_dir}" 2>/dev/null || basename "${f}")"
-            echo "  - ${name}"
+" "${f}" "${global_dir}" 2>/dev/null || basename "${f}")"
+            echo "  - ${rel}"
             found=true
-        done < <(find "${legacy_dir}" -name "*.md" -maxdepth 3 2>/dev/null | sort)
-        echo ""
+        done < <(find "${global_dir}" -mindepth 2 -name "*.md" -maxdepth 3 2>/dev/null | sort)
+        if [[ "${has_nested}" == "true" ]]; then
+            echo ""
+        fi
     fi
 
     if [[ "${found}" != "true" ]]; then

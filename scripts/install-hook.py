@@ -211,9 +211,123 @@ def remove_hooks(settings: dict, guardrail_name: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Codex harness (hooks.json)
+# Codex harness (hooks.json) — CL-l0c
 # ---------------------------------------------------------------------------
 
+CODEX_HOOKS = Path.home() / ".codex" / "hooks.json"
+
+HARNESS_SETTINGS = {
+    "claude_code": CLAUDE_SETTINGS,
+    "codex_cli": CODEX_HOOKS,
+}
+
+
+def _load_json(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    with path.open() as f:
+        return json.load(f)
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    backup = path.with_suffix(path.suffix + ".bak")
+    if path.is_file():
+        backup.write_text(path.read_text())
+    with path.open("w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+
+
+def install_single_hook(entry: dict, dry_run: bool = False) -> int:
+    """Install a kind=single-hook guardrail per-harness.
+
+    For each harness key in entry.sources, register the source path as a hook
+    command in the harness's settings file under every event listed in
+    entry.capability.<harness>.events. Tagged with _origin=entry.name.
+    """
+    name = entry["name"]
+    sources = entry.get("sources", {})
+    capability = entry.get("capability", {})
+    if not sources:
+        sys.exit(f"{name!r}: kind=single-hook but no sources: map")
+
+    total = 0
+    for harness, rel_path in sources.items():
+        if harness not in HARNESS_SETTINGS:
+            print(f"  skip: unknown harness {harness!r}")
+            continue
+        events = capability.get(harness, {}).get("events", [])
+        if not events:
+            print(f"  skip: {harness} declared no events")
+            continue
+
+        abs_path = REPO_ROOT / rel_path
+        if not abs_path.is_file():
+            sys.exit(f"  ERROR: {abs_path} missing on disk")
+
+        command = f"python3 {abs_path}"
+
+        settings_path = HARNESS_SETTINGS[harness]
+        settings = _load_json(settings_path)
+        hooks_root = settings.setdefault("hooks", {})
+
+        for event in events:
+            group_list = hooks_root.setdefault(event, [])
+            # Idempotent: drop any prior entry with same _origin
+            group_list[:] = [g for g in group_list if not any(
+                h.get("_origin") == name
+                for h in (g.get("hooks", []) if isinstance(g, dict) else [])
+            )]
+            timeout_key = "timeoutSec" if harness == "codex_cli" else "timeout"
+            group_list.append({
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": command,
+                        timeout_key: 15,
+                        "_origin": name,
+                    }
+                ]
+            })
+            total += 1
+
+        if dry_run:
+            print(f"  (dry-run) {harness}: would update {settings_path}")
+        else:
+            _write_json(settings_path, settings)
+            print(f"  {harness}: registered {len(events)} event(s) in {settings_path}")
+
+    print(f"Installed {name!r} as single-hook: {total} event registration(s)")
+    return 0
+
+
+def remove_single_hook(entry: dict, dry_run: bool = False) -> int:
+    name = entry["name"]
+    sources = entry.get("sources", {})
+    removed_total = 0
+    for harness in sources:
+        settings_path = HARNESS_SETTINGS.get(harness)
+        if not settings_path or not settings_path.is_file():
+            continue
+        settings = _load_json(settings_path)
+        hooks_root = settings.get("hooks", {})
+        for event in list(hooks_root.keys()):
+            before = len(hooks_root[event])
+            hooks_root[event] = [g for g in hooks_root[event] if not any(
+                h.get("_origin") == name
+                for h in (g.get("hooks", []) if isinstance(g, dict) else [])
+            )]
+            removed_total += before - len(hooks_root[event])
+            if not hooks_root[event]:
+                del hooks_root[event]
+        if dry_run:
+            print(f"  (dry-run) {harness}: would remove {name!r} entries from {settings_path}")
+        else:
+            _write_json(settings_path, settings)
+            print(f"  {harness}: pruned in {settings_path}")
+    print(f"Removed {name!r}: {removed_total} hook entr{'y' if removed_total==1 else 'ies'}")
+    return 0
 
 def load_codex_hooks() -> dict:
     """Load ~/.codex/hooks.json (or CODEX_HOOKS_FILE override)."""
@@ -434,8 +548,15 @@ def main() -> int:
 
     library = load_library()
     entry = find_guardrail(library, args.name)
-    if entry.get("kind") != "hooks-manifest":
-        sys.exit(f"{args.name!r} kind={entry.get('kind','single-hook')!r}, expected hooks-manifest")
+    kind = entry.get("kind", "single-hook")
+
+    if kind == "single-hook":
+        if args.remove:
+            return remove_single_hook(entry, dry_run=args.dry_run)
+        return install_single_hook(entry, dry_run=args.dry_run)
+
+    if kind != "hooks-manifest":
+        sys.exit(f"{args.name!r} has unsupported kind={kind!r}")
 
     source = entry.get("source")
     if not source:
