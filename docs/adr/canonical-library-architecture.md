@@ -17,6 +17,27 @@ related_adrs: ["0001"]
 
 Accepted. **Supersedes ADR-0001.**
 
+> **Terminology clarification (added 2026-05-12 in conjunction with
+> ADR-0003)**: The term *marketplace* in this ADR refers
+> **specifically to the Claude Code plugin-marketplace mechanism** —
+> the bundle-distribution path via `~/.claude/plugins/known_marketplaces.json`,
+> `/plugin marketplace add ...`, and the two retired repos
+> `sussdorff/claude-code-plugins` and `cognovis/claude-code-plugins`.
+> "Full marketplace retirement" in this ADR's title and Decision 1
+> means retirement of *those* mechanisms, not of marketplaces in
+> general.
+>
+> ADR-0003 introduces a distinct concept that reuses the same word:
+> *source-provider marketplaces* are entries in
+> `library.yaml.marketplaces:` that describe where the library
+> fetches a skill from (git repo, REST API, etc.). Under ADR-0003,
+> `cognovis/library-core` and `sussdorff/library-core` themselves
+> become source-provider marketplaces, alongside third-party sources
+> like `anthropics/skills`, `disler`, `skills.sh`, and `pbakaus`.
+> This is **not** in conflict with ADR-0002's retirement decision —
+> the two concepts use the same English word for different referents.
+> See ADR-0003's Decision 2 for the explicit disambiguation.
+
 ## Context
 
 ADR-0001 chose a Hybrid retirement model for `sussdorff-plugins`:
