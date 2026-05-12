@@ -1238,6 +1238,101 @@ mcp_servers:
         claude_ios:
           install_url: https://claude.ai/add-mcp/open-brain
 
+  - name: playwright
+    description: Stateful browser automation — persistent browser sessions for navigation, click, screenshot, form-fill; stateful sessions make CLI conversion impossible
+    coding_strategy: mcp
+    capabilities:
+      stateless: false
+      streaming: false
+      auth: none
+    install:
+      mcp:
+        codex:
+          config_path: ~/.codex/config.toml
+          snippet:
+            command: npx
+            args:
+              - '@playwright/mcp@latest'
+              - '--extension'
+
+  - name: pencil
+    description: Stateful design editor for .pen files — encrypted file format requires MCP; tools include batch_design, get_editor_state, export_nodes; installed in Codex CLI and Claude Desktop (claude_desktop not a schema key — install shown for codex only)
+    coding_strategy: mcp
+    capabilities:
+      stateless: false
+      streaming: false
+      auth: none
+    install:
+      mcp:
+        codex:
+          config_path: ~/.codex/config.toml
+          snippet:
+            command: ~/.pencil/mcp/cursor/out/mcp-server-darwin-arm64
+            args:
+              - '--app'
+              - cursor
+
+  - name: lsp
+    description: Stateful Language Server Protocol bridge — exposes LSP hover, go-to-definition, completions, and diagnostics as MCP tools; stateful LSP sessions require persistent connection
+    coding_strategy: mcp
+    capabilities:
+      stateless: false
+      streaming: false
+      auth: none
+    install:
+      mcp:
+        codex:
+          config_path: ~/.codex/config.toml
+          snippet:
+            command: npx
+            args:
+              - '-y'
+              - lsp-mcp-server
+
+  - name: filesystem
+    description: Filesystem read/write access for Claude Desktop — the only path for file operations in Claude Desktop which has no shell access; not applicable to coding harnesses (Claude Code and Codex have native shell); desktop-only, no harness install config
+    coding_strategy: mcp
+    capabilities:
+      stateless: true
+      streaming: false
+      auth: none
+
+  - name: executive-circle
+    description: Read-only content library lookup — search posts, guides, and prompt kits from Nate's Newsletter archives; HTTP stateless API; CLI wrapper (ec) to be built for coding harnesses; MCP retained for claude.ai/iOS
+    coding_strategy: cli
+    mobile_strategy: mcp
+    capabilities:
+      stateless: true
+      streaming: false
+      auth: token
+    install:
+      cli:
+        package: executive-circle-cli
+        manager: none
+      mcp:
+        codex:
+          config_path: ~/.codex/config.toml
+          snippet:
+            url: 'https://www.contentmasterpro.limited/api/mcp/subscriber/<subscriber-token>'
+
+  - name: heypresto
+    description: Prompt expansion tool — expand_prompt tool for enhancing prompts; HTTP stateless API; CLI wrapper (hp) to be built for coding harnesses; MCP retained for claude.ai/iOS if mobile-relevant (status under investigation)
+    coding_strategy: cli
+    mobile_strategy: mcp
+    capabilities:
+      stateless: true
+      streaming: false
+      auth: none
+    install:
+      cli:
+        package: heypresto-cli
+        manager: none
+      mcp:
+        codex:
+          config_path: ~/.codex/config.toml
+          snippet:
+            url: 'https://www.heypresto.ai/mcp'
+
 catalog:
   - name: sussdorff-library-core
     source: https://github.com/sussdorff/library-core
