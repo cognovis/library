@@ -268,32 +268,36 @@ If the user confirms, create the file at `<resolved-codex-path>/<name>/agents/op
 If the skill's SKILL.md body contains `$ARGUMENTS`:
 > "Advisory: This skill uses `$ARGUMENTS` substitution (Claude Code invocation style). Codex skills receive input via prompt context rather than `$ARGUMENTS` substitution. The skill should still work, but `$ARGUMENTS` will not be replaced — the literal string will appear in the prompt. Consider adapting the skill for Codex if precise argument handling is needed."
 
-### 5e. Standards default to user-global
+### 5f. Standards: ALWAYS ask whether global or project-local
 
-`library.standards:` entries (single files and bundles) default to the **global**
-install location (`~/.agents/standards/`), not project-local.
+`library.standards:` entries (single files and bundles) can install at two tiers:
 
-Rationale:
-- Triggers filter dynamically at SessionStart — a Python bundle costs zero when
-  no `.py` files are present.
-- Global install means every project benefits from a single `/library use python`
-  without per-project repetition.
-- Project-local override is the exception, not the norm. Use it when a project
-  needs a custom version of a standard that diverges from the team default
-  (place files at `<project>/.agents/standards/<name>.md` — project-local wins
-  per the loader resolution order).
+| Tier | Path | When to choose |
+|------|------|----------------|
+| **Global** | `~/.agents/standards/<name>/` | Standard applies broadly; triggers will filter dynamically. Default suggestion. |
+| **Project-local** | `<cwd>/.agents/standards/<name>/` | Standard is project-specific, or you want to override a global version for this project only. |
 
-The `default_dirs.standards` block in `library.yaml` keeps both paths:
+**When `/library use <name>` for a standard runs, ASK the user before installing.**
+Do not silently default. Phrase the question so the user can pick at a glance:
+
+> "Install `python` standard globally (`~/.agents/standards/`, available in every
+> project) or project-local (`<cwd>/.agents/standards/`)? Global is the usual
+> answer — triggers filter dynamically."
+
+Skip the question only when the invocation explicitly states scope:
+- `/library use python globally` → global, no prompt
+- `/library use python locally` / `... for this project` / `... in this project` → project-local, no prompt
+
+The loader resolution order is the same in both directions (standards-loader and
+inject-subagent-standards): project-local wins over user-global. So a
+project-local install always overrides a global one when both exist.
 
 ```yaml
 default_dirs:
   standards:
-    - default: .agents/standards/         # project-local (override only)
-    - global: ~/.agents/standards/        # user-global (default for /library use)
+    - default: .agents/standards/         # project-local
+    - global: ~/.agents/standards/        # user-global
 ```
-
-When the user runs `/library use <name>` for a standard, install to **global**
-unless they explicitly say otherwise.
 
 ### 6. Fetch from Source
 
@@ -371,24 +375,92 @@ checksum=$(shasum -a 256 "<primary_artifact_path>" | awk '{print $1}')
 checksum=$(sha256sum "<primary_artifact_path>" | awk '{print $1}')
 ```
 
-#### 8b. Resolve the source commit
+#### 8b. Resolve the source commit (content-addressable tree hash)
 
-> **IMPORTANT — timing**: For GitHub sources, the source commit must be resolved from
-> `$tmp_dir` BEFORE the `rm -r "$tmp_dir"` cleanup in Step 6. The clone directory is deleted
-> in Step 6 after copying — capture the SHA immediately after the copy, before cleanup.
+> **NORMATIVE**: `source_commit` is the **git tree-object SHA** of the skill's
+> sub-path within the marketplace repo — NOT the marketplace repo's HEAD commit.
+> Tree-SHAs are content-addressable: if the skill's files don't change, the SHA
+> doesn't change, even across hundreds of unrelated marketplace commits. This
+> keeps the Layer-B cache stable and lets `/library sync` short-circuit when
+> there's nothing new.
+>
+> **Rationale**: An earlier draft of this spec used `git rev-parse HEAD`, which
+> tied the cache key to the marketplace's HEAD. Result: every unrelated commit
+> to `library.yaml` or to a sibling skill produced a new cache directory for
+> every skill — cache bloat with zero content change. Tree-hash fixes this.
+
+> **IMPORTANT — timing**: For GitHub sources, both SHAs must be resolved from
+> `$tmp_dir` BEFORE the `rm -r "$tmp_dir"` cleanup in Step 6. Capture them
+> immediately after the copy, before cleanup.
 
 For a **GitHub source** (resolve while `$tmp_dir` still exists, before cleanup):
 ```bash
-# Capture immediately after cp in Step 6, before rm -r "$tmp_dir"
-source_commit=$(git -C "$tmp_dir" rev-parse HEAD)
-rm -r "$tmp_dir"   # cleanup happens AFTER sha capture
+# <skill_subpath> is the path inside the marketplace repo, e.g. "skills/dolt"
+# or "skills/agent-forge" — derived from the URL parsing in Step 6.
+#
+# Tree-SHA: content-addressable identifier of the sub-tree (PRIMARY — cache key).
+source_commit=$(git -C "$tmp_dir" rev-parse "HEAD:${skill_subpath}")
+
+# Repo HEAD: provenance ("which marketplace commit did this install observe?").
+# Stored alongside source_commit but NOT used as the cache key.
+source_repo_commit=$(git -C "$tmp_dir" rev-parse HEAD)
+
+rm -r "$tmp_dir"   # cleanup happens AFTER both captures
 ```
 
-For a **local path source** (copied via `cp`):
+For a **local path source** (copied via `cp`, source is inside a git repo):
 ```bash
-# Try to get the git commit if the source is inside a git repo
-source_commit=$(git -C "$(dirname '<source_path>')" rev-parse HEAD 2>/dev/null || echo "local")
+# Same approach when the source has a git ancestor — tree-hash the sub-path.
+source_commit=$(git -C "${source_root}" rev-parse "HEAD:${skill_subpath}" 2>/dev/null || echo "")
+source_repo_commit=$(git -C "${source_root}" rev-parse HEAD 2>/dev/null || echo "")
 ```
+
+For a **local path source with NO git ancestor** (loose files on disk):
+```bash
+# Content-hash fallback: deterministic SHA over the file tree.
+# Hashes file names + contents in sorted order so reordering can't perturb it.
+source_commit="local-$(
+  cd "${source_root}/${skill_subpath}" && \
+  find . -type f \! -name '.DS_Store' -print0 | \
+  sort -z | \
+  xargs -0 shasum -a 256 | \
+  shasum -a 256 | \
+  awk '{print substr($1, 1, 14)}'
+)"
+source_repo_commit=""   # no provenance available
+```
+
+**Stability properties (NORMATIVE — implementations MUST preserve these):**
+
+| Change | Does `source_commit` change? |
+|--------|------------------------------|
+| Marketplace HEAD advances, skill files unchanged | **No** — tree-SHA is stable |
+| Skill file edited (any byte) | Yes — tree-SHA changes |
+| Skill file renamed | Yes — tree-SHA changes |
+| Sibling skill in same marketplace edited | **No** — only that sibling's tree-SHA changes |
+| `library.yaml` edited | **No** — top-level repo change, this skill's sub-tree unchanged |
+
+**Sync short-circuit (used by `/library sync`):**
+
+```bash
+# Re-fetch latest source, recompute tree-SHA, compare against lockfile.
+new_tree=$(git -C "$tmp_dir" rev-parse "HEAD:${skill_subpath}")
+locked_tree=$(yq '.installed[] | select(.name=="<name>") | .source_commit' .library.lock)
+if [[ "$new_tree" == "$locked_tree" ]]; then
+  # No content change — update install_timestamp + source_repo_commit only.
+  # Do NOT re-materialize the cache; do NOT touch symlinks.
+  exit 0
+fi
+# Otherwise: materialize new cache at <name>@${new_tree:0:14}/ and re-point symlinks.
+```
+
+**Migration of existing lockfile entries**: Entries written before this spec
+revision used `git rev-parse HEAD` (marketplace HEAD) as `source_commit`. They
+look like valid 40-char hex but are NOT tree-SHAs. On next `/library sync`:
+recompute the tree-SHA, compare; if they differ (they almost always will, since
+HEAD ≠ tree-SHA in general), rewrite the lockfile entry with the new tree-SHA
+and materialize the canonical cache location. No content change is implied —
+this is a one-time key correction.
 
 #### 8c. Materialize the cache entry (Layer B)
 
