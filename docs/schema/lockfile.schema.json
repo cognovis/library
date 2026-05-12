@@ -58,7 +58,7 @@
           "minLength": 1
         },
         "cache_path": {
-          "description": "Absolute path to the Layer-B (cache) directory for this item, format: ~/.local/share/library/skills/<marketplace>/<name>@<source_commit>/. Set to empty string for entries migrated from older lockfile versions — will be populated on next 'library sync'.",
+          "description": "Absolute path to the Layer-B (cache) directory for this item, format: ~/.local/share/library/skills/<marketplace>/<name>@<first-14-hex-chars-of-source_commit>/. Set to empty string for entries migrated from older lockfile versions — will be populated on next 'library sync'.",
           "type": "string"
         },
         "install_target": {

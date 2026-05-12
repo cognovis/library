@@ -37,6 +37,26 @@ except ImportError:
     print("ERROR: PyYAML not installed. Run: pip install PyYAML", file=sys.stderr)
     sys.exit(1)
 
+
+# ---------------------------------------------------------------------------
+# Custom YAML Loader that treats timestamps as plain strings
+# ---------------------------------------------------------------------------
+# PyYAML's SafeLoader parses ISO 8601 timestamps (e.g. 2026-04-30T10:23:00Z)
+# into Python datetime objects and then serializes them back as
+# "2026-04-30 10:23:00+00:00" — losing the T separator and Z suffix, which
+# breaks JSON Schema format:"date-time" validation.  The fix: remove the
+# timestamp implicit resolver from a SafeLoader subclass so that timestamp
+# strings are kept as plain strings throughout load → dump round-trips.
+
+class _StrLoader(yaml.SafeLoader):
+    pass
+
+_StrLoader.yaml_implicit_resolvers = {
+    k: [(tag, regexp) for (tag, regexp) in v
+        if tag != "tag:yaml.org,2002:timestamp"]
+    for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+
 # ---------------------------------------------------------------------------
 # Marketplace URL pattern mappings (hardcoded fallback)
 # ---------------------------------------------------------------------------
@@ -90,7 +110,7 @@ def load_marketplace_map(library_yaml_path: Path) -> dict[str, str]:
 
     try:
         with library_yaml_path.open() as f:
-            data = yaml.safe_load(f) or {}
+            data = yaml.load(f, Loader=_StrLoader) or {}
     except Exception as exc:
         print(f"Warning: could not load {library_yaml_path}: {exc}", file=sys.stderr)
         return {}
@@ -146,7 +166,7 @@ def migrate_lockfile(
         return 0
 
     with lockfile_path.open() as f:
-        data = yaml.safe_load(f) or {}
+        data = yaml.load(f, Loader=_StrLoader) or {}
 
     installed = data.get("installed", [])
     if not isinstance(installed, list):

@@ -15,6 +15,7 @@ Tests:
   8. Full ADR-0003 global install example validates
   9. Full ADR-0003 project-scoped install example validates
  10. Existing valid entry without new fields still fails (additionalProperties: false enforced)
+ 11. marketplace: local is valid
 
 Run with:
     python3 -m pytest tests/test_lockfile_schema.py -v

@@ -72,8 +72,8 @@ installed:
     type: skill
     marketplace: cognovis-core
     source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
-    source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456abc123
-    cache_path: /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456/
+    source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456ab12
+    cache_path: /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456ab/
     install_target: .claude/skills/dolt/
     install_timestamp: 2026-04-30T10:23:00Z
     checksum_sha256: 9483a0941234567890abcdef1234567890abcdef1234567890abcdef12345678
@@ -89,14 +89,14 @@ installed:
     type: skill
     marketplace: cognovis-core
     source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
-    source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456abc123
-    cache_path: /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456/
+    source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456ab12
+    cache_path: /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456ab/
     install_target: .claude/skills/dolt/
     install_timestamp: 2026-04-30T10:23:00Z
     checksum_sha256: 9483a0941234567890abcdef1234567890abcdef1234567890abcdef12345678
     license: MIT
     bridge_symlinks:
-      - .agents/skills/dolt -> /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456
+      - .agents/skills/dolt -> /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456ab/
 ```
 
 The `bridge_symlinks` list records every symlink created during a dual-install. See
@@ -124,11 +124,11 @@ installed:
     type: skill
     marketplace: cognovis-core
     source: https://github.com/cognovis/library-core/blob/9b1e72c98f3e21/.claude/skills/agent-forge/SKILL.md
-    source_commit: 9b1e72c98f3e21abc0000000000000000000000000000000000000000000000
+    source_commit: 9b1e72c98f3e21abc00000000000000000000000000000000000000000000000
     cache_path: /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
     install_target: /Users/malte/.claude/skills/agent-forge/
     install_timestamp: 2026-05-12T07:30:00Z
-    checksum_sha256: 9483a0940000000000000000000000000000000000000000000000000000000000
+    checksum_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
     license: MIT
     bridge_symlinks:
       - /Users/malte/.agents/skills/agent-forge -> /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
@@ -142,11 +142,11 @@ installed:
     type: skill
     marketplace: cognovis-core
     source: https://github.com/cognovis/library-core/blob/9b1e72c98f3e21/.claude/skills/agent-forge/SKILL.md
-    source_commit: 9b1e72c98f3e21abc0000000000000000000000000000000000000000000000
+    source_commit: 9b1e72c98f3e21abc00000000000000000000000000000000000000000000000
     cache_path: /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
     install_target: .claude/skills/agent-forge/
     install_timestamp: 2026-05-12T07:30:00Z
-    checksum_sha256: 9483a0940000000000000000000000000000000000000000000000000000000000
+    checksum_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
     license: MIT
     bridge_symlinks:
       - .agents/skills/agent-forge -> /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
@@ -163,7 +163,7 @@ installed:
 | `marketplace` | YES | string | Name of the source marketplace from `library.yaml.marketplaces`. Use `local` for local-path sources, `unknown` for unrecognized sources. |
 | `source` | YES | string | GitHub browser URL or local path used for the install. |
 | `source_commit` | YES | string | Git commit SHA of the source repo at install time. Use `local` for non-git sources. |
-| `cache_path` | YES | string | Absolute Layer-B cache path (`~/.local/share/library/skills/<marketplace>/<name>@<commit>/`). Empty string `""` for migrated entries pending next sync. |
+| `cache_path` | YES | string | Absolute Layer-B cache path (`~/.local/share/library/skills/<marketplace>/<name>@<first-14-hex-chars-of-source_commit>/`). Empty string `""` for migrated entries pending next sync. |
 | `install_target` | YES | string | Relative (project) or absolute (global) path of the install directory (trailing slash required). |
 | `install_timestamp` | YES | string | ISO 8601 UTC datetime of the install or last refresh. |
 | `checksum_sha256` | YES | string | SHA-256 hex digest (64 chars) of the primary artifact file. |

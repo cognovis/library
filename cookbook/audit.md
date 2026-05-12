@@ -72,7 +72,8 @@ For each bridge listed in `bridge_symlinks`:
 
 #### 4f. Verify symlink target against cache_path (ADR-0003)
 
-If `cache_path` is non-empty, verify that `install_target` is a symlink pointing to `cache_path`:
+Check `install_target` against `cache_path`, distinguishing legacy (no cache_path) from
+symlink-missing (cache_path set but install_target is not a symlink):
 
 ```bash
 install_target="<entry.install_target trimmed of trailing slash>"
@@ -89,8 +90,13 @@ if [ -L "$install_target" ]; then
     :
   fi
 elif [ -d "$install_target" ] && [ ! -L "$install_target" ]; then
-  # install_target is a real directory — three-layer not yet active (acceptable during migration)
-  echo "Note: install_target is a real directory, not a symlink. Three-layer not active for this entry."
+  if [ -z "$cache_path" ]; then
+    # Status: LEGACY — real directory and no cache_path (migration pending)
+    echo "Note: install_target is a real directory, cache_path is empty. Migration pending."
+  else
+    # Status: SYMLINK-MISSING — real directory but cache_path is set (needs upgrade)
+    echo "Note: install_target is a real directory but cache_path is set. Three-layer not active — needs upgrade."
+  fi
 fi
 ```
 
