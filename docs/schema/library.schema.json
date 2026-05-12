@@ -118,6 +118,22 @@
         "$ref": "#/$defs/project_tooling_entry"
       },
       "default": []
+    },
+    "model_standards": {
+      "description": "Layer 3 model-standard catalog entries. Each entry describes a per-model behavioral guideline file that is composed into agent prompts at install time. Install path: .agents/model-standards/<name>.md (project) or ~/.agents/model-standards/<name>.md (global).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/model_standard_entry"
+      },
+      "default": []
+    },
+    "golden_prompts": {
+      "description": "Layer 1 golden prompt catalog entries. Each entry describes a base behavioral document that is prepended to every agent's composed prompt at install time. Install path: .agents/golden-prompts/<name>.md (project) or ~/.agents/golden-prompts/<name>.md (global).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/golden_prompt_entry"
+      },
+      "default": []
     }
   },
   "additionalProperties": false,
@@ -954,6 +970,72 @@
           "default": []
         }
       }
+    },
+    "model_standard_entry": {
+      "description": "A Layer 3 model-standard catalog entry. Describes behavioral guidelines for a specific model. Installed to .agents/model-standards/<name>.md (project) or ~/.agents/model-standards/<name>.md (global).",
+      "type": "object",
+      "required": [
+        "name",
+        "description"
+      ],
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this model-standard (kebab-case, matches the filename without .md extension).",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Human-readable description of what model this standard applies to and what behavior it enforces.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "description": "GitHub URL or local path to the model-standard file.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Optional tags for search and filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "golden_prompt_entry": {
+      "description": "A Layer 1 golden prompt catalog entry. Describes the base behavioral document prepended to every composed agent. Installed to .agents/golden-prompts/<name>.md (project) or ~/.agents/golden-prompts/<name>.md (global).",
+      "type": "object",
+      "required": [
+        "name",
+        "description"
+      ],
+      "properties": {
+        "name": {
+          "description": "Unique identifier for this golden prompt (kebab-case, matches the filename without .md extension).",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Human-readable description of the golden prompt's purpose and behavioral scope.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "description": "GitHub URL or local path to the golden prompt file.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Optional tags for search and filtering.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

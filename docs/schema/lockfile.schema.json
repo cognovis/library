@@ -89,6 +89,50 @@
             "minLength": 1
           },
           "default": []
+        },
+        "composed_layers": {
+          "description": "Composition metadata for agents installed with compose-on-install (CL-08n). Present only when the agent was composed from golden-prompt (Layer 1) and/or model-standard (Layer 3) files. Omit for non-composed installs.",
+          "type": "object",
+          "properties": {
+            "golden_prompt": {
+              "description": "Layer 1 golden prompt used during composition.",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the golden prompt (matches the filename without .md).",
+                  "type": "string"
+                },
+                "sha": {
+                  "description": "SHA-256 checksum of the golden prompt file at compose time.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "model_standards": {
+              "description": "Layer 3 model-standard files used during composition, in order.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "description": "Name of the model-standard (matches the filename without .md).",
+                    "type": "string"
+                  },
+                  "sha": {
+                    "description": "SHA-256 checksum of the model-standard file at compose time.",
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "composed_sha": {
+          "description": "SHA-256 of the fully composed agent body (after Layer 1 + Layer 2 + Layer 3 concatenation). Used for drift detection: if any layer file changes, this SHA changes and triggers re-composition on /library sync. Omit for non-composed installs.",
+          "type": "string"
         }
       },
       "additionalProperties": false
