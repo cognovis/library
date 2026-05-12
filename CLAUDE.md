@@ -75,6 +75,8 @@ _Add a brief overview of your project architecture_
   - `~/.local/bin/` must be in `$PATH` (replaces the old `~/.claude/scripts/` PATH entry)
 - **Per ADR-0002 Decision 2:** launchers live in `cognovis-library/bin/`, not in
   `~/.claude/scripts/`. The `~/.claude/scripts/` directory is no longer in `$PATH`.
+- **Note:** `CMUX_BUNDLED_CLI_PATH` in `cld` still references `~/.claude/scripts/cmux-shim.sh`
+  at runtime. Moving `cmux-shim.sh` to `cognovis-library/bin/` is a follow-up task (Phase 2 cleanup per ADR-0002 Decision 3).
 
 ## Conventions & Patterns
 

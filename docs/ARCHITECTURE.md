@@ -58,6 +58,8 @@ The installer is idempotent and uses `ln -sfn` so updates to this repo are immed
 
 `~/.local/bin/` must be in `$PATH`. The legacy `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
 (only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).
+Note: the PATH change takes effect in **new shells only** — existing terminals that were launched before the edit still
+carry the old `~/.claude/scripts/` entry in their inherited environment. Open a new shell to verify AK5.
 
 ## Repo split
 
