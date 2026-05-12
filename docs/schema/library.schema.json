@@ -266,7 +266,7 @@
     "marketplace_entry": {
       "description": "A marketplace source reference for external skill/agent/prompt libraries.",
       "type": "object",
-      "required": ["name", "source"],
+      "required": ["name", "source", "type"],
       "properties": {
         "name": {
           "description": "Short identifier for this marketplace.",
@@ -280,6 +280,17 @@
         "description": {
           "description": "Human-readable description of what this marketplace provides.",
           "type": "string"
+        },
+        "type": {
+          "description": "Distribution mechanism for this marketplace.",
+          "type": "string",
+          "enum": ["git", "skills-sh", "http-tarball"]
+        },
+        "auth": {
+          "description": "Authentication method required to access this marketplace.",
+          "type": "string",
+          "enum": ["none", "bearer", "basic"],
+          "default": "none"
         }
       },
       "additionalProperties": false

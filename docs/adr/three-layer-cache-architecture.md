@@ -1,8 +1,9 @@
 ---
 adr: "0003"
 title: "Three-layer skill deployment: Source/Cache/Harness Symlink + marketplace-symmetric primitives"
-status: proposed
+status: accepted
 date: 2026-05-12
+accepted_date: 2026-05-13
 bead: CL-lti
 deciders:
   - Malte Sussdorff
@@ -15,7 +16,7 @@ related_adrs: ["0002"]
 
 ## Status
 
-Proposed.
+Accepted on 2026-05-13 after two Codex Adversarial Review rounds.
 
 ## Context
 
