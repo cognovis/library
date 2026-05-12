@@ -95,7 +95,8 @@ decide relevance — only the timing of the full-text load differs.
 | Codex CLI | Name, description, and path only loaded at startup (NOT full text). Much lower static cost. INFERRED — consistent with CL-qzw research findings on Codex skill discovery; pending direct vendor confirmation. | Full SKILL.md fetched on first use. Per-invocation fetch cost. INFERRED — consistent with CL-qzw research findings; pending direct vendor confirmation. |
 
 **Format.** SKILL.md — shared format (Open Agent Skills Standard). Install paths
-differ: `.claude/skills/<name>/SKILL.md` (Claude Code) vs `.agents/skills/<name>/SKILL.md`
+differ: `.agents/skills/<name>/SKILL.md` (canonical, read by Codex natively and by
+Claude Code through the `.claude/skills/<name>` bridge symlink)
 (Codex). NORMATIVE for both tools.
 
 **When to choose it.** Use a skill when:
@@ -679,34 +680,40 @@ would technically allow broader access.
 
 For every harness, **project-local always overrides global** for the same skill name.
 
-| Harness | Wins | Loses |
-|---------|------|-------|
-| Claude Code | `.claude/skills/<name>/` | `~/.claude/skills/<name>/` |
-| Codex CLI | `.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
+| Harness | Wins (project-local) | Loses (user-global) |
+|---------|----------------------|---------------------|
+| Claude Code | `.claude/skills/<name>` (bridge -> `.agents/skills/<name>`) | `~/.claude/skills/<name>` |
+| Codex CLI | `.agents/skills/<name>` (canonical, read natively) | `~/.agents/skills/<name>` |
 
-### Canonical vs. bridge (dual-install)
+### Canonical vs. bridge
 
-When a skill is installed for both harnesses simultaneously:
+Every skill install creates the same three-layer structure:
 
 | Role | Path |
 |------|------|
-| **Canonical** (real file) | `.claude/skills/<name>/SKILL.md` |
-| **Bridge** (symlink) | `.agents/skills/<name>` → `../../.claude/skills/<name>` |
+| Layer B (real files, content-addressable) | `~/.local/share/library/skills/<m>/<n>@<tree-sha>/SKILL.md` |
+| **Canonical** (Layer C) | `.agents/skills/<name>` → Layer-B cache (symlink) |
+| **Claude bridge** (Layer C) | `.claude/skills/<name>` → `.agents/skills/<name>` (symlink) |
+| Codex | reads `.agents/skills/<name>` natively (r1 root, CL-603) — no install path |
 
-The Claude Code path is always canonical. The Codex path is always the bridge symlink.
+The `.agents/skills/<name>` path is always canonical. The `.claude/skills/<name>`
+path is always the Claude harness bridge symlink. Codex reaches the same
+canonical files directly; no separate `.codex/skills/<name>` install target.
 This prevents two independent file copies from drifting apart.
 
 ### Name uniqueness requirement
 
-Skill names MUST be globally unique within a project across all harnesses. Two real
-directories at `.claude/skills/foo` and `.agents/skills/foo` (non-symlink) are a
-policy violation — bug reports from that state will be untriageable.
+Skill names MUST be globally unique within a project. Two real directories at
+`.agents/skills/foo` and `.claude/skills/foo` (neither a symlink) are a policy
+violation — bug reports from that state will be untriageable.
 
 ### Uninstall completeness
 
-`/library remove` MUST remove both the canonical AND all bridge symlinks. Removing
-only the canonical leaves a dangling bridge. The removal sequence: remove bridge
-first, then canonical.
+`/library remove` MUST remove the Claude bridge AND the canonical symlink AND
+the lockfile entry. The removal sequence: Claude bridge first, then canonical,
+then lockfile. The Layer-B cache (`~/.local/share/library/skills/...`) is
+garbage-collected separately by `/library prune-cache` once no lockfile entry
+references it.
 
 ### Admin override
 

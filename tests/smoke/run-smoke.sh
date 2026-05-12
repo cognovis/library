@@ -294,25 +294,26 @@ smoke_codex() {
         "${global_agents_skills}" \
         "codex/discovery-order"
 
-    # CHECK 4: Bridge direction per CL-b4o policy:
-    # Canonical = .claude/skills/<name>/ (real dir, Claude Code)
-    # Bridge    = .agents/skills/<name>  (symlink -> canonical, Codex)
-    # The bridge must point FROM Codex (.agents) TO Claude Code (.claude), NOT the reverse.
-    local claude_canonical_dir="${tmpdir}/project/.claude/skills/${FIXTURE_NAME}"
-    mkdir -p "${claude_canonical_dir}"
-    cp "${fixture_src}/SKILL.md" "${claude_canonical_dir}/SKILL.md"
-    # Remove the Codex real dir installed above; replace with bridge symlink
-    rm -rf "${proj_agents_skills}"
-    ln -sfn "$(realpath "${claude_canonical_dir}")" "${proj_agents_skills}"
-    check_symlink "${proj_agents_skills}" ".claude/skills/${FIXTURE_NAME}" "codex/cross-harness-bridge"
+    # CHECK 4: Bridge direction per CL-b4o policy (post-CL-83q inversion):
+    # Canonical = .agents/skills/<name>/ (real dir, read natively by Codex r1 root)
+    # Bridge    = .claude/skills/<name>  (symlink -> canonical, used by Claude Code)
+    # Codex needs no bridge — it reads .agents/skills/ directly.
+    local claude_bridge_path="${tmpdir}/project/.claude/skills/${FIXTURE_NAME}"
+    mkdir -p "$(dirname "${claude_bridge_path}")"
+    # proj_agents_skills was already populated as the canonical real dir above.
+    if [[ -d "${claude_bridge_path}" ]] && [[ ! -L "${claude_bridge_path}" ]]; then
+      rm -r "${claude_bridge_path}"
+    fi
+    ln -sfn "$(realpath "${proj_agents_skills}")" "${claude_bridge_path}"
+    check_symlink "${claude_bridge_path}" ".agents/skills/${FIXTURE_NAME}" "codex/cross-harness-bridge"
 
-    # CHECK 5: Verify the bridge symlink resolves to the SKILL.md (single source of truth)
+    # CHECK 5: Verify the Claude bridge symlink resolves to the canonical SKILL.md.
     local resolved_skill
-    resolved_skill="$(readlink -f "${proj_agents_skills}")/SKILL.md"
+    resolved_skill="$(readlink -f "${claude_bridge_path}")/SKILL.md"
     if [[ -f "${resolved_skill}" ]]; then
-        pass "codex/symlink-skill-reachable: SKILL.md reachable via bridge at ${resolved_skill}"
+        pass "codex/symlink-skill-reachable: SKILL.md reachable via Claude bridge at ${resolved_skill}"
     else
-        fail "codex/symlink-skill-reachable: SKILL.md NOT reachable via bridge"
+        fail "codex/symlink-skill-reachable: SKILL.md NOT reachable via Claude bridge"
     fi
 
     # CHECK 6: Runtime discovery note
@@ -395,14 +396,14 @@ smoke_opencode() {
 }
 
 # ---------------------------------------------------------------------------
-# Harness: name-collision policy (CL-b4o)
+# Harness: name-collision policy (CL-b4o, inverted by CL-83q)
 # Validates docs/policy/name-collision.md structural rules:
-#   1. Claude Code path is canonical (real file)
-#   2. Codex path is bridge (symlink → canonical)
-#   3. Dual-install: single SKILL.md file readable from both paths
+#   1. Canonical path is .agents/skills/<name> (real dir or symlink into Layer-B cache)
+#   2. Claude bridge .claude/skills/<name> is a symlink to the canonical path
+#   3. Single SKILL.md file readable through canonical AND through Claude bridge
 #   4. Two real directories (collision state) is detectable
-#   5. Project-local overrides global for each harness
-#   6. Bridge removal correctly isolates harnesses
+#   5. Project-local overrides global
+#   6. Claude-bridge removal correctly leaves canonical intact
 # ---------------------------------------------------------------------------
 smoke_name_collision() {
     section "name-collision"
@@ -412,12 +413,13 @@ smoke_name_collision() {
     tmpdir="$(make_test_env)"
     TMPDIRS+=("${tmpdir}")
 
-    # Set up fake project structure
-    local canonical="${tmpdir}/project/.claude/skills/${FIXTURE_NAME}"
-    local bridge_dir="${tmpdir}/project/.agents/skills"
+    # Set up fake project structure (post-CL-83q polarity):
+    # canonical real dir at .agents/skills/<name>, Claude bridge at .claude/skills/<name>.
+    local canonical="${tmpdir}/project/.agents/skills/${FIXTURE_NAME}"
+    local bridge_dir="${tmpdir}/project/.claude/skills"
     local bridge="${bridge_dir}/${FIXTURE_NAME}"
-    local global_canonical="${tmpdir}/home/.claude/skills/${FIXTURE_NAME}"
-    local global_bridge_dir="${tmpdir}/home/.agents/skills"
+    local global_canonical="${tmpdir}/home/.agents/skills/${FIXTURE_NAME}"
+    local global_bridge_dir="${tmpdir}/home/.claude/skills"
     local global_bridge="${global_bridge_dir}/${FIXTURE_NAME}"
 
     mkdir -p "${canonical}"
@@ -425,32 +427,32 @@ smoke_name_collision() {
     mkdir -p "${global_canonical}"
     mkdir -p "${global_bridge_dir}"
 
-    # Install fixture to canonical path (real file)
+    # Install fixture to canonical path (real file).
     cp "${fixture_src}/SKILL.md" "${canonical}/SKILL.md"
 
     # -----------------------------------------------------------------------
     # CHECK 1: Canonical is a real directory (not a symlink)
     # -----------------------------------------------------------------------
     if [[ -d "${canonical}" ]] && [[ ! -L "${canonical}" ]]; then
-        pass "name-collision/canonical-real: .claude/skills/${FIXTURE_NAME} is a real directory (canonical)"
+        pass "name-collision/canonical-real: .agents/skills/${FIXTURE_NAME} is a real directory (canonical)"
     else
-        fail "name-collision/canonical-real: .claude/skills/${FIXTURE_NAME} is NOT a real directory"
+        fail "name-collision/canonical-real: .agents/skills/${FIXTURE_NAME} is NOT a real directory"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 2: Create bridge symlink and verify it points to canonical
+    # CHECK 2: Create Claude bridge symlink pointing to canonical
     # -----------------------------------------------------------------------
     ln -sfn "$(realpath "${canonical}")" "${bridge}"
-    check_symlink "${bridge}" ".claude/skills/${FIXTURE_NAME}" "name-collision/bridge-symlink"
+    check_symlink "${bridge}" ".agents/skills/${FIXTURE_NAME}" "name-collision/bridge-symlink"
 
     # -----------------------------------------------------------------------
-    # CHECK 3: SKILL.md reachable via bridge (single source of truth)
+    # CHECK 3: SKILL.md reachable through Claude bridge (single source of truth)
     # -----------------------------------------------------------------------
     local bridge_skill="${bridge}/SKILL.md"
     if [[ -f "${bridge_skill}" ]]; then
-        pass "name-collision/bridge-skill-reachable: SKILL.md reachable via bridge at ${bridge_skill}"
+        pass "name-collision/bridge-skill-reachable: SKILL.md reachable via Claude bridge at ${bridge_skill}"
     else
-        fail "name-collision/bridge-skill-reachable: SKILL.md NOT reachable via bridge"
+        fail "name-collision/bridge-skill-reachable: SKILL.md NOT reachable via Claude bridge"
     fi
 
     # -----------------------------------------------------------------------
@@ -469,16 +471,16 @@ smoke_name_collision() {
     # CHECK 5: Two real directories is detectable as collision state
     # -----------------------------------------------------------------------
     local collision_dir="${tmpdir}/collision-test"
-    local col_canonical="${collision_dir}/.claude/skills/${FIXTURE_NAME}"
-    local col_codex="${collision_dir}/.agents/skills/${FIXTURE_NAME}"
-    mkdir -p "${col_canonical}" "${col_codex}"
+    local col_canonical="${collision_dir}/.agents/skills/${FIXTURE_NAME}"
+    local col_claude="${collision_dir}/.claude/skills/${FIXTURE_NAME}"
+    mkdir -p "${col_canonical}" "${col_claude}"
     cp "${fixture_src}/SKILL.md" "${col_canonical}/SKILL.md"
-    cp "${fixture_src}/SKILL.md" "${col_codex}/SKILL.md"
+    cp "${fixture_src}/SKILL.md" "${col_claude}/SKILL.md"
 
     # Detection: both exist as real dirs (neither is a symlink) = collision
     collision_detected=false
     if [[ -d "${col_canonical}" ]] && [[ ! -L "${col_canonical}" ]] && \
-       [[ -d "${col_codex}" ]] && [[ ! -L "${col_codex}" ]]; then
+       [[ -d "${col_claude}" ]] && [[ ! -L "${col_claude}" ]]; then
         collision_detected=true
     fi
     if [[ "${collision_detected}" == "true" ]]; then
@@ -488,45 +490,44 @@ smoke_name_collision() {
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 6: Project-local overrides global — Claude Code
+    # CHECK 6: Project-local canonical overrides global canonical
     # -----------------------------------------------------------------------
     cp "${fixture_src}/SKILL.md" "${global_canonical}/SKILL.md"
-    # Simulate: project-local canonical wins over global canonical
     check_project_overrides_global \
         "${canonical}" \
         "${global_canonical}" \
-        "name-collision/claude-local-over-global"
+        "name-collision/canonical-local-over-global"
 
     # -----------------------------------------------------------------------
-    # CHECK 7: Project-local overrides global — Codex bridge
+    # CHECK 7: Project-local Claude bridge and global Claude bridge both
+    # resolve correctly to their respective canonicals
     # -----------------------------------------------------------------------
     ln -sfn "$(realpath "${global_canonical}")" "${global_bridge}"
-    # Simulate: project-local bridge (resolved to canonical) wins over global bridge
     local proj_resolved global_resolved
     proj_resolved="$(readlink -f "${bridge}" 2>/dev/null || true)"
     global_resolved="$(readlink -f "${global_bridge}" 2>/dev/null || true)"
     if [[ -d "${proj_resolved}" ]] && [[ -d "${global_resolved}" ]]; then
-        pass "name-collision/codex-local-over-global: project-local bridge and global bridge both structurally valid (runtime picks project-local first per policy)"
+        pass "name-collision/claude-local-over-global: project-local Claude bridge and global Claude bridge both structurally valid (runtime picks project-local first per policy)"
     else
-        fail "name-collision/codex-local-over-global: one or both bridge resolutions invalid"
+        fail "name-collision/claude-local-over-global: one or both Claude bridge resolutions invalid"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 8: Bridge removal leaves canonical intact
+    # CHECK 8: Claude bridge removal leaves canonical intact
     # -----------------------------------------------------------------------
-    local rm_test_canonical="${tmpdir}/rm-test/.claude/skills/${FIXTURE_NAME}"
-    local rm_test_bridge_dir="${tmpdir}/rm-test/.agents/skills"
+    local rm_test_canonical="${tmpdir}/rm-test/.agents/skills/${FIXTURE_NAME}"
+    local rm_test_bridge_dir="${tmpdir}/rm-test/.claude/skills"
     local rm_test_bridge="${rm_test_bridge_dir}/${FIXTURE_NAME}"
     mkdir -p "${rm_test_canonical}" "${rm_test_bridge_dir}"
     cp "${fixture_src}/SKILL.md" "${rm_test_canonical}/SKILL.md"
     ln -sfn "$(realpath "${rm_test_canonical}")" "${rm_test_bridge}"
 
-    # Simulate bridge-first removal (policy: bridge first, then canonical)
+    # Simulate Claude-bridge-first removal (policy: bridge first, then canonical)
     rm "${rm_test_bridge}"
     if [[ ! -e "${rm_test_bridge}" ]] && [[ -f "${rm_test_canonical}/SKILL.md" ]]; then
-        pass "name-collision/bridge-removal: bridge removed; canonical intact (bridge-first removal order correct)"
+        pass "name-collision/bridge-removal: Claude bridge removed; canonical intact (bridge-first removal order correct)"
     else
-        fail "name-collision/bridge-removal: bridge removal order incorrect"
+        fail "name-collision/bridge-removal: Claude bridge removal order incorrect"
     fi
 
     # -----------------------------------------------------------------------

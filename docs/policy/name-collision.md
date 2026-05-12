@@ -20,10 +20,10 @@ Is the collision within the same harness (same path prefix)?
            Project-local wins over global ALWAYS.
            More specific scope wins over less specific.
  └─ NO  → Cross-harness collision (Decision 4):
-           The harness-native path wins for that harness.
-           .claude/skills/foo wins for Claude Code.
-           .agents/skills/foo wins for Codex.
-           A symlink bridges both to the same file.
+           .agents/skills/foo is canonical (real files / Layer-B symlink).
+           Both harnesses see it: Codex natively (r1 root), Claude via the
+           bridge symlink at .claude/skills/foo -> .agents/skills/foo.
+           One real copy, two resolution paths, zero drift.
 
 Am I installing a new version of an existing skill?
  └─ YES → Versioned collision (Decision 5):
@@ -86,28 +86,34 @@ Codex 0.130.0 loads skills from multiple roots. The skill roots observed via
 | r2 | `~/.codex/skills/.system` | System/bundled skills |
 | r3+ | `~/.codex/plugins/cache/...` | Plugin caches |
 
-**Important empirical note** (CL-603, codex 0.130.0): The OpenAI docs specify
-`~/.agents/skills/` as the global path, but `codex debug prompt-input` shows
-`~/.codex/skills/` is r0 (primary root). `~/.agents/skills/` is also loaded (as r1)
-when it exists, but `~/.codex/skills/` is the canonical global install path used by
-`sync-codex-skills` and the library's `global_codex` setting.
+**Important empirical note** (CL-603, codex 0.130.0; library install policy
+updated by CL-83q): The OpenAI docs specify `~/.agents/skills/` as the global
+path. `codex debug prompt-input` shows that Codex loads BOTH `~/.codex/skills/`
+(r0) and `~/.agents/skills/` (r1) when present. The library installs ONLY to
+`~/.agents/skills/` (r1) — this is the canonical Codex install path going
+forward. `~/.codex/skills/` may still hold legacy installs from earlier
+versions of `sync-codex-skills` or the now-retired `global_codex` setting; the
+collision check in cookbook/use.md Step 5d offers to remove those.
 
 The project-local path `.agents/skills/` behavior was not verified by smoke test
 CL-603 — only the global path was tested.
 
-Precedence for same-named skills within Codex:
+Precedence for same-named skills within Codex (post-CL-83q install policy):
 
-| Priority | Path | Scope |
-|----------|------|-------|
-| 1 (wins) | `.agents/skills/<name>/SKILL.md` | Project-local (unverified by CL-603) |
-| 2 | `~/.codex/skills/<name>/SKILL.md` | User-global (r0, confirmed CL-603) |
-| 3 | `~/.agents/skills/<name>/SKILL.md` | User-global secondary (r1, confirmed CL-603) |
+| Priority | Path | Scope | Library install? |
+|----------|------|-------|------------------|
+| 1 (wins) | `.agents/skills/<name>/SKILL.md` | Project-local (unverified by CL-603) | Yes (canonical) |
+| 2 | `~/.agents/skills/<name>/SKILL.md` | User-global secondary (r1, confirmed CL-603) | Yes (canonical) |
+| 3 | `~/.codex/skills/<name>/SKILL.md` | User-global primary (r0, confirmed CL-603) | **No** — legacy only |
 
 **Rule**: Project-local **always** overrides global for the same skill name.
+`/library use` writes to priority-1 or priority-2 paths depending on scope; it
+never installs to `~/.codex/skills/` (Codex reads `~/.agents/skills/` natively,
+so the bridge is unnecessary).
 
-**Evidence level**: PARTIAL — global path `~/.codex/skills/` confirmed empirically
-(CL-603 smoke test). Project-local `.agents/skills/` follows Open Agent Skills
-Standard but was not live-tested in CL-603.
+**Evidence level**: PARTIAL — Codex root order confirmed empirically (CL-603
+smoke test). Project-local `.agents/skills/` follows Open Agent Skills Standard
+but was not live-tested in CL-603.
 
 **Example (Codex)**:
 
@@ -123,42 +129,47 @@ Standard but was not live-tested in CL-603.
 
 ## Decision 2: Library Policy — Canonical Path and Bridge
 
-When `/library use` installs a skill for **both** harnesses simultaneously (dual-install):
+When `/library use` installs a skill (single workflow for all harnesses — there
+is no longer a "dual-install" mode; cross-harness reach is the default):
 
 | Role | Path | Description |
 |------|------|-------------|
-| **Canonical** | `.claude/skills/<name>/` | Real file lives here. This is the source of truth. |
-| **Bridge** | `.agents/skills/<name>` | Symlink pointing to the canonical path. |
+| **Canonical** | `.agents/skills/<name>/` | Real files (or a symlink into the Layer-B cache, per ADR-0003). This is the source of truth. |
+| **Claude bridge** | `.claude/skills/<name>` | Symlink to the canonical path. Claude Code resolves through it. |
+| **Codex** | reads `.agents/skills/<name>` directly | No separate install path. Codex 0.130.0+ loads `~/.agents/skills/` as the r1 root (CL-603). |
 
-**Policy**: The Claude Code path is canonical. The Codex path is the bridge (symlink).
+**Policy**: `.agents/skills/<name>` is canonical. `.claude/skills/<name>` is a
+symlink bridge to it. No `.codex/skills/<name>` install target.
 
 **Rationale**:
-- Claude Code requires SKILL.md to exist as a real file (not a symlink target that
-  might resolve differently across systems).
-- Codex CLI follows symlinked skill directories (NORMATIVE — confirmed via smoke
-  test check 11 in `tests/smoke/README.md`).
-- Using Claude Code as canonical avoids two separate file copies drifting apart.
+- `.agents/skills/` is the cross-harness convention (agentskills.io standard).
+  Codex reads it natively as the r1 root (CL-603 empirical, 2026-05-12).
+- Claude Code does NOT natively read `.agents/skills/`, so it needs a bridge
+  symlink at `.claude/skills/<name>`. Claude follows symlinks transparently.
+- A single canonical real file (or symlink-into-cache) eliminates drift between
+  harnesses.
 
 **Installation sequence** (MANDATORY ORDER):
 
 ```
-1. Copy SKILL.md to .claude/skills/<name>/SKILL.md   ← canonical (real file)
-2. Create symlink: .agents/skills/<name> -> ../../.claude/skills/<name>   ← bridge
+1. Materialize Layer-B cache: ~/.local/share/library/skills/<m>/<n>@<tree-sha>/
+2. Point canonical at cache: ln -s <cache> .agents/skills/<name>
+3. Create Claude bridge:     ln -s <canonical> .claude/skills/<name>
 ```
 
-The bridge must be created AFTER the canonical install. Reversing the order produces
-a dangling symlink.
+The bridges must be created AFTER the canonical is in place. Reversing the
+order produces dangling symlinks.
 
 **Bridge symlink command** (from cookbook/use.md Step 5c):
 
 ```bash
-claude_target=".claude/skills/<name>"
-codex_target=".agents/skills/<name>"
-mkdir -p "$(dirname "$codex_target")"
-if [ -d "$codex_target" ] && [ ! -L "$codex_target" ]; then
-  rm -rf "$codex_target"
+canonical_target=".agents/skills/<name>"        # already pointing at cache
+claude_bridge_target=".claude/skills/<name>"
+mkdir -p "$(dirname "$claude_bridge_target")"
+if [ -d "$claude_bridge_target" ] && [ ! -L "$claude_bridge_target" ]; then
+  rm -r "$claude_bridge_target"
 fi
-ln -sfn "$(realpath "$claude_target")" "$codex_target"
+ln -sfn "$(realpath "$canonical_target")" "$claude_bridge_target"
 ```
 
 ---
@@ -167,33 +178,38 @@ ln -sfn "$(realpath "$claude_target")" "$codex_target"
 
 ### What happens when the user edits the symlink target?
 
-A bridge symlink at `.agents/skills/foo` points to `.claude/skills/foo`.
+A Claude bridge symlink at `.claude/skills/foo` points to `.agents/skills/foo`,
+which itself points into the Layer-B cache.
 
-If the user edits `.agents/skills/foo/SKILL.md` (the symlink target):
-- The edit goes to `.claude/skills/foo/SKILL.md` — the canonical file.
-- Both harnesses immediately see the change (there is only one file).
-- **This is the intended behavior.**
+If the user edits `.claude/skills/foo/SKILL.md` (through the bridge):
+- The edit follows the symlink chain into the Layer-B cache directory.
+- Both harnesses immediately see the change (there is only one real file).
+- **This is the intended behavior**, although editing the canonical
+  `.agents/skills/foo/SKILL.md` directly is cleaner.
 
-If the user replaces the bridge with a real directory:
-- The bridge is destroyed. Two files now exist independently.
+If the user replaces a bridge or canonical with a real directory:
+- The link chain is broken. Two files now exist independently.
 - Drift is possible. `/library sync` will warn.
 
 **Library convention for this case**:
-1. Detect: `[ -d ".agents/skills/foo" ] && [ ! -L ".agents/skills/foo" ]`
-2. Warn the user: "Bridge at `.agents/skills/foo` was replaced with a real directory.
-   The canonical skill is at `.claude/skills/foo`. These may have drifted. Run
-   `/library sync foo` to inspect and reconcile."
-3. Never silently overwrite — always warn first.
+1. Detect (canonical replaced): `[ -d ".agents/skills/foo" ] && [ ! -L ".agents/skills/foo" ]`
+   AND the lockfile lists a `cache_path`. The user has materialized a real copy
+   over the canonical symlink.
+2. Detect (bridge replaced): `[ -d ".claude/skills/foo" ] && [ ! -L ".claude/skills/foo" ]`.
+   The user has put real files where the Claude bridge should be.
+3. Warn the user: "Skill `<name>` has drifted from the canonical Layer-B
+   cache. Run `/library sync <name>` to inspect and reconcile."
+4. Never silently overwrite — always warn first.
 
 ### Symlink lifecycle rules
 
 | Event | Action |
 |-------|--------|
-| `/library use foo` (dual-install) | Create canonical at `.claude/skills/foo`, bridge at `.agents/skills/foo` |
-| User edits via bridge | Edit lands on canonical — correct, no action needed |
-| User replaces bridge with real dir | Warn on next `/library use` or `/library sync` |
-| `/library remove foo` | Remove both canonical AND bridge (see Decision 6) |
-| `/library sync foo` | Refresh canonical from source; bridge continues to point to it |
+| `/library use foo` | Materialize Layer-B cache, create canonical at `.agents/skills/foo` (-> cache), create Claude bridge at `.claude/skills/foo` (-> canonical) |
+| User edits through any link | Edit lands on the cache file — correct, no action needed |
+| User replaces canonical or bridge with real dir | Warn on next `/library use` or `/library sync` |
+| `/library remove foo` | Remove Claude bridge AND canonical symlink AND lockfile entry (see Decision 6); Layer-B cache is GC'd separately |
+| `/library sync foo` | Recompute tree-SHA; if changed, materialize new cache + re-point canonical; bridge auto-resolves |
 
 ### Git tracking of symlinks
 
@@ -213,31 +229,35 @@ git ls-files --stage .agents/skills/foo
 
 ## Decision 4: Cross-Harness Name Uniqueness
 
-**Policy: Skill names must be globally unique across all harnesses within a project.**
+**Policy: Skill names must be globally unique within a project.**
 
-**Rationale**: A dual-install creates a symlink bridge so both harnesses load the
-same SKILL.md. If two different skills with the same name exist in `.claude/skills/foo`
-(Claude Code) and `.agents/skills/foo` (Codex) as separate real files, they will
-diverge silently. Bug reports will be untriageable.
+**Rationale**: The canonical install at `.agents/skills/<name>` is reached by
+Codex natively and by Claude Code through the bridge symlink at
+`.claude/skills/<name>`. If a second real directory exists at the bridge
+path, two copies of the same skill diverge silently. Bug reports become
+untriageable.
 
-**Uniqueness scope**: Within a single project (repository). A `researcher` skill in
-Project A and a different `researcher` skill in Project B do not collide.
+**Uniqueness scope**: Within a single project (repository). A `researcher`
+skill in Project A and a different `researcher` skill in Project B do not
+collide.
 
 **Detection in `/library use`**:
 
-Before installing, check for cross-harness collision:
+Before installing, check the canonical and Claude bridge paths:
 
 ```bash
-claude_path=".claude/skills/<name>"
-codex_path=".agents/skills/<name>"
+canonical_path=".agents/skills/<name>"
+claude_bridge_path=".claude/skills/<name>"
 
-claude_exists=false
-codex_exists=false
-codex_is_bridge=false
+canonical_exists=false
+canonical_is_link=false
+claude_bridge_exists=false
+claude_is_bridge=false
 
-[ -d "$claude_path" ] && claude_exists=true
-[ -d "$codex_path" ] && codex_exists=true
-[ -L "$codex_path" ] && codex_is_bridge=true
+[ -d "$canonical_path" ] && canonical_exists=true
+[ -L "$canonical_path" ] && canonical_is_link=true
+[ -d "$claude_bridge_path" ] && claude_bridge_exists=true
+[ -L "$claude_bridge_path" ] && claude_is_bridge=true
 ```
 
 **Collision scenarios and responses**:
@@ -245,53 +265,58 @@ codex_is_bridge=false
 | Scenario | Response |
 |----------|---------|
 | Neither exists | Fresh install — proceed |
-| Claude exists, Codex absent | Claude Code only was installed — add Codex bridge if dual-install requested |
-| Codex bridge exists (is a symlink) | Bridge already set — refresh canonical and bridge is updated automatically |
-| Both exist as REAL directories | COLLISION — warn user, do NOT silently overwrite |
-| Claude absent, Codex real dir exists | Orphaned Codex install — warn user, offer to set up canonical |
+| Canonical is a symlink to cache; Claude is a symlink to canonical | Already installed correctly — refresh canonical; bridge auto-updates |
+| Canonical is a real dir (no symlink, no cache) | Legacy install — promote to Layer-B cache + symlink, leave bridge alone |
+| Claude bridge is a real dir, canonical absent | Legacy claude-canonical install — migrate content into canonical, replace `.claude/` with bridge |
+| Both canonical and Claude bridge are real dirs (neither a symlink) | COLLISION — warn user, do NOT silently overwrite |
+| Legacy `.codex/skills/<name>` exists | Warn and offer to remove — Codex reads `.agents/` natively, no Codex install needed |
 
 **Warning message for real-directory collision**:
 
 ```
 Warning: Name collision detected for skill '<name>':
-  .claude/skills/<name>/ exists (real directory)
-  .agents/skills/<name>/ exists (real directory, NOT a symlink)
+  .agents/skills/<name>/ exists (real directory)
+  .claude/skills/<name>/  exists (real directory, NOT a symlink)
 
 These are two independent copies that may have diverged.
-Policy: Claude Code path is canonical; Codex path should be a symlink bridge.
+Policy: .agents/skills/<name>/ is canonical.
+        .claude/skills/<name>  is the Claude harness bridge symlink.
 
 Options:
-  1. Overwrite Codex copy with symlink bridge (recommended — eliminates drift)
-  2. Keep both as separate files (not recommended — you must maintain them manually)
-  3. Cancel and inspect manually
+  1. Use .agents/ as canonical, replace .claude/ with bridge symlink (recommended)
+  2. Use .claude/ as canonical, move content into .agents/ and bridge from .claude/
+  3. Keep both as separate files (not recommended — manual maintenance)
+  4. Cancel and inspect manually
 
 Default: option 1.
 ```
 
 **Concrete examples per harness**:
 
-**Claude Code example**:
+**Standard install (single source of truth)**:
 ```
-.claude/skills/researcher/SKILL.md   ← real file (canonical)
-.agents/skills/researcher            ← symlink → ../../.claude/skills/researcher
+~/.local/share/library/skills/<m>/researcher@<tree-sha>/SKILL.md   ← real file (Layer B)
+.agents/skills/researcher    ← symlink → Layer-B cache (canonical, Layer C)
+.claude/skills/researcher    ← symlink → .agents/skills/researcher (Claude bridge)
 ```
-Claude Code reads: `.claude/skills/researcher/SKILL.md` (direct, no symlink needed)
-Codex reads: `.agents/skills/researcher/SKILL.md` (via symlink, resolves to canonical)
+Codex reads `.agents/skills/researcher/SKILL.md` directly (r1 root).
+Claude Code follows `.claude/skills/researcher` → `.agents/skills/researcher` → cache.
 Result: one file, two harnesses, zero drift.
 
-**Codex-only example** (no dual-install):
+**Codex-only example** (no Claude install):
 ```
-.agents/skills/researcher/SKILL.md   ← real file
+.agents/skills/researcher/SKILL.md   ← real file or symlink into cache
 ```
-No collision possible — Claude Code is not configured for this skill. Fine.
+No collision possible — Claude bridge is not present. Fine; Claude won't see
+the skill until a bridge is created.
 
-**Dual-install collision example** (BAD — two real directories):
+**Collision example** (BAD — two real directories):
 ```
-.claude/skills/researcher/SKILL.md   ← real file (v1, old)
-.agents/skills/researcher/SKILL.md   ← real file (v2, newer)
+.agents/skills/researcher/SKILL.md   ← real file (v1)
+.claude/skills/researcher/SKILL.md   ← real file (v2, drifted)
 ```
-These have drifted. Claude Code users get v1. Codex users get v2. This is the bug
-this policy exists to prevent.
+Codex sees v1. Claude sees v2 (because its path is real, not a bridge).
+This is the bug this policy exists to prevent.
 
 ---
 
@@ -310,24 +335,26 @@ Paths do not encode version numbers. `.claude/skills/foo/` does not become
 **Scenario: v1 in one path, v2 in another**:
 
 ```
-.claude/skills/foo/SKILL.md     ← v1 (installed earlier, Claude Code only)
-.agents/skills/foo/SKILL.md     ← v2 (installed later, Codex only)
+.agents/skills/foo/SKILL.md     ← v1 (real file, installed earlier)
+.claude/skills/foo/SKILL.md     ← v2 (real file, installed later via legacy path)
 ```
 
 This is the two-real-directories collision described in Decision 4. Resolution:
 1. Determine which version is canonical (typically the more recent).
-2. Write that version to `.claude/skills/foo/SKILL.md`.
-3. Replace `.agents/skills/foo/` with a symlink bridge.
+2. Materialize that version into the Layer-B cache (Step 8c).
+3. Point `.agents/skills/foo` at the cache via symlink.
+4. Replace `.claude/skills/foo/` with a bridge symlink to `.agents/skills/foo`.
 
 **What the model actually gets** (not a naming issue — a load-order issue):
 
 | Harness | Path loaded | Result |
 |---------|------------|--------|
-| Claude Code | `.claude/skills/foo/SKILL.md` | Gets whatever is at that path |
-| Codex | `.agents/skills/foo/SKILL.md` | Gets whatever is at that path |
+| Claude Code | `.claude/skills/foo/SKILL.md` | Resolves through bridge into canonical; gets canonical content |
+| Codex | `.agents/skills/foo/SKILL.md` | Native r1 root; gets canonical content |
 
-If the paths are diverged (two real files), each harness gets a different version.
-If a symlink bridge is in place, both harnesses get the same file.
+If the paths are diverged (two real directories, no bridge), each harness gets
+its own copy. If the canonical + bridge layout is intact, both harnesses get
+the same file.
 
 ---
 
@@ -342,44 +369,65 @@ discovery.
 **Uninstall sequence** (MANDATORY):
 
 ```bash
-# 1. Remove bridge first (symlink)
+# 1. Remove the Claude harness bridge first (symlink).
+if [ -L ".claude/skills/<name>" ]; then
+  rm ".claude/skills/<name>"
+fi
+# If the bridge was replaced by a real directory at some point, remove it too.
+if [ -d ".claude/skills/<name>" ] && [ ! -L ".claude/skills/<name>" ]; then
+  echo "Warning: .claude/skills/<name> is a real directory (legacy install) — removing."
+  rm -r ".claude/skills/<name>"
+fi
+
+# 2. Remove the canonical (a symlink into Layer-B cache, or a legacy real dir).
 if [ -L ".agents/skills/<name>" ]; then
   rm ".agents/skills/<name>"
+elif [ -d ".agents/skills/<name>" ]; then
+  rm -r ".agents/skills/<name>"
 fi
 
-# 2. Remove bridge real-directory version (if bridge was replaced by user)
-if [ -d ".agents/skills/<name>" ] && [ ! -L ".agents/skills/<name>" ]; then
-  echo "Warning: Bridge at .agents/skills/<name> is a real directory — removing."
-  rm -rf ".agents/skills/<name>"
+# 3. (Optional) Remove legacy ~/.codex/skills/<name> if present.
+# Codex reads ~/.agents/skills/ natively (r1 root); this path is no longer
+# managed by /library use but may exist from older installs.
+if [ -e "~/.codex/skills/<name>" ]; then
+  echo "Notice: ~/.codex/skills/<name> exists from a legacy install — remove?"
+  # prompt user; default yes
 fi
 
-# 3. Remove canonical
-rm -rf ".claude/skills/<name>"
+# 4. The Layer-B cache entry (~/.local/share/library/skills/<m>/<n>@<sha>/) is
+# garbage-collected separately by /library prune-cache once no lockfile entry
+# references it. /library remove does NOT delete cache content directly.
+
+# 5. Remove the lockfile entry.
+yq -i 'del(.installed[] | select(.name=="<name>"))' .library.lock
 ```
 
-**Global paths**: Same pattern applies for `~/.claude/skills/<name>` (Claude Code global),
-`~/.codex/skills/<name>` (Codex global primary, r0), and `~/.agents/skills/<name>`
-(Codex global secondary, r1 — present only when directory exists).
+**Global paths**: Same pattern applies for `~/.claude/skills/<name>` (Claude
+harness bridge global), `~/.agents/skills/<name>` (canonical global), and
+`~/.codex/skills/<name>` (legacy Codex install — remove if present).
 
 **Example — complete removal**:
 
 Before removal:
 ```
-.claude/skills/researcher/SKILL.md   ← canonical (real file)
-.agents/skills/researcher            ← bridge (symlink)
-~/.claude/skills/researcher/         ← global canonical (if globally installed)
-~/.codex/skills/researcher/          ← global Codex primary (r0, if globally installed)
+~/.local/share/library/skills/cognovis/researcher@4f8a2b9c/SKILL.md   ← Layer B (real)
+.agents/skills/researcher            ← canonical (symlink -> Layer B)
+.claude/skills/researcher            ← Claude bridge (symlink -> .agents/skills/researcher)
+~/.agents/skills/researcher          ← global canonical (if globally installed)
+~/.claude/skills/researcher          ← global Claude bridge (if globally installed)
 ```
 
 After `/library remove researcher`:
 ```
-(all four paths removed)
+~/.local/share/library/skills/cognovis/researcher@4f8a2b9c/   ← still present
+                                                              (orphaned; GC by /library prune-cache)
+(all four Layer-C paths removed)
 ```
 
 After `/library remove researcher --local-only`:
 ```
-~/.claude/skills/researcher/         ← still present
-~/.codex/skills/researcher/          ← still present
+~/.agents/skills/researcher          ← still present
+~/.claude/skills/researcher          ← still present
 ```
 
 ---
@@ -414,25 +462,31 @@ See `cookbook/use.md` Step 5b–5d for the full procedure.
 
 ```
 Before installing:
-[ ] Check if canonical path (.claude/skills/<name>/) already exists
-[ ] Check if bridge path (.agents/skills/<name>) exists and whether it is a symlink
-[ ] If both exist as real directories → emit collision warning, prompt user
+[ ] Check if canonical path (.agents/skills/<name>) exists and what kind (real dir / symlink-into-cache)
+[ ] Check if Claude bridge path (.claude/skills/<name>) exists and whether it is a symlink
+[ ] Check for legacy ~/.codex/skills/<name>; offer to remove
+[ ] If canonical AND Claude bridge both exist as real directories → emit collision warning, prompt user
 
-During dual-install:
-[ ] Install canonical (real file) to .claude/skills/<name>/ FIRST
-[ ] Then create bridge symlink: .agents/skills/<name> -> ../../.claude/skills/<name>
-[ ] Use ln -sfn + explicit rm -rf guard for real-dir replacement
-[ ] Verify symlink resolves correctly after creation
+During install:
+[ ] Materialize Layer-B cache at ~/.local/share/library/skills/<m>/<n>@<tree-sha>/ FIRST
+[ ] Point canonical at cache: ln -sfn <cache> .agents/skills/<name>
+[ ] Point Claude bridge at canonical: ln -sfn <canonical> .claude/skills/<name>
+[ ] Use ln -sfn + explicit rm -r guard for real-dir replacement
+[ ] Verify the full symlink chain resolves (cat through to cache)
 
 After install:
-[ ] Confirm SKILL.md exists at canonical path
-[ ] Confirm bridge symlink resolves to the same SKILL.md
-[ ] Report: "Installed to .claude/skills/<name>/ (canonical). Bridge created at .agents/skills/<name>."
+[ ] Confirm SKILL.md exists at the Layer-B cache
+[ ] Confirm .agents/skills/<name>/SKILL.md is reachable (canonical)
+[ ] Confirm .claude/skills/<name>/SKILL.md is reachable (through bridge)
+[ ] Report: "Installed to .agents/skills/<name> (canonical -> Layer-B cache). Claude bridge at .claude/skills/<name>."
 
 On removal:
-[ ] Remove bridge symlink first
-[ ] Handle real-directory bridge (warn + remove)
-[ ] Remove canonical
+[ ] Remove Claude bridge symlink first
+[ ] Handle real-directory Claude path (warn + remove)
+[ ] Remove canonical symlink (or real dir if legacy)
+[ ] Offer to remove legacy ~/.codex/skills/<name>
+[ ] Remove lockfile entry
+[ ] Layer-B cache stays; /library prune-cache GCs it once no entries reference it
 [ ] Check global paths too if --global flag used
 ```
 

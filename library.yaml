@@ -1,9 +1,19 @@
 default_dirs:
   skills:
-    - default: .claude/skills/
-    - default_codex: .agents/skills/
-    - global: ~/.claude/skills/
-    - global_codex: ~/.codex/skills/
+    # Skills are cross-harness via a single canonical location plus a Claude
+    # bridge symlink. Codex reads `~/.agents/skills/` natively (CL-603 r1 root),
+    # so it does NOT need a separate install path.
+    #
+    # Canonical (real files)  -> .agents/skills/
+    # Claude bridge (symlink) -> .claude/skills/
+    # Codex                   -> reads .agents/skills/ directly, no bridge
+    #
+    # The canonical path is itself a symlink into the Layer-B cache per
+    # ADR-0003 (cookbook/use.md Step 8c).
+    - default: .agents/skills/                    # canonical, project-local
+    - global: ~/.agents/skills/                   # canonical, user-global
+    - claude_bridge: .claude/skills/              # Claude harness bridge, project-local
+    - global_claude_bridge: ~/.claude/skills/     # Claude harness bridge, user-global
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/

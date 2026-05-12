@@ -95,7 +95,7 @@ This table documents every architectural claim from `docs/ARCHITECTURE.md` and
 | 8 | Skill install path is `.agents/skills/<name>/SKILL.md` | CONFIRMED | `smoke_codex` check 1: SKILL.md copied to project `.agents/skills/hello-world/SKILL.md` and verified |
 | 9 | Global Codex skill path is `~/.agents/skills/<name>/SKILL.md` | CONFIRMED | `smoke_codex` check 3: global skill installed and verified alongside project-local |
 | 10 | Project-local Codex skills override global | PARTIAL | Structure confirmed. Runtime precedence follows Open Agent Skills Standard — PARTIAL (needs live Codex session) |
-| 11 | Bridge symlink `.agents/skills/<name>` → `.claude/skills/<name>` allows Codex to read the canonical skill file (CL-b4o policy: Codex is bridge, Claude Code is canonical) | CONFIRMED | `smoke_codex` checks 4+5: bridge symlink created at `.agents/skills/<name>` pointing to `.claude/skills/<name>`, SKILL.md reachable via resolved path |
+| 11 | Bridge symlink `.claude/skills/<name>` → `.agents/skills/<name>` allows Claude Code to read the canonical skill files (CL-b4o + CL-83q policy: `.agents/skills/<name>` is canonical, `.claude/skills/<name>` is the Claude bridge; Codex reads canonical natively) | CONFIRMED | `smoke_codex` checks 4+5: Claude bridge symlink created at `.claude/skills/<name>` pointing to `.agents/skills/<name>`, SKILL.md reachable via resolved path |
 | 12 | SKILL.md format is identical between harnesses (Open Agent Skills Standard) | CONFIRMED | Both `claude-code/fixtures/hello-world/SKILL.md` and `codex/fixtures/hello-world/SKILL.md` use identical YAML frontmatter + markdown format; only the `FIXTURE_HARNESS` marker differs |
 | 13 | Runtime Codex skill discovery requires a live Codex session | CONFIRMED (trivially) | Documented as NOTE in test output |
 
@@ -136,14 +136,14 @@ Validates the 7 structural decisions in `docs/policy/name-collision.md`.
 
 | # | Claim | Status | Evidence |
 |---|-------|--------|---------|
-| 23 | Claude Code path (`.claude/skills/<name>/`) is canonical (real directory, not symlink) | CONFIRMED | `smoke_name_collision` check 1: `[ -d ] && [ ! -L ]` passes |
-| 24 | Codex bridge is a symlink pointing to the Claude Code canonical path | CONFIRMED | `smoke_name_collision` check 2: `check_symlink` + `readlink -f` confirms target suffix |
-| 25 | SKILL.md is reachable via the bridge symlink (single source of truth) | CONFIRMED | `smoke_name_collision` check 3: `[ -f bridge/SKILL.md ]` passes |
-| 26 | Canonical and bridge resolve to the same inode (zero drift possible) | CONFIRMED | `smoke_name_collision` check 4: `stat` inode comparison matches |
-| 27 | Two real directories (no symlink) is detectable as collision state | CONFIRMED | `smoke_name_collision` check 5: detection logic `[ -d ] && [ ! -L ]` on both paths triggers correctly |
-| 28 | Project-local Claude Code canonical overrides global canonical | CONFIRMED | `smoke_name_collision` check 6: `check_project_overrides_global` passes |
-| 29 | Project-local Codex bridge and global Codex bridge are both structurally valid | CONFIRMED | `smoke_name_collision` check 7: both bridge resolutions valid; runtime picks project-local first (PARTIAL — runtime order not verifiable without live harness) |
-| 30 | Bridge removal leaves canonical intact (bridge-first removal order) | CONFIRMED | `smoke_name_collision` check 8: `rm` bridge, verify canonical survives |
+| 23 | Canonical path (`.agents/skills/<name>/`) is a real directory (the source of truth; can also be a symlink into the Layer-B cache per ADR-0003) | CONFIRMED | `smoke_name_collision` check 1: `[ -d ] && [ ! -L ]` passes for `.agents/skills/<name>` |
+| 24 | Claude bridge is a symlink at `.claude/skills/<name>` pointing to the canonical `.agents/skills/<name>` path | CONFIRMED | `smoke_name_collision` check 2: `check_symlink` + `readlink -f` confirms target suffix |
+| 25 | SKILL.md is reachable through the Claude bridge (single source of truth) | CONFIRMED | `smoke_name_collision` check 3: `[ -f bridge/SKILL.md ]` passes |
+| 26 | Canonical and Claude bridge resolve to the same inode (zero drift possible) | CONFIRMED | `smoke_name_collision` check 4: `stat` inode comparison matches |
+| 27 | Two real directories at `.agents/skills/<name>` AND `.claude/skills/<name>` is detectable as collision state | CONFIRMED | `smoke_name_collision` check 5: detection logic `[ -d ] && [ ! -L ]` on both paths triggers correctly |
+| 28 | Project-local canonical overrides global canonical | CONFIRMED | `smoke_name_collision` check 6: `check_project_overrides_global` passes |
+| 29 | Project-local Claude bridge and global Claude bridge are both structurally valid (Codex reads canonical natively, no Codex install path) | CONFIRMED | `smoke_name_collision` check 7: both Claude bridge resolutions valid; runtime picks project-local first (PARTIAL — runtime order not verifiable without live harness) |
+| 30 | Claude bridge removal leaves canonical intact (bridge-first removal order) | CONFIRMED | `smoke_name_collision` check 8: `rm` Claude bridge, verify canonical survives |
 | 31 | `docs/policy/name-collision.md` exists and is non-empty | CONFIRMED | `smoke_name_collision` check 9: `[ -f ] && [ -s ]` passes |
 | 32 | Policy document covers all 7 required decisions | CONFIRMED | `smoke_name_collision` check 10: `grep` for "Decision 1" through "Decision 7" all pass |
 
@@ -159,13 +159,14 @@ FAIL:  0
 SKIP: 11  (MANUAL_VERIFICATION_REQUIRED — Pi + OpenCode runtime unavailable)
 ```
 
-### Claims confirmed end-to-end
-- Claude Code skill install path (`.claude/skills/<name>/SKILL.md`) — CONFIRMED
-- Codex skill install path (`.agents/skills/<name>/SKILL.md`) — CONFIRMED
+### Claims confirmed end-to-end (post-CL-83q polarity inversion)
+- Canonical skill install path is `.agents/skills/<name>/SKILL.md` (real dir or symlink into Layer-B cache) — CONFIRMED
+- Claude bridge install path is `.claude/skills/<name>` (symlink to canonical) — CONFIRMED
+- Codex reads canonical `.agents/skills/<name>/` natively (r1 root, CL-603) — no separate Codex install path — CONFIRMED
 - Symlink pattern `.claude/skills/<name>` → `../../.agents/skills/<name>` — CONFIRMED
-- SKILL.md via symlink is reachable (same file, both harnesses) — CONFIRMED
+- SKILL.md via Claude bridge is reachable (same file, both harnesses) — CONFIRMED
 - SKILL.md format is harness-portable (Open Agent Skills Standard) — CONFIRMED
-- Canonical = Claude Code path (real dir); Bridge = Codex path (symlink) — CONFIRMED
+- Canonical = `.agents/skills/<name>` (real or Layer-B symlink); Claude bridge = `.claude/skills/<name>` (symlink) — CONFIRMED
 - Two-real-directory collision state is detectable — CONFIRMED
 - Bridge-first removal order leaves canonical intact — CONFIRMED
 - Policy document (`docs/policy/name-collision.md`) covers all 7 required decisions — CONFIRMED
