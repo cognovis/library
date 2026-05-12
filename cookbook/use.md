@@ -268,6 +268,33 @@ If the user confirms, create the file at `<resolved-codex-path>/<name>/agents/op
 If the skill's SKILL.md body contains `$ARGUMENTS`:
 > "Advisory: This skill uses `$ARGUMENTS` substitution (Claude Code invocation style). Codex skills receive input via prompt context rather than `$ARGUMENTS` substitution. The skill should still work, but `$ARGUMENTS` will not be replaced — the literal string will appear in the prompt. Consider adapting the skill for Codex if precise argument handling is needed."
 
+### 5e. Standards default to user-global
+
+`library.standards:` entries (single files and bundles) default to the **global**
+install location (`~/.agents/standards/`), not project-local.
+
+Rationale:
+- Triggers filter dynamically at SessionStart — a Python bundle costs zero when
+  no `.py` files are present.
+- Global install means every project benefits from a single `/library use python`
+  without per-project repetition.
+- Project-local override is the exception, not the norm. Use it when a project
+  needs a custom version of a standard that diverges from the team default
+  (place files at `<project>/.agents/standards/<name>.md` — project-local wins
+  per the loader resolution order).
+
+The `default_dirs.standards` block in `library.yaml` keeps both paths:
+
+```yaml
+default_dirs:
+  standards:
+    - default: .agents/standards/         # project-local (override only)
+    - global: ~/.agents/standards/        # user-global (default for /library use)
+```
+
+When the user runs `/library use <name>` for a standard, install to **global**
+unless they explicitly say otherwise.
+
 ### 6. Fetch from Source
 
 > If `target_tool = both` (dual-install), run this step once targeting the Claude Code path (`<claude_path>`). After this step completes, create the symlink as described in Step 5c to complete the Codex-side installation.
