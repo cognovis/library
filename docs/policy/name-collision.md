@@ -76,24 +76,44 @@ without a local override continues to use the global.
 
 ### Codex CLI
 
-Codex loads skills from `.agents/skills/` (project-local) and `~/.agents/skills/`
-(user-global), in the same precedence order:
+Codex 0.130.0 loads skills from multiple roots. The skill roots observed via
+`codex debug prompt-input` (empirical, CL-603 smoke test, 2026-05-12):
+
+| Root | Path | Notes |
+|------|------|-------|
+| r0 (primary) | `~/.codex/skills/` | Always present; user-global primary |
+| r1 (secondary) | `~/.agents/skills/` | Included dynamically when directory exists and has content |
+| r2 | `~/.codex/skills/.system` | System/bundled skills |
+| r3+ | `~/.codex/plugins/cache/...` | Plugin caches |
+
+**Important empirical note** (CL-603, codex 0.130.0): The OpenAI docs specify
+`~/.agents/skills/` as the global path, but `codex debug prompt-input` shows
+`~/.codex/skills/` is r0 (primary root). `~/.agents/skills/` is also loaded (as r1)
+when it exists, but `~/.codex/skills/` is the canonical global install path used by
+`sync-codex-skills` and the library's `global_codex` setting.
+
+The project-local path `.agents/skills/` behavior was not verified by smoke test
+CL-603 — only the global path was tested.
+
+Precedence for same-named skills within Codex:
 
 | Priority | Path | Scope |
 |----------|------|-------|
-| 1 (wins) | `.agents/skills/<name>/SKILL.md` | Project-local |
-| 2 | `~/.agents/skills/<name>/SKILL.md` | User-global |
+| 1 (wins) | `.agents/skills/<name>/SKILL.md` | Project-local (unverified by CL-603) |
+| 2 | `~/.codex/skills/<name>/SKILL.md` | User-global (r0, confirmed CL-603) |
+| 3 | `~/.agents/skills/<name>/SKILL.md` | User-global secondary (r1, confirmed CL-603) |
 
 **Rule**: Project-local **always** overrides global for the same skill name.
 
-**Evidence level**: NORMATIVE — follows Open Agent Skills Standard, consistent with
-CL-qzw research findings on Codex skill discovery.
+**Evidence level**: PARTIAL — global path `~/.codex/skills/` confirmed empirically
+(CL-603 smoke test). Project-local `.agents/skills/` follows Open Agent Skills
+Standard but was not live-tested in CL-603.
 
 **Example (Codex)**:
 
 ```
 # User has a global version:
-~/.agents/skills/researcher/SKILL.md     ← global (shadowed)
+~/.codex/skills/researcher/SKILL.md     ← global primary (r0, WINS over r1)
 
 # Project has a project-specific override:
 .agents/skills/researcher/SKILL.md       ← project-local (WINS for this project)
@@ -337,8 +357,9 @@ fi
 rm -rf ".claude/skills/<name>"
 ```
 
-**Global paths**: Same pattern applies for `~/.claude/skills/<name>` and
-`~/.agents/skills/<name>`.
+**Global paths**: Same pattern applies for `~/.claude/skills/<name>` (Claude Code global),
+`~/.codex/skills/<name>` (Codex global primary, r0), and `~/.agents/skills/<name>`
+(Codex global secondary, r1 — present only when directory exists).
 
 **Example — complete removal**:
 
