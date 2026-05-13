@@ -168,13 +168,20 @@ def compute_directory_hash(dir_path: Path) -> str:
 
     Returns:
         64-character lowercase SHA-256 hex string.
+
+    Raises:
+        FileNotFoundError: If dir_path does not exist.
     """
+    if not dir_path.exists():
+        raise FileNotFoundError(f"compute_directory_hash: path does not exist: {dir_path}")
     h = hashlib.sha256()
     for f in sorted(dir_path.rglob("*")):
         if f.is_file():
             rel = f.relative_to(dir_path)
             h.update(str(rel).encode())
+            h.update(b"\0")          # separator
             h.update(compute_checksum(f).encode())
+            h.update(b"\0")          # separator
     return h.hexdigest()
 
 

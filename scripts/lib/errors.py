@@ -8,11 +8,11 @@ from __future__ import annotations
 # Exit code constants
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
-EXIT_NOT_FOUND = 2
+EXIT_NOT_FOUND = 2       # catalog entry not found; NOTE: shares value with EXIT_DRIFT
 EXIT_AMBIGUOUS = 3
 EXIT_DEPENDENCY_MISSING = 4
 EXIT_DRY_RUN = 0  # dry-run returns 0 with planned operations in output
-EXIT_DRIFT = 2    # drift detected in audit or status commands
+EXIT_DRIFT = 2    # audit drift detected; NOTE: shares value with EXIT_NOT_FOUND (renumber in follow-up)
 
 
 class LibraryError(Exception):

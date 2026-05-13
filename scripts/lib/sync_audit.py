@@ -72,7 +72,7 @@ def cmd_sync_impl(
         entry_name = entry.get("name", "")
         entry_type = entry.get("type", "")
         try:
-            _reinstall_entry(catalog, entry, repo_root, scope, harness)
+            reinstall_entry(catalog, entry, repo_root, scope, harness)
             synced.append(f"{entry_type}:{entry_name}")
         except Exception as exc:
             failed.append({"name": entry_name, "type": entry_type, "error": str(exc)})
@@ -87,7 +87,7 @@ def cmd_sync_impl(
     )
 
 
-def _reinstall_entry(
+def reinstall_entry(
     catalog: dict,
     entry: dict,
     repo_root: Path,
@@ -255,8 +255,9 @@ def cmd_audit_impl(
             if dir_path is not None:
                 try:
                     actual_sha = compute_directory_hash(dir_path)
-                except OSError:
+                except (FileNotFoundError, OSError):
                     actual_sha = ""
+                    entry_status = "unknown"
 
                 if expected_sha and actual_sha and expected_sha != actual_sha:
                     drift = True

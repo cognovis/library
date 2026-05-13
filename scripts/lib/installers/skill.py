@@ -27,7 +27,6 @@ from ..cache import (
 from ..catalog import lookup_entry
 from ..errors import InstallError, NotFoundError, SourceError
 from ..lockfile import (
-    compute_checksum,
     compute_directory_hash,
     find_lockfile,
     get_entry,

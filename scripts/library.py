@@ -47,10 +47,12 @@ from lib.catalog import find_repo_root, get_entries, load_catalog, search_all
 from lib.errors import (
     EXIT_AMBIGUOUS,
     EXIT_DEPENDENCY_MISSING,
+    EXIT_DRIFT,
     EXIT_FAILURE,
     EXIT_NOT_FOUND,
     LibraryError,
 )
+from lib.lockfile import find_lockfile, load_lockfile
 from lib.output import (
     format_list_output,
     format_search_output,
@@ -60,6 +62,8 @@ from lib.output import (
     error_result,
 )
 from lib.primitives import PRIMITIVES, all_primitive_names, get_primitive
+from lib.status import cmd_status_impl
+from lib.sync_audit import cmd_audit_impl, cmd_sync_impl, reinstall_entry
 
 
 VALID_PRIMITIVES = all_primitive_names()
@@ -722,7 +726,6 @@ def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     harness = getattr(args, "harness", "all")
     primitive = args.primitive
 
-    from lib.sync_audit import cmd_sync_impl
     try:
         result = cmd_sync_impl(
             catalog=catalog,
@@ -747,13 +750,11 @@ def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
 def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: <primitive> audit [--drift-only]"""
-    from lib.errors import EXIT_DRIFT
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "project")
     drift_only = getattr(args, "drift_only", False)
     primitive = args.primitive
 
-    from lib.sync_audit import cmd_audit_impl
     try:
         result = cmd_audit_impl(
             catalog=catalog,
@@ -796,9 +797,6 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> i
 
     Top-level audit command that checks all primitives across the given scope(s).
     """
-    from lib.errors import EXIT_DRIFT
-    from lib.sync_audit import cmd_audit_impl
-
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "project")
     drift_only = getattr(args, "drift_only", False)
@@ -853,9 +851,6 @@ def cmd_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     Top-level status command that checks upstream SHAs for all installed entries
     without cloning.
     """
-    from lib.errors import EXIT_DRIFT
-    from lib.status import cmd_status_impl
-
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "project")
 
@@ -928,10 +923,6 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
     By default skips entries where upstream_status == 'current'.
     With --force, re-installs all entries regardless.
     """
-    from lib.errors import EXIT_DRIFT
-    from lib.status import cmd_status_impl
-    from lib.sync_audit import cmd_sync_impl
-
     use_json = getattr(args, "json", False)
     dry_run = getattr(args, "dry_run", False)
     force = getattr(args, "force", False)
@@ -942,6 +933,7 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
 
     all_refreshed = []
     all_skipped = []
+    all_failed = []
 
     for s in scopes_to_check:
         # Get upstream status to determine what needs syncing
@@ -953,22 +945,16 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
                     repo_root=repo_root,
                     scope=s,
                 )
-                behind_names = {
-                    e["name"] for e in status_result.get("entries", [])
-                    if e.get("upstream_status") in ("behind", "unknown")
-                }
-                current_names = {
-                    e["name"] for e in status_result.get("entries", [])
+                current_set = {
+                    (e["name"], e.get("primitive", e.get("type", "")))
+                    for e in status_result.get("entries", [])
                     if e.get("upstream_status") == "current"
                 }
             except LibraryError:
-                behind_names = set()
-                current_names = set()
+                current_set = set()
         else:
-            behind_names = None  # Force re-installs all
-            current_names = set()
+            current_set = set()
 
-        from lib.lockfile import find_lockfile, load_lockfile
         lockfile_path = find_lockfile(repo_root, global_scope=(s == "global"))
         lock_data = load_lockfile(lockfile_path)
         installed = lock_data.get("installed", [])
@@ -977,8 +963,9 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
             entry_name = entry.get("name", "")
             entry_type = entry.get("type", "")
             entry_label = f"{entry_type}:{entry_name}"
+            key = (entry_name, entry_type)
 
-            should_skip = (not force) and (entry_name in current_names)
+            should_skip = (not force) and (key in current_set)
 
             if dry_run:
                 if should_skip:
@@ -993,19 +980,22 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
 
             # Re-install this entry
             try:
-                from lib.sync_audit import _reinstall_entry
-                _reinstall_entry(catalog, entry, repo_root, s, harness)
+                reinstall_entry(catalog, entry, repo_root, s, harness)
                 all_refreshed.append(entry_label)
-            except Exception as exc:
-                if use_json:
-                    pass  # Collect errors
-                else:
-                    print(f"Warning: Failed to sync {entry_label}: {exc}", file=sys.stderr)
+            except (LibraryError, Exception) as exc:
+                all_failed.append({
+                    "name": entry.get("name", ""),
+                    "type": entry.get("type", ""),
+                    "error": str(exc),
+                })
+                if not use_json:
+                    print(f"  ERROR: {entry.get('name')}: {exc}", file=sys.stderr)
 
     result = {
         "status": "dry-run" if dry_run else "ok",
         "refreshed": all_refreshed,
         "skipped": all_skipped,
+        "failed": all_failed,
         "total_refreshed": len(all_refreshed),
         "total_skipped": len(all_skipped),
     }

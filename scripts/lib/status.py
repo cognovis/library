@@ -37,11 +37,14 @@ def get_remote_sha(clone_url: str, ref: str = "HEAD") -> Optional[str]:
         )
         if result.returncode != 0:
             return None
+        accepted = {ref, f"refs/heads/{ref}"}
+        if ref == "HEAD":
+            accepted.add("HEAD")
         for line in result.stdout.splitlines():
             if "\t" not in line:
                 continue
             sha, name = line.split("\t", 1)
-            if name in (ref, f"refs/heads/{ref}", "HEAD"):
+            if name.strip() in accepted:
                 return sha.strip()
     except (subprocess.TimeoutExpired, OSError):
         return None

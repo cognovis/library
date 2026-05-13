@@ -591,6 +591,94 @@ class TestHookScript:
         assert "Library Drift Summary" in result.stdout or "DRIFT" in result.stdout, \
             f"Expected drift summary in output, got: {result.stdout}"
 
+    def test_hook_script_outputs_both_sections_when_drift_and_behind(self, tmp_path):
+        """AK7: hook prints both '### Local drift' and '### Upstream drift' sections."""
+        hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
+
+        # --- Local drift entry (directory hash mismatch) ---
+        cache_dir_drift = tmp_path / "cache-drifted"
+        cache_dir_drift.mkdir(parents=True)
+        (cache_dir_drift / "SKILL.md").write_bytes(b"original content")
+
+        # --- Upstream-behind entry (source_commit differs from remote) ---
+        cache_dir_behind = tmp_path / "cache-behind"
+        cache_dir_behind.mkdir(parents=True)
+        (cache_dir_behind / "SKILL.md").write_bytes(b"behind content")
+
+        from lib.lockfile import compute_directory_hash
+        behind_hash = compute_directory_hash(cache_dir_behind)
+
+        entries = [
+            {
+                "name": "drifted-skill",
+                "type": "skill",
+                "marketplace": "local",
+                "source": "local",
+                "source_commit": "abc123",
+                "cache_path": str(cache_dir_drift) + "/",
+                "install_target": str(tmp_path / ".agents/skills/drifted-skill") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": "0" * 64,  # Wrong hash -> local drift
+                "checksum_type": "directory",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+            {
+                "name": "behind-skill",
+                "type": "skill",
+                "marketplace": "local",
+                "source": "https://github.com/test/repo-behind",
+                "source_commit": "oldsha1111111111111111111111111111111111111",
+                "cache_path": str(cache_dir_behind) + "/",
+                "install_target": str(tmp_path / ".agents/skills/behind-skill") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": behind_hash,
+                "checksum_type": "directory",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+        ]
+
+        (tmp_path / ".library.lock").write_text(yaml.dump({"installed": entries}))
+        (tmp_path / "library.yaml").write_text(
+            "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
+            "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+        )
+        (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
+
+        # Create a fake `git` wrapper that returns a known SHA for ls-remote
+        fake_git_dir = tmp_path / "fake-git-bin"
+        fake_git_dir.mkdir()
+        fake_git = fake_git_dir / "git"
+        fake_git.write_text(
+            "#!/bin/bash\n"
+            "if [[ \"$1\" == \"ls-remote\" ]]; then\n"
+            "    printf 'abc123newsha111111111111111111111111111111\\tHEAD\\n'\n"
+            "    exit 0\n"
+            "fi\n"
+            "exec /usr/bin/git \"$@\"\n"
+        )
+        fake_git.chmod(0o755)
+
+        env = os.environ.copy()
+        env["PATH"] = str(fake_git_dir) + ":" + env.get("PATH", "")
+
+        result = subprocess.run(
+            ["bash", str(hook)],
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+            env=env,
+        )
+
+        assert result.returncode == 0, \
+            f"Hook should exit 0 even with drift+behind: exit={result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}"
+        assert "### Local drift" in result.stdout, \
+            f"Expected '### Local drift' section in output, got:\n{result.stdout}"
+        assert "### Upstream drift" in result.stdout, \
+            f"Expected '### Upstream drift' section in output, got:\n{result.stdout}"
+
 
 # ---------------------------------------------------------------------------
 # AK8: make_entry with checksum_type
