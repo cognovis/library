@@ -18,7 +18,6 @@ Idempotent: if the @-import is already present, it is not duplicated.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -56,10 +55,8 @@ def materialize_harness_fields(
     # Determine the reference path for the primary artifact
     if primitive_type == "skill":
         import_ref = f"@.agents/skills/{name}/SKILL.md"
-        standard_ref = None  # not used for skill
     elif primitive_type == "standard":
         import_ref = f"@.agents/standards/{name}/"
-        standard_ref = import_ref
     else:
         return {"operations": operations, "warnings": warnings}
 
@@ -84,7 +81,7 @@ def materialize_harness_fields(
             _append_import_idempotent(claude_md, import_ref)
     elif globs:
         warn_msg = (
-            f"Skill '{name}' has globs but no always_apply — "
+            f"{primitive_type.capitalize()} '{name}' has globs but no always_apply — "
             "CLAUDE.md not modified (globs are not supported natively in Claude Code). "
             "Use Cursor for glob-based rules."
         )
@@ -108,7 +105,7 @@ def materialize_harness_fields(
             _append_import_idempotent(agents_md, import_ref)
     elif globs:
         warn_msg = (
-            f"Skill '{name}' has globs but no always_apply — "
+            f"{primitive_type.capitalize()} '{name}' has globs but no always_apply — "
             "AGENTS.md not modified (globs are not supported natively in Codex). "
             "Use Cursor for glob-based rules."
         )

@@ -136,6 +136,9 @@ def install_standard(
             entry, standard_name, "standard", repo_root, dry_run=True
         )
         ops.extend(harness["operations"])
+        for w in harness.get("warnings", []):
+            import sys as _sys
+            print(f"WARNING: {w}", file=_sys.stderr)
         return dry_run_result(
             ops,
             summary=(

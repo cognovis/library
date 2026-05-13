@@ -118,6 +118,9 @@ def install_skill(
         # Add harness materialization ops (always_apply / globs)
         harness = materialize_harness_fields(entry, skill_name, "skill", repo_root, dry_run=True)
         ops.extend(harness["operations"])
+        for w in harness.get("warnings", []):
+            import sys as _sys
+            print(f"WARNING: {w}", file=_sys.stderr)
         return dry_run_result(
             ops,
             summary=(
