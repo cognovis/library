@@ -4,7 +4,8 @@
 Register a new skill, agent, or prompt in the library catalog.
 
 ## Input
-The user provides: name, description, source, and optionally type and dependencies.
+The user invokes `/library <primitive> add <details>` and provides name,
+description, source, and optionally dependencies.
 
 ## Steps
 
@@ -16,11 +17,12 @@ git pull
 ```
 
 ### 2. Determine the Type
-Figure out the type from the user's prompt or the source path:
-- If the source path contains `SKILL.md` or user says "skill" → type is `skill`
-- If the source path contains `AGENT.md` or user says "agent" → type is `agent`
-- If user says "prompt" → type is `prompt`
-- If ambiguous, ask the user
+Use `<primitive>` as the entry type. Validate that the source path matches it:
+- `skill` sources point at `SKILL.md`
+- `agent` sources point at an agent `.md` or `.toml` file
+- `prompt` sources point at a prompt or command `.md` file
+- `standard` sources point at a standard `.md` file
+- If the source and primitive disagree, warn the user before adding the entry
 
 ### 3. Validate the Source
 - **Local path**: Verify the file exists at the given path
@@ -64,4 +66,4 @@ git push
 ```
 
 ### 7. Confirm
-Tell the user the entry has been added and is now available for others to use via `/library use <name>`.
+Tell the user the entry has been added and is now available for others to use via `/library <primitive> use <name>`.

@@ -17,10 +17,10 @@ git pull
 ### 2. Read .library.lock (Source of Truth)
 
 Read `.library.lock` from the project root. This file lists every item that was installed
-via `/library use`, with its source URL, source commit, and install target.
+via `/library <primitive> use <name>`, with its source URL, source commit, and install target.
 
 If `.library.lock` does not exist:
-> "No .library.lock found. Nothing has been installed via /library use. Run /library use <name>
+> "No .library.lock found. Nothing has been installed via the Library. Run /library <primitive> use <name>
 > to install items."
 Then exit.
 
@@ -37,7 +37,7 @@ guarantees that two developers with the same `.library.lock` get bit-for-bit ide
 ### 3. Determine Items to Sync
 
 All entries in `.library.lock` are synced. `/library sync` is a full re-pull of the locked state.
-To sync a single item, use `/library use <name>` instead.
+To sync a single item, use `/library <primitive> use <name>` instead.
 
 ### 4. Re-pull Each Installed Item
 
@@ -144,7 +144,7 @@ For each entry in `.library.lock` where `type` is `agent`:
    - Warn the user:
      ```
      Warning: Compose failed for <name>: <error>.
-     Keeping uncomposed agent body. Run /library use <name> after installing the required
+     Keeping uncomposed agent body. Run /library agent use <name> after installing the required
      base/model-standard (cognovis-base, model-standard).
      ```
    - Continue with the original fetched body (graceful degradation). Do NOT abort
@@ -247,7 +247,7 @@ with open(lock_path, 'w') as f:
 
 For each entry that has a `requires` field in `library.yaml`:
 - Check if each dependency is also in `.library.lock`
-- If a dependency is not in the lockfile, run `/library use <dep>` to install it
+- If a dependency is not in the lockfile, run `/library <dependency-type> use <dependency-name>` to install it
 - Process dependencies before the items that require them
 
 ### 9. Report Results

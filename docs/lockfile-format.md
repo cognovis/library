@@ -5,15 +5,15 @@
 >
 > **Bead**: CL-t21 / CL-yx2 | **Epic**: CL-36o | **Last updated**: 2026-05-12
 >
-> **Applies to**: `/library use`, `/library remove`, `/library sync`, `/library audit`, and
-> any tooling that installs or manages library items.
+> **Applies to**: `/library <primitive> use`, `/library <primitive> remove`,
+> `/library sync`, `/library audit`, and any tooling that installs or manages library items.
 
 ---
 
 ## Overview
 
 `.library.lock` is a project-local YAML file that records every item installed by
-`/library use`. It provides:
+`/library <primitive> use`. It provides:
 
 - **Reproducibility**: any clone of the project can restore the exact set of installed
   items by running `/library sync` (which reads the lockfile, not the catalog).
@@ -36,7 +36,7 @@ Two lockfile instances exist, sharing the same schema:
 <project-root>/
 ├── .library.lock       ← per-project lockfile (committed to git)
 ├── library.yaml
-├── .claude/
+├── .agents/
 │   └── skills/
 └── ...
 ```
@@ -47,7 +47,7 @@ manifest. It should NOT be gitignored.
 ### Global lockfile (new — ADR-0003)
 
 `~/.config/library/global.lock` records globally installed items (installed with
-`/library use <name> --global`):
+`/library <primitive> use <name> --global`):
 
 ```
 ~/.config/library/
@@ -202,7 +202,7 @@ was written.
 
 ## Lockfile Lifecycle
 
-### `/library use` writes/updates an entry
+### `/library <primitive> use` writes/updates an entry
 
 After a successful install, write or update the entry:
 
@@ -213,7 +213,7 @@ After a successful install, write or update the entry:
 
 See `cookbook/use.md` Step 9 for the full procedure.
 
-### `/library remove` removes an entry
+### `/library <primitive> remove` removes an entry
 
 After deleting the installed files:
 
@@ -285,8 +285,8 @@ installed:
 - `docs/schema/lockfile.schema.json` — JSON Schema for machine validation.
 - `docs/adr/three-layer-cache-architecture.md` (ADR-0003) — Three-layer deployment model that introduced `marketplace` and `cache_path`.
 - `docs/policy/name-collision.md` — Canonical/bridge model for `bridge_symlinks`.
-- `cookbook/use.md` — How `/library use` writes lockfile entries (including cache materialization).
-- `cookbook/remove.md` — How `/library remove` removes lockfile entries (including GC hints).
+- `cookbook/use.md` — How `/library <primitive> use` writes lockfile entries (including cache materialization).
+- `cookbook/remove.md` — How `/library <primitive> remove` removes lockfile entries (including GC hints).
 - `cookbook/sync.md` — How `/library sync` uses the lockfile as source of truth (including cache reconciliation).
 - `cookbook/audit.md` — How `/library audit` detects drift (including symlink target verification).
 - `scripts/migrate-lockfile.py` — Migration script to add `marketplace` and `cache_path` to existing lockfiles.

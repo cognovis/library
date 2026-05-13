@@ -33,7 +33,7 @@ If matches found, format as:
 ```
 ## Search Results for "<keyword>"
 
-| Type | Name | Description | Source |
+| Primitive | Name | Description | Source |
 |------|------|-------------|--------|
 | skill | matching-skill | description... | source... |
 | agent | matching-agent | description... | source... |
@@ -43,8 +43,8 @@ If no matches:
 ```
 No results found for "<keyword>".
 
-Tip: Try broader keywords or run `/library list` to see the full catalog.
+Tip: Try broader keywords or run `/library <primitive> list` once you know which primitive to inspect.
 ```
 
 ### 5. Suggest Next Step
-If matches were found, suggest: `Run /library use <name> to install one of these.`
+If matches were found, suggest: `Run /library <primitive> use <name> to install one of these.`

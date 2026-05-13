@@ -151,7 +151,8 @@ The other two variables (`LIBRARY_YAML_PATH` and `LIBRARY_SKILL_DIR`) are correc
 
 ### 4. Verify
 
-Start a new Claude Code session anywhere. `/library list` should work and show an empty catalog.
+Start a new Claude Code session anywhere. `/library skill list` should work and
+show an empty catalog.
 
 ## Quick Start
 
@@ -164,7 +165,7 @@ Here's the typical workflow: **build → catalog → distribute → use**.
 You built a deploy skill in one of your repos. Register it:
 
 ```
-/library add deploy skill from https://github.com/yourorg/infra-tools/blob/main/skills/deploy/SKILL.md
+/library skill add deploy from https://github.com/yourorg/infra-tools/blob/main/skills/deploy/SKILL.md
 ```
 
 This adds a reference to `library.yaml` and pushes the update to your fork.
@@ -174,15 +175,16 @@ This adds a reference to `library.yaml` and pushes the update to your fork.
 On another device, repo, or agent:
 
 ```
-/library use deploy
+/library skill use deploy
 ```
 
-This pulls the skill from the source repo into `.claude/skills/deploy/`.
+This pulls the skill from the source repo into the canonical `.agents/skills/deploy`
+path and creates the Claude bridge at `.claude/skills/deploy`.
 
 Want it globally available on this machine?
 
 ```
-/library use deploy install globally
+/library skill use deploy install globally
 ```
 
 ### Push changes back
@@ -190,7 +192,7 @@ Want it globally available on this machine?
 You improved the skill locally. Push the update to the source repo:
 
 ```
-/library push deploy
+/library skill push deploy
 ```
 
 Now every device that runs `/library sync` gets the latest version.
@@ -205,16 +207,16 @@ Pull the latest version of all installed items:
 
 ## Commands
 
-| Command                     | What It Does                                               |
-| --------------------------- | ---------------------------------------------------------- |
-| `/library install`          | First-time setup — fork, clone, configure                  |
-| `/library add <details>`    | Register a new entry in the catalog                        |
-| `/library use <name>`       | Pull from source into local directory (install or refresh) |
-| `/library push <name>`      | Push local changes back to the source                      |
-| `/library remove <name>`    | Remove from catalog and optionally delete local copy       |
-| `/library list`             | Show full catalog with install status                      |
-| `/library sync`             | Re-pull all installed items from source                    |
-| `/library search <keyword>` | Find entries by name or description                        |
+| Command                              | What It Does                                               |
+| ------------------------------------ | ---------------------------------------------------------- |
+| `/library install`                   | First-time setup — fork, clone, configure                  |
+| `/library <primitive> add <details>` | Register a new entry in the catalog                        |
+| `/library <primitive> use <name>`    | Pull from source into local directory (install or refresh) |
+| `/library <primitive> push <name>`   | Push local changes back to the source                      |
+| `/library <primitive> remove <name>` | Remove from catalog and optionally delete local copy       |
+| `/library <primitive> list`          | Show catalog entries with install status                   |
+| `/library sync`                      | Re-pull all installed items from source                    |
+| `/library search <keyword>`          | Find entries by name or description                        |
 
 ### Justfile Shortcuts
 

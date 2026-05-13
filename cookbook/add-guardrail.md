@@ -152,4 +152,4 @@ Tell the user:
 - The guardrail has been added to the catalog
 - Which harnesses it supports natively vs. with workarounds
 - Any capability limitations (WORKAROUND or BLUNT harnesses)
-- How to install it with: `/library use-guardrail <name>`
+- How to install it with: `/library guardrail use <name>`

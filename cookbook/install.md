@@ -50,6 +50,6 @@ If already cloned (e.g., user cloned the template first), just update the remote
 ### 6. Done
 Tell the user:
 - The Library is now globally available
-- `/library list` will show the catalog (empty by default)
-- `/library add` to start adding skills, agents, and prompts
+- `/library skill list` will show the skill catalog (empty by default)
+- `/library <primitive> add` starts adding skills, agents, prompts, and standards
 - The `justfile` in the library directory has shorthand commands

@@ -24,7 +24,7 @@ git pull
 - Read `library.yaml` → `guardrails` list
 - Match by `name` (exact) or `description` (fuzzy)
 - If multiple matches, show them and ask the user to pick one
-- If no match, tell the user and suggest `/library list` to see available guardrails
+- If no match, tell the user and suggest `/library guardrail list` to see available guardrails
 
 ### 3. Detect Target Harness(es)
 

@@ -20,20 +20,36 @@ A meta-skill for private-first distribution of agentics (skills, agents, and pro
 
 The Library is a catalog of references to your agentics. The `library.yaml` file points to where skills, agents, and prompts live (local filesystem or GitHub repos). Nothing is fetched until you ask for it.
 
-**The `library.yaml` is a catalog, not a manifest.** Entries define what's *available* — not what gets installed. You pull specific items on demand with `/library use <name>`.
+**The `library.yaml` is a catalog, not a manifest.** Entries define what's *available* — not what gets installed. You pull specific items on demand with `/library <primitive> use <name>`.
+
+## Command Grammar
+
+Primitive-scoped commands use the primitive name before the verb:
+
+```text
+/library <primitive> <verb> [name-or-query]
+```
+
+Valid primitive names are singular: `skill`, `agent`, `prompt`, `standard`,
+`guardrail`, `mcp`, `model-standard`, and `golden-prompt`.
+
+The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
+filtering, dependency resolution, and install/update behavior should live in
+scripts (for example a future `scripts/library.py`) whenever possible. Keep this
+skill focused on dispatch rules, user-facing decisions, and fallback behavior.
 
 ## Commands
 
-| Command                     | Purpose                                  |
-| --------------------------- | ---------------------------------------- |
-| `/library install`          | First-time setup: fork, clone, configure |
-| `/library add <details>`    | Register a new entry in the catalog      |
-| `/library use <name>`       | Pull from source (install or refresh)    |
-| `/library push <name>`      | Push local changes back to source        |
-| `/library remove <name>`    | Remove from catalog and optionally local |
-| `/library list`             | Show full catalog with install status    |
-| `/library sync`             | Re-pull all installed items from source   |
-| `/library search <keyword>` | Find entries by keyword                  |
+| Command                             | Purpose                                  |
+| ----------------------------------- | ---------------------------------------- |
+| `/library install`                  | First-time setup: fork, clone, configure |
+| `/library <primitive> list`         | Show catalog entries for one primitive   |
+| `/library <primitive> use <name>`   | Pull from source (install or refresh)    |
+| `/library <primitive> add <details>` | Register a new catalog entry             |
+| `/library <primitive> push <name>`  | Push local changes back to source        |
+| `/library <primitive> remove <name>` | Remove from catalog and optionally local |
+| `/library sync`                     | Re-pull installed items from source      |
+| `/library search <keyword>`         | Find entries by keyword                  |
 
 ## Cookbook
 
@@ -50,7 +66,9 @@ Each command has a detailed step-by-step guide. **Read the relevant cookbook fil
 | sync    | [cookbook/sync.md](cookbook/sync.md)       | User wants to refresh all installed items at once            |
 | search  | [cookbook/search.md](cookbook/search.md)   | User is looking for a skill but doesn't know the exact name |
 
-**When a user invokes a `/library` command, read the matching cookbook file first, then execute the steps.**
+**When a user invokes a `/library` command, route by verb, read the matching
+cookbook file first, then execute the steps.** For primitive-scoped commands,
+the primitive narrows the catalog section before the cookbook logic runs.
 
 ## Source Format
 
@@ -109,29 +127,34 @@ When resolving dependencies: look up each reference in `library.yaml`, fetch all
 
 ## Target Directories
 
-By default, items are installed to the **default** directory from `library.yaml`:
+By default, items are installed to the directory for their primitive and scope
+from `library.yaml`:
 
 ```yaml
 default_dirs:
     skills:
-        - default: .claude/skills/           # Claude Code project-local
-        - default_codex: .agents/skills/     # Codex project-local
-        - global: ~/.claude/skills/           # Claude Code user-global
-        - global_codex: ~/.agents/skills/     # Codex user-global
+        - default: .agents/skills/                    # canonical, project-local
+        - global: ~/.agents/skills/                   # canonical, user-global
+        - claude_bridge: .claude/skills/              # Claude bridge, project-local
+        - global_claude_bridge: ~/.claude/skills/     # Claude bridge, user-global
     agents:
         - default: .claude/agents/
         - global: ~/.claude/agents/
-        # Codex: agents are embedded as agents/openai.yaml inside skill bundles — no separate install dir
     prompts:
         - default: .claude/commands/
         - global: ~/.claude/commands/
-        # Codex: no commands layer — modern skills replace prompts
+    standards:
+        - default: .agents/standards/
+        - global: ~/.agents/standards/
 ```
 
-- If the user says "global" or "globally", use the `global` directory for Claude Code, or `global_codex` for Codex.
-- If the user says "codex" or "for codex", use the `default_codex` or `global_codex` directory.
+- If the user says "global" or "globally", use the `global` directory for the primitive.
 - If the user specifies a custom path, use that path.
-- Otherwise, use the `default` directory (Claude Code).
+- Otherwise, use the `default` directory for the primitive.
+
+Skills are cross-harness by default: `.agents/skills/<name>` is canonical and
+Claude Code reaches it through `.claude/skills/<name>`. Codex reads
+`.agents/skills/` directly.
 
 ## Validating library.yaml
 
@@ -213,16 +236,19 @@ This keeps the catalog in sync across devices.
 ```yaml
 default_dirs:
   skills:
-    - default: .claude/skills/
-    - default_codex: .agents/skills/
-    - global: ~/.claude/skills/
-    - global_codex: ~/.agents/skills/
+    - default: .agents/skills/
+    - global: ~/.agents/skills/
+    - claude_bridge: .claude/skills/
+    - global_claude_bridge: ~/.claude/skills/
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/
   prompts:
-    - default: .claude/prompts/
-    - global: ~/.claude/prompts/
+    - default: .claude/commands/
+    - global: ~/.claude/commands/
+  standards:
+    - default: .agents/standards/
+    - global: ~/.agents/standards/
 
 library:
   skills:

@@ -1,10 +1,19 @@
-# Use a Skill from the Library
+# Use a Library Primitive
 
 ## Context
-Pull a skill, agent, or prompt from the catalog into the local environment. If already installed locally, overwrite with the latest from the source (refresh).
+Pull a catalog primitive into the local environment. If already installed
+locally, overwrite with the latest from the source (refresh).
 
 ## Input
-The user provides a skill name or description.
+The user invokes the primitive-scoped command:
+
+```text
+/library <primitive> use <name-or-description>
+```
+
+The primitive is required for this workflow. Valid values are `skill`, `agent`,
+`prompt`, `standard`, `guardrail`, `mcp`, `model-standard`, and
+`golden-prompt`.
 
 ## Steps
 
@@ -17,10 +26,19 @@ git pull
 
 ### 2. Find the Entry
 - Read `library.yaml`
-- Search across `library.skills`, `library.agents`, `library.prompts`, and top-level `guardrails:`
+- Map `<primitive>` to exactly one catalog section:
+  - `skill` -> `library.skills`
+  - `agent` -> `library.agents`
+  - `prompt` -> `library.prompts`
+  - `standard` -> `library.standards`
+  - `guardrail` -> top-level `guardrails:`
+  - `mcp` -> top-level `mcp_servers:`
+  - `model-standard` -> top-level `model_standards:`
+  - `golden-prompt` -> top-level `golden_prompts:`
+- Search only that section
 - Match by name (exact) or description (fuzzy/keyword match)
-- If multiple matches, show them and ask the user to pick one
-- If no match, tell the user and suggest `/library search`
+- If multiple matches remain within the primitive, show them and ask the user to pick one
+- If no match, tell the user and suggest `/library <primitive> list`
 
 ### 2b. Branch on Entry Kind
 
@@ -72,8 +90,8 @@ If the entry comes from the top-level `mcp_servers:` list:
    to uninstall."
 4. Skip directly to Step 9 (Confirm).
 
-For all other entries (skills, agents, prompts, single-hook guardrails),
-continue with Step 3.
+For all other entries (skills, agents, prompts, standards, model-standards,
+golden-prompts, and single-hook guardrails), continue with Step 3.
 
 ### 3. Resolve Marketplace Reference
 
@@ -393,7 +411,7 @@ If the skill's SKILL.md body contains `$ARGUMENTS`:
 | **Global** | `~/.agents/standards/<name>/` | Standard applies broadly; triggers will filter dynamically. Default suggestion. |
 | **Project-local** | `<cwd>/.agents/standards/<name>/` | Standard is project-specific, or you want to override a global version for this project only. |
 
-**When `/library use <name>` for a standard runs, ASK the user before installing.**
+**When `/library standard use <name>` runs, ASK the user before installing.**
 Do not silently default. Phrase the question so the user can pick at a glance:
 
 > "Install `python` standard globally (`~/.agents/standards/`, available in every
@@ -401,8 +419,8 @@ Do not silently default. Phrase the question so the user can pick at a glance:
 > answer — triggers filter dynamically."
 
 Skip the question only when the invocation explicitly states scope:
-- `/library use python globally` → global, no prompt
-- `/library use python locally` / `... for this project` / `... in this project` → project-local, no prompt
+- `/library standard use python globally` → global, no prompt
+- `/library standard use python locally` / `... for this project` / `... in this project` → project-local, no prompt
 
 The loader resolution order is the same in both directions (standards-loader and
 inject-subagent-standards): project-local wins over user-global. So a
@@ -508,8 +526,9 @@ If the installed entry is an `agent` AND the fetched file's YAML frontmatter con
 > 1. `<proj_root>/.agents/golden-prompts/<name>.md` (project-local)
 > 2. `~/.agents/golden-prompts/<name>.md` (user-global)
 >
-> Install the required layers first: `/library use cognovis-base` and
-> `/library use claude-haiku-4-5` (or whichever model-standard the agent declares).
+> Install the required layers first: `/library golden-prompt use cognovis-base`
+> and `/library model-standard use claude-haiku-4-5` (or whichever
+> model-standard the agent declares).
 
 ### 7. Verify Installation
 - Confirm the target directory exists

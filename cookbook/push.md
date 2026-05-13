@@ -1,16 +1,17 @@
-# Push a Skill to the Library Source
+# Push a Library Primitive to the Source
 
 ## Context
-The user has improved a skill locally and wants to push changes back to the source.
+The user has improved an installed primitive locally and wants to push changes
+back to the source.
 
 ## Input
-The user provides a skill name or description.
+The user invokes `/library <primitive> push <name-or-description>`.
 
 ## Steps
 
 ### 1. Find the Entry
 - Read `library.yaml`
-- Search across all sections for the matching entry
+- Search only the catalog section for `<primitive>`
 - If no match, tell the user the item wasn't found in the catalog
 
 ### 2. Locate the Local Copy

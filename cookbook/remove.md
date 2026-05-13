@@ -4,7 +4,7 @@
 The user wants to remove a skill, agent, or prompt from the library catalog and optionally delete the local copy.
 
 ## Input
-The user provides a skill name or description.
+The user invokes `/library <primitive> remove <name-or-description>`.
 
 ## Steps
 
@@ -17,8 +17,8 @@ git pull
 
 ### 2. Find the Entry
 - Read `library.yaml`
-- Search across all sections for the matching entry
-- Determine the type (skill, agent, or prompt)
+- Search only the catalog section for `<primitive>`
+- Use `<primitive>` as the entry type
 - If no match, tell the user the item wasn't found in the catalog
 
 ### 3. Confirm with User
@@ -83,7 +83,7 @@ If `.library.lock` does not exist, skip this step (no lockfile to update).
 #### 5e. GC hint — cache entry is retained (not deleted)
 
 When removing an item, the Layer-B cache directory (`cache_path` from the lockfile entry)
-is **NOT deleted** by `/library remove`. The cache is managed by `library gc` which uses
+is **NOT deleted** by `/library <primitive> remove`. The cache is managed by `library gc` which uses
 reference-counting across all lockfiles (per-project + global).
 
 **Why retain the cache?**
@@ -101,7 +101,7 @@ This scans all lockfiles, reference-counts each `cache_path`, and removes cache 
 with zero references that exceed the N=3 retention limit.
 
 > **Note**: The cache directory at `~/.local/share/library/skills/<marketplace>/<name>@<commit>/`
-> will be listed as unreferenced after `/library remove` and will be a candidate for GC
+> will be listed as unreferenced after `/library <primitive> remove` and will be a candidate for GC
 > on the next `library gc` run.
 
 ### 6. Commit and Push

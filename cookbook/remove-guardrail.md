@@ -113,4 +113,4 @@ Tell the user:
 - Which harnesses were uninstalled
 - Which config files were modified
 - The guardrail catalog entry in `library.yaml` remains — they can reinstall with
-  `/library use-guardrail <name>` at any time
+  `/library guardrail use <name>` at any time

@@ -5,7 +5,7 @@
 >
 > **Bead**: CL-b4o | **Epic**: CL-36o | **Last updated**: 2026-04-30
 >
-> **Applies to**: `/library use`, `/library remove`, `/library sync`, and any
+> **Applies to**: `/library skill use`, `/library skill remove`, `/library sync`, and any
 > tooling that installs or manages skills, agents, or prompts across harnesses.
 
 ---
@@ -107,7 +107,7 @@ Precedence for same-named skills within Codex (post-CL-83q install policy):
 | 3 | `~/.codex/skills/<name>/SKILL.md` | User-global primary (r0, confirmed CL-603) | **No** — legacy only |
 
 **Rule**: Project-local **always** overrides global for the same skill name.
-`/library use` writes to priority-1 or priority-2 paths depending on scope; it
+`/library skill use` writes to priority-1 or priority-2 paths depending on scope; it
 never installs to `~/.codex/skills/` (Codex reads `~/.agents/skills/` natively,
 so the bridge is unnecessary).
 
@@ -129,7 +129,7 @@ but was not live-tested in CL-603.
 
 ## Decision 2: Library Policy — Canonical Path and Bridge
 
-When `/library use` installs a skill (single workflow for all harnesses — there
+When `/library skill use` installs a skill (single workflow for all harnesses — there
 is no longer a "dual-install" mode; cross-harness reach is the default):
 
 | Role | Path | Description |
@@ -205,10 +205,10 @@ If the user replaces a bridge or canonical with a real directory:
 
 | Event | Action |
 |-------|--------|
-| `/library use foo` | Materialize Layer-B cache, create canonical at `.agents/skills/foo` (-> cache), create Claude bridge at `.claude/skills/foo` (-> canonical) |
+| `/library skill use foo` | Materialize Layer-B cache, create canonical at `.agents/skills/foo` (-> cache), create Claude bridge at `.claude/skills/foo` (-> canonical) |
 | User edits through any link | Edit lands on the cache file — correct, no action needed |
-| User replaces canonical or bridge with real dir | Warn on next `/library use` or `/library sync` |
-| `/library remove foo` | Remove Claude bridge AND canonical symlink AND lockfile entry (see Decision 6); Layer-B cache is GC'd separately |
+| User replaces canonical or bridge with real dir | Warn on next `/library skill use foo` or `/library sync` |
+| `/library skill remove foo` | Remove Claude bridge AND canonical symlink AND lockfile entry (see Decision 6); Layer-B cache is GC'd separately |
 | `/library sync foo` | Recompute tree-SHA; if changed, materialize new cache + re-point canonical; bridge auto-resolves |
 
 ### Git tracking of symlinks
@@ -241,7 +241,7 @@ untriageable.
 skill in Project A and a different `researcher` skill in Project B do not
 collide.
 
-**Detection in `/library use`**:
+**Detection in `/library skill use`**:
 
 Before installing, check the canonical and Claude bridge paths:
 
@@ -328,7 +328,7 @@ Paths do not encode version numbers. `.claude/skills/foo/` does not become
 `.claude/skills/foo-v2/` for an update.
 
 **Update behavior**:
-- `/library use foo` on an already-installed skill: overwrite in place (refresh).
+- `/library skill use foo` on an already-installed skill: overwrite in place (refresh).
 - Old SKILL.md is replaced. Old bridges continue to point to the same directory (no
   symlink change needed — the directory remains, only the file inside changes).
 
@@ -360,7 +360,7 @@ the same file.
 
 ## Decision 6: Uninstall Behavior
 
-**Policy: `/library remove` must reverse ALL bridges, not just the canonical.**
+**Policy: `/library skill remove` must reverse ALL bridges, not just the canonical.**
 
 When a skill was dual-installed (canonical + bridge), removing only the canonical
 leaves a dangling symlink. That dangling symlink will cause Codex to fail on skill
@@ -388,7 +388,7 @@ fi
 
 # 3. (Optional) Remove legacy ~/.codex/skills/<name> if present.
 # Codex reads ~/.agents/skills/ natively (r1 root); this path is no longer
-# managed by /library use but may exist from older installs.
+# managed by /library skill use but may exist from older installs.
 if [ -e "~/.codex/skills/<name>" ]; then
   echo "Notice: ~/.codex/skills/<name> exists from a legacy install — remove?"
   # prompt user; default yes
@@ -396,7 +396,7 @@ fi
 
 # 4. The Layer-B cache entry (~/.local/share/library/skills/<m>/<n>@<sha>/) is
 # garbage-collected separately by /library prune-cache once no lockfile entry
-# references it. /library remove does NOT delete cache content directly.
+# references it. /library skill remove does NOT delete cache content directly.
 
 # 5. Remove the lockfile entry.
 yq -i 'del(.installed[] | select(.name=="<name>"))' .library.lock
@@ -417,14 +417,14 @@ Before removal:
 ~/.claude/skills/researcher          ← global Claude bridge (if globally installed)
 ```
 
-After `/library remove researcher`:
+After `/library skill remove researcher`:
 ```
 ~/.local/share/library/skills/cognovis/researcher@4f8a2b9c/   ← still present
                                                               (orphaned; GC by /library prune-cache)
 (all four Layer-C paths removed)
 ```
 
-After `/library remove researcher --local-only`:
+After `/library skill remove researcher --local-only`:
 ```
 ~/.agents/skills/researcher          ← still present
 ~/.claude/skills/researcher          ← still present
@@ -446,8 +446,8 @@ outside the Library's install path.
 | Scenario | Library behavior |
 |----------|-----------------|
 | Managed skill `foo` force-enabled by Anthropic | Library skill named `foo` coexists. Claude Code loads BOTH (the managed version and the project-local version). The managed version's precedence is determined by Anthropic's infrastructure — not by Library's path rules. |
-| User tries `/library remove foo` on a managed skill | Library removes the local copy. The managed version persists (it was never in the local path). Warn: "Managed skill 'foo' is force-enabled — the local copy has been removed but the managed version remains active." |
-| User installs `foo` via `/library use` and a managed `foo` exists | Install proceeds. Warn: "A managed skill named 'foo' already exists. Installing a local copy. If names conflict, Anthropic's managed version may take precedence." |
+| User tries `/library skill remove foo` on a managed skill | Library removes the local copy. The managed version persists (it was never in the local path). Warn: "Managed skill 'foo' is force-enabled — the local copy has been removed but the managed version remains active." |
+| User installs `foo` via `/library skill use foo` and a managed `foo` exists | Install proceeds. Warn: "A managed skill named 'foo' already exists. Installing a local copy. If names conflict, Anthropic's managed version may take precedence." |
 
 **Evidence level**: INFERRED — Anthropic's force-enable behavior is not publicly
 documented in detail. The policy above is conservative (treat managed as higher
@@ -455,7 +455,7 @@ authority). Revisit when vendor docs become available.
 
 ---
 
-## Enforcement Checklist for `/library use`
+## Enforcement Checklist for `/library skill use`
 
 This checklist is extracted from the above policies for quick implementation reference.
 See `cookbook/use.md` Step 5b–5d for the full procedure.

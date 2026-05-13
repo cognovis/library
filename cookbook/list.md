@@ -1,12 +1,21 @@
-# List Available Skills
+# List Available Library Primitives
 
 ## Context
-Show the full library catalog with install status, plugin-marketplace installs, and `/library use` lockfile installs.
+Show library catalog entries with install status, plugin-marketplace installs,
+and lockfile-recorded library installs. The canonical command is
+primitive-scoped:
+
+```text
+/library <primitive> list
+```
+
+Valid primitive values are `skill`, `agent`, `prompt`, `standard`, `guardrail`,
+`mcp`, `model-standard`, and `golden-prompt`.
 
 ## Steps
 
 ### 1. Sync the Library Repo
-Before changing directories, remember the **original working directory** (the directory where the user invoked `/library list`) — you will need it in Step 5 to read the lockfile.
+Before changing directories, remember the **original working directory** (the directory where the user invoked `/library <primitive> list`) — you will need it in Step 5 to read the lockfile.
 
 Pull the latest catalog before reading:
 ```bash
@@ -16,7 +25,16 @@ git pull
 
 ### 2. Read the Catalog
 - Read `library.yaml`
-- Parse all entries from `library.skills`, `library.agents`, and `library.prompts`
+- Map `<primitive>` to exactly one catalog section:
+  - `skill` -> `library.skills`
+  - `agent` -> `library.agents`
+  - `prompt` -> `library.prompts`
+  - `standard` -> `library.standards`
+  - `guardrail` -> top-level `guardrails:`
+  - `mcp` -> top-level `mcp_servers:`
+  - `model-standard` -> top-level `model_standards:`
+  - `golden-prompt` -> top-level `golden_prompts:`
+- Parse only that section
 
 ### 3. Check Install Status
 For each entry:
@@ -37,12 +55,14 @@ Read `~/.claude/plugins/installed_plugins.json`:
   - If `scope == "project"`, also collect `projectPath`.
 - Build a set of installed plugin names (without marketplace suffix) for use in catalog annotation.
 
-### 5. Read /library use Installs (Lockfile)
+### 5. Read Library Installs (Lockfile)
 
 Read `.library.lock` from the **original working directory** (where the user invoked the command, saved in Step 1 — NOT from `<LIBRARY_SKILL_DIR>`):
 
-- If the file does not exist, record an empty install list and note "No /library use installs found (no .library.lock in current directory)" for Section 3 output.
-- Parse the YAML `installed` list. For each entry collect: `name`, `type`, `install_target`, `install_timestamp` (date portion only, e.g. `2026-04-30`).
+- If the file does not exist, record an empty install list and note "No library installs found (no .library.lock in current directory)" for Section 3 output.
+- Parse the YAML `installed` list.
+- Keep only entries whose `type` matches `<primitive>`.
+- For each kept entry collect: `name`, `type`, `install_target`, `install_timestamp` (date portion only, e.g. `2026-04-30`).
 
 ### 6. Display Results (3 Sections)
 
@@ -52,7 +72,7 @@ Output all three sections in sequence.
 
 **Section 1: Catalog**
 
-Format the output as a table grouped by type.
+Format the output as a table for the requested primitive.
 For each catalog entry whose `name` appears in the installed plugin names set (from Step 4):
 - If the catalog status is `installed (default)` or `installed (global)`: append `[also: plugin-marketplace]` to the Status column.
 - If the catalog status is `not installed`: append `[via plugin-marketplace]` to the Status column instead.
@@ -61,26 +81,13 @@ For each catalog entry whose `name` appears in the installed plugin names set (f
 ```
 ## Section 1: Catalog
 
-### Skills
+### <Primitive>
 | Name | Description | Source | Status |
 |------|-------------|--------|--------|
-| skill-name | skill-description | /local/path/... | installed (default) |
-| other-skill | other-description | github.com/... | not installed |
-| beads | beads skill | ... | installed (default) [also: plugin-marketplace] |
-| open-brain | open-brain skill | ... | not installed [via plugin-marketplace] |
-
-### Agents
-| Name | Description | Source | Status |
-|------|-------------|--------|--------|
-| agent-name | agent-description | /local/path/... | installed (global) |
-
-### Prompts
-| Name | Description | Source | Status |
-|------|-------------|--------|--------|
-| prompt-name | prompt-description | github.com/... | not installed |
+| entry-name | entry-description | github.com/... | not installed |
 ```
 
-If a catalog subsection is empty, show: `No <type> in catalog.`
+If the requested catalog section is empty, show: `No <primitive> entries in catalog.`
 
 ---
 
@@ -100,21 +107,21 @@ If a catalog subsection is empty, show: `No <type> in catalog.`
 
 ---
 
-**Section 3: /library use Installs**
+**Section 3: Library Installs**
 
 ```
-## Section 3: /library use Installs
+## Section 3: Library Installs
 | Name | Type | Install Target | Installed At |
 |------|------|----------------|--------------|
 | dolt | skill | .claude/skills/dolt/ | 2026-04-30 |
 ```
 
-- If `.library.lock` is not found: `No /library use installs found (no .library.lock in current directory)`
+- If `.library.lock` is not found: `No library installs found (no .library.lock in current directory)`
 
 ### 7. Summary
 At the bottom, show:
-- Total entries in catalog (Section 1)
+- Total entries in the requested catalog section (Section 1)
 - Total installed locally (default + global)
 - Total not installed
 - Total plugin-marketplace installs (Section 2)
-- Total /library use installs from lockfile (Section 3)
+- Total library installs from lockfile (Section 3)

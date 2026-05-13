@@ -20,7 +20,7 @@ git pull
 ### 2. Read the Lockfile
 - Read `.library.lock` from the project root
 - If `.library.lock` does not exist, tell the user:
-  > "No .library.lock found. Run /library use to install items and create the lockfile."
+  > "No .library.lock found. Run /library <primitive> use <name> to install items and create the lockfile."
   Then exit.
 
 ### 3. Select Entries to Audit
@@ -42,7 +42,7 @@ For each entry:
 #### 4b. Check file existence
 - If the primary artifact does NOT exist:
   - Status: **MISSING**
-  - Note: "Expected at `<path>` — file not found. Run /library use <name> to reinstall."
+  - Note: "Expected at `<path>` — file not found. Run /library <type> use <name> to reinstall."
   - Continue to next entry.
 
 #### 4c. Compute current checksum
@@ -148,12 +148,12 @@ Display a summary table:
 Audited: 4 locked entries + 1 unlocked installs found
 
 CLEAN: 1
-DRIFT: 1  ← these need /library use <name> to refresh
-MISSING: 1  ← these need /library use <name> to reinstall
+DRIFT: 1  ← these need /library <type> use <name> to refresh
+MISSING: 1  ← these need /library <type> use <name> to reinstall
 BRIDGE-BROKEN: 0
 SYMLINK-MISMATCH: 0
 LEGACY: 1  ← these need /library sync to materialize cache
-UNLOCKED: 1  ← these need /library use <name> to add to lockfile
+UNLOCKED: 1  ← these need /library <type> use <name> to add to lockfile
 ```
 
 ### 7. Actions Available
@@ -163,13 +163,13 @@ After reporting, offer the user remediation options:
 | Status | Suggested action |
 |--------|-----------------|
 | CLEAN / SYMLINK-OK | No action needed |
-| DRIFT | `/library use <name>` to refresh from source and re-lock |
-| MISSING | `/library use <name>` to reinstall and add to lockfile |
-| BRIDGE-BROKEN | `/library use <name>` to recreate the bridge symlink |
-| SYMLINK-MISMATCH | `/library use <name>` to reinstall — cache_path and install_target are out of sync |
+| DRIFT | `/library <type> use <name>` to refresh from source and re-lock |
+| MISSING | `/library <type> use <name>` to reinstall and add to lockfile |
+| BRIDGE-BROKEN | `/library <type> use <name>` to recreate the bridge symlink |
+| SYMLINK-MISMATCH | `/library <type> use <name>` to reinstall — cache_path and install_target are out of sync |
 | LEGACY | `/library sync` to materialize the Layer-B cache and update `cache_path` |
-| SYMLINK-MISSING | `/library use <name>` to reinstall with three-layer symlink model |
-| UNLOCKED | `/library use <name>` to create a lockfile entry (will overwrite the existing install) |
+| SYMLINK-MISSING | `/library <type> use <name>` to reinstall with three-layer symlink model |
+| UNLOCKED | `/library <type> use <name>` to create a lockfile entry (will overwrite the existing install) |
 
 Do NOT automatically fix drift. Always report and let the user decide — the modification may
 be intentional (e.g. a local patch the user wants to keep).

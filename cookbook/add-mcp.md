@@ -9,7 +9,7 @@
 ## Overview
 
 `mcp_servers:` is the canonical registry for MCP servers in the cognovis-library. Each entry
-defines a server once; the `/library use` command (future) will translate the canonical
+defines a server once; the `/library mcp use <name>` command translates the canonical
 definition into the correct harness-specific config.
 
 ## Schema
@@ -134,7 +134,7 @@ The following are NOT part of this bead or cookbook:
 - **Secrets / auth token storage** — handled by a separate security-model bead.
 - **Mobile install instructions** — the `install_url` fields are stored here, but the UI
   for presenting them to users is a follow-up bead.
-- **Removing or updating a server** — future `/library remove` and `/library sync` commands.
+- **Removing or updating a server** — `/library mcp remove <name>` and `/library sync`.
 
 ## Reference
 

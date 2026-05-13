@@ -34,14 +34,15 @@ differs. The `cdx` wrapper (bead `CL-tap`) parallels `cld`.
 
 1. **Build** — skills/agents live in their natural value-generating repo (no central
    monorepo enforced).
-2. **Catalog** — `library add <github-url>` registers a pointer in `library.yaml`. Catalog is
-   pointers-only, not content.
-3. **Distribute** — `library use <name>` pulls the referenced item into the current
-   repo's `.claude/skills/` or `.agents/skills/` (or `~/.claude/skills/` if "global").
-   Each repo pulls only what it needs.
+2. **Catalog** — `/library <primitive> add <github-url>` registers a pointer in
+   `library.yaml`. Catalog is pointers-only, not content.
+3. **Distribute** — `/library <primitive> use <name>` pulls the referenced item into
+   the primitive's canonical location. For skills, that is `.agents/skills/`
+   project-local or `~/.agents/skills/` global, with a Claude bridge under
+   `.claude/skills/` or `~/.claude/skills/`. Each repo pulls only what it needs.
 4. **Use** — invoked normally once in place. Same as any native skill/agent.
 
-Plus the return path: `library push <name>` sends local edits back upstream;
+Plus the return path: `/library <primitive> push <name>` sends local edits back upstream;
 `library sync` pulls latest for all installed items.
 
 ## Launchers (cld/cdx)
@@ -93,8 +94,9 @@ deploy-all `npx bmad-method install --tools claude-code` pattern) and decided ag
 Reason: our project portfolio is heterogeneous (medical, business, infra, content) and a
 medical project should not get the LinkedIn skill installed by default.
 
-The Library's catalog + on-demand `/library use` is a better fit for that diversity.
-BMAD remains useful as a reference for skill/agent authoring patterns.
+The Library's catalog + on-demand `/library <primitive> use <name>` is a better
+fit for that diversity. BMAD remains useful as a reference for skill/agent
+authoring patterns.
 
 ## Why not Pi?
 
