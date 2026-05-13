@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -38,6 +39,7 @@ from ..output import dry_run_result, success
 from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 from ..source import ParsedSource, get_local_commit_sha, parse_source, resolve_marketplace
+from .harness_materializer import materialize_harness_fields
 
 
 def install_skill(
@@ -113,6 +115,12 @@ def install_skill(
                 "details": f"upsert entry '{skill_name}' in {lockfile_path.name}",
             }
         )
+        # Add harness materialization ops (always_apply / globs)
+        harness = materialize_harness_fields(entry, skill_name, "skill", repo_root, dry_run=True)
+        ops.extend(harness["operations"])
+        for w in harness.get("warnings", []):
+            import sys as _sys
+            print(f"WARNING: {w}", file=_sys.stderr)
         return dry_run_result(
             ops,
             summary=(
@@ -171,6 +179,11 @@ def install_skill(
         upsert_entry(lock_data, lockfile_entry)
         save_lockfile(lockfile_path, lock_data)
 
+        # 9. Harness materialization (always_apply / globs)
+        harness = materialize_harness_fields(entry, skill_name, "skill", repo_root)
+        for w in harness.get("warnings", []):
+            print(f"WARNING: {w}", file=sys.stderr)
+
         return success(
             data={
                 "name": skill_name,
@@ -178,6 +191,7 @@ def install_skill(
                 "bridge": str(bridge_dir) if bridge_dir else None,
                 "cache": str(cache_path),
                 "source_commit": source_commit,
+                "harness_ops": harness.get("operations", []),
             },
             message=(
                 f"Skill '{skill_name}' installed at {canonical_dir}"

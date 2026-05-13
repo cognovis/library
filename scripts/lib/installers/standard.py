@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -34,6 +35,7 @@ from ..output import blocked_result, dry_run_result, success
 from ..paths import resolve_install_paths, resolve_standards_agents_md
 from ..primitives import get_primitive
 from ..source import get_local_commit_sha, parse_source, resolve_marketplace
+from .harness_materializer import materialize_harness_fields
 
 
 def install_standard(
@@ -129,6 +131,14 @@ def install_standard(
                 "details": f"upsert entry '{standard_name}' in {lockfile_path.name}",
             }
         )
+        # Add harness materialization ops (always_apply / globs)
+        harness = materialize_harness_fields(
+            entry, standard_name, "standard", repo_root, dry_run=True
+        )
+        ops.extend(harness["operations"])
+        for w in harness.get("warnings", []):
+            import sys as _sys
+            print(f"WARNING: {w}", file=_sys.stderr)
         return dry_run_result(
             ops,
             summary=(
@@ -202,11 +212,17 @@ def install_standard(
         upsert_entry(lock_data, lockfile_entry)
         save_lockfile(lockfile_path, lock_data)
 
+        # 9. Harness materialization (always_apply / globs)
+        harness = materialize_harness_fields(entry, standard_name, "standard", repo_root)
+        for w in harness.get("warnings", []):
+            print(f"WARNING: {w}", file=sys.stderr)
+
         result_data: dict[str, Any] = {
             "name": standard_name,
             "canonical": str(canonical_dir),
             "cache": str(cache_path),
             "source_commit": source_commit,
+            "harness_ops": harness.get("operations", []),
         }
 
         msg = f"Standard '{standard_name}' installed at {canonical_dir}"
