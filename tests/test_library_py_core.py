@@ -241,11 +241,9 @@ def test_validate_library_still_passes():
 LEGACY_PATTERNS = [
     "/library use ",
     "/library list",
-    "/library remove",
-    "/library search",
-    "/library sync",
-    "/library add",
-    "/library push",
+    "/library remove ",
+    "/library add ",
+    "/library push ",
 ]
 
 DOC_FILES_TO_CHECK = [

@@ -6,6 +6,21 @@ Find entries in the catalog by keyword when the user doesn't remember the exact 
 ## Input
 The user provides a keyword or description.
 
+## CLI Shortcut (preferred)
+
+Use the CLI for deterministic search:
+
+```bash
+# Search across all primitives:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword> --json
+
+# Search within one primitive:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill search <keyword> --json
+```
+
+Use the steps below when you need to present results interactively or need
+install-status context that the CLI search does not yet return.
+
 ## Steps
 
 ### 1. Sync the Library Repo

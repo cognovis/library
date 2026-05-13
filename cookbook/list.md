@@ -12,6 +12,22 @@ primitive-scoped:
 Valid primitive values are `skill`, `agent`, `prompt`, `standard`, `guardrail`,
 `mcp`, `model-standard`, and `golden-prompt`.
 
+## CLI Shortcut (preferred for deterministic output)
+
+For machine-readable output, use the CLI directly:
+
+```bash
+# List skills in JSON (for agent processing):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill list --json
+
+# List standards as human-readable table:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard list
+```
+
+The CLI reads `library.yaml` and returns stable JSON. Use the steps below when
+you need install-status enrichment (plugin-marketplace + lockfile cross-reference)
+that the CLI does not yet provide.
+
 ## Steps
 
 ### 1. Sync the Library Repo
