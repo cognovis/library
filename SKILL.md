@@ -34,22 +34,51 @@ Valid primitive names are singular: `skill`, `agent`, `prompt`, `standard`,
 `guardrail`, `mcp`, `model-standard`, and `golden-prompt`.
 
 The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
-filtering, dependency resolution, and install/update behavior should live in
-scripts (for example a future `scripts/library.py`) whenever possible. Keep this
-skill focused on dispatch rules, user-facing decisions, and fallback behavior.
+filtering, dependency resolution, and install/update behavior live in
+`scripts/library.py`. Keep this skill focused on dispatch rules, user-facing
+decisions, and fallback behavior when the CLI is unavailable.
+
+## CLI Delegation
+
+**For deterministic operations, call `python3 scripts/library.py` directly:**
+
+```bash
+# List all skills in JSON (machine-readable):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill list --json
+
+# Dry-run install of a skill (preview without mutation):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --dry-run --json
+
+# Install a standard to global scope:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope global
+
+# Search across all primitives:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
+```
+
+**Fallback** (when `scripts/library.py` is unavailable): use the cookbook steps below
+to perform the operation manually. Do NOT implement catalog parsing, path resolution,
+lockfile writes, or dependency resolution in skill instructions — those belong in the CLI.
+
+**Interpreting JSON output**: The CLI returns a JSON object with:
+- `status`: `"ok"`, `"dry-run"`, `"blocked"`, or `"error"`
+- `data`: operation-specific results (name, canonical path, cache path, etc.)
+- `operations`: (dry-run only) list of planned write operations
+- `message`: human-readable summary
 
 ## Commands
 
-| Command                             | Purpose                                  |
-| ----------------------------------- | ---------------------------------------- |
-| `/library install`                  | First-time setup: fork, clone, configure |
-| `/library <primitive> list`         | Show catalog entries for one primitive   |
-| `/library <primitive> use <name>`   | Pull from source (install or refresh)    |
-| `/library <primitive> add <details>` | Register a new catalog entry             |
-| `/library <primitive> push <name>`  | Push local changes back to source        |
-| `/library <primitive> remove <name>` | Remove from catalog and optionally local |
-| `/library sync`                     | Re-pull installed items from source      |
-| `/library search <keyword>`         | Find entries by keyword                  |
+| Command                                  | Purpose                                  |
+| ---------------------------------------- | ---------------------------------------- |
+| `/library install`                       | First-time setup: fork, clone, configure |
+| `/library <primitive> list`              | Show catalog entries for one primitive   |
+| `/library <primitive> use <name>`        | Pull from source (install or refresh)    |
+| `/library <primitive> add <details>`     | Register a new catalog entry             |
+| `/library <primitive> push <name>`       | Push local changes back to source        |
+| `/library <primitive> remove <name>`     | Remove from catalog and optionally local |
+| `/library <primitive> sync`              | Re-pull all installed primitives of type |
+| `/library <primitive> search <keyword>`  | Search within a primitive section        |
+| `/library search <keyword>`              | Search across all primitives             |
 
 ## Cookbook
 

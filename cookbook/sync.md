@@ -5,6 +5,22 @@ Refresh every locally installed skill, agent, and prompt by re-pulling from its 
 `.library.lock` as the authoritative source of truth for what is installed and where — two
 clones with the same `.library.lock` end up with identical installed content.
 
+## CLI Shortcut (when available)
+
+Once the sync verb is implemented in the CLI:
+
+```bash
+# Preview sync plan:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill sync --dry-run --json
+
+# Real sync (re-pulls all skills recorded in .library.lock):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill sync --json
+```
+
+Until that is implemented, use the steps below to sync manually. The CLI's
+`skill use <name>` command already handles single-item refresh with correct
+lockfile update and symlink recreation.
+
 ## Steps
 
 ### 1. Sync the Library Repo

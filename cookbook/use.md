@@ -15,6 +15,26 @@ The primitive is required for this workflow. Valid values are `skill`, `agent`,
 `prompt`, `standard`, `guardrail`, `mcp`, `model-standard`, and
 `golden-prompt`.
 
+## CLI Shortcut (preferred for skill and standard)
+
+For `skill` and `standard` installs, prefer the deterministic CLI:
+
+```bash
+# Preview planned writes without mutation:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --dry-run --json
+
+# Real install (skill):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --json
+
+# Real install (standard, global scope):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope global --json
+```
+
+The CLI handles the three-layer cache model, symlink creation, Claude bridge,
+and lockfile write deterministically. The steps below are the fallback for
+primitives not yet implemented in the CLI (`agent`, `mcp`, `guardrail`, etc.)
+and for operations requiring user judgment (collision resolution, scope selection).
+
 ## Steps
 
 ### 1. Sync the Library Repo
