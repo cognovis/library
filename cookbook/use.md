@@ -802,6 +802,29 @@ with open(lock_path, 'w') as f:
 See `docs/lockfile-format.md` for the full field reference and `docs/schema/lockfile.schema.json`
 for machine-readable validation.
 
+### 8.5. Materialize Harness Fields (`always_apply` / `globs`)
+
+After updating the lockfile, check whether the catalog entry declares `always_apply` or `globs`.
+If either field is present, run harness materialization (implemented in `scripts/lib/installers/harness_materializer.py`).
+
+**`always_apply: true`** — forces the primitive into context regardless of file matches:
+- **Claude Code:** append `@<import_ref>` to `CLAUDE.md` (idempotent — skip if already present).
+- **Codex:** append `@<import_ref>` to `AGENTS.md` (idempotent — skip if already present).
+- **Cursor:** write `.cursor/rules/<name>.mdc` with `alwaysApply: true` frontmatter containing the `@<import_ref>`.
+
+**`globs: [...]`** without `always_apply` — suggest primitive when a matching file is in context:
+- **Cursor:** write `.cursor/rules/<name>.mdc` with `globs: [...]` frontmatter.
+- **Claude Code / Codex:** emit a `WARNING:` to stderr explaining that globs are not natively supported and no file is modified.
+
+**No-op rule:** if neither `always_apply` nor `globs` is set, skip this step entirely.
+
+The `import_ref` path follows the install layout:
+- Skill: `@.agents/skills/<name>/SKILL.md`
+- Standard: `@.agents/standards/<name>/`
+
+Harness materialization ops are included in the `dry_run_result` output so users can inspect planned
+writes before committing.
+
 ### 9. Confirm
 Tell the user:
 - What was installed and where

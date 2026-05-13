@@ -133,9 +133,13 @@ Claude Code through the `.claude/skills/<name>` bridge symlink)
 - The capability is context-sensitive (model should decide when to apply it).
 - The skill is reusable across multiple projects and harnesses.
 
+**`always_apply` and `globs` fields.**
+Skills support two optional fields that control when the harness injects them:
+- `always_apply: true` — forces the skill into context unconditionally (analogous to a guardrail for context injection purposes). Use sparingly: it adds startup context cost for every session. On install, the installer writes an `@<path>` import into `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) and a `.cursor/rules/<name>.mdc` with `alwaysApply: true` frontmatter (Cursor).
+- `globs: ["*.py", ...]` — suggests the skill when a matching file is present in the edit context. Cursor writes a `.mdc` with `globs:` frontmatter. Claude Code and Codex do not support glob-scoped injection natively; a warning is emitted on install and no harness file is modified for those harnesses.
+
 **Counter-examples.**
-- Do NOT use a skill for something that must fire unconditionally — that is a
-  guardrail/hook.
+- Do NOT use `always_apply: true` for something that must block or intercept tool calls — that requires a guardrail/hook, not a skill.
 - Do NOT use a skill for a one-off user workflow requiring explicit intent — that is
   a command.
 
