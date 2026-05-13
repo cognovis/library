@@ -427,18 +427,32 @@ behavioral guidance scoped to a project or domain.
 standard is surfaced to the model by the harness at session start or on demand via
 the standards injection mechanism — the model does not autonomously "call" a standard.
 
-**Trigger semantics.** Two mechanisms are supported (see `docs/research/standards-loading.md`,
-CL-v56 for full loader contract and comparison):
+**Trigger semantics — current mechanism (NORMATIVE, post-CL-c2d / CL-c8g):**
 
-1. **SessionStart hook (Claude Code — NORMATIVE, legacy):** Injected via `~/.claude/settings.json`
-   SessionStart hook. Reads from `~/.claude/standards/<domain>/<name>.md`. Claude Code-only.
-   Retained for backward compatibility during migration.
+**Compose-on-install into `AGENTS.md`.** At `/library standard use <name>` install time,
+`scripts/agents-md-block.py insert` writes a delimited `<!-- BEGIN STANDARD:<name> ... -->`
+section into the target `AGENTS.md` (project: `<repo>/AGENTS.md`; global:
+`~/.agents/AGENTS.md`). Both harnesses read AGENTS.md natively (Codex direct; Claude Code
+via the `@AGENTS.md` import in `CLAUDE.md`, and via `@~/.agents/AGENTS.md` in
+`~/.claude/CLAUDE.md` for global). No SessionStart content-injection hook required.
 
-2. **Adapter generation into `AGENTS.md` (cross-harness — NORMATIVE for Claude Code + Codex):**
-   At `/library use` install time, `scripts/standards-loader.sh --generate-adapter <skill>`
-   reads the skill's `requires_standards` frontmatter and writes a delimited section into
-   `AGENTS.md`. This file is read by both Claude Code and Codex at session start — no
-   harness-specific hook configuration required.
+**Drift detection.** A lightweight SessionStart hook (`hooks/standards-drift-check/`) scans
+AGENTS.md / CLAUDE.md for STANDARD markers and emits a single warning line per drifted
+standard. Installable via `/library guardrail use standards-drift-check`. No content
+injection, sub-50ms runtime.
+
+**Update + remove.** `cookbook/sync.md` re-composes blocks against latest source via
+`agents-md-block.py update`. `/library standard remove <name>` calls `agents-md-block.py
+remove` plus deletes the cache directory.
+
+**Retired mechanisms (do not use):**
+- SessionStart trigger-matched content injection via `hooks/standards-loader/` — **deleted** (CL-c8g)
+- TaskCreated per-subagent injection via `hooks/inject-subagent-standards/` — **deleted** (CL-c8g)
+- `~/.claude/standards/<domain>/<name>.md` legacy path — **retired**, see `docs/research/standards-loading.md` (RETIRED notice)
+- `scripts/standards-loader.sh --generate-adapter` — superseded by `agents-md-block.py insert`
+- `scripts/standards-loader.sh --load` — superseded by reading the cached file directly at `~/.agents/standards/<name>/` or `.agents/standards/<name>/`
+
+`scripts/standards-loader.sh` itself still ships **only** for the `--load-model-standard <name>` operation, used by `scripts/compose-agent.py` (golden-prompt Layer 3 resolution). Audit of remaining usage is tracked separately.
 
 **Standard file paths (cross-harness convention, CL-v56).**
 
@@ -458,12 +472,18 @@ requires_standards: [dolt-server, branch-naming]
 ---
 ```
 
-**Runtime loading (skill-script-side, mechanism b):** Individual skill scripts can
-load a specific standard at invocation time via:
+**Runtime loading (skill-script-side):** Individual skill scripts read the cached file
+directly from its resolved path (project-local `.agents/standards/<name>/` wins over
+user-global `~/.agents/standards/<name>/`):
 
 ```bash
-STANDARD=$(bash scripts/standards-loader.sh --load <name>)
+STD_PATH=".agents/standards/<name>/<name>.md"
+[ -f "$STD_PATH" ] || STD_PATH="${HOME}/.agents/standards/<name>/<name>.md"
+STANDARD=$(cat "$STD_PATH")
 ```
+
+The `scripts/standards-loader.sh --load` operation is retired (CL-c8g); content is
+the cached file's contents — no transformation needed.
 
 **Current examples (from `~/.claude/standards/index.yml` — legacy path).**
 
