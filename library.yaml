@@ -265,12 +265,12 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: hook-creator
+    - name: hook-forge
       description: >-
         Create and manage Claude Code hooks across all 8 hook types. Use when adding automated
         behaviors, troubleshooting hooks, or learning best practices. Triggers on create hook,
-        hooks, PreToolUse, PostToolUse, security hook.
-      source: https://github.com/cognovis/library-core/blob/main/skills/hook-creator/SKILL.md
+        hook-forge, hook-creator, hooks, PreToolUse, PostToolUse, security hook.
+      source: https://github.com/cognovis/library-core/blob/main/skills/hook-forge/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -470,14 +470,17 @@ library:
         - origin:original
         - tier:core
         - kind:handler-bundle
-    - name: skill-auditor
+    - name: skill-forge
       description: >-
-        Audit and score agent skills fleet-wide; validate or check a single skill for
-        EXTRACTABLE_CODE; improve weak skills surgically. Triggers on audit skills, skill health
-        check, fleet quality, improve skill, fix skill, rewrite skill.
-      source: https://github.com/cognovis/library-core/blob/main/skills/skill-auditor/SKILL.md
+        Create, validate, and audit skills (SKILL.md files). Use when creating a new skill,
+        validating an existing skill for quality and extractable-code violations, or running
+        a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill,
+        check skill, audit skills, skill health check, fleet quality, skill creation.
+      source: https://github.com/cognovis/library-core/blob/main/skills/skill-forge/SKILL.md
       requires:
+        - "standard:agentic-primitives"
         - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -1570,7 +1573,7 @@ library:
         Decision-tree standard for choosing the right invocation primitive (skill, command,
         agent, hook). Distills PRIMITIVES.md §3 C1-C6 agent-justification criteria plus
         counter-examples into an in-context briefing for the *-forge skills. Loaded via
-        requires_standards by skill-forge, agent-forge, hook-creator, and standard-forge so
+        requires_standards by skill-forge, agent-forge, hook-forge, and standard-forge so
         primitive-type selection is consistent and self-correcting.
       source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives.md
       tier: core

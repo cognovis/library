@@ -138,7 +138,21 @@ Skills support two optional fields that control when the harness injects them:
 - `always_apply: true` — forces the skill into context unconditionally (analogous to a guardrail for context injection purposes). Use sparingly: it adds startup context cost for every session. On install, the installer writes an `@<path>` import into `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) and a `.cursor/rules/<name>.mdc` with `alwaysApply: true` frontmatter (Cursor).
 - `globs: ["*.py", ...]` — suggests the skill when a matching file is present in the edit context. Cursor writes a `.mdc` with `globs:` frontmatter. Claude Code and Codex do not support glob-scoped injection natively; a warning is emitted on install and no harness file is modified for those harnesses.
 
+**`model:` field — FORBIDDEN in skills.** NORMATIVE.
+Skills must not include a `model:` frontmatter field. Model selection is the
+responsibility of the *agent* that consumes the skill, not the skill itself.
+
+Rationale: `model:` is a Claude Code-specific frontmatter extension. Including it in a
+SKILL.md creates harness lock-in — the skill will fail to load or be ignored under
+Codex, Cursor, or any harness that does not understand the field. Skills are
+harness-agnostic context files. If a skill's *content* implicitly requires a certain
+reasoning tier (e.g. "this task needs deep analysis"), document that as a prose note
+inside the skill body; do not pin it in frontmatter.
+
+The one-line rule: **skills are context, not configuration — never model-pin them.**
+
 **Counter-examples.**
+- Do NOT add `model: sonnet` (or any model) to a SKILL.md frontmatter — use an agent if model selection matters.
 - Do NOT use `always_apply: true` for something that must block or intercept tool calls — that requires a guardrail/hook, not a skill.
 - Do NOT use a skill for a one-off user workflow requiring explicit intent — that is
   a command.
@@ -149,7 +163,7 @@ Skills support two optional fields that control when the harness injects them:
 |-------|------------------|
 | `agent-forge` — "Guide for creating Claude Code agents. Use when creating specialized AI assistants…" | Description triggers auto-load whenever the model detects agent creation context. User does not type `/agent-forge`. |
 | `skill-tester` — "Use when testing or installing standalone skills under local development…" | Model auto-invokes when it detects skill development/testing context. |
-| `hook-creator` — "Use when creating, configuring, or managing Claude Code hooks…" | Model auto-invokes when hook creation/configuration is in scope. |
+| `hook-forge` — "Use when creating, configuring, or managing Claude Code hooks…" | Model auto-invokes when hook creation/configuration is in scope. |
 
 ---
 

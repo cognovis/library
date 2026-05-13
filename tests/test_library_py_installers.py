@@ -212,6 +212,56 @@ class TestSkillDryRun:
             ".library.lock was created during --dry-run (must not mutate)"
         )
 
+    def test_skill_dry_run_can_target_project_without_library_yaml(self, tmp_path: Path):
+        """Running the CLI from a normal project should use the CLI catalog and target cwd."""
+        target_project = tmp_path / "external-project"
+        target_project.mkdir()
+
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "skill", "use", "standard-forge", "--dry-run", "--json"],
+            capture_output=True,
+            text=True,
+            cwd=str(target_project),
+        )
+        assert result.returncode == 0, (
+            f"skill use --dry-run returned {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+        data = json.loads(result.stdout)
+        ops_text = json.dumps(data.get("operations", []))
+        assert str(target_project / ".agents" / "skills" / "standard-forge") in ops_text
+
+    def test_skill_dry_run_target_project_overrides_cwd(self, tmp_path: Path):
+        """--target-project should decouple the install target from the catalog cwd."""
+        target_project = tmp_path / "explicit-target"
+        target_project.mkdir()
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "standard-forge",
+                "--dry-run",
+                "--json",
+                "--target-project",
+                str(target_project),
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
+        assert result.returncode == 0, (
+            f"skill use --dry-run returned {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+        data = json.loads(result.stdout)
+        ops_text = json.dumps(data.get("operations", []))
+        assert str(target_project / ".agents" / "skills" / "standard-forge") in ops_text
+
 
 # ---------------------------------------------------------------------------
 # AK5: standard use --dry-run --json
@@ -301,6 +351,34 @@ class TestStandardDryRun:
         assert not (project_dir / ".library.lock").exists(), (
             ".library.lock was created during --dry-run"
         )
+
+
+class TestStandardRealInstall:
+    """Real standard installs should compose the STANDARD block into AGENTS.md."""
+
+    def test_standard_real_install_updates_agents_md(self, project_dir: Path):
+        """standard use must call agents-md-block.py with the current subcommand API."""
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--json"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+        )
+        assert result.returncode == 0, (
+            f"standard use returned {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+        data = json.loads(result.stdout)
+        agents_md_result = data.get("data", {}).get("agents_md", {})
+        assert agents_md_result.get("success") is True, data
+
+        agents_md = project_dir / "AGENTS.md"
+        assert agents_md.exists()
+        text = agents_md.read_text(encoding="utf-8")
+        assert "<!-- BEGIN STANDARD:test-standard" in text
+        assert "# Test Standard" in text
+        assert "<!-- END STANDARD:test-standard -->" in text
 
 
 # ---------------------------------------------------------------------------

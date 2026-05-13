@@ -63,10 +63,10 @@ EXPECTED_COGNOVIS_SKILLS = {
     "agent-forge", "angebotserstellung", "beads", "billing-reviewer", "binary-explorer",
     "brand-forge", "bug-triage", "claude-md-pruner", "cmux", "cmux-browser", "cmux-markdown",
     "codex", "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
-    "hook-creator", "infra-principles", "inject-standards", "mail-send", "mira-aidbox",
+    "hook-forge", "infra-principles", "inject-standards", "mail-send", "mira-aidbox",
     "nbj-audit", "op-credentials", "pencil", "people-query", "playwright-cli",
     "plugin-management", "portless", "project-context", "project-health", "project-setup",
-    "prompt-refiner", "skill-auditor", "spec-developer", "standards", "summarize",
+    "prompt-refiner", "spec-developer", "standards", "summarize",
     "sync-standards", "system-prompt-audit", "token-cost", "ui-cli", "vision", "vision-author",
 }
 
@@ -79,15 +79,11 @@ EXPECTED_SUSSDORFF_SKILLS = {
 
 # Expected cognovis agents
 EXPECTED_COGNOVIS_AGENTS = {
-    "bead-orchestrator", "branch-synchronizer", "changelog-updater",
-    "chrome-devtools-tester", "ci-monitor", "codex-guide", "compliance-reviewer",
-    "constraint-checker", "convention-reviewer", "doc-changelog-updater",
-    "feature-doc-updater", "feedback-extractor", "file-analyzer", "git-operations",
-    "gui-review", "holdout-validator", "human-factors-reviewer", "implementer",
+    "bead-orchestrator", "chrome-devtools-tester", "ci-monitor", "constraint-checker",
+    "doc-changelog-updater", "feature-doc-updater", "holdout-validator", "implementer",
     "integration-test-runner", "learning-extractor", "pester-test-engineer",
     "plan-reviewer", "playwright-tester", "prd-generator", "quick-fix", "researcher",
-    "review-agent", "scenario-generator", "session-close", "skill-auditor",
-    "spellcheck-test-engineer", "test-author", "test-engineer", "uat-validator",
+    "review-agent", "session-close", "skill-auditor", "test-author", "uat-validator",
     "verification-agent", "wave-monitor", "wave-orchestrator",
 }
 
