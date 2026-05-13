@@ -222,12 +222,25 @@ def install_standard(
         return success(data=result_data, message=msg)
 
     finally:
-        # Clean up temp clone if applicable
-        if hasattr(source_dir, "_is_temp"):
+        # Clean up temp clone if applicable.
+        # Walk up to find the temp root dir for proper cleanup.
+        if parsed.is_github():
+            cleanup_dir = source_dir if source_dir.is_dir() else source_dir.parent
             try:
-                shutil.rmtree(str(source_dir if source_dir.is_dir() else source_dir.parent))
-            except OSError:
+                import tempfile as _tf
+                tmp_root = Path(_tf.gettempdir())
+                parts = cleanup_dir.parts
+                tmp_parts = tmp_root.parts
+                if parts[: len(tmp_parts)] == tmp_parts and len(parts) > len(tmp_parts):
+                    cleanup_dir = tmp_root / parts[len(tmp_parts)]
+            except Exception:
                 pass
+            if hasattr(source_dir, "_is_temp"):
+                try:
+                    if cleanup_dir.exists():
+                        shutil.rmtree(str(cleanup_dir))
+                except OSError:
+                    pass
 
 
 def _fetch_standard_source(parsed, standard_name: str) -> tuple[Path, str]:

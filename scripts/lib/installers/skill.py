@@ -185,12 +185,28 @@ def install_skill(
             ),
         )
     finally:
-        # Clean up temp dir if we used one
-        if parsed.is_github() and hasattr(source_dir, "_is_temp"):
+        # Clean up the temp clone dir if we used one.
+        # For GitHub sources, source_dir may be a subdirectory of the temp root.
+        # We need to clean up the temp root, not just the subdirectory.
+        if parsed.is_github():
+            # Find the temp root: walk up from source_dir to find a tmpdir prefix
+            cleanup_dir = source_dir
             try:
-                shutil.rmtree(str(source_dir))
-            except OSError:
+                import tempfile as _tf
+                tmp_root = Path(_tf.gettempdir())
+                # source_dir is either tmp itself or tmp/<subpath>; find the direct child of tmp
+                parts = source_dir.parts
+                tmp_parts = tmp_root.parts
+                if parts[: len(tmp_parts)] == tmp_parts and len(parts) > len(tmp_parts):
+                    cleanup_dir = tmp_root / parts[len(tmp_parts)]
+            except Exception:
                 pass
+            if hasattr(source_dir, "_is_temp") or cleanup_dir != source_dir:
+                try:
+                    if cleanup_dir.exists():
+                        shutil.rmtree(str(cleanup_dir))
+                except OSError:
+                    pass
 
 
 def _resolve_entry_source(entry: dict) -> str:
