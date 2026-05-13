@@ -56,9 +56,10 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope globa
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
 ```
 
-**Fallback** (when `scripts/library.py` is unavailable): use the cookbook steps below
-to perform the operation manually. Do NOT implement catalog parsing, path resolution,
-lockfile writes, or dependency resolution in skill instructions — those belong in the CLI.
+**The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
+all primitive types (skill, agent, prompt, standard, guardrail, mcp, model-standard,
+golden-prompt). Dependency resolution, lockfile writes, and harness selection are all
+handled by the CLI — do NOT implement these manually.
 
 **Interpreting JSON output**: The CLI returns a JSON object with:
 - `status`: `"ok"`, `"dry-run"`, `"blocked"`, or `"error"`
@@ -82,22 +83,19 @@ lockfile writes, or dependency resolution in skill instructions — those belong
 
 ## Cookbook
 
-Each command has a detailed step-by-step guide. **Read the relevant cookbook file before executing a command.**
+The cookbook files provide supplementary guidance for operations that require
+human judgment (scope selection, name collision resolution, first-time setup).
+They do NOT contain install/remove/sync mechanics — those are handled by
+`scripts/library.py`.
 
-| Command | Cookbook                                 | Use When                                                    |
-| ------- | --------------------------------------- | ----------------------------------------------------------- |
-| install | [cookbook/install.md](cookbook/install.md) | First-time setup on a new device                            |
-| add     | [cookbook/add.md](cookbook/add.md)         | User wants to register a new skill/agent/prompt in catalog  |
-| use     | [cookbook/use.md](cookbook/use.md)         | User wants to pull or refresh a skill from the catalog      |
+| Command | Cookbook                                   | Use When                                                     |
+| ------- | ------------------------------------------ | ------------------------------------------------------------ |
+| install | [cookbook/install.md](cookbook/install.md) | First-time setup on a new device                             |
+| add     | [cookbook/add.md](cookbook/add.md)         | User wants to register a new skill/agent/prompt in catalog   |
 | push    | [cookbook/push.md](cookbook/push.md)       | User improved a skill locally and wants to update the source |
-| remove  | [cookbook/remove.md](cookbook/remove.md)   | User wants to remove an entry from the catalog               |
-| list    | [cookbook/list.md](cookbook/list.md)       | User wants to see what's available and what's installed      |
-| sync    | [cookbook/sync.md](cookbook/sync.md)       | User wants to refresh all installed items at once            |
-| search  | [cookbook/search.md](cookbook/search.md)   | User is looking for a skill but doesn't know the exact name |
 
-**When a user invokes a `/library` command, route by verb, read the matching
-cookbook file first, then execute the steps.** For primitive-scoped commands,
-the primitive narrows the catalog section before the cookbook logic runs.
+For `use`, `remove`, `sync`, `list`, `search`, and `audit` — call the CLI directly.
+The cookbook does not document these operations since the CLI handles them deterministically.
 
 ## Source Format
 

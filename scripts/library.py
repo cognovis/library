@@ -46,6 +46,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from lib.catalog import find_repo_root, get_entries, load_catalog, search_all
 from lib.errors import (
     EXIT_AMBIGUOUS,
+    EXIT_DEPENDENCY_MISSING,
     EXIT_FAILURE,
     EXIT_NOT_FOUND,
     LibraryError,
@@ -54,7 +55,6 @@ from lib.output import (
     format_list_output,
     format_search_output,
     print_json,
-    blocked_result,
     dry_run_result,
     success,
     error_result,
@@ -81,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version="library.py 1.0.0 (CL-0bl)",
+        version="library.py 2.0.0 (CL-8ph)",
     )
 
     subparsers = parser.add_subparsers(
@@ -157,6 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
             choices=["project", "global"],
             default="project",
         )
+        sync_p.add_argument(
+            "--harness",
+            choices=["claude_code", "codex", "opencode", "all"],
+            default="all",
+        )
 
         # audit
         audit_p = verb_sub.add_parser("audit", help="Detect drift in installed entries")
@@ -197,6 +202,7 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     dry_run = getattr(args, "dry_run", False)
     name = getattr(args, "name", None)
     scope = getattr(args, "scope", "project")
+    harness = getattr(args, "harness", "all")
     primitive = args.primitive
 
     if name is None:
@@ -207,33 +213,101 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
 
-    # Dispatch to primitive-specific installer
+    # Resolve transitive dependencies before installing
+    if not dry_run:
+        exit_code = _install_with_deps(
+            args, repo_root, catalog, primitive, name, scope, harness, use_json
+        )
+        return exit_code
+
+    # Dry-run: just show the target entry's planned ops (no dep resolution for dry-run)
+    return _dispatch_use(args, repo_root, catalog, primitive, name, scope, harness, dry_run, use_json)
+
+
+def _install_with_deps(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    primitive: str,
+    name: str,
+    scope: str,
+    harness: str,
+    use_json: bool,
+) -> int:
+    """Resolve requires: and install all deps before the main entry."""
+    from lib.resolver import resolve_requires, is_already_installed, CycleError
+    from lib.errors import DependencyMissingError
+
+    try:
+        install_order = resolve_requires(catalog, primitive, name, repo_root, scope)
+    except CycleError as exc:
+        result = error_result(str(exc), exc.exit_code)
+        if use_json:
+            print_json(result)
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+    except DependencyMissingError as exc:
+        result = error_result(str(exc), exc.exit_code)
+        if use_json:
+            print_json(result)
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+    except LibraryError as exc:
+        result = error_result(str(exc), exc.exit_code)
+        if use_json:
+            print_json(result)
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    # Install each entry in dependency order (deps first, main last)
+    for dep_prim, dep_name in install_order:
+        # Skip if already installed (lockfile-aware)
+        if is_already_installed(dep_name, repo_root, scope):
+            continue
+        rc = _dispatch_use(args, repo_root, catalog, dep_prim, dep_name, scope, harness, False, use_json)
+        if rc != 0:
+            return rc
+
+    return 0
+
+
+def _dispatch_use(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    primitive: str,
+    name: str,
+    scope: str,
+    harness: str,
+    dry_run: bool,
+    use_json: bool,
+) -> int:
+    """Dispatch to the correct primitive installer."""
     if primitive == "skill":
         return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json)
     elif primitive == "standard":
         return _use_standard(args, repo_root, catalog, name, scope, dry_run, use_json)
+    elif primitive == "agent":
+        return _use_agent(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
+    elif primitive == "prompt":
+        return _use_simple_file(args, repo_root, catalog, "prompt", name, scope, dry_run, use_json, harness)
+    elif primitive == "model-standard":
+        return _use_simple_file(args, repo_root, catalog, "model-standard", name, scope, dry_run, use_json, harness)
+    elif primitive == "golden-prompt":
+        return _use_simple_file(args, repo_root, catalog, "golden-prompt", name, scope, dry_run, use_json, harness)
+    elif primitive == "mcp":
+        return _use_mcp(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
+    elif primitive == "guardrail":
+        return _use_guardrail(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
     else:
-        # Other primitives: emit "not yet implemented" result
-        msg = (
-            f"'{primitive} use' is not yet implemented in the Python CLI. "
-            f"Use the /library skill wrapper or a dedicated installer script."
-        )
-        if primitive == "mcp":
-            msg = (
-                "MCP installs are handled by scripts/install-mcp.py. "
-                "Run: python3 scripts/install-mcp.py <name>"
-            )
-        elif primitive == "guardrail":
-            msg = (
-                "Hook-manifest guardrails are handled by scripts/install-hook.py. "
-                "Run: python3 scripts/install-hook.py <name>"
-            )
-
-        result = blocked_result(msg, suggestion=msg)
+        msg = f"'{primitive} use' is not supported."
         if use_json:
-            print_json(result)
+            print_json(error_result(msg))
         else:
-            print(f"Blocked: {result['reason']}")
+            print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
 
 
@@ -303,6 +377,158 @@ def _use_standard(
         return exc.exit_code
 
 
+def _use_agent(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    name: str,
+    scope: str,
+    dry_run: bool,
+    use_json: bool,
+    harness: str,
+) -> int:
+    """Install an agent."""
+    from lib.installers.agent import install_agent
+
+    try:
+        result = install_agent(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+            if result.get("harness_missing"):
+                print(f"Warning: harness source missing for: {', '.join(result['harness_missing'])}")
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
+def _use_simple_file(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    primitive: str,
+    name: str,
+    scope: str,
+    dry_run: bool,
+    use_json: bool,
+    harness: str,
+) -> int:
+    """Install a prompt, model-standard, or golden-prompt."""
+    from lib.installers.simple_file import install_simple_file
+
+    try:
+        result = install_simple_file(
+            catalog=catalog,
+            primitive_name=primitive,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
+def _use_mcp(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    name: str,
+    scope: str,
+    dry_run: bool,
+    use_json: bool,
+    harness: str,
+) -> int:
+    """Install an MCP server."""
+    from lib.installers.mcp_installer import install_mcp
+
+    # Pass any env overrides from the environment (for testing)
+    import os
+    env_overrides: dict = {}
+    for key in ["CLAUDE_SETTINGS_FILE", "CODEX_CONFIG_FILE", "OPENCODE_CONFIG_FILE"]:
+        if key in os.environ:
+            env_overrides[key] = os.environ[key]
+
+    try:
+        result = install_mcp(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+            env_overrides=env_overrides if env_overrides else None,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
+def _use_guardrail(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    name: str,
+    scope: str,
+    dry_run: bool,
+    use_json: bool,
+    harness: str,
+) -> int:
+    """Install a guardrail."""
+    from lib.installers.guardrail_installer import install_guardrail
+
+    try:
+        result = install_guardrail(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
 def _print_human_result(result: dict) -> None:
     """Print a human-readable summary of an operation result."""
     status = result.get("status", "unknown")
@@ -329,23 +555,80 @@ def _print_human_result(result: dict) -> None:
 def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: <primitive> remove [name] [--dry-run]"""
     use_json = getattr(args, "json", False)
+    dry_run = getattr(args, "dry_run", False)
     name = getattr(args, "name", None)
+    scope = getattr(args, "scope", "project")
+    primitive = args.primitive
 
     if name is None:
-        msg = f"usage: library.py {args.primitive} remove <name>"
+        msg = f"usage: library.py {primitive} remove <name>"
         if use_json:
             print_json(error_result(msg))
         else:
             print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
 
-    msg = f"'{args.primitive} remove' is not yet fully implemented. Use /library skill to remove."
-    result = blocked_result(msg)
-    if use_json:
-        print_json(result)
+    try:
+        result = _dispatch_remove(primitive, catalog, name, repo_root, scope, dry_run)
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
+def _dispatch_remove(
+    primitive: str,
+    catalog: dict,
+    name: str,
+    repo_root: Path,
+    scope: str,
+    dry_run: bool,
+) -> dict:
+    """Dispatch remove to the correct primitive handler."""
+    if primitive == "skill":
+        from lib.installers.remove import remove_skill
+        return remove_skill(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive == "standard":
+        from lib.installers.remove import remove_standard
+        return remove_standard(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive == "agent":
+        from lib.installers.agent import remove_agent
+        return remove_agent(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive == "prompt":
+        from lib.installers.simple_file import remove_simple_file
+        return remove_simple_file(catalog=catalog, primitive_name="prompt", name=name,
+                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive == "model-standard":
+        from lib.installers.simple_file import remove_simple_file
+        return remove_simple_file(catalog=catalog, primitive_name="model-standard", name=name,
+                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive == "golden-prompt":
+        from lib.installers.simple_file import remove_simple_file
+        return remove_simple_file(catalog=catalog, primitive_name="golden-prompt", name=name,
+                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive == "mcp":
+        from lib.installers.mcp_installer import remove_mcp
+        import os
+        env_overrides: dict = {}
+        for key in ["CLAUDE_SETTINGS_FILE", "CODEX_CONFIG_FILE", "OPENCODE_CONFIG_FILE"]:
+            if key in os.environ:
+                env_overrides[key] = os.environ[key]
+        return remove_mcp(catalog=catalog, name=name, repo_root=repo_root, scope=scope,
+                          dry_run=dry_run, env_overrides=env_overrides if env_overrides else None)
+    elif primitive == "guardrail":
+        from lib.installers.guardrail_installer import remove_guardrail
+        return remove_guardrail(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
     else:
-        print(f"Blocked: {msg}")
-    return EXIT_FAILURE
+        from lib.errors import EXIT_FAILURE
+        from lib.output import error_result as _err
+        return _err(f"'{primitive} remove' is not supported.", EXIT_FAILURE)
 
 
 def cmd_search(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
@@ -378,25 +661,69 @@ def cmd_search(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: <primitive> sync [--dry-run]"""
     use_json = getattr(args, "json", False)
-    msg = "'sync' reads .library.lock and re-installs. Not yet implemented in Python CLI."
-    result = blocked_result(msg, suggestion="Use /library sync skill wrapper for now.")
-    if use_json:
-        print_json(result)
-    else:
-        print(f"Blocked: {msg}")
-    return EXIT_FAILURE
+    dry_run = getattr(args, "dry_run", False)
+    scope = getattr(args, "scope", "project")
+    harness = getattr(args, "harness", "all")
+    primitive = args.primitive
+
+    from lib.sync_audit import cmd_sync_impl
+    try:
+        result = cmd_sync_impl(
+            catalog=catalog,
+            primitive=primitive,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
 
 
 def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: <primitive> audit"""
     use_json = getattr(args, "json", False)
-    msg = "'audit' checksums installed items. Not yet implemented in Python CLI."
-    result = blocked_result(msg)
-    if use_json:
-        print_json(result)
-    else:
-        print(f"Blocked: {msg}")
-    return EXIT_FAILURE
+    scope = getattr(args, "scope", "project")
+    primitive = args.primitive
+
+    from lib.sync_audit import cmd_audit_impl
+    try:
+        result = cmd_audit_impl(
+            catalog=catalog,
+            primitive=primitive,
+            repo_root=repo_root,
+            scope=scope,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            status = result.get("status", "?")
+            entries = result.get("entries", [])
+            drift_entries = [e for e in entries if e.get("drift")]
+            if status == "clean":
+                print(f"Audit: CLEAN ({len(entries)} entries checked)")
+            elif status == "drift":
+                print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(entries)} entries")
+                for e in drift_entries:
+                    print(f"  DRIFT: {e['primitive']}:{e['name']}")
+            else:
+                print(f"Audit: {status}")
+        return 0
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
 
 
 # ---------------------------------------------------------------------------
