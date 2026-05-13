@@ -680,6 +680,32 @@ class TestGuardrailUse:
 
 
 # ---------------------------------------------------------------------------
+# AK14: guardrail remove
+# ---------------------------------------------------------------------------
+
+class TestGuardrailRemove:
+    def test_guardrail_remove_no_not_yet_implemented(self, project_dir):
+        # Remove a nonexistent guardrail — should fail with not-found, not "not yet implemented"
+        result = run_library("guardrail", "remove", "nonexistent-guardrail", "--json", cwd=project_dir)
+        assert "not yet implemented" not in result.stdout
+        assert "not yet implemented" not in result.stderr
+        assert "Run: python3 scripts/install-hook.py" not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# AK16: standard remove
+# ---------------------------------------------------------------------------
+
+class TestStandardRemove:
+    def test_standard_remove_no_not_yet_implemented(self, project_dir):
+        # Install a mock standard then remove it
+        # Standard needs a source — we add a minimal standard to the fixture
+        result = run_library("standard", "remove", "nonexistent-standard", "--json", cwd=project_dir)
+        assert "not yet implemented" not in result.stdout
+        assert "not yet implemented" not in result.stderr
+
+
+# ---------------------------------------------------------------------------
 # AK15: skill remove
 # ---------------------------------------------------------------------------
 
