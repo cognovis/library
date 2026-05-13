@@ -511,6 +511,34 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: python-dev
+      description: >-
+        Develop Python CLI tools — project scaffold, CLI entry points, packaging, PyPI release,
+        config resolution. Loads python-cli-patterns standard for full conventions. Triggers
+        on write python, python tool, python cli, build cli, argparse, click, pyproject.toml,
+        uv tool, src layout, hatchling, pypi, calver.
+      source: https://github.com/cognovis/library-core/blob/main/skills/python-dev/SKILL.md
+      requires:
+        - "standard:python-cli-patterns"
+        - "standard:english-only"
+        - "standard:no-emoji"
+      tags:
+        - origin:original
+        - tier:domain
+    - name: python-test
+      description: >-
+        Test Python CLI tools — pytest layout, click.testing.CliRunner, argparse invocation,
+        fixtures, coverage. Loads python-cli-patterns standard so tests target the right modules.
+        Triggers on pytest, uv run pytest, test python, test cli, CliRunner, conftest, click
+        testing, capsys, monkeypatch.
+      source: https://github.com/cognovis/library-core/blob/main/skills/python-test/SKILL.md
+      requires:
+        - "standard:python-cli-patterns"
+        - "standard:english-only"
+        - "standard:no-emoji"
+      tags:
+        - origin:original
+        - tier:domain
     - name: standards
       description: >-
         Manage coding standards lifecycle: list, inject, create, sync, review. Use when loading
