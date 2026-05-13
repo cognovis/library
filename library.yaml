@@ -841,7 +841,9 @@ library:
         - workflow:beads
     - name: review-conventions
       description: >-
-        Review code conventions and naming choices against project standards.
+        Scan a project for undocumented coding conventions and propose new standards (HITL).
+        Filters aggressively — most runs yield 0-2 proposals. Distinguishes industry standards
+        (skip), anti-patterns (refactoring beads), and genuine team-specific conventions.
       source: https://github.com/cognovis/library-core/blob/main/skills/review-conventions/SKILL.md
       requires:
         - "standard:english-only"
@@ -849,6 +851,81 @@ library:
         - origin:original
         - tier:core
         - workflow:beads
+    - name: codex-guide
+      description: >-
+        Answer documentation questions about OpenAI Codex CLI — subcommands, flags,
+        config.toml, sandbox modes, profiles, subagents, skills, and MCP integration.
+        Does NOT run Codex.
+      source: https://github.com/cognovis/library-core/blob/main/skills/codex-guide/SKILL.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: compliance-reviewer
+      description: >-
+        Healthcare regulatory and security compliance reviewer (EU/Germany). Audits
+        code against GDPR, EU AI Act, NIS2, and 11 healthcare control areas. Produces
+        structured findings report. Read-only.
+      source: https://github.com/cognovis/library-core/blob/main/skills/compliance-reviewer/SKILL.md
+      tags:
+        - origin:original
+        - tier:project
+    - name: human-factors-reviewer
+      description: >-
+        Healthcare clinical UX and human-factors reviewer. Audits UI against NIST,
+        FDA, IEC 62366, ISO 9241, WCAG 2.1, and clinical safety standards (20 categories).
+        Read-only.
+      source: https://github.com/cognovis/library-core/blob/main/skills/human-factors-reviewer/SKILL.md
+      tags:
+        - origin:original
+        - tier:project
+    - name: spellcheck-test-engineer
+      description: >-
+        Run spellcheck via typos CLI, analyze errors, update .typos.toml configuration
+        with legitimate German and technical terms, debug false positives.
+      source: https://github.com/cognovis/library-core/blob/main/skills/spellcheck-test-engineer/SKILL.md
+      tags:
+        - origin:original
+        - tier:project
+    - name: gui-review
+      description: >-
+        Visually verify UI changes against acceptance criteria using playwright-cli,
+        with optional Pencil-design comparison. Framework-agnostic.
+      source: https://github.com/cognovis/library-core/blob/main/skills/gui-review/SKILL.md
+      requires:
+        - "skill:playwright-cli"
+        - "skill:pencil"
+      tags:
+        - origin:original
+        - tier:domain
+    - name: scenario-generator
+      description: >-
+        Generate testable user-flow scenarios from bead descriptions (no source code
+        access). Two modes — bead-scenario (inline) and persistent-scenario (writes file).
+        Reuses existing seed data, references existing scenarios.
+      source: https://github.com/cognovis/library-core/blob/main/skills/scenario-generator/SKILL.md
+      tags:
+        - origin:original
+        - tier:domain
+    - name: git-ops
+      description: >-
+        Deterministic git operations — branch sync (fetch+rebase with smart conflict
+        resolution for version_manifest.json and SCRIPT_VERSION/ModuleVersion bumps)
+        plus commit/push/force-push/tag/glab-merge wrappers. JSON-output contracts for
+        orchestrators.
+      source: https://github.com/cognovis/library-core/blob/main/skills/git-ops/SKILL.md
+      tags:
+        - origin:original
+        - tier:core
+    - name: file-inspect
+      description: >-
+        Analyze changed files in a git branch — list modified/added/deleted files,
+        categorize by type (scripts/manifests/docs/other), detect embedded version
+        numbers, emit structured JSON for downstream tooling (changelog, release-prep,
+        version-bumpers).
+      source: https://github.com/cognovis/library-core/blob/main/skills/file-inspect/SKILL.md
+      tags:
+        - origin:original
+        - tier:domain
     - name: wave-dispatch
       description: >-
         Slash-command surface that dispatches to the wave-orchestrator agent for parallel
@@ -1067,21 +1144,6 @@ library:
       tags:
         - origin:original
         - tier:core
-    - name: branch-synchronizer
-      description: >-
-        Synchronizes branches with main: fetch, rebase, handle conflicts intelligently.
-      source: https://github.com/cognovis/library-core/blob/main/agents/branch-synchronizer.md
-      tags:
-        - origin:original
-        - tier:domain
-    - name: changelog-updater
-      description: >-
-        Updates CHANGELOG.md based on closed beads. Analyzes branch changes and generates
-        properly formatted changelog entries.
-      source: https://github.com/cognovis/library-core/blob/main/agents/changelog-updater.md
-      tags:
-        - origin:original
-        - tier:domain
     - name: chrome-devtools-tester
       description: >-
         Execute browser tests using agent-browser CLI: UI testing, form interaction, visual
@@ -1101,36 +1163,12 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: codex-guide
-      description: >-
-        Use when the user asks questions about OpenAI Codex CLI, Codex subagents, or Codex
-        skills and MCP integration. Do NOT use to RUN Codex — answers documentation questions only.
-      source: https://github.com/cognovis/library-core/blob/main/agents/codex-guide.md
-      tags:
-        - origin:original
-        - tier:domain
-    - name: compliance-reviewer
-      description: >-
-        Healthcare regulatory and security compliance reviewer. Audits code changes against
-        GDPR, EU AI Act, NIS2, and healthcare privacy control areas. Read-only — produces
-        structured findings report.
-      source: https://github.com/cognovis/library-core/blob/main/agents/compliance-reviewer.md
-      tags:
-        - origin:original
-        - tier:project
     - name: constraint-checker
       description: >-
         Verifies SLOs, security defaults, and performance constraints against a built artifact.
         Use proactively after holdout validation to check non-functional requirements.
         Read-only and execute-only: never modifies code.
       source: https://github.com/cognovis/library-core/blob/main/agents/constraint-checker.md
-      tags:
-        - origin:original
-        - tier:domain
-    - name: convention-reviewer
-      description: >-
-        Scans projects for undocumented conventions and proposes new standards (HITL).
-      source: https://github.com/cognovis/library-core/blob/main/agents/convention-reviewer.md
       tags:
         - origin:original
         - tier:domain
@@ -1154,37 +1192,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: feedback-extractor
-      description: >-
-        Extracts user feedback from Claude Code conversation histories. Analyzes JSONL
-        conversation files, classifies feedback types, identifies affected skills/agents,
-        and stores structured learnings.
-      source: https://github.com/cognovis/library-core/blob/main/agents/feedback-extractor.md
-      tags:
-        - origin:original
-        - tier:domain
-    - name: file-analyzer
-      description: >-
-        Analyzes changed files in a branch: find modified files, detect version numbers,
-        categorize changes.
-      source: https://github.com/cognovis/library-core/blob/main/agents/file-analyzer.md
-      tags:
-        - origin:original
-        - tier:domain
-    - name: git-operations
-      description: >-
-        Performs git operations: commit, push, force-push, merge, tag.
-      source: https://github.com/cognovis/library-core/blob/main/agents/git-operations.md
-      tags:
-        - origin:original
-        - tier:domain
-    - name: gui-review
-      description: >-
-        Visually verifies UI changes with playwright-cli and optional Pencil design comparison.
-      source: https://github.com/cognovis/library-core/blob/main/agents/gui-review.md
-      tags:
-        - origin:original
-        - tier:domain
     - name: holdout-validator
       description: >-
         Runs holdout scenarios from tests/holdout/ against a built artifact. Use proactively
@@ -1193,14 +1200,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: human-factors-reviewer
-      description: >-
-        Healthcare clinical UX and human-factors reviewer. Audits UI components against NIST,
-        FDA, IEC 62366, ISO 9241, WCAG 2.1, and clinical safety standards. Read-only.
-      source: https://github.com/cognovis/library-core/blob/main/agents/human-factors-reviewer.md
-      tags:
-        - origin:original
-        - tier:project
     - name: implementer
       description: >-
         Develops production code to make existing failing unit tests pass (Green phase of TDD).
@@ -1289,13 +1288,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: scenario-generator
-      description: >-
-        Generates test scenarios and acceptance criteria from feature descriptions and bead specifications.
-      source: https://github.com/cognovis/library-core/blob/main/agents/scenario-generator.md
-      tags:
-        - origin:original
-        - tier:domain
     - name: session-close
       description: >-
         Orchestrates a full session close with double-merge strategy for parallel safety. Commits,
@@ -1318,14 +1310,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: spellcheck-test-engineer
-      description: >-
-        Expert spellcheck engineer for Charly Server using typos CLI tool. Runs spellcheck,
-        analyzes spelling errors, updates .typos.toml configuration with legitimate words.
-      source: https://github.com/cognovis/library-core/blob/main/agents/spellcheck-test-engineer.md
-      tags:
-        - origin:original
-        - tier:project
     - name: test-author
       description: >-
         Writes TDD tests from spec intent and acceptance criteria. Use when a bead's acceptance
@@ -1334,15 +1318,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: test-engineer
-      description: >-
-        Framework-agnostic test engineer that writes, reviews, and executes unit tests. Detects
-        the project's test framework automatically and applies appropriate patterns.
-      source: https://github.com/cognovis/library-core/blob/main/agents/test-engineer.md
-      requires:
-        - "mcp:open-brain"
-      tags:
-        - origin:original
         - tier:domain
     - name: uat-validator
       description: >-
