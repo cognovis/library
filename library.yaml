@@ -1593,6 +1593,19 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+    - name: python-cli-patterns
+      description: >-
+        Python CLI tool conventions — project scaffold, CalVer + tag-driven PyPI release,
+        Trusted Publishing, config resolution (XDG + key_command + lazy click context),
+        Hatchling force-include, install-skill subcommand, version self-check, first-run
+        wizard, output file conventions. Folder-form standard (entry + 5 sub-topic files).
+      source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/python-cli-patterns.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
     - name: execution-result-envelope
       description: >-
         Execution-Result Envelope Contract for agent-facing helper scripts in claude-code-plugins.
