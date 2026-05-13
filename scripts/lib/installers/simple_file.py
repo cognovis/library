@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from ..cache import compute_cache_path
 from ..catalog import lookup_entry
@@ -123,7 +123,7 @@ def install_simple_file(
         return dry_run_result(ops, summary=f"Would install {primitive_name} '{item_name}' to {install_target}")
 
     # 5. Fetch source
-    source_file, source_commit = _fetch_file_source(parsed, item_name)
+    source_file, source_commit, temp_root = _fetch_file_source(parsed, item_name)
 
     try:
         cache_path = compute_cache_path(
@@ -191,7 +191,7 @@ def install_simple_file(
         )
 
     finally:
-        _cleanup_temp(parsed, source_file)
+        _cleanup_temp(temp_root)
 
 
 def remove_simple_file(
@@ -244,14 +244,20 @@ def remove_simple_file(
     )
 
 
-def _fetch_file_source(parsed: ParsedSource, name: str) -> tuple[Path, str]:
-    """Fetch source file and return (path, commit_sha)."""
+def _fetch_file_source(
+    parsed: ParsedSource, name: str
+) -> tuple[Path, str, Optional[Path]]:
+    """Fetch source file.
+
+    Returns (path, commit_sha, temp_root). `temp_root` is the directory
+    that must be cleaned up after use, or None when the source is local.
+    """
     if parsed.is_local():
         local = parsed.local_path
         if local is None or not local.exists():
             raise InstallError(f"Local source path does not exist: {parsed.raw}")
         commit = get_local_commit_sha(local)
-        return local, commit
+        return local, commit, None
 
     if parsed.is_github():
         tmp = Path(tempfile.mkdtemp())
@@ -280,27 +286,19 @@ def _fetch_file_source(parsed: ParsedSource, name: str) -> tuple[Path, str]:
         if parsed.file_path:
             source_file = tmp / parsed.file_path
             if source_file.exists():
-                source_file._temp_root = tmp  # type: ignore[attr-defined]
-                return source_file, commit
+                return source_file, commit, tmp
 
         for candidate in [tmp / f"{name}.md", tmp / "SKILL.md", tmp / "agent.md"]:
             if candidate.exists():
-                candidate._temp_root = tmp  # type: ignore[attr-defined]
-                return candidate, commit
+                return candidate, commit, tmp
 
-        tmp._temp_root = tmp  # type: ignore[attr-defined]
-        return tmp, commit
+        return tmp, commit, tmp
 
     raise SourceError(f"Cannot fetch source: unsupported kind '{parsed.kind}'")
 
 
-def _cleanup_temp(parsed: ParsedSource, source_file: Path) -> None:
-    """Clean up temp directory used for GitHub clone."""
-    if not parsed.is_github():
+def _cleanup_temp(temp_root: Optional[Path]) -> None:
+    """Remove the temp clone dir, if one was created."""
+    if temp_root is None:
         return
-    try:
-        temp_root = getattr(source_file, "_temp_root", None)
-        if temp_root and temp_root.exists():
-            shutil.rmtree(str(temp_root), ignore_errors=True)
-    except OSError:
-        pass
+    shutil.rmtree(str(temp_root), ignore_errors=True)

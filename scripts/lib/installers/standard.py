@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from ..cache import compute_cache_path, plan_cache_writes
 from ..catalog import lookup_entry
@@ -142,7 +142,7 @@ def install_standard(
         )
 
     # 5. Fetch source
-    source_dir, source_commit = _fetch_standard_source(parsed, standard_name)
+    source_dir, source_commit, temp_root = _fetch_standard_source(parsed, standard_name)
 
     try:
         cache_path = compute_cache_path("standard", marketplace, standard_name, source_commit)
@@ -222,35 +222,24 @@ def install_standard(
         return success(data=result_data, message=msg)
 
     finally:
-        # Clean up temp clone if applicable.
-        # Walk up to find the temp root dir for proper cleanup.
-        if parsed.is_github():
-            cleanup_dir = source_dir if source_dir.is_dir() else source_dir.parent
-            try:
-                import tempfile as _tf
-                tmp_root = Path(_tf.gettempdir())
-                parts = cleanup_dir.parts
-                tmp_parts = tmp_root.parts
-                if parts[: len(tmp_parts)] == tmp_parts and len(parts) > len(tmp_parts):
-                    cleanup_dir = tmp_root / parts[len(tmp_parts)]
-            except Exception:
-                pass
-            if hasattr(source_dir, "_is_temp"):
-                try:
-                    if cleanup_dir.exists():
-                        shutil.rmtree(str(cleanup_dir))
-                except OSError:
-                    pass
+        if temp_root is not None:
+            shutil.rmtree(str(temp_root), ignore_errors=True)
 
 
-def _fetch_standard_source(parsed, standard_name: str) -> tuple[Path, str]:
-    """Fetch the standard source file/dir."""
+def _fetch_standard_source(
+    parsed, standard_name: str
+) -> tuple[Path, str, Optional[Path]]:
+    """Fetch the standard source file/dir.
+
+    Returns (path, commit_sha, temp_root). `temp_root` is the directory
+    that must be cleaned up after use, or None when the source is local.
+    """
     if parsed.is_local():
         local = parsed.local_path
         if local is None or not local.exists():
             raise InstallError(f"Local source path does not exist: {parsed.raw}")
         commit = get_local_commit_sha(local)
-        return local, commit
+        return local, commit, None
 
     if parsed.is_github():
         tmp = Path(tempfile.mkdtemp())
@@ -283,11 +272,8 @@ def _fetch_standard_source(parsed, standard_name: str) -> tuple[Path, str]:
         if parsed.file_path:
             source_file = tmp / parsed.file_path
             if source_file.exists():
-                source_file._is_temp = True  # type: ignore[attr-defined]
-                return source_file, commit
-        source_dir = tmp
-        source_dir._is_temp = True  # type: ignore[attr-defined]
-        return source_dir, commit
+                return source_file, commit, tmp
+        return tmp, commit, tmp
 
     raise SourceError(f"Cannot fetch source: unsupported source kind '{parsed.kind}'")
 

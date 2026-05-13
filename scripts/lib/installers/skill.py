@@ -122,7 +122,7 @@ def install_skill(
         )
 
     # 5. Fetch source and get commit SHA
-    source_dir, source_commit = _fetch_source_dir(parsed, skill_name)
+    source_dir, source_commit, temp_root = _fetch_source_dir(parsed, skill_name)
 
     try:
         # Recompute cache_path with real commit SHA
@@ -185,28 +185,8 @@ def install_skill(
             ),
         )
     finally:
-        # Clean up the temp clone dir if we used one.
-        # For GitHub sources, source_dir may be a subdirectory of the temp root.
-        # We need to clean up the temp root, not just the subdirectory.
-        if parsed.is_github():
-            # Find the temp root: walk up from source_dir to find a tmpdir prefix
-            cleanup_dir = source_dir
-            try:
-                import tempfile as _tf
-                tmp_root = Path(_tf.gettempdir())
-                # source_dir is either tmp itself or tmp/<subpath>; find the direct child of tmp
-                parts = source_dir.parts
-                tmp_parts = tmp_root.parts
-                if parts[: len(tmp_parts)] == tmp_parts and len(parts) > len(tmp_parts):
-                    cleanup_dir = tmp_root / parts[len(tmp_parts)]
-            except Exception:
-                pass
-            if hasattr(source_dir, "_is_temp") or cleanup_dir != source_dir:
-                try:
-                    if cleanup_dir.exists():
-                        shutil.rmtree(str(cleanup_dir))
-                except OSError:
-                    pass
+        if temp_root is not None:
+            shutil.rmtree(str(temp_root), ignore_errors=True)
 
 
 def _resolve_entry_source(entry: dict) -> str:
@@ -236,14 +216,16 @@ def _resolve_entry_source(entry: dict) -> str:
     )
 
 
-def _fetch_source_dir(parsed: ParsedSource, skill_name: str) -> tuple[Path, str]:
-    """Fetch the skill source directory and return (dir_path, commit_sha).
+def _fetch_source_dir(
+    parsed: ParsedSource, skill_name: str
+) -> tuple[Path, str, Optional[Path]]:
+    """Fetch the skill source directory.
 
-    For local sources: return the parent directory.
-    For GitHub sources: clone to a temp dir and return it.
+    Returns (dir_path, commit_sha, temp_root). `temp_root` is the temp
+    clone directory the caller must clean up, or None for local sources.
 
-    Note: For GitHub sources, the returned Path object has a `_is_temp` attribute
-    set to True so the caller knows to clean it up.
+    For local sources: returns the parent directory.
+    For GitHub sources: clones to a temp dir, navigates to the skill subdir.
     """
     if parsed.is_local():
         local = parsed.local_path
@@ -254,12 +236,11 @@ def _fetch_source_dir(parsed: ParsedSource, skill_name: str) -> tuple[Path, str]
         # The source is the SKILL.md file — we want the parent directory
         source_dir = local.parent if local.is_file() else local
         commit = get_local_commit_sha(source_dir)
-        return source_dir, commit
+        return source_dir, commit, None
 
     if parsed.is_github():
         # Clone to temp dir
         tmp = Path(tempfile.mkdtemp())
-        tmp._is_temp = True  # type: ignore[attr-defined]
 
         # Try HTTPS first, fall back to SSH
         clone_url = parsed.clone_url or ""
@@ -296,7 +277,6 @@ def _fetch_source_dir(parsed: ParsedSource, skill_name: str) -> tuple[Path, str]
         skill_dir = tmp / (parent_dir or "") if parent_dir else tmp
         if not skill_dir.exists():
             skill_dir = tmp
-        skill_dir._is_temp = True  # type: ignore[attr-defined]
-        return skill_dir, commit
+        return skill_dir, commit, tmp
 
     raise SourceError(f"Cannot fetch source: unsupported source kind '{parsed.kind}'")

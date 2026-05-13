@@ -157,7 +157,7 @@ def install_agent(
         return result
 
     # 6. Fetch source
-    source_file, source_commit = _fetch_agent_source(parsed, agent_name)
+    source_file, source_commit, temp_root = _fetch_agent_source(parsed, agent_name)
 
     try:
         cache_path = compute_cache_path("agent", marketplace, agent_name, source_commit)
@@ -225,7 +225,7 @@ def install_agent(
         return result
 
     finally:
-        _cleanup_source(parsed, source_file)
+        _cleanup_source(temp_root)
 
 
 def remove_agent(
@@ -297,15 +297,21 @@ def _try_compose(compose_script: Path, agent_file: Path, agent_name: str) -> Non
         pass  # compose is optional
 
 
-def _fetch_agent_source(parsed: ParsedSource, agent_name: str) -> tuple[Path, str]:
-    """Fetch the agent source file and return (file_path, commit_sha)."""
+def _fetch_agent_source(
+    parsed: ParsedSource, agent_name: str
+) -> tuple[Path, str, Optional[Path]]:
+    """Fetch the agent source file.
+
+    Returns (file_path, commit_sha, temp_root). `temp_root` is the directory
+    that must be cleaned up after use, or None when the source is local.
+    """
     if parsed.is_local():
         local = parsed.local_path
         if local is None or not local.exists():
             raise InstallError(f"Local source path does not exist: {parsed.raw}")
         source_file = local if local.is_file() else _find_agent_file(local, agent_name)
         commit = get_local_commit_sha(source_file)
-        return source_file, commit
+        return source_file, commit, None
 
     if parsed.is_github():
         tmp = Path(tempfile.mkdtemp())
@@ -338,15 +344,11 @@ def _fetch_agent_source(parsed: ParsedSource, agent_name: str) -> tuple[Path, st
         if parsed.file_path:
             source_file = tmp / parsed.file_path
             if source_file.exists():
-                source_file._is_temp = True  # type: ignore[attr-defined]
-                source_file._temp_root = tmp  # type: ignore[attr-defined]
-                return source_file, commit
+                return source_file, commit, tmp
 
         # Fallback: look for agent file in repo root
         agent_file = _find_agent_file(tmp, agent_name)
-        agent_file._is_temp = True  # type: ignore[attr-defined]
-        agent_file._temp_root = tmp  # type: ignore[attr-defined]
-        return agent_file, commit
+        return agent_file, commit, tmp
 
     raise SourceError(f"Cannot fetch agent source: unsupported source kind '{parsed.kind}'")
 
@@ -366,23 +368,8 @@ def _find_agent_file(directory: Path, agent_name: str) -> Path:
     return directory / f"{agent_name}.md"
 
 
-def _cleanup_source(parsed: ParsedSource, source_file: Path) -> None:
-    """Clean up temp directory if used for GitHub clone."""
-    if not parsed.is_github():
+def _cleanup_source(temp_root: Optional[Path]) -> None:
+    """Remove the temp clone dir, if one was created."""
+    if temp_root is None:
         return
-    try:
-        temp_root = getattr(source_file, "_temp_root", None)
-        if temp_root and temp_root.exists():
-            shutil.rmtree(str(temp_root), ignore_errors=True)
-        elif source_file.exists() or source_file.is_symlink():
-            # Walk up to find temp root
-            import tempfile as _tf
-            tmp_root = Path(_tf.gettempdir())
-            parts = source_file.parts
-            tmp_parts = tmp_root.parts
-            if parts[: len(tmp_parts)] == tmp_parts and len(parts) > len(tmp_parts):
-                cleanup_dir = tmp_root / parts[len(tmp_parts)]
-                if cleanup_dir.exists():
-                    shutil.rmtree(str(cleanup_dir), ignore_errors=True)
-    except OSError:
-        pass
+    shutil.rmtree(str(temp_root), ignore_errors=True)
