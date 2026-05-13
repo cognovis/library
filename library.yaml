@@ -1858,6 +1858,28 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+    - name: agentic-primitives
+      description: >-
+        Decision-tree standard for choosing the right invocation primitive (skill, command,
+        agent, hook). Distills PRIMITIVES.md §3 C1-C6 agent-justification criteria plus
+        counter-examples into an in-context briefing for the *-forge skills. Loaded via
+        requires_standards by skill-forge, agent-forge, hook-creator, and standard-forge so
+        primitive-type selection is consistent and self-correcting.
+      source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives.md
+      triggers:
+        - primitive type
+        - skill vs agent
+        - agent vs skill
+        - hook vs skill
+        - is this an agent
+        - is this a skill
+        - C1-C6
+        - justification criteria
+        - forge dispatch
+      tags:
+        - origin:original
+        - tier:core
+        - category:standard
     - name: english-only
       description: >-
         All source code MUST be in English — including comments, identifiers, log messages,
