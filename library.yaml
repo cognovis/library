@@ -494,6 +494,20 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: standard-forge
+      description: >-
+        Scaffold a new Library standard — a factual, harness-injected markdown context file.
+        Use when creating standards, asking "is this a standard?", or wiring requires_standards
+        into a skill. Triggers on create standard, new standard, scaffold standard,
+        standard for skill, requires_standards, standard-forge.
+      source: https://github.com/cognovis/library-core/blob/main/skills/standard-forge/SKILL.md
+      requires:
+        - "standard:agentic-primitives"
+        - "standard:english-only"
+        - "standard:no-emoji"
+      tags:
+        - origin:original
+        - tier:domain
     - name: standards
       description: >-
         Manage coding standards lifecycle: list, inject, create, sync, review. Use when loading
