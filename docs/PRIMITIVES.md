@@ -487,9 +487,125 @@ remove` plus deletes the cache directory.
 
 | Priority | Path | Scope |
 |----------|------|-------|
-| 1 (wins) | `.agents/standards/<name>.md` | Project-local |
-| 2 | `~/.agents/standards/<name>.md` | User-global |
-| 3 (legacy) | `~/.claude/standards/<domain>/<name>.md` | Claude Code fallback |
+| 1 (wins) | `.agents/standards/<name>/<name>.md` | Project-local, folder-form |
+| 2 | `~/.agents/standards/<name>/<name>.md` | User-global, folder-form |
+| 3 (legacy) | `.agents/standards/<name>.md` (flat) | Older standards before folder-form |
+| 4 (legacy) | `~/.claude/standards/<domain>/<name>.md` | Claude Code fallback |
+
+**Standard file layout (single-file vs folder-form).**
+
+| Form | When to use | Layout |
+|------|-------------|--------|
+| Single-file | <600 tokens, single topic | `standards/<name>/<name>.md` (the folder holds only the one entry file) |
+| Folder-form | 600-3000 tokens with multiple sub-topics | `standards/<name>/<name>.md` (entry) + sibling `<topic>.md` files in the same folder |
+
+Convention: **entry file = stem matches folder name**. Sibling `.md` files in the
+same folder are detail pages reachable via relative links from the entry. The entry
+file is what `requires_standards: [<identifier>]` loads; sibling files are pulled
+on demand by the model when it follows a link.
+
+For >3000 tokens of disparate content, prefer two separate standards over one
+folder with many sibling files.
+
+**Frontmatter convention (domain vs rule).**
+
+A standard's entry file declares either `domain:` or `rule:` in its frontmatter —
+one of the two, not both. The choice tells the agent at a glance what kind of
+shared knowledge it just opened.
+
+| Field | Use when content is | Example |
+|-------|---------------------|---------|
+| `domain:` | A body of knowledge about a topic | `domain: python-cli-patterns`, `domain: healthcare-control-areas` |
+| `rule:` | A convention or prohibition that applies broadly | `rule: english-only`, `rule: no-emoji`, `rule: adr-location` |
+
+```yaml
+# Domain-style standard:
+---
+domain: python-cli-patterns
+description: How to author Python CLIs with argparse, click, and the release flow.
+---
+
+# Rule-style standard:
+---
+rule: english-only
+description: All source code is English; user-facing strings may be localized.
+---
+```
+
+Loader and validator accept either field as the standard's identifier. In
+`library.yaml` the catalog entry still uses `name:` — that is catalog-internal and
+not user-facing.
+
+The folder name matches the identifier value: `domain: python-cli-patterns` →
+`standards/python-cli-patterns/python-cli-patterns.md`.
+
+**Optional `scripts/` directory.**
+
+A standard folder may include `scripts/<name>.{sh,py}` alongside its markdown
+when parts of the standard can be enforced or automated deterministically.
+
+| Standard kind | Typical script role | Called by |
+|---------------|---------------------|-----------|
+| `rule:` | Enforcement — e.g. `scripts/check-english.py` scans source files and exits non-zero on violation | Pre-commit hooks, guardrails |
+| `domain:` | Tooling — e.g. `scripts/scaffold-cli.py` generates argparse boilerplate | Skills that consume the standard |
+
+Scripts are **not invoked by the standard itself** — the standard's `.md` remains
+pure model-context. Scripts are called from outside: by hooks (for rules) or by
+skills (for domains). This keeps the standard contract clean (context-only) while
+allowing deterministic enforcement to ship in the same package.
+
+Output contract: scripts with multiple failure modes follow the
+`execution-result-envelope` JSON shape (`status`, `summary`, `data`, `errors`,
+`next_steps`). Pre-commit-style binary enforcement uses a non-zero exit code
+with stderr diagnostics.
+
+**Maturity arc (skill reference ↔ standard).**
+
+Markdown files containing factual knowledge can live in two places — inside one
+skill as a private reference, or in the catalog as a standard. The structural
+difference is ownership and addressability, not content.
+
+| Criterion | Skill-internal reference (`skills/<skill>/references/foo.md`) | Standard (`standards/<name>/<name>.md`) |
+|-----------|---------------------------------------------------------------|-----------------------------------------|
+| Entry in `library.yaml` | No | Yes (under `library.standards:`) |
+| Reachable by other primitives | No — bundled with parent skill | Yes, via `requires_standards: [name]` |
+| Versioned with | Parent skill commit | Independent source/commit |
+| Reachable when parent skill not loaded | No | Yes |
+| Installable standalone | No | Yes (`library standard use <name>`) |
+
+**Operative test:** Would a second primitive (another skill, agent, or project)
+want to declare this as a dependency? If yes → standard. If no → skill-internal
+reference.
+
+**Mechanical test:** Does the file have a `name:` entry in `library.yaml`? If
+yes, it is a standard. If no, it is a skill-internal reference. (Inside the
+standard file itself, the identifier appears as `domain:` or `rule:`; the
+library.yaml entry maps that to `name:`.)
+
+**Lifecycle:**
+
+```
+new idea
+   │
+   ▼
+skill reference         "useful only for this skill"
+   │ (promotion: another primitive needs the same content)
+   ▼
+catalog standard        "shared knowledge with its own lifecycle"
+   │ (demotion: only one primitive still uses it)
+   ▼
+skill reference (back)
+```
+
+Promotion mechanics:
+1. Move the file: `skills/<skill>/references/<file>.md` → `standards/<name>/<name>.md`
+2. Register the entry in `library.yaml` under `library.standards:`
+3. Add `requires_standards: [<name>]` to every skill that needs it
+4. Remove the original `references/<file>.md` from the source skill
+5. Update intra-skill links to rely on `requires_standards` for injection
+
+Demotion is the inverse: fold the standard back into the one skill's `references/`,
+drop the catalog entry, remove `requires_standards:` declarations.
 
 **Skills declare dependencies** via `requires_standards` frontmatter:
 
