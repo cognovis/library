@@ -149,7 +149,7 @@ Skills support two optional fields that control when the harness injects them:
 |-------|------------------|
 | `agent-forge` — "Guide for creating Claude Code agents. Use when creating specialized AI assistants…" | Description triggers auto-load whenever the model detects agent creation context. User does not type `/agent-forge`. |
 | `skill-tester` — "Use when testing or installing standalone skills under local development…" | Model auto-invokes when it detects skill development/testing context. |
-| `hook-creator` — "Use when creating, configuring, or managing Claude Code hooks…" | Model auto-invokes when hook creation/configuration is in scope. |
+| `hook-forge` — "Use when creating, configuring, or managing Claude Code hooks…" | Model auto-invokes when hook creation/configuration is in scope. |
 
 ---
 
