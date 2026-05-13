@@ -65,6 +65,24 @@ files, so the force flag is unnecessary.
 rm -r <install_target>
 ```
 
+#### 5c-std. Standards: also remove the AGENTS.md block
+
+For `standard` primitive removals, in addition to deleting the cache directory,
+remove the composed block from the target `AGENTS.md`:
+
+```bash
+# Resolve target AGENTS.md from lockfile metadata (scope field):
+# - scope=global  -> ~/.agents/AGENTS.md
+# - scope=project -> <cwd>/AGENTS.md
+
+LIBRARY_ROOT="<path to library repo>"
+python3 "${LIBRARY_ROOT}/scripts/agents-md-block.py" remove \
+  --name=<standard-name> \
+  --file=<resolved-AGENTS.md>
+```
+
+This is idempotent: if the block was already removed, exit code is 0 (no-op).
+
 #### 5d. Remove the lockfile entry
 
 ```python

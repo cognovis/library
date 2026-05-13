@@ -422,29 +422,30 @@ with the `model:` value from the frontmatter. (Use the `<canonical_path>` resolv
 If the skill's SKILL.md body contains `$ARGUMENTS`:
 > "Advisory: This skill uses `$ARGUMENTS` substitution (Claude Code invocation style). Codex skills receive input via prompt context rather than `$ARGUMENTS` substitution. The skill should still work, but `$ARGUMENTS` will not be replaced — the literal string will appear in the prompt. Consider adapting the skill for Codex if precise argument handling is needed."
 
-### 5f. Standards: ALWAYS ask whether global or project-local
+### 5f. Standards: resolve scope then compose-on-install
 
 `library.standards:` entries (single files and bundles) can install at two tiers:
 
 | Tier | Path | When to choose |
 |------|------|----------------|
-| **Global** | `~/.agents/standards/<name>/` | Standard applies broadly; triggers will filter dynamically. Default suggestion. |
+| **Global** | `~/.agents/standards/<name>/` | Standard applies broadly; available in every project. |
 | **Project-local** | `<cwd>/.agents/standards/<name>/` | Standard is project-specific, or you want to override a global version for this project only. |
 
-**When `/library standard use <name>` runs, ASK the user before installing.**
-Do not silently default. Phrase the question so the user can pick at a glance:
+**Scope resolution (check `default_scope` first, then ask):**
 
-> "Install `python` standard globally (`~/.agents/standards/`, available in every
-> project) or project-local (`<cwd>/.agents/standards/`)? Global is the usual
-> answer — triggers filter dynamically."
+Read the entry's `default_scope` field from `library.yaml`:
+- `default_scope: global` → install globally without prompting (e.g. `english-only`, `no-emoji`).
+- `default_scope: project` → install project-locally without prompting.
+- `default_scope: ask` → ask the user before installing. Phrase the question:
 
-Skip the question only when the invocation explicitly states scope:
+  > "Install `python` standard globally (`~/.agents/standards/`, available in every
+  > project) or project-local (`<cwd>/.agents/standards/`)?"
+
+Skip the question when the invocation explicitly states scope:
 - `/library standard use python globally` → global, no prompt
 - `/library standard use python locally` / `... for this project` / `... in this project` → project-local, no prompt
 
-The loader resolution order is the same in both directions (standards-loader and
-inject-subagent-standards): project-local wins over user-global. So a
-project-local install always overrides a global one when both exist.
+The loader resolution order (project-local wins over user-global) is unchanged.
 
 ```yaml
 default_dirs:
@@ -452,6 +453,29 @@ default_dirs:
     - default: .agents/standards/         # project-local
     - global: ~/.agents/standards/        # user-global
 ```
+
+**After copying files to the cache/install target — compose-on-install (MANDATORY):**
+
+Once the standard's files are installed to `<install_target>/`, write the standard's
+content as a marker block into the correct `AGENTS.md`:
+
+```bash
+# Resolve target AGENTS.md:
+# - scope=global  -> ~/.agents/AGENTS.md
+# - scope=project -> <cwd>/AGENTS.md
+
+LIBRARY_ROOT="<path to library repo>"
+python3 "${LIBRARY_ROOT}/scripts/agents-md-block.py" insert \
+  --name=<standard-name> \
+  --file=<resolved-AGENTS.md> \
+  --content=<install_target>/<name>.md
+```
+
+For bundle standards (multiple source files), use the bundle's primary file (the
+file matching `<name>.md` in the install dir, or the first `.md` file found).
+
+This step is idempotent: re-running `insert` on an existing block does nothing if
+the content hash matches.
 
 ### 6. Fetch from Source
 
