@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Removed
+
+- **Legacy standards-loader and inject-subagent-standards hooks** (`hooks/standards-loader/`, `hooks/inject-subagent-standards/`, `library.yaml`, `docs/research/standards-loading.md`): Retired the trigger-based context-injection hooks that were superseded by the compose-on-install model (CL-c2d). Removed `hooks/standards-loader/` (SessionStart hook for trigger-based catalog matching) and `hooks/inject-subagent-standards/` (TaskCreated hook for subagent-specific standard scoping). Removed associated guardrail entries from `library.yaml` and the `~/.claude/agent-standards.yml` mapping file. Marked `docs/research/standards-loading.md` as RETIRED with explanation that standards are now embedded directly in AGENTS.md via `/library standard use` instead of injected at runtime. Closes CL-4bv.
+
 ### Added
 
 - **Standards compose-on-install + drift-detect hook** (`scripts/agents-md-block.py`, `hooks/standards-drift-check/`, `library.yaml`, `cookbook/use.md`, `cookbook/remove.md`, `cookbook/sync.md`, `scripts/lib/installers/remove.py`): Replaces trigger-based SessionStart context injection with a compose-on-install model. `/library standard use` now writes a `<!-- BEGIN STANDARD:<name> v:1 hash:<sha256-12> -->` marker block directly into `AGENTS.md` (global `~/.agents/AGENTS.md` or project `<cwd>/AGENTS.md`); both Claude Code and Codex consume the same composed text with no runtime injection overhead. `agents-md-block.py` supports `insert` (idempotent), `update`, `remove`, and `check` (exits 1 on drift/missing). New `standards-drift-check` SessionStart hook scans AGENTS.md/CLAUDE.md files and emits one warning per drifted standard. `library.yaml` standards schema updated: `triggers:` removed from all 23 entries; `tier:` and `default_scope:` added to each. Hook registered in `guardrails:` with both harness mappings. 19 new tests. Closes CL-c2d.
