@@ -106,3 +106,114 @@ bd close <id>         # Complete work
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
+
+<!-- BEGIN STANDARD:python-cli-patterns v:1 hash:ab6e04218fc3 -->
+---
+domain: python-cli-patterns
+description: Python CLI tool conventions — project structure, versioning, PyPI distribution, config resolution, update hints, packaging.
+---
+
+# Python CLI Patterns
+
+> **Scope**: Loaded by Python development and testing skills that build or
+> maintain command-line tools published to PyPI. Covers project layout, release
+> flow, runtime config resolution, distribution, and update UX.
+
+## What This Standard Covers
+
+| File | Topic |
+|------|-------|
+| [project-scaffold.md](project-scaffold.md) | Directory layout and `pyproject.toml` template |
+| [versioning-release.md](versioning-release.md) | CalVer, tag-driven GitHub Actions release, Trusted Publishing |
+| [config-resolution.md](config-resolution.md) | Platform config paths, `key_command`, lazy click context |
+| [distribution-packaging.md](distribution-packaging.md) | Hatchling `force-include`, package vs import names, `install-skill` |
+| [update-and-ux.md](update-and-ux.md) | PyPI version self-check, first-run wizard, output file conventions |
+
+## When These Patterns Apply
+
+A Python tool is a CLI under this standard when:
+
+- It is invoked by users from a shell (entry point in `[project.scripts]`)
+- It is distributed via PyPI and installed with `uv tool install <name>`
+- It may require runtime configuration (API keys, server URLs)
+
+For internal libraries without a CLI entry point, only `project-scaffold.md`
+applies; the other sub-topics are optional.
+
+## Core Rules
+
+- Use the `src/` layout — prevents accidental local imports during development.
+- Version is single-sourced from a git tag, stamped by CI, never hand-edited.
+- Config resolution order: env var → `key_command` → explicit setup hint.
+- Never self-update; show an upgrade hint and let the user run `uv tool upgrade`.
+- Bundle non-Python files explicitly via Hatchling `force-include`.
+<!-- END STANDARD:python-cli-patterns -->
+
+<!-- BEGIN STANDARD:english-only v:1 hash:1d10ea481194 -->
+---
+name: english-only
+description: All source code must be in English — comments, identifiers, log messages, and string literals. Applies even when the user prompt is in another language.
+---
+
+# English-Only Source Code
+
+> **Scope**: All skills, agents, hooks, and scripts in this library. Loaded globally via `default_scope: global`.
+
+## Rule
+
+All source code MUST be in English — including:
+
+| Category | Rule |
+|----------|------|
+| Comments | English only |
+| Identifiers | English variable, function, class, and method names |
+| Log messages | English |
+| String literals | English (technical strings, error messages, keys) |
+| File names | English, kebab-case |
+
+## Exceptions
+
+- **User-facing strings** (UI labels, end-user error messages) may be localized when the project requires it
+- **Data values** (e.g. test fixtures in another language) are permitted if the data itself is the subject
+
+## Non-Exceptions
+
+This rule applies even when:
+- The user prompt is in German (or any other language)
+- The project domain is German-language (e.g. healthcare, accounting)
+- A team member requests a comment in their native language
+<!-- END STANDARD:english-only -->
+
+<!-- BEGIN STANDARD:no-emoji v:1 hash:c2492196344f -->
+---
+name: no-emoji
+description: Do not add emojis to source code files, configuration files, or technical documentation. Emojis degrade diff readability and cause encoding issues in some terminals.
+---
+
+# No Emoji in Code
+
+> **Scope**: All skills, agents, hooks, scripts, and technical documentation in this library. Loaded globally via `default_scope: global`.
+
+## Rule
+
+Do not add emojis to:
+
+| Location | Examples |
+|----------|---------|
+| Source code comments | `# ✅ done` — forbidden |
+| Log messages | `logger.info("🚀 started")` — forbidden |
+| Identifiers or string literals | `const STATUS_OK = "✓"` — forbidden |
+| Error messages | `raise ValueError("❌ invalid input")` — forbidden |
+| Configuration files | YAML, TOML, JSON keys/values — forbidden |
+| Technical documentation | ADRs, READMEs, changelogs — forbidden |
+
+## Exception
+
+User-facing UI strings where the **design spec explicitly requires** emoji (e.g. a status badge that is defined in a Figma design as "✅ Done").
+
+## Rationale
+
+- Emoji render inconsistently across terminals, editors, and log viewers
+- Diffs become noisy and harder to read
+- Some CI/CD systems and log parsers strip or mishandle multi-byte emoji codepoints
+<!-- END STANDARD:no-emoji -->

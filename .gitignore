@@ -23,3 +23,11 @@
 tests/__pycache__/
 **/__pycache__/
 .session-close.lock
+
+# Library-installed primitives (symlinks into ~/.local/share/library cache)
+.claude/skills/
+.agents/skills/
+.agents/standards/
+.agents/agents/
+.agents/prompts/
+.library.lock
