@@ -54,6 +54,16 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope globa
 
 # Search across all primitives:
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
+
+# Check upstream status for all installed entries (no clone):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py status --json
+
+# Detect local drift across all primitives (exit 2 if drift):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py audit --drift-only --json
+
+# Sync all installed entries, skip current, dry-run first:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync
 ```
 
 **The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
@@ -77,9 +87,13 @@ handled by the CLI — do NOT implement these manually.
 | `/library <primitive> add <details>`     | Register a new catalog entry             |
 | `/library <primitive> push <name>`       | Push local changes back to source        |
 | `/library <primitive> remove <name>`     | Remove from catalog and optionally local |
-| `/library <primitive> sync`              | Re-pull all installed primitives of type |
+| `/library <primitive> sync`              | Re-pull all installed entries of one primitive type |
+| `/library <primitive> audit`             | Detect local drift for one primitive type |
 | `/library <primitive> search <keyword>`  | Search within a primitive section        |
 | `/library search <keyword>`              | Search across all primitives             |
+| `/library audit [--drift-only]`          | Detect local drift across all primitives; exit 2 on drift |
+| `/library status`                        | Check upstream SHA for all installed entries (no clone) |
+| `/library sync [--dry-run] [--force]`    | Re-sync all installed entries across primitives; skip current by default |
 
 ## Cookbook
 
