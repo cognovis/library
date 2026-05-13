@@ -30,11 +30,14 @@ def _run_validator(yaml_content: str) -> subprocess.CompletedProcess:
     ) as f:
         f.write(yaml_content)
         tmp_path = f.name
-    result = subprocess.run(
-        [sys.executable, str(VALIDATE_PY), "--yaml", tmp_path, "--schema", str(SCHEMA_PATH)],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(VALIDATE_PY), "--yaml", tmp_path, "--schema", str(SCHEMA_PATH)],
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
     return result
 
 
@@ -46,6 +49,19 @@ def _make_library_yaml(skill_entry: dict) -> str:
         },
         "library": {
             "skills": [skill_entry],
+        },
+    }
+    return yaml.dump(data, default_flow_style=False)
+
+
+def _make_library_yaml_with_standard(standard_entry: dict) -> str:
+    """Wrap a standard entry dict into a minimal valid library.yaml string."""
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": {
+            "standards": [standard_entry],
         },
     }
     return yaml.dump(data, default_flow_style=False)
@@ -155,5 +171,40 @@ def test_m3_valid_entry_passes():
     result = _run_validator(yaml_str)
     assert result.returncode == 0, (
         f"Expected exit 0 for valid entry, got {result.returncode}.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
+def test_m3_name_with_trailing_hyphen():
+    """Skill with name 'bad-name-' (trailing hyphen) must fail (exit 1) and mention 'trailing hyphen'."""
+    entry = _base_skill_entry()
+    entry["name"] = "bad-name-"
+
+    yaml_str = _make_library_yaml(entry)
+    result = _run_validator(yaml_str)
+    assert result.returncode == 1, (
+        f"Expected exit 1 for name with trailing hyphen, got {result.returncode}.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+    output = result.stdout + result.stderr
+    assert "trailing hyphen" in output.lower(), (
+        f"Expected error output to mention 'trailing hyphen', got:\n{output}"
+    )
+
+
+def test_m2_standard_entry_with_globs_and_always_apply():
+    """Standard entry with globs and always_apply fields must validate successfully (exit 0)."""
+    entry = {
+        "name": "my-standard",
+        "description": "A valid standard.",
+        "source": "https://github.com/example/repo/blob/main/standards/my-standard.md",
+        "globs": ["*.md"],
+        "always_apply": False,
+    }
+
+    yaml_str = _make_library_yaml_with_standard(entry)
+    result = _run_validator(yaml_str)
+    assert result.returncode == 0, (
+        f"Expected exit 0 for standard entry with globs and always_apply, got {result.returncode}.\n"
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )

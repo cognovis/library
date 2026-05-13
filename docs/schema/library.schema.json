@@ -397,13 +397,13 @@
               "default": "both"
             },
             "globs": {
-              "description": "File glob patterns (Cursor convergence). When any glob matches a file in context, this skill is suggested.",
+              "description": "File glob patterns (agentskills.io standard). When any glob matches a file in context, this skill is suggested.",
               "type": "array",
               "items": {"type": "string"},
               "default": []
             },
             "always_apply": {
-              "description": "When true, always load this skill into context regardless of file matches (Cursor convergence). Use sparingly.",
+              "description": "When true, always load this skill into context regardless of file matches (agentskills.io standard). Use sparingly.",
               "type": "boolean",
               "default": false
             },
@@ -511,13 +511,13 @@
               "default": []
             },
             "globs": {
-              "description": "File glob patterns (Cursor convergence). When any glob matches a file in context, this standard is suggested.",
+              "description": "File glob patterns (agentskills.io standard). When any glob matches a file in context, this standard is suggested.",
               "type": "array",
               "items": {"type": "string"},
               "default": []
             },
             "always_apply": {
-              "description": "When true, always load this standard into context regardless of file matches (Cursor convergence). Use sparingly.",
+              "description": "When true, always load this standard into context regardless of file matches (agentskills.io standard). Use sparingly.",
               "type": "boolean",
               "default": false
             }

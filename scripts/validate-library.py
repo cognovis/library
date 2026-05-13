@@ -65,6 +65,11 @@ def _validate_agentskills_rules(data: dict) -> list:
             name = entry.get('name', f'<entry {i}>')
             desc = entry.get('description', '')
 
+            # If name is missing or not a non-empty string, skip agentskills checks
+            # to avoid confusing errors from the placeholder value.
+            if not isinstance(name, str) or not name or name.startswith('<entry '):
+                continue
+
             prefix = f"  [library.{section}[{i}] '{name}']"
 
             if len(name) > 64:
@@ -77,7 +82,7 @@ def _validate_agentskills_rules(data: dict) -> list:
                 )
 
             if name.endswith('-'):
-                errors.append(f"{prefix} name must not end with hyphen")
+                errors.append(f"{prefix} name must not have a trailing hyphen")
 
             if '--' in name:
                 errors.append(f"{prefix} name must not contain consecutive hyphens (--)")
