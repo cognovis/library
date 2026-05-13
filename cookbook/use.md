@@ -15,25 +15,29 @@ The primitive is required for this workflow. Valid values are `skill`, `agent`,
 `prompt`, `standard`, `guardrail`, `mcp`, `model-standard`, and
 `golden-prompt`.
 
-## CLI Shortcut (preferred for skill and standard)
+## CLI Shortcut (preferred for all primitives)
 
-For `skill` and `standard` installs, prefer the deterministic CLI:
+For all installs, prefer the deterministic CLI:
 
 ```bash
 # Preview planned writes without mutation:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --dry-run --json
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --dry-run --json
 
-# Real install (skill):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --json
+# Real install (any primitive):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --json
 
-# Real install (standard, global scope):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope global --json
+# Real install with global scope:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --scope global --json
+
+# Install with specific harness (agent / prompt / model-standard / golden-prompt):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py agent use <name> --harness claude_code --json
 ```
 
 The CLI handles the three-layer cache model, symlink creation, Claude bridge,
-and lockfile write deterministically. The steps below are the fallback for
-primitives not yet implemented in the CLI (`agent`, `mcp`, `guardrail`, etc.)
-and for operations requiring user judgment (collision resolution, scope selection).
+transitive `requires:` dependency resolution, and lockfile write deterministically
+for every primitive (`skill`, `agent`, `prompt`, `standard`, `guardrail`, `mcp`,
+`model-standard`, `golden-prompt`). The steps below apply only to operations
+requiring user judgment (collision resolution, scope selection).
 
 ## Steps
 
@@ -738,10 +742,9 @@ After 8c.1 + 8c.2, run the bridge command from Step 5c so Claude Code can
 resolve `<claude_bridge_path><name>` through the canonical path into the
 cache.
 
-> **Note**: If `cache_path` materialization is not yet implemented by the
-> tool (legacy lockfile entries from before this spec revision), set
-> `cache_path: ""` in the lockfile entry. The next `/library sync` will
-> recompute the tree-SHA, populate `cache_path`, and re-point the symlinks.
+> **Note**: For legacy lockfile entries that predate this spec revision and
+> have `cache_path: ""`, the next `/library sync` will recompute the tree-SHA,
+> populate `cache_path`, and re-point the symlinks.
 
 #### 8d. Build the lockfile entry
 
