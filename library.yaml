@@ -1353,6 +1353,12 @@ library:
       sources:
         claude: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.md
         codex: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.toml
+      requires:
+        - agent:wave-monitor
+        - agent:bead-orchestrator
+        - agent:quick-fix
+        - skill:wave-reviewer
+        - skill:factory-check
       tags:
         - origin:original
         - tier:domain

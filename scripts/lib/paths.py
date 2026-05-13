@@ -40,6 +40,10 @@ def resolve_install_paths(
         return {"canonical": None, "bridge": None}
 
     dirs_for_type = default_dirs.get(subdir_key, []) or []
+    if not dirs_for_type:
+        # Try underscore variant (library.yaml uses model_standards, golden_prompts with underscores)
+        underscore_key = subdir_key.replace("-", "_")
+        dirs_for_type = default_dirs.get(underscore_key, []) or []
 
     canonical: Optional[Path] = None
     bridge: Optional[Path] = None
