@@ -40,7 +40,7 @@
         "type": {
           "description": "Primitive type of the installed item.",
           "type": "string",
-          "enum": ["skill", "agent", "prompt", "guardrail"]
+          "enum": ["skill", "agent", "prompt", "guardrail", "standard", "model-standard", "golden-prompt", "mcp"]
         },
         "marketplace": {
           "description": "Name of the source-provider marketplace entry in library.yaml.marketplaces. Identifies which marketplace this item was fetched from. Use 'local' for local-path sources and 'unknown' for sources that cannot be matched to a registered marketplace.",
@@ -75,6 +75,12 @@
           "description": "SHA-256 checksum of the primary artifact file (SKILL.md for skills, the .md file for agents/prompts). Used by /library audit to detect drift between the lockfile record and the current on-disk state.",
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
+        },
+        "checksum_type": {
+          "description": "Checksum strategy used. 'file' (default) checksums the primary artifact only. 'directory' checksums all files in the cache directory (Merkle-style). Directory installs (skills, standards) use 'directory'; single-file installs (agents, prompts) use 'file'. Legacy entries without this field are treated as unknown.",
+          "type": "string",
+          "enum": ["file", "directory"],
+          "default": "file"
         },
         "license": {
           "description": "SPDX license identifier of the installed item (e.g. MIT, Apache-2.0, proprietary). Use 'unknown' when no license information is available.",

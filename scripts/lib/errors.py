@@ -12,6 +12,7 @@ EXIT_NOT_FOUND = 2
 EXIT_AMBIGUOUS = 3
 EXIT_DEPENDENCY_MISSING = 4
 EXIT_DRY_RUN = 0  # dry-run returns 0 with planned operations in output
+EXIT_DRIFT = 2    # drift detected in audit or status commands
 
 
 class LibraryError(Exception):

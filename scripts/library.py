@@ -171,6 +171,11 @@ def build_parser() -> argparse.ArgumentParser:
             choices=["project", "global"],
             default="project",
         )
+        audit_p.add_argument(
+            "--drift-only",
+            action="store_true",
+            help="Only show drifted entries; exit 2 if any drift, 0 if clean",
+        )
 
     # Top-level search (cross-primitive)
     search_parser = subparsers.add_parser(
@@ -690,9 +695,11 @@ def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
 
 def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
-    """Handle: <primitive> audit"""
+    """Handle: <primitive> audit [--drift-only]"""
+    from lib.errors import EXIT_DRIFT
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "project")
+    drift_only = getattr(args, "drift_only", False)
     primitive = args.primitive
 
     from lib.sync_audit import cmd_audit_impl
@@ -702,6 +709,7 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             primitive=primitive,
             repo_root=repo_root,
             scope=scope,
+            drift_only=drift_only,
         )
         if use_json:
             print_json(result)
@@ -717,7 +725,8 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
                     print(f"  DRIFT: {e['primitive']}:{e['name']}")
             else:
                 print(f"Audit: {status}")
-        return 0
+        # Exit 2 if drift detected, 0 if clean
+        return EXIT_DRIFT if result.get("status") == "drift" else 0
     except LibraryError as exc:
         if use_json:
             print_json(error_result(str(exc), exc.exit_code))

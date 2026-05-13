@@ -28,6 +28,7 @@ from ..catalog import lookup_entry
 from ..errors import InstallError, NotFoundError, SourceError
 from ..lockfile import (
     compute_checksum,
+    compute_directory_hash,
     find_lockfile,
     get_entry,
     load_lockfile,
@@ -148,16 +149,10 @@ def install_skill(
             create_harness_symlink(bridge_dir, cache_path)
             bridge_symlink_strs.append(f"{bridge_dir} -> {cache_path}")
 
-        # 8. Write lockfile
-        primary_artifact = cache_path / "SKILL.md"
-        if not primary_artifact.exists():
-            # Fallback: find any .md file in the cache
-            md_files = list(cache_path.glob("*.md"))
-            primary_artifact = md_files[0] if md_files else cache_path / "SKILL.md"
-
-        if primary_artifact.exists():
-            checksum = compute_checksum(primary_artifact)
-        else:
+        # 8. Write lockfile — use directory hash for skills (all files matter)
+        try:
+            checksum = compute_directory_hash(cache_path)
+        except OSError:
             checksum = "0" * 64
 
         install_target_str = str(canonical_dir) + "/"
@@ -170,6 +165,7 @@ def install_skill(
             cache_path=str(cache_path) + "/",
             install_target=install_target_str,
             checksum_sha256=checksum,
+            checksum_type="directory",
             license_id=entry.get("license", "unknown"),
             bridge_symlinks=bridge_symlink_strs,
         )

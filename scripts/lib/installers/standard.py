@@ -25,6 +25,7 @@ from ..catalog import lookup_entry
 from ..errors import InstallError, SourceError
 from ..lockfile import (
     compute_checksum,
+    compute_directory_hash,
     find_lockfile,
     load_lockfile,
     make_entry,
@@ -191,9 +192,11 @@ def install_standard(
                 "error": result.stderr.strip() if result.returncode != 0 else None,
             }
 
-        # 8. Write lockfile
-        primary_artifact = _find_primary_artifact(cache_path, standard_name)
-        checksum = compute_checksum(primary_artifact) if primary_artifact.exists() else "0" * 64
+        # 8. Write lockfile — use directory hash for standards (all files matter)
+        try:
+            checksum = compute_directory_hash(cache_path)
+        except OSError:
+            checksum = "0" * 64
 
         lockfile_entry = make_entry(
             name=standard_name,
@@ -204,6 +207,7 @@ def install_standard(
             cache_path=str(cache_path) + "/",
             install_target=str(canonical_dir) + "/",
             checksum_sha256=checksum,
+            checksum_type="directory",
             license_id=entry.get("license", "unknown"),
         )
 
