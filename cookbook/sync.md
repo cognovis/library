@@ -195,6 +195,48 @@ For each entry in `.library.lock` where `type` is `agent`:
 > 1. `<proj_root>/.agents/golden-prompts/<name>.md` (project-local)
 > 2. `~/.agents/golden-prompts/<name>.md` (user-global)
 
+### 4.6. Standards: update AGENTS.md blocks on resync
+
+> **Applies to standard entries only.** Skills, agents, and prompts are not affected.
+
+After re-pulling fresh standard content in Step 4, update the composed block in the
+target `AGENTS.md`:
+
+```bash
+# Resolve target AGENTS.md from lockfile metadata (scope field):
+# - scope=global  -> ~/.agents/AGENTS.md
+# - scope=project -> <cwd>/AGENTS.md
+
+LIBRARY_ROOT="<path to library repo>"
+```
+
+For each standard entry in `.library.lock`:
+
+1. **Compute the current block hash** using `agents-md-block.py check`:
+   ```bash
+   python3 "${LIBRARY_ROOT}/scripts/agents-md-block.py" check \
+     --name=<standard-name> \
+     --file=<resolved-AGENTS.md> \
+     --content=<install_target>/<name>.md
+   ```
+   - Exit 0 → block is up to date; skip update.
+   - Exit 1 → drift detected (or block missing); proceed to update.
+
+2. **If drift detected**: warn the user if the block was manually edited
+   (block body hash != marker hash), then prompt:
+   > "STANDARD:<name> block in <AGENTS.md> has been manually edited.
+   > Overwrite with the freshly synced version? [y/N]"
+   - Confirmed → update.
+   - Declined → skip; log in sync summary as "skipped (manually edited)".
+
+3. **Apply the update**:
+   ```bash
+   python3 "${LIBRARY_ROOT}/scripts/agents-md-block.py" update \
+     --name=<standard-name> \
+     --file=<resolved-AGENTS.md> \
+     --content=<install_target>/<name>.md
+   ```
+
 ### 5. Recreate Bridge Symlinks
 
 For each entry that has non-empty `bridge_symlinks`:
