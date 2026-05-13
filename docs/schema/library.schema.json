@@ -395,6 +395,28 @@
                 "both"
               ],
               "default": "both"
+            },
+            "globs": {
+              "description": "File glob patterns (agentskills.io standard). When any glob matches a file in context, this skill is suggested.",
+              "type": "array",
+              "items": {"type": "string"},
+              "default": []
+            },
+            "always_apply": {
+              "description": "When true, always load this skill into context regardless of file matches (agentskills.io standard). Use sparingly.",
+              "type": "boolean",
+              "default": false
+            },
+            "compatibility": {
+              "description": "Minimum harness version or capability string per agentskills.io standard (e.g. 'claude_code>=4.0').",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "metadata": {
+              "description": "Arbitrary key-value metadata per agentskills.io standard.",
+              "type": "object",
+              "additionalProperties": {"type": "string"}
             }
           }
         }
@@ -487,6 +509,17 @@
                 "type": "string"
               },
               "default": []
+            },
+            "globs": {
+              "description": "File glob patterns (agentskills.io standard). When any glob matches a file in context, this standard is suggested.",
+              "type": "array",
+              "items": {"type": "string"},
+              "default": []
+            },
+            "always_apply": {
+              "description": "When true, always load this standard into context regardless of file matches (agentskills.io standard). Use sparingly.",
+              "type": "boolean",
+              "default": false
             }
           }
         }

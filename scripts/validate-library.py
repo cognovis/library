@@ -12,6 +12,7 @@ Exit codes:
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -41,6 +42,57 @@ def find_repo_root() -> Path:
     if (cwd / "library.yaml").exists():
         return cwd
     return Path(__file__).resolve().parent.parent
+
+
+_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9-]*$')
+
+
+def _validate_agentskills_rules(data: dict) -> list:
+    """Enforce agentskills.io name/description constraints on all catalog entries.
+
+    Rules (apply to skills, agents, prompts, standards):
+    - name: max 64 chars
+    - name: must match [a-z][a-z0-9-]* (lowercase letters, digits, hyphens only)
+    - name: must not end with hyphen
+    - name: must not contain consecutive hyphens (--)
+    - description: max 1024 chars
+
+    Returns a list of formatted error strings.
+    """
+    errors = []
+    for section in ('skills', 'agents', 'prompts', 'standards'):
+        for i, entry in enumerate(data.get('library', {}).get(section, [])):
+            name = entry.get('name', f'<entry {i}>')
+            desc = entry.get('description', '')
+
+            # If name is missing or not a non-empty string, skip agentskills checks
+            # to avoid confusing errors from the placeholder value.
+            if not isinstance(name, str) or not name or name.startswith('<entry '):
+                continue
+
+            prefix = f"  [library.{section}[{i}] '{name}']"
+
+            if len(name) > 64:
+                errors.append(f"{prefix} name exceeds 64 chars (got {len(name)})")
+
+            if not _NAME_PATTERN.match(name):
+                errors.append(
+                    f"{prefix} name must match [a-z][a-z0-9-]* "
+                    "(lowercase letters, digits, hyphens only)"
+                )
+
+            if name.endswith('-'):
+                errors.append(f"{prefix} name must not have a trailing hyphen")
+
+            if '--' in name:
+                errors.append(f"{prefix} name must not contain consecutive hyphens (--)")
+
+            if len(desc) > 1024:
+                errors.append(
+                    f"{prefix} description exceeds 1024 chars (got {len(desc)})"
+                )
+
+    return errors
 
 
 def main() -> int:
@@ -134,6 +186,16 @@ def main() -> int:
                 print(err)
         else:
             print(f"FAIL: {len(semantic_errors)} semantic error(s) in {yaml_path}")
+        return 1
+
+    agentskills_errors = _validate_agentskills_rules(data)
+    if agentskills_errors:
+        if not args.quiet:
+            print(f"FAIL: {yaml_path} has {len(agentskills_errors)} agentskills rule violation(s):\n")
+            for err in agentskills_errors:
+                print(err)
+        else:
+            print(f"FAIL: {len(agentskills_errors)} agentskills rule violation(s) in {yaml_path}")
         return 1
 
     if not args.quiet:

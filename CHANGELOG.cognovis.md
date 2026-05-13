@@ -7,6 +7,12 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Added
+
+- **`library.yaml` schema: industry-standard fields on skill and standard entries** (`docs/schema/library.schema.json`): Added four new optional fields to `skill_entry` and two to `standard_entry` to align with agentskills.io and Cursor convergence patterns. Skills and standards now accept `globs` (array of file-glob strings; when a matching file is in context, the entry is suggested) and `always_apply` (boolean; forces the entry into context regardless of file matches — use sparingly). Skills additionally accept `compatibility` (string, max 500 chars; encodes minimum harness version or capability requirement, e.g. `claude_code>=4.0`) and `metadata` (string-to-string map; replaces ad-hoc tags for non-trigger data, per agentskills.io standard). All four fields are optional and backward-compatible with existing `library.yaml` entries. Closes CL-49a M2.
+
+- **`validate-library.py`: agentskills.io name and description validation** (`scripts/validate-library.py`): Extended the library validator with a new `_validate_agentskills_rules` pass that runs after JSON Schema validation. Enforces across all `skills`, `agents`, `prompts`, and `standards` catalog sections: entry names must be 1-64 characters, match `[a-z][a-z0-9-]*` (lowercase letters, digits, hyphens), must not end with a hyphen, and must not contain consecutive hyphens (`--`); descriptions must not exceed 1024 characters. Violations are reported with section, index, and entry name for easy location. Exit code 1 on any violation; quiet mode prints a summary count. 210 new tests covering all rule combinations. Closes CL-49a M3.
+
 ### Removed
 
 - **Legacy standards-loader and inject-subagent-standards hooks** (`hooks/standards-loader/`, `hooks/inject-subagent-standards/`, `library.yaml`, `docs/research/standards-loading.md`): Retired the trigger-based context-injection hooks that were superseded by the compose-on-install model (CL-c2d). Removed `hooks/standards-loader/` (SessionStart hook for trigger-based catalog matching) and `hooks/inject-subagent-standards/` (TaskCreated hook for subagent-specific standard scoping). Removed associated guardrail entries from `library.yaml` and the `~/.claude/agent-standards.yml` mapping file. Marked `docs/research/standards-loading.md` as RETIRED with explanation that standards are now embedded directly in AGENTS.md via `/library standard use` instead of injected at runtime. Closes CL-4bv.
