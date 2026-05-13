@@ -306,7 +306,7 @@ if [[ -n "$bead_id" ]]; then
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_id}"
     claude_args+=("--worktree" "$worktree_name")
-    claude_args+=("--agent" "beads-workflow:bead-orchestrator")
+    claude_args+=("--agent" "bead-orchestrator")
     # ── Force full plugin registry in the worktree session ────────
     # CCP-9xy: guarantees core:session-close is spawnable at Phase 16 handoff,
     # even if a project-level .claude/settings overrides setting-sources.
@@ -359,7 +359,7 @@ if [[ -n "$bead_quick_id" ]]; then
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_quick_id}"
     claude_args+=("--worktree" "$worktree_name")
-    claude_args+=("--agent" "beads-workflow:quick-fix")
+    claude_args+=("--agent" "quick-fix")
     # ── Force full plugin registry in the worktree session ────────
     # CCP-9xy: guarantees core:session-close is spawnable at Phase 5 handoff,
     # even if a project-level .claude/settings overrides setting-sources.
