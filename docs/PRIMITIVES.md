@@ -65,7 +65,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 1 | [Skill](#1-skill) | **YES** — shared SKILL.md (Open Agent Skills Standard) | full text at session start | name+desc at startup, full on-demand | n/a | n/a | n/a | §1 |
 | 2 | [Command](#2-command) | partial — same intent, different formats | `.claude/commands/*.md` (slash) | TBD (CL-qzw) | n/a | n/a | n/a | §2 |
 | 3 | [Agent](#3-agent) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | n/a | §3 |
-| 4 | [Guardrail/Hook](#4-guardrail-hook) | **NO** — event coverage diverges | 13 events | 3 events (SessionStart/End, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | §4 |
+| 4 | [Guardrail/Hook](#4-guardrail-hook) | **NO** — event coverage diverges | 15 events | 3 events (SessionStart/End, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | §4 |
 | 5 | [Plugin](#5-plugin) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | §5 |
 | 6 | [Marketplace](#6-marketplace) | yes — distribution layer | yes | yes | yes | yes | yes | §6 |
 | 7 | [Standard](#7-standard) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | n/a | §7 |
@@ -272,17 +272,28 @@ Key:
 - **PARTIAL** — supported for some scenarios only.
 - **NO** — not supported; skip this harness for this purpose.
 
+**Claude Code hook events — three-cadence taxonomy:**
+
+| Cadence | Events |
+|---------|--------|
+| Per session | SessionStart, SessionEnd |
+| Per turn | UserPromptSubmit, UserPromptExpansion, Stop, StopFailure |
+| Per tool call | PreToolUse, PostToolUse, PostToolUseFailure |
+| Per permission | PermissionRequest, PermissionDenied |
+| Per subagent | SubagentStart, SubagentStop |
+| Other | PreCompact, Notification |
+
 **Per-harness event coverage:**
 
 | Harness | Events | Notes |
 |---------|--------|-------|
-| Claude Code | 13 events: SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Notification, SubagentStart, SubagentStop, Stop, PreCompact, Setup | NORMATIVE. |
+| Claude Code | 15 events: SessionStart, SessionEnd, UserPromptSubmit, UserPromptExpansion, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, PermissionDenied, Notification, SubagentStart, SubagentStop, Stop, StopFailure, PreCompact | NORMATIVE. See [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks). |
 | Codex CLI | 3 events: SessionStart, SessionEnd, Stop | NORMATIVE — per CL-qzw research. No PreToolUse equivalent. |
 | Codex Cloud | Pre-tool call via `approval_policy` | NORMATIVE. Static policy only; no event scripting. |
 | Pi | `tool_call`, `tool_result`, `message`, `session_start` | INFERRED — pending vendor doc validation. |
 | OpenCode | Pre-tool-call via `rules` array | INFERRED — pending vendor doc validation. |
 
-Full event-to-harness mapping: see `docs/research/guardrails-mapping.md`.
+Full event-to-harness mapping: see `docs/research/guardrails-mapping.md`. Official Claude Code hook reference: [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks).
 
 **Capability mismatch warnings.** The `/library use-guardrail` cookbook automatically
 detects when a target harness does not support the guardrail's declared purpose and
