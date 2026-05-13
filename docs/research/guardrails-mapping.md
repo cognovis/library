@@ -37,14 +37,14 @@ Legend:
 
 | Harness | Mechanism | Config file | Handler format | Native events |
 |---------|-----------|-------------|----------------|---------------|
-| **Claude Code** | hooks | `settings.json` (project or global) | Any executable (bash, python, etc.) | 13+ events — see below |
+| **Claude Code** | hooks | `settings.json` (project or global) | Any executable (bash, python, etc.) | 15 events — see below |
 | **Codex CLI** | hooks (limited) | `hooks.json` | Node ESM `.mjs` | 3 events only: SessionStart, SessionEnd, Stop |
 | **Codex Cloud** | `sandbox_mode` + `approval_policy` | `config.toml` | static TOML policy | Pre-tool only via approval gate (always/unless-allow-listed) |
 | **Pi** | TypeScript Extensions | `.pi/extensions/*.ts` | TypeScript code | Tool-call events; `pi.on("event", handler)` |
 | **OpenCode** | permission rules | `opencode.json` | JSON rules array | Pre-tool-call gates only |
 
 ### NORMATIVE claim sources
-- Claude Code: https://docs.anthropic.com/claude-code/hooks (confirmed 13 events)
+- Claude Code: https://code.claude.com/docs/en/hooks (confirmed 15 events)
 - Codex CLI: CL-qzw research session (2026-04-16) — see `codex-prompts.md`
 - Codex Cloud: https://github.com/openai/codex (config.toml docs)
 - Pi: https://pi.dev/docs/extensions (INFERRED — not yet fully validated)
@@ -54,23 +54,27 @@ Legend:
 
 ## Event Coverage Per Harness
 
-### Claude Code Events (13 events, NORMATIVE)
+### Claude Code Events (15 events, NORMATIVE)
 
-| Event | Timing | Can block? | Use for |
-|-------|--------|------------|---------|
-| `SessionStart` | Session initialization | No | Context injection, state setup |
-| `SessionEnd` | Session teardown | No | Cleanup, final logging |
-| `UserPromptSubmit` | Before model processes prompt | No | Prompt sanitization, logging |
-| `PreToolUse` | Before each tool call | YES (exit 2) | Tool veto, parameter validation |
-| `PostToolUse` | After each tool call | No | Side effects, audit logging |
-| `PostToolUseFailure` | After a tool call fails | No | Error recovery, alerting |
-| `PermissionRequest` | When model requests permission | YES | Custom permission logic |
-| `Notification` | System notifications | No | Monitoring |
-| `SubagentStart` | Before spawning a subagent | No | Subagent context injection |
-| `SubagentStop` | After a subagent returns | No | Metrics, result post-processing |
-| `Stop` | Before Claude stops responding | No | Cleanup |
-| `PreCompact` | Before context compaction | No | State preservation |
-| `Setup` | First-time setup | No | Environment initialization |
+Source: https://code.claude.com/docs/en/hooks
+
+| Event | Cadence | Can block? | Use for |
+|-------|---------|------------|---------|
+| `SessionStart` | Per session | No | Context injection, state setup |
+| `SessionEnd` | Per session | No | Cleanup, final logging |
+| `UserPromptSubmit` | Per turn | No | Prompt sanitization, logging |
+| `UserPromptExpansion` | Per turn | No | Prompt expansion observation |
+| `Stop` | Per turn | No | Cleanup before Claude stops |
+| `StopFailure` | Per turn | No | Error handling on stop failure |
+| `PreToolUse` | Per tool call | YES (exit 2) | Tool veto, parameter validation |
+| `PostToolUse` | Per tool call | No | Side effects, audit logging |
+| `PostToolUseFailure` | Per tool call | No | Error recovery, alerting |
+| `PermissionRequest` | Per permission | YES | Custom permission logic |
+| `PermissionDenied` | Per permission | No | Audit denied permissions |
+| `SubagentStart` | Per subagent | No | Subagent context injection |
+| `SubagentStop` | Per subagent | No | Metrics, result post-processing |
+| `PreCompact` | Other | No | State preservation before compaction |
+| `Notification` | Other | No | Monitoring |
 
 ### Codex CLI Events (3 events, NORMATIVE)
 
