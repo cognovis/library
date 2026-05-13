@@ -1,5 +1,13 @@
 # Standards Loading Mechanism: Design + Prototype
 
+> **[RETIRED — 2026-05-13]** The hook-based injection mechanism described in this document
+> has been retired (see bead CL-c8g). The current standards delivery mechanism is
+> **compose-on-install**: standards are baked into `~/.agents/AGENTS.md` as marker-blocks
+> via `/library standard install <name>`, with drift detection by the
+> `standards-drift-check` hook (see bead CL-c2d). The `scripts/standards-loader.sh`
+> shell utility remains for compose-time use; the runtime injection hooks
+> (`hooks/standards-loader/` and `hooks/inject-subagent-standards/`) have been deleted.
+
 > **Bead:** CL-v56 | **Epic:** CL-36o (Multi-Harness Library) | **Date:** 2026-04-30
 > **Status:** NORMATIVE — this document is the design decision record for cross-harness
 > standards loading. It supersedes the hook-injection-only approach currently in
