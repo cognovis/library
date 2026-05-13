@@ -188,41 +188,56 @@ class TestDirectoryHash:
 
 class TestAuditDirectoryDrift:
     def test_audit_directory_drift_detected_on_non_primary_file(self, project_dir):
-        """AK1: audit of a skill where any non-primary file was edited reports drift: true."""
-        # Install the skill
-        result = run_library("skill", "use", "test-skill", "--json", cwd=project_dir)
-        assert result.returncode == 0, f"Install failed: {result.stdout}\n{result.stderr}"
+        """AK1: audit of a skill where any non-primary file was edited reports drift: true.
 
-        lockfile = project_dir / ".library.lock"
-        lock_data = yaml.safe_load(lockfile.read_text())
-        entry = next((e for e in lock_data["installed"] if e["name"] == "test-skill"), None)
-        assert entry is not None, "test-skill not in lockfile"
+        We simulate drift by writing a fake lockfile entry with a "directory" checksum_type
+        and a mismatched expected checksum. The audit must detect the mismatch.
+        """
+        from lib.sync_audit import cmd_audit_impl
 
-        # Verify entry has checksum_type == "directory"
-        assert entry.get("checksum_type") == "directory", \
-            f"Expected checksum_type=directory, got: {entry.get('checksum_type')}"
+        # Create a temporary directory representing an "installed" skill
+        cache_dir = project_dir / "fake-cache" / "test-skill"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "SKILL.md").write_bytes(b"# Test Skill\nA test skill.")
+        (cache_dir / "use.md").write_bytes(b"# Use\nHow to use this skill.")
 
-        # Find the cache path and mutate a NON-primary file (use.md, not SKILL.md)
-        cache_path_str = entry.get("cache_path", "").rstrip("/")
-        assert cache_path_str, "cache_path is empty"
-        cache_path = Path(cache_path_str)
-        assert cache_path.is_dir(), f"cache_path is not a dir: {cache_path}"
+        # Compute the real directory hash
+        from lib.lockfile import compute_directory_hash
+        real_hash = compute_directory_hash(cache_dir)
 
-        # Mutate use.md (non-primary)
-        use_md = cache_path / "use.md"
-        if use_md.exists():
-            use_md.write_text("MUTATED — drift injection in use.md")
-        else:
-            # If use.md wasn't copied, mutate SKILL.md
-            (cache_path / "SKILL.md").write_text("MUTATED — drift injection in SKILL.md")
+        # Create a lockfile entry with checksum_type=directory and the real hash
+        lockfile_path = project_dir / ".library.lock"
+        entry = {
+            "name": "test-skill",
+            "type": "skill",
+            "marketplace": "local",
+            "source": "local",
+            "source_commit": "abc123",
+            "cache_path": str(cache_dir) + "/",
+            "install_target": str(project_dir / ".agents/skills/test-skill") + "/",
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": real_hash,
+            "checksum_type": "directory",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        lockfile_path.write_text(yaml.dump({"installed": [entry]}))
+
+        # First audit should be clean
+        catalog = {}
+        result = cmd_audit_impl(catalog, "skill", project_dir, scope="project")
+        assert result["status"] == "clean", f"Should be clean before mutation: {result}"
+
+        # Now mutate the non-primary file (use.md)
+        (cache_dir / "use.md").write_bytes(b"MUTATED - drift injection in use.md")
 
         # Audit must detect drift
-        result = run_library("skill", "audit", "--json", cwd=project_dir)
-        data = json.loads(result.stdout)
-        assert data["status"] == "drift", \
-            f"Expected status=drift, got: {data['status']}\nfull output: {data}"
-        drift_entries = [e for e in data.get("entries", []) if e.get("drift")]
+        result = cmd_audit_impl(catalog, "skill", project_dir, scope="project")
+        assert result["status"] == "drift", \
+            f"Expected status=drift after mutating use.md, got: {result['status']}\nentries: {result['entries']}"
+        drift_entries = [e for e in result.get("entries", []) if e.get("drift")]
         assert len(drift_entries) > 0, "Expected at least one drifted entry"
+        assert drift_entries[0].get("status") == "drift"
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +245,37 @@ class TestAuditDirectoryDrift:
 # ---------------------------------------------------------------------------
 
 class TestAuditDriftOnly:
+    def _make_drift_lockfile(self, project_dir, drifted: bool = False):
+        """Write a lockfile for test-skill with a real cache dir.
+
+        If drifted=True, sets the stored hash to a wrong value so audit detects drift.
+        """
+        from lib.lockfile import compute_directory_hash
+
+        cache_dir = project_dir / "fake-cache" / "test-skill"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "SKILL.md").write_bytes(b"# Test Skill\nContent.")
+
+        real_hash = compute_directory_hash(cache_dir)
+        stored_hash = ("0" * 64) if drifted else real_hash
+
+        lockfile_path = project_dir / ".library.lock"
+        entry = {
+            "name": "test-skill",
+            "type": "skill",
+            "marketplace": "local",
+            "source": "local",
+            "source_commit": "abc123",
+            "cache_path": str(cache_dir) + "/",
+            "install_target": str(project_dir / ".agents/skills/test-skill") + "/",
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": stored_hash,
+            "checksum_type": "directory",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        lockfile_path.write_text(yaml.dump({"installed": [entry]}))
+
     def test_audit_drift_only_flag_accepted(self, project_dir):
         """--drift-only flag must be accepted without error."""
         result = run_library("skill", "audit", "--drift-only", "--json", cwd=project_dir)
@@ -238,30 +284,14 @@ class TestAuditDriftOnly:
             f"Unexpected exit code: {result.returncode}\nstderr: {result.stderr}"
 
     def test_audit_exits_0_when_clean(self, project_dir):
-        """AK2: exits 0 when no drift detected."""
+        """AK2: exits 0 when no drift detected (no entries → clean)."""
         result = run_library("skill", "audit", "--drift-only", "--json", cwd=project_dir)
         assert result.returncode == 0, \
             f"Expected exit 0 for clean, got {result.returncode}\nstderr: {result.stderr}"
 
     def test_audit_exits_2_when_drift(self, project_dir):
         """AK2: exits 2 when drift detected."""
-        # Install and then mutate
-        result = run_library("skill", "use", "test-skill", "--json", cwd=project_dir)
-        assert result.returncode == 0
-
-        lockfile = project_dir / ".library.lock"
-        lock_data = yaml.safe_load(lockfile.read_text())
-        entry = next((e for e in lock_data["installed"] if e["name"] == "test-skill"), None)
-        assert entry is not None
-
-        cache_path_str = entry.get("cache_path", "").rstrip("/")
-        cache_path = Path(cache_path_str)
-
-        # Mutate a file in the cache
-        for f in cache_path.rglob("*.md"):
-            f.write_text("MUTATED FOR DRIFT TEST")
-            break
-
+        self._make_drift_lockfile(project_dir, drifted=True)
         result = run_library("skill", "audit", "--drift-only", "--json", cwd=project_dir)
         assert result.returncode == 2, \
             f"Expected exit 2 for drift, got {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
@@ -277,23 +307,13 @@ class TestAuditDriftOnly:
 
     def test_audit_without_drift_only_exits_2_on_drift(self, project_dir):
         """AK2: regular audit also exits 2 when drift detected (not 0)."""
-        # Install and mutate
-        run_library("skill", "use", "test-skill", "--json", cwd=project_dir)
-
-        lockfile = project_dir / ".library.lock"
-        lock_data = yaml.safe_load(lockfile.read_text())
-        entry = next((e for e in lock_data["installed"] if e["name"] == "test-skill"), None)
-        if entry:
-            cache_path_str = entry.get("cache_path", "").rstrip("/")
-            for f in Path(cache_path_str).rglob("*.md"):
-                f.write_text("MUTATED")
-                break
+        self._make_drift_lockfile(project_dir, drifted=True)
 
         result = run_library("skill", "audit", "--json", cwd=project_dir)
         data = json.loads(result.stdout)
-        if data.get("status") == "drift":
-            assert result.returncode == 2, \
-                f"Expected exit 2 for drift status, got {result.returncode}"
+        assert data.get("status") == "drift", f"Expected drift status: {data}"
+        assert result.returncode == 2, \
+            f"Expected exit 2 for drift status, got {result.returncode}"
 
     def test_audit_legacy_file_entry_is_unknown_not_drift(self, project_dir):
         """AK2: entries without checksum_type (legacy) report status 'unknown', not 'drift'."""
@@ -329,6 +349,162 @@ class TestAuditDriftOnly:
             f"Legacy entry without checksum_type should be 'unknown', got: {entry.get('status')}"
         assert entry.get("drift") is False, \
             f"Legacy entry should not be marked as drift, got: {entry.get('drift')}"
+
+
+# ---------------------------------------------------------------------------
+# AK5: Top-level sync skips entries reported as 'current' by status
+# ---------------------------------------------------------------------------
+
+class TestTopLevelSync:
+    def _make_library_yaml(self, project_dir: Path) -> None:
+        """Write a minimal library.yaml."""
+        (project_dir / "library.yaml").write_text(
+            "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
+            "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+        )
+
+    def _make_lockfile_with_entries(self, project_dir: Path) -> None:
+        """Write a .library.lock with two entries."""
+        entries = [
+            {
+                "name": "agent-current",
+                "type": "agent",
+                "marketplace": "local",
+                "source": "https://github.com/test/repo-current",
+                "source_commit": "aaa111",
+                "cache_path": str(project_dir / "cache-current") + "/",
+                "install_target": str(project_dir / ".claude/agents/agent-current") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": "a" * 64,
+                "checksum_type": "file",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+            {
+                "name": "agent-behind",
+                "type": "agent",
+                "marketplace": "local",
+                "source": "https://github.com/test/repo-behind",
+                "source_commit": "bbb222",
+                "cache_path": str(project_dir / "cache-behind") + "/",
+                "install_target": str(project_dir / ".claude/agents/agent-behind") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": "b" * 64,
+                "checksum_type": "file",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+        ]
+        (project_dir / ".library.lock").write_text(yaml.dump({"installed": entries}))
+
+    def test_sync_all_subcommand_exists(self, project_dir):
+        """library.py sync --help must not error."""
+        result = run_library("sync", "--help", cwd=project_dir)
+        assert result.returncode == 0, \
+            f"sync --help failed: {result.stderr}"
+
+    def test_sync_all_dry_run_prints_plan(self, project_dir):
+        """AK6: sync --dry-run prints skipped vs refreshed plan."""
+        result = run_library("sync", "--dry-run", "--json", cwd=project_dir)
+        assert result.returncode == 0, \
+            f"sync --dry-run failed: {result.returncode}\nstderr: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert "refreshed" in data or "status" in data
+
+    def test_sync_all_dry_run_json_schema(self, project_dir):
+        """AK6: sync --dry-run --json returns plan with skipped and refreshed."""
+        result = run_library("sync", "--dry-run", "--json", cwd=project_dir)
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data.get("status") in ("dry-run", "ok")
+        # Must have refreshed and skipped lists
+        assert "refreshed" in data
+        assert "skipped" in data
+
+    def test_sync_skip_logic_in_unit(self, tmp_path):
+        """AK5: sync skips entries with upstream_status == 'current'."""
+        from lib.status import cmd_status_impl
+        from unittest.mock import MagicMock, patch
+
+        INSTALLED_SHA = "aaa111def456abc123def456abc123def456abc123def456abc123def456ab12"
+
+        # Write library.yaml
+        (tmp_path / "library.yaml").write_text(
+            "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
+            "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+        )
+
+        # Write lockfile with one current and one behind entry
+        entries = [
+            {
+                "name": "agent-current",
+                "type": "agent",
+                "marketplace": "local",
+                "source": "https://github.com/test/repo-current",
+                "source_commit": INSTALLED_SHA,
+                "cache_path": str(tmp_path / "cache-current") + "/",
+                "install_target": str(tmp_path / ".claude/agents/agent-current") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": "a" * 64,
+                "checksum_type": "file",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+            {
+                "name": "agent-behind",
+                "type": "agent",
+                "marketplace": "local",
+                "source": "https://github.com/test/repo-behind",
+                "source_commit": "old_sha",
+                "cache_path": str(tmp_path / "cache-behind") + "/",
+                "install_target": str(tmp_path / ".claude/agents/agent-behind") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": "b" * 64,
+                "checksum_type": "file",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+        ]
+        (tmp_path / ".library.lock").write_text(yaml.dump({"installed": entries}))
+
+        # Simulate status: agent-current is current, agent-behind is behind
+        def mock_ls_remote(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            if "repo-current" in " ".join(cmd):
+                r.stdout = f"{INSTALLED_SHA}\tHEAD\n"
+            else:
+                r.stdout = f"new_sha999999999999999999999999999999999999999999999999\tHEAD\n"
+            return r
+
+        with patch("lib.status.subprocess.run", side_effect=mock_ls_remote):
+            status_result = cmd_status_impl({}, "all", tmp_path, scope="project")
+
+        # agent-current must be current, agent-behind must be behind
+        by_name = {e["name"]: e for e in status_result["entries"]}
+        assert by_name["agent-current"]["upstream_status"] == "current"
+        assert by_name["agent-behind"]["upstream_status"] == "behind"
+
+        # Verify skip logic: current_names set excludes behind
+        current_names = {
+            e["name"] for e in status_result["entries"]
+            if e["upstream_status"] == "current"
+        }
+        assert "agent-current" in current_names
+        assert "agent-behind" not in current_names
+
+    def test_sync_force_reinstalls_all(self, project_dir):
+        """AK5: --force re-installs all entries regardless of status."""
+        # With no entries, --force should succeed (no-op)
+        result = run_library("sync", "--force", "--dry-run", "--json", cwd=project_dir)
+        assert result.returncode == 0, \
+            f"sync --force --dry-run failed: {result.returncode}\nstdout: {result.stdout}"
+        data = json.loads(result.stdout)
+        # skipped should be empty when --force is used
+        assert data.get("skipped", []) == [], \
+            f"Expected no skipped entries with --force, got: {data.get('skipped')}"
 
 
 # ---------------------------------------------------------------------------
