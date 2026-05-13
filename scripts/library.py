@@ -1018,6 +1018,8 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
         else:
             print(f"Synced: {len(all_refreshed)} refreshed, {len(all_skipped)} skipped (current)")
 
+    if all_failed:
+        return EXIT_FAILURE
     return 0
 
 

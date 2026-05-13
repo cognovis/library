@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .lockfile import find_lockfile, load_lockfile
+from .source import parse_source
 
 
 def get_remote_sha(clone_url: str, ref: str = "HEAD") -> Optional[str]:
@@ -63,9 +64,12 @@ def _clone_url_from_source(source: str) -> Optional[str]:
     returns https://github.com/org/repo.
 
     For plain GitHub repo URLs, returns them as-is.
+    SSH URLs are passed through unchanged (git ls-remote supports them natively).
     """
+    if source.startswith("ssh://") or source.startswith("git@"):
+        return source
     if not source.startswith("https://github.com/"):
-        if source.startswith("https://") or source.startswith("git@"):
+        if source.startswith("https://"):
             return source
         return None
 
@@ -135,9 +139,17 @@ def cmd_status_impl(
         behind = False
 
         if _is_remote_source(source) and installed_sha and installed_sha != "local":
-            clone_url = _clone_url_from_source(source)
+            # For GitHub browser/raw URLs, extract branch to compare against the
+            # correct ref rather than always defaulting to remote HEAD.
+            parsed = parse_source(source)
+            if parsed.kind in ("github_browser", "github_raw") and parsed.clone_url:
+                clone_url = parsed.clone_url
+                ref = parsed.branch or "HEAD"
+            else:
+                clone_url = _clone_url_from_source(source)
+                ref = "HEAD"
             if clone_url:
-                remote_sha = get_remote_sha(clone_url, "HEAD")
+                remote_sha = get_remote_sha(clone_url, ref)
                 if remote_sha is not None:
                     if remote_sha == installed_sha:
                         upstream_status = "current"

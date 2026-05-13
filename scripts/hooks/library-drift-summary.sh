@@ -5,8 +5,15 @@
 
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIBRARY_PY="$(cd "$SCRIPT_DIR/../.." && pwd)/scripts/library.py"
+HOOK_REAL_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")")" && pwd)"
+LIBRARY_PY="$(cd "$HOOK_REAL_DIR/../.." && pwd)/scripts/library.py"
+
+# Fallback: if library.py not found via resolved path, search from working directory
+# (hooks run in the project root during session start)
+if [[ ! -f "$LIBRARY_PY" ]]; then
+    CANDIDATE="$PWD/scripts/library.py"
+    [[ -f "$CANDIDATE" ]] && LIBRARY_PY="$CANDIDATE"
+fi
 
 # Fail silently if library.py not found (repo not yet set up)
 [[ -f "$LIBRARY_PY" ]] || exit 0
