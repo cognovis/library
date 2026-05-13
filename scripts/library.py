@@ -185,6 +185,24 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("query", nargs="?", default=None, help="Search keyword")
     search_parser.add_argument("--json", action="store_true", help="Output JSON")
 
+    # Top-level audit (cross-primitive)
+    top_audit_parser = subparsers.add_parser(
+        "audit",
+        help="Detect drift in all installed entries across primitives",
+    )
+    top_audit_parser.add_argument("--json", action="store_true", help="Output JSON")
+    top_audit_parser.add_argument(
+        "--scope",
+        choices=["project", "global", "both"],
+        default="project",
+        help="Scope to audit (default: project)",
+    )
+    top_audit_parser.add_argument(
+        "--drift-only",
+        action="store_true",
+        help="Only show drifted entries; exit 2 if any drift, 0 if clean",
+    )
+
     # Top-level status (cross-primitive, checks upstream SHAs without cloning)
     status_parser = subparsers.add_parser(
         "status",
@@ -773,6 +791,62 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
+def cmd_audit_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    """Handle: audit [--scope=...] [--drift-only] [--json]
+
+    Top-level audit command that checks all primitives across the given scope(s).
+    """
+    from lib.errors import EXIT_DRIFT
+    from lib.sync_audit import cmd_audit_impl
+
+    use_json = getattr(args, "json", False)
+    scope = getattr(args, "scope", "project")
+    drift_only = getattr(args, "drift_only", False)
+
+    scopes_to_check = ["project", "global"] if scope == "both" else [scope]
+
+    all_entries = []
+    any_drift = False
+
+    for s in scopes_to_check:
+        try:
+            result = cmd_audit_impl(
+                catalog=catalog,
+                primitive="all",
+                repo_root=repo_root,
+                scope=s,
+                drift_only=drift_only,
+            )
+            all_entries.extend(result.get("entries", []))
+            if result.get("status") == "drift":
+                any_drift = True
+        except LibraryError as exc:
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+
+    overall_status = "drift" if any_drift else "clean"
+    combined_result = {
+        "status": overall_status,
+        "entries": all_entries,
+    }
+
+    if use_json:
+        print_json(combined_result)
+    else:
+        drift_entries = [e for e in all_entries if e.get("drift")]
+        if overall_status == "clean":
+            print(f"Audit: CLEAN ({len(all_entries)} entries checked)")
+        else:
+            print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(all_entries)} entries")
+            for e in drift_entries:
+                print(f"  DRIFT: {e['primitive']}:{e['name']}")
+
+    return EXIT_DRIFT if any_drift else 0
+
+
 def cmd_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: status [--scope=...] [--json]
 
@@ -993,6 +1067,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
         return cmd_search(args, repo_root, catalog)
+
+    # Top-level audit (cross-primitive)
+    if args.primitive == "audit":
+        try:
+            repo_root = find_repo_root()
+            catalog = load_catalog(repo_root)
+        except LibraryError as exc:
+            use_json = getattr(args, "json", False)
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+        return cmd_audit_all(args, repo_root, catalog)
 
     # Top-level status (cross-primitive, no clone)
     if args.primitive == "status":

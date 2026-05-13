@@ -508,6 +508,91 @@ class TestTopLevelSync:
 
 
 # ---------------------------------------------------------------------------
+# AK7: Hook script smoke test
+# ---------------------------------------------------------------------------
+
+class TestHookScript:
+    def test_hook_script_exists_and_is_executable(self):
+        """AK7: library-drift-summary.sh must exist and be executable."""
+        hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
+        assert hook.exists(), f"Hook script not found at {hook}"
+        assert hook.stat().st_mode & 0o111, "Hook script must be executable"
+
+    def test_hook_script_exits_0_on_clean_project(self):
+        """AK7: hook script exits 0 when no drift or behind entries."""
+        hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
+        result = subprocess.run(
+            ["bash", str(hook)],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
+        assert result.returncode == 0, \
+            f"Hook script failed: exit={result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}"
+
+    def test_hook_script_silent_when_clean(self):
+        """AK7: hook script produces no output when project is clean."""
+        hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
+        result = subprocess.run(
+            ["bash", str(hook)],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
+        # Clean project: no output expected
+        assert result.stdout.strip() == "", \
+            f"Expected no output for clean project, got: {result.stdout}"
+
+    def test_hook_script_outputs_drift_section_when_drift_exists(self, project_dir):
+        """AK7: hook script prints drift section when local drift detected."""
+        from lib.lockfile import compute_directory_hash
+
+        hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
+
+        # Create a drift scenario: lockfile says one hash, cache has different content
+        cache_dir = project_dir / "hook-test-cache"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "SKILL.md").write_bytes(b"original content")
+
+        real_hash = compute_directory_hash(cache_dir)
+
+        # Write lockfile with WRONG hash to simulate drift
+        entry = {
+            "name": "drifted-skill",
+            "type": "skill",
+            "marketplace": "local",
+            "source": "local",
+            "source_commit": "abc123",
+            "cache_path": str(cache_dir) + "/",
+            "install_target": str(project_dir / ".agents/skills/drifted-skill") + "/",
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": "0" * 64,  # Wrong hash -> drift
+            "checksum_type": "directory",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        (project_dir / ".library.lock").write_text(yaml.dump({"installed": [entry]}))
+        (project_dir / "library.yaml").write_text(
+            "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
+            "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+        )
+
+        result = subprocess.run(
+            ["bash", str(hook)],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+        )
+        # Exit code 0 (hook always exits 0 — it's informational)
+        assert result.returncode == 0, \
+            f"Hook should exit 0 even with drift: {result.returncode}"
+        # Must print drift summary
+        assert "Library Drift Summary" in result.stdout or "DRIFT" in result.stdout, \
+            f"Expected drift summary in output, got: {result.stdout}"
+
+
+# ---------------------------------------------------------------------------
 # AK8: make_entry with checksum_type
 # ---------------------------------------------------------------------------
 
