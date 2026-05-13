@@ -14,6 +14,7 @@ from typing import Any
 from .errors import InstallError, LibraryError
 from .lockfile import (
     compute_checksum,
+    compute_directory_hash,
     find_lockfile,
     get_entry,
     load_lockfile,
@@ -71,7 +72,7 @@ def cmd_sync_impl(
         entry_name = entry.get("name", "")
         entry_type = entry.get("type", "")
         try:
-            _reinstall_entry(catalog, entry, repo_root, scope, harness)
+            reinstall_entry(catalog, entry, repo_root, scope, harness)
             synced.append(f"{entry_type}:{entry_name}")
         except Exception as exc:
             failed.append({"name": entry_name, "type": entry_type, "error": str(exc)})
@@ -86,7 +87,7 @@ def cmd_sync_impl(
     )
 
 
-def _reinstall_entry(
+def reinstall_entry(
     catalog: dict,
     entry: dict,
     repo_root: Path,
@@ -132,17 +133,31 @@ def cmd_audit_impl(
     primitive: str,
     repo_root: Path,
     scope: str = "project",
+    drift_only: bool = False,
 ) -> dict[str, Any]:
     """Audit: compute checksums for installed entries and compare against lockfile.
 
     Returns a result with status 'clean' or 'drift'.
     Schema: {"status": "clean"|"drift", "entries": [...]}
 
+    Each entry has a "status" field:
+      - "drift": checksum mismatch (directory or file, depending on checksum_type)
+      - "clean": checksums match
+      - "unknown": legacy entry without checksum_type, or path not found
+
+    With drift_only=True, only entries with status="drift" are included in output.
+
+    Exit codes (returned as metadata for the CLI layer):
+      - 0: all clean (or no entries)
+      - 2: drift detected
+      - 1: error
+
     Args:
         catalog: Parsed library.yaml dict.
         primitive: Primitive type to audit, or all if 'all'.
         repo_root: Project root.
         scope: 'project' or 'global'.
+        drift_only: If True, filter output to only drifted entries.
 
     Returns:
         Audit result dict with stable schema.
@@ -169,38 +184,94 @@ def cmd_audit_impl(
     for entry in entries:
         entry_name = entry.get("name", "")
         expected_sha = entry.get("checksum_sha256", "")
+        checksum_type = entry.get("checksum_type", None)  # None means legacy
         cache_path_str = entry.get("cache_path", "").rstrip("/")
         install_target_str = entry.get("install_target", "")
 
         actual_sha = ""
         drift = False
+        entry_status = "unknown"
 
-        # Try to compute actual checksum from install target or cache
-        for path_str in [install_target_str, cache_path_str]:
-            if not path_str:
+        # Legacy entries (no checksum_type field): report unknown, never drift
+        if checksum_type is None or checksum_type == "file":
+            # For file-type: check single file
+            if checksum_type is None:
+                # Legacy: always report unknown (cannot verify intent)
+                audit_entries.append({
+                    "name": entry_name,
+                    "primitive": entry.get("type", ""),
+                    "expected_sha": expected_sha,
+                    "actual_sha": "",
+                    "drift": False,
+                    "status": "unknown",
+                })
                 continue
-            p = Path(path_str)
-            if p.is_symlink():
-                p = p.resolve()
-            if p.is_file():
-                try:
-                    actual_sha = compute_checksum(p)
-                except OSError:
-                    actual_sha = ""
-                break
-            elif p.is_dir():
-                # For directories, compute hash of primary artifact
-                primary = _find_primary_artifact(p, entry_name)
-                if primary and primary.exists():
+
+            # checksum_type == "file": check single file
+            for path_str in [install_target_str, cache_path_str]:
+                if not path_str:
+                    continue
+                p = Path(path_str)
+                if p.is_symlink():
+                    p = p.resolve()
+                if p.is_file():
                     try:
-                        actual_sha = compute_checksum(primary)
+                        actual_sha = compute_checksum(p)
                     except OSError:
                         actual_sha = ""
-                break
+                    break
+                elif p.is_dir():
+                    primary = _find_primary_artifact(p, entry_name)
+                    if primary and primary.exists():
+                        try:
+                            actual_sha = compute_checksum(primary)
+                        except OSError:
+                            actual_sha = ""
+                    break
 
-        if expected_sha and actual_sha and expected_sha != actual_sha:
-            drift = True
-            any_drift = True
+            if expected_sha and actual_sha and expected_sha != actual_sha:
+                drift = True
+                any_drift = True
+                entry_status = "drift"
+            elif actual_sha:
+                entry_status = "clean"
+            else:
+                entry_status = "unknown"
+
+        elif checksum_type == "directory":
+            # Directory-based checksum: hash the entire cache directory
+            # Prefer cache_path for audit (canonical source of truth)
+            dir_path = None
+            for path_str in [cache_path_str, install_target_str]:
+                if not path_str:
+                    continue
+                p = Path(path_str)
+                if p.is_symlink():
+                    p = p.resolve()
+                if p.is_dir():
+                    dir_path = p
+                    break
+
+            if dir_path is not None:
+                try:
+                    actual_sha = compute_directory_hash(dir_path)
+                except (FileNotFoundError, OSError):
+                    actual_sha = ""
+                    entry_status = "unknown"
+
+                if expected_sha and actual_sha and expected_sha != actual_sha:
+                    drift = True
+                    any_drift = True
+                    entry_status = "drift"
+                elif actual_sha:
+                    entry_status = "clean"
+                else:
+                    entry_status = "unknown"
+            else:
+                entry_status = "unknown"
+        else:
+            # Unknown checksum_type: report unknown
+            entry_status = "unknown"
 
         audit_entries.append({
             "name": entry_name,
@@ -208,7 +279,12 @@ def cmd_audit_impl(
             "expected_sha": expected_sha,
             "actual_sha": actual_sha,
             "drift": drift,
+            "status": entry_status,
         })
+
+    # Apply drift_only filter: exclude non-drifted entries
+    if drift_only:
+        audit_entries = [e for e in audit_entries if e.get("drift") is True]
 
     return {
         "status": "drift" if any_drift else "clean",

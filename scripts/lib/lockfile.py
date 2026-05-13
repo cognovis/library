@@ -157,6 +157,34 @@ def compute_checksum(file_path: Path) -> str:
     return h.hexdigest()
 
 
+def compute_directory_hash(dir_path: Path) -> str:
+    """Merkle-style hash over all files in a directory (sorted, recursive).
+
+    The hash is deterministic: same file contents at same relative paths always
+    produce the same digest, regardless of absolute location on disk.
+
+    Args:
+        dir_path: Path to the directory to hash.
+
+    Returns:
+        64-character lowercase SHA-256 hex string.
+
+    Raises:
+        FileNotFoundError: If dir_path does not exist.
+    """
+    if not dir_path.exists():
+        raise FileNotFoundError(f"compute_directory_hash: path does not exist: {dir_path}")
+    h = hashlib.sha256()
+    for f in sorted(dir_path.rglob("*")):
+        if f.is_file():
+            rel = f.relative_to(dir_path)
+            h.update(str(rel).encode())
+            h.update(b"\0")          # separator
+            h.update(compute_checksum(f).encode())
+            h.update(b"\0")          # separator
+    return h.hexdigest()
+
+
 def make_entry(
     *,
     name: str,
@@ -169,6 +197,7 @@ def make_entry(
     checksum_sha256: str,
     license_id: str = "unknown",
     bridge_symlinks: Optional[list[str]] = None,
+    checksum_type: str = "file",
 ) -> dict[str, Any]:
     """Build a lockfile entry dict conforming to the lockfile schema.
 
@@ -197,6 +226,7 @@ def make_entry(
         "install_target": install_target,
         "install_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "checksum_sha256": checksum_sha256,
+        "checksum_type": checksum_type,
         "license": license_id,
         "bridge_symlinks": bridge_symlinks or [],
     }
