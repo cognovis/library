@@ -1,8 +1,18 @@
-# Project Instructions for AI Agents
+# Claude Code Instructions for This Repo
 
-This file provides instructions and context for AI coding agents working on this project.
+> Navigation and conventions live in `AGENTS.md` (shared with Codex CLI).
+> This file is intentionally a thin wrapper — do not duplicate content here.
+
+@AGENTS.md
+
+## Claude-Code-Specific Notes
+
+_None currently. Add here only if a behavior is truly Claude-Code-only_
+_(no Codex equivalent and not already covered in AGENTS.md)._
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+<!-- Auto-managed by bd. Identical block lives in AGENTS.md (also auto-managed). -->
+<!-- Duplication via @AGENTS.md import is acceptable: same content, harmless. -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -48,44 +58,3 @@ bd close <id>         # Complete work
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
-
-
-## Build & Test
-
-_Add your build and test commands here_
-
-```bash
-# Example:
-# npm install
-# npm test
-```
-
-## Architecture Overview
-
-_Add a brief overview of your project architecture_
-
-## Canonical Launchers (cld/cdx)
-
-- **Canonical home:** `cognovis-library/bin/` (this repo)
-  - `bin/cld` — Claude Code launcher (502 lines, full-featured zsh wrapper)
-  - `bin/cdx` — Codex CLI launcher (zsh wrapper, parallel to `cld`)
-- **Install command:** `bash scripts/install-bin.sh`
-  - Creates symlinks from `~/.local/bin/cld` and `~/.local/bin/cdx` into `bin/`
-  - Idempotent: safe to run multiple times
-  - `~/.local/bin/` must be in `$PATH` (replaces the old `~/.claude/scripts/` PATH entry)
-- **Per ADR-0002 Decision 2:** launchers live in `cognovis-library/bin/`, not in
-  `~/.claude/scripts/`. The `~/.claude/scripts/` directory is no longer in `$PATH`.
-- **Note:** `CMUX_BUNDLED_CLI_PATH` in `cld` still references `~/.claude/scripts/cmux-shim.sh`
-  at runtime. Moving `cmux-shim.sh` to `cognovis-library/bin/` is a follow-up task (Phase 2 cleanup per ADR-0002 Decision 3).
-
-## Conventions & Patterns
-
-### library.yaml schema ownership
-
-Schema extensions to `library.yaml` are **serialized**. Per top-level section
-(`mcp_servers:`, `guardrails:`, `marketplaces:`, `hooks:`, …) at most one
-extending bead may be active at a time. While that bead is open, other beads
-must not modify the same section in parallel — file an explicit
-`bd dep add <new-bead> <active-bead>` instead.
-
-Validator tests (`CL-wud`) run on every schema change.

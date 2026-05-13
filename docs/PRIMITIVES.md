@@ -55,6 +55,35 @@ Does it provide model-specific behavioral guidance for an agent persona?
 
 ---
 
+## Portability Matrix (TL;DR)
+
+Quick answer to "is primitive X portable between harnesses?"
+Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels.
+
+| # | Primitive | Format portable? | Claude Code | Codex CLI | Codex Cloud | Pi | OpenCode | Details |
+|---|-----------|------------------|-------------|-----------|-------------|----|----|---------|
+| 1 | [Skill](#1-skill) | **YES** — shared SKILL.md (Open Agent Skills Standard) | full text at session start | name+desc at startup, full on-demand | n/a | n/a | n/a | §1 |
+| 2 | [Command](#2-command) | partial — same intent, different formats | `.claude/commands/*.md` (slash) | TBD (CL-qzw) | n/a | n/a | n/a | §2 |
+| 3 | [Agent](#3-agent) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | n/a | §3 |
+| 4 | [Guardrail/Hook](#4-guardrail-hook) | **NO** — event coverage diverges | 13 events | 3 events (SessionStart/End, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | §4 |
+| 5 | [Plugin](#5-plugin) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | §5 |
+| 6 | [Marketplace](#6-marketplace) | yes — distribution layer | yes | yes | yes | yes | yes | §6 |
+| 7 | [Standard](#7-standard) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | n/a | §7 |
+| 8 | [MCP-Server](#8-mcp-server) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | §8 |
+| 9 | Scripts (not a primitive) | yes — plain shell/python | n/a | n/a | n/a | n/a | n/a | §9 |
+| 10 | [Model-Standard](#10-model-standard) | partial — concept portable, mechanism per-harness | yes | yes | partial | unverified | unverified | §10 |
+
+**How to read this:**
+- **portable** = same source file works in multiple harnesses (no translation needed)
+- **harness-specific** = each harness needs its own representation
+- **n/a** = primitive does not exist in that harness's mental model
+- Cells with `INFERRED` mean pending validation — see the per-primitive section.
+
+For a capability decision ("should this be a skill or an agent?"), use the Quick Decision Tree above.
+For implementation details on any cell, jump to its linked section below.
+
+---
+
 ## Primitive Categories
 
 ### Category 1: Invocation Primitives
