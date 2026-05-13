@@ -104,6 +104,7 @@ def remove_standard(
     repo_root: Path,
     scope: str = "project",
     dry_run: bool = False,
+    tool_root: Path | None = None,
 ) -> dict[str, Any]:
     """Remove an installed standard.
 
@@ -118,6 +119,7 @@ def remove_standard(
         repo_root: Project root.
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
+        tool_root: Repository root that provides helper scripts.
 
     Returns:
         Operation result dict.
@@ -158,7 +160,8 @@ def remove_standard(
     # Remove the composed STANDARD block from AGENTS.md (fail-open).
     agents_md_removed = False
     agents_md_error: str | None = None
-    agents_md_script = _find_repo_root(repo_root) / "scripts" / "agents-md-block.py"
+    helper_root = tool_root or _find_repo_root(repo_root)
+    agents_md_script = helper_root / "scripts" / "agents-md-block.py"
     if agents_md_script.exists():
         agents_md = resolve_standards_agents_md({}, scope=scope, repo_root=repo_root)
         if agents_md is not None and agents_md.exists():
@@ -167,6 +170,7 @@ def remove_standard(
                     [sys.executable, str(agents_md_script), "remove", f"--name={name}", f"--file={agents_md}"],
                     check=True,
                     capture_output=True,
+                    cwd=str(helper_root),
                 )
                 agents_md_removed = True
             except subprocess.CalledProcessError as exc:

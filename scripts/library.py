@@ -14,6 +14,8 @@ Options:
   --json        Machine-readable JSON output
   --dry-run     Show planned operations without mutating files
   --scope       project (default) or global
+  --target-project
+                Project root for project-scoped writes
   --harness     claude_code, codex, opencode, or all (where applicable)
 
 Exit codes:
@@ -35,6 +37,7 @@ Usage examples:
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -42,6 +45,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+TOOL_ROOT = SCRIPT_DIR.parent
 
 from lib.catalog import find_repo_root, get_entries, load_catalog, search_all
 from lib.errors import (
@@ -126,6 +130,15 @@ def build_parser() -> argparse.ArgumentParser:
             help="Scope (default: project)",
         )
         use_p.add_argument(
+            "--target-project",
+            type=Path,
+            default=None,
+            help=(
+                "Project root for project-scoped writes "
+                "(default: current git root or cwd)"
+            ),
+        )
+        use_p.add_argument(
             "--harness",
             choices=["claude_code", "codex", "opencode", "all"],
             default="all",
@@ -141,6 +154,15 @@ def build_parser() -> argparse.ArgumentParser:
             "--scope",
             choices=["project", "global"],
             default="project",
+        )
+        remove_p.add_argument(
+            "--target-project",
+            type=Path,
+            default=None,
+            help=(
+                "Project root for project-scoped writes "
+                "(default: current git root or cwd)"
+            ),
         )
 
         # search
@@ -158,6 +180,15 @@ def build_parser() -> argparse.ArgumentParser:
             default="project",
         )
         sync_p.add_argument(
+            "--target-project",
+            type=Path,
+            default=None,
+            help=(
+                "Project root for project-scoped writes "
+                "(default: current git root or cwd)"
+            ),
+        )
+        sync_p.add_argument(
             "--harness",
             choices=["claude_code", "codex", "opencode", "all"],
             default="all",
@@ -170,6 +201,15 @@ def build_parser() -> argparse.ArgumentParser:
             "--scope",
             choices=["project", "global"],
             default="project",
+        )
+        audit_p.add_argument(
+            "--target-project",
+            type=Path,
+            default=None,
+            help=(
+                "Project root for project-scoped writes "
+                "(default: current git root or cwd)"
+            ),
         )
 
     # Top-level search (cross-primitive)
@@ -363,6 +403,7 @@ def _use_standard(
             repo_root=repo_root,
             scope=scope,
             dry_run=dry_run,
+            tool_root=TOOL_ROOT,
         )
         if use_json:
             print_json(result)
@@ -597,7 +638,14 @@ def _dispatch_remove(
         return remove_skill(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
     elif primitive == "standard":
         from lib.installers.remove import remove_standard
-        return remove_standard(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
+        return remove_standard(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            tool_root=TOOL_ROOT,
+        )
     elif primitive == "agent":
         from lib.installers.agent import remove_agent
         return remove_agent(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
@@ -761,12 +809,12 @@ def main(argv: list[str] | None = None) -> int:
     # Top-level search
     if args.primitive == "search":
         try:
-            repo_root = find_repo_root()
-            catalog = load_catalog(repo_root)
+            catalog_root = _resolve_catalog_root()
+            catalog = load_catalog(catalog_root)
         except LibraryError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
-        return cmd_search(args, repo_root, catalog)
+        return cmd_search(args, catalog_root, catalog)
 
     # Validate primitive
     prim_info = get_primitive(args.primitive)
@@ -787,8 +835,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # Load catalog
     try:
-        repo_root = find_repo_root()
-        catalog = load_catalog(repo_root)
+        catalog_root = _resolve_catalog_root()
+        repo_root = _resolve_target_root(args, catalog_root)
+        catalog = load_catalog(catalog_root)
     except LibraryError as exc:
         use_json = getattr(args, "json", False)
         if use_json:
@@ -814,6 +863,41 @@ def main(argv: list[str] | None = None) -> int:
         return exc.exit_code
     except KeyboardInterrupt:
         return 130
+
+
+def _resolve_catalog_root() -> Path:
+    """Return the root containing the library catalog used for lookup."""
+    try:
+        return find_repo_root()
+    except LibraryError:
+        return find_repo_root(TOOL_ROOT)
+
+
+def _resolve_target_root(args: argparse.Namespace, catalog_root: Path) -> Path:
+    """Return the project root used for project-scoped writes."""
+    scope = getattr(args, "scope", "project")
+    if scope == "global":
+        return catalog_root
+
+    explicit_target = getattr(args, "target_project", None)
+    if explicit_target is not None:
+        return explicit_target.expanduser().resolve()
+
+    return _find_git_root(Path.cwd()) or Path.cwd().resolve()
+
+
+def _find_git_root(start: Path) -> Path | None:
+    """Return the git worktree root containing start, if any."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        cwd=str(start),
+    )
+    if result.returncode != 0:
+        return None
+    root = result.stdout.strip()
+    return Path(root).resolve() if root else None
 
 
 if __name__ == "__main__":

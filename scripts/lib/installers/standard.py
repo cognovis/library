@@ -44,6 +44,7 @@ def install_standard(
     repo_root: Path,
     scope: str = "project",
     dry_run: bool = False,
+    tool_root: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Install a standard from the catalog.
 
@@ -53,6 +54,7 @@ def install_standard(
         repo_root: Project root directory.
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
+        tool_root: Repository root that provides helper scripts.
 
     Returns:
         Operation result dict.
@@ -87,7 +89,8 @@ def install_standard(
     canonical_dir = canonical_base / standard_name
 
     # Check for agents-md-block.py
-    agents_md_script = repo_root / "scripts" / "agents-md-block.py"
+    helper_root = tool_root or repo_root
+    agents_md_script = helper_root / "scripts" / "agents-md-block.py"
     agents_md_available = agents_md_script.exists()
     agents_md_target = resolve_standards_agents_md(catalog, scope=scope, repo_root=repo_root)
 
@@ -176,14 +179,23 @@ def install_standard(
             shutil.rmtree(str(canonical_dir))
         canonical_dir.symlink_to(cache_path)
 
+        primary_artifact = _find_primary_artifact(cache_path, standard_name)
+
         # 7. AGENTS.md block injection
         agents_md_result = None
         if agents_md_available and agents_md_target:
             result = subprocess.run(
-                ["python3", str(agents_md_script), standard_name, "--target", str(agents_md_target)],
+                [
+                    sys.executable,
+                    str(agents_md_script),
+                    "insert",
+                    f"--name={standard_name}",
+                    f"--file={agents_md_target}",
+                    f"--content={primary_artifact}",
+                ],
                 capture_output=True,
                 text=True,
-                cwd=str(repo_root),
+                cwd=str(helper_root),
             )
             agents_md_result = {
                 "success": result.returncode == 0,
@@ -192,7 +204,6 @@ def install_standard(
             }
 
         # 8. Write lockfile
-        primary_artifact = _find_primary_artifact(cache_path, standard_name)
         checksum = compute_checksum(primary_artifact) if primary_artifact.exists() else "0" * 64
 
         lockfile_entry = make_entry(
