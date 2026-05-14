@@ -5,7 +5,7 @@
 > agent composition model and MODEL-STANDARD primitive.
 >
 > **Depends on:**
-> - `docs/PRIMITIVES.md` §10 Model-Standard — defines the MODEL-STANDARD primitive
+> - `docs/primitives/model-standard.md` — defines the MODEL-STANDARD primitive
 > - `scripts/standards-loader.sh` — loader used for model-standards
 > - `docs/research/agents-format-mapping.md` (CL-11p) — field mapping extended for new frontmatter
 
@@ -256,7 +256,8 @@ model_standards: []
 
 ## Cross-References
 
-- `docs/PRIMITIVES.md` §10 — MODEL-STANDARD primitive definition and composition algorithm
+- `docs/primitives/model-standard.md` — MODEL-STANDARD primitive definition and composition algorithm
+- `docs/primitives/golden-prompt.md` — GOLDEN-PROMPT primitive definition
 - `docs/research/agents-format-mapping.md` (CL-11p) — field mapping with new composition fields
 - `.agents/golden-prompts/cognovis-base.md` — Cognovis Base Golden Prompt source
 - `.agents/model-standards/` — model-standard file directory

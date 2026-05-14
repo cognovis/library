@@ -1,0 +1,126 @@
+# Model-Standard
+
+> Primitive reference extracted from [PRIMITIVES.md](../PRIMITIVES.md).
+
+**Definition.** A markdown document containing model-specific behavioral guidance
+injected for an agent persona on a given model (e.g., conciseness guidance for
+Sonnet, extended thinking budget configuration for Opus). Model-standards are a
+sub-type of standards scoped to a particular model's characteristics.
+
+**Key constitutive feature.** Model-scoped behavioral overlay: unlike general
+standards (which apply to any model), a model-standard is keyed to a specific model
+ID and adjusts the agent's behavior for that model's strengths and limitations.
+
+**Storage.** `.agents/model-standards/<model-name>.md` (project-local) or
+`~/.agents/model-standards/<model-name>.md` (user-global).
+Example: `.agents/model-standards/claude-sonnet-4-6.md`
+
+**Loading.** Model-standards use project-local > user-global precedence and are
+inlined by the Library composer into the effective agent system prompt.
+
+**Path resolution (same precedence rules as Standards):**
+
+| Priority | Path | Scope |
+|----------|------|-------|
+| 1 (wins) | `.agents/model-standards/<name>.md` | Project-local |
+| 2 | `~/.agents/model-standards/<name>.md` | User-global |
+
+**Trigger semantics.** Injected at agent instantiation time when the agent's
+frontmatter specifies a `model` field matching this model-standard's filename. The
+three-layer composition is applied in order (see Golden Prompt Composition below).
+
+**Agent Golden Prompt Composition.**
+
+When the harness instantiates an agent, the effective system prompt is composed from
+three layers in order:
+
+```
+Layer 1: Cognovis Base Golden Prompt
+  └── Global behavioral rules, safety checks, confirmation gates,
+      content isolation, core skill access. Applies to all agents.
+
+Layer 2: Agent Persona
+  └── The agent's own system prompt (from .claude/agents/<name>.md
+      or .codex/agents/<name>.toml). Defines the agent's specific
+      purpose, tool grants, and domain expertise.
+
+Layer 3: Model-Standard (optional)
+  └── Model-specific overlays: verbosity tuning, thinking budget,
+      output format adjustments, known model quirks to work around.
+      Applied only when the agent's `model` field matches a known
+      model-standard.
+```
+
+**Decision-rule frontmatter fields.**
+
+```yaml
+# In an agent's frontmatter (.claude/agents/<name>.md):
+golden_prompt_extends: cognovis-base   # which base golden prompt to use
+model: claude-sonnet-4-6               # triggers model-standard lookup
+model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrides
+```
+
+**Composition algorithm (install-time, NOT runtime).**
+
+The Library executes this composition once when the agent is installed or synced.
+There is no runtime composition — the harness receives the fully-composed prompt.
+
+Source and target are always SEPARATE paths. The source agent file (library copy) is
+never overwritten — the composed prompt is written to the installed copy only.
+
+```
+1. Load Layer 1: read .agents/golden-prompts/<golden_prompt_extends>.md
+   (skip if golden_prompt_extends=from-scratch or file not found)
+
+2. Load Layer 2: read the SOURCE agent file body (library copy, never the installed copy)
+   This reads the original unmodified persona. Repeat installs always read the same source.
+
+3. Load Layer 3:
+   a) If model_standards is non-empty: load each name via
+         standards-loader.sh --load-model-standard <name>
+      Concatenate results in declaration order.
+   b) If model_standards is empty AND model is set: attempt alias-based lookup via
+         standards-loader.sh --load-model-standard <model>
+      (the loader resolves by alias if direct filename lookup fails; silent skip on miss)
+
+4. Compose: Layer1 + "\n---\n" + Layer2 + ("\n---\n" + Layer3 if Layer3 non-empty)
+
+5. Write composed prompt to INSTALLED copy (separate from source):
+   - Claude Code: .claude/agents/<name>.md body (keep frontmatter from source)
+   - Codex: developer_instructions in .codex/agents/<name>.toml
+     (add composition metadata as header comments)
+   - OpenCode: .opencode/agents/<name>.md body
+   - Pi: export as TypeScript string from the extension module
+```
+
+**Tool constraint encoding.** Per-agent tool grants (`tools:`, `disallowedTools:`) are
+NOT enforced by all harnesses at the sandbox level (Codex global sandbox semantics
+ignore per-agent tool constraints). Therefore, the Library MUST encode the agent's
+effective tool grant in the composed system prompt body, not rely on frontmatter alone.
+The Cognovis Base Golden Prompt (`Layer 1`) includes a "Tool Constraints" section that
+instructs the agent to honor its declared tool list behaviorally even when the harness
+would technically allow broader access.
+
+**Canonical source locations (CL-9b1).**
+
+- Golden prompts: `.agents/golden-prompts/<name>.md`
+  - Cognovis base: `.agents/golden-prompts/cognovis-base.md`
+- Model standards: `.agents/model-standards/<model-name>.md`
+  - Sonnet conciseness: `.agents/model-standards/claude-sonnet-4-6.md`
+  - Opus thinking budget: `.agents/model-standards/claude-opus-4-7.md`
+
+**When to choose it.** Create a model-standard when:
+- A specific model has known behaviors (verbosity, thinking defaults, tool-call
+  patterns) that require project-wide adjustment.
+- Different agents in the system run on different models and need model-aware
+  behavioral tuning without duplicating guidance in every agent file.
+
+**Counter-examples.**
+- Do NOT put model-specific guidance in the agent persona file — that locks the
+  persona to one model and makes model-swapping harder.
+- Do NOT create a model-standard for a behavior that applies to all models — that
+  belongs in the base golden prompt or a general standard.
+- Do NOT introduce a parallel loader for model-standards — reuse
+  `scripts/standards-loader.sh --load-model-standard <name>` (same contract).
+
+---

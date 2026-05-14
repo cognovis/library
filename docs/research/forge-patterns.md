@@ -77,7 +77,7 @@ Three cadences:
 | Per subagent | `SubagentStart`, `SubagentStop` |
 | Other | `PreCompact`, `Notification` |
 
-14 events total. Our `meta/docs/PRIMITIVES.md §4` lists 13 and includes a stale
+14 events total. Our `meta/docs/primitives/guardrail-hook.md` lists 13 and includes a stale
 `Setup` event; missing `UserPromptExpansion`, `PermissionDenied`, `StopFailure`.
 
 ## Cross-cutting industry signals
@@ -208,10 +208,10 @@ is implicit for project-local installs. Document in `docs/lockfile-format.md`.
 rules into our marketplace. Cursor's MDC frontmatter maps cleanly to our entries
 (description, globs, alwaysApply). Defer until demand surfaces.
 
-### M6. Refresh `meta/docs/PRIMITIVES.md §4`
+### M6. Refresh `meta/docs/primitives/guardrail-hook.md`
 
 Update the Claude Code hook event list (currently 13 with stale `Setup`; should be
-14 with the three-cadences taxonomy). Small task, but PRIMITIVES.md is the
+14 with the three-cadences taxonomy). Small task, but the guardrail primitive doc is the
 authoritative reference for hook-forge and any future hook authoring.
 
 ## What we already do well (worth keeping)

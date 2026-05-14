@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-30
 **Author:** CL-p91 audit pass
-**Reference:** `docs/PRIMITIVES.md §8` (MCP-Server decision rule)
+**Reference:** `docs/primitives/mcp-server.md` (MCP-Server decision rule)
 
 This audit classifies every MCP server installed across all harnesses (Codex CLI, Claude Desktop, Claude Code).
 The goal is to identify which servers should be replaced by CLI + Skill pairs, which must stay as MCP, and which need follow-up work.
@@ -130,7 +130,7 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 1. Create `ec` CLI tool (thin HTTP client against the executive-circle API).
 2. Create `content:executive-circle-cli` skill.
 3. Retain MCP for non-coding harnesses.
-4. Note: PRIMITIVES.md §8 already uses this as a canonical "keep MCP" example — the MCP is correct; the gap is the missing CLI path for coding harnesses.
+4. Note: `docs/primitives/mcp-server.md` already uses this as a canonical "keep MCP" example — the MCP is correct; the gap is the missing CLI path for coding harnesses.
 
 ---
 

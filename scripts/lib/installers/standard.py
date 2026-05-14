@@ -216,11 +216,26 @@ def _fetch_standard_source(
         )
         commit = sha_result.stdout.strip() if sha_result.returncode == 0 else "unknown"
 
-        # Navigate to the file within the repo
+        # Navigate to the file or directory within the repo. Standards may be
+        # single files (GitHub blob/raw URL) or folder-form bundles (tree URL).
         if parsed.file_path:
-            source_file = tmp / parsed.file_path
-            if source_file.exists():
-                return source_file, commit, tmp
+            source_path = tmp / parsed.file_path
+            if not source_path.exists():
+                shutil.rmtree(str(tmp), ignore_errors=True)
+                raise InstallError(
+                    f"Standard source path does not exist in {clone_url}: {parsed.file_path}"
+                )
+            if parsed.path_type == "directory" and not source_path.is_dir():
+                shutil.rmtree(str(tmp), ignore_errors=True)
+                raise InstallError(
+                    f"Standard source path is not a directory for tree URL: {parsed.file_path}"
+                )
+            if parsed.path_type == "file" and not source_path.is_file():
+                shutil.rmtree(str(tmp), ignore_errors=True)
+                raise InstallError(
+                    f"Standard source path is not a file for blob/raw URL: {parsed.file_path}"
+                )
+            return source_path, commit, tmp
         return tmp, commit, tmp
 
     raise SourceError(f"Cannot fetch source: unsupported source kind '{parsed.kind}'")

@@ -13,6 +13,7 @@ Run with:
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -381,6 +382,79 @@ class TestStandardRealInstall:
         assert (canonical / "test-standard.md").exists()
         agents_md = project_dir / "AGENTS.md"
         assert not agents_md.exists()
+
+
+class TestStandardTreeSource:
+    """GitHub tree URL standards should install as directory bundles."""
+
+    def test_source_parse_github_tree_has_directory_hint(self):
+        """GitHub tree URL parses as a browser source with directory path type."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.source import parse_source
+
+        url = "https://github.com/cognovis/library-core/tree/main/standards/python"
+        parsed = parse_source(url)
+        assert parsed.kind == "github_browser"
+        assert parsed.org == "cognovis"
+        assert parsed.repo == "library-core"
+        assert parsed.branch == "main"
+        assert parsed.file_path == "standards/python"
+        assert parsed.path_type == "directory"
+        assert parsed.clone_url == "https://github.com/cognovis/library-core.git"
+
+    def test_standard_tree_source_installs_directory_bundle(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """standard use must copy the whole folder for GitHub tree URL sources."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import standard as standard_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        bundle = fake_repo / "standards" / "bundle-standard"
+        bundle.mkdir(parents=True)
+        (bundle / "bundle-standard.md").write_text("# Bundle Standard\n")
+        (bundle / "detail.md").write_text("# Detail\n")
+
+        def fake_run(cmd, capture_output=False, text=False, cwd=None):
+            if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
+                target = Path(cmd[-1])
+                shutil.copytree(fake_repo, target, dirs_exist_ok=True)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            if cmd == ["git", "rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
+            raise AssertionError(f"Unexpected command: {cmd}")
+
+        monkeypatch.setattr(standard_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            standard_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bundle-standard",
+                        "description": "Directory-backed standard fixture.",
+                        "source": "https://github.com/example/repo/tree/main/standards/bundle-standard",
+                    }
+                ]
+            },
+            "marketplaces": [],
+        }
+
+        result = standard_mod.install_standard(catalog, "bundle-standard", project)
+
+        assert result["status"] == "ok"
+        canonical = project / ".agents" / "standards" / "bundle-standard"
+        assert (canonical / "bundle-standard.md").exists()
+        assert (canonical / "detail.md").exists()
 
 
 class TestSimpleFileDirectoryEntrypoint:

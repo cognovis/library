@@ -831,7 +831,7 @@
               "type": "string"
             },
             "triggers": {
-              "description": "Keywords/patterns matched (case-insensitive substring) against project context \u2014 file extensions, paths, CLAUDE.md content, project name. When any trigger matches, the standard (or all files in a bundle) is loaded into context. Use [\"*\"] for always-on.",
+              "description": "Legacy compatibility metadata for older catalog entries. Standards are no longer loaded by automatic project-context matching; installation plus explicit consumer references such as requires_standards are the delivery contract. Prefer globs or always_apply only when exporting to agentskills-compatible metadata.",
               "type": "array",
               "items": {
                 "type": "string"

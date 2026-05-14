@@ -629,7 +629,7 @@ This agent handles research ONLY. It does not:
 ### Cross-references
 
 - `docs/ARCHITECTURE.md` — Layer 2 overview and sync infrastructure context
-- `docs/PRIMITIVES.md` — Agent primitive definition (§3); NORMATIVE/INFERRED label convention
+- `docs/primitives/agent.md` — Agent primitive definition; NORMATIVE/INFERRED label convention
 - `docs/research/codex-prompts.md` — Layer 3 translation research (CL-qzw); cross-tool observations reused
 
 ### Bead context

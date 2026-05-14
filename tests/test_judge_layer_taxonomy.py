@@ -16,6 +16,11 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from lib.catalog import search_all
 
 
+def _doc_text(*relative_paths: str) -> str:
+    """Return concatenated text for documentation assertions."""
+    return "\n".join((REPO_ROOT / path).read_text() for path in relative_paths)
+
+
 def test_judge_layer_tags_are_documented_in_catalog():
     """library.yaml must define the judge-layer tag vocabulary."""
     data = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
@@ -64,8 +69,12 @@ def test_search_judge_layer_returns_valid_json():
 
 
 def test_primitives_documents_judge_layer_contracts():
-    """PRIMITIVES.md must document the judge-layer vocabulary."""
-    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+    """Primitive reference docs must document the judge-layer vocabulary."""
+    text = _doc_text(
+        "docs/primitives/agent.md",
+        "docs/primitives/skill.md",
+        "docs/primitives/standard.md",
+    )
 
     for expected in (
         "#### Judge Specialization",
@@ -79,7 +88,7 @@ def test_primitives_documents_judge_layer_contracts():
 
 def test_agent_justification_gate_keeps_existing_c_numbering():
     """Judge C7 must extend, not renumber, the existing C1-C6 gate."""
-    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+    text = _doc_text("docs/primitives/agent.md")
 
     for expected in (
         "| C1: different tool permission set |",
@@ -100,7 +109,7 @@ def test_agent_justification_gate_keeps_existing_c_numbering():
 
 def test_persona_alone_is_not_agent_justification():
     """Durable persona/rubric language must remain a counterexample, not C2."""
-    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+    text = _doc_text("docs/primitives/agent.md")
 
     assert "Do NOT create an agent just because the work needs a durable persona" in text
     assert "unless one of C1-C7 also" in text
@@ -108,7 +117,7 @@ def test_persona_alone_is_not_agent_justification():
 
 def test_action_boundary_uses_risk_class_effect_type_and_uri_refs():
     """action_boundary examples must use the stable downstream contract shape."""
-    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+    text = _doc_text("docs/primitives/agent.md", "docs/primitives/skill.md")
 
     for expected in (
         "risk_class: external-side-effect",
@@ -138,6 +147,6 @@ def test_portability_matrix_includes_action_boundary_row():
     """Action Boundary metadata must be discoverable from the matrix."""
     text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
 
-    assert "| 3a | [Action Boundary](#action-boundary-metadata) |" in text
+    assert "| 3a | [Action Boundary](primitives/action-boundary.md) |" in text
     assert "### Action Boundary Metadata" in text
     assert "YAML for skills, TOML for agents" in text

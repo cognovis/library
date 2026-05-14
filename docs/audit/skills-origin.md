@@ -171,7 +171,7 @@ This audit classifies every skill, agent, hook, command, and standard across:
 | `core/agents/git-operations.md` | agent | ORIGINAL | agent (git operations, isolated context) | agent — correct | Keep in cognovis/library-core | domain |
 | `core/agents/researcher.md` | agent | ORIGINAL | agent (research tasks, isolated context) | agent — correct | Keep in cognovis/library-core | domain |
 | `core/agents/session-close.md` | agent | ORIGINAL | agent (multi-phase close pipeline, isolated) | agent — correct | Keep in cognovis/library-core; Codex bridge via `dev-tools/codex-agents/session-close.toml` | core |
-| `core/agents/session-close-handlers/` | script | ORIGINAL | scripts (implementation substrate for session-close phases) | scripts — correct (not a primitive per PRIMITIVES.md §9) | Keep alongside session-close agent | core |
+| `core/agents/session-close-handlers/` | script | ORIGINAL | scripts (implementation substrate for session-close phases) | scripts — correct (not a primitive per `docs/primitives/script.md`) | Keep alongside session-close agent | core |
 
 ### Hooks
 

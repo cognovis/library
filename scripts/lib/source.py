@@ -34,6 +34,8 @@ class ParsedSource:
     branch: Optional[str] = None
     file_path: Optional[str] = None  # path within repo
     clone_url: Optional[str] = None
+    path_type: Optional[str] = None
+    """GitHub browser path hint: 'file' for blob URLs, 'directory' for tree URLs."""
 
     # Local-specific fields
     local_path: Optional[Path] = None
@@ -59,6 +61,7 @@ def parse_source(source: str) -> ParsedSource:
     - /absolute/local/path
     - ~/home/relative/path
     - https://github.com/org/repo/blob/branch/path/to/file
+    - https://github.com/org/repo/tree/branch/path/to/directory
     - https://raw.githubusercontent.com/org/repo/branch/path/to/file
     """
     if not source:
@@ -71,11 +74,11 @@ def parse_source(source: str) -> ParsedSource:
 
     # GitHub browser URL
     m = re.match(
-        r"https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)",
+        r"https://github\.com/([^/]+)/([^/]+)/(blob|tree)/([^/]+)/(.+)",
         source,
     )
     if m:
-        org, repo, branch, file_path = m.groups()
+        org, repo, browser_kind, branch, file_path = m.groups()
         return ParsedSource(
             kind="github_browser",
             raw=source,
@@ -84,6 +87,7 @@ def parse_source(source: str) -> ParsedSource:
             branch=branch,
             file_path=file_path,
             clone_url=f"https://github.com/{org}/{repo}.git",
+            path_type="directory" if browser_kind == "tree" else "file",
         )
 
     # GitHub raw URL
@@ -101,6 +105,7 @@ def parse_source(source: str) -> ParsedSource:
             branch=branch,
             file_path=file_path,
             clone_url=f"https://github.com/{org}/{repo}.git",
+            path_type="file",
         )
 
     # Unrecognized
