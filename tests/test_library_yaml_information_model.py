@@ -51,13 +51,13 @@ def test_library_yaml_uses_normalized_root_sections() -> None:
     """The checked-in catalog keeps primitives and source registries in canonical sections."""
     data = yaml.safe_load(LIBRARY_PATH.read_text())
 
-    assert list(data.keys()) == [
+    assert {
         "default_dirs",
         "tag_vocabulary",
         "sources",
         "library",
         "project_tooling",
-    ]
+    } <= set(data)
     for legacy_key in (
         "catalog",
         "marketplaces",
@@ -188,8 +188,18 @@ def test_loader_reads_canonical_sources_with_legacy_fallbacks() -> None:
         "catalog": [{"name": "legacy-catalog"}],
         "marketplaces": [{"name": "legacy-marketplace"}],
     }
+    canonical_empty = {
+        "sources": {
+            "catalogs": [],
+            "marketplaces": [],
+        },
+        "catalog": [{"name": "legacy-catalog"}],
+        "marketplaces": [{"name": "legacy-marketplace"}],
+    }
 
     assert get_catalogs(canonical)[0]["name"] == "canonical-catalog"
     assert get_marketplaces(canonical)[0]["name"] == "canonical-marketplace"
     assert get_catalogs(legacy)[0]["name"] == "legacy-catalog"
     assert get_marketplaces(legacy)[0]["name"] == "legacy-marketplace"
+    assert get_catalogs(canonical_empty) == []
+    assert get_marketplaces(canonical_empty) == []

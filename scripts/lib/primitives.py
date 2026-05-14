@@ -139,10 +139,23 @@ def resolve_yaml_section(data: dict, primitive: PrimitiveInfo) -> list[dict]:
 
     Returns an empty list if the section is absent or empty.
     """
-    entries = _lookup_yaml_key(data, primitive.yaml_key)
+    return resolve_yaml_list(data, primitive.yaml_key, primitive.legacy_yaml_keys)
+
+
+def resolve_yaml_list(
+    data: dict,
+    yaml_key: str,
+    legacy_yaml_keys: list[str] | tuple[str, ...] = (),
+) -> list[dict]:
+    """Resolve a canonical YAML list with optional legacy fallback keys.
+
+    The canonical key wins whenever it is present, even when its value is an
+    empty list. Legacy keys are only consulted when the canonical key is absent.
+    """
+    entries = lookup_yaml_key(data, yaml_key)
     if entries is _MISSING:
-        for legacy_key in primitive.legacy_yaml_keys:
-            entries = _lookup_yaml_key(data, legacy_key)
+        for legacy_key in legacy_yaml_keys:
+            entries = lookup_yaml_key(data, legacy_key)
             if entries is not _MISSING:
                 break
 
@@ -152,7 +165,12 @@ def resolve_yaml_section(data: dict, primitive: PrimitiveInfo) -> list[dict]:
     return entries if isinstance(entries, list) else []
 
 
-def _lookup_yaml_key(data: dict, key: str) -> object:
+def yaml_key_present(data: dict, key: str) -> bool:
+    """Return True when a slash-separated YAML key path exists."""
+    return lookup_yaml_key(data, key) is not _MISSING
+
+
+def lookup_yaml_key(data: dict, key: str) -> object:
     """Return a value at a slash-separated YAML key path, or _MISSING."""
     current: object = data
     for part in key.split("/"):

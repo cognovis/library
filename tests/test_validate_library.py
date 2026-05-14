@@ -23,7 +23,7 @@ VALIDATE_PY = REPO_ROOT / "scripts" / "validate-library.py"
 SCHEMA_PATH = REPO_ROOT / "docs" / "schema" / "library.schema.json"
 
 
-def _run_validator(yaml_content: str) -> subprocess.CompletedProcess:
+def _run_validator(yaml_content: str, *extra_args: str) -> subprocess.CompletedProcess:
     """Write yaml_content to a temp file and run validate-library.py against it."""
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", delete=False
@@ -32,7 +32,15 @@ def _run_validator(yaml_content: str) -> subprocess.CompletedProcess:
         tmp_path = f.name
     try:
         result = subprocess.run(
-            [sys.executable, str(VALIDATE_PY), "--yaml", tmp_path, "--schema", str(SCHEMA_PATH)],
+            [
+                sys.executable,
+                str(VALIDATE_PY),
+                "--yaml",
+                tmp_path,
+                "--schema",
+                str(SCHEMA_PATH),
+                *extra_args,
+            ],
             capture_output=True,
             text=True,
         )
@@ -208,3 +216,107 @@ def test_m2_standard_entry_with_globs_and_always_apply():
         f"Expected exit 0 for standard entry with globs and always_apply, got {result.returncode}.\n"
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
+
+
+def test_legacy_primitive_alias_warning_when_canonical_present():
+    """Dual canonical+legacy primitive sections warn that legacy entries are ignored."""
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": {
+            "guardrails": [],
+        },
+        "guardrails": [
+            {
+                "name": "legacy-guardrail",
+                "description": "A legacy guardrail.",
+                "purpose": "pre-tool-veto",
+            }
+        ],
+    }
+
+    result = _run_validator(yaml.dump(data, default_flow_style=False))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    assert "WARN:" in output
+    assert "guardrails" in output
+    assert "canonical 'library.guardrails' is present" in output
+    assert "canonical wins and legacy entries are ignored" in output
+
+
+def test_legacy_source_alias_warning_when_canonical_present():
+    """Dual canonical+legacy source registries warn that root aliases are ignored."""
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": {},
+        "sources": {
+            "catalogs": [],
+            "marketplaces": [],
+        },
+        "catalog": [
+            {
+                "name": "legacy-catalog",
+                "source": "https://github.com/example/catalog",
+                "description": "A legacy catalog.",
+            }
+        ],
+        "marketplaces": [
+            {
+                "name": "legacy-marketplace",
+                "source": "https://github.com/example",
+                "description": "A legacy marketplace.",
+                "type": "git",
+            }
+        ],
+    }
+
+    result = _run_validator(yaml.dump(data, default_flow_style=False))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    assert "WARN:" in output
+    assert "catalog" in output
+    assert "marketplaces" in output
+    assert "canonical 'sources.catalogs' is present" in output
+    assert "canonical 'sources.marketplaces' is present" in output
+    assert "canonical wins and legacy entries are ignored" in output
+
+
+def test_strict_aliases_rejects_legacy_aliases_even_without_canonical():
+    """--strict-aliases fails any deprecated root alias during alias sunset."""
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": {},
+        "guardrails": [
+            {
+                "name": "legacy-guardrail",
+                "description": "A legacy guardrail.",
+                "purpose": "pre-tool-veto",
+            }
+        ],
+        "catalog": [
+            {
+                "name": "legacy-catalog",
+                "source": "https://github.com/example/catalog",
+                "description": "A legacy catalog.",
+            }
+        ],
+    }
+
+    result = _run_validator(
+        yaml.dump(data, default_flow_style=False),
+        "--strict-aliases",
+    )
+
+    assert result.returncode == 1
+    output = result.stdout + result.stderr
+    assert "legacy alias error" in output
+    assert "--strict-aliases" in output
+    assert "library.guardrails" in output
+    assert "sources.catalogs" in output

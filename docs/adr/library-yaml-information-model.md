@@ -91,7 +91,9 @@ silently merging duplicate entries from two ownership models.
 
 The JSON Schema also accepts the legacy root aliases during the compatibility
 period, but descriptions mark them deprecated. New catalog edits should use only
-the canonical locations.
+the canonical locations. `scripts/validate-library.py` emits compatibility
+warnings for legacy aliases and supports `--strict-aliases` to reject them when
+the compatibility period ends.
 
 ## Consequences
 

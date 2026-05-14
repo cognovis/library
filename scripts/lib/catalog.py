@@ -4,6 +4,7 @@ catalog.py — Load library.yaml, source registries, primitive mapping, entry lo
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -13,7 +14,46 @@ except ImportError as exc:
     raise ImportError("PyYAML is required: pip install PyYAML") from exc
 
 from .errors import AmbiguousMatchError, CatalogError, NotFoundError
-from .primitives import PrimitiveInfo, all_primitive_names, get_primitive, resolve_yaml_section
+from .primitives import (
+    PrimitiveInfo,
+    all_primitive_names,
+    get_primitive,
+    resolve_yaml_list,
+    resolve_yaml_section,
+)
+
+
+@dataclass(frozen=True)
+class SourceRegistryInfo:
+    """Metadata for a non-primitive source registry in library.yaml."""
+
+    name: str
+    """Canonical registry name returned by get_sources(), e.g. 'marketplaces'."""
+
+    yaml_section: str
+    """Canonical section in library.yaml, e.g. 'sources.marketplaces'."""
+
+    yaml_key: str
+    """Canonical slash-separated key path, e.g. 'sources/marketplaces'."""
+
+    legacy_yaml_keys: list[str] = field(default_factory=list)
+    """Deprecated root key paths still accepted when the canonical key is absent."""
+
+
+SOURCE_REGISTRIES: tuple[SourceRegistryInfo, ...] = (
+    SourceRegistryInfo(
+        name="catalogs",
+        yaml_section="sources.catalogs",
+        yaml_key="sources/catalogs",
+        legacy_yaml_keys=["catalog"],
+    ),
+    SourceRegistryInfo(
+        name="marketplaces",
+        yaml_section="sources.marketplaces",
+        yaml_key="sources/marketplaces",
+        legacy_yaml_keys=["marketplaces"],
+    ),
+)
 
 
 def find_repo_root(start: Optional[Path] = None) -> Path:
@@ -96,22 +136,17 @@ def get_sources(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     top-level `catalog` and `marketplaces` keys; those remain readable when the
     canonical key is absent.
     """
-    sources = data.get("sources", {}) or {}
-    if not isinstance(sources, dict):
-        sources = {}
-
-    catalogs = _source_list(sources, "catalogs")
-    if catalogs is None:
-        catalogs = _source_list(data, "catalog") or []
-
-    marketplaces = _source_list(sources, "marketplaces")
-    if marketplaces is None:
-        marketplaces = _source_list(data, "marketplaces") or []
-
     return {
-        "catalogs": catalogs,
-        "marketplaces": marketplaces,
+        registry.name: resolve_source_registry(data, registry)
+        for registry in SOURCE_REGISTRIES
     }
+
+
+def resolve_source_registry(
+    data: dict[str, Any], registry: SourceRegistryInfo
+) -> list[dict[str, Any]]:
+    """Return source registry entries using canonical-first legacy fallback."""
+    return resolve_yaml_list(data, registry.yaml_key, registry.legacy_yaml_keys)
 
 
 def get_catalogs(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -122,14 +157,6 @@ def get_catalogs(data: dict[str, Any]) -> list[dict[str, Any]]:
 def get_marketplaces(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Return third-party source marketplaces from library.yaml."""
     return get_sources(data)["marketplaces"]
-
-
-def _source_list(data: dict[str, Any], key: str) -> Optional[list[dict[str, Any]]]:
-    """Return a source registry list, None when the key is absent."""
-    if key not in data:
-        return None
-    value = data.get(key) or []
-    return value if isinstance(value, list) else []
 
 
 def lookup_entry(

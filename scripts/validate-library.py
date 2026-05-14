@@ -3,7 +3,7 @@
 validate-library.py — Validate library.yaml against library.schema.json
 
 Usage:
-    python3 scripts/validate-library.py [--yaml PATH] [--schema PATH]
+    python3 scripts/validate-library.py [--yaml PATH] [--schema PATH] [--strict-aliases]
 
 Exit codes:
     0 — PASS: library.yaml is valid
@@ -16,7 +16,13 @@ import re
 import sys
 from pathlib import Path
 
-from lib.primitives import all_primitive_names, get_primitive, resolve_yaml_section
+from lib.catalog import SOURCE_REGISTRIES
+from lib.primitives import (
+    all_primitive_names,
+    get_primitive,
+    resolve_yaml_section,
+    yaml_key_present,
+)
 
 try:
     import yaml
@@ -100,6 +106,61 @@ def _validate_agentskills_rules(data: dict) -> list:
     return errors
 
 
+def _validate_legacy_aliases(
+    data: dict, *, strict: bool = False
+) -> tuple[list[str], list[str]]:
+    """Report deprecated root aliases for normalized library.yaml sections.
+
+    Normal mode returns compatibility warnings while keeping legacy files valid.
+    Strict mode turns every legacy alias into an error so the compatibility
+    window has an enforceable sunset path.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    alias_pairs: list[tuple[str, str, str, str]] = []
+    for primitive_name in all_primitive_names():
+        primitive = get_primitive(primitive_name)
+        if primitive is None:
+            continue
+        for legacy_key in primitive.legacy_yaml_keys:
+            alias_pairs.append(
+                ("primitive", primitive.yaml_section, primitive.yaml_key, legacy_key)
+            )
+
+    for registry in SOURCE_REGISTRIES:
+        for legacy_key in registry.legacy_yaml_keys:
+            alias_pairs.append(
+                ("source registry", registry.yaml_section, registry.yaml_key, legacy_key)
+            )
+
+    for alias_kind, canonical_section, canonical_key, legacy_key in alias_pairs:
+        if not yaml_key_present(data, legacy_key):
+            continue
+
+        label = f"  [{alias_kind} legacy alias '{legacy_key}']"
+        if strict:
+            errors.append(
+                f"{label} Deprecated root key '{legacy_key}' is not allowed in "
+                f"--strict-aliases; use '{canonical_section}' instead"
+            )
+            continue
+
+        if yaml_key_present(data, canonical_key):
+            warnings.append(
+                f"{label} Deprecated root key '{legacy_key}' is ignored because "
+                f"canonical '{canonical_section}' is present; canonical wins and "
+                "legacy entries are ignored"
+            )
+        else:
+            warnings.append(
+                f"{label} Deprecated root key '{legacy_key}' is accepted for "
+                f"compatibility; use '{canonical_section}' instead"
+            )
+
+    return errors, warnings
+
+
 def main() -> int:
     repo_root = find_repo_root()
 
@@ -120,6 +181,11 @@ def main() -> int:
         "--quiet",
         action="store_true",
         help="Suppress output except PASS/FAIL summary",
+    )
+    parser.add_argument(
+        "--strict-aliases",
+        action="store_true",
+        help="Reject deprecated root aliases for normalized library.yaml sections",
     )
     args = parser.parse_args()
 
@@ -171,6 +237,18 @@ def main() -> int:
             print(f"FAIL: {len(errors)} validation error(s) in {yaml_path}")
         return 1
 
+    alias_errors, alias_warnings = _validate_legacy_aliases(
+        data, strict=args.strict_aliases
+    )
+    if alias_errors:
+        if not args.quiet:
+            print(f"FAIL: {yaml_path} has {len(alias_errors)} legacy alias error(s):\n")
+            for err in alias_errors:
+                print(err)
+        else:
+            print(f"FAIL: {len(alias_errors)} legacy alias error(s) in {yaml_path}")
+        return 1
+
     # Additional semantic check: each catalog entry must have a resolvable source
     semantic_errors = []
     for section in ('skill', 'agent', 'prompt', 'script'):
@@ -217,6 +295,12 @@ def main() -> int:
         else:
             print(f"FAIL: {len(agentskills_errors)} agentskills rule violation(s) in {yaml_path}")
         return 1
+
+    if alias_warnings and not args.quiet:
+        print(f"WARN: {yaml_path} has {len(alias_warnings)} legacy alias warning(s):\n")
+        for warning in alias_warnings:
+            print(warning)
+        print()
 
     if not args.quiet:
         print(f"PASS: {yaml_path} is valid against {schema_path}")
