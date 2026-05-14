@@ -53,6 +53,16 @@ def _base_catalog(entry: dict) -> dict:
     }
 
 
+def _errors(result: subprocess.CompletedProcess) -> str:
+    return "\n".join(json.loads(result.stdout)["errors"])
+
+
+def test_schema_uses_unique_gascity_target_enum_values():
+    schema = json.loads(SCHEMA_PATH.read_text())
+    targets = schema["$defs"]["gascity_target_surface"]["enum"]
+    assert len(targets) == len(set(targets))
+
+
 def test_schema_accepts_nested_gascity_metadata():
     entry = {
         "name": "packable-skill",
@@ -148,6 +158,53 @@ def test_export_validator_accepts_valid_exportable_entry():
     assert envelope["status"] == "ok"
 
 
+def test_export_validator_rejects_agent_target_without_session_class():
+    entry = {
+        "name": "incomplete-agent",
+        "description": "An agent projection missing its Gas City session class.",
+        "source": "https://github.com/example/repo/blob/main/agents/incomplete-agent.md",
+        "metadata": {
+            "library": {
+                "gascity": {
+                    "exportable": True,
+                    "target": "agent",
+                    "pack": "cognovis-base",
+                    "scope": "rig",
+                }
+            }
+        },
+    }
+    data = _base_catalog(entry)
+    data["library"]["agents"] = [data["library"]["skills"].pop()]
+    result = _run(VALIDATE_EXPORT, data, "--json")
+    assert result.returncode == 1
+    assert "target=agent must declare session_class polecat or crew" in _errors(result)
+
+
+def test_export_validator_rejects_projection_target_section_mismatch():
+    entry = {
+        "name": "not-an-agent",
+        "description": "A skill cannot project directly as a runtime agent.",
+        "source": "https://github.com/example/repo/blob/main/skills/not-an-agent/SKILL.md",
+        "metadata": {
+            "library": {
+                "gascity": {
+                    "exportable": True,
+                    "target": "agent",
+                    "pack": "cognovis-base",
+                    "scope": "rig",
+                    "session_class": "crew",
+                }
+            }
+        },
+    }
+    result = _run(VALIDATE_EXPORT, _base_catalog(entry), "--json")
+    assert result.returncode == 1
+    assert "target=agent is only valid for agent catalog entries, not skill" in _errors(
+        result
+    )
+
+
 def test_export_validator_accepts_projection_shape():
     entry = {
         "name": "projectable-agent",
@@ -179,6 +236,100 @@ def test_export_validator_accepts_projection_shape():
     assert result.returncode == 0, result.stdout + result.stderr
     envelope = json.loads(result.stdout)
     assert envelope["status"] == "ok"
+
+
+def test_export_validator_rejects_unknown_projection_standards():
+    entry = {
+        "name": "unknown-standard",
+        "description": "A projection requiring a missing standard.",
+        "source": "https://github.com/example/repo/blob/main/skills/unknown-standard/SKILL.md",
+        "metadata": {
+            "library": {
+                "gascity": {
+                    "exportable": True,
+                    "projections": [
+                        {
+                            "target": "skill",
+                            "pack": "cognovis-base",
+                            "scope": "rig",
+                            "requires": {"standards": ["missing-standard"]},
+                        }
+                    ],
+                }
+            }
+        },
+    }
+    result = _run(VALIDATE_EXPORT, _base_catalog(entry), "--json")
+    assert result.returncode == 1
+    assert "references unknown Gas City export standards: missing-standard" in _errors(
+        result
+    )
+
+
+def test_export_validator_rejects_unsafe_projection_target_paths():
+    entry = {
+        "name": "unsafe-paths",
+        "description": "A projection with unsafe target paths.",
+        "source": "https://github.com/example/repo/blob/main/skills/unsafe-paths/SKILL.md",
+        "metadata": {
+            "library": {
+                "gascity": {
+                    "exportable": True,
+                    "projections": [
+                        {
+                            "target": "skill",
+                            "pack": "cognovis-base",
+                            "scope": "rig",
+                            "target_path": "/absolute/path.md",
+                        },
+                        {
+                            "target": "skill",
+                            "pack": "cognovis-extra",
+                            "scope": "rig",
+                            "target_path": "../escape.md",
+                        },
+                    ],
+                }
+            }
+        },
+    }
+    result = _run(VALIDATE_EXPORT, _base_catalog(entry), "--json")
+    assert result.returncode == 1
+    errors = json.loads(result.stdout)["errors"]
+    assert sum("target_path must be pack-relative" in error for error in errors) == 2
+
+
+def test_projection_shape_takes_precedence_over_legacy_pack_fields():
+    entry = {
+        "name": "mixed-shape",
+        "description": "An entry carrying legacy fields during projection migration.",
+        "source": "https://github.com/example/repo/blob/main/skills/mixed-shape/SKILL.md",
+        "metadata": {
+            "library": {
+                "gascity": {
+                    "exportable": True,
+                    "target": "agent",
+                    "pack": "legacy-base",
+                    "scope": "rig",
+                    "projections": [
+                        {
+                            "target": "skill",
+                            "pack": "cognovis-base",
+                            "scope": "rig",
+                        }
+                    ],
+                }
+            }
+        },
+    }
+    data = _base_catalog(entry)
+    result = _run(VALIDATE_EXPORT, data, "--json")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    result = _run(VALIDATE_EXPORT, data, "--json", "--pack", "legacy-base")
+    assert result.returncode == 1
+    errors = _errors(result)
+    assert "target=agent is only valid for agent catalog entries, not skill" in errors
 
 
 def test_export_validator_rejects_missing_target():
@@ -237,6 +388,25 @@ def test_pack_strict_validation_checks_targeted_non_exportable_projection():
     errors = "\n".join(envelope["errors"])
     assert "missing 'target'" in errors
     assert "missing 'scope'" in errors
+
+
+def test_bundled_command_doctor_and_formula_scripts_require_entrypoint():
+    entry = {
+        "name": "script-consumer",
+        "description": "A skill with bundled script entrypoints.",
+        "source": "https://github.com/example/repo/blob/main/skills/script-consumer/SKILL.md",
+        "scripts": [
+            {"path": "scripts/command.py", "role": "command"},
+            {"path": "scripts/doctor.py", "role": "doctor"},
+            {"path": "scripts/formula.py", "role": "formula-step"},
+        ],
+    }
+    result = _run(VALIDATE_EXPORT, _base_catalog(entry), "--json")
+    assert result.returncode == 1
+    errors = _errors(result)
+    assert "script role command must set entrypoint: true" in errors
+    assert "script role doctor must set entrypoint: true" in errors
+    assert "script role formula-step must set entrypoint: true" in errors
 
 
 def test_script_primitive_is_python_only():

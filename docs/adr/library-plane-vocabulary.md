@@ -179,6 +179,9 @@ projection metadata in `metadata.library.*` lets the source file remain portable
 
 - Schema work can add `metadata.library.plane` with Library catalog entries
   limited to the dev plane.
+- Library catalog validation rejects `metadata.library.plane: product`;
+  product-plane artifacts must be referenced through
+  `metadata.library.product_counterpart`.
 - Schema work can add `metadata.library.product_counterpart` as a reference to
   paired product-plane work without cataloging the product artifact itself.
 - Gas City metadata can evolve toward projection entries without redefining

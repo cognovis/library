@@ -367,17 +367,7 @@
         },
         "target": {
           "description": "Legacy Gas City pack surface this primitive projects to. Prefer projections[].target for new metadata.",
-          "type": "string",
-          "enum": [
-            "skill",
-            "agent",
-            "command",
-            "doctor",
-            "formula",
-            "overlay",
-            "asset",
-            "script"
-          ]
+          "$ref": "#/$defs/gascity_target_surface"
         },
         "pack": {
           "description": "Legacy preferred pack name for generated exports, e.g. cognovis-base. Prefer projections[].pack for new metadata.",
@@ -386,13 +376,7 @@
         },
         "scope": {
           "description": "Legacy runtime scope for the exported behavior. Prefer projections[].scope for new metadata.",
-          "type": "string",
-          "enum": [
-            "city",
-            "rig",
-            "provider",
-            "global"
-          ]
+          "$ref": "#/$defs/gascity_scope"
         },
         "projections": {
           "description": "Gas City PackV2 projection targets. Use this shape when target, scope, or target_path varies per pack.",
@@ -404,12 +388,7 @@
         },
         "session_class": {
           "description": "Whether this primitive implies a Gas City transient or persistent session class.",
-          "type": "string",
-          "enum": [
-            "polecat",
-            "crew",
-            "none"
-          ],
+          "$ref": "#/$defs/gascity_session_class",
           "default": "none"
         },
         "provider_neutral": {
@@ -423,31 +402,68 @@
         },
         "requires": {
           "description": "Runtime requirements for the exported pack surface.",
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "binaries": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            },
-            "env": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            },
-            "standards": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            }
-          }
+          "$ref": "#/$defs/gascity_requires"
+        }
+      }
+    },
+    "gascity_target_surface": {
+      "description": "Gas City pack surface a Library primitive projects to.",
+      "type": "string",
+      "enum": [
+        "skill",
+        "agent",
+        "command",
+        "doctor",
+        "formula",
+        "overlay",
+        "asset",
+        "script"
+      ]
+    },
+    "gascity_scope": {
+      "description": "Where exported Gas City behavior is expected to operate.",
+      "type": "string",
+      "enum": [
+        "city",
+        "rig",
+        "provider",
+        "global"
+      ]
+    },
+    "gascity_session_class": {
+      "description": "Whether a Gas City projection implies a transient or persistent session class.",
+      "type": "string",
+      "enum": [
+        "polecat",
+        "crew",
+        "none"
+      ]
+    },
+    "gascity_requires": {
+      "description": "Runtime requirements for a projected pack surface.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "binaries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "standards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       }
     },
@@ -463,17 +479,7 @@
       "properties": {
         "target": {
           "description": "Gas City pack surface this primitive projects to.",
-          "type": "string",
-          "enum": [
-            "skill",
-            "agent",
-            "command",
-            "doctor",
-            "formula",
-            "overlay",
-            "asset",
-            "script"
-          ]
+          "$ref": "#/$defs/gascity_target_surface"
         },
         "pack": {
           "description": "Target PackV2 pack name, e.g. cognovis-base.",
@@ -482,22 +488,11 @@
         },
         "scope": {
           "description": "Where the exported behavior is expected to operate.",
-          "type": "string",
-          "enum": [
-            "city",
-            "rig",
-            "provider",
-            "global"
-          ]
+          "$ref": "#/$defs/gascity_scope"
         },
         "session_class": {
           "description": "Whether this projection implies a Gas City transient or persistent session class.",
-          "type": "string",
-          "enum": [
-            "polecat",
-            "crew",
-            "none"
-          ],
+          "$ref": "#/$defs/gascity_session_class",
           "default": "none"
         },
         "provider_neutral": {
@@ -511,31 +506,7 @@
         },
         "requires": {
           "description": "Runtime requirements for this projected pack surface.",
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "binaries": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            },
-            "env": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            },
-            "standards": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": []
-            }
-          }
+          "$ref": "#/$defs/gascity_requires"
         }
       }
     },

@@ -21,6 +21,12 @@ except ImportError:
     print("FAIL: PyYAML is not installed. Run: pip install PyYAML", file=sys.stderr)
     sys.exit(1)
 
+TARGET_SECTION_REQUIREMENTS = {
+    "agent": "agent",
+    "script": "script",
+    "skill": "skill",
+}
+
 
 def find_repo_root() -> Path:
     current = Path(__file__).resolve().parent
@@ -87,11 +93,16 @@ def validate_catalog(data: dict[str, Any], target_pack: str | None = None) -> li
                 "product-plane artifacts belong in metadata.library.product_counterpart"
             )
 
-        gascity = (
-            library_meta.get("gascity") or {}
-        )
+        gascity = library_meta.get("gascity") or {}
         if gascity.get("exportable") is True:
-            _validate_gascity(location, section, gascity, standards, errors)
+            _validate_gascity(
+                location,
+                section,
+                gascity,
+                standards,
+                errors,
+                target_pack=target_pack,
+            )
         elif target_pack and _gascity_targets_pack(gascity, target_pack):
             _validate_gascity(
                 location,
@@ -176,7 +187,11 @@ def _validate_gascity(
                 errors,
                 defaults=gascity,
             )
-        if validated_projection or not target_pack or gascity.get("pack") != target_pack:
+        if (
+            validated_projection
+            or not target_pack
+            or gascity.get("pack") != target_pack
+        ):
             return
 
     _validate_projection(location, section, gascity, standards, errors)
@@ -195,6 +210,7 @@ def _validate_projection(
             errors.append(f"{location} exportable metadata missing '{field}'")
 
     target = projection.get("target")
+    _validate_target_section(location, section, target, errors)
     session_class = projection.get("session_class") or (defaults or {}).get(
         "session_class",
         "none",
@@ -203,15 +219,25 @@ def _validate_projection(
         errors.append(
             f"{location} target=agent must declare session_class polecat or crew"
         )
-    if section == "script" and target not in {"script", "asset", "command", "doctor", "formula"}:
-        errors.append(f"{location} script export target is not script-compatible: {target}")
+    if section == "script" and target not in {
+        "script",
+        "asset",
+        "command",
+        "doctor",
+        "formula",
+    }:
+        errors.append(
+            f"{location} script export target is not script-compatible: {target}"
+        )
 
     target_path = projection.get("target_path")
     if target_path and (
         str(target_path).startswith("/")
         or ".." in Path(str(target_path)).parts
     ):
-        errors.append(f"{location} target_path must be pack-relative and stay inside the pack")
+        errors.append(
+            f"{location} target_path must be pack-relative and stay inside the pack"
+        )
 
     missing_standards = []
     requires = projection.get("requires") or (defaults or {}).get("requires") or {}
@@ -225,6 +251,17 @@ def _validate_projection(
         )
 
 
+def _validate_target_section(
+    location: str, section: str, target: Any, errors: list[str]
+) -> None:
+    required_section = TARGET_SECTION_REQUIREMENTS.get(str(target))
+    if required_section and section != required_section:
+        errors.append(
+            f"{location} target={target} is only valid for {required_section} "
+            f"catalog entries, not {section}"
+        )
+
+
 def _validate_script_asset(
     location: str, script: dict[str, Any], errors: list[str]
 ) -> None:
@@ -233,8 +270,12 @@ def _validate_script_asset(
         errors.append(f"{location} bundled script path must end in .py: {path}")
     if script.get("language", "python") != "python":
         errors.append(f"{location} bundled scripts are Python-only: {path}")
-    if script.get("role") in {"command", "doctor", "formula-step"} and not script.get("entrypoint"):
-        errors.append(f"{location} script role {script.get('role')} must set entrypoint: true")
+    if script.get("role") in {"command", "doctor", "formula-step"} and not script.get(
+        "entrypoint"
+    ):
+        errors.append(
+            f"{location} script role {script.get('role')} must set entrypoint: true"
+        )
 
 
 def _validate_script_entry(
