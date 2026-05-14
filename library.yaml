@@ -78,7 +78,10 @@ library:
         "audit agent", "agent vs skill", or asks about multi-agent architecture.
       source: https://github.com/cognovis/library-core/blob/main/skills/agent-forge/SKILL.md
       requires:
+        - "standard:agentic-primitives"
+        - "standard:primitive-placement"
         - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:core
@@ -285,7 +288,10 @@ library:
         hook-forge, hook-creator, hooks, PreToolUse, PostToolUse, security hook.
       source: https://github.com/cognovis/library-core/blob/main/skills/hook-forge/SKILL.md
       requires:
+        - "standard:agentic-primitives"
+        - "standard:primitive-placement"
         - "standard:english-only"
+        - "standard:no-emoji"
       tags:
         - origin:original
         - tier:domain
@@ -493,6 +499,7 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/skill-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
+        - "standard:primitive-placement"
         - "standard:english-only"
         - "standard:no-emoji"
       tags:
@@ -507,6 +514,7 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/script-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
+        - "standard:primitive-placement"
         - "standard:english-only"
         - "standard:no-emoji"
       scripts:
@@ -540,6 +548,7 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/standard-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
+        - "standard:primitive-placement"
         - "standard:english-only"
         - "standard:no-emoji"
       tags:
@@ -1638,6 +1647,18 @@ library:
         requires_standards by skill-forge, agent-forge, hook-forge, and standard-forge so
         primitive-type selection is consistent and self-correcting.
       source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives.md
+      tier: core
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:core
+        - category:standard
+    - name: primitive-placement
+      description: >-
+        Placement rubric for Library primitives: steward marketplace, dev-plane catalog
+        boundaries, product counterparts, repo-local overlays, deterministic script
+        routing, and Gas City projections.
+      source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives/primitive-placement.md
       tier: core
       default_scope: ask
       tags:
