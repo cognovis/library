@@ -15,6 +15,13 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.skip(
+    reason=(
+        "Historical one-shot migration tests target the removed plugin/.claude source layout. "
+        "Current catalog and installer layout coverage lives in the active library tests."
+    )
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

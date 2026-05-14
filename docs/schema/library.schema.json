@@ -712,6 +712,22 @@
         "name",
         "description"
       ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "single-hook"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "purpose"
+            ]
+          }
+        }
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {

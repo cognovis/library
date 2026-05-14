@@ -6,6 +6,13 @@ import os
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.skip(
+    reason=(
+        "Historical one-shot migration tests target the removed plugin/.claude source layout. "
+        "Current catalog and installer layout coverage lives in the active library tests."
+    )
+)
+
 LIBRARY_CORE = Path(os.environ.get("LIBRARY_CORE", "/tmp/cognovis-library-core"))
 SOURCE = Path(os.environ.get("SOURCE_PLUGINS", "/Users/malte/code/claude-code-plugins"))
 PEOPLE_QUERY_SOURCE = Path("/Users/malte/.claude/skills/open-brain/people-query")

@@ -24,21 +24,21 @@ REPO = "sussdorff/library-core"
 
 # All 13 artefacts: (path_in_repo, display_name)
 EXPECTED_SKILL_FILES = [
-    (".claude/skills/business/ai-readiness/SKILL.md", "ai-readiness"),
-    (".claude/skills/business/amazon/SKILL.md", "amazon"),
-    (".claude/skills/business/career-check/SKILL.md", "career-check"),
-    (".claude/skills/business/google-invoice/SKILL.md", "google-invoice"),
-    (".claude/skills/business/mm-cli/SKILL.md", "mm-cli"),
-    (".claude/skills/content/linkedin/SKILL.md", "linkedin"),
-    (".claude/skills/content/transcribe/SKILL.md", "transcribe"),
-    (".claude/skills/infra/hetzner-cloud/SKILL.md", "hetzner-cloud"),
-    (".claude/skills/infra/home-infra/SKILL.md", "home-infra"),
-    (".claude/skills/infra/local-vm/SKILL.md", "local-vm"),
-    (".claude/skills/infra/paperless-cli/SKILL.md", "paperless-cli"),
-    (".claude/skills/infra/piler-cli/SKILL.md", "piler-cli"),
+    ("skills/business/ai-readiness/SKILL.md", "ai-readiness"),
+    ("skills/business/amazon/SKILL.md", "amazon"),
+    ("skills/business/career-check/SKILL.md", "career-check"),
+    ("skills/business/google-invoice/SKILL.md", "google-invoice"),
+    ("skills/business/mm-cli/SKILL.md", "mm-cli"),
+    ("skills/content/linkedin/SKILL.md", "linkedin"),
+    ("skills/content/transcribe/SKILL.md", "transcribe"),
+    ("skills/infra/hetzner-cloud/SKILL.md", "hetzner-cloud"),
+    ("skills/infra/home-infra/SKILL.md", "home-infra"),
+    ("skills/infra/local-vm/SKILL.md", "local-vm"),
+    ("skills/infra/paperless-cli/SKILL.md", "paperless-cli"),
+    ("skills/infra/piler-cli/SKILL.md", "piler-cli"),
 ]
 
-AGENT_FILE = ".claude/agents/home.md"
+AGENT_FILE = "agents/home.md"
 
 MIGRATION_COMMIT_PREFIX = "feat(CL-4mt):"
 
@@ -134,7 +134,7 @@ class TestSmokeInstallable:
 
     def test_mm_cli_smoke(self):
         """mm-cli SKILL.md must be accessible and have name: + description: in frontmatter."""
-        path = ".claude/skills/business/mm-cli/SKILL.md"
+        path = "skills/business/mm-cli/SKILL.md"
         data = gh_api(path)
         content = decode_content(data)
         frontmatter = get_frontmatter(content)
@@ -146,7 +146,7 @@ class TestSmokeInstallable:
 
     def test_home_infra_smoke(self):
         """home-infra SKILL.md must be accessible and have name: + description: in frontmatter."""
-        path = ".claude/skills/infra/home-infra/SKILL.md"
+        path = "skills/infra/home-infra/SKILL.md"
         data = gh_api(path)
         content = decode_content(data)
         frontmatter = get_frontmatter(content)
@@ -170,7 +170,7 @@ class TestSmokeInstallable:
             f"gh repo clone failed: {result.stderr.strip()}"
         )
         # Simulate install: copy skill directory to target (mirrors what /library use does)
-        skill_src = src_dir / ".claude" / "skills" / "business" / "mm-cli"
+        skill_src = src_dir / "skills" / "business" / "mm-cli"
         skill_dst = tmp_path / "installed-skills" / "mm-cli"
         assert skill_src.exists(), f"mm-cli skill not found at {skill_src}"
         shutil.copytree(str(skill_src), str(skill_dst))
@@ -199,7 +199,7 @@ class TestSmokeInstallable:
             f"gh repo clone failed: {result.stderr.strip()}"
         )
         # Simulate install: copy skill directory to target (mirrors what /library use does)
-        skill_src = src_dir / ".claude" / "skills" / "infra" / "home-infra"
+        skill_src = src_dir / "skills" / "infra" / "home-infra"
         skill_dst = tmp_path / "installed-skills" / "home-infra"
         assert skill_src.exists(), f"home-infra skill not found at {skill_src}"
         shutil.copytree(str(skill_src), str(skill_dst))

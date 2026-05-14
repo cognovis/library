@@ -55,7 +55,8 @@ def get_registered_names(library_data):
     skills = {e["name"] for e in lib.get("skills", []) if "name" in e}
     agents = {e["name"] for e in lib.get("agents", []) if "name" in e}
     prompts = {e["name"] for e in lib.get("prompts", []) if "name" in e}
-    return skills, agents, prompts
+    standards = {e["name"] for e in lib.get("standards", []) if "name" in e}
+    return skills, agents, prompts, standards
 
 
 # Expected cognovis skills (names as they appear in library.yaml)
@@ -90,13 +91,26 @@ EXPECTED_COGNOVIS_AGENTS = {
 # Expected sussdorff agents
 EXPECTED_SUSSDORFF_AGENTS = {"home"}
 
-# Expected prompts (commands + standards)
+# Expected prompts (commands only)
 EXPECTED_PROMPTS = {
     "compact-reference", "install-playwright", "install-plugin",
+}
+
+# Expected standards
+EXPECTED_STANDARDS = {
     "adr-location", "english-only", "execution-result-envelope",
     "healthcare-control-areas", "no-emoji", "open-brain-http-client",
     "python-default-bash-exception", "script-first-rule", "tool-standards",
 }
+
+ALLOWED_SOURCE_REPOS = (
+    "cognovis/library-core",
+    "sussdorff/library-core",
+    "sussdorff/open-brain",
+    "cognovis/samurai-skills",
+)
+
+ALLOWED_DEPENDENCY_PREFIXES = ("skill:", "agent:", "prompt:", "standard:", "hook:", "mcp:")
 
 
 # ---- Tests ----------------------------------------------------------------
@@ -104,7 +118,7 @@ EXPECTED_PROMPTS = {
 def test_cognovis_skills_registered():
     """All expected cognovis skills must be registered in library.skills."""
     library = load_library()
-    skills, _, _ = get_registered_names(library)
+    skills, _, _, _ = get_registered_names(library)
     missing = EXPECTED_COGNOVIS_SKILLS - skills
     assert not missing, f"Missing cognovis skills in library.yaml: {sorted(missing)}"
 
@@ -112,7 +126,7 @@ def test_cognovis_skills_registered():
 def test_sussdorff_skills_registered():
     """All expected sussdorff skills must be registered in library.skills."""
     library = load_library()
-    skills, _, _ = get_registered_names(library)
+    skills, _, _, _ = get_registered_names(library)
     missing = EXPECTED_SUSSDORFF_SKILLS - skills
     assert not missing, f"Missing sussdorff skills in library.yaml: {sorted(missing)}"
 
@@ -120,7 +134,7 @@ def test_sussdorff_skills_registered():
 def test_cognovis_agents_registered():
     """All expected cognovis agents must be registered in library.agents."""
     library = load_library()
-    _, agents, _ = get_registered_names(library)
+    _, agents, _, _ = get_registered_names(library)
     missing = EXPECTED_COGNOVIS_AGENTS - agents
     assert not missing, f"Missing cognovis agents in library.yaml: {sorted(missing)}"
 
@@ -128,17 +142,25 @@ def test_cognovis_agents_registered():
 def test_sussdorff_agents_registered():
     """All expected sussdorff agents must be registered in library.agents."""
     library = load_library()
-    _, agents, _ = get_registered_names(library)
+    _, agents, _, _ = get_registered_names(library)
     missing = EXPECTED_SUSSDORFF_AGENTS - agents
     assert not missing, f"Missing sussdorff agents in library.yaml: {sorted(missing)}"
 
 
 def test_prompts_registered():
-    """All expected prompts (commands + standards) must be registered in library.prompts."""
+    """All expected commands must be registered in library.prompts."""
     library = load_library()
-    _, _, prompts = get_registered_names(library)
+    _, _, prompts, _ = get_registered_names(library)
     missing = EXPECTED_PROMPTS - prompts
     assert not missing, f"Missing prompts in library.yaml: {sorted(missing)}"
+
+
+def test_standards_registered():
+    """All expected standards must be registered in library.standards."""
+    library = load_library()
+    _, _, _, standards = get_registered_names(library)
+    missing = EXPECTED_STANDARDS - standards
+    assert not missing, f"Missing standards in library.yaml: {sorted(missing)}"
 
 
 def test_all_entries_have_source_urls():
@@ -147,7 +169,7 @@ def test_all_entries_have_source_urls():
     lib = library.get("library", {})
 
     errors = []
-    for section_name in ("skills", "agents", "prompts"):
+    for section_name in ("skills", "agents", "prompts", "standards"):
         for entry in lib.get(section_name, []):
             name = entry.get("name", "<unknown>")
             # Skip impeccable (from_marketplace) and any other marketplace entries
@@ -165,7 +187,7 @@ def test_all_entries_have_descriptions():
     lib = library.get("library", {})
 
     errors = []
-    for section_name in ("skills", "agents", "prompts"):
+    for section_name in ("skills", "agents", "prompts", "standards"):
         for entry in lib.get(section_name, []):
             name = entry.get("name", "<unknown>")
             if "from_marketplace" in entry:
@@ -183,7 +205,7 @@ def test_all_entries_have_tags():
     lib = library.get("library", {})
 
     errors = []
-    for section_name in ("skills", "agents", "prompts"):
+    for section_name in ("skills", "agents", "prompts", "standards"):
         for entry in lib.get(section_name, []):
             name = entry.get("name", "<unknown>")
             if "from_marketplace" in entry:
@@ -195,23 +217,20 @@ def test_all_entries_have_tags():
     assert not errors, f"Entries without tags:\n" + "\n".join(errors)
 
 
-def test_source_urls_point_to_correct_repos():
-    """Source URLs must point to cognovis or sussdorff library-core."""
+def test_source_urls_point_to_registered_source_repos():
+    """Source URLs must point to an approved first-party source repo."""
     library = load_library()
     lib = library.get("library", {})
 
     errors = []
-    for section_name in ("skills", "agents", "prompts"):
+    for section_name in ("skills", "agents", "prompts", "standards"):
         for entry in lib.get(section_name, []):
             name = entry.get("name", "<unknown>")
             if "from_marketplace" in entry:
                 continue
             source = entry.get("source", "")
-            if source and not (
-                "cognovis/library-core" in source
-                or "sussdorff/library-core" in source
-            ):
-                errors.append(f"{section_name}/{name}: source URL does not point to library-core: {source}")
+            if source and not any(repo in source for repo in ALLOWED_SOURCE_REPOS):
+                errors.append(f"{section_name}/{name}: source URL does not point to an allowed source repo: {source}")
 
     assert not errors, f"Entries with wrong source URLs:\n" + "\n".join(errors)
 
@@ -229,15 +248,15 @@ def test_requires_format():
     lib = library.get("library", {})
 
     errors = []
-    for section_name in ("skills", "agents", "prompts"):
+    for section_name in ("skills", "agents", "prompts", "standards"):
         for entry in lib.get(section_name, []):
             name = entry.get("name", "<unknown>")
             requires = entry.get("requires", [])
             for req in requires:
                 if not isinstance(req, str):
                     errors.append(f"{section_name}/{name}: requires item must be string, got {type(req).__name__}: {req}")
-                elif not any(req.startswith(p) for p in ("skill:", "agent:", "prompt:")):
-                    errors.append(f"{section_name}/{name}: requires item must match 'skill:|agent:|prompt:' pattern: {req}")
+                elif not any(req.startswith(p) for p in ALLOWED_DEPENDENCY_PREFIXES):
+                    errors.append(f"{section_name}/{name}: requires item must use a supported typed prefix: {req}")
 
     assert not errors, f"Invalid requires format:\n" + "\n".join(errors)
 
