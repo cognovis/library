@@ -1,8 +1,8 @@
 """
-installers/simple_file.py — Generic single-file installer for prompt, model-standard,
-and golden-prompt primitives.
+installers/simple_file.py — Generic single-file installer for prompt, script,
+model-standard, and golden-prompt primitives.
 
-All three follow the same pattern:
+All four follow the same pattern:
   1. Fetch source file
   2. Cache it in Layer B (~/.local/share/library/<type>s/<marketplace>/<name>@<sha>/)
   3. Copy to the install target by default (or symlink with --symlink)
@@ -47,11 +47,11 @@ def install_simple_file(
     harness: str = "all",
     install_mode: str = "vendor",
 ) -> dict[str, Any]:
-    """Generic install for prompt, model-standard, golden-prompt.
+    """Generic install for prompt, script, model-standard, golden-prompt.
 
     Args:
         catalog: Parsed library.yaml dict.
-        primitive_name: One of 'prompt', 'model-standard', 'golden-prompt'.
+        primitive_name: One of 'prompt', 'script', 'model-standard', 'golden-prompt'.
         name: Entry name.
         repo_root: Project root.
         scope: 'project' or 'global'.
@@ -96,6 +96,14 @@ def install_simple_file(
     # Determine install filename
     if primitive_name == "prompt":
         install_filename = f"{item_name}.md"
+    elif primitive_name == "script":
+        language = entry.get("language", "python")
+        if language != "python":
+            raise InstallError(
+                f"Script '{item_name}' uses unsupported language '{language}'. "
+                "Scripts are Python-only."
+            )
+        install_filename = f"{item_name}.py"
     elif primitive_name == "model-standard":
         install_filename = f"{item_name}.md"
     elif primitive_name == "golden-prompt":
@@ -144,13 +152,14 @@ def install_simple_file(
             shutil.rmtree(str(cache_path))
         cache_path.mkdir(parents=True, exist_ok=True)
 
-        cached_file_name = source_file.name if source_file.is_file() else f"{item_name}.md"
+        cached_file_name = source_file.name if source_file.is_file() else install_filename
         cached_file = cache_path / cached_file_name
         if source_file.is_file():
             shutil.copy2(str(source_file), str(cached_file))
         else:
             shutil.copytree(str(source_file), str(cache_path / item_name))
-            cached_file = cache_path / item_name / f"{item_name}.md"
+            entrypoint = entry.get("entrypoint") or install_filename
+            cached_file = cache_path / item_name / entrypoint
 
         # 6. Install to target
         canonical_base.mkdir(parents=True, exist_ok=True)
@@ -216,7 +225,7 @@ def remove_simple_file(
     scope: str = "project",
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Generic remove for prompt, model-standard, golden-prompt."""
+    """Generic remove for prompt, script, model-standard, golden-prompt."""
     prim = get_primitive(primitive_name)
     if prim is None:
         raise InstallError(f"Unknown primitive: {primitive_name}")
@@ -226,7 +235,8 @@ def remove_simple_file(
     if canonical_base is None:
         raise InstallError(f"Cannot determine install path for {primitive_name} '{name}'.")
 
-    install_target = canonical_base / f"{name}.md"
+    extension = ".py" if primitive_name == "script" else ".md"
+    install_target = canonical_base / f"{name}{extension}"
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
 
     if dry_run:

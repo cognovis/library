@@ -62,6 +62,13 @@ PRIMITIVES: list[PrimitiveInfo] = [
         install_subdir="prompts",
     ),
     PrimitiveInfo(
+        name="script",
+        yaml_section="library.scripts",
+        yaml_key="library/scripts",
+        description="First-class Python helper scripts deployed to .agents/scripts/",
+        install_subdir="scripts",
+    ),
+    PrimitiveInfo(
         name="standard",
         yaml_section="library.standards",
         yaml_key="library/standards",

@@ -5,7 +5,7 @@ library.py — Deterministic library engine CLI.
 Canonical command grammar:
   python3 scripts/library.py <primitive> <verb> [name-or-query] [options]
 
-Supported primitives: skill, agent, prompt, standard, guardrail, mcp,
+Supported primitives: skill, agent, prompt, script, standard, guardrail, mcp,
                       model-standard, golden-prompt
 
 Supported verbs: list, use, remove, sync, search, audit
@@ -405,6 +405,8 @@ def _dispatch_use(
         return _use_agent(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
     elif primitive == "prompt":
         return _use_simple_file(args, repo_root, catalog, "prompt", name, scope, dry_run, use_json, harness, install_mode)
+    elif primitive == "script":
+        return _use_simple_file(args, repo_root, catalog, "script", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "model-standard":
         return _use_simple_file(args, repo_root, catalog, "model-standard", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "golden-prompt":
@@ -729,6 +731,10 @@ def _dispatch_remove(
     elif primitive == "prompt":
         from lib.installers.simple_file import remove_simple_file
         return remove_simple_file(catalog=catalog, primitive_name="prompt", name=name,
+                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive == "script":
+        from lib.installers.simple_file import remove_simple_file
+        return remove_simple_file(catalog=catalog, primitive_name="script", name=name,
                                   repo_root=repo_root, scope=scope, dry_run=dry_run)
     elif primitive == "model-standard":
         from lib.installers.simple_file import remove_simple_file

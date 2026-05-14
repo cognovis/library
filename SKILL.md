@@ -30,8 +30,8 @@ Primitive-scoped commands use the primitive name before the verb:
 /library <primitive> <verb> [name-or-query]
 ```
 
-Valid primitive names are singular: `skill`, `agent`, `prompt`, `standard`,
-`guardrail`, `mcp`, `model-standard`, and `golden-prompt`.
+Valid primitive names are singular: `skill`, `agent`, `prompt`, `script`,
+`standard`, `guardrail`, `mcp`, `model-standard`, and `golden-prompt`.
 
 The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
 filtering, dependency resolution, and install/update behavior live in
@@ -67,7 +67,7 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync
 ```
 
 **The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
-all primitive types (skill, agent, prompt, standard, guardrail, mcp, model-standard,
+all primitive types (skill, agent, prompt, script, standard, guardrail, mcp, model-standard,
 golden-prompt). Dependency resolution, lockfile writes, and harness selection are all
 handled by the CLI — do NOT implement these manually.
 
@@ -184,6 +184,9 @@ default_dirs:
     prompts:
         - default: .claude/commands/
         - global: ~/.claude/commands/
+    scripts:
+        - default: .agents/scripts/
+        - global: ~/.agents/scripts/
     standards:
         - default: .agents/standards/
         - global: ~/.agents/standards/

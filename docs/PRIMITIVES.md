@@ -15,8 +15,9 @@ Use this tree to decide which primitive a new capability belongs in.
 
 ```
 Is the capability purely deterministic logic (>50 lines)?
- └─ YES → Extract to a script (bash/Python via uv). Wrap the script in a Skill if
-           the model needs to call it.
+ └─ YES → SCRIPT (Python-only deterministic helper). Wrap the script in a Skill,
+           Command, Hook, Agent, or Gas City pack surface if the model/runtime
+           needs to call it.
  └─ NO  → Continue below.
 
 Should the model auto-pick this up from context?
@@ -78,7 +79,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 6 | [Marketplace](#6-marketplace) | yes — distribution layer | yes | yes | yes | yes | yes | §6 |
 | 7 | [Standard](#7-standard) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | n/a | §7 |
 | 8 | [MCP-Server](#8-mcp-server) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | §8 |
-| 9 | Scripts (not a primitive) | yes — plain shell/python | n/a | n/a | n/a | n/a | n/a | §9 |
+| 9 | [Script](#9-script) | **YES** — Python file plus Library metadata | callable from skills/hooks/commands | callable from skills/hooks | callable from CI/export | callable through adapters | callable through adapters | §9 |
 | 10 | [Model-Standard](#10-model-standard) | partial — concept portable, mechanism per-harness | yes | yes | partial | unverified | unverified | §10 |
 
 **How to read this:**
@@ -90,11 +91,20 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 For a capability decision ("should this be a skill or an agent?"), use the Quick Decision Tree above.
 For implementation details on any cell, jump to its linked section below.
 
-**Action boundary metadata.** `action_boundary` is not a separate primitive.
-It is Library metadata declared on any side-effecting skill or agent. NORMATIVE:
+### Action Boundary Metadata
+
+`action_boundary` is not a separate primitive. It is Library metadata declared on
+any side-effecting skill or agent. NORMATIVE:
 the metadata keys are shared across harnesses, but the physical serialization follows
 the primitive format (`SKILL.md` YAML frontmatter for skills, YAML or TOML agent
 metadata for harness-specific agents).
+
+**Catalog metadata compatibility.** `library.yaml` treats `metadata` as an open
+extension bag so nested Library-owned metadata such as `metadata.library.gascity`
+can coexist with agentskills-compatible top-level string metadata. External
+consumers that previously expected `metadata` to be a strict string-to-string map
+should ignore nested `metadata.library.*` keys or validate only the top-level
+string fields they consume.
 
 ---
 
@@ -492,8 +502,8 @@ distributing collections of invokable primitives.
 
 **Definition.** An installable unit that bundles multiple primitives (skills,
 commands, agents, hooks) into a single versioned package distributed from
-one source. (Scripts are not a primitive — they are an implementation substrate
-used inside skills/hooks/agents; see "Design Principle: Scripts" below.)
+one source. (Scripts are a deterministic primitive, but they are not model-invoked
+by themselves; see Script below.)
 
 **Key constitutive feature.** Composite installable: a plugin is defined by its
 bundling — it contains multiple primitive types that work together as a coherent
@@ -823,32 +833,105 @@ tool-use block. The MCP server responds with a tool result.
 
 ---
 
-### 9. Design Principle: Scripts (not a primitive)
+### 9. Script
 
-Scripts are not an agentic primitive — they are the preferred implementation substrate
-for deterministic logic inside any primitive.
+**Definition.** A deterministic Python helper distributed by the Library and called
+by another primitive or runtime surface. Scripts are not model-context by default:
+they are executable implementation artifacts with typed metadata, tests, and output
+contracts.
 
-**The rule:** Maximize deterministic script logic; minimize model decisions.
+**Key constitutive feature.** Deterministic execution: scripts hold logic that should
+not be re-created by the model. They are callable by skills, agents, commands,
+hooks/guardrails, standards, tests, CI, and Gas City pack exports.
 
-- Logic that is deterministic, testable, and >50 lines MUST be extracted to a script
-  (bash or Python via `uv`). Do not embed it inline in a skill's prompt.
-- The model is expensive and non-deterministic. Anything the model decides that a
-  script could decide reliably is wasted tokens and added variance.
-- Standard runtime: `bash` for simple orchestration; `uv`-managed Python for anything
-  requiring libraries or structured data.
+**Language rule.** Cognovis Library scripts are **Python-only**. NORMATIVE.
+
+Rationale: Python gives structured parsing, testability, packaging through `uv`,
+and stable cross-platform behavior. Shell snippets remain acceptable as one-line
+usage examples in docs, but reusable Library scripts are Python.
+
+**Trigger semantics.** A script is never auto-selected by the model. It runs only when
+another primitive or runtime calls it explicitly. Examples:
+
+- a skill says "run `scripts/validate-spec.py`";
+- a hook executes a Python guard script;
+- a Gas City pack command uses the script as `commands/<name>/run.py`;
+- a Gas City doctor check uses the script as `doctor/<name>/run.py`;
+- a formula step calls a script through a command or provider session.
+
+**Catalog format.** First-class scripts live under `library.scripts` in
+`library.yaml`:
+
+```yaml
+- name: validate-spec
+  description: Validate a spec document and return structured findings.
+  source: https://github.com/cognovis/library-core/blob/main/scripts/validate-spec.py
+  language: python
+  output_contract: json-envelope
+  metadata:
+    library:
+      gascity:
+        exportable: true
+        target: script
+        pack: cognovis-specs
+        scope: rig
+```
+
+Skills, agents, standards, hooks, and prompts can also declare bundled scripts in
+their catalog entry:
+
+```yaml
+scripts:
+  - path: scripts/check.py
+    role: validator
+    entrypoint: true
+    language: python
+    output_contract: json-envelope
+```
+
+**Output contracts.**
+
+| Contract | Use when |
+|----------|----------|
+| `json-envelope` | Multiple fields, warnings/errors, or next actions must be machine-readable |
+| `bare-value` | The script prints exactly one atomic value |
+| `exit-code` | The consumer only needs pass/fail plus stderr diagnostics |
+
+The preferred general contract is `json-envelope`:
+
+```json
+{"status":"ok","summary":"one sentence","data":{},"errors":[],"next_steps":[]}
+```
 
 **Where scripts live.**
 
 | Context | Script location |
 |---------|----------------|
-| Skill implementation | `skills/<name>/bin/` alongside SKILL.md |
-| Hook implementation | `hooks/<event>/<name>.py` or `.sh` |
-| Plugin shared logic | `plugins/<name>/scripts/` |
-| Standalone Justfile tasks | `justfile` (tool-agnostic shell) |
+| First-class Library script | `scripts/<name>.py` or `scripts/<name>/<name>.py` |
+| Skill implementation | `skills/<name>/scripts/<name>.py` |
+| Agent helper | `agents/<name>/scripts/<name>.py` when the helper is agent-private |
+| Standard enforcement/tooling | `standards/<name>/scripts/<name>.py` |
+| Guardrail implementation | `guardrails/<name>/<harness-or-purpose>.py` |
+| Gas City export | `assets/scripts/`, `commands/<name>/run.py`, or `doctor/<name>/run.py` |
+
+**When to choose it.** Create a script when:
+
+- logic is deterministic, testable, and over roughly 50 lines;
+- a prompt would otherwise contain a shell/Python pipeline;
+- structured parsing or transformation is required;
+- the same helper will be reused by multiple primitives;
+- Gas City pack export needs a deterministic command or doctor entrypoint.
+
+**Counter-examples.**
+
+- Do NOT make a script for model judgment, prioritization, or tradeoff reasoning.
+- Do NOT hide workflow policy in a script if the model must reason about it; put
+  policy in a skill, standard, or agent prompt and use scripts only for mechanics.
+- Do NOT add shell scripts to the Library. Convert reusable shell logic to Python.
 
 **Anti-pattern.** A 200-line shell pipeline embedded in a skill's prompt is a smell.
 The model will hallucinate flags, get argument order wrong, and produce non-reproducible
-results. Extract to a script and have the skill call it.
+results. Extract to a Python script and have the skill call it.
 
 ---
 

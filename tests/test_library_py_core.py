@@ -30,6 +30,7 @@ SUPPORTED_PRIMITIVES = [
     "skill",
     "agent",
     "prompt",
+    "script",
     "standard",
     "guardrail",
     "mcp",

@@ -383,6 +383,59 @@ class TestStandardRealInstall:
         assert not agents_md.exists()
 
 
+class TestSimpleFileDirectoryEntrypoint:
+    """Directory-backed simple-file primitives should honor entrypoint."""
+
+    def test_prompt_directory_source_installs_configured_entrypoint(self, tmp_path: Path):
+        """A prompt sourced from a directory must install the configured entrypoint file."""
+        source_dir = tmp_path / "prompt-source"
+        source_dir.mkdir()
+        chosen = source_dir / "chosen.md"
+        chosen.write_text("# Chosen Prompt\n\nThis file should be installed.\n")
+
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "library.yaml").write_text(
+            f"""
+default_dirs:
+  prompts:
+    - default: .claude/commands/
+
+library:
+  skills: []
+  agents: []
+  prompts:
+    - name: entrypoint-prompt
+      description: Prompt with a directory source and explicit entrypoint
+      source: {source_dir}
+      entrypoint: chosen.md
+  scripts: []
+  standards: []
+
+marketplaces: []
+guardrails: []
+mcp_servers: []
+model_standards: []
+golden_prompts: []
+"""
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "prompt", "use", "entrypoint-prompt", "--json"],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+        )
+        assert result.returncode == 0, (
+            f"prompt use returned {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+        install_target = project / ".claude" / "commands" / "entrypoint-prompt.md"
+        assert install_target.is_file()
+        assert install_target.read_text() == chosen.read_text()
+
+
 # ---------------------------------------------------------------------------
 # AK6: Real skill use in tempdir
 # ---------------------------------------------------------------------------
@@ -818,6 +871,15 @@ class TestPrimitiveMapping:
         prim = get_primitive("standard")
         assert prim is not None
         assert prim.yaml_key == "library/standards"
+
+    def test_script_maps_to_library_scripts(self):
+        """script primitive maps to library.scripts."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.primitives import get_primitive
+
+        prim = get_primitive("script")
+        assert prim is not None
+        assert prim.yaml_key == "library/scripts"
 
     def test_guardrail_maps_to_guardrails(self):
         """guardrail primitive maps to top-level guardrails."""

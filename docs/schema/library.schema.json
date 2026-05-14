@@ -24,6 +24,10 @@
         "prompts": {
           "description": "Directory mappings for prompts/commands across harnesses.",
           "$ref": "#/$defs/dir_list"
+        },
+        "scripts": {
+          "description": "Directory mappings for first-class Python script primitives.",
+          "$ref": "#/$defs/dir_list"
         }
       },
       "additionalProperties": {
@@ -63,6 +67,14 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/standard_entry"
+          },
+          "default": []
+        },
+        "scripts": {
+          "description": "Catalog of first-class Python script primitives. Scripts are deterministic helpers consumed by skills, agents, hooks, commands, standards, and pack exporters.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/script_entry"
           },
           "default": []
         }
@@ -225,7 +237,8 @@
               "hooks",
               "standards",
               "guardrails",
-              "prompts"
+              "prompts",
+              "scripts"
             ]
           },
           "default": []
@@ -277,17 +290,174 @@
       ]
     },
     "typed_dependency": {
-      "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2: skill, agent, prompt, standard, hook, mcp.",
+      "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2: skill, agent, prompt, standard, hook, mcp, script.",
       "type": "string",
-      "pattern": "^(skill|agent|prompt|standard|hook|mcp):.+$",
+      "pattern": "^(skill|agent|prompt|standard|hook|mcp|script):.+$",
       "examples": [
         "skill:firecrawl",
         "agent:video-processor",
         "prompt:caption-style",
         "standard:english-only",
         "hook:block-destructive-bash",
-        "mcp:open-brain"
+        "mcp:open-brain",
+        "script:validate-spec"
       ]
+    },
+    "script_asset": {
+      "description": "A deterministic Python script bundled with or referenced by a primitive.",
+      "type": "object",
+      "required": [
+        "path",
+        "role"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Path to the Python script relative to the primitive root.",
+          "type": "string",
+          "pattern": "^[^\\0]+\\.py$"
+        },
+        "role": {
+          "description": "How the script is used by the owning primitive.",
+          "type": "string",
+          "enum": [
+            "helper",
+            "entrypoint",
+            "command",
+            "doctor",
+            "validator",
+            "exporter",
+            "formula-step"
+          ]
+        },
+        "entrypoint": {
+          "description": "True when the script is directly callable by humans, pack commands, doctor checks, or formulas.",
+          "type": "boolean",
+          "default": false
+        },
+        "language": {
+          "description": "Script implementation language. Cognovis Library scripts are Python-only.",
+          "type": "string",
+          "enum": [
+            "python"
+          ],
+          "default": "python"
+        },
+        "output_contract": {
+          "description": "Output contract expected by consumers.",
+          "type": "string",
+          "enum": [
+            "json-envelope",
+            "bare-value",
+            "exit-code"
+          ],
+          "default": "json-envelope"
+        }
+      }
+    },
+    "gascity_export": {
+      "description": "Library-owned Gas City PackV2 export metadata. This is a projection hint for pack generation, not Gas City runtime config.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exportable": {
+          "description": "Whether this primitive may be exported into a Gas City pack.",
+          "type": "boolean",
+          "default": false
+        },
+        "target": {
+          "description": "Gas City pack surface this primitive projects to.",
+          "type": "string",
+          "enum": [
+            "skill",
+            "agent",
+            "command",
+            "doctor",
+            "formula",
+            "overlay",
+            "asset",
+            "script"
+          ]
+        },
+        "pack": {
+          "description": "Preferred pack name for generated exports, e.g. cognovis-base.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "scope": {
+          "description": "Where the exported behavior is expected to operate.",
+          "type": "string",
+          "enum": [
+            "city",
+            "rig",
+            "provider",
+            "global"
+          ]
+        },
+        "session_class": {
+          "description": "Whether this primitive implies a Gas City transient or persistent session class.",
+          "type": "string",
+          "enum": [
+            "polecat",
+            "crew",
+            "none"
+          ],
+          "default": "none"
+        },
+        "provider_neutral": {
+          "description": "True when core content avoids Claude/Codex/provider-specific assumptions.",
+          "type": "boolean",
+          "default": true
+        },
+        "target_path": {
+          "description": "Optional pack-relative target path override.",
+          "type": "string"
+        },
+        "requires": {
+          "description": "Runtime requirements for the exported pack surface.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "binaries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "env": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "standards": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          }
+        }
+      }
+    },
+    "entry_metadata": {
+      "description": "Open metadata bag. Library-owned metadata lives under metadata.library.*; agentskills-compatible string fields may coexist at the top level.",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "library": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "gascity": {
+              "$ref": "#/$defs/gascity_export"
+            }
+          }
+        }
+      }
     },
     "base_entry": {
       "description": "Common fields shared by all catalog entry types. Either `source` or `from_marketplace + repo + path` is required.",
@@ -316,6 +486,17 @@
             "$ref": "#/$defs/typed_dependency"
           },
           "default": []
+        },
+        "scripts": {
+          "description": "Python scripts bundled with this primitive and visible to validators/exporters.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/script_asset"
+          },
+          "default": []
+        },
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
         },
         "version": {
           "description": "Optional semantic version or tag of the entry.",
@@ -443,9 +624,7 @@
               "maxLength": 500
             },
             "metadata": {
-              "description": "Arbitrary key-value metadata per agentskills.io standard.",
-              "type": "object",
-              "additionalProperties": {"type": "string"}
+              "$ref": "#/$defs/entry_metadata"
             }
           }
         }
@@ -549,6 +728,65 @@
               "description": "When true, always load this standard into context regardless of file matches (agentskills.io standard). Use sparingly.",
               "type": "boolean",
               "default": false
+            }
+          }
+        }
+      ]
+    },
+    "script_entry": {
+      "description": "A first-class Python script primitive. Scripts are deterministic helpers, not model context, and may be exported to Gas City assets/scripts, commands, doctor checks, or formula steps.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/base_entry"
+        },
+        {
+          "$ref": "#/$defs/marketplace_ref"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "install_path": {
+              "description": "Override the default install directory for this script.",
+              "type": "string"
+            },
+            "language": {
+              "description": "Script implementation language. Cognovis Library scripts are Python-only.",
+              "type": "string",
+              "enum": [
+                "python"
+              ],
+              "default": "python"
+            },
+            "entrypoint": {
+              "description": "Path to the primary Python entrypoint relative to the source directory, or omitted when source points directly at the .py file.",
+              "type": "string",
+              "pattern": "^[^\\0]+\\.py$"
+            },
+            "output_contract": {
+              "description": "Output contract expected by consumers.",
+              "type": "string",
+              "enum": [
+                "json-envelope",
+                "bare-value",
+                "exit-code"
+              ],
+              "default": "json-envelope"
+            },
+            "gascity_targets": {
+              "description": "Allowed Gas City target surfaces for this script.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "asset",
+                  "command",
+                  "doctor",
+                  "formula"
+                ]
+              },
+              "default": [
+                "asset"
+              ]
             }
           }
         }

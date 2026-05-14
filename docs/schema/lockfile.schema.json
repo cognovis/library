@@ -40,7 +40,7 @@
         "type": {
           "description": "Primitive type of the installed item.",
           "type": "string",
-          "enum": ["skill", "agent", "prompt", "guardrail", "standard", "model-standard", "golden-prompt", "mcp"]
+          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "golden-prompt", "mcp"]
         },
         "marketplace": {
           "description": "Name of the source-provider marketplace entry in library.yaml.marketplaces. Identifies which marketplace this item was fetched from. Use 'local' for local-path sources and 'unknown' for sources that cannot be matched to a registered marketplace.",

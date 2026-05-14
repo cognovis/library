@@ -50,7 +50,7 @@ _NAME_PATTERN = re.compile(r'^[a-z][a-z0-9-]*$')
 def _validate_agentskills_rules(data: dict) -> list:
     """Enforce agentskills.io name/description constraints on all catalog entries.
 
-    Rules (apply to skills, agents, prompts, standards):
+    Rules (apply to skills, agents, prompts, standards, scripts):
     - name: max 64 chars
     - name: must match [a-z][a-z0-9-]* (lowercase letters, digits, hyphens only)
     - name: must not end with hyphen
@@ -60,7 +60,7 @@ def _validate_agentskills_rules(data: dict) -> list:
     Returns a list of formatted error strings.
     """
     errors = []
-    for section in ('skills', 'agents', 'prompts', 'standards'):
+    for section in ('skills', 'agents', 'prompts', 'standards', 'scripts'):
         for i, entry in enumerate(data.get('library', {}).get(section, [])):
             name = entry.get('name', f'<entry {i}>')
             desc = entry.get('description', '')
@@ -168,7 +168,7 @@ def main() -> int:
 
     # Additional semantic check: each catalog entry must have a resolvable source
     semantic_errors = []
-    for section in ('skills', 'agents', 'prompts'):
+    for section in ('skills', 'agents', 'prompts', 'scripts'):
         for i, entry in enumerate(data.get('library', {}).get(section, [])):
             name = entry.get('name', f'<entry {i}>')
             has_source = bool(entry.get('source'))
@@ -179,6 +179,18 @@ def main() -> int:
                     f"  [library.{section}[{i}] '{name}'] Entry has no resolvable source: "
                     "provide either 'source' or 'from_marketplace + repo + path'"
                 )
+            if section == 'scripts':
+                source = entry.get('source') or ''
+                entrypoint = entry.get('entrypoint') or source
+                if entry.get('language', 'python') != 'python':
+                    semantic_errors.append(
+                        f"  [library.scripts[{i}] '{name}'] Scripts are Python-only: "
+                        "set language: python"
+                    )
+                if entrypoint and not str(entrypoint).endswith('.py'):
+                    semantic_errors.append(
+                        f"  [library.scripts[{i}] '{name}'] Script entrypoint/source must end in .py"
+                    )
     if semantic_errors:
         if not args.quiet:
             print(f"FAIL: {yaml_path} has {len(semantic_errors)} semantic error(s):\n")

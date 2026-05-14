@@ -139,4 +139,5 @@ def test_portability_matrix_includes_action_boundary_row():
     text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
 
     assert "| 3a | [Action Boundary](#action-boundary-metadata) |" in text
+    assert "### Action Boundary Metadata" in text
     assert "YAML for skills, TOML for agents" in text
