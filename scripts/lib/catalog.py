@@ -150,7 +150,7 @@ def search_all(
         query: Keyword to search (case-insensitive substring).
 
     Returns:
-        List of dicts with keys: primitive, name, description, source.
+        List of dicts with keys: primitive, name, description, source, tags.
     """
     results = []
     query_lower = query.lower()
@@ -163,7 +163,9 @@ def search_all(
         for entry in entries:
             name = entry.get("name") or ""
             desc = entry.get("description") or ""
-            if query_lower in name.lower() or query_lower in desc.lower():
+            tags = [str(tag) for tag in entry.get("tags", []) if tag is not None]
+            searchable = [name, desc, *tags]
+            if any(query_lower in value.lower() for value in searchable):
                 source = (
                     entry.get("source")
                     or entry.get("sources", {}).get("claude")
@@ -175,6 +177,7 @@ def search_all(
                         "name": name,
                         "description": desc,
                         "source": source,
+                        "tags": tags,
                         "status": "unknown",
                     }
                 )

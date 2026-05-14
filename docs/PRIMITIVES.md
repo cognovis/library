@@ -1,7 +1,7 @@
 # Agentic Primitives Glossary
 
 > v0 — source of truth for primitive definitions used across the cognovis-library multi-harness stack.
-> Last updated: 2026-04-30
+> Last updated: 2026-05-14
 >
 > **Claim labeling convention**: Every per-harness behavioral claim is labeled
 > **NORMATIVE** (verified against vendor docs / confirmed behavior) or
@@ -28,7 +28,9 @@ Does the user invoke it explicitly by typing a slash command?
  └─ NO  → Continue below.
 
 Does it need an isolated context budget / own tool permissions?
- └─ YES → AGENT (own context window, own system prompt, own tool set)
+ └─ YES → Is this a pre-action gate (decides whether a proposed side-effect may execute)?
+           ├─ YES → JUDGE (specialization of Agent — see §3 Judge Specialization)
+           └─ NO  → AGENT (own context window, own system prompt, own tool set)
  └─ NO  → Continue below.
 
 Must it fire regardless of what the model decides?
@@ -52,6 +54,11 @@ Is it an external capability provider accessed via the MCP protocol?
 Does it provide model-specific behavioral guidance for an agent persona?
  └─ YES → MODEL-STANDARD
 ```
+
+Judge is the pre-action gate: it approves, rejects, or constrains a proposed
+side-effect before execution. Reviewer and verification agents are post-action
+checks; they inspect results after work has happened and do not authorize the
+action itself.
 
 ---
 
@@ -81,6 +88,12 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 
 For a capability decision ("should this be a skill or an agent?"), use the Quick Decision Tree above.
 For implementation details on any cell, jump to its linked section below.
+
+**Action boundary metadata.** `action_boundary` is not a separate primitive.
+It is Library metadata declared on any side-effecting skill or agent. NORMATIVE:
+the metadata keys are shared across harnesses, but the physical serialization follows
+the primitive format (`SKILL.md` YAML frontmatter for skills, YAML or TOML agent
+metadata for harness-specific agents).
 
 ---
 
@@ -150,6 +163,34 @@ reasoning tier (e.g. "this task needs deep analysis"), document that as a prose 
 inside the skill body; do not pin it in frontmatter.
 
 The one-line rule: **skills are context, not configuration — never model-pin them.**
+
+**`action_boundary` frontmatter for side-effecting skills.** NORMATIVE.
+Any skill that can cause side effects declares the action boundary it operates
+under so a judge layer can request an action proposal before execution.
+
+```yaml
+---
+name: supplier-payment
+description: Draft and submit approved supplier payments.
+action_boundary:
+  class: external-system
+  proposal_schema: action-proposal.v1
+  judge: default-judge
+  requires_mandate: true
+---
+```
+
+Field meanings:
+- `class` — the side-effect class, such as `filesystem-write`, `network-call`,
+  `external-system`, `financial`, `message-send`, `credential-use`, or `other`.
+- `proposal_schema` — the Action Proposal Schema standard the actor must satisfy
+  before attempting the side effect.
+- `judge` — the judge agent or catalog identifier that evaluates the proposal.
+- `requires_mandate` — whether execution requires an AP2-style mandate record in
+  addition to the proposal.
+
+Skills that only provide context, analysis, or read-only commands omit
+`action_boundary`.
 
 **Counter-examples.**
 - Do NOT add `model: sonnet` (or any model) to a SKILL.md frontmatter — use an agent if model selection matters.
@@ -237,6 +278,77 @@ lookups.
 **Format (Codex).** TOML in `.codex/agents/<name>.toml` (or `~/.codex/agents/<name>.toml`
 for global). NORMATIVE — Codex has first-class subagents (default/worker/explorer
 built-ins plus custom TOML).
+
+**`action_boundary` metadata for side-effecting agents.** NORMATIVE.
+Agents that may execute or authorize side effects declare the same boundary fields
+as side-effecting skills. Claude agent sources use YAML frontmatter:
+
+```yaml
+---
+name: payment-runner
+description: Execute approved supplier payments.
+action_boundary:
+  class: financial
+  proposal_schema: action-proposal.v1
+  judge: default-judge
+  requires_mandate: true
+---
+```
+
+Codex agent sources use TOML metadata:
+
+```toml
+name = "payment-runner"
+description = "Execute approved supplier payments."
+
+[action_boundary]
+class = "financial"
+proposal_schema = "action-proposal.v1"
+judge = "default-judge"
+requires_mandate = true
+```
+
+**Agent Justification Gate.** NORMATIVE as Library authoring taxonomy.
+Agent creation must satisfy at least one C-criterion. Judge agents add C7 and
+normally satisfy C1 plus C4.
+
+| Criterion | Justifies an agent when |
+|-----------|-------------------------|
+| C1: isolated context | The work needs a fresh context window or must not pollute the parent context. |
+| C2: specialized prompt | The work needs a durable persona, rubric, or operating procedure. |
+| C3: parallel execution | The work can run independently while the parent continues other work. |
+| C4: tool boundary | The work needs a different tool grant, especially read-only or approval-only access. |
+| C5: independent review | The work needs separation from the actor being checked. |
+| C6: model fit | The work needs a different reasoning tier, latency target, or cost profile. |
+| C7: pre-action gate | The agent decides whether a proposed side-effect may execute before it happens. |
+
+#### Judge Specialization
+
+**Definition.** A Judge is an Agent specialization that evaluates an Action Proposal
+before a side-effecting primitive acts. It returns an allow, deny, request-changes,
+or escalate decision, optionally with constraints the actor must follow.
+
+**Key constitutive feature.** Pre-action authorization. A judge sits before the
+side effect, not after it. It consumes the proposed action, evidence, expected
+consequence, rollback path, and any mandate record, then decides whether the actor
+may continue.
+
+**Justification.** A judge must satisfy C7 plus the normal agent gate. In practice
+that means C1 (separate context) and C4 (separate tool or approval boundary), and
+often C5 (independent review of the actor's evidence). If the check is fully
+deterministic and does not require model judgment, use a Guardrail/Hook instead.
+
+**Relationship to reviewers.** Reviewers and verification agents are post-action:
+they inspect completed work or generated output. Judges are pre-action: they
+authorize, constrain, or reject the action before it executes.
+
+**Distribution status.** This repo defines the taxonomy only. Implementation
+artifacts live in the cognovis-core sibling epic (TBD links): default judge agent,
+Action Proposal Schema standards, Mandate standards, and forge updates.
+
+**Catalog tags.** Judge-layer artifacts use `judge-layer`; side-effecting actors
+that must emit proposals use `requires-proposal`; artifacts that emit AP2-style
+mandates use `produces-mandate`. The tag vocabulary is defined in `library.yaml`.
 
 **When to choose it.** Use an agent when:
 - The subtask needs a different tool permission set than the parent.
@@ -526,6 +638,20 @@ not user-facing.
 
 The folder name matches the identifier value: `domain: python-cli-patterns` →
 `standards/python-cli-patterns/python-cli-patterns.md`.
+
+**Judge-layer standard subtypes.** NORMATIVE as Library taxonomy.
+These are standards, not new primitive classes, because they are shared context and
+schema contracts consumed by skills, agents, and judges.
+
+| Subtype | Definition | Required shape |
+|---------|------------|----------------|
+| Action Proposal Schema | A structured object an actor must produce before a side effect. | intended action, evidence, authorization context, expected consequence, rollback path |
+| Mandate | An AP2-style authorization-as-evidence record that can be attached to an Action Proposal. | scope, limits, evidence, granted_at, granted_by, expires_at, supersedes |
+
+Action Proposal Schema standards define what a side-effecting actor must submit to
+the judge. Mandate standards define durable authorization records: they are evidence
+that the actor has permission within a bounded scope, not permission to do anything
+outside that scope.
 
 **Optional `scripts/` directory.**
 

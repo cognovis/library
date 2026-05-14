@@ -37,6 +37,14 @@ default_dirs:
     - default: .agents/golden-prompts/
     - global: ~/.agents/golden-prompts/
 
+tag_vocabulary:
+  - tag: judge-layer
+    description: Artifacts that ship as part of the judge-layer family.
+  - tag: requires-proposal
+    description: Side-effecting artifacts that must emit an Action Proposal before execution.
+  - tag: produces-mandate
+    description: Artifacts that emit AP2-style mandate records.
+
 library:
   skills:
     - name: impeccable

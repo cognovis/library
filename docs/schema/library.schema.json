@@ -77,6 +77,14 @@
       },
       "default": []
     },
+    "tag_vocabulary": {
+      "description": "Catalog-owned tag definitions used for search and filtering across primitive entries.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tag_definition"
+      },
+      "default": []
+    },
     "standards": {
       "description": "Storage convention and loader-mechanism reference (stub \u2014 populated by CL-v56).",
       "type": "object",
@@ -138,6 +146,27 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "tag_definition": {
+      "description": "A documented catalog tag that may appear in entry tags arrays.",
+      "type": "object",
+      "required": [
+        "tag",
+        "description"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "description": "Machine-readable tag value.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9:-]*$"
+        },
+        "description": {
+          "description": "Human-readable one-line definition.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "catalog_entry": {
       "description": "A first-party content repo (personal or team) registered as a canonical source.",
       "type": "object",
