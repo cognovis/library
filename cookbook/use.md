@@ -55,10 +55,10 @@ git pull
   - `agent` -> `library.agents`
   - `prompt` -> `library.prompts`
   - `standard` -> `library.standards`
-  - `guardrail` -> top-level `guardrails:`
-  - `mcp` -> top-level `mcp_servers:`
-  - `model-standard` -> top-level `model_standards:`
-  - `golden-prompt` -> top-level `golden_prompts:`
+  - `guardrail` -> `library.guardrails`
+  - `mcp` -> `library.mcp_servers`
+  - `model-standard` -> `library.model_standards`
+  - `golden-prompt` -> `library.golden_prompts`
 - Search only that section
 - Match by name (exact) or description (fuzzy/keyword match)
 - If multiple matches remain within the primitive, show them and ask the user to pick one
@@ -71,7 +71,7 @@ scripts. The Step 3–8 catalog workflow does not apply to them.
 
 **(i) hook-manifest guardrails** (e.g. `open-brain-hooks`, per ADR-0004 Decision 8):
 
-If the entry comes from `guardrails:` AND has `kind: hooks-manifest`:
+If the entry comes from `library.guardrails` AND has `kind: hooks-manifest`:
 1. **Skip Steps 3–8 entirely.** They do not apply (no SKILL.md to copy, no
    skills-dir target, no symlinks).
 2. Shell out to the installer:
@@ -85,9 +85,9 @@ If the entry comes from `guardrails:` AND has `kind: hooks-manifest`:
    `python3 .../scripts/install-hook.py <entry-name> --remove` to uninstall."
 4. Skip directly to Step 9 (Confirm).
 
-**(ii) MCP servers** (`mcp_servers:` section, per CL-l0c Deliverable D):
+**(ii) MCP servers** (`library.mcp_servers` section, per CL-l0c Deliverable D):
 
-If the entry comes from the top-level `mcp_servers:` list:
+If the entry comes from the `library.mcp_servers` list:
 1. **Skip Steps 3–8 entirely.** MCP servers have no SKILL.md and no
    skills-dir; the per-harness snippet under `install.mcp.<harness>` is
    what gets merged into each harness's MCP config file.
@@ -150,7 +150,7 @@ If the entry has a singular `source:` field, skip step 3a and continue.
 If the matched catalog entry has a `source` field, skip this step — use the explicit `source` directly in Step 6.
 
 If the entry has a `from_marketplace` field (and no `source`):
-- Look up the marketplace by name in `library.yaml` → `marketplaces`
+- Look up the marketplace by name in `library.yaml` → `sources.marketplaces`
 - If not found, warn the user: "Marketplace '<name>' is not registered in library.yaml" and stop
 - Construct the full browser-form GitHub URL:
   - `<marketplace.source>/<repo>/blob/main/<path>/SKILL.md`
@@ -181,7 +181,7 @@ primitive ships in**, not by user preference.
 | Agent file `.toml` | Codex (native). Claude needs `.md`. If both ship → both. |
 | Slash-command `.md` (no SKILL.md format) | Claude Code today. Codex equivalents TBD. |
 | Hook script + per-harness adapter | Whichever harnesses the entry's `capability:` map declares. |
-| MCP server | All harnesses listed under `mcp_servers.<name>.install.mcp.*` in library.yaml. |
+| MCP server | All harnesses listed under `library.mcp_servers.<name>.install.mcp.*` in library.yaml. |
 
 **For SKILL.md specifically: it is a violation to mark it `harness: claude`
 or `harness: codex`.** The format is harness-neutral by agentskills.io
@@ -200,7 +200,7 @@ default for skills).
 | `.../agents/<X>.toml` | `{codex}` natively. **Convert to `.md` and also install to Claude** via converter |
 | `.../prompts/<X>.md` or `.../commands/<X>.md` | `{claude}` today; `{codex}` once Codex slash-command adapter lands |
 | Hook manifest (`kind: hooks-manifest`, handled separately in Step 2b) | per `capability:` map |
-| MCP entry (`mcp_servers:` section) | per `install.mcp.*` map |
+| MCP entry (`library.mcp_servers` section) | per `install.mcp.*` map |
 
 **2 — Reject invalid `harness:` overrides for skills:**
 If a `SKILL.md` catalog entry carries `harness: claude` or `harness: codex`,
@@ -657,7 +657,7 @@ Determine the `cache_path` using the tree-SHA from Step 8b:
 
 Where `<source_commit_short>` is the first 14 hex characters of `source_commit`
 (tree-SHA from Step 8b) or `local-<14hex>` for local-path sources with no git
-ancestor. Derive `<marketplace>` from the URL using `library.yaml.marketplaces`.
+ancestor. Derive `<marketplace>` from the URL using `library.yaml` `sources.marketplaces`.
 
 **Step 8c.1 — materialize cache (idempotent: skip if path already exists):**
 
@@ -697,7 +697,7 @@ resolve `<claude_bridge_path><name>` through the canonical path.
 ```yaml
 - name: <name>
   type: <type>          # skill | agent | prompt | guardrail
-  marketplace: <marketplace>  # from library.yaml.marketplaces[].name, or "local" / "unknown"
+  marketplace: <marketplace>  # from sources.marketplaces[].name, or "local" / "unknown"
   source: <source>      # the URL or path from Step 2 / 3
   source_commit: <sha>  # from 8b, or "local"
   cache_path: <cache_path>  # from 8c; empty string if not yet materialized
@@ -732,7 +732,7 @@ lock.setdefault('installed', [])
 entry = {
     'name': '<name>',
     'type': '<type>',
-    'marketplace': '<marketplace>',   # from library.yaml.marketplaces[].name
+    'marketplace': '<marketplace>',   # from sources.marketplaces[].name
     'source': '<source>',
     'source_commit': '<source_commit>',
     'cache_path': '<cache_path>',     # from 8c; empty string if not materialized

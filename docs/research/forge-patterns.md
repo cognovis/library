@@ -141,7 +141,7 @@ Augment original ACs with:
   reason: "..."}` (OPA/Rego pattern) rather than raw exit codes.
 - (d) Paired positive (should-block) + negative (should-allow) test fixtures
   scaffolded under `tests/hooks/<name>/`.
-- (e) Emit `capability:` map for library.yaml `guardrails:` entry
+- (e) Emit `capability:` map for library.yaml `library.guardrails` entry
   `{claude: pre-tool-veto|post-tool-reaction|..., codex-cli: workaround|none, ...}`.
 - (f) Hook script template includes a "<100ms target" comment for PreToolUse
   (pre-commit framework discipline).

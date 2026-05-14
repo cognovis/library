@@ -16,6 +16,8 @@ import re
 import sys
 from pathlib import Path
 
+from lib.primitives import all_primitive_names, get_primitive, resolve_yaml_section
+
 try:
     import yaml
 except ImportError:
@@ -60,8 +62,11 @@ def _validate_agentskills_rules(data: dict) -> list:
     Returns a list of formatted error strings.
     """
     errors = []
-    for section in ('skills', 'agents', 'prompts', 'standards', 'scripts'):
-        for i, entry in enumerate(data.get('library', {}).get(section, [])):
+    for primitive_name in all_primitive_names():
+        primitive = get_primitive(primitive_name)
+        if primitive is None:
+            continue
+        for i, entry in enumerate(resolve_yaml_section(data, primitive)):
             name = entry.get('name', f'<entry {i}>')
             desc = entry.get('description', '')
 
@@ -70,7 +75,7 @@ def _validate_agentskills_rules(data: dict) -> list:
             if not isinstance(name, str) or not name or name.startswith('<entry '):
                 continue
 
-            prefix = f"  [library.{section}[{i}] '{name}']"
+            prefix = f"  [{primitive.yaml_section}[{i}] '{name}']"
 
             if len(name) > 64:
                 errors.append(f"{prefix} name exceeds 64 chars (got {len(name)})")
@@ -168,28 +173,31 @@ def main() -> int:
 
     # Additional semantic check: each catalog entry must have a resolvable source
     semantic_errors = []
-    for section in ('skills', 'agents', 'prompts', 'scripts'):
-        for i, entry in enumerate(data.get('library', {}).get(section, [])):
+    for section in ('skill', 'agent', 'prompt', 'script'):
+        primitive = get_primitive(section)
+        if primitive is None:
+            continue
+        for i, entry in enumerate(resolve_yaml_section(data, primitive)):
             name = entry.get('name', f'<entry {i}>')
             has_source = bool(entry.get('source'))
             has_sources_map = bool(entry.get('sources'))  # per-harness map (CL-l0c)
             has_marketplace_ref = bool(entry.get('from_marketplace') and entry.get('repo') and entry.get('path'))
             if not has_source and not has_sources_map and not has_marketplace_ref:
                 semantic_errors.append(
-                    f"  [library.{section}[{i}] '{name}'] Entry has no resolvable source: "
+                    f"  [{primitive.yaml_section}[{i}] '{name}'] Entry has no resolvable source: "
                     "provide either 'source' or 'from_marketplace + repo + path'"
                 )
-            if section == 'scripts':
+            if section == 'script':
                 source = entry.get('source') or ''
                 entrypoint = entry.get('entrypoint') or source
                 if entry.get('language', 'python') != 'python':
                     semantic_errors.append(
-                        f"  [library.scripts[{i}] '{name}'] Scripts are Python-only: "
+                        f"  [{primitive.yaml_section}[{i}] '{name}'] Scripts are Python-only: "
                         "set language: python"
                     )
                 if entrypoint and not str(entrypoint).endswith('.py'):
                     semantic_errors.append(
-                        f"  [library.scripts[{i}] '{name}'] Script entrypoint/source must end in .py"
+                        f"  [{primitive.yaml_section}[{i}] '{name}'] Script entrypoint/source must end in .py"
                     )
     if semantic_errors:
         if not args.quiet:

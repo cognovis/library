@@ -171,7 +171,7 @@ installed:
 |-------|----------|------|-------------|
 | `name` | YES | string | Unique item name. Must match the catalog entry in `library.yaml`. |
 | `type` | YES | string | `skill`, `agent`, `prompt`, `guardrail`, `standard`, `model-standard`, `golden-prompt`, or `mcp`. |
-| `marketplace` | YES | string | Name of the source marketplace from `library.yaml.marketplaces`. Use `local` for local-path sources, `unknown` for unrecognized sources. |
+| `marketplace` | YES | string | Name of the source marketplace from `library.yaml` `sources.marketplaces`. Use `local` for local-path sources, `unknown` for unrecognized sources. |
 | `source` | YES | string | GitHub browser URL or local path used for the install. |
 | `source_commit` | YES | string | Git commit SHA of the source repo at install time. Use `local` for non-git sources. |
 | `cache_path` | YES | string | Absolute Layer-B cache path (`~/.local/share/library/skills/<marketplace>/<name>@<first-14-hex-chars-of-source_commit>/`). Empty string `""` for migrated entries pending next sync. |

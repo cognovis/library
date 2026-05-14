@@ -21,6 +21,8 @@ except ImportError:
     print("FAIL: PyYAML is not installed. Run: pip install PyYAML", file=sys.stderr)
     sys.exit(1)
 
+from lib.primitives import all_primitive_names, get_primitive, resolve_yaml_section
+
 TARGET_SECTION_REQUIREMENTS = {
     "agent": "agent",
     "script": "script",
@@ -123,28 +125,25 @@ def validate_catalog(data: dict[str, Any], target_pack: str | None = None) -> li
 
 
 def _iter_entries(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    library = data.get("library", {}) or {}
-    nested_sections = [
-        "skills",
-        "agents",
-        "prompts",
-        "scripts",
-        "standards",
-    ]
+    section_labels = {
+        "skill": "skill",
+        "agent": "agent",
+        "prompt": "prompt",
+        "script": "script",
+        "standard": "standard",
+        "guardrail": "guardrail",
+        "mcp": "mcp",
+        "model-standard": "model-standard",
+        "golden-prompt": "golden-prompt",
+    }
     entries: list[tuple[str, dict[str, Any]]] = []
-    for section in nested_sections:
-        for entry in library.get(section, []) or []:
-            entries.append((section[:-1] if section.endswith("s") else section, entry))
-
-    top_level = [
-        ("guardrail", "guardrails"),
-        ("mcp", "mcp_servers"),
-        ("model-standard", "model_standards"),
-        ("golden-prompt", "golden_prompts"),
-    ]
-    for primitive, key in top_level:
-        for entry in data.get(key, []) or []:
-            entries.append((primitive, entry))
+    for primitive_name in all_primitive_names():
+        primitive = get_primitive(primitive_name)
+        if primitive is None:
+            continue
+        section_label = section_labels[primitive.name]
+        for entry in resolve_yaml_section(data, primitive):
+            entries.append((section_label, entry))
 
     return entries
 

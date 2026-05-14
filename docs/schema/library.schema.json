@@ -35,7 +35,7 @@
       }
     },
     "library": {
-      "description": "The catalog of available skills, agents, and prompts.",
+      "description": "Canonical primitive catalog. All primitive entry arrays live here; legacy root primitive arrays are accepted only as migration aliases.",
       "type": "object",
       "properties": {
         "skills": {
@@ -77,12 +77,68 @@
             "$ref": "#/$defs/script_entry"
           },
           "default": []
+        },
+        "guardrails": {
+          "description": "Catalog of guardrail entries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/guardrail_entry"
+          },
+          "default": []
+        },
+        "mcp_servers": {
+          "description": "Catalog of canonical MCP server model definitions.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mcp_server_entry"
+          },
+          "default": []
+        },
+        "model_standards": {
+          "description": "Catalog of Layer 3 model-standard entries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/model_standard_entry"
+          },
+          "default": []
+        },
+        "golden_prompts": {
+          "description": "Catalog of Layer 1 golden prompt entries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/golden_prompt_entry"
+          },
+          "default": []
         }
       },
       "additionalProperties": false
     },
+    "sources": {
+      "description": "Canonical source registries used to resolve catalog entries. `sources.catalogs` owns first-party source repositories; `sources.marketplaces` owns third-party source providers.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "catalogs": {
+          "description": "First-party content repo registrations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalog_entry"
+          },
+          "default": []
+        },
+        "marketplaces": {
+          "description": "Third-party source-provider registrations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/marketplace_entry"
+          },
+          "default": []
+        }
+      },
+      "default": {}
+    },
     "guardrails": {
-      "description": "Guardrail catalog entries \u2014 deterministic enforcement primitives that compile to per-harness native format (hooks, permission rules, approval policies). Each entry declares capability per harness so the installer can emit mismatch warnings.",
+      "description": "Deprecated compatibility alias for library.guardrails. New catalog files should use library.guardrails.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/guardrail_entry"
@@ -103,7 +159,7 @@
       "additionalProperties": true
     },
     "mcp_servers": {
-      "description": "Canonical MCP server model definitions. Each entry describes a server once; per-harness translator logic (install config mutation) is a separate follow-up bead (CL-mfz successor).",
+      "description": "Deprecated compatibility alias for library.mcp_servers. New catalog files should use library.mcp_servers.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/mcp_server_entry"
@@ -111,7 +167,7 @@
       "default": []
     },
     "marketplaces": {
-      "description": "Third-party source references for external libraries.",
+      "description": "Deprecated compatibility alias for sources.marketplaces. New catalog files should use sources.marketplaces.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/marketplace_entry"
@@ -124,7 +180,7 @@
       "additionalProperties": true
     },
     "catalog": {
-      "description": "First-party content repo registrations. These are owned repos (personal or team) that serve as canonical sources for skills, agents, commands, hooks, and standards. Distinct from marketplaces (third-party sources).",
+      "description": "Deprecated compatibility alias for sources.catalogs. New catalog files should use sources.catalogs.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/catalog_entry"
@@ -140,7 +196,7 @@
       "default": []
     },
     "model_standards": {
-      "description": "Layer 3 model-standard catalog entries. Each entry describes a per-model behavioral guideline file that is composed into agent prompts at install time. Install path: .agents/model-standards/<name>.md (project) or ~/.agents/model-standards/<name>.md (global).",
+      "description": "Deprecated compatibility alias for library.model_standards. New catalog files should use library.model_standards.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/model_standard_entry"
@@ -148,7 +204,7 @@
       "default": []
     },
     "golden_prompts": {
-      "description": "Layer 1 golden prompt catalog entries. Each entry describes a base behavioral document that is prepended to every agent's composed prompt at install time. Install path: .agents/golden-prompts/<name>.md (project) or ~/.agents/golden-prompts/<name>.md (global).",
+      "description": "Deprecated compatibility alias for library.golden_prompts. New catalog files should use library.golden_prompts.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/golden_prompt_entry"

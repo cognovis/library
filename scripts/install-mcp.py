@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""install-mcp.py — Install an MCP server per library.yaml mcp_servers entry.
+"""install-mcp.py — Install an MCP server per library.yaml library.mcp_servers entry.
 
-Parallel to install-hook.py. Reads an `mcp_servers:` entry from library.yaml,
+Parallel to install-hook.py. Reads a `library.mcp_servers:` entry from library.yaml,
 extracts the per-harness snippet from `install.mcp.<harness>`, and writes it
 into the target harness config file under the correct top-level key. Tags
 every entry with `_origin = "library:mcp:<name>"` for idempotent re-install
@@ -31,6 +31,8 @@ import os
 import sys
 from pathlib import Path
 from typing import Any, Callable
+
+from lib.catalog import get_entries
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -69,11 +71,11 @@ def load_library() -> dict:
 
 
 def find_mcp_entry(library: dict, name: str) -> dict:
-    """Locate an MCP server entry by name in library.yaml mcp_servers list."""
-    for entry in library.get("mcp_servers", []) or []:
+    """Locate an MCP server entry by name in library.yaml."""
+    for entry in get_entries(library, "mcp"):
         if entry.get("name") == name:
             return entry
-    sys.exit(f"MCP server {name!r} not found in library.yaml mcp_servers")
+    sys.exit(f"MCP server {name!r} not found in library.yaml library.mcp_servers")
 
 
 def harness_block(entry: dict, harness: str) -> dict | None:
@@ -400,7 +402,7 @@ HANDLERS: dict[str, Callable[..., int]] = {
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("name", help="mcp_servers entry name (e.g. open-brain)")
+    ap.add_argument("name", help="library.mcp_servers entry name (e.g. open-brain)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--remove", action="store_true")
     ap.add_argument(

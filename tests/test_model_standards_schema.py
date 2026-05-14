@@ -185,11 +185,11 @@ def test_library_yaml_with_new_sections_passes_validator():
     schema = load_schema()
     with LIBRARY_PATH.open() as f:
         data = yaml.safe_load(f)
-    # This test will pass only after library.yaml is updated AND schema accepts new sections
-    if "model_standards" not in data or "golden_prompts" not in data:
+    lib = data.get("library", {}) or {}
+    if "model_standards" not in lib or "golden_prompts" not in lib:
         print("SKIP test_library_yaml_with_new_sections_passes_validator: sections not yet in library.yaml")
         return
-    assert_valid(data, schema, "library.yaml on disk with model_standards + golden_prompts")
+    assert_valid(data, schema, "library.yaml on disk with library.model_standards + library.golden_prompts")
     print("PASS test_library_yaml_with_new_sections_passes_validator")
 
 

@@ -14,8 +14,8 @@ git pull
 
 ### 2. Read the Marketplaces Section
 - Read `library.yaml`
-- Parse all entries from the top-level `marketplaces:` list
-- If the `marketplaces:` key is absent or the list is empty, report: "No marketplaces registered."
+- Parse all entries from the `sources.marketplaces:` list
+- If the `sources.marketplaces:` key is absent or the list is empty, report: "No marketplaces registered."
 
 ### 3. Display as Table
 Format the output as a table (example output — actual entries reflect library.yaml):

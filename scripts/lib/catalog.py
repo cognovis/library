@@ -1,5 +1,5 @@
 """
-catalog.py — Load/validate library.yaml, primitive section mapping, entry lookup.
+catalog.py — Load library.yaml, source registries, primitive mapping, entry lookup.
 """
 
 from __future__ import annotations
@@ -86,6 +86,50 @@ def get_entries(
             f"Unknown primitive '{primitive_name}'. Valid primitives: {valid}"
         )
     return resolve_yaml_section(data, prim)
+
+
+def get_sources(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Return canonical source registries with legacy root fallbacks.
+
+    The canonical library.yaml shape stores source registries under
+    `sources.catalogs` and `sources.marketplaces`. Older catalog files used
+    top-level `catalog` and `marketplaces` keys; those remain readable when the
+    canonical key is absent.
+    """
+    sources = data.get("sources", {}) or {}
+    if not isinstance(sources, dict):
+        sources = {}
+
+    catalogs = _source_list(sources, "catalogs")
+    if catalogs is None:
+        catalogs = _source_list(data, "catalog") or []
+
+    marketplaces = _source_list(sources, "marketplaces")
+    if marketplaces is None:
+        marketplaces = _source_list(data, "marketplaces") or []
+
+    return {
+        "catalogs": catalogs,
+        "marketplaces": marketplaces,
+    }
+
+
+def get_catalogs(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return first-party source catalogs from library.yaml."""
+    return get_sources(data)["catalogs"]
+
+
+def get_marketplaces(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return third-party source marketplaces from library.yaml."""
+    return get_sources(data)["marketplaces"]
+
+
+def _source_list(data: dict[str, Any], key: str) -> Optional[list[dict[str, Any]]]:
+    """Return a source registry list, None when the key is absent."""
+    if key not in data:
+        return None
+    value = data.get(key) or []
+    return value if isinstance(value, list) else []
 
 
 def lookup_entry(

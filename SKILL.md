@@ -229,13 +229,19 @@ The schema (`docs/schema/library.schema.json`) covers:
 | `library.skills` | Defined | Skill catalog entries with source, requires, install paths |
 | `library.agents` | Defined | Agent catalog entries with format-translation hints |
 | `library.prompts` | Defined | Command/prompt catalog entries |
-| `guardrails` | Stub | Capability matrix per harness (CL-xcm) |
-| `standards` | Stub | Storage convention + loader-mechanism reference (CL-v56) |
-| `mcp_servers` | Stub | Canonical MCP server model (CL-mfz) |
-| `marketplaces` | Stub | Third-party source references (CL-7ii) |
-| `plugins` | Stub | Bundle declarations |
+| `library.scripts` | Defined | First-class Python script catalog entries |
+| `library.standards` | Defined | Standards catalog entries |
+| `library.guardrails` | Defined | Capability matrix per harness |
+| `library.mcp_servers` | Defined | Canonical MCP server model |
+| `library.model_standards` | Defined | Layer 3 model-standard catalog entries |
+| `library.golden_prompts` | Defined | Layer 1 golden prompt catalog entries |
+| `sources.catalogs` | Defined | First-party source repositories |
+| `sources.marketplaces` | Defined | Third-party source providers |
+| `project_tooling` | Defined | Fleet-wide project file/hook distribution policy |
 
-Stub sections use `additionalProperties: true` so they pass validation when new beads (CL-xcm, CL-v56, CL-mfz, CL-7ii) add their content.
+Deprecated root aliases for `guardrails`, `mcp_servers`, `model_standards`,
+`golden_prompts`, `catalog`, and `marketplaces` are accepted for read
+compatibility, but new edits should use the canonical locations above.
 
 ### Pre-commit hook integration
 

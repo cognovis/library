@@ -3,7 +3,7 @@
 migrate-lockfile.py — CL-yx2: Extend existing .library.lock files with new ADR-0003 fields.
 
 Adds two new required fields to every lockfile entry that is missing them:
-  - marketplace: derived from the entry's source URL (or from library.yaml.marketplaces)
+  - marketplace: derived from the entry's source URL (or from library.yaml sources.marketplaces)
   - cache_path:  set to empty string "" (pending next `library sync` to materialize)
 
 Usage:
@@ -100,7 +100,7 @@ def derive_marketplace_from_url(source: str) -> str:
 # ---------------------------------------------------------------------------
 
 def load_marketplace_map(library_yaml_path: Path) -> dict[str, str]:
-    """Load URL → marketplace name mappings from library.yaml.marketplaces.
+    """Load URL → marketplace name mappings from library.yaml sources.
 
     Returns a dict mapping source_prefix → marketplace_name.
     Returns empty dict if the file cannot be read.
@@ -115,7 +115,12 @@ def load_marketplace_map(library_yaml_path: Path) -> dict[str, str]:
         print(f"Warning: could not load {library_yaml_path}: {exc}", file=sys.stderr)
         return {}
 
-    marketplaces = data.get("marketplaces", [])
+    sources = data.get("sources", {}) or {}
+    if not isinstance(sources, dict):
+        sources = {}
+    marketplaces = sources.get("marketplaces")
+    if marketplaces is None:
+        marketplaces = data.get("marketplaces", [])
     if not isinstance(marketplaces, list):
         return {}
 

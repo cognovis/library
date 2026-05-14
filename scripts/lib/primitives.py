@@ -2,7 +2,7 @@
 primitives.py — Primitive registry and metadata.
 
 Defines the canonical set of supported primitives, their library.yaml section
-mappings, and associated metadata.
+mappings, legacy read fallbacks, and associated metadata.
 """
 
 from __future__ import annotations
@@ -19,17 +19,19 @@ class PrimitiveInfo:
     """Canonical primitive name (e.g. 'skill', 'model-standard')."""
 
     yaml_section: str
-    """Top-level or nested key in library.yaml (e.g. 'library.skills', 'guardrails')."""
+    """Canonical section in library.yaml (e.g. 'library.skills')."""
 
     yaml_key: str
     """The actual dict key chain to look up in the loaded YAML.
 
-    For nested sections (library.X): 'library/<X>'
-    For top-level sections: '<key>'
+    Canonical primitive sections use nested keys such as 'library/<X>'.
     """
 
     description: str
     """Human-readable description of this primitive type."""
+
+    legacy_yaml_keys: list[str] = field(default_factory=list)
+    """Deprecated key chains still accepted when the canonical key is absent."""
 
     aliases: list[str] = field(default_factory=list)
     """Alternative names accepted on the CLI."""
@@ -77,30 +79,34 @@ PRIMITIVES: list[PrimitiveInfo] = [
     ),
     PrimitiveInfo(
         name="guardrail",
-        yaml_section="guardrails",
-        yaml_key="guardrails",
+        yaml_section="library.guardrails",
+        yaml_key="library/guardrails",
+        legacy_yaml_keys=["guardrails"],
         description="Pre/PostToolUse hooks and permission rules",
         install_subdir="guardrails",
     ),
     PrimitiveInfo(
         name="mcp",
-        yaml_section="mcp_servers",
-        yaml_key="mcp_servers",
+        yaml_section="library.mcp_servers",
+        yaml_key="library/mcp_servers",
+        legacy_yaml_keys=["mcp_servers"],
         description="MCP server configurations for Claude/Codex/OpenCode",
         install_subdir=None,  # handled by install-mcp.py
     ),
     PrimitiveInfo(
         name="model-standard",
-        yaml_section="model_standards",
-        yaml_key="model_standards",
+        yaml_section="library.model_standards",
+        yaml_key="library/model_standards",
+        legacy_yaml_keys=["model_standards"],
         description="Model-specific behavioral standards (Layer 3 composition)",
         aliases=["model_standard"],
         install_subdir="model-standards",
     ),
     PrimitiveInfo(
         name="golden-prompt",
-        yaml_section="golden_prompts",
-        yaml_key="golden_prompts",
+        yaml_section="library.golden_prompts",
+        yaml_key="library/golden_prompts",
+        legacy_yaml_keys=["golden_prompts"],
         description="Golden prompt base layers for agent composition (Layer 1)",
         aliases=["golden_prompt"],
         install_subdir="golden-prompts",
@@ -125,19 +131,32 @@ def all_primitive_names() -> list[str]:
     return [p.name for p in PRIMITIVES]
 
 
+_MISSING = object()
+
+
 def resolve_yaml_section(data: dict, primitive: PrimitiveInfo) -> list[dict]:
     """Extract the list of entries for this primitive from parsed library.yaml data.
 
     Returns an empty list if the section is absent or empty.
     """
-    key = primitive.yaml_key
-    if "/" in key:
-        # Nested: e.g. 'library/skills' -> data['library']['skills']
-        parts = key.split("/", 1)
-        section = data.get(parts[0], {}) or {}
-        entries = section.get(parts[1], []) or []
-    else:
-        # Top-level: e.g. 'guardrails' -> data['guardrails']
-        entries = data.get(key, []) or []
+    entries = _lookup_yaml_key(data, primitive.yaml_key)
+    if entries is _MISSING:
+        for legacy_key in primitive.legacy_yaml_keys:
+            entries = _lookup_yaml_key(data, legacy_key)
+            if entries is not _MISSING:
+                break
+
+    if entries is _MISSING:
+        entries = []
 
     return entries if isinstance(entries, list) else []
+
+
+def _lookup_yaml_key(data: dict, key: str) -> object:
+    """Return a value at a slash-separated YAML key path, or _MISSING."""
+    current: object = data
+    for part in key.split("/"):
+        if not isinstance(current, dict) or part not in current:
+            return _MISSING
+        current = current[part]
+    return current

@@ -21,13 +21,15 @@ git pull
 - If a marketplace with the same name already exists in `library.yaml`, warn the user and stop
 
 ### 3. Add Entry to library.yaml
-Read `library.yaml` and add the new entry under the `marketplaces:` section:
+Read `library.yaml` and add the new entry under the `sources.marketplaces:` section:
 
 ```yaml
-marketplaces:
-  - name: <short-name>
-    source: <github-url>
-    description: <one-line description>
+sources:
+  marketplaces:
+    - name: <short-name>
+      source: <github-url>
+      description: <one-line description>
+      type: git
 ```
 
 **YAML formatting rules:**
@@ -38,9 +40,10 @@ marketplaces:
 
 **Example entry:**
 ```yaml
-  - name: disler
-    source: https://github.com/disler
-    description: Public skill/agent/hooks repos for Claude Code and AI agents
+    - name: disler
+      source: https://github.com/disler
+      description: Public skill/agent/hooks repos for Claude Code and AI agents
+      type: git
 ```
 
 ### 4. Run Validator

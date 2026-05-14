@@ -2,13 +2,13 @@
 
 > **Bead**: CL-mfz | **Epic**: CL-36o | **Last updated**: 2026-04-30
 >
-> **Scope**: This cookbook covers how to add a server to the `mcp_servers:` catalog in
+> **Scope**: This cookbook covers how to add a server to the `library.mcp_servers:` catalog in
 > `library.yaml`. It does NOT cover per-harness config mutation (install/remove), which is a
 > follow-up bead.
 
 ## Overview
 
-`mcp_servers:` is the canonical registry for MCP servers in the cognovis-library. Each entry
+`library.mcp_servers:` is the canonical registry for MCP servers in the cognovis-library. Each entry
 defines a server once; the `/library mcp use <name>` command translates the canonical
 definition into the correct harness-specific config.
 
@@ -17,34 +17,35 @@ definition into the correct harness-specific config.
 The canonical shape for one server entry is:
 
 ```yaml
-mcp_servers:
-  - name: <kebab-case-identifier>        # required
-    description: <human-readable string>  # required
-    coding_strategy: cli | mcp            # optional — how coding harnesses consume this
-    mobile_strategy: cli | mcp            # optional — how mobile/web harnesses consume this
-    capabilities:                         # optional
-      stateless: true | false
-      streaming: true | false
-      auth: token | oauth | none
-    install:                              # optional — per-harness install metadata
-      cli:                                # present when coding_strategy: cli
-        package: <package-name>
-        manager: npm | pip | cargo | brew | none
-      mcp:                                # present when any strategy is mcp
-        claude_code:
-          config_path: ~/.claude/settings.json
-          snippet: { ... }               # harness-specific MCP descriptor
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet: { ... }
-        opencode:
-          config_path: ~/.config/opencode/opencode.json
-          snippet: { ... }
-        claude_ai:
-          install_url: https://...        # URL for manual add
-        claude_ios:
-          install_url: https://...
-    tags: []                              # optional search tags
+library:
+  mcp_servers:
+    - name: <kebab-case-identifier>        # required
+      description: <human-readable string>  # required
+      coding_strategy: cli | mcp            # optional — how coding harnesses consume this
+      mobile_strategy: cli | mcp            # optional — how mobile/web harnesses consume this
+      capabilities:                         # optional
+        stateless: true | false
+        streaming: true | false
+        auth: token | oauth | none
+      install:                              # optional — per-harness install metadata
+        cli:                                # present when coding_strategy: cli
+          package: <package-name>
+          manager: npm | pip | cargo | brew | none
+        mcp:                                # present when any strategy is mcp
+          claude_code:
+            config_path: ~/.claude/settings.json
+            snippet: { ... }               # harness-specific MCP descriptor
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet: { ... }
+          opencode:
+            config_path: ~/.config/opencode/opencode.json
+            snippet: { ... }
+          claude_ai:
+            install_url: https://...        # URL for manual add
+          claude_ios:
+            install_url: https://...
+      tags: []                              # optional search tags
 ```
 
 Full schema definition: `docs/schema/library.schema.json` — `$defs/mcp_server_entry`.
@@ -107,7 +108,7 @@ install:
 
 ### 5. Add to library.yaml
 
-Add the new entry under `mcp_servers:` in `library.yaml`. Keep entries alphabetically sorted
+Add the new entry under `library.mcp_servers:` in `library.yaml`. Keep entries alphabetically sorted
 by `name` for readability.
 
 ### 6. Validate
@@ -122,7 +123,7 @@ Must exit 0 before committing.
 
 ```bash
 git add library.yaml
-git commit -m "feat: register <name> in mcp_servers catalog"
+git commit -m "feat: register <name> in library.mcp_servers catalog"
 ```
 
 ## Out of Scope (follow-up beads)

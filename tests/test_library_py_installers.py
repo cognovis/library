@@ -1039,23 +1039,23 @@ class TestPrimitiveMapping:
         assert prim is not None
         assert prim.yaml_key == "library/scripts"
 
-    def test_guardrail_maps_to_guardrails(self):
-        """guardrail primitive maps to top-level guardrails."""
+    def test_guardrail_maps_to_library_guardrails(self):
+        """guardrail primitive maps to library.guardrails."""
         sys.path.insert(0, str(SCRIPTS_DIR))
         from lib.primitives import get_primitive
 
         prim = get_primitive("guardrail")
         assert prim is not None
-        assert prim.yaml_key == "guardrails"
+        assert prim.yaml_key == "library/guardrails"
 
-    def test_mcp_maps_to_mcp_servers(self):
-        """mcp primitive maps to top-level mcp_servers."""
+    def test_mcp_maps_to_library_mcp_servers(self):
+        """mcp primitive maps to library.mcp_servers."""
         sys.path.insert(0, str(SCRIPTS_DIR))
         from lib.primitives import get_primitive
 
         prim = get_primitive("mcp")
         assert prim is not None
-        assert prim.yaml_key == "mcp_servers"
+        assert prim.yaml_key == "library/mcp_servers"
 
     def test_model_standard_alias(self):
         """model_standard (underscore) is an alias for model-standard (hyphen)."""

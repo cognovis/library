@@ -48,6 +48,80 @@ tag_vocabulary:
   - tag: produces-mandate
     description: Artifacts that emit AP2-style mandate records.
 
+sources:
+  catalogs:
+    - name: sussdorff-library-core
+      source: https://github.com/sussdorff/library-core
+      description: Malte Sussdorff personal agentic content (skills, agents, commands, hooks)
+      visibility: private
+      owner: sussdorff
+      audience: personal
+      content_types:
+        - skills
+        - agents
+        - commands
+        - hooks
+        - standards
+      skeleton:
+        claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
+        codex: [.agents/skills/, .agents/standards/, agents/]
+      notes: >-
+        First-party personal library. Content targets personal workflows identified in
+        docs/audit/skills-origin.json (personal_to_sussdorff_library_core list).
+        Installs tracked via .library.lock per CL-t21.
+      tags:
+        - first-party
+        - personal
+
+    - name: cognovis-library-core
+      source: https://github.com/cognovis/library-core
+      description: Cognovis team agentic content (skills, agents, commands, hooks)
+      visibility: private
+      owner: cognovis
+      audience: team
+      content_types:
+        - skills
+        - agents
+        - commands
+        - hooks
+        - standards
+      skeleton:
+        claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
+        codex: [.agents/skills/, .agents/standards/, agents/]
+      notes: >-
+        First-party team library. Content covers original Cognovis team skills (origin=ORIGINAL
+        per docs/audit/skills-origin.json). Name-collision and canonical-vs-bridge convention
+        applies per docs/policy/name-collision.md. Installs tracked via .library.lock per CL-t21.
+      tags:
+        - first-party
+        - team
+
+  marketplaces:
+    - name: anthropic-official
+      source: https://github.com/anthropics
+      description: Anthropic-curated Claude plugins and extensions
+      type: git
+    - name: cognovis-samurai
+      source: https://github.com/cognovis/samurai-skills
+      description: Cognovis Samurai skills collection (FHIR/Aidbox tooling, ex-global plugin)
+      type: git
+    - name: open-brain
+      source: https://github.com/sussdorff/open-brain
+      description: Open-Brain memory store with skills+hooks for memory capture across coding sessions
+      type: git
+    - name: disler
+      source: https://github.com/disler
+      description: Public skill/agent/hooks repos for Claude Code and AI agents
+      type: git
+    - name: pbakaus
+      source: https://github.com/pbakaus
+      description: Paul Bakaus' public agentic content (Impeccable frontend design skill)
+      type: git
+    - name: thadenorigar
+      source: https://github.com/ThadeNorigar
+      description: Private K2SO and related agent repos
+      type: git
+
 library:
   scripts: []
   skills:
@@ -1779,287 +1853,240 @@ library:
         - tier:domain
         - category:standard
 
-guardrails:
-  - name: block-destructive-bash
-    description: >-
-      Blocks destructive bash commands (force-pushes, recursive deletes, DROP TABLE, etc.)
-      that cannot be undone. The only deterministic safety layer — runs outside the LLM loop
-      and cannot be bypassed by the model.
-    purpose: pre-tool-veto
-    capability:
-      claude_code:
-        events: [PreToolUse]
-        handler: bash-script
-        matcher: Bash
-        note: >-
-          Primary implementation. Reads $CLAUDE_TOOL_INPUT JSON, checks command string for
-          destructive patterns, exits 2 to block with a message. Full PreToolUse semantics.
-      codex_cli:
-        events: [PreToolUse]
-        matcher: Bash
-        handler: node-mjs
-        note: >-
-          Codex CLI command hook. Reads PreToolUse JSON from stdin and blocks
-          destructive Bash commands with decision=block.
-        mismatch_warning: >-
-          codex_cli supports PreToolUse in current Codex CLI releases; older
-          Codex versions may require a SessionStart advisory fallback.
-      codex_cloud:
-        mechanism: approval_policy
-        config_key: approval_policy
-        supported_values: [always, unless-allow-listed]
-        recommended_value: always
-        note: >-
-          No event-level veto in Codex cloud. Setting approval_policy=always requires human
-          approval for every tool call — blunt but effective. Alternatively configure
-          sandbox_mode restrictions.
-        mismatch_warning: >-
-          codex_cloud has no per-tool-call hook. Installing sets approval_policy=always in
-          config.toml, which requires approval for ALL tool calls (not just destructive ones).
-      opencode:
-        mechanism: permission-rule
-        config_key: rules
-        note: >-
-          OpenCode permission rules in opencode.json. The fragment adds a deny rule for
-          shell commands matching destructive patterns. Pre-tool gates only.
-    sources:
-      claude_code: guardrails/block-destructive-bash/claude-code.sh
-      codex_cli: guardrails/block-destructive-bash/codex-cli.mjs
-      codex_cloud: guardrails/block-destructive-bash/codex-cloud-config-fragment.toml
-      opencode: guardrails/block-destructive-bash/opencode-fragment.json
-    tags:
-      - security
-      - destructive-prevention
-      - pre-tool-veto
-
-  - name: open-brain-hooks
-    description: >-
-      Open-brain memory hooks. Claude Code installs the full Claude manifest
-      with SessionStart context injection, SessionEnd summaries, and Claude
-      turn logging. Codex installs the Codex-native manifest with SessionStart
-      additionalContext and a Codex transcript summary Stop hook.
-      Replaces the Claude-Code-plugin distribution of open-brain hooks per ADR-0004
-      (the plugin manifest was removed; hooks now install via /library use).
-    kind: hooks-manifest
-    source: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
-    sources:
-      claude_code: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
-      codex_cli: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.codex.json
-    requires:
-      - "mcp:open-brain"
-    harness: both
-    capability:
-      claude_code:
-        events: [SessionStart, SessionEnd, Stop, SubagentStop]
-      codex_cli:
-        events: [SessionStart, Stop]
-        note: >-
-          Codex SessionStart context must use hookSpecificOutput.additionalContext.
-          Codex has no SessionEnd event, so transcript summaries run from Stop.
-    tags:
-      - origin:personal
-      - workflow:memory
-      - hooks-manifest
-
-mcp_servers:
-  - name: open-brain
-    description: Stateless memory store via search/save/get — persists observations across sessions
-    coding_strategy: cli
-    mobile_strategy: mcp
-    capabilities:
-      stateless: true
-      streaming: false
-      auth: token
-    install:
-      cli:
-        package: '@cognovis/open-brain-cli'
-        manager: npm
-      mcp:
+  guardrails:
+    - name: block-destructive-bash
+      description: >-
+        Blocks destructive bash commands (force-pushes, recursive deletes, DROP TABLE, etc.)
+        that cannot be undone. The only deterministic safety layer — runs outside the LLM loop
+        and cannot be bypassed by the model.
+      purpose: pre-tool-veto
+      capability:
         claude_code:
-          config_path: ~/.claude/settings.json
-          snippet:
-            type: stdio
-            command: open-brain
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet:
-            command: open-brain
+          events: [PreToolUse]
+          handler: bash-script
+          matcher: Bash
+          note: >-
+            Primary implementation. Reads $CLAUDE_TOOL_INPUT JSON, checks command string for
+            destructive patterns, exits 2 to block with a message. Full PreToolUse semantics.
+        codex_cli:
+          events: [PreToolUse]
+          matcher: Bash
+          handler: node-mjs
+          note: >-
+            Codex CLI command hook. Reads PreToolUse JSON from stdin and blocks
+            destructive Bash commands with decision=block.
+          mismatch_warning: >-
+            codex_cli supports PreToolUse in current Codex CLI releases; older
+            Codex versions may require a SessionStart advisory fallback.
+        codex_cloud:
+          mechanism: approval_policy
+          config_key: approval_policy
+          supported_values: [always, unless-allow-listed]
+          recommended_value: always
+          note: >-
+            No event-level veto in Codex cloud. Setting approval_policy=always requires human
+            approval for every tool call — blunt but effective. Alternatively configure
+            sandbox_mode restrictions.
+          mismatch_warning: >-
+            codex_cloud has no per-tool-call hook. Installing sets approval_policy=always in
+            config.toml, which requires approval for ALL tool calls (not just destructive ones).
         opencode:
-          config_path: ~/.config/opencode/opencode.json
-          snippet:
-            command: open-brain
-        claude_ai:
-          install_url: https://claude.ai/add-mcp/open-brain
-        claude_ios:
-          install_url: https://claude.ai/add-mcp/open-brain
+          mechanism: permission-rule
+          config_key: rules
+          note: >-
+            OpenCode permission rules in opencode.json. The fragment adds a deny rule for
+            shell commands matching destructive patterns. Pre-tool gates only.
+      sources:
+        claude_code: guardrails/block-destructive-bash/claude-code.sh
+        codex_cli: guardrails/block-destructive-bash/codex-cli.mjs
+        codex_cloud: guardrails/block-destructive-bash/codex-cloud-config-fragment.toml
+        opencode: guardrails/block-destructive-bash/opencode-fragment.json
+      tags:
+        - security
+        - destructive-prevention
+        - pre-tool-veto
 
-  - name: playwright
-    description: Stateful browser automation — persistent browser sessions for navigation, click, screenshot, form-fill; stateful sessions make CLI conversion impossible
-    coding_strategy: mcp
-    capabilities:
-      stateless: false
-      streaming: false
-      auth: none
-    install:
-      mcp:
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet:
-            command: npx
-            args:
-              - '@playwright/mcp@latest'
-              - '--extension'
+    - name: open-brain-hooks
+      description: >-
+        Open-brain memory hooks. Claude Code installs the full Claude manifest
+        with SessionStart context injection, SessionEnd summaries, and Claude
+        turn logging. Codex installs the Codex-native manifest with SessionStart
+        additionalContext and a Codex transcript summary Stop hook.
+        Replaces the Claude-Code-plugin distribution of open-brain hooks per ADR-0004
+        (the plugin manifest was removed; hooks now install via /library use).
+      kind: hooks-manifest
+      source: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
+      sources:
+        claude_code: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
+        codex_cli: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.codex.json
+      requires:
+        - "mcp:open-brain"
+      harness: both
+      capability:
+        claude_code:
+          events: [SessionStart, SessionEnd, Stop, SubagentStop]
+        codex_cli:
+          events: [SessionStart, Stop]
+          note: >-
+            Codex SessionStart context must use hookSpecificOutput.additionalContext.
+            Codex has no SessionEnd event, so transcript summaries run from Stop.
+      tags:
+        - origin:personal
+        - workflow:memory
+        - hooks-manifest
 
-  - name: pencil
-    description: Stateful design editor for .pen files — encrypted file format requires MCP; tools include batch_design, get_editor_state, export_nodes; installed in Codex CLI and Claude Desktop
-    coding_strategy: mcp
-    capabilities:
-      stateless: false
-      streaming: false
-      auth: none
-    # Note: also installed in Claude Desktop (no claude_desktop schema key in CL-mfz v1)
-    install:
-      mcp:
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet:
-            command: ~/.pencil/mcp/cursor/out/mcp-server-darwin-arm64
-            args:
-              - '--app'
-              - cursor
+  mcp_servers:
+    - name: open-brain
+      description: Stateless memory store via search/save/get — persists observations across sessions
+      coding_strategy: cli
+      mobile_strategy: mcp
+      capabilities:
+        stateless: true
+        streaming: false
+        auth: token
+      install:
+        cli:
+          package: '@cognovis/open-brain-cli'
+          manager: npm
+        mcp:
+          claude_code:
+            config_path: ~/.claude/settings.json
+            snippet:
+              type: stdio
+              command: open-brain
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              command: open-brain
+          opencode:
+            config_path: ~/.config/opencode/opencode.json
+            snippet:
+              command: open-brain
+          claude_ai:
+            install_url: https://claude.ai/add-mcp/open-brain
+          claude_ios:
+            install_url: https://claude.ai/add-mcp/open-brain
 
-  - name: lsp
-    description: Stateful Language Server Protocol bridge — exposes LSP hover, go-to-definition, completions, and diagnostics as MCP tools; stateful LSP sessions require persistent connection
-    coding_strategy: mcp
-    capabilities:
-      stateless: false
-      streaming: false
-      auth: none
-    install:
-      mcp:
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet:
-            command: npx
-            args:
-              - '-y'
-              - lsp-mcp-server
+    - name: playwright
+      description: Stateful browser automation — persistent browser sessions for navigation, click, screenshot, form-fill; stateful sessions make CLI conversion impossible
+      coding_strategy: mcp
+      capabilities:
+        stateless: false
+        streaming: false
+        auth: none
+      install:
+        mcp:
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              command: npx
+              args:
+                - '@playwright/mcp@latest'
+                - '--extension'
 
-  - name: filesystem
-    description: Filesystem read/write access for Claude Desktop — required because Claude Desktop has no shell access; stateless per-call file operations via npx @modelcontextprotocol/server-filesystem
-    coding_strategy: mcp
-    capabilities:
-      stateless: true
-      streaming: false
-      auth: none
-    # Note: also installed in Claude Desktop (no claude_desktop schema key in CL-mfz v1)
+    - name: pencil
+      description: Stateful design editor for .pen files — encrypted file format requires MCP; tools include batch_design, get_editor_state, export_nodes; installed in Codex CLI and Claude Desktop
+      coding_strategy: mcp
+      capabilities:
+        stateless: false
+        streaming: false
+        auth: none
+      # Note: also installed in Claude Desktop (no claude_desktop schema key in CL-mfz v1)
+      install:
+        mcp:
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              command: ~/.pencil/mcp/cursor/out/mcp-server-darwin-arm64
+              args:
+                - '--app'
+                - cursor
 
-  - name: executive-circle
-    description: Read-only content library lookup — search posts, guides, and prompt kits from Nate's Newsletter archives; HTTP stateless API; CLI wrapper (ec) to be built for coding harnesses; MCP retained for claude.ai/iOS
-    coding_strategy: cli
-    mobile_strategy: mcp
-    capabilities:
-      stateless: true
-      streaming: false
-      auth: token
-    install:
-      cli:
-        package: executive-circle-cli
-        manager: none
-      mcp:
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet:
-            url: 'https://www.contentmasterpro.limited/api/mcp/subscriber/<subscriber-token>'
+    - name: lsp
+      description: Stateful Language Server Protocol bridge — exposes LSP hover, go-to-definition, completions, and diagnostics as MCP tools; stateful LSP sessions require persistent connection
+      coding_strategy: mcp
+      capabilities:
+        stateless: false
+        streaming: false
+        auth: none
+      install:
+        mcp:
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              command: npx
+              args:
+                - '-y'
+                - lsp-mcp-server
 
-  - name: heypresto
-    description: Prompt expansion tool — expand_prompt tool for enhancing prompts; HTTP stateless API; CLI wrapper (hp) to be built for coding harnesses; MCP retained for claude.ai/iOS
-    coding_strategy: cli
-    mobile_strategy: mcp
-    capabilities:
-      stateless: true
-      streaming: false
-      auth: none
-    install:
-      cli:
-        package: heypresto-cli
-        manager: none
-      mcp:
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet:
-            url: 'https://www.heypresto.ai/mcp'
+    - name: filesystem
+      description: Filesystem read/write access for Claude Desktop — required because Claude Desktop has no shell access; stateless per-call file operations via npx @modelcontextprotocol/server-filesystem
+      coding_strategy: mcp
+      capabilities:
+        stateless: true
+        streaming: false
+        auth: none
+      # Note: also installed in Claude Desktop (no claude_desktop schema key in CL-mfz v1)
 
-catalog:
-  - name: sussdorff-library-core
-    source: https://github.com/sussdorff/library-core
-    description: Malte Sussdorff personal agentic content (skills, agents, commands, hooks)
-    visibility: private
-    owner: sussdorff
-    audience: personal
-    content_types:
-      - skills
-      - agents
-      - commands
-      - hooks
-      - standards
-    skeleton:
-      claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
-      codex: [.agents/skills/, .agents/standards/, agents/]
-    notes: >-
-      First-party personal library. Content targets personal workflows identified in
-      docs/audit/skills-origin.json (personal_to_sussdorff_library_core list).
-      Installs tracked via .library.lock per CL-t21.
-    tags:
-      - first-party
-      - personal
+    - name: executive-circle
+      description: Read-only content library lookup — search posts, guides, and prompt kits from Nate's Newsletter archives; HTTP stateless API; CLI wrapper (ec) to be built for coding harnesses; MCP retained for claude.ai/iOS
+      coding_strategy: cli
+      mobile_strategy: mcp
+      capabilities:
+        stateless: true
+        streaming: false
+        auth: token
+      install:
+        cli:
+          package: executive-circle-cli
+          manager: none
+        mcp:
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              url: 'https://www.contentmasterpro.limited/api/mcp/subscriber/<subscriber-token>'
 
-  - name: cognovis-library-core
-    source: https://github.com/cognovis/library-core
-    description: Cognovis team agentic content (skills, agents, commands, hooks)
-    visibility: private
-    owner: cognovis
-    audience: team
-    content_types:
-      - skills
-      - agents
-      - commands
-      - hooks
-      - standards
-    skeleton:
-      claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
-      codex: [.agents/skills/, .agents/standards/, agents/]
-    notes: >-
-      First-party team library. Content covers original Cognovis team skills (origin=ORIGINAL
-      per docs/audit/skills-origin.json). Name-collision and canonical-vs-bridge convention
-      applies per docs/policy/name-collision.md. Installs tracked via .library.lock per CL-t21.
-    tags:
-      - first-party
-      - team
+    - name: heypresto
+      description: Prompt expansion tool — expand_prompt tool for enhancing prompts; HTTP stateless API; CLI wrapper (hp) to be built for coding harnesses; MCP retained for claude.ai/iOS
+      coding_strategy: cli
+      mobile_strategy: mcp
+      capabilities:
+        stateless: true
+        streaming: false
+        auth: none
+      install:
+        cli:
+          package: heypresto-cli
+          manager: none
+        mcp:
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              url: 'https://www.heypresto.ai/mcp'
 
-model_standards:
-  - name: claude-sonnet-4-6
-    description: >-
-      Layer 3 model-standard for Claude Sonnet 4.6 — conciseness, lower
-      tool-hopping bias.
-    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-sonnet-4-6.md
-  - name: claude-opus-4-7
-    description: >-
-      Layer 3 model-standard for Claude Opus 4.7 — thinking-budget discipline,
-      avoid over-deliberation on trivial steps.
-    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-7.md
-  - name: claude-haiku-4-5
-    description: >-
-      Layer 3 model-standard for Claude Haiku 4.5 — avoid under-scoping
-      multi-step plans, no terse-skip on verification steps.
-    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-haiku-4-5.md
+  model_standards:
+    - name: claude-sonnet-4-6
+      description: >-
+        Layer 3 model-standard for Claude Sonnet 4.6 — conciseness, lower
+        tool-hopping bias.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-sonnet-4-6.md
+    - name: claude-opus-4-7
+      description: >-
+        Layer 3 model-standard for Claude Opus 4.7 — thinking-budget discipline,
+        avoid over-deliberation on trivial steps.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-7.md
+    - name: claude-haiku-4-5
+      description: >-
+        Layer 3 model-standard for Claude Haiku 4.5 — avoid under-scoping
+        multi-step plans, no terse-skip on verification steps.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-haiku-4-5.md
 
-golden_prompts:
-  - name: cognovis-base
-    description: >-
-      Layer 1 of the three-layer agent composition model. Safety, confirmation
-      gates, content isolation, source-language, session-close protocol.
-    source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
+  golden_prompts:
+    - name: cognovis-base
+      description: >-
+        Layer 1 of the three-layer agent composition model. Safety, confirmation
+        gates, content isolation, source-language, session-close protocol.
+      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
 
 project_tooling:
   - name: beads-prime
@@ -2168,29 +2195,3 @@ project_tooling:
       - gitignore
       - marketplace
       - fleet-policy
-
-marketplaces:
-  - name: anthropic-official
-    source: https://github.com/anthropics
-    description: Anthropic-curated Claude plugins and extensions
-    type: git
-  - name: cognovis-samurai
-    source: https://github.com/cognovis/samurai-skills
-    description: Cognovis Samurai skills collection (FHIR/Aidbox tooling, ex-global plugin)
-    type: git
-  - name: open-brain
-    source: https://github.com/sussdorff/open-brain
-    description: Open-Brain memory store with skills+hooks for memory capture across coding sessions
-    type: git
-  - name: disler
-    source: https://github.com/disler
-    description: Public skill/agent/hooks repos for Claude Code and AI agents
-    type: git
-  - name: pbakaus
-    source: https://github.com/pbakaus
-    description: Paul Bakaus' public agentic content (Impeccable frontend design skill)
-    type: git
-  - name: thadenorigar
-    source: https://github.com/ThadeNorigar
-    description: Private K2SO and related agent repos
-    type: git

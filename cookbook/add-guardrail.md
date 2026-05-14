@@ -87,46 +87,47 @@ chmod +x guardrails/<name>/claude-code.sh
 
 ### 4. Build the library.yaml Entry
 
-Add the guardrail entry under `guardrails:` in `library.yaml`. Follow the existing
+Add the guardrail entry under `library.guardrails:` in `library.yaml`. Follow the existing
 `block-destructive-bash` entry as a pattern:
 
 ```yaml
-guardrails:
-  - name: <name>
-    description: <one-line description of what is enforced>
-    purpose: <purpose>
-    capability:
-      claude_code:
-        events: [PreToolUse]           # adjust to actual events used
-        handler: bash-script
-        matcher: Bash                  # tool name to match, or omit for all tools
-      codex_cli:                       # omit if NOT SUPPORTED for this purpose
-        events: [SessionStart]
-        handler: node-mjs
-        note: "Capability limitation note here"
-        mismatch_warning: "Warning text shown to user during use-guardrail"
-      codex_cloud:                     # omit if NOT SUPPORTED
-        mechanism: approval_policy
-        config_key: approval_policy
-        recommended_value: all
-        note: "..."
-        mismatch_warning: "..."
-      opencode:                        # omit if NOT SUPPORTED
-        mechanism: permission-rule
-        config_key: rules
-    sources:
-      claude_code: guardrails/<name>/claude-code.sh
-      codex_cli: guardrails/<name>/codex-cli.mjs     # omit if not created
-      codex_cloud: guardrails/<name>/codex-cloud-config-fragment.toml
-      opencode: guardrails/<name>/opencode-fragment.json
-    tags:
-      - <relevant-tags>
+library:
+  guardrails:
+    - name: <name>
+      description: <one-line description of what is enforced>
+      purpose: <purpose>
+      capability:
+        claude_code:
+          events: [PreToolUse]           # adjust to actual events used
+          handler: bash-script
+          matcher: Bash                  # tool name to match, or omit for all tools
+        codex_cli:                       # omit if NOT SUPPORTED for this purpose
+          events: [SessionStart]
+          handler: node-mjs
+          note: "Capability limitation note here"
+          mismatch_warning: "Warning text shown to user during use-guardrail"
+        codex_cloud:                     # omit if NOT SUPPORTED
+          mechanism: approval_policy
+          config_key: approval_policy
+          recommended_value: all
+          note: "..."
+          mismatch_warning: "..."
+        opencode:                        # omit if NOT SUPPORTED
+          mechanism: permission-rule
+          config_key: rules
+      sources:
+        claude_code: guardrails/<name>/claude-code.sh
+        codex_cli: guardrails/<name>/codex-cli.mjs     # omit if not created
+        codex_cloud: guardrails/<name>/codex-cloud-config-fragment.toml
+        opencode: guardrails/<name>/opencode-fragment.json
+      tags:
+        - <relevant-tags>
 ```
 
 **YAML formatting rules:**
 - 2-space indentation
 - Omit harness keys where support is NOT available (not just unsupported but omit entirely)
-- Keep entries alphabetically sorted by name within the `guardrails:` list
+- Keep entries alphabetically sorted by name within the `library.guardrails:` list
 - `mismatch_warning` text is shown verbatim to the user by `use-guardrail`
 
 ### 5. Validate the Entry

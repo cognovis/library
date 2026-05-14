@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
+from .catalog import get_marketplaces
 from .errors import SourceError
 
 
@@ -132,13 +133,13 @@ def resolve_marketplace(
     """Resolve marketplace name for a catalog entry.
 
     Checks entry's `from_marketplace` field and matches against
-    the `marketplaces` section of library.yaml.
+    `sources.marketplaces` in library.yaml, with legacy root fallback.
 
     Returns:
         Marketplace name string (e.g. 'cognovis-core'), or 'local' for local paths,
         or 'unknown' if not resolvable.
     """
-    marketplaces = catalog_data.get("marketplaces", []) or []
+    marketplaces = get_marketplaces(catalog_data)
     marketplace_names = {
         m.get("id") or m.get("name"): m for m in marketplaces if isinstance(m, dict)
     }

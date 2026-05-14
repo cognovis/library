@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """install-hook.py -- Install a `hooks-manifest`-kind guardrail per ADR-0004 Phase 2.
 
-Reads a guardrail entry from library.yaml whose `kind` is `hooks-manifest`,
+Reads a `library.guardrails` entry from library.yaml whose `kind` is `hooks-manifest`,
 fetches the referenced hooks.json from its remote `source:` or per-harness
 `sources:` map, caches the
 source repo at ~/.local/share/library/guardrails/<name>/checkout/,
@@ -39,6 +39,8 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
+
+from lib.catalog import get_entries
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -84,10 +86,10 @@ def load_library() -> dict:
 
 
 def find_guardrail(library: dict, name: str) -> dict:
-    for entry in library.get("guardrails", []):
+    for entry in get_entries(library, "guardrail"):
         if entry.get("name") == name:
             return entry
-    sys.exit(f"Guardrail {name!r} not found in library.yaml")
+    sys.exit(f"Guardrail {name!r} not found in library.yaml under library.guardrails")
 
 
 def parse_github_source(url: str) -> tuple[str, str, str, str]:

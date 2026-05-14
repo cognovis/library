@@ -46,10 +46,10 @@ git pull
   - `agent` -> `library.agents`
   - `prompt` -> `library.prompts`
   - `standard` -> `library.standards`
-  - `guardrail` -> top-level `guardrails:`
-  - `mcp` -> top-level `mcp_servers:`
-  - `model-standard` -> top-level `model_standards:`
-  - `golden-prompt` -> top-level `golden_prompts:`
+  - `guardrail` -> `library.guardrails`
+  - `mcp` -> `library.mcp_servers`
+  - `model-standard` -> `library.model_standards`
+  - `golden-prompt` -> `library.golden_prompts`
 - Parse only that section
 
 ### 3. Check Install Status

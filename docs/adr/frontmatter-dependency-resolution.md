@@ -126,7 +126,8 @@ A dependency reference is a string `<type>:<name>`:
 The type prefix is **mandatory**. Bare names are not allowed. The
 resolver uses the type to look up the entry in the correct
 `library.yaml` section (`library.skills`, `library.agents`,
-`library.prompts`, `library.guardrails`, `library.mcp_servers`).
+`library.prompts`, `library.guardrails`, `library.mcp_servers`, and the
+other `library.*` primitive arrays).
 
 ### Decision 3: `library.yaml` entries mirror frontmatter; validator catches drift
 

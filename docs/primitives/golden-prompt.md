@@ -30,14 +30,16 @@ Layer 3: Model-Standard (optional)
   └── Model-specific overlays such as verbosity or tool-use tuning.
 ```
 
-**Catalog format.** Golden-prompts live under `golden_prompts:` in `library.yaml`:
+**Catalog format.** Golden-prompts live under `library.golden_prompts` in `library.yaml`:
 
 ```yaml
-- name: cognovis-base
-  description: >-
-    Layer 1 of the three-layer agent composition model. Safety, confirmation
-    gates, content isolation, source-language, session-close protocol.
-  source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
+library:
+  golden_prompts:
+    - name: cognovis-base
+      description: >-
+        Layer 1 of the three-layer agent composition model. Safety, confirmation
+        gates, content isolation, source-language, session-close protocol.
+      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
 ```
 
 **When to choose it.** Create a golden-prompt when:
