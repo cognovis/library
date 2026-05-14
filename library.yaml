@@ -156,6 +156,12 @@ library:
         - "standard:primitive-placement"
         - "standard:english-only"
         - "standard:no-emoji"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:core
@@ -366,6 +372,12 @@ library:
         - "standard:primitive-placement"
         - "standard:english-only"
         - "standard:no-emoji"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -409,6 +421,18 @@ library:
       requires:
         - "standard:healthcare-control-areas"
         - "standard:english-only"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            primitive_type: workflow
+            notes: >-
+              Audit-backed counterpart for Mira Aidbox/FHIR development work;
+              product paths, runtime state, and credentials stay in the Mira repo.
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:project
@@ -576,6 +600,12 @@ library:
         - "standard:primitive-placement"
         - "standard:english-only"
         - "standard:no-emoji"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -597,6 +627,12 @@ library:
           entrypoint: true
           language: python
           output_contract: bare-value
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -625,6 +661,12 @@ library:
         - "standard:primitive-placement"
         - "standard:english-only"
         - "standard:no-emoji"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -1242,6 +1284,18 @@ library:
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox/skills/aidbox/SKILL.md
       requires:
         - "standard:english-only"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            primitive_type: workflow
+            notes: >-
+              Audit-backed counterpart for Mira and Aidbox development; product
+              runtime state and local configuration stay in product repositories.
+          gascity:
+            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -1254,6 +1308,18 @@ library:
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-ig-development/skills/aidbox-ig-development/SKILL.md
       requires:
         - "standard:english-only"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            primitive_type: workflow
+            notes: >-
+              Audit-backed counterpart for Mira and healthcare FHIR IG work;
+              product-specific IG paths and release state stay in product repos.
+          gascity:
+            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -1265,6 +1331,18 @@ library:
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-sql-on-fhir/skills/aidbox-sql-on-fhir/SKILL.md
       requires:
         - "standard:english-only"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            primitive_type: workflow
+            notes: >-
+              Audit-backed counterpart for Mira SQL on FHIR work; product SQL
+              views, schemas, and runtime data stay in the Mira repo.
+          gascity:
+            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -1276,6 +1354,18 @@ library:
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/atomic-generate-types/skills/atomic-generate-types/SKILL.md
       requires:
         - "standard:english-only"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: healthcare-repos
+            primitive_type: workflow
+            notes: >-
+              Audit-backed counterpart for healthcare/FHIR type-generation work;
+              generated product code remains owned by each product repository.
+          gascity:
+            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -1287,6 +1377,18 @@ library:
       source: https://github.com/cognovis/samurai-skills/blob/main/plugins/hs-search/skills/hs-search/SKILL.md
       requires:
         - "standard:english-only"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            primitive_type: workflow
+            notes: >-
+              Audit-backed counterpart for Mira and healthcare documentation
+              lookup; product implementation decisions stay in product repos.
+          gascity:
+            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -1618,6 +1720,18 @@ library:
       source: https://github.com/cognovis/library-core/tree/main/standards/healthcare/
       tier: domain
       default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: healthcare-repos
+            primitive_type: other
+            notes: >-
+              Audit-backed counterpart for Mira, Polaris, and FHIR repo work;
+              product-specific examples and overlays stay in those repositories.
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -1735,6 +1849,12 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives/primitive-placement.md
       tier: core
       default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:core
@@ -1793,6 +1913,18 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/standards/healthcare/control-areas.md
       tier: domain
       default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: healthcare-repos
+            primitive_type: other
+            notes: >-
+              Audit-backed counterpart for healthcare product control work;
+              product-specific control evidence remains in each product repo.
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:domain
