@@ -75,3 +75,68 @@ def test_primitives_documents_judge_layer_contracts():
         "Mandate",
     ):
         assert expected in text
+
+
+def test_agent_justification_gate_keeps_existing_c_numbering():
+    """Judge C7 must extend, not renumber, the existing C1-C6 gate."""
+    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+
+    for expected in (
+        "| C1: different tool permission set |",
+        "| C2: own context budget |",
+        "| C3: parallel siblings |",
+        "| C4: information barrier |",
+        "| C5: different model |",
+        "| C6: multi-phase orchestration |",
+        "| C7: pre-action gate |",
+    ):
+        assert expected in text
+
+    assert "| C1: isolated context |" not in text
+    assert "| C2: specialized prompt |" not in text
+    assert "| C5: independent review |" not in text
+    assert "| C6: model fit |" not in text
+
+
+def test_persona_alone_is_not_agent_justification():
+    """Durable persona/rubric language must remain a counterexample, not C2."""
+    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+
+    assert "Do NOT create an agent just because the work needs a durable persona" in text
+    assert "unless one of C1-C7 also" in text
+
+
+def test_action_boundary_uses_risk_class_effect_type_and_uri_refs():
+    """action_boundary examples must use the stable downstream contract shape."""
+    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+
+    for expected in (
+        "risk_class: external-side-effect",
+        "effect_type: financial",
+        "proposal_schema: standard://judge-layer/proposals/action-proposal.v1",
+        "judge: agent://judge-default",
+        'risk_class = "external-side-effect"',
+        'effect_type = "financial"',
+        'proposal_schema = "standard://judge-layer/proposals/action-proposal.v1"',
+        'judge = "agent://judge-default"',
+    ):
+        assert expected in text
+
+    for forbidden in (
+        "class: external-system",
+        "class: financial",
+        "proposal_schema: action-proposal.v1",
+        "judge: default-judge",
+        'class = "financial"',
+        'proposal_schema = "action-proposal.v1"',
+        'judge = "default-judge"',
+    ):
+        assert forbidden not in text
+
+
+def test_portability_matrix_includes_action_boundary_row():
+    """Action Boundary metadata must be discoverable from the matrix."""
+    text = (REPO_ROOT / "docs" / "PRIMITIVES.md").read_text()
+
+    assert "| 3a | [Action Boundary](#action-boundary-metadata) |" in text
+    assert "YAML for skills, TOML for agents" in text

@@ -72,6 +72,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 1 | [Skill](#1-skill) | **YES** — shared SKILL.md (Open Agent Skills Standard) | full text at session start | name+desc at startup, full on-demand | n/a | n/a | n/a | §1 |
 | 2 | [Command](#2-command) | partial — same intent, different formats | `.claude/commands/*.md` (slash) | TBD (CL-qzw) | n/a | n/a | n/a | §2 |
 | 3 | [Agent](#3-agent) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | n/a | §3 |
+| 3a | [Action Boundary](#action-boundary-metadata) | partial — shared keys, primitive-native serialization | YAML frontmatter on skills/agents | YAML for skills, TOML for agents | n/a | unverified | unverified | metadata |
 | 4 | [Guardrail/Hook](#4-guardrail-hook) | **NO** — event coverage diverges | 15 events | 3 events (SessionStart/End, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | §4 |
 | 5 | [Plugin](#5-plugin) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | §5 |
 | 6 | [Marketplace](#6-marketplace) | yes — distribution layer | yes | yes | yes | yes | yes | §6 |
@@ -173,19 +174,24 @@ under so a judge layer can request an action proposal before execution.
 name: supplier-payment
 description: Draft and submit approved supplier payments.
 action_boundary:
-  class: external-system
-  proposal_schema: action-proposal.v1
-  judge: default-judge
+  risk_class: external-side-effect
+  effect_type: financial
+  proposal_schema: standard://judge-layer/proposals/action-proposal.v1
+  judge: agent://judge-default
   requires_mandate: true
 ---
 ```
 
 Field meanings:
-- `class` — the side-effect class, such as `filesystem-write`, `network-call`,
-  `external-system`, `financial`, `message-send`, `credential-use`, or `other`.
-- `proposal_schema` — the Action Proposal Schema standard the actor must satisfy
-  before attempting the side effect.
-- `judge` — the judge agent or catalog identifier that evaluates the proposal.
+- `risk_class` — the reversibility/escalation class: `read-only`,
+  `reversible-write`, `external-side-effect`, or `high-risk`. This axis tells a
+  judge how hard to scrutinize the proposal and whether to escalate to a human.
+- `effect_type` — the side-effect category, such as `filesystem`, `network`,
+  `financial`, `messaging`, `credential`, or `other`. This axis helps route to a
+  specialist judge or policy check.
+- `proposal_schema` — a `standard://` URI for the Action Proposal Schema the
+  actor must satisfy before attempting the side effect.
+- `judge` — an `agent://` URI for the judge agent that evaluates the proposal.
 - `requires_mandate` — whether execution requires an AP2-style mandate record in
   addition to the proposal.
 
@@ -288,9 +294,10 @@ as side-effecting skills. Claude agent sources use YAML frontmatter:
 name: payment-runner
 description: Execute approved supplier payments.
 action_boundary:
-  class: financial
-  proposal_schema: action-proposal.v1
-  judge: default-judge
+  risk_class: external-side-effect
+  effect_type: financial
+  proposal_schema: standard://judge-layer/proposals/action-proposal.v1
+  judge: agent://judge-default
   requires_mandate: true
 ---
 ```
@@ -302,24 +309,25 @@ name = "payment-runner"
 description = "Execute approved supplier payments."
 
 [action_boundary]
-class = "financial"
-proposal_schema = "action-proposal.v1"
-judge = "default-judge"
+risk_class = "external-side-effect"
+effect_type = "financial"
+proposal_schema = "standard://judge-layer/proposals/action-proposal.v1"
+judge = "agent://judge-default"
 requires_mandate = true
 ```
 
 **Agent Justification Gate.** NORMATIVE as Library authoring taxonomy.
 Agent creation must satisfy at least one C-criterion. Judge agents add C7 and
-normally satisfy C1 plus C4.
+normally satisfy C1 plus C4, often C5, and sometimes C2.
 
 | Criterion | Justifies an agent when |
 |-----------|-------------------------|
-| C1: isolated context | The work needs a fresh context window or must not pollute the parent context. |
-| C2: specialized prompt | The work needs a durable persona, rubric, or operating procedure. |
-| C3: parallel execution | The work can run independently while the parent continues other work. |
-| C4: tool boundary | The work needs a different tool grant, especially read-only or approval-only access. |
-| C5: independent review | The work needs separation from the actor being checked. |
-| C6: model fit | The work needs a different reasoning tier, latency target, or cost profile. |
+| C1: different tool permission set | The work needs a different tool grant than the parent, especially read-only, approval-only, or constrained write access. |
+| C2: own context budget | The work needs a fresh context window or must not pollute the parent context. |
+| C3: parallel siblings | The work can run independently while the parent or sibling agents continue other work. |
+| C4: information barrier | The work needs separation from the actor being checked, or must not see/manipulate the same evidence stream. |
+| C5: different model | The work needs a different reasoning tier, latency target, or cost profile. |
+| C6: multi-phase orchestration | The work owns a multi-step workflow with durable state, handoffs, or phase gates. |
 | C7: pre-action gate | The agent decides whether a proposed side-effect may execute before it happens. |
 
 #### Judge Specialization
@@ -334,9 +342,9 @@ consequence, rollback path, and any mandate record, then decides whether the act
 may continue.
 
 **Justification.** A judge must satisfy C7 plus the normal agent gate. In practice
-that means C1 (separate context) and C4 (separate tool or approval boundary), and
-often C5 (independent review of the actor's evidence). If the check is fully
-deterministic and does not require model judgment, use a Guardrail/Hook instead.
+that means C1 (different tool or approval boundary) and C4 (information barrier),
+and often C5 (different model). If the check is fully deterministic and does not
+require model judgment, use a Guardrail/Hook instead.
 
 **Relationship to reviewers.** Reviewers and verification agents are post-action:
 they inspect completed work or generated output. Judges are pre-action: they
@@ -361,6 +369,9 @@ mandates use `produces-mandate`. The tag vocabulary is defined in `library.yaml`
 **Counter-examples.**
 - Do NOT spawn an agent for a single tool call or lookup — that wastes a full context
   window.
+- Do NOT create an agent just because the work needs a durable persona, rubric, or
+  operating procedure. That is usually a skill or standard unless one of C1-C7 also
+  applies.
 - Do NOT use an agent when the capability should be reusable across harnesses in a
   portable format — use a skill.
 
