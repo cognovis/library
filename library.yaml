@@ -1748,7 +1748,7 @@ library:
         - category:standard-bundle
     - name: project
       description: >-
-        Project-level conventions: no mock data, centralized config, team workflow, factory-ready criteria.
+        Project-level conventions: centralized config, team workflow, factory-ready criteria.
       source: https://github.com/cognovis/library-core/tree/main/standards/project/
       tier: domain
       default_scope: ask
@@ -1929,6 +1929,61 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+    - name: no-mock-data
+      description: >-
+        Production code uses real data boundaries and seed fixtures instead of
+        hardcoded mock responses.
+      source: https://github.com/cognovis/library-core/blob/main/standards/no-mock-data/no-mock-data.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/billing/no-mock-data.md
+            primitive_type: other
+            notes: >-
+              Reconciles Mira's billing anti-mock-data rule into a reusable
+              dev-plane boundary; endpoint names, seed commands, FHIR server
+              URLs, tenant examples, and local fixture paths remain product
+              owned.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - project
+        - testing
+    - name: sse-first
+      description: >-
+        Server-Sent Events are the default browser realtime transport for
+        one-way server-to-client state updates.
+      source: https://github.com/cognovis/library-core/blob/main/standards/sse-first/sse-first.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/frontend/sse-first.md
+            primitive_type: other
+            notes: >-
+              Reconciles Mira's frontend realtime guidance into a shared
+              transport rule; concrete event names, route topology, reconnect
+              policy details, and product runtime examples stay in Mira.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - frontend
+        - realtime
     - name: sql-safety
       description: >-
         SQL query construction rules for safe filtering, casting, aggregation, and
