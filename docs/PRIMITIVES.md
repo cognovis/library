@@ -165,6 +165,12 @@ The one-line rule: **skills are context, not configuration — never model-pin t
 | `skill-tester` — "Use when testing or installing standalone skills under local development…" | Model auto-invokes when it detects skill development/testing context. |
 | `hook-forge` — "Use when creating, configuring, or managing Claude Code hooks…" | Model auto-invokes when hook creation/configuration is in scope. |
 
+**Authoring source-of-truth.** Day-to-day rules for writing a SKILL.md (thin-shell
+rule, two-contracts shape, agent-private rule, `disableModelInvocation` guidance)
+live in the `skill-forge` skill itself — it is the operational source-of-truth
+for skill authoring. This document defines the primitive; `skill-forge` defines
+how to write one. Do NOT create parallel policy documents.
+
 ---
 
 ### 2. Command
@@ -448,37 +454,35 @@ invocation primitives).
 ### 7. Standard
 
 **Definition.** A markdown document containing project-specific or cross-cutting
-context that supplements global skills. Standards are injected into the model's
-context by the harness (not invoked by the model or user), providing durable
-behavioral guidance scoped to a project or domain.
+context that supplements skills and agents. Standards are not invoked by the user
+or model. They are dependency content loaded only when a consuming primitive
+declares `requires_standards:`.
 
-**Key constitutive feature.** Harness-injected context (not model-invoked): a
-standard is surfaced to the model by the harness at session start or on demand via
-the standards injection mechanism — the model does not autonomously "call" a standard.
+**Key constitutive feature.** Dependency-scoped context: a standard is surfaced
+through a consuming skill or agent, not by automatic project-wide injection.
 
-**Trigger semantics — current mechanism (NORMATIVE, post-CL-c2d / CL-c8g):**
+**Delivery semantics — current mechanism (NORMATIVE, Axis 1 lock-in, 2026-05-14):**
 
-**Compose-on-install into `AGENTS.md`.** At `/library standard use <name>` install time,
-`scripts/agents-md-block.py insert` writes a delimited `<!-- BEGIN STANDARD:<name> ... -->`
-section into the target `AGENTS.md` (project: `<repo>/AGENTS.md`; global:
-`~/.agents/AGENTS.md`). Both harnesses read AGENTS.md natively (Codex direct; Claude Code
-via the `@AGENTS.md` import in `CLAUDE.md`, and via `@~/.agents/AGENTS.md` in
-`~/.claude/CLAUDE.md` for global). No SessionStart content-injection hook required.
+**Never auto-injected.** `/library standard use <name>` installs the standard file
+at its canonical path and updates `.library.lock`. It does not write to
+`AGENTS.md`, `CLAUDE.md`, or any other harness context file. Standards reach the
+model only when a consuming primitive declares `requires_standards: [<name>]`.
 
-**Drift detection.** A lightweight SessionStart hook (`hooks/standards-drift-check/`) scans
-AGENTS.md / CLAUDE.md for STANDARD markers and emits a single warning line per drifted
-standard. Installable via `/library guardrail use standards-drift-check`. No content
-injection, sub-50ms runtime.
+**Manual composition utility.** `scripts/agents-md-block.py` remains available for
+project owners who intentionally want to hand-compose a standard block into their
+own `AGENTS.md`. The Library installer, remover, and sync flow do not call it.
 
-**Update + remove.** `cookbook/sync.md` re-composes blocks against latest source via
-`agents-md-block.py update`. `/library standard remove <name>` calls `agents-md-block.py
-remove` plus deletes the cache directory.
+**Update + remove.** `/library sync` refreshes the vendored standard files under
+`.agents/standards/<name>/` or `~/.agents/standards/<name>/` and updates the
+lockfile content hash. `/library standard remove <name>` deletes the installed
+files and lockfile entry only. Existing `<!-- BEGIN STANDARD:... -->` blocks in
+user-owned `AGENTS.md` files are left untouched.
 
 **Retired mechanisms (do not use):**
 - SessionStart trigger-matched content injection via `hooks/standards-loader/` — **deleted** (CL-c8g)
 - TaskCreated per-subagent injection via `hooks/inject-subagent-standards/` — **deleted** (CL-c8g)
 - `~/.claude/standards/<domain>/<name>.md` legacy path — **retired**, see `docs/research/standards-loading.md` (RETIRED notice)
-- `scripts/standards-loader.sh --generate-adapter` — superseded by `agents-md-block.py insert`
+- `scripts/standards-loader.sh --generate-adapter` — retired with automatic standards adapters
 - `scripts/standards-loader.sh --load` — superseded by reading the cached file directly at `~/.agents/standards/<name>/` or `.agents/standards/<name>/`
 
 `scripts/standards-loader.sh` itself still ships **only** for the `--load-model-standard <name>` operation, used by `scripts/compose-agent.py` (golden-prompt Layer 3 resolution). Audit of remaining usage is tracked separately.
@@ -659,6 +663,22 @@ Migration target: move these to `.agents/standards/<name>.md` after CL-717 compl
 **Metadata note.** Library-owned metadata (e.g., `metadata.library.requires_standards`)
 lives in the Library's own namespace. Do NOT pollute standard SKILL.md frontmatter
 fields with Library-internal metadata.
+
+**Authoring source-of-truth.** Day-to-day rules for writing a standard
+(`rule:` vs `domain:` frontmatter, folder-form vs single-file layout, required
+and optional fields, maturity-arc test, promotion mechanics) live in the
+`standard-forge` skill itself — it is the operational source-of-truth for
+standard authoring. This document defines the primitive; `standard-forge`
+defines how to write one. Do NOT create parallel policy documents.
+
+> **Delivery clarification (Axis 1, 2026-05-14):** Earlier revisions of this
+> document described a "compose-on-install" mechanism that wrote
+> `<!-- BEGIN STANDARD:<name> -->` blocks into `AGENTS.md` at install time.
+> That mechanism is being retired. Standards are NEVER auto-injected. They
+> reach the model only when a consuming primitive declares
+> `requires_standards: [<name>]`. If a project owner wants a rule globally
+> on, they hand-paste it into their own `AGENTS.md` — the library does not
+> assume.
 
 ---
 
@@ -886,14 +906,15 @@ Every skill install creates the same three-layer structure:
 | Role | Path |
 |------|------|
 | Layer B (real files, content-addressable) | `~/.local/share/library/skills/<m>/<n>@<tree-sha>/SKILL.md` |
-| **Canonical** (Layer C) | `.agents/skills/<name>` → Layer-B cache (symlink) |
+| **Canonical** (Layer C) | `.agents/skills/<name>` real vendored copy by default |
 | **Claude bridge** (Layer C) | `.claude/skills/<name>` → `.agents/skills/<name>` (symlink) |
 | Codex | reads `.agents/skills/<name>` natively (r1 root, CL-603) — no install path |
 
 The `.agents/skills/<name>` path is always canonical. The `.claude/skills/<name>`
 path is always the Claude harness bridge symlink. Codex reaches the same
 canonical files directly; no separate `.codex/skills/<name>` install target.
-This prevents two independent file copies from drifting apart.
+The Layer-B cache remains the resolver source; Layer C is committed content unless
+the user explicitly installs with `--symlink` for local development.
 
 ### Name uniqueness requirement
 
@@ -903,7 +924,7 @@ violation — bug reports from that state will be untriageable.
 
 ### Uninstall completeness
 
-`/library remove` MUST remove the Claude bridge AND the canonical symlink AND
+`/library remove` MUST remove the Claude bridge AND the canonical install AND
 the lockfile entry. The removal sequence: Claude bridge first, then canonical,
 then lockfile. The Layer-B cache (`~/.local/share/library/skills/...`) is
 garbage-collected separately by `/library prune-cache` once no lockfile entry
