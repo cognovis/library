@@ -14,7 +14,7 @@ superseded_by: ["0002"]
 # ADR-0001: Replace sussdorff-plugins marketplace with per-project /library use
 
 > **SUPERSEDED by ADR-0002 (2026-05-02).** This ADR's Hybrid retention
-> model is reversed in favor of full retirement. ADR-0001's argument
+> model is reversed in favor of full removal. ADR-0001's argument
 > for keeping `core`/`beads-workflow`/`infra` bundles in the
 > marketplace was based on those artefacts being unique to the
 > marketplace bundle. CL-8vb subsequently migrated all of those
@@ -77,17 +77,17 @@ Specifically:
 | `core` | **Keep in marketplace** | Cross-cutting standards, dev-tools hooks, and core utilities needed in every session. Installing per-project would create 15+ redundant copies with no benefit. |
 | `beads-workflow` | **Keep in marketplace** | The orchestrator runtime (`codex-exec.py`, `metrics-*.py`, `claim-bead.py`, etc.) must be available globally for the `cld -b <id>` workflow to function. It is not a per-project concern. |
 | `infra` | **Keep in marketplace** | Infrastructure tooling (chezmoi, dolt, server management) applies across all machines, not per project. |
-| `business` | **Retire from marketplace → /library use** | Business skills (CRM, offers, project management) are project-specific. The medical project must not receive LinkedIn or Angebotserstellung by default. |
-| `content` | **Retire from marketplace → /library use** | Content creation skills are domain-specific. Projects opt in via `/library use`. |
-| `meta` | **Retire from marketplace → /library use** | Meta-skills (agent creators, skill creators) are used in specific contexts, not always-on. |
-| `medical` | **Retire from marketplace → /library use** | Medical domain skills must not install globally for non-medical projects. Explicit project opt-in is a safety requirement. |
+| `business` | **Remove from marketplace → /library use** | Business skills (CRM, offers, project management) are project-specific. The medical project must not receive LinkedIn or Angebotserstellung by default. |
+| `content` | **Remove from marketplace → /library use** | Content creation skills are domain-specific. Projects opt in via `/library use`. |
+| `meta` | **Remove from marketplace → /library use** | Meta-skills (agent creators, skill creators) are used in specific contexts, not always-on. |
+| `medical` | **Remove from marketplace → /library use** | Medical domain skills must not install globally for non-medical projects. Explicit project opt-in is a safety requirement. |
 | `dev-tools` | **Conditional keep** | The base dev-tools bundle (playwright, browser tools) stays in the marketplace. Codex-specific overlays move to `/library use`. Review after Phase 1 migration completes. |
 
 This is the "Hybrid" option from the Alternatives Considered section, refined by empirical data.
 
 ## Rationale
 
-### Why not Option 1 (full retirement)?
+### Why not Option 1 (full removal)?
 
 The `~/.claude/plugins` surface is the only mechanism Claude Code's UI exposes for
 one-time global installs. Retiring the marketplace entirely would:
@@ -158,18 +158,18 @@ domain-specific skills.
 **Trigger for starting**: Phase 1 completion criterion met AND all projects verified.
 
 **Actions**:
-1. For each of the four bundles to retire: verify no project depends on the marketplace
+1. For each of the four bundles to remove: verify no project depends on the marketplace
    version (i.e., every project that uses any skill from the bundle has a project-local
    install).
 2. Run `plugin uninstall business@sussdorff-plugins` (and content, meta, medical).
 3. Verify no session-start errors. If any: re-install the affected bundle and create a
    follow-up bead.
 4. Update `library.yaml` `marketplaces:` section to remove sussdorff-plugins entries for
-   retired bundles (follow-up bead — requires schema serialization per CLAUDE.md
+   removed bundles (follow-up bead — requires schema serialization per CLAUDE.md
    conventions).
 
-**dev-tools review**: Assess whether the base dev-tools bundle can also be retired.
-If Codex-specific overlays have been moved to `/library use`, retire the bundle. If
+**dev-tools review**: Assess whether the base dev-tools bundle can also be removed.
+If Codex-specific overlays have been moved to `/library use`, remove the bundle. If
 still needed fleet-wide, keep.
 
 **Completion criterion**: `installed_plugins.json` shows no `business`, `content`, `meta`,
@@ -202,7 +202,7 @@ The transition is safe because of `docs/policy/name-collision.md`:
 | Skill exists only in marketplace bundle | Marketplace version loads | None — will be shadowed when project installs via `/library use` |
 | Skill installed via `/library use` AND in marketplace bundle | Project-local wins (Decision 1) | None — this is the intended coexistence state |
 | Skill removed from marketplace but project-local exists | Project-local continues to work | No action needed — removal is safe |
-| Skill removed from marketplace, no project-local | Skill becomes unavailable | Must ensure project-local install before retiring the bundle (Phase 1 gate) |
+| Skill removed from marketplace, no project-local | Skill becomes unavailable | Must ensure project-local install before removing the bundle (Phase 1 gate) |
 | Cross-harness (Claude Code + Codex) | Bridge symlink handles this | `/library use` with `harness: both` creates symlink automatically |
 
 **Recommendation during Phase 1**: Do not uninstall any marketplace bundles. Let the
@@ -214,12 +214,12 @@ has a `/library use` manifest) is the gate. Only after that gate: Phase 2 uninst
 | Scenario | Recovery action |
 |----------|----------------|
 | Phase 1 in progress, project-local install breaks a skill | `plugin install <bundle>@sussdorff-plugins` restores the marketplace version; project-local is still there but uninstall it if needed |
-| Phase 2 bundle removal breaks something | `plugin install <bundle>@sussdorff-plugins` — reinstall the retired bundle. The marketplace source (`directory:/Users/malte/code/claude-code-plugins`) is preserved and available at all times |
+| Phase 2 bundle removal breaks something | `plugin install <bundle>@sussdorff-plugins` — reinstall the removed bundle. The marketplace source (`directory:/Users/malte/code/claude-code-plugins`) is preserved and available at all times |
 | Phase 2 and `claude-code-plugins` directory has moved | Update `known_marketplaces.json` source path. No git history is lost — this is a local directory reference, not a registry entry |
 | Phase 3 migration fails | Revert `known_marketplaces.json` to `directory:` source. The content was never deleted, only the pointer changed |
 
 **Key safety property**: `sussdorff-plugins` will NOT be deregistered as a marketplace
-source until Phase 3 is explicitly started. Even after Phase 2 bundle retirement, the
+source until Phase 3 is explicitly started. Even after Phase 2 bundle removal, the
 marketplace registration remains so reinstallation is a single command.
 
 ## Communication
@@ -257,7 +257,7 @@ The decision is successfully implemented when all of the following are true:
    in their CLAUDE.md or `.claude/settings.json`.
 3. No session-start errors related to missing skills in any active project.
 4. `core`, `beads-workflow`, and `infra` bundles remain installed and functional.
-5. `library.yaml` `marketplaces:` section updated to reflect retired bundles (or a
+5. `library.yaml` `marketplaces:` section updated to reflect removed bundles (or a
    new bead tracks this).
 6. This ADR is linked from `docs/ARCHITECTURE.md`.
 
@@ -269,7 +269,7 @@ project convention). The phases are:
 | Phase | Name | Gate to start | Gate to complete |
 |-------|------|---------------|-----------------|
 | 1 | Per-project opt-in | CL-yko done (complete) | All active projects have /library use manifests |
-| 2 | Bundle retirement | Phase 1 gate met + all projects verified | business/content/meta/medical uninstalled from marketplace |
+| 2 | Bundle removal | Phase 1 gate met + all projects verified | business/content/meta/medical uninstalled from marketplace |
 | 3 | Source migration (optional) | `core`/`beads-workflow`/`infra` stable + machine layout change | Local directory source replaced or deregistered |
 
 Phase 1 can start immediately. Phases 2 and 3 are follow-up beads.
@@ -281,13 +281,13 @@ execute the decision:
 
 1. **Phase 1 execution bead**: For each active project, run `/library use` for
    business/content/meta/medical skills. Document manifests.
-2. **Phase 2 execution bead**: Uninstall retired bundles after Phase 1 gate met.
+2. **Phase 2 execution bead**: Uninstall removed bundles after Phase 1 gate met.
 3. **library.yaml marketplaces: update bead** (schema-serialized — depends on Phase 2 bead,
    no parallel edits to `marketplaces:` section per CLAUDE.md conventions).
 
 ## Alternatives Considered
 
-### Option 1: Retire sussdorff-plugins entirely
+### Option 1: Remove sussdorff-plugins entirely
 
 **Description**: Stop using the marketplace bundle mechanism entirely. Install everything
 via `/library use`.
@@ -300,7 +300,7 @@ of these would create 15+ redundant copies and require per-project boilerplate f
 fundamentals like `bd` commands and the beads orchestrator runtime.
 
 **Rejected because**: 30 artifacts are correctly classified `keep_in_plugin` in the audit.
-Those 30 back the fleet-wide bundles. Full retirement would break the development workflow
+Those 30 back the fleet-wide bundles. Full removal would break the development workflow
 on new machines.
 
 ### Option 2: Keep marketplace, drop /library use

@@ -37,13 +37,34 @@ differs. The `cdx` wrapper (bead `CL-tap`) parallels `cld`.
 2. **Catalog** — `/library <primitive> add <github-url>` registers a pointer in
    `library.yaml`. Catalog is pointers-only, not content.
 3. **Distribute** — `/library <primitive> use <name>` pulls the referenced item into
-   the primitive's canonical location. For skills, that is `.agents/skills/`
-   project-local or `~/.agents/skills/` global, with a Claude bridge under
-   `.claude/skills/` or `~/.claude/skills/`. Each repo pulls only what it needs.
+   the primitive's canonical location as a vendored copy by default. For skills,
+   that is `.agents/skills/` project-local or `~/.agents/skills/` global, with a
+   Claude bridge under `.claude/skills/` or `~/.claude/skills/`. Layer-B cache
+   paths are per-machine resolver inputs, not committed runtime targets. Each
+   repo pulls only what it needs.
 4. **Use** — invoked normally once in place. Same as any native skill/agent.
 
 Plus the return path: `/library <primitive> push <name>` sends local edits back upstream;
 `library sync` pulls latest for all installed items.
+
+### Project-self-contained installs
+
+Consumer projects should commit the project-local `.agents/` tree:
+
+```text
+<consumer-project>/
+├── .agents/
+│   ├── skills/<name>/SKILL.md
+│   ├── standards/<name>/<name>.md
+│   ├── agents/
+│   └── prompts/
+├── .claude/skills/        # ignored bridge symlinks
+└── .claude/worktrees/     # ignored worktree directories
+```
+
+Marketplace repos are the exception. In this `meta/` repo and the library-core
+marketplaces, source content lives under top-level `skills/`, `standards/`,
+`agents/`, and `prompts/`; `.agents/` remains an ignored install destination.
 
 ## Launchers (cld/cdx)
 
@@ -57,7 +78,7 @@ Per **ADR-0002 Decision 2**, the canonical source for all CLI launchers is `cogn
 **Deployment:** `bash scripts/install-bin.sh` creates symlinks from `~/.local/bin/{cld,cdx}` into `bin/`.
 The installer is idempotent and uses `ln -sfn` so updates to this repo are immediately reflected.
 
-`~/.local/bin/` must be in `$PATH`. The legacy `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
+`~/.local/bin/` must be in `$PATH`. The `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
 (only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).
 Note: the PATH change takes effect in **new shells only** — existing terminals that were launched before the edit still
 carry the old `~/.claude/scripts/` entry in their inherited environment. Open a new shell to verify AK5.
@@ -170,9 +191,9 @@ required.
 |-----------|-------------|-----------|-----|----------|-------------|
 | **Skill** | `.claude/skills/<name>/SKILL.md` | `.agents/skills/<name>/SKILL.md` | own skill loader | TBD | **Portable** — shared SKILL.md format (Open Agent Skills Standard); only install path differs |
 | **Agent** | YAML frontmatter `.claude/agents/<name>.md` | TOML `.codex/agents/<name>.toml` (per-repo; `~/.codex/agents/<name>.toml` for global/personal) | N/A | TBD | **Per-harness translation** — same concept, divergent formats; translation spec: bead `CL-11p` |
-| **Command / Prompt** | `.claude/commands/<name>.md` (slash cmds) | Deprecated in Codex — use skills instead | N/A | TBD | **Per-harness** — Claude Code has first-class slash commands; Codex deprecated custom prompts (bead `CL-qzw`) |
+| **Command / Prompt** | `.claude/commands/<name>.md` (slash cmds) | Not supported in Codex — use skills instead | N/A | TBD | **Per-harness** — Claude Code has first-class slash commands; Codex custom prompt targets are not used by the Library (bead `CL-qzw`) |
 | **Guardrail / Hook** | `.claude/settings.json` `hooks` section (scripts in `.claude/hooks/`) + 15 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | TBD | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
-| **Standard** | SessionStart hook injection via `standards/index.yml` | Future: `.agents/standards/<name>.md` file convention | TBD | TBD | **Library-managed** — not an invocation primitive; injected as context by the harness |
+| **Standard** | Loaded by consuming skills/agents via `requires_standards` | `.agents/standards/<name>/` file convention | TBD | TBD | **Library-managed** — not an invocation primitive; installed as dependency content, never auto-injected |
 | **MCP-Server** | `mcpServers` in `.mcp.json` (or `--mcp-config`) | `mcp_servers` TOML in `~/.codex/config.toml` | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config syntax is not portable |
 | **Plugin** | Bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | TBD | **Per-harness** — both harnesses now support plugins; bundle formats and install commands differ |
 | **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
@@ -190,8 +211,8 @@ tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRI
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [ADR-0001](adr/sussdorff-plugins-retirement.md) | Replace sussdorff-plugins marketplace with per-project /library use | Superseded by ADR-0002 |
-| [ADR-0002](adr/canonical-library-architecture.md) | Library-core repos as canonical source; harness dirs as deployment targets; full marketplace retirement | Accepted |
+| [ADR-0001](adr/sussdorff-plugins-removal.md) | Replace sussdorff-plugins marketplace with per-project /library use | Superseded by ADR-0002 |
+| [ADR-0002](adr/canonical-library-architecture.md) | Library-core repos as canonical source; harness dirs as deployment targets; marketplace removal | Accepted |
 | [ADR-0003](adr/three-layer-cache-architecture.md) | Three-layer skill deployment: Source/Cache/Harness Symlink + marketplace-symmetric primitives | Accepted |
 | [ADR-0004](adr/frontmatter-dependency-resolution.md) | Frontmatter-driven dependency resolution for library primitives | Accepted |
 

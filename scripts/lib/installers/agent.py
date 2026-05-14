@@ -204,6 +204,8 @@ def install_agent(
             cache_path=str(cache_path) + "/",
             install_target=str(install_target),
             checksum_sha256=checksum,
+            content_sha256=checksum,
+            install_mode="vendor",
             license_id=entry.get("license", "unknown"),
         )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))

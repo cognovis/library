@@ -559,7 +559,7 @@ class TestNoFieldsNoRegression:
             )
 
     def test_plain_skill_still_installs_correctly(self, project_no_fields: Path):
-        """Plain skill install must still create the canonical symlink."""
+        """Plain skill install must still create the canonical directory."""
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "skill", "use", "plain-skill", "--json"],
             capture_output=True,
@@ -584,16 +584,17 @@ class TestNoFieldsNoRegression:
 
 
 # ---------------------------------------------------------------------------
-# AK4: Standard with always_apply: true
+# AK4: Standards do not materialize always_apply into harness files
 # ---------------------------------------------------------------------------
 
 class TestStandardAlwaysApply:
-    """AK4: Standard with always_apply: true appends to CLAUDE.md and AGENTS.md."""
+    """Standards are installed as files only; no automatic AGENTS.md/CLAUDE.md edits."""
 
-    def test_standard_always_apply_appends_to_claude_md(
+    def test_standard_always_apply_does_not_append_to_claude_md(
         self, project_standard_always_apply: Path
     ):
-        """Standard install with always_apply must append @-import to CLAUDE.md."""
+        """Standard install with always_apply must not append @-import to CLAUDE.md."""
+        before = (project_standard_always_apply / "CLAUDE.md").read_text()
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "standard", "use", "always-standard", "--json"],
             capture_output=True,
@@ -605,15 +606,13 @@ class TestStandardAlwaysApply:
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
         claude_md = project_standard_always_apply / "CLAUDE.md"
-        content = claude_md.read_text()
-        assert "@.agents/standards/always-standard/" in content, (
-            f"Expected standard @-import in CLAUDE.md, got:\n{content}"
-        )
+        assert claude_md.read_text() == before
 
-    def test_standard_always_apply_appends_to_agents_md(
+    def test_standard_always_apply_does_not_append_to_agents_md(
         self, project_standard_always_apply: Path
     ):
-        """Standard install with always_apply must append @-import to AGENTS.md."""
+        """Standard install with always_apply must not append @-import to AGENTS.md."""
+        before = (project_standard_always_apply / "AGENTS.md").read_text()
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "standard", "use", "always-standard", "--json"],
             capture_output=True,
@@ -625,10 +624,7 @@ class TestStandardAlwaysApply:
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
         agents_md = project_standard_always_apply / "AGENTS.md"
-        content = agents_md.read_text()
-        assert "@.agents/standards/always-standard/" in content, (
-            f"Expected standard @-import in AGENTS.md, got:\n{content}"
-        )
+        assert agents_md.read_text() == before
 
 
 # ---------------------------------------------------------------------------

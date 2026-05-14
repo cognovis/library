@@ -7,8 +7,6 @@ Implements `skill remove` and `standard remove` which were stubbed in CL-0bl.
 from __future__ import annotations
 
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +20,7 @@ from ..lockfile import (
     save_lockfile,
 )
 from ..output import dry_run_result, success
-from ..paths import resolve_install_paths, resolve_standards_agents_md
+from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 
 
@@ -65,7 +63,7 @@ def remove_skill(
     if dry_run:
         ops = []
         if canonical_dir.exists() or canonical_dir.is_symlink():
-            ops.append({"operation": "delete", "path": str(canonical_dir), "details": f"remove canonical symlink"})
+            ops.append({"operation": "delete", "path": str(canonical_dir), "details": "remove canonical install"})
         if bridge_dir and (bridge_dir.exists() or bridge_dir.is_symlink()):
             ops.append({"operation": "delete", "path": str(bridge_dir), "details": f"remove Claude bridge symlink"})
         ops.append({"operation": "remove_lockfile_entry", "path": str(lockfile_path), "details": f"remove '{name}'"})
@@ -109,8 +107,7 @@ def remove_standard(
     """Remove an installed standard.
 
     Removes:
-    - Canonical symlink (.agents/standards/<name>/ or ~/.agents/standards/<name>/)
-    - AGENTS.md block (if agents-md-block.py has a --remove flag)
+    - Canonical install directory (.agents/standards/<name>/ or ~/.agents/standards/<name>/)
     - Lockfile entry
 
     Args:
@@ -137,7 +134,7 @@ def remove_standard(
     if dry_run:
         ops = []
         if canonical_dir.exists() or canonical_dir.is_symlink():
-            ops.append({"operation": "delete", "path": str(canonical_dir), "details": f"remove canonical symlink"})
+            ops.append({"operation": "delete", "path": str(canonical_dir), "details": "remove canonical install"})
         ops.append({"operation": "remove_lockfile_entry", "path": str(lockfile_path), "details": f"remove '{name}'"})
         return dry_run_result(ops, summary=f"Would remove standard '{name}'")
 
@@ -157,42 +154,10 @@ def remove_standard(
     remove_entry(lock_data, name)
     save_lockfile(lockfile_path, lock_data)
 
-    # Remove the composed STANDARD block from AGENTS.md (fail-open).
-    agents_md_removed = False
-    agents_md_error: str | None = None
-    helper_root = tool_root or _find_repo_root(repo_root)
-    agents_md_script = helper_root / "scripts" / "agents-md-block.py"
-    if agents_md_script.exists():
-        agents_md = resolve_standards_agents_md({}, scope=scope, repo_root=repo_root)
-        if agents_md is not None and agents_md.exists():
-            try:
-                subprocess.run(
-                    [sys.executable, str(agents_md_script), "remove", f"--name={name}", f"--file={agents_md}"],
-                    check=True,
-                    capture_output=True,
-                    cwd=str(helper_root),
-                )
-                agents_md_removed = True
-            except subprocess.CalledProcessError as exc:
-                agents_md_error = exc.stderr.decode(errors="replace") if exc.stderr else str(exc)
-
     return success(
         data={
             "name": name,
             "removed_files": removed_files,
-            "agents_md_block_removed": agents_md_removed,
-            **({"agents_md_error": agents_md_error} if agents_md_error else {}),
         },
-        message=f"Standard '{name}' removed."
-        + (" AGENTS.md block removed." if agents_md_removed else ""),
+        message=f"Standard '{name}' removed.",
     )
-
-
-def _find_repo_root(start: Path) -> Path:
-    """Walk up from start to find the directory containing scripts/agents-md-block.py."""
-    for candidate in [start] + list(start.parents):
-        if (candidate / "scripts" / "agents-md-block.py").exists():
-            return candidate
-        if (candidate / "scripts" / "library.py").exists():
-            return candidate
-    return start

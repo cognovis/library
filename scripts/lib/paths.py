@@ -1,5 +1,5 @@
 """
-paths.py — Resolve default_dirs, project/global scope, and AGENTS.md targets.
+paths.py — Resolve default_dirs and project/global scope.
 
 Reads the `default_dirs` section of library.yaml to derive installation paths
 for each primitive type in project-local and global scope.
@@ -77,28 +77,3 @@ def _expand_path(raw: str, home: Path, root: Path) -> Path:
         return Path(raw)
     # Relative path — resolve against repo root
     return root / raw
-
-
-def resolve_standards_agents_md(
-    data: dict[str, Any],
-    *,
-    scope: str = "project",
-    repo_root: Optional[Path] = None,
-) -> Optional[Path]:
-    """Return the AGENTS.md target path for standards injection.
-
-    For project scope: AGENTS.md at repo_root.
-    For global scope: ~/.agents/standards/ AGENTS.md parent.
-
-    Returns:
-        Path to AGENTS.md, or None if it cannot be determined.
-    """
-    root = repo_root or Path.cwd()
-    home = Path.home()
-
-    if scope == "project":
-        candidate = root / "AGENTS.md"
-        return candidate
-    else:
-        # Global: ~/.agents/standards/ -> parent AGENTS.md is ~/.agents/AGENTS.md
-        return home / ".agents" / "AGENTS.md"

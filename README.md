@@ -53,8 +53,10 @@ Existing solutions don't fit:
 ```yaml
 default_dirs:
   skills:
-    - default: .claude/skills/
-    - global: ~/.claude/skills/
+    - default: .agents/skills/
+    - global: ~/.agents/skills/
+    - claude_bridge: .claude/skills/
+    - global_claude_bridge: ~/.claude/skills/
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/
@@ -88,6 +90,23 @@ The catalog stores pointers, not copies. Skills live in their source repos. You 
 The source points to a specific file. The system pulls the entire parent directory (skills include scripts, references, assets — not just the markdown file).
 
 For private repos, authentication uses SSH keys or `GITHUB_TOKEN` automatically.
+
+### Consumer vs Marketplace Repos
+
+`/library use` vendors real files into `.agents/` by default. Consumer projects should
+commit those files; marketplace/library-core repos keep `.agents/` ignored because their
+source content lives in top-level primitive directories.
+
+| Repo type | Project tooling profile | `.agents/` policy |
+|-----------|-------------------------|-------------------|
+| Consumer app repo | `consumer` | Commit `.agents/skills/`, `.agents/standards/`, `.agents/agents/`, `.agents/prompts/` |
+| Marketplace/library-core repo | `marketplace` | Ignore `.agents/` install targets |
+
+Apply the profile from a project root with:
+
+```bash
+python3 <LIBRARY_SKILL_DIR>/scripts/sync_project_tooling.py --profile consumer --verbose
+```
 
 ### Typed Dependencies
 

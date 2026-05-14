@@ -7,7 +7,7 @@ each registered target to the current project directory. Called from the Session
 hook in place of the old hardcoded PRIME.md distribution block.
 
 Usage:
-    python3 /path/to/cognovis-library/scripts/sync_project_tooling.py [--project-root DIR]
+    python3 /path/to/cognovis-library/scripts/sync_project_tooling.py [--project-root DIR] [--profile consumer|marketplace]
 
 Exit codes:
     0 — completed (with or without changes)
@@ -279,6 +279,44 @@ def sync_json_field_enforce(
     return "synced"
 
 
+def sync_gitignore_patch(
+    entry: dict[str, Any],
+    project_root: Path,
+) -> str:
+    """Handle target_kind=gitignore_patch.
+
+    The patch is intentionally simple and idempotent: remove exact lines listed
+    in fields.remove_lines, then append exact lines from fields.ensure_lines if
+    missing. This supports the consumer/marketplace .agents gitignore profile
+    without owning the user's whole .gitignore file.
+    """
+    target_path = project_root / entry["target_path"]
+    fields = entry.get("fields", {})
+    remove_lines = set(fields.get("remove_lines", []) or [])
+    ensure_lines = list(fields.get("ensure_lines", []) or [])
+
+    if not remove_lines and not ensure_lines:
+        return "skipped"
+
+    if target_path.exists():
+        original_lines = target_path.read_text().splitlines()
+    else:
+        original_lines = []
+
+    lines = [line for line in original_lines if line not in remove_lines]
+
+    for line in ensure_lines:
+        if line not in lines:
+            lines.append(line)
+
+    if lines == original_lines:
+        return "skipped"
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text("\n".join(lines).rstrip() + "\n")
+    return "synced"
+
+
 # ---------------------------------------------------------------------------
 # Entry dispatcher
 # ---------------------------------------------------------------------------
@@ -287,10 +325,15 @@ def apply_entry(
     entry: dict[str, Any],
     library_root: Path,
     project_root: Path,
+    profile: str = "consumer",
 ) -> str:
     """Apply a single project_tooling entry. Returns status string."""
     target_kind = entry.get("target_kind", "file")
     conditions = entry.get("conditions", [])
+    profiles = entry.get("profiles")
+
+    if profiles and profile not in profiles:
+        return "profile-not-applicable"
 
     if not evaluate_conditions(conditions, project_root):
         return "conditions-not-met"
@@ -301,8 +344,10 @@ def apply_entry(
         return sync_git_hook(entry, library_root, project_root)
     elif target_kind == "json_field_enforce":
         return sync_json_field_enforce(entry, project_root)
+    elif target_kind == "gitignore_patch":
+        return sync_gitignore_patch(entry, project_root)
     else:
-        # file_section, gitignore_patch — not yet implemented
+        # file_section — not yet implemented
         entry_name = entry.get("name", "<unnamed>")
         print(
             f"[sync_project_tooling] WARN: target_kind='{target_kind}' not yet implemented "
@@ -321,6 +366,7 @@ def sync_entries(
     library_root: Path,
     project_root: Path,
     verbose: bool = False,
+    profile: str = "consumer",
 ) -> dict[str, int]:
     """Apply a list of project_tooling entries. Returns summary counts.
 
@@ -329,15 +375,22 @@ def sync_entries(
         library_root: root of cognovis-library (source files resolved from here)
         project_root: root of the project to sync into (target paths resolved from here)
         verbose: if True, print one line per entry
+        profile: project profile, either 'consumer' or 'marketplace'
 
     Returns:
         dict with keys: synced, skipped, errors, conditions_not_met
     """
-    summary: dict[str, int] = {"synced": 0, "skipped": 0, "errors": 0, "conditions_not_met": 0}
+    summary: dict[str, int] = {
+        "synced": 0,
+        "skipped": 0,
+        "errors": 0,
+        "conditions_not_met": 0,
+        "profile_skipped": 0,
+    }
 
     for entry in entries:
         name = entry.get("name", "<unnamed>")
-        status = apply_entry(entry, library_root, project_root)
+        status = apply_entry(entry, library_root, project_root, profile=profile)
 
         if status == "synced":
             summary["synced"] += 1
@@ -347,6 +400,10 @@ def sync_entries(
             summary["conditions_not_met"] += 1
             if verbose:
                 print(f"[sync_project_tooling] skipped (conditions not met): {name}")
+        elif status == "profile-not-applicable":
+            summary["profile_skipped"] += 1
+            if verbose:
+                print(f"[sync_project_tooling] skipped (profile {profile}): {name}")
         elif status.startswith("error:"):
             summary["errors"] += 1
             print(f"[sync_project_tooling] ERROR {name}: {status[6:]}", file=sys.stderr)
@@ -395,6 +452,12 @@ def main() -> int:
         action="store_true",
         help="Print one line per entry processed",
     )
+    parser.add_argument(
+        "--profile",
+        choices=["consumer", "marketplace"],
+        default="consumer",
+        help="Project profile for profile-scoped tooling entries (default: consumer)",
+    )
     args = parser.parse_args()
 
     project_root = Path(args.project_root) if args.project_root else find_project_root()
@@ -422,7 +485,13 @@ def main() -> int:
             print("[sync_project_tooling] No project_tooling entries found in library.yaml")
         return 0
 
-    summary = sync_entries(entries, library_root=library_root, project_root=project_root, verbose=args.verbose)
+    summary = sync_entries(
+        entries,
+        library_root=library_root,
+        project_root=project_root,
+        verbose=args.verbose,
+        profile=args.profile,
+    )
 
     if args.verbose:
         print(
@@ -430,6 +499,7 @@ def main() -> int:
             f"{summary['synced']} synced, "
             f"{summary['skipped']} skipped, "
             f"{summary['conditions_not_met']} conditions-not-met, "
+            f"{summary['profile_skipped']} profile-skipped, "
             f"{summary['errors']} errors"
         )
 

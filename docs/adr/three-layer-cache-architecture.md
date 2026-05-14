@@ -161,13 +161,13 @@ basis (advisory, not security).
 ### Decision 2: Marketplace-symmetric primitive
 
 **Terminology note — "marketplace" disambiguation**: ADR-0002
-retired *Claude Code plugin marketplaces*
+removed *Claude Code plugin marketplaces*
 (`sussdorff/claude-code-plugins`, `cognovis/claude-code-plugins`) —
 the bundle-distribution mechanism native to Claude Code. ADR-0003
 introduces *source-provider marketplaces* — entries in
 `library.yaml.marketplaces:` that describe **where the library
 fetches a skill from**. Same word, different referent. The
-plugin-marketplace concept stays retired; the source-provider
+plugin-marketplace concept stays removed; the source-provider
 marketplace is what this ADR specifies. ADR-0002 has been updated
 with the same clarification (see the corresponding note there).
 Alternatives considered: rename to `source_providers` or
@@ -643,7 +643,7 @@ actually reads skills from.
 **Actions**:
 1. Create two uniquely identifiable test skills.
 2. Place one in `~/.agents/skills/test-canon/SKILL.md` only.
-3. Place the other in `~/.codex/skills/test-legacy/SKILL.md` only.
+3. Place the other in `~/.codex/skills/test-previous/SKILL.md` only.
 4. Start Codex, attempt to invoke each skill, observe which loads.
 5. Document the result; update `default_dirs.skills.global_codex`
    and `project_codex` only if the smoke test contradicts the
@@ -834,7 +834,7 @@ follows (2026-05-12, after Codex adversarial review):
 | Scenario | Recovery |
 |----------|---------|
 | Phase 1 validator rejects new schema | Revert `library.yaml`; investigate validator rules; fix before re-applying |
-| Phase 2 `library use` cache write fails | Old cp-based implementation still callable via legacy code path; toggle config flag to revert |
+| Phase 2 `library use` cache write fails | Old cp-based implementation still callable via previous code path; toggle config flag to revert |
 | Phase 3 surgical-wipe misclassifies an unmanaged skill as managed | Restore the specific entry from backup in `~/.tmp/skills-pre-library-go-live-<date>/`; refine the classifier; re-run Phase 3 step 2 |
 | Phase 3 leaves an unmanaged skill behind that should have been migrated | Audit log lists it; create a follow-up bead to register it in `library.yaml` and re-run `library use <name>` |
 | Cache corruption | `rm -rf ~/.local/share/library/skills/<marketplace>/<name>@<version>/`; `library use <name>` rematerializes |

@@ -31,7 +31,7 @@ Neither answers the question:
 
 ### The gap discovered today (2026-05-12)
 
-After CL-ast retired the `sussdorff-plugins` marketplace, the
+After CL-ast removed the `sussdorff-plugins` marketplace, the
 `beads-workflow` plugin's **10 agents** were copied to
 `~/.claude/agents/beads-workflow/` as a bridge. Its **15 skills**
 (`factory-check`, `plan`, `impl`, `epic-init`, `wave-orchestrator`,
@@ -62,7 +62,7 @@ orchestrator's lifecycle. It is invisible to `ls ~/.claude/agents`.
    were created via marketplace-plugin migration where dependencies
    were implicit in the plugin bundle.
 
-3. ADR-0002 retired the bundle mechanism (plugin marketplaces). The
+3. ADR-0002 removed the bundle mechanism (plugin marketplaces). The
    bundle's implicit dep-coupling vanished with it. No replacement
    was specified.
 
@@ -242,8 +242,8 @@ Rules:
    content and is not surfaced through `library.yaml`. Same logic for
    `.codex/` if needed.
 4. **Plugin-style nesting** (`plugins/<plugin-name>/{agents,skills,hooks}`)
-   is retired. ADR-0002 ended the Claude Code plugin-marketplace
-   mechanism; the legacy nested layout has no remaining purpose. All
+   is removed. ADR-0002 ended the Claude Code plugin-marketplace
+   mechanism; the previous nested layout has no remaining purpose. All
    content lives at the top-level harness-neutral roots.
 5. **library.yaml `source:` URLs** point to the harness-neutral paths
    (e.g. `https://github.com/cognovis/library-core/blob/main/skills/factory-check/SKILL.md`,
@@ -457,8 +457,8 @@ Executed as part of accepting this ADR (Decisions 6 + 7 + 8):
    - `git mv .agents/standards standards/` (new 5th top-level slot).
    - `git rm -r .agents/skills/` (broken-symlink Codex farm; obsolete
      under ADR-0003 cache-layer model).
-   - Retire `plugins/{beads-workflow,architecture-trinity}/` subtrees
-     (legacy plugin layout; content folded into top-level
+   - Remove `plugins/{beads-workflow,architecture-trinity}/` subtrees
+     (previous plugin layout; content folded into top-level
      `skills/agents/hooks/`).
    - `.claude/settings.json` (and `.codex/`) retained as THIS repo's
      own harness config; not surfaced via library.yaml.
@@ -529,7 +529,7 @@ they become relevant.
 | Entries with non-empty `requires:` | < 5 | grep `requires:` |
 | `beads-workflow` agents currently in `~/.claude/agents/` | 10 | `ls ~/.claude/agents/beads-workflow/` |
 | `beads-workflow` skills currently in `~/.claude/skills/` | 0 | `ls ~/.claude/skills/` |
-| `beads-workflow` skills in legacy plugin layout | 15 | `~/code/library/cognovis-core/plugins/beads-workflow/skills/` |
+| `beads-workflow` skills in previous plugin layout | 15 | `~/code/library/cognovis-core/plugins/beads-workflow/skills/` |
 | Cookbook step for recursive install | exists, unused | `cookbook/use.md` Step 4 |
 
 The infrastructure for recursive install **predates this ADR**. The

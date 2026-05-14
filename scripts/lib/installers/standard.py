@@ -3,24 +3,19 @@ installers/standard.py — Standard install logic.
 
 Installs a standard by:
 1. Copying the standard file to the standards directory (Layer B cache)
-2. Creating a canonical symlink (Layer C)
-3. If scripts/agents-md-block.py exists: composing a block into AGENTS.md
-4. Writing the lockfile entry
-
-If scripts/agents-md-block.py does NOT exist, emits a blocked/not-implemented
-result but still performs the cache+symlink steps.
+2. Creating a canonical vendored copy (Layer C) by default
+3. Writing the lockfile entry
 """
 
 from __future__ import annotations
 
 import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
-from ..cache import compute_cache_path, plan_cache_writes
+from ..cache import compute_cache_path, materialize_install_target, plan_cache_writes
 from ..catalog import lookup_entry
 from ..errors import InstallError, SourceError
 from ..lockfile import (
@@ -32,10 +27,9 @@ from ..lockfile import (
     upsert_entry,
 )
 from ..output import blocked_result, dry_run_result, success
-from ..paths import resolve_install_paths, resolve_standards_agents_md
+from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 from ..source import get_local_commit_sha, parse_source, resolve_marketplace
-from .harness_materializer import materialize_harness_fields
 
 
 def install_standard(
@@ -45,6 +39,7 @@ def install_standard(
     scope: str = "project",
     dry_run: bool = False,
     tool_root: Optional[Path] = None,
+    install_mode: str = "vendor",
 ) -> dict[str, Any]:
     """Install a standard from the catalog.
 
@@ -55,10 +50,14 @@ def install_standard(
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
         tool_root: Repository root that provides helper scripts.
+        install_mode: 'vendor' (default) or 'symlink'.
 
     Returns:
         Operation result dict.
     """
+    if install_mode not in ("vendor", "symlink"):
+        raise InstallError(f"Unknown install mode for standard '{name}': {install_mode}")
+
     prim = get_primitive("standard")
 
     # 1. Catalog lookup
@@ -88,12 +87,6 @@ def install_standard(
 
     canonical_dir = canonical_base / standard_name
 
-    # Check for agents-md-block.py
-    helper_root = tool_root or repo_root
-    agents_md_script = helper_root / "scripts" / "agents-md-block.py"
-    agents_md_available = agents_md_script.exists()
-    agents_md_target = resolve_standards_agents_md(catalog, scope=scope, repo_root=repo_root)
-
     # 4. Dry-run mode
     if dry_run:
         ops = plan_cache_writes(
@@ -103,29 +96,8 @@ def install_standard(
             source_commit="<commit-sha>",
             install_target=canonical_dir,
             bridge_path=None,
+            install_mode=install_mode,
         )
-        if agents_md_available and agents_md_target:
-            ops.append(
-                {
-                    "operation": "inject_agents_md_block",
-                    "path": str(agents_md_target),
-                    "details": (
-                        f"compose marker block for '{standard_name}' "
-                        f"into {agents_md_target}"
-                    ),
-                }
-            )
-        else:
-            ops.append(
-                {
-                    "operation": "agents_md_block_blocked",
-                    "path": str(agents_md_target) if agents_md_target else "AGENTS.md",
-                    "details": (
-                        "scripts/agents-md-block.py not found — "
-                        "AGENTS.md injection step will be skipped"
-                    ),
-                }
-            )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append(
             {
@@ -134,24 +106,9 @@ def install_standard(
                 "details": f"upsert entry '{standard_name}' in {lockfile_path.name}",
             }
         )
-        # Add harness materialization ops (always_apply / globs)
-        harness = materialize_harness_fields(
-            entry, standard_name, "standard", repo_root, dry_run=True
-        )
-        ops.extend(harness["operations"])
-        for w in harness.get("warnings", []):
-            import sys as _sys
-            print(f"WARNING: {w}", file=_sys.stderr)
         return dry_run_result(
             ops,
-            summary=(
-                f"Would install standard '{standard_name}' to {canonical_dir}"
-                + (
-                    f", inject AGENTS.md block via agents-md-block.py"
-                    if agents_md_available
-                    else " (AGENTS.md injection blocked: agents-md-block.py not found)"
-                )
-            ),
+            summary=f"Would install standard '{standard_name}' to {canonical_dir}",
         )
 
     # 5. Fetch source
@@ -171,41 +128,12 @@ def install_standard(
         else:
             shutil.copytree(str(source_dir), str(cache_path))
 
-        # 6. Create canonical symlink
-        canonical_dir.parent.mkdir(parents=True, exist_ok=True)
-        if canonical_dir.is_symlink():
-            canonical_dir.unlink()
-        elif canonical_dir.is_dir():
-            shutil.rmtree(str(canonical_dir))
-        canonical_dir.symlink_to(cache_path)
+        # 6. Create canonical install (Layer C)
+        materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
 
-        primary_artifact = _find_primary_artifact(cache_path, standard_name)
-
-        # 7. AGENTS.md block injection
-        agents_md_result = None
-        if agents_md_available and agents_md_target:
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(agents_md_script),
-                    "insert",
-                    f"--name={standard_name}",
-                    f"--file={agents_md_target}",
-                    f"--content={primary_artifact}",
-                ],
-                capture_output=True,
-                text=True,
-                cwd=str(helper_root),
-            )
-            agents_md_result = {
-                "success": result.returncode == 0,
-                "output": result.stdout.strip(),
-                "error": result.stderr.strip() if result.returncode != 0 else None,
-            }
-
-        # 8. Write lockfile — use directory hash for standards (all files matter)
+        # 7. Write lockfile — hash local installed content (all files matter)
         try:
-            checksum = compute_directory_hash(cache_path)
+            checksum = compute_directory_hash(canonical_dir)
         except OSError:
             checksum = "0" * 64
 
@@ -219,6 +147,8 @@ def install_standard(
             install_target=str(canonical_dir) + "/",
             checksum_sha256=checksum,
             checksum_type="directory",
+            content_sha256=checksum,
+            install_mode=install_mode,
             license_id=entry.get("license", "unknown"),
         )
 
@@ -227,28 +157,15 @@ def install_standard(
         upsert_entry(lock_data, lockfile_entry)
         save_lockfile(lockfile_path, lock_data)
 
-        # 9. Harness materialization (always_apply / globs)
-        harness = materialize_harness_fields(entry, standard_name, "standard", repo_root)
-        for w in harness.get("warnings", []):
-            print(f"WARNING: {w}", file=sys.stderr)
-
         result_data: dict[str, Any] = {
             "name": standard_name,
             "canonical": str(canonical_dir),
             "cache": str(cache_path),
             "source_commit": source_commit,
-            "harness_ops": harness.get("operations", []),
+            "install_mode": install_mode,
         }
 
         msg = f"Standard '{standard_name}' installed at {canonical_dir}"
-
-        if not agents_md_available:
-            result_data["agents_md_blocked"] = (
-                "scripts/agents-md-block.py not found — AGENTS.md injection skipped"
-            )
-            msg += ". Note: AGENTS.md block injection requires scripts/agents-md-block.py"
-        elif agents_md_result:
-            result_data["agents_md"] = agents_md_result
 
         return success(data=result_data, message=msg)
 

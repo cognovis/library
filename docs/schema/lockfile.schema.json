@@ -72,15 +72,26 @@
           "format": "date-time"
         },
         "checksum_sha256": {
-          "description": "SHA-256 checksum of the primary artifact file (SKILL.md for skills, the .md file for agents/prompts). Used by /library audit to detect drift between the lockfile record and the current on-disk state.",
+          "description": "SHA-256 checksum of the local installed content. For directory installs this is the Merkle-style hash of the vendored directory; for file installs this is the file hash. Kept as the backward-compatible audit field.",
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
         "checksum_type": {
-          "description": "Checksum strategy used. 'file' (default) checksums the primary artifact only. 'directory' checksums all files in the cache directory (Merkle-style). Directory installs (skills, standards) use 'directory'; single-file installs (agents, prompts) use 'file'. Legacy entries without this field are treated as unknown.",
+          "description": "Checksum strategy used. 'file' (default) checksums the primary artifact only. 'directory' checksums all files in the installed directory (Merkle-style). Directory installs (skills, standards) use 'directory'; single-file installs (agents, prompts) use 'file'. Entries without this field are treated as unknown.",
           "type": "string",
           "enum": ["file", "directory"],
           "default": "file"
+        },
+        "content_sha256": {
+          "description": "Explicit SHA-256 checksum of the local installed content at install_target. New vendor-mode entries set this to the same value as checksum_sha256.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "install_mode": {
+          "description": "How Layer C was materialized. 'vendor' means real files were copied into the install target; 'symlink' means the install target points into the Layer-B cache.",
+          "type": "string",
+          "enum": ["vendor", "symlink"],
+          "default": "vendor"
         },
         "license": {
           "description": "SPDX license identifier of the installed item (e.g. MIT, Apache-2.0, proprietary). Use 'unknown' when no license information is available.",
@@ -97,7 +108,7 @@
           "default": []
         },
         "composed_layers": {
-          "description": "Composition metadata for agents installed with compose-on-install (CL-08n). Present only when the agent was composed from golden-prompt (Layer 1) and/or model-standard (Layer 3) files. Omit for non-composed installs.",
+          "description": "Composition metadata for agents installed with layered prompt composition (CL-08n). Present only when the agent was composed from golden-prompt (Layer 1) and/or model-standard (Layer 3) files. Omit for non-composed installs.",
           "type": "object",
           "properties": {
             "golden_prompt": {

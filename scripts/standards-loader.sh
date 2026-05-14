@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
-# standards-loader.sh — Cross-harness standards loading prototype
+# standards-loader.sh — Standards file resolver
 #
 # Bead: CL-v56 | Epic: CL-36o (Multi-Harness Library)
-#
-# Implements two mechanisms from the standards-loading design:
-#   (a) Adapter generation — writes standards into AGENTS.md at install time
-#   (b) Skill-script-side loader — reads .agents/standards/<name>.md at runtime
 #
 # Usage:
 #   standards-loader.sh --load <standard-name>
 #     Load a single standard by name, resolve via project>global precedence,
 #     write content to stdout. Warn on stderr if not found (warn-and-continue).
-#
-#   standards-loader.sh --generate-adapter <skill-name> [--target <file>]
-#     Read requires_standards from skill's SKILL.md frontmatter, load all
-#     declared standards, write a delimited section into the target file.
-#     Default target: AGENTS.md in the current project root.
-#     Idempotent: replaces existing section if present.
 #
 #   standards-loader.sh --list
 #     List all available standards by scanning .agents/standards/ and
@@ -27,8 +17,6 @@
 #   2. ~/.agents/standards/<name>.md               (user-global)
 #   3. ~/.agents/standards/**/<name>.md            (bundle subdir layout, recursive)
 #
-# See docs/research/standards-loading.md for the full loader contract.
-
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -218,163 +206,6 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# write_adapter_section <target_file> <skill_name> <combined_content>
-#   Writes (or replaces) a delimited standards section in the target file.
-#   Section markers:
-#     <!-- BEGIN STANDARDS <skill_name> -->
-#     <!-- END STANDARDS <skill_name> -->
-#   Idempotent: replaces existing section if present, appends if absent.
-# ---------------------------------------------------------------------------
-write_adapter_section() {
-    local target_file="$1"
-    local skill_name="$2"
-    local content_file="$3"
-
-    local begin_marker="<!-- BEGIN STANDARDS ${skill_name} -->"
-    local end_marker="<!-- END STANDARDS ${skill_name} -->"
-
-    local new_section
-    new_section="$(printf '%s\n%s\n%s\n' "${begin_marker}" "$(cat "${content_file}")" "${end_marker}")"
-
-    if [[ ! -f "${target_file}" ]]; then
-        # Create target file with section
-        printf '%s\n' "${new_section}" > "${target_file}"
-        info "Created ${target_file} with standards section for skill '${skill_name}'"
-        return 0
-    fi
-
-    if grep -qF "${begin_marker}" "${target_file}" 2>/dev/null; then
-        # Replace existing section using Python for reliability with multiline content
-        python3 - "${target_file}" "${begin_marker}" "${end_marker}" "${content_file}" <<'PYEOF'
-import sys, re
-
-target = sys.argv[1]
-begin = sys.argv[2]
-end = sys.argv[3]
-content_file = sys.argv[4]
-
-with open(target) as f:
-    original = f.read()
-
-with open(content_file) as f:
-    new_content = f.read()
-
-# Build new section
-new_section = f"{begin}\n{new_content}\n{end}"
-
-# Replace between markers (inclusive)
-pattern = re.escape(begin) + r'.*?' + re.escape(end)
-updated = re.sub(pattern, new_section, original, flags=re.DOTALL)
-
-with open(target, 'w') as f:
-    f.write(updated)
-PYEOF
-        info "Replaced standards section for skill '${skill_name}' in ${target_file}"
-    else
-        # Append new section
-        printf '\n%s\n' "${new_section}" >> "${target_file}"
-        info "Appended standards section for skill '${skill_name}' to ${target_file}"
-    fi
-}
-
-# ---------------------------------------------------------------------------
-# cmd_generate_adapter <skill_name> [<target_file>]
-#   Mechanism (a): adapter generation into AGENTS.md (or specified target).
-#   Reads requires_standards from skill's SKILL.md, concatenates standards,
-#   writes delimited section into target file.
-# ---------------------------------------------------------------------------
-cmd_generate_adapter() {
-    local skill_name="$1"
-    local target_file="${2:-${PROJ_ROOT}/AGENTS.md}"
-
-    # Locate the skill directory
-    local skill_dir=""
-    for candidate in \
-        "${PROJ_ROOT}/.claude/skills/${skill_name}" \
-        "${PROJ_ROOT}/.agents/skills/${skill_name}" \
-        "${HOME}/.claude/skills/${skill_name}" \
-        "${HOME}/.agents/skills/${skill_name}"; do
-        if [[ -d "${candidate}" ]]; then
-            skill_dir="${candidate}"
-            break
-        fi
-    done
-
-    if [[ -z "${skill_dir}" ]]; then
-        warn "skill '${skill_name}' not found. Checked .claude/skills/, .agents/skills/, global paths."
-        return 1
-    fi
-
-    # Read requires_standards
-    local requires_list
-    requires_list="$(read_requires_standards "${skill_dir}")" || {
-        warn "Failed to read requires_standards from ${skill_dir}/SKILL.md"
-        return 1
-    }
-
-    if [[ -z "${requires_list}" ]]; then
-        info "Skill '${skill_name}' has no requires_standards — nothing to generate."
-        return 0
-    fi
-
-    # Build combined content in a temp file.
-    # Deduplication: if the same standard name appears multiple times in requires_list
-    # (e.g., declared by multiple nested skills), load it exactly once.
-    # First declaration wins per the merge order contract in docs/research/standards-loading.md.
-    #
-    # Note: we use a plain string variable (not declare -A associative array) for
-    # deduplication because macOS ships bash 3.2 which does not support associative
-    # arrays. A colon-delimited "seen" sentinel string is portable across bash 3.2+.
-    #
-    # tmpfile is initialized to empty string before mktemp so that the EXIT trap
-    # below does not hit an unbound variable under set -u.
-    local tmpfile=""
-    tmpfile="$(mktemp)"
-    # Register cleanup in a subshell-safe way: capture the value at trap-definition
-    # time so the variable is not looked up (and potentially unbound) later.
-    local _tmpfile_to_clean="${tmpfile}"
-    # shellcheck disable=SC2064
-    trap "rm -f '${_tmpfile_to_clean}'" EXIT
-
-    local first=true
-    local seen_standards=""  # colon-delimited list of already-seen standard names
-
-    while IFS= read -r standard_name; do
-        [[ -z "${standard_name}" ]] && continue
-
-        # Skip duplicates — first declaration wins.
-        # Check: does ":name:" appear in ":seen_standards:"?
-        if [[ ":${seen_standards}:" == *":${standard_name}:"* ]]; then
-            info "Deduplicating standard '${standard_name}' — already included once."
-            continue
-        fi
-        seen_standards="${seen_standards}:${standard_name}"
-
-        local path
-        if path="$(resolve_standard "${standard_name}" 2>/dev/null)"; then
-            if [[ "${first}" != "true" ]]; then
-                printf '\n---\n\n' >> "${tmpfile}"
-            fi
-            printf '# Standard: %s\n' "${standard_name}" >> "${tmpfile}"
-            cat "${path}" >> "${tmpfile}"
-            first=false
-        else
-            warn "standard '${standard_name}' not found. Checked:"
-            warn "  - ${PROJ_ROOT}/.agents/standards/${standard_name}.md"
-            warn "  - ${HOME}/.agents/standards/${standard_name}.md"
-                warn "Proceeding without this standard."
-        fi
-    done <<< "${requires_list}"
-
-    if [[ ! -s "${tmpfile}" ]]; then
-        info "No standards content generated for skill '${skill_name}' — all were missing."
-        return 0
-    fi
-
-    write_adapter_section "${target_file}" "${skill_name}" "${tmpfile}"
-}
-
-# ---------------------------------------------------------------------------
 # resolve_model_standard <name>
 #   Resolves a model-standard name to a file path using project>global precedence.
 #   Model-standards live in .agents/model-standards/ (parallel to .agents/standards/).
@@ -427,7 +258,7 @@ resolve_model_standard() {
         fi
     fi
 
-    # Not found — model-standards have no legacy fallback path
+    # Not found — model-standards have no fallback path
     return 1
 }
 
@@ -666,9 +497,8 @@ main() {
         echo "  --proj-root <path>   Override project root (default: \$PWD)" >&2
         echo "" >&2
         echo "Commands:" >&2
-        echo "  --load <name>                          Load a project-standard (mechanism b)" >&2
+        echo "  --load <name>                          Load a project-standard" >&2
         echo "  --load-model-standard <name>           Load a model-standard from .agents/model-standards/" >&2
-        echo "  --generate-adapter <skill> [--target <file>]  Generate AGENTS.md adapter (mechanism a)" >&2
         echo "  --list                                 List available standards and model-standards" >&2
         echo "" >&2
         echo "Path resolution for standards:       .agents/standards/<name>.md (project) > ~/.agents/standards/<name>.md (global)" >&2
@@ -690,7 +520,7 @@ main() {
     done
 
     if [[ $# -eq 0 ]]; then
-        echo "No command given after --proj-root. Use --load, --generate-adapter, or --list." >&2
+        echo "No command given after --proj-root. Use --load, --load-model-standard, or --list." >&2
         exit 1
     fi
 
@@ -713,34 +543,15 @@ main() {
             cmd_load_model_standard "$1"
             ;;
         --generate-adapter)
-            if [[ $# -eq 0 ]]; then
-                echo "Usage: standards-loader.sh --generate-adapter <skill-name> [--target <file>]" >&2
-                exit 1
-            fi
-            local skill_name="$1"
-            shift
-            local target_file="${PROJ_ROOT}/AGENTS.md"
-            while [[ $# -gt 0 ]]; do
-                case "$1" in
-                    --target)
-                        shift
-                        target_file="$1"
-                        shift
-                        ;;
-                    *)
-                        echo "Unknown option: $1" >&2
-                        exit 1
-                        ;;
-                esac
-            done
-            cmd_generate_adapter "${skill_name}" "${target_file}"
+            echo "AGENTS.md adapter generation has been removed. Use requires_standards on the consuming skill or agent." >&2
+            exit 1
             ;;
         --list)
             cmd_list
             ;;
         *)
             echo "Unknown command: ${cmd}" >&2
-            echo "Use --load, --generate-adapter, or --list" >&2
+            echo "Use --load, --load-model-standard, or --list" >&2
             exit 1
             ;;
     esac

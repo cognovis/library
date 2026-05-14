@@ -6,7 +6,7 @@
 >
 > **Depends on:**
 > - `docs/PRIMITIVES.md` §10 Model-Standard — defines the MODEL-STANDARD primitive
-> - `docs/research/standards-loading.md` (CL-v56) — loader contract reused for model-standards
+> - `scripts/standards-loader.sh` — loader used for model-standards
 > - `docs/research/agents-format-mapping.md` (CL-11p) — field mapping extended for new frontmatter
 
 ---
@@ -159,10 +159,9 @@ tool grant as a prose statement at the top of the composed prompt for Codex targ
 | Agent definition (source) | `.claude/agents/<name>.md` | Claude Code |
 | Codex TOML (derived) | `.codex/agents/<name>.toml` | Codex |
 
-**Loader:** Both `.agents/standards/` AND `.agents/model-standards/` use the same
-`scripts/standards-loader.sh`. Model-standards use the `--load-model-standard <name>`
-operation which resolves from `.agents/model-standards/`. See `docs/research/standards-loading.md`
-for the full loader contract.
+**Loader:** `.agents/model-standards/` uses `scripts/standards-loader.sh`.
+Model-standards use the `--load-model-standard <name>` operation which resolves
+from `.agents/model-standards/`.
 
 ---
 
@@ -258,7 +257,6 @@ model_standards: []
 ## Cross-References
 
 - `docs/PRIMITIVES.md` §10 — MODEL-STANDARD primitive definition and composition algorithm
-- `docs/research/standards-loading.md` (CL-v56) — loader contract (reused for model-standards)
 - `docs/research/agents-format-mapping.md` (CL-11p) — field mapping with new composition fields
 - `.agents/golden-prompts/cognovis-base.md` — Cognovis Base Golden Prompt source
 - `.agents/model-standards/` — model-standard file directory

@@ -2,7 +2,7 @@
 """
 compose-agent.py — Compose a three-layer agent prompt at install time.
 
-Implements the compose-on-install step (Part C of bead CL-08n).
+Implements layered agent prompt composition (Part C of bead CL-08n).
 
 Algorithm:
   1. Parse YAML frontmatter from the agent file.

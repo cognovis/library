@@ -4,7 +4,7 @@ cache.py — Layer-B cache path calculation and materialization.
 Per ADR-0003, library items are deployed through three layers:
   Layer A — Source: GitHub URL or local path (catalog entry `source:`)
   Layer B — Cache:  ~/.local/share/library/<type>/<marketplace>/<name>@<14hex>/
-  Layer C — Harness: .agents/skills/<name>/ (symlink -> Layer B)
+  Layer C — Harness: .agents/skills/<name>/ (vendored copy by default)
 """
 
 from __future__ import annotations
@@ -110,6 +110,54 @@ def create_harness_symlink(
     return f"created {op}"
 
 
+def materialize_vendor_copy(
+    source_path: Path,
+    install_target: Path,
+    *,
+    dry_run: bool = False,
+) -> str:
+    """Copy a cache path into a harness install target.
+
+    Directories are copied recursively and files are copied as single files. Any
+    existing target is replaced first, whether it is a symlink, file, or
+    directory.
+    """
+    op = f"vendor copy {source_path} -> {install_target}"
+    if dry_run:
+        return f"[dry-run] would create {op}"
+
+    install_target.parent.mkdir(parents=True, exist_ok=True)
+
+    if install_target.is_symlink():
+        install_target.unlink()
+    elif install_target.is_dir():
+        shutil.rmtree(str(install_target))
+    elif install_target.exists():
+        install_target.unlink()
+
+    if source_path.is_dir():
+        shutil.copytree(str(source_path), str(install_target))
+    else:
+        shutil.copy2(str(source_path), str(install_target))
+
+    return f"created {op}"
+
+
+def materialize_install_target(
+    install_target: Path,
+    cache_path: Path,
+    *,
+    install_mode: str = "vendor",
+    dry_run: bool = False,
+) -> str:
+    """Materialize a cache path into Layer C using vendor or symlink mode."""
+    if install_mode == "vendor":
+        return materialize_vendor_copy(cache_path, install_target, dry_run=dry_run)
+    if install_mode == "symlink":
+        return create_harness_symlink(install_target, cache_path, dry_run=dry_run)
+    raise ValueError(f"Unknown install_mode: {install_mode}")
+
+
 def plan_cache_writes(
     primitive_type: str,
     marketplace: str,
@@ -118,6 +166,7 @@ def plan_cache_writes(
     install_target: Path,
     bridge_path: Optional[Path],
     cache_base: Optional[Path] = None,
+    install_mode: str = "vendor",
 ) -> list[dict]:
     """Return a list of planned write operations without mutating anything.
 
@@ -131,6 +180,13 @@ def plan_cache_writes(
         # Override for tests
         cache_path = cache_base / f"{name}@{source_commit[:14] if len(source_commit) >= 14 else source_commit}"
 
+    install_operation = "vendor_copy" if install_mode == "vendor" else "create_symlink"
+    install_details = (
+        f"Layer-C vendored copy {install_target} <- {cache_path}"
+        if install_mode == "vendor"
+        else f"Layer-C symlink {install_target} -> {cache_path}"
+    )
+
     ops = [
         {
             "operation": "materialize_cache",
@@ -138,10 +194,10 @@ def plan_cache_writes(
             "details": f"copy source -> Layer-B cache at {cache_path}",
         },
         {
-            "operation": "create_symlink",
+            "operation": install_operation,
             "path": str(install_target),
             "target": str(cache_path),
-            "details": f"Layer-C symlink {install_target} -> {cache_path}",
+            "details": install_details,
         },
     ]
 

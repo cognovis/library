@@ -1,6 +1,6 @@
 ---
 adr: "0002"
-title: "Library-core repos as canonical source; harness dirs as deployment targets; full marketplace retirement"
+title: "Library-core repos as canonical source; harness dirs as deployment targets; full marketplace removal"
 status: accepted
 date: 2026-05-02
 bead: CL-7na
@@ -11,7 +11,7 @@ superseded_by: []
 related_adrs: ["0001"]
 ---
 
-# ADR-0002: Library-core repos as canonical source; harness dirs as deployment targets; full marketplace retirement
+# ADR-0002: Library-core repos as canonical source; harness dirs as deployment targets; full marketplace removal
 
 ## Status
 
@@ -21,10 +21,10 @@ Accepted. **Supersedes ADR-0001.**
 > ADR-0003)**: The term *marketplace* in this ADR refers
 > **specifically to the Claude Code plugin-marketplace mechanism** —
 > the bundle-distribution path via `~/.claude/plugins/known_marketplaces.json`,
-> `/plugin marketplace add ...`, and the two retired repos
+> `/plugin marketplace add ...`, and the two removed repos
 > `sussdorff/claude-code-plugins` and `cognovis/claude-code-plugins`.
-> "Full marketplace retirement" in this ADR's title and Decision 1
-> means retirement of *those* mechanisms, not of marketplaces in
+> "Full marketplace removal" in this ADR's title and Decision 1
+> means removal of *those* mechanisms, not of marketplaces in
 > general.
 >
 > ADR-0003 introduces a distinct concept that reuses the same word:
@@ -34,14 +34,14 @@ Accepted. **Supersedes ADR-0001.**
 > `cognovis/library-core` and `sussdorff/library-core` themselves
 > become source-provider marketplaces, alongside third-party sources
 > like `anthropics/skills`, `disler`, `skills.sh`, and `pbakaus`.
-> This is **not** in conflict with ADR-0002's retirement decision —
+> This is **not** in conflict with ADR-0002's removal decision —
 > the two concepts use the same English word for different referents.
 > See ADR-0003's Decision 2 for the explicit disambiguation.
 
 ## Context
 
-ADR-0001 chose a Hybrid retirement model for `sussdorff-plugins`:
-retire `business`/`content`/`meta`/`medical` bundles, keep
+ADR-0001 chose a Hybrid removal model for `sussdorff-plugins`:
+remove `business`/`content`/`meta`/`medical` bundles, keep
 `core`/`beads-workflow`/`infra` (and conditionally `dev-tools`) as
 fleet-wide marketplace bundles. ADR-0001 did not address the second
 marketplace `cognovis-claude-code-plugins`.
@@ -72,7 +72,7 @@ Three things have happened since ADR-0001 was accepted:
    or equivalent install scripts.
 
 ADR-0001's Hybrid was a defensible intermediate stance. The data and
-principle changes above make full retirement the correct end state.
+principle changes above make full removal the correct end state.
 
 ### Empirical data
 
@@ -89,20 +89,20 @@ principle changes above make full retirement the correct end state.
 
 The "all keep_in_plugin already migrated" finding eliminates ADR-0001's
 core argument for Hybrid retention. The "0 external users" finding
-makes full retirement low-risk.
+makes full removal low-risk.
 
 ## Decision
 
-### Decision 1: Full retirement of both marketplace repos
+### Decision 1: Full removal of both marketplace repos
 
 Both `sussdorff/claude-code-plugins` and `cognovis/claude-code-plugins`
-are fully retired as distribution mechanisms. ADR-0001's Hybrid
+are fully removed as distribution mechanisms. ADR-0001's Hybrid
 decision is reversed — there are no "keep in marketplace" bundles.
 
 | Repo | Local checkout | Fate |
 |------|----------------|------|
-| `sussdorff/claude-code-plugins` | `~/code/claude-code-plugins/` | Retired. All bundles uninstalled. Marketplace deregistered. Repo archived/deleted. |
-| `cognovis/claude-code-plugins` | `~/code/cognovis-marketplace/` | Retired. Bundle uninstalled. Marketplace deregistered. Repo archived/deleted. |
+| `sussdorff/claude-code-plugins` | `~/code/claude-code-plugins/` | Removed. All bundles uninstalled. Marketplace deregistered. Repo archived/deleted. |
+| `cognovis/claude-code-plugins` | `~/code/cognovis-marketplace/` | Removed. Bundle uninstalled. Marketplace deregistered. Repo archived/deleted. |
 
 Distribution moves entirely to `/library use` against
 `cognovis/library-core` (team artefacts) and `sussdorff/library-core`
@@ -192,7 +192,7 @@ Single distribution mechanism (`/library use`) backed by
 
 ## Rationale
 
-### Why full retirement now (Option 1) instead of ADR-0001's Hybrid
+### Why full removal now (Option 1) instead of ADR-0001's Hybrid
 
 ADR-0001's Hybrid argument: 30 artefacts were `keep_in_plugin` in the
 audit, backing the fleet-wide bundles. CL-8vb migrated those 30 to
@@ -268,7 +268,7 @@ work.
 **Completion criterion**: `which cld` / `which cdx` → `~/.local/bin/`
 symlinks; `cld -b <id>` smoke test passes.
 
-### Phase 2: Retire both marketplaces
+### Phase 2: Remove both marketplaces
 
 **Goal**: No marketplace bundles installed; both marketplaces
 deregistered; library.yaml `marketplaces:` cleaned.
@@ -297,7 +297,7 @@ cleanly.
 
 ### Phase 3: Archive or delete the two marketplace repos
 
-**Goal**: Repo state matches the retirement decision.
+**Goal**: Repo state matches the removal decision.
 
 **Trigger**: Phase 2 complete + 30 days of clean operation.
 
@@ -305,12 +305,12 @@ cleanly.
 1. For each of `sussdorff/claude-code-plugins` and
    `cognovis/claude-code-plugins`: add a final commit to README
    pointing users at `cognovis-library` and `/library use`.
-2. Archive on GitHub (read-only, indicates retirement) OR delete
+2. Archive on GitHub (read-only, indicates removal) OR delete
    if no historical value.
 3. Decision on archive vs delete deferred until trigger.
 
 **This phase is optional.** Phase 2 is sufficient for functional
-retirement. Local checkouts remain available as backup until Phase 3.
+removal. Local checkouts remain available as backup until Phase 3.
 
 ### Phase 4 (separate epic): Migrate residual `~/.claude/` and `~/.codex/` content
 
@@ -363,7 +363,7 @@ required.
 
 Decision 3 explicitly extends to `~/.codex/`. Codex uses
 `~/.codex/agents/<name>.toml` (global) or per-repo `.codex/agents/`
-rather than a marketplace bundle model — the equivalent retirement
+rather than a marketplace bundle model — the equivalent removal
 work in Codex's case is the migration of any global-personal toml
 files into `sussdorff/library-core` with the cross-harness bridge
 (per `docs/policy/name-collision.md` Decision 2).
@@ -382,9 +382,9 @@ tooling ecosystem; this ADR canonicalizes that placement under
 3. `~/.claude/scripts/`, `~/code/claude-code-plugins/`, and
    `~/code/cognovis-marketplace/` no longer contain a maintained
    `cld`/`cdx`.
-4. `installed_plugins.json` contains no bundles from either retired
+4. `installed_plugins.json` contains no bundles from either removed
    marketplace.
-5. `library.yaml` `marketplaces:` contains neither retired
+5. `library.yaml` `marketplaces:` contains neither removed
    marketplace.
 6. A bootstrap script exists in `cognovis-library/scripts/` that
    installs fleet-wide essentials via `/library use`.
@@ -404,7 +404,7 @@ Phases gated on completion criteria, not calendar time.
 | Phase | Name | Gate to start | Gate to complete |
 |-------|------|---------------|------------------|
 | 1 | Canonicalize cld/cdx | This ADR accepted | which cld/cdx → symlinks; smoke test passes |
-| 2 | Retire both marketplaces | Phase 1 verified | installed_plugins.json clean; library.yaml clean; bootstrap script works |
+| 2 | Remove both marketplaces | Phase 1 verified | installed_plugins.json clean; library.yaml clean; bootstrap script works |
 | 3 | Archive or delete repos (optional) | Phase 2 + 30 days clean | GitHub repos archived or deleted |
 | 4 | Migrate ~/.claude / ~/.codex content (own epic) | Phase 1 done | ~/.claude/ and ~/.codex/ contain only permitted files |
 
@@ -444,7 +444,7 @@ is NO-GO; the symlink-based approach is the sole viable path.
 ### Option A: Maintain ADR-0001's Hybrid
 
 **Description**: Keep `core`, `beads-workflow`, `infra` bundles in
-`sussdorff-plugins`. Retire `cognovis-marketplace`.
+`sussdorff-plugins`. Remove `cognovis-marketplace`.
 
 **Pros**: Less migration work. Preserves new-machine marketplace-UI
 install affordance for fleet-wide essentials.
@@ -458,7 +458,7 @@ trivially by a bootstrap script.
 longer holds; preserving two distribution paths for entirely
 duplicated content is overhead without benefit.
 
-### Option B: Selected — Full retirement + deployment-only harness dirs
+### Option B: Selected — Full removal + deployment-only harness dirs
 
 See Decision section above.
 
@@ -518,5 +518,5 @@ from per-project vs fleet-wide install variants.
 worktree creation. Python rewrite is substantial work driven by
 needs (cross-platform, complexity) not yet urgent.
 
-**Rejected because**: Out of scope for retirement decision. Decision 4
+**Rejected because**: Out of scope for removal decision. Decision 4
 codifies the deferral.

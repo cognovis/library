@@ -8,8 +8,9 @@ default_dirs:
     # Claude bridge (symlink) -> .claude/skills/
     # Codex                   -> reads .agents/skills/ directly, no bridge
     #
-    # The canonical path is itself a symlink into the Layer-B cache per
-    # ADR-0003 (cookbook/use.md Step 8c).
+    # The canonical path is a vendored copy by default. Use `--symlink`
+    # only for personal development workflows that need hot edits against
+    # the Layer-B cache.
     - default: .agents/skills/                    # canonical, project-local
     - global: ~/.agents/skills/                   # canonical, user-global
     - claude_bridge: .claude/skills/              # Claude harness bridge, project-local
@@ -436,7 +437,7 @@ library:
     - name: project-setup
       description: >-
         Set up new projects and upgrade existing ones to current standards. Handles scaffolding,
-        beads init, Dolt remote, CLAUDE.md generation, .gitignore, and standards injection for
+        beads init, Dolt remote, CLAUDE.md generation, and .gitignore profiles for
         all project types. Use when creating a new project, onboarding an existing repo, or
         upgrading project setup to current conventions.
       source: https://github.com/cognovis/library-core/blob/main/skills/project-setup/SKILL.md
@@ -1713,36 +1714,6 @@ library:
         - category:standard
 
 guardrails:
-  - name: standards-drift-check
-    description: >-
-      SessionStart hook that scans AGENTS.md / CLAUDE.md files (project + global)
-      for STANDARD block markers and emits one warning line per standard whose block
-      hash diverges from the cached source file. Fail-open: always exits 0. Target
-      runtime <50ms.
-    kind: single-hook
-    purpose: session-init
-    capability:
-      claude_code:
-        events: [SessionStart]
-        handler: python
-        note: >-
-          Outputs JSON hookSpecificOutput.additionalContext with warning lines for
-          drifted standards. Exit 0 with no output when all clean.
-      codex_cli:
-        events: [SessionStart]
-        handler: python
-        note: >-
-          Writes one warning line per drifted standard to stdout; Codex injects it
-          into the session preamble.
-    sources:
-      claude_code: hooks/standards-drift-check/claude-code.py
-      codex_cli: hooks/standards-drift-check/codex-cli.py
-    tags:
-      - origin:original
-      - session-init
-      - standards
-      - drift-detection
-
   - name: block-destructive-bash
     description: >-
       Blocks destructive bash commands (force-pushes, recursive deletes, DROP TABLE, etc.)
@@ -1800,7 +1771,7 @@ guardrails:
       Open-brain memory-capture hooks: SessionStart context injection,
       Stop/SubagentStop turn logging, SessionEnd summary, periodic memory sync.
       Replaces the Claude-Code-plugin distribution of open-brain hooks per ADR-0004
-      (the plugin manifest was retired; hooks now install via /library use).
+      (the plugin manifest was removed; hooks now install via /library use).
     kind: hooks-manifest
     source: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
     requires:
@@ -2070,6 +2041,53 @@ project_tooling:
     tags:
       - beads
       - git-hooks
+      - fleet-policy
+
+  - name: consumer-agents-gitignore-profile
+    description: >-
+      Consumer projects commit vendored .agents content so worktrees and teammates
+      receive the same project-local skills, standards, agents, and prompts.
+    target_kind: gitignore_patch
+    target_path: .gitignore
+    profiles:
+      - consumer
+    sync_strategy: repair_fields
+    conflict_policy: canonical_wins
+    fields:
+      remove_lines:
+        - .agents/skills/
+        - .agents/standards/
+        - .agents/agents/
+        - .agents/prompts/
+      ensure_lines:
+        - .claude/skills/
+        - .claude/worktrees/
+    tags:
+      - gitignore
+      - consumer
+      - fleet-policy
+
+  - name: marketplace-agents-gitignore-profile
+    description: >-
+      Marketplace repos keep .agents install destinations untracked because their
+      source content lives in top-level skills, standards, agents, and prompts.
+    target_kind: gitignore_patch
+    target_path: .gitignore
+    profiles:
+      - marketplace
+    sync_strategy: repair_fields
+    conflict_policy: canonical_wins
+    fields:
+      ensure_lines:
+        - .claude/skills/
+        - .claude/worktrees/
+        - .agents/skills/
+        - .agents/standards/
+        - .agents/agents/
+        - .agents/prompts/
+    tags:
+      - gitignore
+      - marketplace
       - fleet-policy
 
 marketplaces:

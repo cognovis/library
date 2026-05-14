@@ -24,7 +24,7 @@ tests/__pycache__/
 **/__pycache__/
 .session-close.lock
 
-# Library-installed primitives (symlinks into ~/.local/share/library cache)
+# Library-installed primitives in this marketplace repo (source lives in top-level primitive dirs)
 .claude/skills/
 .agents/skills/
 .agents/standards/

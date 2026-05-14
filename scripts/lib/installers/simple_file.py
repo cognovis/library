@@ -5,7 +5,7 @@ and golden-prompt primitives.
 All three follow the same pattern:
   1. Fetch source file
   2. Cache it in Layer B (~/.local/share/library/<type>s/<marketplace>/<name>@<sha>/)
-  3. Symlink or copy to the install target
+  3. Copy to the install target by default (or symlink with --symlink)
   4. Write lockfile entry
 
 Remove reverses steps 3 and 4.
@@ -45,6 +45,7 @@ def install_simple_file(
     scope: str = "project",
     dry_run: bool = False,
     harness: str = "all",
+    install_mode: str = "vendor",
 ) -> dict[str, Any]:
     """Generic install for prompt, model-standard, golden-prompt.
 
@@ -56,10 +57,14 @@ def install_simple_file(
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
         harness: Target harness (used for determining install sub-path for prompts).
+        install_mode: 'vendor' (default) or 'symlink'.
 
     Returns:
         Operation result dict.
     """
+    if install_mode not in ("vendor", "symlink"):
+        raise InstallError(f"Unknown install mode for {primitive_name} '{name}': {install_mode}")
+
     prim = get_primitive(primitive_name)
     if prim is None:
         raise InstallError(f"Unknown primitive: {primitive_name}")
@@ -109,7 +114,7 @@ def install_simple_file(
                 "details": f"copy source -> Layer-B cache",
             },
             {
-                "operation": "install_file",
+                "operation": "vendor_file" if install_mode == "vendor" else "create_symlink",
                 "path": str(install_target),
                 "details": f"install {primitive_name} '{item_name}' to {install_target}",
             },
@@ -155,13 +160,19 @@ def install_simple_file(
             install_target.unlink()
 
         if cached_file.exists():
-            install_target.symlink_to(cached_file)
+            if install_mode == "vendor":
+                shutil.copy2(str(cached_file), str(install_target))
+            else:
+                install_target.symlink_to(cached_file)
         else:
-            install_target.parent.mkdir(parents=True, exist_ok=True)
-            install_target.symlink_to(cache_path)
+            if install_mode == "vendor":
+                shutil.copytree(str(cache_path), str(install_target))
+            else:
+                install_target.parent.mkdir(parents=True, exist_ok=True)
+                install_target.symlink_to(cache_path)
 
         # 7. Write lockfile
-        primary = cached_file if cached_file.exists() else cache_path
+        primary = install_target if install_target.exists() else cached_file
         checksum = compute_checksum(primary) if primary.is_file() else "0" * 64
 
         lockfile_entry = make_entry(
@@ -173,6 +184,8 @@ def install_simple_file(
             cache_path=str(cache_path) + "/",
             install_target=str(install_target),
             checksum_sha256=checksum,
+            content_sha256=checksum,
+            install_mode=install_mode,
             license_id=entry.get("license", "unknown"),
         )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
@@ -186,6 +199,7 @@ def install_simple_file(
                 "install_target": str(install_target),
                 "cache": str(cache_path),
                 "source_commit": source_commit,
+                "install_mode": install_mode,
             },
             message=f"{primitive_name.title()} '{item_name}' installed at {install_target}",
         )

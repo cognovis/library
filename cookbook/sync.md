@@ -1,25 +1,23 @@
 # Sync All Installed Items
 
 ## Context
-Refresh every locally installed skill, agent, and prompt by re-pulling from its source. Uses
+Refresh every locally installed skill, agent, prompt, and standard by re-pulling from its source. Uses
 `.library.lock` as the authoritative source of truth for what is installed and where — two
 clones with the same `.library.lock` end up with identical installed content.
 
 ## CLI Shortcut (when available)
 
-Once the sync verb is implemented in the CLI:
-
 ```bash
 # Preview sync plan:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill sync --dry-run --json
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run --json
 
-# Real sync (re-pulls all skills recorded in .library.lock):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill sync --json
+# Real sync (re-pulls all entries recorded in .library.lock):
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync --json
 ```
 
-Until that is implemented, use the steps below to sync manually. The CLI's
+The CLI's
 `skill use <name>` command already handles single-item refresh with correct
-lockfile update and symlink recreation.
+lockfile update, vendor-copy materialization, and bridge recreation.
 
 ## Steps
 
@@ -116,7 +114,7 @@ This ensures the item is refreshed at the same location it was originally instal
 omit the `git checkout <source_commit>` pin and use the current branch HEAD instead. Then update
 `source_commit` in the lockfile to the new HEAD SHA.
 
-### 4.5. Compose Agent Body on Resync (compose-on-resync)
+### 4.5. Compose Agent Body on Resync
 
 > **Applies to agent entries only.** Skills, prompts, and guardrails are not composed.
 
@@ -195,48 +193,6 @@ For each entry in `.library.lock` where `type` is `agent`:
 > 1. `<proj_root>/.agents/golden-prompts/<name>.md` (project-local)
 > 2. `~/.agents/golden-prompts/<name>.md` (user-global)
 
-### 4.6. Standards: update AGENTS.md blocks on resync
-
-> **Applies to standard entries only.** Skills, agents, and prompts are not affected.
-
-After re-pulling fresh standard content in Step 4, update the composed block in the
-target `AGENTS.md`:
-
-```bash
-# Resolve target AGENTS.md from lockfile metadata (scope field):
-# - scope=global  -> ~/.agents/AGENTS.md
-# - scope=project -> <cwd>/AGENTS.md
-
-LIBRARY_ROOT="<path to library repo>"
-```
-
-For each standard entry in `.library.lock`:
-
-1. **Compute the current block hash** using `agents-md-block.py check`:
-   ```bash
-   python3 "${LIBRARY_ROOT}/scripts/agents-md-block.py" check \
-     --name=<standard-name> \
-     --file=<resolved-AGENTS.md> \
-     --content=<install_target>/<name>.md
-   ```
-   - Exit 0 → block is up to date; skip update.
-   - Exit 1 → drift detected (or block missing); proceed to update.
-
-2. **If drift detected**: warn the user if the block was manually edited
-   (block body hash != marker hash), then prompt:
-   > "STANDARD:<name> block in <AGENTS.md> has been manually edited.
-   > Overwrite with the freshly synced version? [y/N]"
-   - Confirmed → update.
-   - Declined → skip; log in sync summary as "skipped (manually edited)".
-
-3. **Apply the update**:
-   ```bash
-   python3 "${LIBRARY_ROOT}/scripts/agents-md-block.py" update \
-     --name=<standard-name> \
-     --file=<resolved-AGENTS.md> \
-     --content=<install_target>/<name>.md
-   ```
-
 ### 5. Recreate Bridge Symlinks
 
 For each entry that has non-empty `bridge_symlinks`:
@@ -251,13 +207,14 @@ For each entry that has non-empty `bridge_symlinks`:
   ```
 - This ensures cross-harness bridges are restored after a fresh clone.
 
-### 6. Reconcile Cache Against Lockfile (ADR-0003)
+### 6. Reconcile Cache And Install Target
 
-Before updating the lockfile, reconcile the Layer-B cache with each entry's `cache_path`:
+Before updating the lockfile, reconcile the Layer-B cache and Layer-C install target with
+each entry's `cache_path` and `install_mode`:
 
 For each entry in `.library.lock`:
 
-1. **If `cache_path` is empty** (migrated entry): derive and materialize the cache path:
+1. **If `cache_path` is empty**: derive and materialize the cache path:
    ```bash
    cache_path="${HOME}/.local/share/library/skills/<marketplace>/<name>@${source_commit:0:14}/"
    mkdir -p "$cache_path"
@@ -265,23 +222,28 @@ For each entry in `.library.lock`:
    ```
    Update the entry's `cache_path` to the materialized path.
 
-2. **If `cache_path` is set**: verify the cache directory exists and matches `checksum_sha256`.
-   If the cache is missing (e.g. after a clean install on a new machine):
+2. **If `cache_path` is set**: verify the cache directory exists. If the cache is missing
+   after a clean install on a new machine, fetch from `source` and repopulate the cache:
    ```bash
    mkdir -p "<cache_path>"
-   cp -R <install_target>/ "<cache_path>"
+   cp -R <fetched_source_directory>/ "<cache_path>"
    ```
 
-3. **Verify install_target is a symlink** pointing into `cache_path` (Layer C → Layer B).
-   If it is a real directory instead of a symlink, the three-layer model is not yet active
-   for this entry — this is acceptable during the migration period.
+3. **Materialize `install_target` from the cache**:
+   - `install_mode: vendor` or missing: remove the existing install target and copy real
+     files from `cache_path` into `install_target`.
+   - `install_mode: symlink`: recreate `install_target` as a symlink to `cache_path`.
+
+4. **Recompute the installed content hash** from `install_target`. For directory entries,
+   hash all files in the vendored directory. For file entries, hash the installed file.
 
 ### 7. Update .library.lock After Sync
 
 After re-pulling each item, update its lockfile entry:
-- Recompute `checksum_sha256` from the primary artifact file
+- Recompute `checksum_sha256` and `content_sha256` from the installed content
 - Update `source_commit` to the new HEAD of the cloned repo (or keep `local`)
-- Update `cache_path` if it was empty (populated in Step 6)
+- Update `cache_path` if it was empty
+- Update `install_mode` to `vendor` unless the entry was explicitly installed with `--symlink`
 - Update `install_timestamp` to the current UTC time
 
 ```python
@@ -294,7 +256,7 @@ with open(lock_path) as f:
 
 for entry in lock.get('installed', []):
     # Update entry fields for this item after re-pull
-    # (source_commit, install_timestamp, checksum_sha256)
+    # (source_commit, install_timestamp, checksum_sha256, content_sha256, install_mode)
     pass  # implementation fills in the updated values
 
 with open(lock_path, 'w') as f:
@@ -307,6 +269,26 @@ For each entry that has a `requires` field in `library.yaml`:
 - Check if each dependency is also in `.library.lock`
 - If a dependency is not in the lockfile, run `/library <dependency-type> use <dependency-name>` to install it
 - Process dependencies before the items that require them
+
+### 8.5. Commit Consumer Vendored Files
+
+Consumer projects commit the vendored `.agents/` tree and `.library.lock` so a fresh clone
+has real primitive files available immediately. After `/library sync`, apply the consumer
+project-tooling profile and review the diff:
+
+```bash
+python3 <LIBRARY_SKILL_DIR>/scripts/sync_project_tooling.py --profile consumer --verbose
+git status --short
+git add .library.lock .agents/ .gitignore
+git commit -m "Sync library-installed agent files"
+```
+
+Marketplace/library-core repos use the marketplace profile because their `.agents/` tree is
+a local install target, not source content:
+
+```bash
+python3 <LIBRARY_SKILL_DIR>/scripts/sync_project_tooling.py --profile marketplace --verbose
+```
 
 ### 9. Report Results
 

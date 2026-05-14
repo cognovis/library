@@ -4,9 +4,9 @@ installers/skill.py — Skill install/remove logic.
 Implements the three-layer cache model (ADR-0003):
   Layer A: Source (catalog entry source URL or local path)
   Layer B: Cache (~/.local/share/library/skills/<marketplace>/<name>@<14hex>/)
-  Layer C: Harness (.agents/skills/<name>/ symlink -> Layer B)
+  Layer C: Harness (.agents/skills/<name>/ vendored copy by default)
 
-For Claude Code: adds a bridge symlink at .claude/skills/<name>/ -> Layer B.
+For Claude Code: adds a bridge symlink at .claude/skills/<name>/ -> Layer C.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from typing import Any, Optional
 from ..cache import (
     compute_cache_path,
     create_harness_symlink,
+    materialize_install_target,
     materialize_cache,
     plan_cache_writes,
 )
@@ -48,6 +49,7 @@ def install_skill(
     repo_root: Path,
     scope: str = "project",
     dry_run: bool = False,
+    install_mode: str = "vendor",
 ) -> dict[str, Any]:
     """Install a skill from the catalog.
 
@@ -57,8 +59,8 @@ def install_skill(
     3. Compute cache path (Layer B)
     4. If dry_run: return planned operations without mutating
     5. Materialize cache (copy source dir -> Layer B)
-    6. Create canonical symlink (Layer C -> Layer B)
-    7. Create Claude bridge symlink (Layer C' -> Layer B)
+    6. Create canonical install (Layer C vendored copy, or symlink opt-in)
+    7. Create Claude bridge symlink (Layer C' -> Layer C)
     8. Write lockfile entry
 
     Args:
@@ -67,10 +69,14 @@ def install_skill(
         repo_root: Project root directory.
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
+        install_mode: 'vendor' (default) or 'symlink'.
 
     Returns:
         Operation result dict.
     """
+    if install_mode not in ("vendor", "symlink"):
+        raise InstallError(f"Unknown install mode for skill '{name}': {install_mode}")
+
     prim = get_primitive("skill")
 
     # 1. Catalog lookup
@@ -105,7 +111,13 @@ def install_skill(
             source_commit="<commit-sha>",
             install_target=canonical_dir,
             bridge_path=bridge_dir,
+            install_mode=install_mode,
         )
+        if install_mode == "vendor" and bridge_dir:
+            for op in ops:
+                if op.get("operation") == "create_bridge_symlink":
+                    op["target"] = str(canonical_dir)
+                    op["details"] = f"Claude bridge symlink {bridge_dir} -> {canonical_dir}"
         # Add lockfile write op
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append(
@@ -139,18 +151,19 @@ def install_skill(
         # 5b. Materialize cache (Layer B)
         materialize_cache(source_dir, cache_path)
 
-        # 6. Create canonical symlink (Layer C -> Layer B)
-        create_harness_symlink(canonical_dir, cache_path)
+        # 6. Create canonical install (Layer C)
+        materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
 
         # 7. Create Claude bridge symlink
         bridge_symlink_strs: list[str] = []
         if bridge_dir:
-            create_harness_symlink(bridge_dir, cache_path)
-            bridge_symlink_strs.append(f"{bridge_dir} -> {cache_path}")
+            bridge_target = canonical_dir if install_mode == "vendor" else cache_path
+            create_harness_symlink(bridge_dir, bridge_target)
+            bridge_symlink_strs.append(f"{bridge_dir} -> {bridge_target}")
 
-        # 8. Write lockfile — use directory hash for skills (all files matter)
+        # 8. Write lockfile — hash local installed content (all files matter)
         try:
-            checksum = compute_directory_hash(cache_path)
+            checksum = compute_directory_hash(canonical_dir)
         except OSError:
             checksum = "0" * 64
 
@@ -165,6 +178,8 @@ def install_skill(
             install_target=install_target_str,
             checksum_sha256=checksum,
             checksum_type="directory",
+            content_sha256=checksum,
+            install_mode=install_mode,
             license_id=entry.get("license", "unknown"),
             bridge_symlinks=bridge_symlink_strs,
         )
@@ -186,6 +201,7 @@ def install_skill(
                 "bridge": str(bridge_dir) if bridge_dir else None,
                 "cache": str(cache_path),
                 "source_commit": source_commit,
+                "install_mode": install_mode,
                 "harness_ops": harness.get("operations", []),
             },
             message=(

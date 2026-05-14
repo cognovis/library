@@ -4,7 +4,7 @@ test_library_py_installers.py — Tests for skill/standard dry-run and real inst
 
 AK4: skill use --dry-run --json emits planned writes without mutation
 AK5: standard use --dry-run --json emits planned writes without mutation
-AK6: Real skill use in tempdir fixture produces canonical .agents symlink + Claude bridge
+AK6: Real skill use in tempdir fixture produces canonical .agents vendored copy + Claude bridge
 AK7: Lockfile create/update is deterministic and schema-compatible
 
 Run with:
@@ -161,8 +161,8 @@ class TestSkillDryRun:
             f"Expected cache materialization operation, got: {op_names}"
         )
 
-    def test_skill_dry_run_includes_symlink_op(self, project_dir: Path):
-        """Dry-run operations must include a symlink creation step."""
+    def test_skill_dry_run_includes_vendor_op(self, project_dir: Path):
+        """Dry-run operations must include a vendor copy step by default."""
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
             capture_output=True,
@@ -172,8 +172,8 @@ class TestSkillDryRun:
         data = json.loads(result.stdout)
         ops = data.get("operations", [])
         op_names = [op.get("operation") for op in ops]
-        assert "create_symlink" in op_names, (
-            f"Expected create_symlink operation, got: {op_names}"
+        assert "vendor_copy" in op_names, (
+            f"Expected vendor_copy operation, got: {op_names}"
         )
 
     def test_skill_dry_run_includes_lockfile_op(self, project_dir: Path):
@@ -320,8 +320,8 @@ class TestStandardDryRun:
         ops = data.get("operations", [])
         assert len(ops) > 0, "Expected at least one operation in dry-run output"
 
-    def test_standard_dry_run_mentions_agents_md(self, project_dir: Path):
-        """standard dry-run operations must mention AGENTS.md block injection."""
+    def test_standard_dry_run_does_not_mention_agents_md(self, project_dir: Path):
+        """standard dry-run operations must not mention AGENTS.md mutation."""
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--dry-run", "--json"],
             capture_output=True,
@@ -332,8 +332,10 @@ class TestStandardDryRun:
         ops_text = json.dumps(data.get("operations", []))
         summary = data.get("summary", "")
         combined = ops_text + summary
-        assert "agents_md" in combined.lower() or "AGENTS.md" in combined or "agents-md" in combined.lower(), (
-            f"Expected AGENTS.md mention in dry-run output\ndata: {data}"
+        assert "agents_md" not in combined.lower()
+        assert "AGENTS.md" not in combined
+        assert "agents-md" not in combined.lower(), (
+            f"Unexpected AGENTS.md mention in dry-run output\ndata: {data}"
         )
 
     def test_standard_dry_run_no_mutation(self, project_dir: Path):
@@ -354,10 +356,10 @@ class TestStandardDryRun:
 
 
 class TestStandardRealInstall:
-    """Real standard installs should compose the STANDARD block into AGENTS.md."""
+    """Real standard installs should vendor files without mutating AGENTS.md."""
 
-    def test_standard_real_install_updates_agents_md(self, project_dir: Path):
-        """standard use must call agents-md-block.py with the current subcommand API."""
+    def test_standard_real_install_vendors_without_agents_md(self, project_dir: Path):
+        """standard use must install files and leave AGENTS.md alone."""
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--json"],
             capture_output=True,
@@ -370,15 +372,15 @@ class TestStandardRealInstall:
         )
 
         data = json.loads(result.stdout)
-        agents_md_result = data.get("data", {}).get("agents_md", {})
-        assert agents_md_result.get("success") is True, data
+        assert data.get("status") == "ok", data
 
+        canonical = project_dir / ".agents" / "standards" / "test-standard"
+        assert canonical.exists()
+        assert canonical.is_dir()
+        assert not canonical.is_symlink()
+        assert (canonical / "test-standard.md").exists()
         agents_md = project_dir / "AGENTS.md"
-        assert agents_md.exists()
-        text = agents_md.read_text(encoding="utf-8")
-        assert "<!-- BEGIN STANDARD:test-standard" in text
-        assert "# Test Standard" in text
-        assert "<!-- END STANDARD:test-standard -->" in text
+        assert not agents_md.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +389,7 @@ class TestStandardRealInstall:
 
 
 class TestSkillRealInstall:
-    """AK6: Real skill use produces canonical .agents symlink plus Claude bridge."""
+    """AK6: Real skill use produces canonical .agents vendored copy plus Claude bridge."""
 
     def test_skill_real_install_exits_zero(self, project_dir: Path):
         """skill use (real, no --dry-run) must exit 0."""
@@ -402,8 +404,8 @@ class TestSkillRealInstall:
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
-    def test_skill_real_install_creates_canonical_symlink(self, project_dir: Path):
-        """Real skill use must create .agents/skills/test-skill as a symlink."""
+    def test_skill_real_install_creates_canonical_vendor_copy(self, project_dir: Path):
+        """Real skill use must create .agents/skills/test-skill as a real directory."""
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--json"],
             capture_output=True,
@@ -416,8 +418,11 @@ class TestSkillRealInstall:
         assert canonical.exists(), (
             f"Expected {canonical} to exist after skill install"
         )
-        assert canonical.is_symlink(), (
-            f"Expected {canonical} to be a symlink (Layer C -> Layer B), got real directory"
+        assert canonical.is_dir(), (
+            f"Expected {canonical} to be a directory after skill install"
+        )
+        assert not canonical.is_symlink(), (
+            f"Expected {canonical} to be a vendored directory, got symlink"
         )
 
     def test_skill_real_install_creates_claude_bridge(self, project_dir: Path):
@@ -438,8 +443,8 @@ class TestSkillRealInstall:
             f"Expected Claude bridge {bridge} to be a symlink"
         )
 
-    def test_skill_real_install_symlink_points_to_cache(self, project_dir: Path):
-        """Canonical symlink must point into the Layer-B cache directory."""
+    def test_skill_real_install_bridge_points_to_canonical(self, project_dir: Path):
+        """Claude bridge symlink must point at the canonical vendored directory."""
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--json"],
             capture_output=True,
@@ -448,16 +453,14 @@ class TestSkillRealInstall:
         )
         assert result.returncode == 0
 
-        canonical = project_dir / ".agents" / "skills" / "test-skill"
-        assert canonical.is_symlink()
-        target = canonical.resolve()
-        # Layer B cache is under ~/.local/share/library/
-        cache_home = str(Path.home() / ".local" / "share" / "library")
-        # Or it could be under TMPDIR in test environments — just check it points somewhere real
-        assert target.exists(), f"Symlink target {target} does not exist"
+        bridge = project_dir / ".claude" / "skills" / "test-skill"
+        assert bridge.is_symlink()
+        target = bridge.resolve()
+        canonical = (project_dir / ".agents" / "skills" / "test-skill").resolve()
+        assert target == canonical
 
     def test_skill_real_install_skill_md_accessible(self, project_dir: Path):
-        """SKILL.md must be accessible through the canonical symlink."""
+        """SKILL.md must be accessible through the canonical install directory."""
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--json"],
             capture_output=True,
@@ -554,6 +557,40 @@ class TestSkillRealInstall:
             )
         except ImportError:
             pass  # Skip lockfile check if yaml not available
+
+    def test_skill_symlink_opt_in_preserves_cache_link_mode(self, project_dir: Path):
+        """--symlink must install the canonical path as a cache symlink."""
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--symlink", "--json"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+        )
+        assert result.returncode == 0, (
+            f"skill use --symlink returned {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+        canonical = project_dir / ".agents" / "skills" / "test-skill"
+        assert canonical.is_symlink(), f"Expected {canonical} to be a symlink"
+
+    def test_skill_vendor_survives_cache_delete(self, project_dir: Path):
+        """Vendored skill remains readable after its Layer-B cache is removed."""
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--json"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        cache = Path(data["data"]["cache"])
+        if cache.exists():
+            import shutil
+            shutil.rmtree(cache)
+
+        skill_md = project_dir / ".agents" / "skills" / "test-skill" / "SKILL.md"
+        assert skill_md.exists()
+        assert "test skill" in skill_md.read_text().lower()
 
 
 # ---------------------------------------------------------------------------

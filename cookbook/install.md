@@ -47,7 +47,24 @@ If already cloned (e.g., user cloned the template first), just update the remote
 - Confirm library.yaml exists at `<LIBRARY_SKILL_DIR>/library.yaml`
 - Confirm the `/library` command is now available
 
-### 6. Done
+### 6. Select Project Tooling Profile
+
+The Library manages `.gitignore` lines for installed primitive trees with two profiles:
+
+| Profile | Use for | `.agents/` policy |
+|---------|---------|-------------------|
+| `consumer` | Application repos that consume skills, agents, prompts, and standards | `.agents/skills/`, `.agents/standards/`, `.agents/agents/`, and `.agents/prompts/` are committed |
+| `marketplace` | Library-core and catalog repos that publish primitives | `.agents/` install targets stay ignored; source lives in top-level primitive directories |
+
+Apply the profile from the project root:
+
+```bash
+python3 <LIBRARY_SKILL_DIR>/scripts/sync_project_tooling.py --profile consumer --verbose
+```
+
+Use `--profile marketplace` only in repos that publish Library primitives.
+
+### 7. Done
 Tell the user:
 - The Library is now globally available
 - `/library skill list` will show the skill catalog (empty by default)

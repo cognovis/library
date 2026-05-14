@@ -31,6 +31,7 @@ Usage examples:
   python3 scripts/library.py skill list --json
   python3 scripts/library.py standard use english-only --scope global
   python3 scripts/library.py skill use dolt --dry-run --json
+  python3 scripts/library.py skill use dolt --symlink --json
   python3 scripts/library.py search firecrawl
 """
 
@@ -127,6 +128,11 @@ def build_parser() -> argparse.ArgumentParser:
         use_p.add_argument("name", nargs="?", default=None, help="Entry name or keyword")
         use_p.add_argument("--json", action="store_true", help="Output JSON")
         use_p.add_argument("--dry-run", action="store_true", help="Show planned writes, no mutation")
+        use_p.add_argument(
+            "--symlink",
+            action="store_true",
+            help="Install Layer C as a symlink into the cache instead of a vendored copy",
+        )
         use_p.add_argument(
             "--scope",
             choices=["project", "global"],
@@ -303,6 +309,7 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     name = getattr(args, "name", None)
     scope = getattr(args, "scope", "project")
     harness = getattr(args, "harness", "all")
+    install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
     primitive = args.primitive
 
     if name is None:
@@ -321,7 +328,7 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         return exit_code
 
     # Dry-run: just show the target entry's planned ops (no dep resolution for dry-run)
-    return _dispatch_use(args, repo_root, catalog, primitive, name, scope, harness, dry_run, use_json)
+    return _dispatch_use(args, repo_root, catalog, primitive, name, scope, harness, dry_run, use_json, install_mode)
 
 
 def _install_with_deps(
@@ -367,7 +374,10 @@ def _install_with_deps(
         # Skip if already installed (lockfile-aware)
         if is_already_installed(dep_name, repo_root, scope):
             continue
-        rc = _dispatch_use(args, repo_root, catalog, dep_prim, dep_name, scope, harness, False, use_json)
+        install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
+        rc = _dispatch_use(
+            args, repo_root, catalog, dep_prim, dep_name, scope, harness, False, use_json, install_mode
+        )
         if rc != 0:
             return rc
 
@@ -384,20 +394,21 @@ def _dispatch_use(
     harness: str,
     dry_run: bool,
     use_json: bool,
+    install_mode: str = "vendor",
 ) -> int:
     """Dispatch to the correct primitive installer."""
     if primitive == "skill":
-        return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json)
+        return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
     elif primitive == "standard":
-        return _use_standard(args, repo_root, catalog, name, scope, dry_run, use_json)
+        return _use_standard(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
     elif primitive == "agent":
         return _use_agent(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
     elif primitive == "prompt":
-        return _use_simple_file(args, repo_root, catalog, "prompt", name, scope, dry_run, use_json, harness)
+        return _use_simple_file(args, repo_root, catalog, "prompt", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "model-standard":
-        return _use_simple_file(args, repo_root, catalog, "model-standard", name, scope, dry_run, use_json, harness)
+        return _use_simple_file(args, repo_root, catalog, "model-standard", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "golden-prompt":
-        return _use_simple_file(args, repo_root, catalog, "golden-prompt", name, scope, dry_run, use_json, harness)
+        return _use_simple_file(args, repo_root, catalog, "golden-prompt", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "mcp":
         return _use_mcp(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
     elif primitive == "guardrail":
@@ -419,8 +430,9 @@ def _use_skill(
     scope: str,
     dry_run: bool,
     use_json: bool,
+    install_mode: str,
 ) -> int:
-    """Install a skill (three-layer cache + symlink + bridge + lockfile)."""
+    """Install a skill (three-layer cache + vendored copy + bridge + lockfile)."""
     from lib.installers.skill import install_skill
 
     try:
@@ -430,6 +442,7 @@ def _use_skill(
             repo_root=repo_root,
             scope=scope,
             dry_run=dry_run,
+            install_mode=install_mode,
         )
         if use_json:
             print_json(result)
@@ -452,8 +465,9 @@ def _use_standard(
     scope: str,
     dry_run: bool,
     use_json: bool,
+    install_mode: str,
 ) -> int:
-    """Install a standard (AGENTS.md block + lockfile)."""
+    """Install a standard (vendored copy + lockfile)."""
     from lib.installers.standard import install_standard
 
     try:
@@ -464,6 +478,7 @@ def _use_standard(
             scope=scope,
             dry_run=dry_run,
             tool_root=TOOL_ROOT,
+            install_mode=install_mode,
         )
         if use_json:
             print_json(result)
@@ -525,6 +540,7 @@ def _use_simple_file(
     dry_run: bool,
     use_json: bool,
     harness: str,
+    install_mode: str,
 ) -> int:
     """Install a prompt, model-standard, or golden-prompt."""
     from lib.installers.simple_file import install_simple_file
@@ -538,6 +554,7 @@ def _use_simple_file(
             scope=scope,
             dry_run=dry_run,
             harness=harness,
+            install_mode=install_mode,
         )
         if use_json:
             print_json(result)

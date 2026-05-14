@@ -97,28 +97,33 @@ def reinstall_entry(
     """Re-install a single lockfile entry."""
     entry_name = entry.get("name", "")
     entry_type = entry.get("type", "")
+    install_mode = entry.get("install_mode", "vendor")
 
     if entry_type == "skill":
         from .installers.skill import install_skill
-        install_skill(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope)
+        install_skill(
+            catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, install_mode=install_mode
+        )
     elif entry_type == "agent":
         from .installers.agent import install_agent
         install_agent(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
     elif entry_type == "prompt":
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="prompt", name=entry_name,
-                           repo_root=repo_root, scope=scope, harness=harness)
+                           repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "standard":
         from .installers.standard import install_standard
-        install_standard(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope)
+        install_standard(
+            catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, install_mode=install_mode
+        )
     elif entry_type == "model-standard":
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="model-standard", name=entry_name,
-                           repo_root=repo_root, scope=scope, harness=harness)
+                           repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "golden-prompt":
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="golden-prompt", name=entry_name,
-                           repo_root=repo_root, scope=scope, harness=harness)
+                           repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "mcp":
         from .installers.mcp_installer import install_mcp
         install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
@@ -143,7 +148,7 @@ def cmd_audit_impl(
     Each entry has a "status" field:
       - "drift": checksum mismatch (directory or file, depending on checksum_type)
       - "clean": checksums match
-      - "unknown": legacy entry without checksum_type, or path not found
+      - "unknown": entry without checksum_type, or path not found
 
     With drift_only=True, only entries with status="drift" are included in output.
 
@@ -183,8 +188,8 @@ def cmd_audit_impl(
 
     for entry in entries:
         entry_name = entry.get("name", "")
-        expected_sha = entry.get("checksum_sha256", "")
-        checksum_type = entry.get("checksum_type", None)  # None means legacy
+        expected_sha = entry.get("content_sha256") or entry.get("checksum_sha256", "")
+        checksum_type = entry.get("checksum_type", None)
         cache_path_str = entry.get("cache_path", "").rstrip("/")
         install_target_str = entry.get("install_target", "")
 
@@ -192,11 +197,11 @@ def cmd_audit_impl(
         drift = False
         entry_status = "unknown"
 
-        # Legacy entries (no checksum_type field): report unknown, never drift
+        # Entries without checksum_type report unknown, never drift.
         if checksum_type is None or checksum_type == "file":
             # For file-type: check single file
             if checksum_type is None:
-                # Legacy: always report unknown (cannot verify intent)
+                # Missing strategy: always report unknown (cannot verify intent)
                 audit_entries.append({
                     "name": entry_name,
                     "primitive": entry.get("type", ""),
@@ -211,7 +216,7 @@ def cmd_audit_impl(
             for path_str in [install_target_str, cache_path_str]:
                 if not path_str:
                     continue
-                p = Path(path_str)
+                p = _entry_path(path_str, repo_root)
                 if p.is_symlink():
                     p = p.resolve()
                 if p.is_file():
@@ -239,13 +244,14 @@ def cmd_audit_impl(
                 entry_status = "unknown"
 
         elif checksum_type == "directory":
-            # Directory-based checksum: hash the entire cache directory
-            # Prefer cache_path for audit (canonical source of truth)
+            # Directory-based checksum: hash the local installed directory first.
+            # This detects drift in vendored project copies even when the cache
+            # still matches upstream.
             dir_path = None
-            for path_str in [cache_path_str, install_target_str]:
+            for path_str in [install_target_str, cache_path_str]:
                 if not path_str:
                     continue
-                p = Path(path_str)
+                p = _entry_path(path_str, repo_root)
                 if p.is_symlink():
                     p = p.resolve()
                 if p.is_dir():
@@ -305,3 +311,11 @@ def _find_primary_artifact(cache_dir: Path, name: str) -> Path | None:
             return c
     md_files = list(cache_dir.rglob("*.md"))
     return md_files[0] if md_files else None
+
+
+def _entry_path(path_str: str, repo_root: Path) -> Path:
+    """Resolve a lockfile path relative to repo_root when needed."""
+    path = Path(path_str.rstrip("/"))
+    if path.is_absolute():
+        return path
+    return repo_root / path

@@ -198,6 +198,8 @@ def make_entry(
     license_id: str = "unknown",
     bridge_symlinks: Optional[list[str]] = None,
     checksum_type: str = "file",
+    install_mode: str = "vendor",
+    content_sha256: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build a lockfile entry dict conforming to the lockfile schema.
 
@@ -212,6 +214,9 @@ def make_entry(
         checksum_sha256: SHA-256 hex digest of primary artifact.
         license_id: SPDX license identifier.
         bridge_symlinks: List of bridge symlink description strings.
+        checksum_type: Checksum strategy for checksum_sha256.
+        install_mode: 'vendor' for real copied files, or 'symlink' for cache links.
+        content_sha256: SHA-256 hex digest of the local installed content.
 
     Returns:
         Complete entry dict.
@@ -227,6 +232,8 @@ def make_entry(
         "install_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "checksum_sha256": checksum_sha256,
         "checksum_type": checksum_type,
+        "content_sha256": content_sha256 or checksum_sha256,
+        "install_mode": install_mode,
         "license": license_id,
         "bridge_symlinks": bridge_symlinks or [],
     }

@@ -202,11 +202,9 @@ default for skills).
 | Hook manifest (`kind: hooks-manifest`, handled separately in Step 2b) | per `capability:` map |
 | MCP entry (`mcp_servers:` section) | per `install.mcp.*` map |
 
-**2 — Legacy `harness:` field (transitional, deprecated for skills):**
-If an entry still carries `harness:` (legacy from pre-ADR-0004 era), respect it
-as a hard override only when it NARROWS the URL-derived set (you can't widen).
-The field is being phased out — new entries should not set it; resolver should
-prefer URL derivation.
+**2 — Reject invalid `harness:` overrides for skills:**
+If a `SKILL.md` catalog entry carries `harness: claude` or `harness: codex`,
+stop and fix the catalog entry. Skills are cross-harness by file format.
 
 **2 — Detect deployment scope (global vs. project-local).** This IS a user
 question, but framed by scope not harness:
@@ -241,7 +239,7 @@ natively — no separate Codex install path.
 
 | Role | Scope | Key in `default_dirs.skills` |
 |------|-------|------------------------------|
-| Canonical (real files / Layer-B symlink) | project-local | `default` (resolves to `.agents/skills/`) |
+| Canonical (vendored real files) | project-local | `default` (resolves to `.agents/skills/`) |
 | Canonical | user-global | `global` (resolves to `~/.agents/skills/`) |
 | Claude harness bridge (symlink) | project-local | `claude_bridge` (resolves to `.claude/skills/`) |
 | Claude harness bridge | user-global | `global_claude_bridge` (resolves to `~/.claude/skills/`) |
@@ -268,15 +266,15 @@ Scope rules:
 - `<canonical_path>`: from `default` (or `global`) — e.g. `.agents/skills/`
 - `<claude_bridge_path>`: from `claude_bridge` (or `global_claude_bridge`) — e.g. `.claude/skills/`
 
-#### 5c. Canonical install + Claude bridge symlink
+#### 5c. Canonical vendor install + Claude bridge symlink
 
 > **Note:** This dual-link strategy applies to **skills only**. Agents and
 > prompts ship as harness-specific file formats; see Step 5b.
 
-Skills are installed in two steps: first the canonical files (which are
-themselves a symlink into the Layer-B cache per ADR-0003 and Step 8c), then
-a Claude harness bridge symlink pointing to the canonical path. Codex reads
-`.agents/skills/` natively, so no Codex-side symlink is needed.
+Skills are installed in two steps: first copy the cache contents into the
+canonical `.agents/skills/<name>/` directory, then create a Claude harness
+bridge symlink pointing to that canonical path. Codex reads `.agents/skills/`
+natively, so no Codex-side symlink is needed.
 
 ```bash
 # <canonical_path> and <claude_bridge_path> are the base dirs resolved in 5b.
@@ -284,26 +282,25 @@ canonical_target="<canonical_path><name>"          # e.g. .agents/skills/dolt
 claude_bridge_target="<claude_bridge_path><name>"  # e.g. .claude/skills/dolt
 
 # Step A: canonical install (per Step 6 + Step 8c — writes the Layer-B cache
-# and points <canonical_target> at it via a symlink).
+# and vendors a real copy into <canonical_target>).
 mkdir -p "$(dirname "$canonical_target")"
-# ... (Step 6 / Step 8c materializes <canonical_target> -> cache_path)
+# ... (Step 6 / Step 8c copies cache_path into <canonical_target>)
 
 # Step B: Claude harness bridge. Points at the canonical path so Claude Code
 # resolves through it transparently.
 mkdir -p "$(dirname "$claude_bridge_target")"
-# Replace a stale real directory if one exists (e.g. legacy install). The
-# `block-destructive-bash` guardrail refuses recursive forced deletes, so we
-# use `rm -r` without `-f`; this is safe because the agent owns the path.
+# Replace a non-symlink bridge path. The `block-destructive-bash` guardrail
+# refuses recursive forced deletes, so use `rm -r` without `-f`; this is safe
+# because the agent owns the path.
 if [ -d "$claude_bridge_target" ] && [ ! -L "$claude_bridge_target" ]; then
   rm -r "$claude_bridge_target"
 fi
 ln -sfn "$(realpath "$canonical_target")" "$claude_bridge_target"
 ```
 
-The resolution chain is `.claude/skills/<name>` → `.agents/skills/<name>` →
-Layer-B cache (`~/.local/share/library/skills/<m>/<n>@<tree-sha>/`). Claude
-Code follows the chain; Codex reads `.agents/skills/<name>` directly. One
-real copy, three resolution paths, zero drift.
+The resolution chain is `.claude/skills/<name>` → `.agents/skills/<name>`.
+Claude Code follows the bridge; Codex reads `.agents/skills/<name>` directly.
+Layer-B remains a per-machine resolver cache, not a runtime path.
 
 #### 5d. Name Collision Check (MANDATORY for skill installs)
 
@@ -318,33 +315,25 @@ Detect the current state of canonical and Claude-bridge paths before writing:
 # Paths resolved in Step 5b.
 canonical_path="<canonical_path><name>"          # e.g. .agents/skills/dolt
 claude_bridge_path="<claude_bridge_path><name>"  # e.g. .claude/skills/dolt
-codex_legacy_path="<codex_legacy_root>/<name>"   # e.g. ~/.codex/skills/dolt
-                                                 # only for legacy detection;
-                                                 # never an install target
 
 canonical_real=false        # canonical exists as a real directory
-canonical_is_link=false     # canonical exists as a symlink (e.g. into cache)
 claude_bridge_real=false    # claude path exists as a real directory (BAD)
 claude_is_bridge=false      # claude path exists as a symlink (GOOD)
-codex_legacy_exists=false   # legacy .codex/skills/<name> present (must be removed)
 
 [ -d "$canonical_path" ] && [ ! -L "$canonical_path" ] && canonical_real=true
-[ -L "$canonical_path" ] && canonical_is_link=true
 [ -d "$claude_bridge_path" ] && [ ! -L "$claude_bridge_path" ] && claude_bridge_real=true
 [ -L "$claude_bridge_path" ] && claude_is_bridge=true
-[ -e "$codex_legacy_path" ] && codex_legacy_exists=true
 ```
 
 **Collision decision table** (rows are mutually exclusive):
 
-| canonical | claude_bridge | legacy `.codex/` | Action |
-|-----------|---------------|------------------|--------|
-| neither real nor link | neither real nor link | absent | Fresh install — proceed to Step 6 |
-| link (into cache) | is_bridge → canonical | absent | Already installed correctly — refresh canonical; bridge auto-updates |
-| real (legacy real dir at canonical) | absent | absent | Promote: materialize into Layer-B cache, replace canonical with symlink |
-| absent | real (legacy `.claude/` only) | absent | Legacy claude-canonical install — migrate content to canonical, replace `.claude/` with bridge |
-| real | real | (any) | **COLLISION** — two independent real copies; emit warning, prompt user |
-| any | any | present | Legacy Codex bridge exists — warn and offer to remove (Codex reads `.agents/` natively) |
+| canonical | claude_bridge | Action |
+|-----------|---------------|--------|
+| absent | absent | Fresh install — proceed to Step 6 |
+| real | is_bridge → canonical | Refresh canonical; bridge remains valid |
+| real | absent | Refresh canonical; create bridge |
+| absent | real | **INVALID** — remove `.claude/skills/<name>` and install canonical |
+| real | real | **COLLISION** — two independent real copies; stop and ask which one is canonical |
 
 **Collision warning** (for the dual-real-directory case):
 
@@ -354,7 +343,7 @@ Warning: Name collision detected for skill '<name>':
   .claude/skills/<name>/  exists (real directory, NOT a symlink)
 
 These are two independent copies that may have diverged.
-Policy: .agents/skills/<name>/ is canonical (real or symlink into Layer-B cache).
+Policy: .agents/skills/<name>/ is canonical (vendored real files).
         .claude/skills/<name>  is the Claude harness bridge symlink.
 
 Options:
@@ -373,19 +362,6 @@ location, replace the other side with a bridge symlink (Step 5c).
 
 If user selects option 3: install proceeds, both real directories remain;
 warn that drift is the user's responsibility.
-
-**Legacy `.codex/skills/<name>` handling**: If detected, prompt the user:
-
-```
-Notice: ~/.codex/skills/<name> exists from a legacy install.
-Codex 0.130.0+ reads ~/.agents/skills/ natively (CL-603 r1), so this path is
-no longer needed.
-
-Remove ~/.codex/skills/<name>? [Y/n]
-```
-
-Default yes. Removing eliminates a stale entry that could shadow the new
-canonical install if Codex's r0 root (`~/.codex/skills/`) is searched first.
 
 #### 5e. Translation Warnings
 
@@ -426,7 +402,7 @@ with the `model:` value from the frontmatter. (Use the `<canonical_path>` resolv
 If the skill's SKILL.md body contains `$ARGUMENTS`:
 > "Advisory: This skill uses `$ARGUMENTS` substitution (Claude Code invocation style). Codex skills receive input via prompt context rather than `$ARGUMENTS` substitution. The skill should still work, but `$ARGUMENTS` will not be replaced — the literal string will appear in the prompt. Consider adapting the skill for Codex if precise argument handling is needed."
 
-### 5f. Standards: resolve scope then compose-on-install
+### 5f. Standards: resolve scope and install files only
 
 `library.standards:` entries (single files and bundles) can install at two tiers:
 
@@ -449,7 +425,7 @@ Skip the question when the invocation explicitly states scope:
 - `/library standard use python globally` → global, no prompt
 - `/library standard use python locally` / `... for this project` / `... in this project` → project-local, no prompt
 
-The loader resolution order (project-local wins over user-global) is unchanged.
+The resolution order is project-local first, then user-global.
 
 ```yaml
 default_dirs:
@@ -458,36 +434,17 @@ default_dirs:
     - global: ~/.agents/standards/        # user-global
 ```
 
-**After copying files to the cache/install target — compose-on-install (MANDATORY):**
-
-Once the standard's files are installed to `<install_target>/`, write the standard's
-content as a marker block into the correct `AGENTS.md`:
-
-```bash
-# Resolve target AGENTS.md:
-# - scope=global  -> ~/.agents/AGENTS.md
-# - scope=project -> <cwd>/AGENTS.md
-
-LIBRARY_ROOT="<path to library repo>"
-python3 "${LIBRARY_ROOT}/scripts/agents-md-block.py" insert \
-  --name=<standard-name> \
-  --file=<resolved-AGENTS.md> \
-  --content=<install_target>/<name>.md
-```
-
-For bundle standards (multiple source files), use the bundle's primary file (the
-file matching `<name>.md` in the install dir, or the first `.md` file found).
-
-This step is idempotent: re-running `insert` on an existing block does nothing if
-the content hash matches.
+After copying files to `<install_target>/`, update `.library.lock`. Do not modify
+`AGENTS.md` or `CLAUDE.md`. Standards enter context only through
+`requires_standards:` on the consuming skill or agent.
 
 ### 6. Fetch from Source
 
 > For skills: this step fetches the source content into a temp directory.
 > The actual placement happens in Step 8c (Layer-B cache materialization),
-> and the canonical `<canonical_path><name>` symlink plus Claude bridge are
-> created from there. Do NOT cp directly to `<canonical_path>` — that
-> bypasses the Layer-B cache and breaks `/library sync` tree-SHA short-circuit.
+> and the canonical `<canonical_path><name>` vendor copy plus Claude bridge are
+> created from there. Do NOT copy directly to `<canonical_path>` before the
+> cache is materialized.
 
 **If source is a local path** (starts with `/` or `~`):
 - Resolve `~` to the home directory
@@ -533,7 +490,7 @@ the content hash matches.
   git clone --depth 1 --branch <branch> git@github.com:<org>/<repo>.git "$tmp_dir"
   ```
 
-### 6.5: Compose Agent Body (compose-on-install)
+### 6.5: Compose Agent Body
 
 > **Applies to agent entries only.** Skills, prompts, and guardrails are not composed.
 
@@ -682,22 +639,15 @@ if [[ "$new_tree" == "$locked_tree" ]]; then
   # Do NOT re-materialize the cache; do NOT touch symlinks.
   exit 0
 fi
-# Otherwise: materialize new cache at <name>@${new_tree:0:14}/ and re-point symlinks.
+# Otherwise: materialize new cache at <name>@${new_tree:0:14}/ and refresh Layer C.
 ```
 
-**Migration of existing lockfile entries**: Entries written before this spec
-revision used `git rev-parse HEAD` (marketplace HEAD) as `source_commit`. They
-look like valid 40-char hex but are NOT tree-SHAs. On next `/library sync`:
-recompute the tree-SHA, compare; if they differ (they almost always will, since
-HEAD ≠ tree-SHA in general), rewrite the lockfile entry with the new tree-SHA
-and materialize the canonical cache location. No content change is implied —
-this is a one-time key correction.
-
-#### 8c. Materialize the cache entry (Layer B) and create symlinks (Layer C)
+#### 8c. Materialize the cache entry (Layer B) and vendored install (Layer C)
 
 Per ADR-0003, the fetched content lives in the Layer-B cache. The canonical
-harness path (Layer C) is a symlink into that cache, and the Claude bridge
-is a symlink to the canonical path.
+harness path (Layer C) is a vendored copy of that cache, and the Claude bridge
+is a symlink to the canonical path. Use `--symlink` only when the user asks for
+cache-linked development mode.
 
 Determine the `cache_path` using the tree-SHA from Step 8b:
 
@@ -723,28 +673,24 @@ fi
 # no re-copy needed (this is the /library sync short-circuit from Step 8b).
 ```
 
-**Step 8c.2 — point canonical (Layer C) at cache (Layer B):**
+**Step 8c.2 — vendor canonical Layer C from cache:**
 
 ```bash
 canonical_target="<canonical_path><name>"   # e.g. ~/.agents/skills/dolt
 mkdir -p "$(dirname "$canonical_target")"
 
-# Replace stale canonical (legacy real dir or wrong-version symlink).
 if [ -d "$canonical_target" ] && [ ! -L "$canonical_target" ]; then
   rm -r "$canonical_target"
+elif [ -L "$canonical_target" ]; then
+  rm "$canonical_target"
 fi
-ln -sfn "$cache_path" "$canonical_target"
+cp -R "$cache_path" "$canonical_target"
 ```
 
 **Step 8c.3 — Claude harness bridge → canonical (Step 5c):**
 
 After 8c.1 + 8c.2, run the bridge command from Step 5c so Claude Code can
-resolve `<claude_bridge_path><name>` through the canonical path into the
-cache.
-
-> **Note**: For legacy lockfile entries that predate this spec revision and
-> have `cache_path: ""`, the next `/library sync` will recompute the tree-SHA,
-> populate `cache_path`, and re-point the symlinks.
+resolve `<claude_bridge_path><name>` through the canonical path.
 
 #### 8d. Build the lockfile entry
 
@@ -758,6 +704,9 @@ cache.
   install_target: <install_target>/  # trailing slash required; from Step 5b
   install_timestamp: <ISO 8601 UTC>  # e.g. 2026-04-30T10:23:00Z
   checksum_sha256: <checksum>
+  checksum_type: directory
+  content_sha256: <checksum>
+  install_mode: vendor
   license: <license>    # from SKILL.md/agent frontmatter, or "unknown"
   bridge_symlinks:      # from Step 5c; empty list if no bridge was created
     - "<link-path> -> <target-path>"
@@ -790,6 +739,9 @@ entry = {
     'install_target': '<install_target>/',
     'install_timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
     'checksum_sha256': '<checksum>',
+    'checksum_type': 'directory',
+    'content_sha256': '<checksum>',
+    'install_mode': 'vendor',
     'license': '<license>',
     'bridge_symlinks': ['<link> -> <target>'],  # or [] if no bridge
 }
@@ -851,7 +803,7 @@ Tell the user:
 | User-defined slash commands | `~/.claude/commands/<name>.md` (YAML frontmatter) | Not directly supported via `.md` files |
 | User-defined "commands" equivalent | -- | **Skills** (`~/.codex/skills/<name>/SKILL.md`) |
 | Built-in slash commands | `/beads`, `/library`, `/dispatch`, ... | `/model`, `/review`, `/plan`, `/skills`, ... |
-| Custom prompt format | Single `.md` file, YAML frontmatter, `$ARGUMENTS` | Deprecated: `~/.codex/prompts/<name>.md` |
+| Custom prompt format | Single `.md` file, YAML frontmatter, `$ARGUMENTS` | Not supported by the Library |
 
 ### Resolution path
 

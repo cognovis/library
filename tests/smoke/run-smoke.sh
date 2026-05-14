@@ -842,67 +842,31 @@ print_summary() {
 }
 
 # ---------------------------------------------------------------------------
-# Standards-loader smoke tests (CL-v56)
+# Standards smoke tests
 #
-# Validates the structural guarantees of the cross-harness standards loading
-# mechanism:
-#  1. Research doc exists at docs/research/standards-loading.md
-#  2. Research doc contains all required loader-contract sections
-#  3. Prototype loader script exists at scripts/standards-loader.sh
-#  4. Prototype loader script is executable
-#  5. Prototype loader resolves project-local over global (precedence rule)
-#  6. Prototype loader emits a warning (not an error) for missing standards
-#  7. Generated adapter writes standards into AGENTS.md (mechanism a)
-#  8. Skill-script-side loader reads .agents/standards/<name>.md (mechanism b)
-#  9. PRIMITIVES.md STANDARD section references the new loader convention
-# 10. standards index.yml schema is documented
+# Validates the structural guarantees of the standards dependency model:
+#  1. Loader script exists
+#  2. Loader script is executable
+#  3. Loader resolves project-local over global
+#  4. Loader emits a warning for missing standards
+#  5. Adapter generation fails
+#  6. Standard install path does not mutate harness context files
+#  7. SessionStart drift hook files are absent
+#  8. Catalog does not register a standard drift guardrail
+#  9. PRIMITIVES.md documents requires_standards loading
+# 10. Loader still reads .agents/standards/<name>.md
 # ---------------------------------------------------------------------------
 smoke_standards() {
     section "standards"
 
-    local research_doc="${REPO_ROOT}/docs/research/standards-loading.md"
     local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
     local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
+    local standard_installer="${REPO_ROOT}/scripts/lib/installers/standard.py"
+    local library_yaml="${REPO_ROOT}/library.yaml"
+    local drift_hook_dir="${REPO_ROOT}/hooks/standards""-drift-check"
 
     # -----------------------------------------------------------------------
-    # CHECK 1: Research doc exists
-    # -----------------------------------------------------------------------
-    if [[ -f "${research_doc}" ]]; then
-        pass "standards/research-doc: docs/research/standards-loading.md exists"
-    else
-        fail "standards/research-doc: docs/research/standards-loading.md NOT found"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 2: Research doc contains required loader-contract sections
-    # -----------------------------------------------------------------------
-    if [[ -f "${research_doc}" ]]; then
-        local required_sections=(
-            "Loader Contract"
-            "Path Resolution"
-            "Missing Standard"
-            "Merge Order"
-            "Validation"
-            "Caching"
-            "Compatibility"
-            "Recommended"
-        )
-        local all_sections=true
-        for section_name in "${required_sections[@]}"; do
-            if ! grep -qi "${section_name}" "${research_doc}" 2>/dev/null; then
-                fail "standards/research-doc-sections: '${section_name}' section NOT found in standards-loading.md"
-                all_sections=false
-            fi
-        done
-        if [[ "${all_sections}" == "true" ]]; then
-            pass "standards/research-doc-sections: all required loader-contract sections present"
-        fi
-    else
-        fail "standards/research-doc-sections: research doc not found — cannot check sections"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 3: Prototype loader script exists
+    # CHECK 1: Loader script exists
     # -----------------------------------------------------------------------
     if [[ -f "${loader_script}" ]]; then
         pass "standards/loader-script: scripts/standards-loader.sh exists"
@@ -911,7 +875,7 @@ smoke_standards() {
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 4: Loader script is executable
+    # CHECK 2: Loader script is executable
     # -----------------------------------------------------------------------
     if [[ -x "${loader_script}" ]]; then
         pass "standards/loader-executable: scripts/standards-loader.sh is executable"
@@ -920,85 +884,116 @@ smoke_standards() {
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 5: Loader implements project-local > global precedence
+    # CHECK 3: Loader implements project-local > global precedence
     # -----------------------------------------------------------------------
     if [[ -f "${loader_script}" ]]; then
-        if grep -q "project\|local\|override\|PROJ\|proj" "${loader_script}" 2>/dev/null; then
-            pass "standards/loader-precedence: loader script references project-local precedence"
+        if grep -q "project-local ALWAYS overrides global" "${loader_script}" 2>/dev/null; then
+            pass "standards/loader-precedence: loader script documents project-local precedence"
         else
-            fail "standards/loader-precedence: loader script does NOT implement project-local precedence"
+            fail "standards/loader-precedence: loader script does NOT document project-local precedence"
         fi
     else
-        fail "standards/loader-precedence: loader script not found — cannot check precedence"
+        fail "standards/loader-precedence: loader script not found"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 6: Missing standard emits warning (not exit 1)
+    # CHECK 4: Missing standard emits warning and exits successfully
     # -----------------------------------------------------------------------
     if [[ -f "${loader_script}" ]]; then
-        if grep -q "warn\|WARN\|echo.*Warning\|>&2" "${loader_script}" 2>/dev/null; then
-            pass "standards/loader-warn-on-missing: loader emits a warning for missing standards"
+        local missing_output
+        if missing_output="$("${loader_script}" --load "__missing_standard_for_smoke__" 2>&1 >/dev/null)"; then
+            if grep -q "WARNING" <<<"${missing_output}"; then
+                pass "standards/loader-warn-on-missing: loader warns and continues"
+            else
+                fail "standards/loader-warn-on-missing: loader did not print warning text"
+            fi
         else
-            fail "standards/loader-warn-on-missing: loader does NOT document warn-on-missing behavior"
+            fail "standards/loader-warn-on-missing: loader exited nonzero for missing standard"
         fi
     else
         fail "standards/loader-warn-on-missing: loader script not found"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 7: Mechanism (a) — adapter generation targets AGENTS.md
-    # -----------------------------------------------------------------------
-    if [[ -f "${research_doc}" ]]; then
-        if grep -qi "AGENTS\.md\|adapter\|compile\|generat" "${research_doc}" 2>/dev/null; then
-            pass "standards/mechanism-a: research doc covers mechanism (a) adapter generation"
-        else
-            fail "standards/mechanism-a: research doc does NOT cover mechanism (a) AGENTS.md adapter"
-        fi
-    else
-        fail "standards/mechanism-a: research doc not found"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 8: Mechanism (b) — skill-script-side loader
+    # CHECK 5: Adapter generation fails
     # -----------------------------------------------------------------------
     if [[ -f "${loader_script}" ]]; then
-        if grep -q '\.agents/standards\|agents/standards' "${loader_script}" 2>/dev/null; then
-            pass "standards/mechanism-b: loader script reads from .agents/standards/ path"
+        local adapter_output
+        if adapter_output="$("${loader_script}" --generate-adapter 2>&1 >/dev/null)"; then
+            fail "standards/adapter-removed: adapter generation succeeded"
+        elif grep -q "adapter generation has been removed" <<<"${adapter_output}"; then
+            pass "standards/adapter-removed: adapter generation fails with removal message"
         else
-            fail "standards/mechanism-b: loader script does NOT reference .agents/standards/ path"
+            fail "standards/adapter-removed: adapter generation failed with unexpected message"
         fi
     else
-        fail "standards/mechanism-b: loader script not found"
+        fail "standards/adapter-removed: loader script not found"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 9: PRIMITIVES.md STANDARD section references the new loader convention
+    # CHECK 6: Standard installer does not mutate harness context files
+    # -----------------------------------------------------------------------
+    if [[ -f "${standard_installer}" ]]; then
+        if grep -q "AGENTS.md\\|agents_md\\|agents""-md-block" "${standard_installer}" 2>/dev/null; then
+            fail "standards/installer-no-context-mutation: standard installer still references harness context mutation"
+        else
+            pass "standards/installer-no-context-mutation: standard installer only writes files and lockfile"
+        fi
+    else
+        fail "standards/installer-no-context-mutation: standard installer not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 7: Drift hook files are absent
+    # -----------------------------------------------------------------------
+    if [[ -d "${drift_hook_dir}" ]]; then
+        fail "standards/drift-hook-removed: drift hook directory still exists"
+    else
+        pass "standards/drift-hook-removed: drift hook directory is absent"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 8: Catalog does not register the drift guardrail
+    # -----------------------------------------------------------------------
+    if [[ -f "${library_yaml}" ]]; then
+        if grep -q "standards""-drift-check" "${library_yaml}" 2>/dev/null; then
+            fail "standards/catalog-no-drift-guardrail: catalog still registers drift guardrail"
+        else
+            pass "standards/catalog-no-drift-guardrail: catalog has no drift guardrail entry"
+        fi
+    else
+        fail "standards/catalog-no-drift-guardrail: library.yaml not found"
+    fi
+
+    # -----------------------------------------------------------------------
+    # CHECK 9: PRIMITIVES.md documents requires_standards loading
     # -----------------------------------------------------------------------
     if [[ -f "${primitives_doc}" ]]; then
-        if grep -q "standards-loading\|CL-v56\|\.agents/standards" "${primitives_doc}" 2>/dev/null; then
-            pass "standards/primitives-updated: PRIMITIVES.md STANDARD section references loader convention"
+        if grep -q "requires_standards" "${primitives_doc}" 2>/dev/null \
+            && grep -q "Never auto-injected" "${primitives_doc}" 2>/dev/null; then
+            pass "standards/primitives-updated: PRIMITIVES.md documents scoped standard loading"
         else
-            fail "standards/primitives-updated: PRIMITIVES.md does NOT reference new loader convention"
+            fail "standards/primitives-updated: PRIMITIVES.md does NOT document scoped standard loading"
         fi
     else
         fail "standards/primitives-updated: docs/PRIMITIVES.md NOT found"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 10: standards index.yml schema documented in research doc
+    # CHECK 10: Loader reads from .agents/standards/
     # -----------------------------------------------------------------------
-    if [[ -f "${research_doc}" ]]; then
-        if grep -qi "index\.yml\|frontmatter\|requires_standards" "${research_doc}" 2>/dev/null; then
-            pass "standards/index-schema: research doc covers standards index.yml schema"
+    if [[ -f "${loader_script}" ]]; then
+        if grep -q '\.agents/standards' "${loader_script}" 2>/dev/null; then
+            pass "standards/loader-path: loader reads from .agents/standards/"
         else
-            fail "standards/index-schema: research doc does NOT cover standards index.yml schema"
+            fail "standards/loader-path: loader does NOT reference .agents/standards/"
         fi
     else
-        fail "standards/index-schema: research doc not found"
+        fail "standards/loader-path: loader script not found"
     fi
 
-    echo "  NOTE  standards/runtime: End-to-end standards injection requires a live harness session."
-    echo "        Structural checks above confirm the loader mechanism satisfies the contract."
+    echo "  NOTE  standards/runtime: End-to-end requires_standards loading requires a live consuming primitive."
+    echo "        Structural checks above confirm the removed adapter path fails closed."
 }
 
 # ---------------------------------------------------------------------------
@@ -1010,7 +1005,7 @@ smoke_standards() {
 #  4. Each present standard has valid YAML frontmatter (name, version, description)
 #  5. standards-loader.sh --load resolves core standards from ~/.agents/standards/
 #  6. At least one SKILL.md in claude-code-plugins has requires_standards: frontmatter
-#  7. inject-subagent-standards.py is marked DEPRECATED
+#  7. inject-subagent-standards.py is absent
 # ---------------------------------------------------------------------------
 smoke_migration() {
     section "migration"
@@ -1137,21 +1132,16 @@ smoke_migration() {
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 7: inject-subagent-standards.py is marked DEPRECATED
+    # CHECK 7: inject-subagent-standards.py is absent
     # -----------------------------------------------------------------------
-    local hook_file="${HOME}/.claude/hooks/inject-subagent-standards.py"
+    local hook_file="${HOME}/.claude/hooks/inject-subagent""-standards.py"
     if [[ -f "${hook_file}" ]]; then
-        if grep -q "DEPRECATED" "${hook_file}" 2>/dev/null; then
-            pass "migration/hook-deprecated: inject-subagent-standards.py is marked DEPRECATED"
-        else
-            fail "migration/hook-deprecated: inject-subagent-standards.py is NOT marked DEPRECATED — run CL-717 migration"
-        fi
+        fail "migration/hook-removed: inject-subagent-standards.py still exists"
     else
-        pass "migration/hook-deprecated: inject-subagent-standards.py not present (already removed)"
+        pass "migration/hook-removed: inject-subagent-standards.py is absent"
     fi
 
-    echo "  NOTE  migration/phase3: Hook removal (Phase 3 per docs/research/standards-loading.md)"
-    echo "        is deferred until all projects have migrated. See CL-717 ADR for removal checklist."
+    echo "  NOTE  migration/hook-removed: Hook removal is complete on this machine."
 }
 
 # ---------------------------------------------------------------------------

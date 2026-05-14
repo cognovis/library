@@ -19,6 +19,7 @@ Tests:
   13. sync_project_tooling.py: file target sync works (integration test, temp dirs)
   14. sync_project_tooling.py: json_field_enforce ensure/remove works
   15. sync_project_tooling.py: running sync twice is idempotent
+  16. gitignore_patch applies consumer and marketplace profiles
 
 Run with:
     python3 -m pytest tests/test_project_tooling.py -v
@@ -317,6 +318,42 @@ def test_json_field_enforce_fields():
     print("PASS test_json_field_enforce_fields")
 
 
+def test_project_tooling_profiles_field():
+    """profiles accepts consumer and marketplace values."""
+    schema = load_schema()
+    data = minimal_library({
+        "project_tooling": [
+            minimal_tooling_entry(
+                target_kind="gitignore_patch",
+                target_path=".gitignore",
+                profiles=["consumer", "marketplace"],
+                fields={"remove_lines": [".agents/skills/"]},
+            )
+        ]
+    })
+    assert_valid(data, schema, "project_tooling profiles")
+    print("PASS test_project_tooling_profiles_field")
+
+
+def test_gitignore_patch_fields():
+    """gitignore_patch fields ensure_lines/remove_lines validate."""
+    schema = load_schema()
+    data = minimal_library({
+        "project_tooling": [
+            minimal_tooling_entry(
+                target_kind="gitignore_patch",
+                target_path=".gitignore",
+                fields={
+                    "remove_lines": [".agents/skills/"],
+                    "ensure_lines": [".claude/worktrees/"],
+                },
+            )
+        ]
+    })
+    assert_valid(data, schema, "gitignore_patch line fields")
+    print("PASS test_gitignore_patch_fields")
+
+
 def test_full_beads_prime_example():
     """The full beads-prime entry from the bead description validates cleanly."""
     schema = load_schema()
@@ -571,6 +608,109 @@ def test_sync_runtime_idempotent():
     print("PASS test_sync_runtime_idempotent")
 
 
+def test_sync_runtime_gitignore_profile_consumer():
+    """consumer profile removes .agents ignore lines and keeps machine-local ignores."""
+    sync = _import_sync_script()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        lib_root = tmp / "library"
+        project_root = tmp / "project"
+        lib_root.mkdir()
+        project_root.mkdir()
+
+        gitignore = project_root / ".gitignore"
+        gitignore.write_text(
+            ".claude/skills/\n"
+            ".claude/worktrees/\n"
+            ".agents/skills/\n"
+            ".agents/standards/\n"
+            ".agents/agents/\n"
+            ".agents/prompts/\n"
+        )
+
+        entries = [
+            {
+                "name": "consumer-agents-gitignore-profile",
+                "description": "Consumer gitignore profile",
+                "target_kind": "gitignore_patch",
+                "target_path": ".gitignore",
+                "profiles": ["consumer"],
+                "sync_strategy": "repair_fields",
+                "fields": {
+                    "remove_lines": [
+                        ".agents/skills/",
+                        ".agents/standards/",
+                        ".agents/agents/",
+                        ".agents/prompts/",
+                    ],
+                    "ensure_lines": [".claude/skills/", ".claude/worktrees/"],
+                },
+            }
+        ]
+
+        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root, profile="consumer")
+        assert result["synced"] == 1, result
+        lines = gitignore.read_text().splitlines()
+        assert ".agents/skills/" not in lines
+        assert ".agents/standards/" not in lines
+        assert ".agents/agents/" not in lines
+        assert ".agents/prompts/" not in lines
+        assert ".claude/skills/" in lines
+        assert ".claude/worktrees/" in lines
+
+    print("PASS test_sync_runtime_gitignore_profile_consumer")
+
+
+def test_sync_runtime_gitignore_profile_marketplace():
+    """marketplace profile keeps .agents install destinations ignored."""
+    sync = _import_sync_script()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        lib_root = tmp / "library"
+        project_root = tmp / "project"
+        lib_root.mkdir()
+        project_root.mkdir()
+        (project_root / ".gitignore").write_text(".claude/worktrees/\n")
+
+        entries = [
+            {
+                "name": "marketplace-agents-gitignore-profile",
+                "description": "Marketplace gitignore profile",
+                "target_kind": "gitignore_patch",
+                "target_path": ".gitignore",
+                "profiles": ["marketplace"],
+                "sync_strategy": "repair_fields",
+                "fields": {
+                    "ensure_lines": [
+                        ".claude/skills/",
+                        ".claude/worktrees/",
+                        ".agents/skills/",
+                        ".agents/standards/",
+                        ".agents/agents/",
+                        ".agents/prompts/",
+                    ],
+                },
+            }
+        ]
+
+        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root, profile="marketplace")
+        assert result["synced"] == 1, result
+        lines = (project_root / ".gitignore").read_text().splitlines()
+        for expected in [
+            ".agents/skills/",
+            ".agents/standards/",
+            ".agents/agents/",
+            ".agents/prompts/",
+            ".claude/skills/",
+            ".claude/worktrees/",
+        ]:
+            assert expected in lines
+
+    print("PASS test_sync_runtime_gitignore_profile_marketplace")
+
+
 # ---------------------------------------------------------------------------
 # Main runner (no pytest required)
 # ---------------------------------------------------------------------------
@@ -588,12 +728,16 @@ ALL_TESTS = [
     test_file_target_requires_source,
     test_git_hook_target_requires_source,
     test_json_field_enforce_fields,
+    test_project_tooling_profiles_field,
+    test_gitignore_patch_fields,
     test_full_beads_prime_example,
     test_library_yaml_has_project_tooling,
     test_sync_runtime_file_target,
     test_sync_runtime_json_field_enforce,
     test_sync_runtime_git_hook,
     test_sync_runtime_idempotent,
+    test_sync_runtime_gitignore_profile_consumer,
+    test_sync_runtime_gitignore_profile_marketplace,
 ]
 
 

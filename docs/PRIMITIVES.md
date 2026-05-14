@@ -190,7 +190,7 @@ context cost between invocations.
 
 **Format (Claude Code).** `.claude/commands/<name>.md` with YAML frontmatter. NORMATIVE.
 
-**Format (Codex).** Custom prompts/commands are DEPRECATED in Codex. Use skills
+**Format (Codex).** Custom prompts/commands are not supported in Codex. Use skills
 instead. NORMATIVE — per CL-qzw research.
 
 **When to choose it.** Use a command when:
@@ -201,7 +201,7 @@ instead. NORMATIVE — per CL-qzw research.
 **Counter-examples.**
 - Do NOT use a command for something the model should recognize and apply automatically
   — that is a skill.
-- Do NOT use a command in Codex (deprecated) — use a skill with explicit invocation
+- Do NOT use a command in Codex — use a skill with explicit invocation
   guidance in its description.
 
 **Worked examples.**
@@ -468,24 +468,10 @@ at its canonical path and updates `.library.lock`. It does not write to
 `AGENTS.md`, `CLAUDE.md`, or any other harness context file. Standards reach the
 model only when a consuming primitive declares `requires_standards: [<name>]`.
 
-**Manual composition utility.** `scripts/agents-md-block.py` remains available for
-project owners who intentionally want to hand-compose a standard block into their
-own `AGENTS.md`. The Library installer, remover, and sync flow do not call it.
-
 **Update + remove.** `/library sync` refreshes the vendored standard files under
 `.agents/standards/<name>/` or `~/.agents/standards/<name>/` and updates the
 lockfile content hash. `/library standard remove <name>` deletes the installed
-files and lockfile entry only. Existing `<!-- BEGIN STANDARD:... -->` blocks in
-user-owned `AGENTS.md` files are left untouched.
-
-**Retired mechanisms (do not use):**
-- SessionStart trigger-matched content injection via `hooks/standards-loader/` — **deleted** (CL-c8g)
-- TaskCreated per-subagent injection via `hooks/inject-subagent-standards/` — **deleted** (CL-c8g)
-- `~/.claude/standards/<domain>/<name>.md` legacy path — **retired**, see `docs/research/standards-loading.md` (RETIRED notice)
-- `scripts/standards-loader.sh --generate-adapter` — retired with automatic standards adapters
-- `scripts/standards-loader.sh --load` — superseded by reading the cached file directly at `~/.agents/standards/<name>/` or `.agents/standards/<name>/`
-
-`scripts/standards-loader.sh` itself still ships **only** for the `--load-model-standard <name>` operation, used by `scripts/compose-agent.py` (golden-prompt Layer 3 resolution). Audit of remaining usage is tracked separately.
+files and lockfile entry only.
 
 **Standard file paths (cross-harness convention, CL-v56).**
 
@@ -493,8 +479,6 @@ user-owned `AGENTS.md` files are left untouched.
 |----------|------|-------|
 | 1 (wins) | `.agents/standards/<name>/<name>.md` | Project-local, folder-form |
 | 2 | `~/.agents/standards/<name>/<name>.md` | User-global, folder-form |
-| 3 (legacy) | `.agents/standards/<name>.md` (flat) | Older standards before folder-form |
-| 4 (legacy) | `~/.claude/standards/<domain>/<name>.md` | Claude Code fallback |
 
 **Standard file layout (single-file vs folder-form).**
 
@@ -606,7 +590,7 @@ Promotion mechanics:
 2. Register the entry in `library.yaml` under `library.standards:`
 3. Add `requires_standards: [<name>]` to every skill that needs it
 4. Remove the original `references/<file>.md` from the source skill
-5. Update intra-skill links to rely on `requires_standards` for injection
+5. Update intra-skill links to rely on `requires_standards` for loading
 
 Demotion is the inverse: fold the standard back into the one skill's `references/`,
 drop the catalog entry, remove `requires_standards:` declarations.
@@ -631,22 +615,6 @@ STD_PATH=".agents/standards/<name>/<name>.md"
 STANDARD=$(cat "$STD_PATH")
 ```
 
-The `scripts/standards-loader.sh --load` operation is retired (CL-c8g); content is
-the cached file's contents — no transformation needed.
-
-**Current examples (from `~/.claude/standards/index.yml` — legacy path).**
-
-| Standard | Domain |
-|----------|--------|
-| `python/style` | Python coding style rules |
-| `python/python314-patterns` | Python 3.14 pattern guidance |
-| `dev-tools/script-first-rule` | Maximize script logic, minimize model decisions |
-| `dev-tools/execution-result-envelope` | Structured tool result format |
-| `dev-tools/python-default-bash-exception` | Python exception handling in bash contexts |
-| `integrations/open-brain-http-client` | HTTP client patterns for open-brain |
-
-Migration target: move these to `.agents/standards/<name>.md` after CL-717 completes.
-
 **When to choose it.** Create a standard when:
 - A project has coding conventions, architectural decisions, or integration patterns
   that every agent working on the project must know.
@@ -670,15 +638,6 @@ and optional fields, maturity-arc test, promotion mechanics) live in the
 `standard-forge` skill itself — it is the operational source-of-truth for
 standard authoring. This document defines the primitive; `standard-forge`
 defines how to write one. Do NOT create parallel policy documents.
-
-> **Delivery clarification (Axis 1, 2026-05-14):** Earlier revisions of this
-> document described a "compose-on-install" mechanism that wrote
-> `<!-- BEGIN STANDARD:<name> -->` blocks into `AGENTS.md` at install time.
-> That mechanism is being retired. Standards are NEVER auto-injected. They
-> reach the model only when a consuming primitive declares
-> `requires_standards: [<name>]`. If a project owner wants a rule globally
-> on, they hand-paste it into their own `AGENTS.md` — the library does not
-> assume.
 
 ---
 
@@ -771,12 +730,8 @@ ID and adjusts the agent's behavior for that model's strengths and limitations.
 `~/.agents/model-standards/<model-name>.md` (user-global).
 Example: `.agents/model-standards/claude-sonnet-4-6.md`
 
-**Loading.** Model-standards use the SAME loader as project-standards — no parallel
-mechanism. `scripts/standards-loader.sh --load-model-standard <name>` resolves via the
-same project-local > user-global precedence rule and emits the file content to stdout.
-At install time, the Library composer calls this to inline the model-standard content
-into the effective agent system prompt. See `docs/research/standards-loading.md` for
-the full loader contract.
+**Loading.** Model-standards use project-local > user-global precedence and are
+inlined by the Library composer into the effective agent system prompt.
 
 **Path resolution (same precedence rules as Standards):**
 
@@ -945,9 +900,6 @@ Library treats managed skills as read-only and does not override them.
   primitive type definitions.
 - **Name Collision Policy**: `docs/policy/name-collision.md` (CL-b4o) — authoritative
   policy for collision handling, symlink lifecycle, and uninstall completeness.
-- **Standards Loading** (`docs/research/standards-loading.md`, CL-v56): Design and
-  prototype for cross-harness standards loading. Model-Standards reuse the same loader
-  mechanism (`scripts/standards-loader.sh --load-model-standard <name>`).
 - **Audit doc** (`docs/audit/skills-origin.md`, CL-23z): This doc's taxonomy is used to
   classify the intent of every existing artifact. CL-23z inventory uses PRIMITIVES.md
   definitions to classify all 44 agents in scope.

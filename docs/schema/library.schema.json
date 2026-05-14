@@ -921,6 +921,15 @@
           },
           "default": []
         },
+        "profiles": {
+          "description": "Optional project profiles this tooling entry applies to. Omit to apply to every profile.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["consumer", "marketplace"]
+          },
+          "default": ["consumer", "marketplace"]
+        },
         "sync_strategy": {
           "description": "How to apply the target when syncing. overwrite_if_source_newer: copy only when content differs. overwrite_always: always overwrite. append_if_missing: append content if not already present. replace_section: replace a marked section between begin/end markers. repair_fields: for json_field_enforce, apply ensure/remove field operations.",
           "type": "string",
@@ -958,7 +967,7 @@
           }
         },
         "fields": {
-          "description": "For json_field_enforce target_kind: declares fields to ensure/set and field names to remove.",
+          "description": "For json_field_enforce target_kind: declares fields to ensure/set and field names to remove. For gitignore_patch: declares exact lines to ensure or remove.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -968,6 +977,20 @@
             },
             "remove": {
               "description": "Field names that must be absent from the target JSON file.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "ensure_lines": {
+              "description": "Exact lines that must be present in a text target such as .gitignore.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remove_lines": {
+              "description": "Exact lines that must be absent from a text target such as .gitignore.",
               "type": "array",
               "items": {
                 "type": "string"

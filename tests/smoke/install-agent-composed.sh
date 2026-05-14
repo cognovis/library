@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-agent-composed.sh — Smoke test: compose-on-install end-to-end
+# install-agent-composed.sh — Smoke test: layered agent prompt composition end-to-end
 #
 # Bead: CL-08n
 #

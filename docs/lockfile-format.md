@@ -17,7 +17,7 @@
 
 - **Reproducibility**: any clone of the project can restore the exact set of installed
   items by running `/library sync` (which reads the lockfile, not the catalog).
-- **Drift detection**: `/library audit` compares the `checksum_sha256` stored at install
+- **Drift detection**: `/library audit` compares the `content_sha256`/`checksum_sha256` stored at install
   time against the current on-disk file to identify modifications made outside the Library.
 - **Audit trail**: every entry records the source URL, commit SHA, license, and install
   timestamp for security and compliance review.
@@ -74,14 +74,17 @@ installed:
     source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
     source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456ab12
     cache_path: /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456ab/
-    install_target: .claude/skills/dolt/
+    install_target: .agents/skills/dolt/
     install_timestamp: 2026-04-30T10:23:00Z
     checksum_sha256: 9483a0941234567890abcdef1234567890abcdef1234567890abcdef12345678
+    content_sha256: 9483a0941234567890abcdef1234567890abcdef1234567890abcdef12345678
+    install_mode: vendor
     license: MIT
-    bridge_symlinks: []
+    bridge_symlinks:
+      - .claude/skills/dolt -> .agents/skills/dolt
 ```
 
-### Dual-install example (skill installed for both Claude Code and Codex)
+### Symlink opt-in example (developer mode)
 
 ```yaml
 installed:
@@ -91,12 +94,14 @@ installed:
     source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
     source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456ab12
     cache_path: /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456ab/
-    install_target: .claude/skills/dolt/
+    install_target: .agents/skills/dolt/
     install_timestamp: 2026-04-30T10:23:00Z
     checksum_sha256: 9483a0941234567890abcdef1234567890abcdef1234567890abcdef12345678
+    content_sha256: 9483a0941234567890abcdef1234567890abcdef1234567890abcdef12345678
+    install_mode: symlink
     license: MIT
     bridge_symlinks:
-      - .agents/skills/dolt -> /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456ab/
+      - .claude/skills/dolt -> /Users/malte/.local/share/library/skills/cognovis-core/dolt@abc123def456ab/
 ```
 
 The `bridge_symlinks` list records every symlink created during a dual-install. See
@@ -109,12 +114,14 @@ Per ADR-0003, skill deployment passes through three layers:
 ```
 Layer A — Source:  https://github.com/cognovis/library-core/...  (canonical git repo)
 Layer B — Cache:   ~/.local/share/library/skills/<marketplace>/<name>@<commit>/
-Layer C — Harness: ~/.claude/skills/<name>/  or  .claude/skills/<name>/
+Layer C — Harness: ~/.agents/skills/<name>/  or  .agents/skills/<name>/
 ```
 
 The lockfile records Layer A (`source`, `source_commit`) and Layer B (`cache_path`).
 Layer C is recorded as `install_target`. The harness directory at Layer C is a
-**symlink** pointing into the Layer-B cache directory.
+**vendored copy** by default so consumer projects can commit real files. The
+Layer-B cache is a per-machine resolver source, not a runtime path. `--symlink`
+keeps Layer C as a symlink into the Layer-B cache for local development.
 
 **Global install example (ADR-0003):**
 
@@ -126,12 +133,14 @@ installed:
     source: https://github.com/cognovis/library-core/blob/9b1e72c98f3e21/.claude/skills/agent-forge/SKILL.md
     source_commit: 9b1e72c98f3e21abc00000000000000000000000000000000000000000000000
     cache_path: /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
-    install_target: /Users/malte/.claude/skills/agent-forge/
+    install_target: /Users/malte/.agents/skills/agent-forge/
     install_timestamp: 2026-05-12T07:30:00Z
     checksum_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
+    content_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
+    install_mode: vendor
     license: MIT
     bridge_symlinks:
-      - /Users/malte/.agents/skills/agent-forge -> /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
+      - /Users/malte/.claude/skills/agent-forge -> /Users/malte/.agents/skills/agent-forge/
 ```
 
 **Project-scoped install example (ADR-0003):**
@@ -144,12 +153,14 @@ installed:
     source: https://github.com/cognovis/library-core/blob/9b1e72c98f3e21/.claude/skills/agent-forge/SKILL.md
     source_commit: 9b1e72c98f3e21abc00000000000000000000000000000000000000000000000
     cache_path: /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
-    install_target: .claude/skills/agent-forge/
+    install_target: .agents/skills/agent-forge/
     install_timestamp: 2026-05-12T07:30:00Z
     checksum_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
+    content_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
+    install_mode: vendor
     license: MIT
     bridge_symlinks:
-      - .agents/skills/agent-forge -> /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
+      - .claude/skills/agent-forge -> .agents/skills/agent-forge/
 ```
 
 ---
@@ -166,8 +177,10 @@ installed:
 | `cache_path` | YES | string | Absolute Layer-B cache path (`~/.local/share/library/skills/<marketplace>/<name>@<first-14-hex-chars-of-source_commit>/`). Empty string `""` for migrated entries pending next sync. |
 | `install_target` | YES | string | Relative (project) or absolute (global) path of the install directory (trailing slash required). |
 | `install_timestamp` | YES | string | ISO 8601 UTC datetime of the install or last refresh. |
-| `checksum_sha256` | YES | string | SHA-256 hex digest (64 chars). For `checksum_type: file`, covers the primary artifact file. For `checksum_type: directory`, covers all files in the cache directory (Merkle-style). |
-| `checksum_type` | NO | string | `file` (default) or `directory`. Skills and standards use `directory`; agents and prompts use `file`. Legacy entries without this field are treated as unknown by `library audit`. |
+| `checksum_sha256` | YES | string | Backward-compatible SHA-256 hex digest (64 chars). New entries compute it from the local installed content. |
+| `checksum_type` | NO | string | `file` (default) or `directory`. Skills and standards use `directory`; agents and prompts use `file`. Entries without this field are treated as unknown by `library audit`. |
+| `content_sha256` | NO | string | Explicit SHA-256 of the local installed content at `install_target`. New vendor-mode entries set this and `checksum_sha256` to the same value. |
+| `install_mode` | NO | string | `vendor` (default, real copied files) or `symlink` (explicit opt-in pointing Layer C at Layer B). If omitted, `/library sync` writes `vendor` on the next refresh. |
 | `license` | NO | string | SPDX license identifier (e.g. `MIT`, `Apache-2.0`). Default: `unknown`. |
 | `bridge_symlinks` | NO | array | List of symlink strings created for dual-install. Format: `<link-path> -> <target-path>`. Default: `[]`. |
 
@@ -181,12 +194,12 @@ The `checksum_sha256` field and `checksum_type` field together specify how the d
 
 ### Directory hash (`checksum_type: directory`)
 
-Skills and standards use a Merkle-style directory hash over **all files** in the cache directory:
+Skills and standards use a Merkle-style directory hash over **all files** in the local installed directory:
 
 | Item type | Checksum scope |
 |-----------|----------------|
-| `skill` | All files in `<cache_path>/` (sorted, recursive) |
-| `standard` | All files in `<cache_path>/` (sorted, recursive) |
+| `skill` | All files in `<install_target>/` (sorted, recursive) |
+| `standard` | All files in `<install_target>/` (sorted, recursive) |
 
 The hash is computed by `scripts/lib/lockfile.py:compute_directory_hash()`:
 
@@ -194,7 +207,7 @@ The hash is computed by `scripts/lib/lockfile.py:compute_directory_hash()`:
 2. For each file, feed the relative path string + NUL separator + SHA-256 of the file contents + NUL separator into an outer SHA-256 digest.
 3. Return the final 64-character hex digest.
 
-This means any file edit, addition, or deletion inside the installed directory is detected as drift.
+This means any file edit, addition, or deletion inside the vendored project copy is detected as drift.
 
 ### File hash (`checksum_type: file`)
 
@@ -215,11 +228,11 @@ shasum -a 256 <primary_artifact_path> | awk '{print $1}'
 sha256sum <primary_artifact_path> | awk '{print $1}'
 ```
 
-### Legacy entries (no `checksum_type`)
+### Entries without `checksum_type`
 
-Entries written before `checksum_type` was introduced do not have this field. `/library audit`
+Entries without this field are not auditable with a known strategy. `/library audit`
 reports them as `unknown` — it does not report them as drifted. Run `/library <primitive> use <name>`
-to refresh the entry and write the correct `checksum_type`.
+to refresh the entry and write `checksum_type`.
 
 `/library audit` recomputes the checksum (using the strategy from `checksum_type`) and compares
 it to the stored value to detect drift. A mismatch means the installed files were modified after
@@ -236,7 +249,7 @@ After a successful install, write or update the entry:
 1. If an entry for `name` already exists (refresh): update all fields in place.
 2. If no entry exists: append a new entry.
 3. Write the updated `installed` list back to `.library.lock`.
-4. Compute checksum immediately after copying: use `directory` hash for skills/standards, `file` hash for agents/prompts. Write `checksum_type` accordingly.
+4. Compute checksum immediately after copying to `install_target`: use `directory` hash for skills/standards, `file` hash for agents/prompts. Write `checksum_type`, `content_sha256`, and `install_mode` accordingly.
 
 See `cookbook/use.md` Step 9 for the full procedure.
 
@@ -274,7 +287,7 @@ For each entry in `installed`:
 1. Inspect `checksum_type` to determine the audit strategy.
 2. For `directory` entries: recompute the Merkle-style directory hash over `cache_path`.
 3. For `file` entries: recompute the SHA-256 of the primary artifact.
-4. For legacy entries (no `checksum_type`): report `unknown` — do not report as drift.
+4. For entries without `checksum_type`: report `unknown` — do not report as drift.
 5. Compare against `checksum_sha256`. Report `clean`, `drift`, or `unknown` per entry.
 
 Use `--drift-only` to filter output to only drifted entries and exit with code 2.

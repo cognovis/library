@@ -530,14 +530,14 @@ class TestHookScript:
         assert result.returncode == 0, \
             f"Hook script failed: exit={result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}"
 
-    def test_hook_script_silent_when_clean(self):
+    def test_hook_script_silent_when_clean(self, project_dir):
         """AK7: hook script produces no output when project is clean."""
         hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
         result = subprocess.run(
             ["bash", str(hook)],
             capture_output=True,
             text=True,
-            cwd=str(REPO_ROOT),
+            cwd=str(project_dir),
         )
         # Clean project: no output expected
         assert result.stdout.strip() == "", \
