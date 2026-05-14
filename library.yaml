@@ -1668,6 +1668,18 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+    - name: judge-layer
+      description: >-
+        Judge-layer contracts for pre-action Action Proposals, four-outcome judge
+        decisions, provenance labels, mandate records, and judge eval suites.
+      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/judge-layer.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - judge-layer
     - name: execution-result-envelope
       description: >-
         Execution-Result Envelope Contract for agent-facing helper scripts in claude-code-plugins.
