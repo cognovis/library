@@ -1929,6 +1929,167 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+    - name: sql-safety
+      description: >-
+        SQL query construction rules for safe filtering, casting, aggregation, and
+        generated query maintenance.
+      source: https://github.com/cognovis/library-core/blob/main/standards/sql-safety/sql-safety.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/backend/sql-safety.md
+            primitive_type: other
+            notes: >-
+              Promoted from the primitive-placement C2 audit; Mira-specific SQL
+              examples, table names, cache choices, and runtime topology remain
+              in the Mira repo-local overlay.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - healthcare
+        - sql
+    - name: tdd-api-contracts
+      description: >-
+        API contract testing conventions for endpoint status, shape, fields,
+        errors, and environment-independent base URLs.
+      source: https://github.com/cognovis/library-core/blob/main/standards/tdd-api-contracts/tdd-api-contracts.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/backend/tdd-api-contracts.md
+            primitive_type: other
+            notes: >-
+              Promoted from the primitive-placement C2 audit; concrete ports,
+              route names, seed scripts, and server startup instructions remain
+              product-owned.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - api
+        - testing
+    - name: tenant-isolation
+      description: >-
+        Tenant-scoped data access rules for reads, writes, aggregates, and
+        ownership checks.
+      source: https://github.com/cognovis/library-core/blob/main/standards/tenant-isolation/tenant-isolation.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/backend/tenant-isolation.md
+            primitive_type: other
+            notes: >-
+              Promoted from the primitive-placement C2 audit; concrete tenant
+              names, organization IDs, schema details, and route examples remain
+              in product repositories.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - healthcare
+        - security
+    - name: ai-provenance
+      description: >-
+        Provenance metadata requirements for AI-generated and rules-generated
+        system outputs.
+      source: https://github.com/cognovis/library-core/blob/main/standards/ai-provenance/ai-provenance.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/billing/ai-provenance.md
+            primitive_type: other
+            notes: >-
+              Promoted from the primitive-placement C2 audit; concrete badge UI,
+              extension URLs, model providers, and review workflows remain
+              product-owned.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - healthcare
+        - ai
+    - name: fhir-sql-patterns
+      description: >-
+        SQL patterns for querying FHIR-shaped relational data without widening
+        joins or creating N+1 lookups.
+      source: https://github.com/cognovis/library-core/blob/main/standards/fhir-sql-patterns/fhir-sql-patterns.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/backend/fhir-sql-patterns.md
+            primitive_type: other
+            notes: >-
+              Promoted from the primitive-placement C2 audit; Aidbox table names,
+              Mira billing joins, schemas, and local ViewDefinitions stay in
+              product repositories or skill references.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - fhir
+        - sql
+    - name: fhir-query-naming
+      description: >-
+        Naming conventions for query helpers that return FHIR resource types and
+        resource-scoped properties.
+      source: https://github.com/cognovis/library-core/blob/main/standards/fhir-query-naming/fhir-query-naming.md
+      tier: domain
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: mira
+            path: .claude/standards/backend/fhir-query-naming.md
+            primitive_type: other
+            notes: >-
+              Promoted from the primitive-placement C2 audit; concrete helper
+              names, billing identifiers, and migration history remain in the
+              Mira repo-local overlay.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - fhir
     - name: no-emoji
       description: >-
         Do not add emojis to source code files, configuration files, or technical documentation.
