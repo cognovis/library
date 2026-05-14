@@ -1768,15 +1768,28 @@ guardrails:
 
   - name: open-brain-hooks
     description: >-
-      Open-brain memory-capture hooks: SessionStart context injection,
-      Stop/SubagentStop turn logging, SessionEnd summary, periodic memory sync.
+      Open-brain memory hooks. Claude Code installs the full Claude manifest
+      with SessionStart context injection, SessionEnd summaries, and Claude
+      turn logging. Codex installs the Codex-native manifest with SessionStart
+      additionalContext and a Codex transcript summary Stop hook.
       Replaces the Claude-Code-plugin distribution of open-brain hooks per ADR-0004
       (the plugin manifest was removed; hooks now install via /library use).
     kind: hooks-manifest
     source: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
+    sources:
+      claude_code: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
+      codex_cli: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.codex.json
     requires:
       - "mcp:open-brain"
-    harness: claude
+    harness: both
+    capability:
+      claude_code:
+        events: [SessionStart, SessionEnd, Stop, SubagentStop]
+      codex_cli:
+        events: [SessionStart, Stop]
+        note: >-
+          Codex SessionStart context must use hookSpecificOutput.additionalContext.
+          Codex has no SessionEnd event, so transcript summaries run from Stop.
     tags:
       - origin:personal
       - workflow:memory

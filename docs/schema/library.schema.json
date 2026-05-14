@@ -741,7 +741,7 @@
           "minLength": 1
         },
         "kind": {
-          "description": "Installation shape per ADR-0004 Phase 2. 'single-hook' (default) is one script bound to one event/harness (sources field used). 'hooks-manifest' is a multi-event manifest file (source field used) \u2014 install logic merges all declared hooks into harness config.",
+          "description": "Installation shape per ADR-0004 Phase 2. 'single-hook' (default) is one script bound to one event/harness (sources field used). 'hooks-manifest' is a multi-event manifest file (source field used, or sources.<harness> for per-harness manifests) \u2014 install logic merges all declared hooks into harness config.",
           "type": "string",
           "enum": [
             "single-hook",
@@ -750,7 +750,7 @@
           "default": "single-hook"
         },
         "source": {
-          "description": "URL of the manifest file (required when kind=hooks-manifest). For single-hook entries use the 'sources' map instead. Typically a hooks.json from a marketplace repo.",
+          "description": "URL of the manifest file (required when kind=hooks-manifest unless sources.<harness> is provided). For single-hook entries use the 'sources' map instead. Typically a hooks.json from a marketplace repo.",
           "type": "string",
           "format": "uri"
         },
@@ -788,7 +788,7 @@
               "additionalProperties": true
             },
             "codex_cli": {
-              "description": "Capability declaration for Codex CLI (hooks.json, Node .mjs). Supports 3 events: SessionStart, SessionEnd, Stop.",
+              "description": "Capability declaration for Codex CLI hooks.json.",
               "type": "object",
               "additionalProperties": true
             },
@@ -810,16 +810,16 @@
           }
         },
         "sources": {
-          "description": "Per-harness source file paths (relative to repo root). Points to the handler file that implements the guardrail for each harness.",
+          "description": "Per-harness sources. For single-hook entries these are source file paths relative to repo root. For hooks-manifest entries these may be manifest URLs per harness.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
             "claude_code": {
-              "description": "Path to the Claude Code hook script (bash/python).",
+              "description": "Path to the Claude Code hook script (bash/python), or manifest URL for kind=hooks-manifest.",
               "type": "string"
             },
             "codex_cli": {
-              "description": "Path to the Codex CLI hook script (Node .mjs).",
+              "description": "Path to the Codex CLI hook script, or manifest URL for kind=hooks-manifest.",
               "type": "string"
             },
             "codex_cloud": {

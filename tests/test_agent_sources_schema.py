@@ -18,7 +18,7 @@ Tests:
     9. install-hook.py accepts --harness flag
     10. install-hook.py --harness codex dry-run shows SessionStart event
   AK5:
-    11. mismatch_warning emitted for SubagentStop event with --harness codex
+    11. Codex uses its per-harness OpenBrain manifest without Claude-only events
 
 Run with:
     python3 -m pytest tests/test_agent_sources_schema.py -v
@@ -75,6 +75,65 @@ def minimal_library_with_agents(agents: list) -> dict:
             "prompts": [],
         },
     }
+
+
+def seed_open_brain_hooks_checkout(xdg_data_home: Path) -> None:
+    """Create a minimal cached OpenBrain checkout for install-hook dry-runs."""
+    hooks_dir = xdg_data_home / "library" / "guardrails" / "open-brain-hooks" / "checkout" / "hooks"
+    hooks_dir.mkdir(parents=True)
+    (hooks_dir / "hooks.json").write_text(json.dumps({
+        "description": "claude manifest",
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/context_inject.py",
+                        }
+                    ]
+                }
+            ],
+            "SubagentStop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/worktree_turn_log.py",
+                        }
+                    ]
+                }
+            ],
+        },
+    }))
+    (hooks_dir / "hooks.codex.json").write_text(json.dumps({
+        "description": "codex manifest",
+        "hooks": {
+            "SessionStart": [
+                {
+                    "matcher": "startup|clear|compact",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 ${OPEN_BRAIN_PLUGIN_ROOT}/hooks/scripts/context_inject.py --harness codex",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 ${OPEN_BRAIN_PLUGIN_ROOT}/hooks/scripts/codex_session_summary.py",
+                            "timeout": 15,
+                        }
+                    ]
+                }
+            ],
+        },
+    }))
 
 
 def assert_valid(data: dict, schema: dict, label: str) -> None:
@@ -255,8 +314,14 @@ def test_install_hook_accepts_harness_flag():
 def test_install_hook_codex_dry_run_shows_sessionstart():
     """install-hook.py --harness codex --dry-run exits 0 and shows SessionStart in output."""
     with tempfile.TemporaryDirectory() as tmp:
+        xdg_data_home = Path(tmp) / "xdg"
+        seed_open_brain_hooks_checkout(xdg_data_home)
         fake_codex_hooks = Path(tmp) / "codex-hooks.json"
-        env = {**os.environ, "CODEX_HOOKS_FILE": str(fake_codex_hooks)}
+        env = {
+            **os.environ,
+            "CODEX_HOOKS_FILE": str(fake_codex_hooks),
+            "XDG_DATA_HOME": str(xdg_data_home),
+        }
 
         result = subprocess.run(
             [
@@ -276,6 +341,8 @@ def test_install_hook_codex_dry_run_shows_sessionstart():
         assert "SessionStart" in combined, (
             f"Expected SessionStart in codex dry-run output. Got:\n{combined}"
         )
+        assert "codex_session_summary.py" in combined, combined
+        assert "${OPEN_BRAIN_PLUGIN_ROOT}" not in combined, combined
     print("PASS test_install_hook_codex_dry_run_shows_sessionstart")
 
 
@@ -314,15 +381,21 @@ def test_install_hook_codex_single_hook_uses_current_schema():
 
 
 # ---------------------------------------------------------------------------
-# AK5: mismatch_warning for unsupported Codex events
+# AK5: Codex-specific OpenBrain manifest
 # ---------------------------------------------------------------------------
 
 
-def test_mismatch_warning_for_subagent_stop():
-    """open-brain-hooks has SubagentStop -- must emit mismatch_warning with --harness codex."""
+def test_open_brain_codex_manifest_avoids_claude_only_events():
+    """open-brain-hooks uses hooks.codex.json for Codex without Claude-only events."""
     with tempfile.TemporaryDirectory() as tmp:
+        xdg_data_home = Path(tmp) / "xdg"
+        seed_open_brain_hooks_checkout(xdg_data_home)
         fake_codex_hooks = Path(tmp) / "codex-hooks.json"
-        env = {**os.environ, "CODEX_HOOKS_FILE": str(fake_codex_hooks)}
+        env = {
+            **os.environ,
+            "CODEX_HOOKS_FILE": str(fake_codex_hooks),
+            "XDG_DATA_HOME": str(xdg_data_home),
+        }
 
         result = subprocess.run(
             [
@@ -336,12 +409,12 @@ def test_mismatch_warning_for_subagent_stop():
             env=env,
         )
         combined = result.stdout + result.stderr
-        # SubagentStop is unsupported in Codex and should not be written to hooks.json.
-        # The script must emit a mismatch_warning for it
-        assert "SubagentStop" in combined or "mismatch" in combined.lower(), (
-            f"Expected SubagentStop mismatch warning in output. Got:\n{combined}"
-        )
-    print("PASS test_mismatch_warning_for_subagent_stop")
+        assert result.returncode == 0, combined
+        assert "SessionStart" in combined, combined
+        assert "Stop" in combined, combined
+        assert "SubagentStop" not in combined, combined
+        assert "mismatch_warning" not in combined, combined
+    print("PASS test_open_brain_codex_manifest_avoids_claude_only_events")
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +436,7 @@ if __name__ == "__main__":
         test_install_hook_accepts_harness_flag,
         test_install_hook_codex_dry_run_shows_sessionstart,
         test_install_hook_codex_single_hook_uses_current_schema,
-        test_mismatch_warning_for_subagent_stop,
+        test_open_brain_codex_manifest_avoids_claude_only_events,
     ]
 
     passed = 0

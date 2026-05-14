@@ -2,9 +2,10 @@
 """install-hook.py -- Install a `hooks-manifest`-kind guardrail per ADR-0004 Phase 2.
 
 Reads a guardrail entry from library.yaml whose `kind` is `hooks-manifest`,
-fetches the referenced hooks.json from its remote `source:`, caches the
+fetches the referenced hooks.json from its remote `source:` or per-harness
+`sources:` map, caches the
 source repo at ~/.local/share/library/guardrails/<name>/checkout/,
-resolves ${CLAUDE_PLUGIN_ROOT} to that cache, and merges every declared
+resolves ${CLAUDE_PLUGIN_ROOT}/${OPEN_BRAIN_PLUGIN_ROOT} to that cache, and merges every declared
 hook into the target harness config (idempotent, deep-merge by command).
 
 Supported harnesses:
@@ -139,9 +140,9 @@ def resolve_plugin_root(checkout: Path) -> str:
 
 
 def rewrite_commands(manifest: dict, plugin_root: str) -> dict:
-    """Replace ${CLAUDE_PLUGIN_ROOT} with absolute path."""
+    """Replace known hook root placeholders with an absolute checkout path."""
     out = json.loads(json.dumps(manifest))  # deep copy
-    pattern = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}")
+    pattern = re.compile(r"\$\{(?:CLAUDE_PLUGIN_ROOT|OPEN_BRAIN_PLUGIN_ROOT)\}")
     for event_entries in out.get("hooks", {}).values():
         for group in event_entries:
             for hook in group.get("hooks", []):
@@ -231,6 +232,11 @@ def remove_hooks(settings: dict, guardrail_name: str) -> dict:
 HARNESS_SETTINGS = {
     "claude_code": CLAUDE_SETTINGS,
     "codex_cli": CODEX_HOOKS_FILE,
+}
+
+HARNESS_SOURCE_KEYS = {
+    "claude": "claude_code",
+    "codex": "codex_cli",
 }
 
 
@@ -502,6 +508,43 @@ def remove_codex_hooks(codex_config: dict, guardrail_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _manifest_source_for_harness(entry: dict, harness: str) -> str:
+    """Return the hooks-manifest source URL for a target harness."""
+    harness_key = HARNESS_SOURCE_KEYS[harness]
+    sources = entry.get("sources") or {}
+    source = sources.get(harness_key) or entry.get("source")
+    if not source:
+        sys.exit(
+            f"guardrail entry missing source URL for harness={harness!r} "
+            f"(expected source: or sources.{harness_key})"
+        )
+    return source
+
+
+def _load_resolved_manifest_for_harness(
+    args: argparse.Namespace,
+    entry: dict,
+    harness: str,
+) -> tuple[Path, dict, dict] | None:
+    """Load and resolve a hooks manifest for one target harness."""
+    source = _manifest_source_for_harness(entry, harness)
+    org, repo, ref, path_in_repo = parse_github_source(source)
+    checkout = GUARDRAILS_HOME / args.name / "checkout"
+
+    print(f"[{harness}] Cache: {checkout}")
+    if not args.dry_run:
+        ensure_checkout(org, repo, ref, checkout)
+
+    if not checkout.exists():
+        print(f"[{harness}] (dry-run) would clone {checkout}")
+        return None
+
+    manifest = load_manifest(checkout, path_in_repo)
+    plugin_root = resolve_plugin_root(checkout)
+    resolved = rewrite_commands(manifest, plugin_root)
+    return checkout, manifest, resolved
+
+
 def install_claude_harness(
     args: argparse.Namespace,
     entry: dict,
@@ -616,33 +659,27 @@ def main() -> int:
     if kind != "hooks-manifest":
         sys.exit(f"{args.name!r} has unsupported kind={kind!r}")
 
-    source = entry.get("source")
-    if not source:
-        sys.exit("guardrail entry missing source: URL")
-
-    org, repo, ref, path_in_repo = parse_github_source(source)
-    checkout = GUARDRAILS_HOME / args.name / "checkout"
-
-    print(f"Cache: {checkout}")
-    if not args.dry_run:
-        ensure_checkout(org, repo, ref, checkout)
-
-    if not checkout.exists():
-        print("(dry-run) would clone " + str(checkout))
-        return 0
-
-    manifest = load_manifest(checkout, path_in_repo)
-    plugin_root = resolve_plugin_root(checkout)
-    resolved = rewrite_commands(manifest, plugin_root)
-
     harness = args.harness
     exit_code = 0
 
+    if args.remove:
+        if harness in ("claude", "all"):
+            exit_code |= install_claude_harness(args, entry, Path(), {}, {})
+        if harness in ("codex", "all"):
+            exit_code |= install_codex_harness(args, entry, Path(), {}, {})
+        return exit_code
+
     if harness in ("claude", "all"):
-        exit_code |= install_claude_harness(args, entry, checkout, manifest, resolved)
+        loaded = _load_resolved_manifest_for_harness(args, entry, "claude")
+        if loaded is not None:
+            checkout, manifest, resolved = loaded
+            exit_code |= install_claude_harness(args, entry, checkout, manifest, resolved)
 
     if harness in ("codex", "all"):
-        exit_code |= install_codex_harness(args, entry, checkout, manifest, resolved)
+        loaded = _load_resolved_manifest_for_harness(args, entry, "codex")
+        if loaded is not None:
+            checkout, manifest, resolved = loaded
+            exit_code |= install_codex_harness(args, entry, checkout, manifest, resolved)
 
     return exit_code
 

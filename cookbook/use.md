@@ -78,11 +78,11 @@ If the entry comes from `guardrails:` AND has `kind: hooks-manifest`:
    ```bash
    python3 <LIBRARY_SKILL_DIR>/scripts/install-hook.py <entry-name>
    ```
-   The installer handles fetch + cache + settings.json merge atomically
-   and is idempotent.
-3. Confirm the user: "<n> hook(s) across <m> event(s) installed to
-   `~/.claude/settings.json`. Use `python3 .../scripts/install-hook.py
-   <entry-name> --remove` to uninstall."
+   The installer handles fetch + cache + harness config merge atomically
+   and is idempotent. For entries with per-harness `sources:`, it selects
+   the manifest for the requested harness.
+3. Confirm the user: "<n> hook(s) across <m> event(s) installed. Use
+   `python3 .../scripts/install-hook.py <entry-name> --remove` to uninstall."
 4. Skip directly to Step 9 (Confirm).
 
 **(ii) MCP servers** (`mcp_servers:` section, per CL-l0c Deliverable D):

@@ -38,7 +38,7 @@ Legend:
 | Harness | Mechanism | Config file | Handler format | Native events |
 |---------|-----------|-------------|----------------|---------------|
 | **Claude Code** | hooks | `settings.json` (project or global) | Any executable (bash, python, etc.) | 15 events — see below |
-| **Codex CLI** | hooks (limited) | `hooks.json` | Node ESM `.mjs` | 3 events only: SessionStart, SessionEnd, Stop |
+| **Codex CLI** | hooks (limited) | `hooks.json` | command hook | PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop |
 | **Codex Cloud** | `sandbox_mode` + `approval_policy` | `config.toml` | static TOML policy | Pre-tool only via approval gate (always/unless-allow-listed) |
 | **Pi** | TypeScript Extensions | `.pi/extensions/*.ts` | TypeScript code | Tool-call events; `pi.on("event", handler)` |
 | **OpenCode** | permission rules | `opencode.json` | JSON rules array | Pre-tool-call gates only |

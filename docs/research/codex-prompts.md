@@ -64,7 +64,7 @@ default_dirs:
 | Tool | Hook events supported | Configuration |
 |------|----------------------|---------------|
 | **Claude Code** | 13 events: `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `Notification`, `SubagentStart`, `SubagentStop`, `Stop`, `PreCompact`, `Setup` | `.claude/settings.json` + `.claude/hooks/*` |
-| **Codex CLI** | **3 events only**: `SessionStart`, `SessionEnd`, `Stop` | `hooks.json` in plugin or Codex config; matcher field supported |
+| **Codex CLI** | `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SessionStart`, `UserPromptSubmit`, `Stop` | `hooks.json` in plugin or Codex config; matcher field supported |
 
 **Implication:** Codex is a **second-class citizen for observability**. Hook-based observability (indydevdan pattern) captures ~4x more events in Claude Code. Cross-tool observability dashboards would show asymmetric coverage.
 
