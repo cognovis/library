@@ -34,8 +34,8 @@ class ParsedSource:
     branch: Optional[str] = None
     file_path: Optional[str] = None  # path within repo
     clone_url: Optional[str] = None
-    path_type: Optional[str] = None
-    """GitHub browser path hint: 'file' for blob URLs, 'directory' for tree URLs."""
+    path_type: str = "unknown"
+    """Source path hint: 'file', 'directory', or 'unknown'."""
 
     # Local-specific fields
     local_path: Optional[Path] = None
@@ -70,7 +70,18 @@ def parse_source(source: str) -> ParsedSource:
     # Local path
     if source.startswith("/") or source.startswith("~"):
         local = Path(source).expanduser()
-        return ParsedSource(kind="local", raw=source, local_path=local)
+        if local.is_dir():
+            path_type = "directory"
+        elif local.is_file():
+            path_type = "file"
+        else:
+            path_type = "unknown"
+        return ParsedSource(
+            kind="local",
+            raw=source,
+            local_path=local,
+            path_type=path_type,
+        )
 
     # GitHub browser URL
     m = re.match(
@@ -79,6 +90,7 @@ def parse_source(source: str) -> ParsedSource:
     )
     if m:
         org, repo, browser_kind, branch, file_path = m.groups()
+        file_path = file_path.rstrip("/")
         return ParsedSource(
             kind="github_browser",
             raw=source,
@@ -97,6 +109,7 @@ def parse_source(source: str) -> ParsedSource:
     )
     if m:
         org, repo, branch, file_path = m.groups()
+        file_path = file_path.rstrip("/")
         return ParsedSource(
             kind="github_raw",
             raw=source,

@@ -387,6 +387,22 @@ class TestStandardRealInstall:
 class TestStandardTreeSource:
     """GitHub tree URL standards should install as directory bundles."""
 
+    @staticmethod
+    def _patch_git_clone(
+        monkeypatch: pytest.MonkeyPatch, standard_mod, fake_repo: Path
+    ) -> None:
+        """Patch standard installer git commands to clone from a local fixture."""
+        def fake_run(cmd, capture_output=False, text=False, cwd=None):
+            if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
+                target = Path(cmd[-1])
+                shutil.copytree(fake_repo, target, dirs_exist_ok=True)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            if cmd == ["git", "rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
+            raise AssertionError(f"Unexpected command: {cmd}")
+
+        monkeypatch.setattr(standard_mod.subprocess, "run", fake_run)
+
     def test_source_parse_github_tree_has_directory_hint(self):
         """GitHub tree URL parses as a browser source with directory path type."""
         sys.path.insert(0, str(SCRIPTS_DIR))
@@ -402,6 +418,26 @@ class TestStandardTreeSource:
         assert parsed.path_type == "directory"
         assert parsed.clone_url == "https://github.com/cognovis/library-core.git"
 
+    def test_source_parse_github_tree_trailing_slash_normalizes_path(self):
+        """GitHub tree URL with a trailing slash parses to the directory path."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.source import parse_source
+
+        url = "https://github.com/cognovis/library-core/tree/main/standards/python/"
+        parsed = parse_source(url)
+        assert parsed.kind == "github_browser"
+        assert parsed.file_path == "standards/python"
+        assert parsed.path_type == "directory"
+
+    def test_source_parse_unknown_has_explicit_path_type(self):
+        """Unrecognized source strings should expose path_type='unknown', not None."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.source import parse_source
+
+        parsed = parse_source("not-a-url")
+        assert parsed.kind == "unknown"
+        assert parsed.path_type == "unknown"
+
     def test_standard_tree_source_installs_directory_bundle(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
@@ -415,16 +451,7 @@ class TestStandardTreeSource:
         (bundle / "bundle-standard.md").write_text("# Bundle Standard\n")
         (bundle / "detail.md").write_text("# Detail\n")
 
-        def fake_run(cmd, capture_output=False, text=False, cwd=None):
-            if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
-                target = Path(cmd[-1])
-                shutil.copytree(fake_repo, target, dirs_exist_ok=True)
-                return subprocess.CompletedProcess(cmd, 0, "", "")
-            if cmd == ["git", "rev-parse", "HEAD"]:
-                return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
-            raise AssertionError(f"Unexpected command: {cmd}")
-
-        monkeypatch.setattr(standard_mod.subprocess, "run", fake_run)
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
         monkeypatch.setattr(
             standard_mod,
             "compute_cache_path",
@@ -442,7 +469,7 @@ class TestStandardTreeSource:
                     {
                         "name": "bundle-standard",
                         "description": "Directory-backed standard fixture.",
-                        "source": "https://github.com/example/repo/tree/main/standards/bundle-standard",
+                        "source": "https://github.com/example/repo/tree/main/standards/bundle-standard/",
                     }
                 ]
             },
@@ -455,6 +482,63 @@ class TestStandardTreeSource:
         canonical = project / ".agents" / "standards" / "bundle-standard"
         assert (canonical / "bundle-standard.md").exists()
         assert (canonical / "detail.md").exists()
+
+    def test_fetch_standard_source_missing_path_raises_install_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Missing GitHub source path should fail instead of installing repo root."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.errors import InstallError
+        from lib.installers import standard as standard_mod
+        from lib.source import parse_source
+
+        fake_repo = tmp_path / "fake-repo"
+        fake_repo.mkdir()
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+
+        parsed = parse_source("https://github.com/example/repo/tree/main/standards/missing")
+        with pytest.raises(InstallError, match="does not exist"):
+            standard_mod._fetch_standard_source(parsed, "missing")
+
+    def test_fetch_standard_source_blob_directory_raises_install_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Blob URLs must point at files, not standard bundle directories."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.errors import InstallError
+        from lib.installers import standard as standard_mod
+        from lib.source import parse_source
+
+        fake_repo = tmp_path / "fake-repo"
+        (fake_repo / "standards" / "bundle-standard").mkdir(parents=True)
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+
+        parsed = parse_source(
+            "https://github.com/example/repo/blob/main/standards/bundle-standard"
+        )
+        with pytest.raises(InstallError, match="not a file"):
+            standard_mod._fetch_standard_source(parsed, "bundle-standard")
+
+    def test_fetch_standard_source_tree_file_raises_install_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Tree URLs must point at directories, not individual files."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.errors import InstallError
+        from lib.installers import standard as standard_mod
+        from lib.source import parse_source
+
+        fake_repo = tmp_path / "fake-repo"
+        source_file = fake_repo / "standards" / "single-standard.md"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text("# Single Standard\n")
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+
+        parsed = parse_source(
+            "https://github.com/example/repo/tree/main/standards/single-standard.md"
+        )
+        with pytest.raises(InstallError, match="not a directory"):
+            standard_mod._fetch_standard_source(parsed, "single-standard")
 
 
 class TestSimpleFileDirectoryEntrypoint:
@@ -1030,6 +1114,7 @@ class TestPrimitiveMapping:
         parsed = parse_source("/tmp/skills/my-skill/SKILL.md")
         assert parsed.kind == "local"
         assert parsed.local_path == Path("/tmp/skills/my-skill/SKILL.md")
+        assert parsed.path_type == "unknown"
 
     def test_source_parse_github_browser(self):
         """GitHub browser URL parses correctly."""
@@ -1057,6 +1142,7 @@ class TestPrimitiveMapping:
         assert parsed.repo == "library-core"
         assert parsed.branch == "main"
         assert parsed.file_path == "skills/dolt/SKILL.md"
+        assert parsed.path_type == "file"
 
     def test_cache_path_computation(self):
         """Cache path must follow the documented format."""

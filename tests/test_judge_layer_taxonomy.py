@@ -68,18 +68,38 @@ def test_search_judge_layer_returns_valid_json():
     assert isinstance(json.loads(result.stdout), list)
 
 
-def test_primitives_documents_judge_layer_contracts():
-    """Primitive reference docs must document the judge-layer vocabulary."""
-    text = _doc_text(
-        "docs/primitives/agent.md",
-        "docs/primitives/skill.md",
-        "docs/primitives/standard.md",
-    )
+def test_agent_primitive_documents_judge_specialization_contracts():
+    """Agent docs must own the judge specialization and C7 vocabulary."""
+    text = _doc_text("docs/primitives/agent.md")
 
     for expected in (
         "#### Judge Specialization",
         "C7: pre-action gate",
+        "Action Proposal Schema standards, Mandate standards, and forge updates.",
+    ):
+        assert expected in text
+
+
+def test_skill_primitive_documents_action_boundary_frontmatter():
+    """Skill docs must own SKILL.md action_boundary frontmatter guidance."""
+    text = _doc_text("docs/primitives/skill.md")
+
+    for expected in (
         "`action_boundary` frontmatter",
+        "risk_class: external-side-effect",
+        "effect_type: financial",
+        "proposal_schema: standard://judge-layer/proposals/action-proposal.v1",
+        "judge: agent://judge-default",
+    ):
+        assert expected in text
+
+
+def test_standard_primitive_documents_judge_layer_standard_subtypes():
+    """Standard docs must own Action Proposal Schema and Mandate subtype guidance."""
+    text = _doc_text("docs/primitives/standard.md")
+
+    for expected in (
+        "Judge-layer standard subtypes",
         "Action Proposal Schema",
         "Mandate",
     ):
@@ -117,30 +137,39 @@ def test_persona_alone_is_not_agent_justification():
 
 def test_action_boundary_uses_risk_class_effect_type_and_uri_refs():
     """action_boundary examples must use the stable downstream contract shape."""
-    text = _doc_text("docs/primitives/agent.md", "docs/primitives/skill.md")
+    skill_text = _doc_text("docs/primitives/skill.md")
+    agent_text = _doc_text("docs/primitives/agent.md")
 
     for expected in (
         "risk_class: external-side-effect",
         "effect_type: financial",
         "proposal_schema: standard://judge-layer/proposals/action-proposal.v1",
         "judge: agent://judge-default",
+    ):
+        assert expected in skill_text
+
+    for expected in (
         'risk_class = "external-side-effect"',
         'effect_type = "financial"',
         'proposal_schema = "standard://judge-layer/proposals/action-proposal.v1"',
         'judge = "agent://judge-default"',
     ):
-        assert expected in text
+        assert expected in agent_text
 
     for forbidden in (
         "class: external-system",
         "class: financial",
         "proposal_schema: action-proposal.v1",
         "judge: default-judge",
+    ):
+        assert forbidden not in skill_text
+
+    for forbidden in (
         'class = "financial"',
         'proposal_schema = "action-proposal.v1"',
         'judge = "default-judge"',
     ):
-        assert forbidden not in text
+        assert forbidden not in agent_text
 
 
 def test_portability_matrix_includes_action_boundary_row():
