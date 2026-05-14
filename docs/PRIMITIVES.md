@@ -615,6 +615,8 @@ through a consuming skill or agent, not by automatic project-wide injection.
 at its canonical path and updates `.library.lock`. It does not write to
 `AGENTS.md`, `CLAUDE.md`, or any other harness context file. Standards reach the
 model only when a consuming primitive declares `requires_standards: [<name>]`.
+Folder-form standards do not use `_triggers.yml`; catalog registration plus
+`requires_standards` is the delivery contract.
 
 **Update + remove.** `/library sync` refreshes the vendored standard files under
 `.agents/standards/<name>/` or `~/.agents/standards/<name>/` and updates the
@@ -671,6 +673,11 @@ description: All source code is English; user-facing strings may be localized.
 Loader and validator accept either field as the standard's identifier. In
 `library.yaml` the catalog entry still uses `name:` — that is catalog-internal and
 not user-facing.
+
+Minimum v2 frontmatter is exactly one identifier field (`domain:` or `rule:`)
+plus `description:`. `maturity:` is optional metadata, not a required field. The
+"maturity arc" is the lifecycle between skill-internal reference and catalog
+standard; it is not a mandate to add a `maturity:` key to every standard.
 
 The folder name matches the identifier value: `domain: python-cli-patterns` →
 `standards/python-cli-patterns/python-cli-patterns.md`.
