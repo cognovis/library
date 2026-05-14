@@ -106,6 +106,21 @@ consumers that previously expected `metadata` to be a strict string-to-string ma
 should ignore nested `metadata.library.*` keys or validate only the top-level
 string fields they consume.
 
+### Plane And Projection Vocabulary
+
+ADR-0005 (`docs/adr/library-plane-vocabulary.md`) defines the placement
+vocabulary used by catalog schema and Gas City export work:
+
+- `library/meta` is the dev-plane installer, catalog, and compiler engine.
+- Marketplaces are stewarded primitive sources such as `cognovis-core` and
+  `sussdorff-core`.
+- Repo-local primitives are vendored or local overlays.
+- Product-plane runtime agents are product features, not Library catalog
+  primitives.
+- Gas City PackV2 is a runtime projection target, not a Library install bundle.
+- Catalog metadata (`metadata.library.*`) is separate from primitive source files.
+- `script` is a first-class Python-only primitive for deterministic helpers.
+
 ---
 
 ## Primitive Categories
@@ -870,11 +885,14 @@ another primitive or runtime calls it explicitly. Examples:
   output_contract: json-envelope
   metadata:
     library:
+      plane: dev
       gascity:
         exportable: true
-        target: script
-        pack: cognovis-specs
-        scope: rig
+        projections:
+          - target: script
+            pack: cognovis-specs
+            scope: rig
+            target_path: assets/scripts/validate-spec.py
 ```
 
 Skills, agents, standards, hooks, and prompts can also declare bundled scripts in

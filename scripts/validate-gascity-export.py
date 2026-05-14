@@ -46,6 +46,13 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", help="Emit JSON envelope")
     parser.add_argument("--quiet", action="store_true", help="Only print PASS/FAIL")
+    parser.add_argument(
+        "--pack",
+        help=(
+            "Strictly validate entries that target this Gas City pack, even when "
+            "metadata.library.gascity.exportable is not true"
+        ),
+    )
     args = parser.parse_args()
 
     yaml_path = Path(args.yaml)
@@ -56,12 +63,12 @@ def main() -> int:
     except yaml.YAMLError as exc:
         return _finish(args, "error", [f"Invalid YAML in {yaml_path}: {exc}"])
 
-    errors = validate_catalog(data)
+    errors = validate_catalog(data, target_pack=args.pack)
     status = "ok" if not errors else "error"
     return _finish(args, status, errors)
 
 
-def validate_catalog(data: dict[str, Any]) -> list[str]:
+def validate_catalog(data: dict[str, Any], target_pack: str | None = None) -> list[str]:
     errors: list[str] = []
     standards = {
         entry.get("name")
@@ -72,12 +79,28 @@ def validate_catalog(data: dict[str, Any]) -> list[str]:
     for section, entry in _iter_entries(data):
         name = entry.get("name", "<unnamed>")
         location = f"{section}:{name}"
+        library_meta = (entry.get("metadata") or {}).get("library") or {}
+        plane = library_meta.get("plane", "dev")
+        if plane != "dev":
+            errors.append(
+                f"{location} metadata.library.plane must be 'dev'; "
+                "product-plane artifacts belong in metadata.library.product_counterpart"
+            )
+
         gascity = (
-            ((entry.get("metadata") or {}).get("library") or {}).get("gascity")
-            or {}
+            library_meta.get("gascity") or {}
         )
         if gascity.get("exportable") is True:
-            _validate_exportable(location, section, gascity, standards, errors)
+            _validate_gascity(location, section, gascity, standards, errors)
+        elif target_pack and _gascity_targets_pack(gascity, target_pack):
+            _validate_gascity(
+                location,
+                section,
+                gascity,
+                standards,
+                errors,
+                target_pack=target_pack,
+            )
 
         for script in entry.get("scripts") or []:
             _validate_script_asset(location, script, errors)
@@ -115,19 +138,67 @@ def _iter_entries(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     return entries
 
 
-def _validate_exportable(
+def _gascity_targets_pack(gascity: dict[str, Any], target_pack: str) -> bool:
+    if not gascity:
+        return False
+    if gascity.get("pack") == target_pack:
+        return True
+    for projection in gascity.get("projections") or []:
+        if isinstance(projection, dict) and projection.get("pack") == target_pack:
+            return True
+    return False
+
+
+def _validate_gascity(
     location: str,
     section: str,
     gascity: dict[str, Any],
     standards: set[str],
     errors: list[str],
+    target_pack: str | None = None,
+) -> None:
+    projections = gascity.get("projections") or []
+    if projections:
+        validated_projection = False
+        for index, projection in enumerate(projections):
+            projection_location = f"{location} projections[{index}]"
+            if not isinstance(projection, dict):
+                errors.append(f"{projection_location} must be an object")
+                continue
+            if target_pack and projection.get("pack") != target_pack:
+                continue
+            validated_projection = True
+            _validate_projection(
+                projection_location,
+                section,
+                projection,
+                standards,
+                errors,
+                defaults=gascity,
+            )
+        if validated_projection or not target_pack or gascity.get("pack") != target_pack:
+            return
+
+    _validate_projection(location, section, gascity, standards, errors)
+
+
+def _validate_projection(
+    location: str,
+    section: str,
+    projection: dict[str, Any],
+    standards: set[str],
+    errors: list[str],
+    defaults: dict[str, Any] | None = None,
 ) -> None:
     for field in ("target", "pack", "scope"):
-        if not gascity.get(field):
+        if not projection.get(field):
             errors.append(f"{location} exportable metadata missing '{field}'")
 
-    target = gascity.get("target")
-    session_class = gascity.get("session_class", "none")
+    target = projection.get("target")
+    session_class = projection.get("session_class") or (defaults or {}).get(
+        "session_class",
+        "none",
+    )
     if target == "agent" and session_class not in {"polecat", "crew"}:
         errors.append(
             f"{location} target=agent must declare session_class polecat or crew"
@@ -135,12 +206,15 @@ def _validate_exportable(
     if section == "script" and target not in {"script", "asset", "command", "doctor", "formula"}:
         errors.append(f"{location} script export target is not script-compatible: {target}")
 
-    target_path = gascity.get("target_path")
-    if target_path and (str(target_path).startswith("/") or ".." in Path(str(target_path)).parts):
+    target_path = projection.get("target_path")
+    if target_path and (
+        str(target_path).startswith("/")
+        or ".." in Path(str(target_path)).parts
+    ):
         errors.append(f"{location} target_path must be pack-relative and stay inside the pack")
 
     missing_standards = []
-    requires = gascity.get("requires") or {}
+    requires = projection.get("requires") or (defaults or {}).get("requires") or {}
     for standard in requires.get("standards") or []:
         if standard not in standards:
             missing_standards.append(standard)

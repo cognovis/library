@@ -366,7 +366,7 @@
           "default": false
         },
         "target": {
-          "description": "Gas City pack surface this primitive projects to.",
+          "description": "Legacy Gas City pack surface this primitive projects to. Prefer projections[].target for new metadata.",
           "type": "string",
           "enum": [
             "skill",
@@ -380,12 +380,12 @@
           ]
         },
         "pack": {
-          "description": "Preferred pack name for generated exports, e.g. cognovis-base.",
+          "description": "Legacy preferred pack name for generated exports, e.g. cognovis-base. Prefer projections[].pack for new metadata.",
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$"
         },
         "scope": {
-          "description": "Where the exported behavior is expected to operate.",
+          "description": "Legacy runtime scope for the exported behavior. Prefer projections[].scope for new metadata.",
           "type": "string",
           "enum": [
             "city",
@@ -393,6 +393,14 @@
             "provider",
             "global"
           ]
+        },
+        "projections": {
+          "description": "Gas City PackV2 projection targets. Use this shape when target, scope, or target_path varies per pack.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/gascity_projection"
+          },
+          "default": []
         },
         "session_class": {
           "description": "Whether this primitive implies a Gas City transient or persistent session class.",
@@ -443,6 +451,136 @@
         }
       }
     },
+    "gascity_projection": {
+      "description": "One Gas City PackV2 projection target for a Library primitive.",
+      "type": "object",
+      "required": [
+        "target",
+        "pack",
+        "scope"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "description": "Gas City pack surface this primitive projects to.",
+          "type": "string",
+          "enum": [
+            "skill",
+            "agent",
+            "command",
+            "doctor",
+            "formula",
+            "overlay",
+            "asset",
+            "script"
+          ]
+        },
+        "pack": {
+          "description": "Target PackV2 pack name, e.g. cognovis-base.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "scope": {
+          "description": "Where the exported behavior is expected to operate.",
+          "type": "string",
+          "enum": [
+            "city",
+            "rig",
+            "provider",
+            "global"
+          ]
+        },
+        "session_class": {
+          "description": "Whether this projection implies a Gas City transient or persistent session class.",
+          "type": "string",
+          "enum": [
+            "polecat",
+            "crew",
+            "none"
+          ],
+          "default": "none"
+        },
+        "provider_neutral": {
+          "description": "True when core content avoids Claude/Codex/provider-specific assumptions.",
+          "type": "boolean",
+          "default": true
+        },
+        "target_path": {
+          "description": "Optional pack-relative target path override.",
+          "type": "string"
+        },
+        "requires": {
+          "description": "Runtime requirements for this projected pack surface.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "binaries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "env": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "standards": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          }
+        }
+      }
+    },
+    "product_counterpart": {
+      "description": "Reference to paired product-plane work. The referenced product artifact is not a Library catalog primitive.",
+      "type": "object",
+      "required": [
+        "repo"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "description": "Product repository or product identifier, e.g. mira or polaris.",
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "description": "Optional path to the paired product-plane artifact.",
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "description": "Optional product-plane artifact name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "primitive_type": {
+          "description": "Product-plane counterpart kind.",
+          "type": "string",
+          "enum": [
+            "agent",
+            "skill",
+            "command",
+            "workflow",
+            "pack",
+            "service",
+            "other"
+          ]
+        },
+        "notes": {
+          "description": "Free-form notes about the product-plane counterpart.",
+          "type": "string"
+        }
+      }
+    },
     "entry_metadata": {
       "description": "Open metadata bag. Library-owned metadata lives under metadata.library.*; agentskills-compatible string fields may coexist at the top level.",
       "type": "object",
@@ -452,6 +590,17 @@
           "type": "object",
           "additionalProperties": true,
           "properties": {
+            "plane": {
+              "description": "Library catalog plane. Catalog entries are dev-plane primitives; product-plane artifacts are referenced via product_counterpart.",
+              "type": "string",
+              "enum": [
+                "dev"
+              ],
+              "default": "dev"
+            },
+            "product_counterpart": {
+              "$ref": "#/$defs/product_counterpart"
+            },
             "gascity": {
               "$ref": "#/$defs/gascity_export"
             }

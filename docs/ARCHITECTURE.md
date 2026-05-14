@@ -215,6 +215,7 @@ tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRI
 | [ADR-0002](adr/canonical-library-architecture.md) | Library-core repos as canonical source; harness dirs as deployment targets; marketplace removal | Accepted |
 | [ADR-0003](adr/three-layer-cache-architecture.md) | Three-layer skill deployment: Source/Cache/Harness Symlink + marketplace-symmetric primitives | Accepted |
 | [ADR-0004](adr/frontmatter-dependency-resolution.md) | Frontmatter-driven dependency resolution for library primitives | Accepted |
+| [ADR-0005](adr/library-plane-vocabulary.md) | Library catalog plane vocabulary and Gas City PackV2 projection boundaries | Accepted |
 
 ## Open beads
 
