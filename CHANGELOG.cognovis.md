@@ -23,6 +23,8 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ### Technical
 
+- **Security housekeeping: removed persistent user-level `repomix` install**: Audited the high transitive findings reported under `repomix` (`fast-xml-builder`, `fast-uri`) and confirmed they were in the user-level Bun project at `/Users/malte`, not in the library platform dependency set. `repomix@1.14.0` was already the latest release, so the persistent install was removed with `bun remove repomix`; follow-up `bun audit --audit-level high --json` returned `{}`. Evidence is recorded on bead CL-usc.
+
 - **`reinstall_entry` promoted to public API** (`scripts/lib/sync_audit.py`): Renamed `_reinstall_entry` to `reinstall_entry` (removed leading underscore) to allow the new top-level `sync` command in `library.py` to call it directly for per-entry force-reinstall. No behavioral change.
 
 - **Tests: 1093 new lines across `test_status.py` and `test_sync_audit.py`** (`tests/test_status.py`, `tests/test_sync_audit.py`): New test modules covering directory-hash determinism, mocked `git ls-remote`, upstream SHA comparison, skip-on-current logic, `--drift-only` filter, exit code 2, and hook smoke test. Closes CL-7oy (AK8).
