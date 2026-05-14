@@ -161,6 +161,20 @@ def _validate_legacy_aliases(
     return errors, warnings
 
 
+def _print_error_group(
+    yaml_path: Path,
+    errors: list[str],
+    label: str,
+) -> None:
+    """Print one validator error group."""
+    if not errors:
+        return
+    print(f"FAIL: {yaml_path} has {len(errors)} {label}:\n")
+    for err in errors:
+        print(err)
+    print()
+
+
 def main() -> int:
     repo_root = find_repo_root()
 
@@ -240,14 +254,6 @@ def main() -> int:
     alias_errors, alias_warnings = _validate_legacy_aliases(
         data, strict=args.strict_aliases
     )
-    if alias_errors:
-        if not args.quiet:
-            print(f"FAIL: {yaml_path} has {len(alias_errors)} legacy alias error(s):\n")
-            for err in alias_errors:
-                print(err)
-        else:
-            print(f"FAIL: {len(alias_errors)} legacy alias error(s) in {yaml_path}")
-        return 1
 
     # Additional semantic check: each catalog entry must have a resolvable source
     semantic_errors = []
@@ -277,23 +283,22 @@ def main() -> int:
                     semantic_errors.append(
                         f"  [{primitive.yaml_section}[{i}] '{name}'] Script entrypoint/source must end in .py"
                     )
-    if semantic_errors:
-        if not args.quiet:
-            print(f"FAIL: {yaml_path} has {len(semantic_errors)} semantic error(s):\n")
-            for err in semantic_errors:
-                print(err)
-        else:
-            print(f"FAIL: {len(semantic_errors)} semantic error(s) in {yaml_path}")
-        return 1
 
     agentskills_errors = _validate_agentskills_rules(data)
-    if agentskills_errors:
+    if alias_errors or semantic_errors or agentskills_errors:
         if not args.quiet:
-            print(f"FAIL: {yaml_path} has {len(agentskills_errors)} agentskills rule violation(s):\n")
-            for err in agentskills_errors:
-                print(err)
+            _print_error_group(yaml_path, alias_errors, "legacy alias error(s)")
+            _print_error_group(yaml_path, semantic_errors, "semantic error(s)")
+            _print_error_group(
+                yaml_path,
+                agentskills_errors,
+                "agentskills rule violation(s)",
+            )
         else:
-            print(f"FAIL: {len(agentskills_errors)} agentskills rule violation(s) in {yaml_path}")
+            total_errors = (
+                len(alias_errors) + len(semantic_errors) + len(agentskills_errors)
+            )
+            print(f"FAIL: {total_errors} semantic validation issue(s) in {yaml_path}")
         return 1
 
     if alias_warnings and not args.quiet:

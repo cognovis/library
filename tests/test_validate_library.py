@@ -286,6 +286,31 @@ def test_legacy_source_alias_warning_when_canonical_present():
     assert "canonical wins and legacy entries are ignored" in output
 
 
+def test_legacy_only_alias_warning_mentions_compatibility_fallback():
+    """Legacy-only aliases pass in normal mode and explain the compatibility fallback."""
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": {},
+        "guardrails": [
+            {
+                "name": "legacy-guardrail",
+                "description": "A legacy guardrail.",
+                "purpose": "pre-tool-veto",
+            }
+        ],
+    }
+
+    result = _run_validator(yaml.dump(data, default_flow_style=False))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    assert "WARN:" in output
+    assert "Deprecated root key 'guardrails' is accepted for compatibility" in output
+    assert "use 'library.guardrails' instead" in output
+
+
 def test_strict_aliases_rejects_legacy_aliases_even_without_canonical():
     """--strict-aliases fails any deprecated root alias during alias sunset."""
     data = {
@@ -320,3 +345,39 @@ def test_strict_aliases_rejects_legacy_aliases_even_without_canonical():
     assert "--strict-aliases" in output
     assert "library.guardrails" in output
     assert "sources.catalogs" in output
+
+
+def test_strict_aliases_reports_semantic_errors_in_same_run():
+    """Strict alias failures should not hide independent semantic errors."""
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": {
+            "skills": [
+                {
+                    "name": "missing-source",
+                    "description": "A skill missing a resolvable source.",
+                }
+            ],
+        },
+        "guardrails": [
+            {
+                "name": "legacy-guardrail",
+                "description": "A legacy guardrail.",
+                "purpose": "pre-tool-veto",
+            }
+        ],
+    }
+
+    result = _run_validator(
+        yaml.dump(data, default_flow_style=False),
+        "--strict-aliases",
+    )
+
+    assert result.returncode == 1
+    output = result.stdout + result.stderr
+    assert "legacy alias error" in output
+    assert "semantic error" in output
+    assert "library.guardrails" in output
+    assert "Entry has no resolvable source" in output
