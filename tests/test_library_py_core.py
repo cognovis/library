@@ -260,7 +260,6 @@ DOC_FILES_TO_CHECK = [
 ALLOWED_LEGACY_CONTEXTS = [
     # Patterns that are explicitly documenting legacy forms to be avoided
     "legacy",
-    "deprecated",
     "old form",
     "no longer",
     "do not use",
@@ -279,7 +278,7 @@ def test_no_legacy_commands_promoted(doc_file: Path):
     for i, line in enumerate(lines, 1):
         for pattern in LEGACY_PATTERNS:
             if pattern in line:
-                # Allow if in a context that explains it's legacy/deprecated
+                # Allow only when the context says the old form must not be used.
                 context_window = " ".join(
                     lines[max(0, i - 3) : i + 3]
                 ).lower()
