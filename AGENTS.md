@@ -4,6 +4,26 @@
 > then jump to the linked detail document for the question you have.
 > `CLAUDE.md` in this repo @-imports this file; do not duplicate content there.
 
+## Repository Identity
+
+This repository is the **library platform**. Its current checkout path is
+`/Users/malte/code/library/meta`, but the intended name is
+`library-platform/`.
+
+Use this repo for the tooling, scripts, schemas, launchers, installers, tests,
+and documentation that power the library system. It is not itself a catalog of
+shareable skills or agents.
+
+Sibling catalog repositories:
+
+- `../cognovis-core/` is the Cognovis developer marketplace, intended name
+  `cognovis-marketplace/`.
+- `../sussdorff-core/` is the private personal catalog, intended name
+  `sussdorff-private-catalog/`.
+
+When install/remove/sync code touches a catalog, keep the platform repository
+separate from the target catalog or project where content is installed.
+
 ## Where to look first
 
 | Your question | Read | Section / anchor |
