@@ -2021,9 +2021,16 @@ library:
         counter-examples into an in-context briefing for the *-forge skills. Loaded via
         requires_standards by skill-forge, agent-forge, hook-forge, and standard-forge so
         primitive-type selection is consistent and self-correcting.
-      source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives.md
+      source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives.md
       tier: core
       default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: library-platform
+          source_catalog: library-platform
+          gascity:
+            exportable: false
       tags:
         - origin:original
         - tier:core
@@ -2033,13 +2040,14 @@ library:
         Placement rubric for Library primitives: steward marketplace, dev-plane catalog
         boundaries, product counterparts, repo-local overlays, deterministic script
         routing, and Gas City projections.
-      source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives/primitive-placement.md
+      source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/primitive-placement.md
       tier: core
       default_scope: ask
       metadata:
         library:
           plane: dev
-          steward: cognovis-core
+          steward: library-platform
+          source_catalog: library-platform
           gascity:
             exportable: false
       tags:
@@ -2050,12 +2058,19 @@ library:
       description: >-
         All source code MUST be in English — including comments, identifiers, log messages,
         and string literals. This standard applies even when the user prompt is in German.
-      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/english-only.md
+      source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
       tier: global
       default_scope: global
+      metadata:
+        library:
+          plane: dev
+          steward: library-platform
+          source_catalog: library-platform
+          gascity:
+            exportable: false
       tags:
         - origin:original
-        - tier:domain
+        - tier:global
         - category:standard
     - name: python-cli-patterns
       description: >-
@@ -2336,12 +2351,19 @@ library:
       description: >-
         Do not add emojis to source code files, configuration files, or technical documentation.
         Emojis degrade diff readability and cause encoding issues in some terminals.
-      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/no-emoji.md
+      source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
       tier: global
       default_scope: global
+      metadata:
+        library:
+          plane: dev
+          steward: library-platform
+          source_catalog: library-platform
+          gascity:
+            exportable: false
       tags:
         - origin:original
-        - tier:domain
+        - tier:global
         - category:standard
     - name: open-brain-http-client
       description: >-
