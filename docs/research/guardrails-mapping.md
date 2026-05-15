@@ -19,14 +19,13 @@ guardrail mechanism. They differ significantly in expressiveness:
 | Harness | Pre-tool veto | Post-tool reaction | Session init | Cleanup |
 |---------|:-------------:|:------------------:|:------------:|:-------:|
 | Claude Code | NATIVE | NATIVE | NATIVE | NATIVE |
-| Codex CLI | WORKAROUND | NO | NATIVE | PARTIAL |
+| Codex CLI | NATIVE | NATIVE | NATIVE | PARTIAL |
 | Codex Cloud | BLUNT | NO | NO | NO |
 | Pi | NATIVE | NATIVE | PARTIAL | NO |
 | OpenCode | NATIVE | NO | NO | NO |
 
 Legend:
 - **NATIVE** — Full support for this lifecycle class; preferred install path.
-- **WORKAROUND** — Supported but with reduced effectiveness; requires mismatch warning.
 - **BLUNT** — Mechanism exists but is coarser than requested (affects all tools, not just targeted ones).
 - **PARTIAL** — Supported for some events or scenarios only.
 - **NO** — Not supported; skip this harness for this purpose class.
@@ -45,7 +44,8 @@ Legend:
 
 ### NORMATIVE claim sources
 - Claude Code: https://code.claude.com/docs/en/hooks (confirmed 15 events)
-- Codex CLI: CL-qzw research session (2026-04-16) — see `codex-prompts.md`
+- Codex CLI: local Codex CLI 0.130.0 plus `scripts/install-hook.py`
+  `CODEX_SUPPORTED_EVENTS` — see also `codex-prompts.md`
 - Codex Cloud: https://github.com/openai/codex (config.toml docs)
 - Pi: https://pi.dev/docs/extensions (INFERRED — not yet fully validated)
 - OpenCode: https://opencode.ai/docs/permissions (INFERRED — not yet fully validated)
@@ -76,16 +76,24 @@ Source: https://code.claude.com/docs/en/hooks
 | `PreCompact` | Other | No | State preservation before compaction |
 | `Notification` | Other | No | Monitoring |
 
-### Codex CLI Events (3 events, NORMATIVE)
+### Codex CLI Events (8 events, NORMATIVE for 0.130.0)
 
 | Event | Timing | Can block? | Use for |
 |-------|--------|------------|---------|
-| `SessionStart` | Session initialization | No | Advisory injection, context setup |
-| `SessionEnd` | Session teardown | No | Cleanup |
+| `PreToolUse` | Before tool execution | YES | Tool veto, parameter validation |
+| `PermissionRequest` | Permission gate | YES | Custom permission logic |
+| `PostToolUse` | After tool completion | No | Side effects, audit logging |
+| `PreCompact` | Before compaction | No | State preservation before compaction |
+| `PostCompact` | After compaction | No | State restoration or cleanup after compaction |
+| `SessionStart` | Session initialization | No | Context injection, setup |
+| `UserPromptSubmit` | Before prompt processing | UNKNOWN | Prompt observation or policy checks; blocking semantics not relied on here |
 | `Stop` | Before session stops | No | Final cleanup |
 
-**Key gap:** No `PreToolUse` equivalent. Pre-tool veto is not possible; advisory
-injection via `SessionStart` is the nearest workaround.
+**Key gap:** Codex CLI has fewer lifecycle events than Claude Code and does not
+currently expose Claude-only events such as `SessionEnd`, `SubagentStart`,
+`SubagentStop`, `StopFailure`, `Notification`, `PermissionDenied`, or
+`PostToolUseFailure`. Unsupported events are filtered by `scripts/install-hook.py`
+with a mismatch warning.
 
 ### Codex Cloud (static policy, NORMATIVE)
 
@@ -122,13 +130,12 @@ Goal: block a tool call before it executes.
 | Harness | Support | Installation | Effectiveness |
 |---------|---------|--------------|---------------|
 | Claude Code | NATIVE | `PreToolUse` hook (exit 2 to block) | Hard block — model cannot proceed |
-| Codex CLI | WORKAROUND | `SessionStart` advisory injection | Advisory only — model is warned, not blocked |
+| Codex CLI | NATIVE | `PreToolUse` hook in `hooks.json` | Hard block for matched tool calls |
 | Codex Cloud | BLUNT | `approval_policy = "always"` in config.toml | Hard gate — but applies to ALL tool calls |
 | Pi | NATIVE | TypeScript extension `tool_call` handler | Hard block |
 | OpenCode | NATIVE | JSON `rules` with `action: "deny"` | Hard block for matched patterns |
 
 **Mismatch warning triggers:**
-- Codex CLI: emit warning, offer SessionStart workaround or skip
 - Codex Cloud: emit warning, offer approval_policy=always or skip
 
 ### `post-tool-reaction`
@@ -138,12 +145,13 @@ Goal: run code after a tool call completes (side effects, audit, notification).
 | Harness | Support | Installation | Notes |
 |---------|---------|--------------|-------|
 | Claude Code | NATIVE | `PostToolUse` or `PostToolUseFailure` hook | Full support |
-| Codex CLI | NO | — | No PostToolUse equivalent; skip |
+| Codex CLI | NATIVE | `PostToolUse` hook in `hooks.json` | Supported; no Codex `PostToolUseFailure` event is listed in 0.130.0 |
 | Codex Cloud | NO | — | No hook system; skip |
 | Pi | NATIVE | `tool_result` extension | Full support |
 | OpenCode | NO | — | No post-tool hooks; skip |
 
-**Mismatch warning:** All harnesses except Claude Code and Pi should be skipped.
+**Mismatch warning:** Codex CLI should warn only for unsupported event names in a
+manifest, not for the `post-tool-reaction` purpose class itself.
 
 ### `session-init`
 
@@ -164,7 +172,7 @@ Goal: run teardown code at the end of a session.
 | Harness | Support | Installation | Notes |
 |---------|---------|--------------|-------|
 | Claude Code | NATIVE | `Stop` or `PreCompact` hook | Full support |
-| Codex CLI | PARTIAL | `Stop` hook only | No `PreCompact` equivalent |
+| Codex CLI | PARTIAL | `Stop`, `PreCompact`, or `PostCompact` hook | No `SessionEnd` event in 0.130.0 |
 | Codex Cloud | NO | — | No hook system; skip |
 | Pi | NO | — | No equivalent; skip |
 | OpenCode | NO | — | No cleanup hooks; skip |
@@ -176,7 +184,7 @@ Goal: log every tool call for security/compliance audit.
 | Harness | Support | Installation | Notes |
 |---------|---------|--------------|-------|
 | Claude Code | NATIVE | `PostToolUse` hook | Full support |
-| Codex CLI | NO | — | No PostToolUse; use SessionStart to log session metadata only |
+| Codex CLI | PARTIAL | `PostToolUse` hook | Supported for completed tool calls; failure-specific event not listed in 0.130.0 |
 | Codex Cloud | NO | — | No hook system; skip |
 | Pi | NATIVE | `tool_result` extension | Full support |
 | OpenCode | NO | — | No post-tool hooks; skip |
@@ -189,19 +197,18 @@ The `use-guardrail` cookbook emits mismatch warnings based on this table:
 
 | Guardrail purpose | Target harness | Warning type | Default action |
 |-------------------|----------------|--------------|----------------|
-| `pre-tool-veto` | `codex_cli` | WORKAROUND — install as SessionStart advisory? | Skip |
 | `pre-tool-veto` | `codex_cloud` | BLUNT — install as approval_policy=always? | Skip |
-| `post-tool-reaction` | `codex_cli` | NOT SUPPORTED — skip? | Skip |
 | `post-tool-reaction` | `codex_cloud` | NOT SUPPORTED — skip? | Skip |
 | `post-tool-reaction` | `opencode` | NOT SUPPORTED — skip? | Skip |
 | `session-init` | `codex_cloud` | NOT SUPPORTED — skip? | Skip |
 | `session-init` | `opencode` | NOT SUPPORTED — skip? | Skip |
+| `cleanup` requiring `SessionEnd` | `codex_cli` | PARTIAL — install supported cleanup events only? | Continue with event-level warning |
 | `cleanup` | `codex_cloud` | NOT SUPPORTED — skip? | Skip |
 | `cleanup` | `pi` | NOT SUPPORTED — skip? | Skip |
 | `cleanup` | `opencode` | NOT SUPPORTED — skip? | Skip |
-| `audit-log` | `codex_cli` | NOT SUPPORTED — skip? | Skip |
 | `audit-log` | `codex_cloud` | NOT SUPPORTED — skip? | Skip |
 | `audit-log` | `opencode` | NOT SUPPORTED — skip? | Skip |
+| Unsupported event in manifest | `codex_cli` | EVENT UNSUPPORTED — skip event and emit `mismatch_warning` | Continue with supported events |
 | Any | harness NOT in `capability` map | UNSUPPORTED — no implementation exists | Skip |
 
 ---
@@ -215,16 +222,16 @@ This guardrail has `purpose: pre-tool-veto` and targets destructive Bash command
 | Harness | Installed as | Effectiveness | Config changed |
 |---------|-------------|---------------|----------------|
 | Claude Code | `PreToolUse` hook (bash script) | Hard block — exit 2 | `settings.json` hooks section |
-| Codex CLI | `SessionStart` advisory hook | Advisory only | `hooks.json` SessionStart |
+| Codex CLI | `PreToolUse` command hook | Hard block for matched Bash calls | `hooks.json` PreToolUse |
 | Codex Cloud | `approval_policy = "always"` | Hard gate (all tools) | `config.toml` |
 | OpenCode | JSON permission rules | Hard block (matched patterns) | `opencode.json` rules array |
 | Pi | Not implemented yet | — | — |
 
 **Mismatch warnings emitted during install:**
-1. `codex_cli`: Requested `pre-tool-veto` but Codex CLI only supports `SessionStart`.
-   Installs as advisory injection (reduced effectiveness).
-2. `codex_cloud`: Requested `pre-tool-veto` but Codex Cloud only has `approval_policy`.
+1. `codex_cloud`: Requested `pre-tool-veto` but Codex Cloud only has `approval_policy`.
    Installs as `approval_policy = "always"` (blunt — affects ALL tool calls).
+2. `codex_cli`: No warning for `PreToolUse` itself in Codex CLI 0.130.0. Warnings
+   apply only if the manifest also contains unsupported Claude-only events.
 
 ---
 
@@ -235,3 +242,5 @@ This guardrail has `purpose: pre-tool-veto` and targets destructive Bash command
 - Add Pi source file to `block-destructive-bash` once Pi API confirmed
 - Research whether Codex Cloud `sandbox_permissions` can scope blocking to specific
   patterns (would upgrade from BLUNT to NATIVE for some use cases)
+- Keep this document synchronized with `scripts/install-hook.py`
+  `CODEX_SUPPORTED_EVENTS` when Codex CLI upgrades.

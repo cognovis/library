@@ -22,14 +22,13 @@ calls before execution (Codex Cloud, OpenCode).
 | Harness | Mechanism | Config file | Handler format | Pre-tool veto | Post-tool | Session-init |
 |---------|-----------|-------------|----------------|:-------------:|:---------:|:------------:|
 | Claude Code | hooks | `settings.json` | Any executable | YES (exit 2) | YES | YES |
-| Codex CLI | hooks (limited) | `hooks.json` | Node ESM `.mjs` | WORKAROUND | NO | YES |
+| Codex CLI | hooks (limited) | `hooks.json` | command hook | YES | YES | YES |
 | Codex Cloud | `approval_policy` | `config.toml` | static TOML | BLUNT (all tools) | NO | NO |
 | Pi | TypeScript extensions | `.pi/extensions/*.ts` | TypeScript | YES | YES | PARTIAL |
 | OpenCode | permission rules | `opencode.json` | JSON rules | YES | NO | NO |
 
 Key:
 - **YES** — full native support.
-- **WORKAROUND** — implemented via a less-capable event (advisory only, not hard-blocking).
 - **BLUNT** — mechanism exists but applies to all tool calls, not just matched patterns.
 - **PARTIAL** — supported for some scenarios only.
 - **NO** — not supported; skip this harness for this purpose.
@@ -50,7 +49,7 @@ Key:
 | Harness | Events | Notes |
 |---------|--------|-------|
 | Claude Code | 15 events: SessionStart, SessionEnd, UserPromptSubmit, UserPromptExpansion, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, PermissionDenied, Notification, SubagentStart, SubagentStop, Stop, StopFailure, PreCompact | NORMATIVE. See [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks). |
-| Codex CLI | 3 events: SessionStart, SessionEnd, Stop | NORMATIVE — per CL-qzw research. No PreToolUse equivalent. |
+| Codex CLI | 8 events: PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop | NORMATIVE for Codex CLI 0.130.0 — per `scripts/install-hook.py` and local feature checks. No `SessionEnd`, `SubagentStart`, `SubagentStop`, `StopFailure`, `Notification`, `PermissionDenied`, or `PostToolUseFailure` equivalent listed. |
 | Codex Cloud | Pre-tool call via `approval_policy` | NORMATIVE. Static policy only; no event scripting. |
 | Pi | `tool_call`, `tool_result`, `message`, `session_start` | INFERRED — pending vendor doc validation. |
 | OpenCode | Pre-tool-call via `rules` array | INFERRED — pending vendor doc validation. |
@@ -59,7 +58,7 @@ Full event-to-harness mapping: see `docs/research/guardrails-mapping.md`. Offici
 
 **Capability mismatch warnings.** The `/library use-guardrail` cookbook automatically
 detects when a target harness does not support the guardrail's declared purpose and
-emits a warning with options (install with workaround / skip / cancel). See
+emits a warning with options (install qualified subset / skip / cancel). See
 `cookbook/use-guardrail.md` Step 4 for the full decision table.
 
 **Purpose classes:**
@@ -89,7 +88,7 @@ PreToolUse/PostToolUse hooks.
 
 | Guardrail | Why it is a guardrail |
 |-----------|----------------------|
-| `block-destructive-bash` (PreToolUse) | Blocks irreversible commands (recursive deletes, force-pushes, DROP TABLE). Must fire on every Bash tool call regardless of model reasoning. Model cannot bypass. Compiles to 4 harnesses: Claude Code (hook), Codex CLI (advisory), Codex Cloud (approval_policy), OpenCode (permission rules). |
+| `block-destructive-bash` (PreToolUse) | Blocks irreversible commands (recursive deletes, force-pushes, DROP TABLE). Must fire on every Bash tool call regardless of model reasoning. Model cannot bypass. Compiles to 4 harnesses: Claude Code (PreToolUse hook), Codex CLI (PreToolUse hook), Codex Cloud (approval_policy), OpenCode (permission rules). |
 | `auto-capture.py` (PostToolUse) | Captures tool calls for audit. Must fire on every tool use regardless of what the model decides. Model cannot opt out. |
 | `bd-cache-invalidator.py` (PreToolUse) | Invalidates beads cache. Must run before specific tool types unconditionally to keep cache consistent. |
 | SessionStart context-loader hooks | Inject standards and skill context before the model sees any user input. Must run before model reasoning begins — model cannot be trusted to load its own context reliably. |
