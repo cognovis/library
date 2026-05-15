@@ -78,6 +78,34 @@ def make_model_standard_dir(tmp_path: Path) -> Path:
     return std_dir
 
 
+def make_agent_with_runtime_frontmatter(tmp_path: Path) -> Path:
+    """Create an agent fixture that includes runtime and composer frontmatter."""
+    agent_file = tmp_path / "agent-with-runtime-frontmatter.md"
+    agent_file.write_text(
+        """---
+name: frontmatter-agent
+description: Agent with runtime frontmatter
+tools: [Read, Bash]
+model: claude-sonnet-4-6
+mcpServers:
+  open-brain:
+    command: ob
+permissionMode: acceptEdits
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
+cache_control: ephemeral
+requires:
+  - private-field
+---
+
+# Frontmatter Agent
+
+This agent verifies runtime frontmatter emission.
+"""
+    )
+    return agent_file
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -181,6 +209,51 @@ def test_codex_harness_toml_safe(tmp_path):
     print("PASS test_codex_harness_toml_safe")
 
 
+def test_claude_harness_emits_runtime_frontmatter(tmp_path):
+    """--harness=claude preserves runtime frontmatter and strips composer fields."""
+    base_dir = make_base_dir(tmp_path)
+    std_dir = make_model_standard_dir(tmp_path)
+    agent_file = make_agent_with_runtime_frontmatter(tmp_path)
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir, std_dir, harness="claude")
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert stdout.startswith("---\n"), f"Claude output must start with frontmatter.\nstdout: {stdout}"
+
+    _, frontmatter, body = stdout.split("---\n", 2)
+    for field in ("name:", "description:", "tools:", "model:"):
+        assert field in frontmatter, f"Missing {field} in frontmatter:\n{frontmatter}"
+    assert "mcpServers:" in frontmatter, f"Missing mcpServers in frontmatter:\n{frontmatter}"
+    assert "permissionMode:" in frontmatter, (
+        f"Missing permissionMode in frontmatter:\n{frontmatter}"
+    )
+    for field in ("golden_prompt_extends:", "model_standards:", "cache_control:", "requires:"):
+        assert field not in frontmatter, f"Composer field leaked into frontmatter:\n{frontmatter}"
+    assert body.lstrip("\n").startswith("# Cognovis Base Golden Prompt"), (
+        f"Composed body should follow Claude frontmatter.\nbody: {body}"
+    )
+    assert "SONNET_LAYER3_MARKER" in body, (
+        f"Model standard body should still be composed.\nbody: {body}"
+    )
+    print("PASS test_claude_harness_emits_runtime_frontmatter")
+
+
+def test_codex_harness_does_not_emit_frontmatter(tmp_path):
+    """--harness=codex keeps the previous body-only TOML-safe output."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir, harness="codex")
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert stdout.startswith("# Cognovis Base Golden Prompt"), (
+        f"Codex output should remain body-only.\nstdout: {stdout}"
+    )
+    assert not stdout.startswith("---\n"), f"Codex output should not emit frontmatter.\nstdout: {stdout}"
+    assert "description: Test agent fixture for compose tests" not in stdout, (
+        f"Codex output should not include source frontmatter.\nstdout: {stdout}"
+    )
+    print("PASS test_codex_harness_does_not_emit_frontmatter")
+
+
 def test_layer_separators_present(tmp_path):
     """Composed output contains the layer separator markers."""
     base_dir = make_base_dir(tmp_path)
@@ -233,6 +306,8 @@ ALL_TESTS = [
     test_from_scratch_no_layer1,
     test_empty_model_standards_no_layer3,
     test_codex_harness_toml_safe,
+    test_claude_harness_emits_runtime_frontmatter,
+    test_codex_harness_does_not_emit_frontmatter,
     test_layer_separators_present,
     test_layer3_separator_present,
     test_missing_base_exits_nonzero,

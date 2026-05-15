@@ -52,6 +52,12 @@ except ImportError:
 # ---------------------------------------------------------------------------
 SEP_PERSONA = "--- AGENT PERSONA ---"
 SEP_MODEL_STANDARD = "--- MODEL STANDARD ---"
+CLAUDE_FRONTMATTER_EXCLUDE = {
+    "cache_control",
+    "golden_prompt_extends",
+    "model_standards",
+    "requires",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +92,24 @@ def extract_body(file_path: Path) -> str:
     text = file_path.read_text(encoding="utf-8")
     _, body = parse_frontmatter(text)
     return body.strip()
+
+
+def format_claude_frontmatter(frontmatter: dict[str, Any]) -> str:
+    """Serialize runtime frontmatter for Claude agent files."""
+    runtime_frontmatter = {
+        key: value
+        for key, value in frontmatter.items()
+        if key not in CLAUDE_FRONTMATTER_EXCLUDE
+    }
+    if not runtime_frontmatter:
+        return ""
+
+    serialized = yaml.safe_dump(
+        runtime_frontmatter,
+        sort_keys=False,
+        default_flow_style=False,
+    ).strip()
+    return f"---\n{serialized}\n---\n\n"
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +322,8 @@ def compose(
     # ---------------------------------------------------------------------------
     if harness == "codex":
         composed = escape_for_toml(composed)
+    elif harness == "claude":
+        composed = f"{format_claude_frontmatter(fm)}{composed}"
 
     return composed
 
