@@ -465,7 +465,7 @@ library:
         Provides dual-mode routing guidance: use `ob` CLI for coding sessions (search,
         save, context, timeline), use MCP for mobile (claude.ai/iOS) and admin operations.
         Triggers on memory, open-brain, ob CLI, recall, past work, save observation.
-      source: https://github.com/cognovis/library-core/blob/main/skills/ob-cli/SKILL.md
+      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-cli/SKILL.md
       tags:
         - origin:original
         - tier:core
