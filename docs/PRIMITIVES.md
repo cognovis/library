@@ -56,9 +56,29 @@ Does it provide model-specific behavioral guidance for an agent persona?
  └─ YES → MODEL-STANDARD
  └─ NO  → Continue below.
 
-Does it provide a shared base prompt layer for multiple agents?
- └─ YES → GOLDEN-PROMPT
+Does it provide a shared base prompt layer for multiple agents (Layer 1
+of the composed agent system prompt)?
+ └─ YES → GOLDEN-PROMPT (a.k.a. "agent base prompt")
+ └─ NO  → Continue below.
+
+Does it replace or extend the ORCHESTRATOR's system prompt or tool set
+(the prompt loaded by `cld` / `cdx` at session start, NOT an agent's prompt)?
+ └─ YES → SYSTEM-PROMPT
 ```
+
+> **Two distinct "system prompts" in this stack.** The decision tree
+> distinguishes them because they live in different contexts:
+>
+> - **Orchestrator system prompt** ([system-prompt](primitives/system-prompt.md))
+>   — top-level `cld` / `cdx` session. Default = vendor prompt; override via
+>   CLI flags or the `system-prompts/registry.yml` mechanism.
+> - **Agent system prompt** ([agent](primitives/agent.md) + Layer 1
+>   [golden-prompt](primitives/golden-prompt.md) + Layer 3
+>   [model-standard](primitives/model-standard.md)) — each spawned subagent.
+>   Composed at install time by the Library.
+>
+> Subagents do **not** inherit the orchestrator's system prompt. Setting one
+> does not affect the other.
 
 Judge is the pre-action gate: it approves, rejects, or constrains a proposed
 side-effect before execution. Reviewer and verification agents are post-action
@@ -85,7 +105,8 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 8 | [MCP-Server](primitives/mcp-server.md) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | details |
 | 9 | [Script](primitives/script.md) | **YES** — Python file plus Library metadata | callable from skills/hooks/commands | callable from skills/hooks | callable from CI/export | callable through adapters | callable through adapters | details |
 | 10 | [Model-Standard](primitives/model-standard.md) | partial — concept portable, mechanism per-harness | yes | yes | partial | unverified | unverified | details |
-| 11 | [Golden-Prompt](primitives/golden-prompt.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition | install-time composition | partial | unverified | unverified | details |
+| 11 | [Golden-Prompt (Agent Base Prompt)](primitives/golden-prompt.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition into agent system prompt | install-time composition into agent system prompt | partial | unverified | unverified | details |
+| 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
@@ -149,9 +170,18 @@ Details: [Script](primitives/script.md).
 
 Details: [Model-Standard](primitives/model-standard.md).
 
-### 11. Golden-Prompt
+### 11. Golden-Prompt (Agent Base Prompt)
 
-Details: [Golden-Prompt](primitives/golden-prompt.md).
+Details: [Golden-Prompt](primitives/golden-prompt.md). Layer 1 of the
+composed **agent** system prompt. Distinct from the orchestrator system
+prompt (see #12).
+
+### 12. System-Prompt
+
+Details: [System-Prompt](primitives/system-prompt.md). The **orchestrator**-level
+system prompt + built-in tool set that `cld` / `cdx` loads at top-level session
+start. Distinct from the agent system prompt (see #3, #10, #11). Subagents do
+not inherit it.
 
 
 ## Precedence and Name Collision Policy

@@ -515,7 +515,10 @@ If the installed entry is an `agent` AND the fetched file's YAML frontmatter con
    - Warn the user: "Compose failed: <error>. Installing uncomposed agent body.
      Run `/library sync` after installing the required base/model-standard."
    - Continue with the original fetched body (graceful degradation). Do NOT abort
-     the install — an uncomposed agent still works with the harness system prompt.
+     the install — an uncomposed agent still works; it just runs with its
+     persona body alone as the agent system prompt, with no Cognovis base layer
+     prepended. (Agents do not inherit the orchestrator / harness system prompt,
+     so the persona body IS the agent system prompt.)
 
 5. **For Codex agents** (`.toml` format): write the composed body into the
    `developer_instructions` field in the TOML file.

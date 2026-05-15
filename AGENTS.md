@@ -29,6 +29,7 @@ separate from the target catalog or project where content is installed.
 | Your question | Read | Section / anchor |
 |---|---|---|
 | What is a Skill / Agent / Hook / Standard / Plugin / Marketplace exactly? | `docs/PRIMITIVES.md` | matching `### N. <name>` section |
+| Orchestrator system prompt vs. agent system prompt (which one am I editing?) | `docs/primitives/system-prompt.md` (orchestrator) + `docs/primitives/golden-prompt.md` (agent Layer 1) | — |
 | Is primitive X portable between Claude Code, Codex, Pi, OpenCode? | `docs/PRIMITIVES.md` | **Portability Matrix (TL;DR)** — top of file, after Decision Tree |
 | Which primitive should I create for this new capability? | `docs/PRIMITIVES.md` | **Quick Decision Tree** — very top |
 | How is this repo structured (4-layer stack, install paths)? | `docs/ARCHITECTURE.md` | The 4-layer Agentic Stack |

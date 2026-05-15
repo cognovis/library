@@ -13,20 +13,47 @@
 
 ## Executive Summary
 
-Today every agent inherits the harness's system prompt (Anthropic's Claude Code prompt,
-OpenAI's Codex prompt, etc.). This makes agents harness-dependent: the same agent behaves
-differently in Claude Code vs. Codex because the harness system prompt varies.
+> **Terminology note (2026-05-15).** This document uses the legacy term "golden
+> prompt" because the frontmatter field, catalog key, and Python module names
+> still use it. In prose, "agent system prompt Layer 1" or "agent base prompt"
+> is the preferred phrasing — see [system-prompt.md](../primitives/system-prompt.md)
+> for the orchestrator/agent distinction and [golden-prompt.md](../primitives/golden-prompt.md)
+> for the agent-level primitive.
 
-**Decision**: Implement a three-layer Agent Golden Prompt composition model, resolved at
-install time by the Library, writing the composed prompt to the harness-native location.
+> **Premise correction (2026-05-15).** An earlier version of this doc claimed
+> that "every agent inherits the harness's system prompt." That is **wrong**
+> for Claude Code and at best misleading for Codex. Per the upstream Claude
+> Code docs (`code.claude.com/docs/en/sub-agents`): *"Subagents receive only
+> this system prompt (plus basic environment details like working directory),
+> **not the full Claude Code system prompt**."* A Codex named-agent invoked via
+> nickname starts a fresh session whose `developer_instructions` likewise
+> replace, not extend, the parent session's developer prompt. Agents start
+> essentially **blank** — that is the actual motivation for the composition
+> model below.
+
+A subagent starts with only its own system prompt (the body of its agent file)
+plus minimal environment details. It does **not** inherit cross-cutting safety
+rules, confirmation gates, or operating policies from the harness or from the
+parent orchestrator session. Without a composition mechanism, every agent has
+to re-inline that material verbatim.
+
+**Decision**: Implement a three-layer agent system prompt composition model,
+resolved at install time by the Library, writing the composed prompt to the
+harness-native location. This gives every agent a shared, Library-controlled
+base layer without duplicating it across files.
 
 ```
-Effective Agent System Prompt = compose(
-  Layer 1: Cognovis Base Golden Prompt,
+Composed Agent System Prompt = compose(
+  Layer 1: Cognovis Base (agent base prompt, a.k.a. "golden prompt"),
   Layer 2: Agent Persona,
   Layer 3: Model-Standard(s) for the agent's declared model
 )
 ```
+
+This composed string is what the harness sees as the **agent's** system prompt
+when the agent runs. It is unrelated to the **orchestrator's** system prompt —
+that is the vendor's Claude Code / Codex prompt and is configured separately
+(see [system-prompt.md](../primitives/system-prompt.md)).
 
 ---
 
@@ -40,12 +67,17 @@ Effective Agent System Prompt = compose(
 and tool constraint encoding. Applies to ALL agents regardless of harness or model.
 
 **Why it exists:**
-- The harness system prompt (Anthropic's) changes on vendor update cadence, silently altering
-  agent behavior. The Cognovis Base Golden Prompt is under our control.
-- Cross-harness portability: a Codex agent with no Claude Code ancestor needs the same safety
-  rules. Encoding them in a Library-owned file lets us inject them during Codex TOML generation.
-- Token efficiency: the harness prompt contains many things agents don't need (Bash safety rules
-  already enforced by guardrails, etc.). The Cognovis Base is intentionally smaller.
+- Agents do not inherit the harness or orchestrator system prompt (see the
+  premise correction above), so cross-cutting safety, confirmation, and
+  operating rules have to be supplied to each agent explicitly. The Cognovis
+  Base centralizes that material in one Library-owned file rather than
+  re-inlining it in every agent persona.
+- Cross-harness portability: a Codex agent and a Claude Code agent need the
+  same safety baseline. Encoding it once in a Library-owned file lets the
+  composer inject it during install for whichever harness file is generated.
+- Drift control: when the Anthropic or OpenAI harness prompt changes, the
+  agents do not silently pick it up — but our base prompt is also not silently
+  pinned to the harness. We update the Cognovis Base deliberately, on review.
 
 **Content:** Safety checks (Dolt push pattern, `bd init` block, payment/PII stop), confirmation
 gates (bd close, git push --force, etc.), content isolation rule (untrusted content via
@@ -240,9 +272,12 @@ model_standards: []
   Decision deferred. Current implementation: single-extends only (`golden_prompt_extends` is a scalar).
   Multiple inheritance via `model_standards` list is already supported (each entry is a file).
 
-- **Harness drift:** When Anthropic adds something useful to the Claude Code system prompt,
-  how do we decide whether to incorporate it into `cognovis-base.md`?
-  Not addressed in this bead. Manual review process assumed.
+- **Harness drift:** When Anthropic adds something useful to the Claude Code
+  orchestrator system prompt, how do we decide whether to incorporate it into
+  `cognovis-base.md`? Note that the orchestrator prompt change does not
+  automatically reach agents (agents do not inherit it), so any inclusion is
+  a deliberate copy-down decision, not a propagation. Not addressed in this
+  bead. Manual review process assumed.
 
 - **from-scratch testing:** Agents that set `golden_prompt_extends: from-scratch` bypass Layer 1.
   This is useful for test agents that should NOT follow Cognovis safety rules.

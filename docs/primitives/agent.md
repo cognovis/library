@@ -2,13 +2,23 @@
 
 > Primitive reference extracted from [PRIMITIVES.md](../PRIMITIVES.md).
 
-**Definition.** An autonomous AI worker with its own context window, system prompt,
-tool permissions, and (optionally) model selection. Agents can be spawned by the
-orchestrating model to run a subtask in isolation.
+**Definition.** An autonomous AI worker with its own context window, **agent
+system prompt**, tool permissions, and (optionally) model selection. Agents
+can be spawned by the orchestrating model to run a subtask in isolation.
 
-**Key constitutive feature.** Isolated context budget: each agent invocation gets a
-fresh context window and its own tool grant. The parent model does not share its
-context with the subagent.
+> **Two prompts, not one.** "System prompt" is ambiguous in this stack. The
+> agent's system prompt (this primitive) is the composed body of the agent's
+> definition file — see [Golden-Prompt](golden-prompt.md) + [Model-Standard](model-standard.md)
+> for how Layer 1/2/3 are stitched together. It is distinct from the
+> [orchestrator system prompt](system-prompt.md) of the top-level `cld` / `cdx`
+> session. Subagents do **not** inherit the orchestrator's system prompt
+> (`code.claude.com/docs/en/sub-agents`: *"Subagents receive only this system
+> prompt … not the full Claude Code system prompt."*).
+
+**Key constitutive feature.** Isolated context budget: each agent invocation
+gets a fresh context window and its own tool grant. The parent model does not
+share its context with the subagent, and the subagent does not see the
+orchestrator's system prompt.
 
 **Trigger semantics.** The orchestrating model (or a user command) calls
 `Agent(subagent_type="<name>")`. The harness launches the agent in a separate context.
@@ -118,7 +128,7 @@ mandates use `produces-mandate`. The tag vocabulary is defined in `library.yaml`
 
 | Agent | Why it is an agent |
 |-------|-------------------|
-| `beads-workflow:bead-orchestrator` | Orchestrates a multi-step bead workflow with its own system prompt, model, and tool set. Parent model delegates the entire workflow. |
+| `beads-workflow:bead-orchestrator` | Orchestrates a multi-step bead workflow with its own agent system prompt, model, and tool set. Parent model delegates the entire workflow. |
 | `beads-workflow:verification-agent` | Isolated, read-only verification context. Tool grant is explicitly limited to Read, Bash, Grep, Glob — isolation prevents accidental writes during verification. |
 | `core:session-close` | Orchestrates a multi-phase close pipeline (merge, commit, changelog, push, close bead). Too complex and stateful for inline execution; needs its own context. |
 

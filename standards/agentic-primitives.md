@@ -21,7 +21,7 @@ tags:
 |-----------|---------------------|
 | Skill | Context file (`SKILL.md`) the model auto-loads via description matching. No user trigger. |
 | Command | Prompt template the user explicitly invokes with `/<name>`. Model does not auto-pick. |
-| Agent | Autonomous worker with its own context window, system prompt, tool grant, and optionally model. |
+| Agent | Autonomous worker with its own context window, **agent system prompt** (composed by the Library, distinct from the orchestrator's system prompt — subagents do not inherit it), tool grant, and optionally model. |
 | Hook | Deterministic enforcement that runs outside the LLM loop at lifecycle events. Model cannot bypass. |
 
 Library-managed dependencies (`Standard`, `MCP-Server`, `Model-Standard`,

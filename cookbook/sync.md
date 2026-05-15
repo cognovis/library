@@ -162,7 +162,10 @@ For each entry in `.library.lock` where `type` is `agent`:
      base/model-standard (cognovis-base, model-standard).
      ```
    - Continue with the original fetched body (graceful degradation). Do NOT abort
-     the sync — an uncomposed agent still works with the harness system prompt.
+     the sync — an uncomposed agent still works; it just runs with its persona
+     body alone as the agent system prompt, with no Cognovis base layer
+     prepended. (Agents do not inherit the orchestrator / harness system prompt,
+     so the persona body IS the agent system prompt.)
 
 7. **Update the lockfile `composed_sha` and `composed_layers` fields** for the entry
    (these will be written out in Step 7):
