@@ -11,7 +11,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from .errors import InstallError, LibraryError
+from .errors import EXIT_NOT_FOUND, InstallError, LibraryError
 from .lockfile import (
     compute_checksum,
     compute_directory_hash,
@@ -29,8 +29,9 @@ def cmd_sync_impl(
     scope: str = "project",
     dry_run: bool = False,
     harness: str = "all",
+    target_name: str | None = None,
 ) -> dict[str, Any]:
-    """Sync: re-install all entries of a given primitive from the lockfile.
+    """Sync: re-install entries of a given primitive from the lockfile.
 
     Args:
         catalog: Parsed library.yaml dict.
@@ -39,6 +40,7 @@ def cmd_sync_impl(
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
         harness: Target harness.
+        target_name: Optional installed entry name to refresh.
 
     Returns:
         Operation result dict with list of synced entries.
@@ -52,6 +54,17 @@ def cmd_sync_impl(
         entries = [e for e in installed if e.get("type") == primitive]
     else:
         entries = list(installed)
+
+    if target_name is not None:
+        primitive_type = primitive if primitive and primitive not in ("all", "search") else None
+        entry = get_entry(lock_data, target_name, primitive_type=primitive_type)
+        if entry is None:
+            label = f"{primitive}:{target_name}" if primitive_type else target_name
+            raise LibraryError(
+                f"{label} is not installed in {scope} scope.",
+                exit_code=EXIT_NOT_FOUND,
+            )
+        entries = [entry]
 
     if dry_run:
         ops = []
@@ -110,6 +123,10 @@ def reinstall_entry(
     elif entry_type == "prompt":
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="prompt", name=entry_name,
+                           repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
+    elif entry_type == "script":
+        from .installers.simple_file import install_simple_file
+        install_simple_file(catalog=catalog, primitive_name="script", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "standard":
         from .installers.standard import install_standard

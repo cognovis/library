@@ -186,7 +186,8 @@ def build_parser() -> argparse.ArgumentParser:
         search_p.add_argument("--json", action="store_true", help="Output JSON")
 
         # sync
-        sync_p = verb_sub.add_parser("sync", help="Re-pull all installed entries from lockfile")
+        sync_p = verb_sub.add_parser("sync", help="Re-pull installed entries from lockfile")
+        sync_p.add_argument("name", nargs="?", default=None, help="Installed entry name")
         sync_p.add_argument("--json", action="store_true", help="Output JSON")
         sync_p.add_argument("--dry-run", action="store_true", help="Show planned syncs")
         sync_p.add_argument(
@@ -916,9 +917,10 @@ def cmd_search(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
 
 def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
-    """Handle: <primitive> sync [--dry-run]"""
+    """Handle: <primitive> sync [name] [--dry-run]"""
     use_json = getattr(args, "json", False)
     dry_run = getattr(args, "dry_run", False)
+    name = getattr(args, "name", None)
     scope = getattr(args, "scope", "project")
     harness = getattr(args, "harness", "all")
     primitive = args.primitive
@@ -931,6 +933,7 @@ def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             scope=scope,
             dry_run=dry_run,
             harness=harness,
+            target_name=name,
         )
         if use_json:
             print_json(result)

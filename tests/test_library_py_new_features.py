@@ -14,11 +14,23 @@ import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 LIBRARY_PY = SCRIPTS_DIR / "library.py"
 PYTHON = sys.executable
+TARGETED_SYNC_PRIMITIVES = [
+    "skill",
+    "agent",
+    "prompt",
+    "script",
+    "standard",
+    "guardrail",
+    "mcp",
+    "model-standard",
+    "golden-prompt",
+]
 
 
 def run_library(*args, cwd=None, env=None):
@@ -32,6 +44,42 @@ def run_library(*args, cwd=None, env=None):
         text=True,
         cwd=str(cwd or REPO_ROOT),
         env=base_env,
+    )
+
+
+def run_git(*args: str, cwd: Path) -> subprocess.CompletedProcess:
+    """Run git in a test repository."""
+    return subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+        check=True,
+    )
+
+
+def init_git_source_repo(repo: Path) -> str:
+    """Initialize a source fixture repository and return its HEAD SHA."""
+    run_git("init", cwd=repo)
+    run_git("config", "user.name", "Library Test", cwd=repo)
+    run_git("config", "user.email", "library-test@example.com", cwd=repo)
+    run_git("add", "-A", cwd=repo)
+    run_git("commit", "-m", "initial source", cwd=repo)
+    return git_head(repo)
+
+
+def git_head(repo: Path) -> str:
+    """Return HEAD SHA for a test repository."""
+    return run_git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+
+
+def lockfile_entry(project_dir: Path, primitive: str, name: str) -> dict:
+    """Return one lockfile entry by primitive and name."""
+    lock_data = yaml.safe_load((project_dir / ".library.lock").read_text())
+    return next(
+        entry
+        for entry in lock_data["installed"]
+        if entry["type"] == primitive and entry["name"] == name
     )
 
 
@@ -775,6 +823,80 @@ class TestSync:
         agent_path_after = project_dir / ".claude" / "agents" / "test-agent.md"
         assert agent_path_after.exists() or agent_path_after.is_symlink()
 
+    def test_targeted_sync_updates_stale_lockfile_sha(self, project_dir, tmp_path):
+        source_repo = project_dir / "fixture-skill"
+        initial_sha = init_git_source_repo(source_repo)
+        env = {"XDG_DATA_HOME": str(tmp_path / "xdg")}
+
+        install = run_library("skill", "use", "test-skill", "--json", cwd=project_dir, env=env)
+        assert install.returncode == 0, f"stdout={install.stdout}\nstderr={install.stderr}"
+        before = lockfile_entry(project_dir, "skill", "test-skill")
+        assert before["source_commit"] == initial_sha
+
+        source_file = source_repo / "SKILL.md"
+        source_file.write_text("# Test Skill\nUpdated content.\n")
+        run_git("add", "SKILL.md", cwd=source_repo)
+        run_git("commit", "-m", "update source", cwd=source_repo)
+        updated_sha = git_head(source_repo)
+        assert updated_sha != initial_sha
+
+        sync = run_library("skill", "sync", "test-skill", "--json", cwd=project_dir, env=env)
+        assert sync.returncode == 0, f"stdout={sync.stdout}\nstderr={sync.stderr}"
+
+        after = lockfile_entry(project_dir, "skill", "test-skill")
+        assert after["source_commit"] == updated_sha
+        assert after["source_commit"] != before["source_commit"]
+        installed = project_dir / ".agents" / "skills" / "test-skill" / "SKILL.md"
+        assert installed.read_text() == "# Test Skill\nUpdated content.\n"
+
+    def test_targeted_sync_current_entry_is_idempotent(self, project_dir, tmp_path):
+        source_repo = project_dir / "fixture-skill"
+        init_git_source_repo(source_repo)
+        env = {"XDG_DATA_HOME": str(tmp_path / "xdg")}
+
+        install = run_library("skill", "use", "test-skill", "--json", cwd=project_dir, env=env)
+        assert install.returncode == 0, f"stdout={install.stdout}\nstderr={install.stderr}"
+        before = lockfile_entry(project_dir, "skill", "test-skill")
+        installed = project_dir / ".agents" / "skills" / "test-skill" / "SKILL.md"
+        installed_before = installed.read_text()
+
+        sync = run_library("skill", "sync", "test-skill", "--json", cwd=project_dir, env=env)
+        assert sync.returncode == 0, f"stdout={sync.stdout}\nstderr={sync.stderr}"
+        sync_data = json.loads(sync.stdout)
+        assert sync_data["data"]["synced"] == ["skill:test-skill"]
+
+        after = lockfile_entry(project_dir, "skill", "test-skill")
+        assert after["source_commit"] == before["source_commit"]
+        assert after["content_sha256"] == before["content_sha256"]
+        assert installed.read_text() == installed_before
+
+        lock_data = yaml.safe_load((project_dir / ".library.lock").read_text())
+        matches = [
+            entry
+            for entry in lock_data["installed"]
+            if entry["type"] == "skill" and entry["name"] == "test-skill"
+        ]
+        assert len(matches) == 1
+
+    def test_targeted_sync_unknown_name_fails_fast(self, project_dir, tmp_path):
+        env = {"XDG_DATA_HOME": str(tmp_path / "xdg")}
+        result = run_library("skill", "sync", "missing-skill", "--json", cwd=project_dir, env=env)
+
+        assert result.returncode == 2
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "skill:missing-skill is not installed in project scope" in data["message"]
+
+    @pytest.mark.parametrize("primitive", TARGETED_SYNC_PRIMITIVES)
+    def test_targeted_sync_name_is_accepted_for_all_primitives(self, project_dir, tmp_path, primitive):
+        env = {"XDG_DATA_HOME": str(tmp_path / "xdg")}
+        result = run_library(primitive, "sync", "missing-entry", "--json", cwd=project_dir, env=env)
+
+        assert result.returncode == 2
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert f"{primitive}:missing-entry is not installed in project scope" in data["message"]
+
 
 # ---------------------------------------------------------------------------
 # AK19: sync --dry-run
@@ -789,6 +911,17 @@ class TestSyncDryRun:
         result = run_library("skill", "sync", "--dry-run", "--json", cwd=project_dir)
         data = json.loads(result.stdout)
         assert data["status"] in ("dry-run", "ok")
+
+    def test_targeted_sync_dry_run_plans_one_entry(self, project_dir, tmp_path):
+        env = {"XDG_DATA_HOME": str(tmp_path / "xdg")}
+        install = run_library("skill", "use", "test-skill", "--json", cwd=project_dir, env=env)
+        assert install.returncode == 0, f"stdout={install.stdout}\nstderr={install.stderr}"
+
+        result = run_library("skill", "sync", "test-skill", "--dry-run", "--json", cwd=project_dir, env=env)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["status"] == "dry-run"
+        assert [op["details"] for op in data["operations"]] == ["re-install skill:test-skill"]
 
 
 # ---------------------------------------------------------------------------
