@@ -1445,7 +1445,7 @@ library:
         Aidbox FHIR platform by Health Samurai. Use for FHIR REST API, search,
         transactions, bundles, access policies, subscriptions, custom resources,
         terminology, profiles, AccessPolicy, SearchParameter.
-      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox/skills/aidbox/SKILL.md
+      source: https://github.com/cognovis/samurai-skills/blob/master/plugins/aidbox/skills/aidbox/SKILL.md
       requires:
         - "standard:english-only"
       metadata:
@@ -1469,7 +1469,7 @@ library:
         FHIR Implementation Guide development lifecycle with Aidbox — CodeSystems,
         ValueSets, profiles, extensions, terminology, IG Publisher, QA reports,
         SUSHI/FSH, $validate, $expand, $validate-code, $fhir-package-install.
-      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-ig-development/skills/aidbox-ig-development/SKILL.md
+      source: https://github.com/cognovis/samurai-skills/blob/master/plugins/aidbox-ig-development/skills/aidbox-ig-development/SKILL.md
       requires:
         - "standard:english-only"
       metadata:
@@ -1492,7 +1492,7 @@ library:
       description: >-
         SQL on FHIR with Aidbox — ViewDefinitions, $materialize, sof schema,
         flattening FHIR data into SQL tables, dashboard queries, analytics.
-      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/aidbox-sql-on-fhir/skills/aidbox-sql-on-fhir/SKILL.md
+      source: https://github.com/cognovis/samurai-skills/blob/master/plugins/aidbox-sql-on-fhir/skills/aidbox-sql-on-fhir/SKILL.md
       requires:
         - "standard:english-only"
       metadata:
@@ -1515,7 +1515,7 @@ library:
       description: >-
         Generate or update FHIR types using @atomic-ehr/codegen with tree-shaking.
         Supports TypeScript, Python, and C#.
-      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/atomic-generate-types/skills/atomic-generate-types/SKILL.md
+      source: https://github.com/cognovis/samurai-skills/blob/master/plugins/atomic-generate-types/skills/atomic-generate-types/SKILL.md
       requires:
         - "standard:english-only"
       metadata:
@@ -1538,7 +1538,7 @@ library:
       description: >-
         Search health-samurai.io — docs, blog, case studies, examples for Aidbox
         and Health Samurai products.
-      source: https://github.com/cognovis/samurai-skills/blob/main/plugins/hs-search/skills/hs-search/SKILL.md
+      source: https://github.com/cognovis/samurai-skills/blob/master/plugins/hs-search/skills/hs-search/SKILL.md
       requires:
         - "standard:english-only"
       metadata:

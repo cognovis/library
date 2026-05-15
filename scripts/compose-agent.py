@@ -156,6 +156,11 @@ def _format_search_dirs(paths: list[Path]) -> str:
     return "\n".join(f"    - {path}" for path in paths)
 
 
+def _is_legacy_agent_base_path(path: Path) -> bool:
+    """Return True when a Layer 1 base resolved from the old physical directory."""
+    return "golden-prompts" in path.parts
+
+
 def resolve_layer1(name: str, proj_root: Path, override_dir: str | None = None) -> Path | None:
     """Resolve agent base prompt Layer 1 file.
 
@@ -271,8 +276,8 @@ def compose(
     if agent_base_extends and agent_base_extends != "from-scratch":
         if uses_legacy_extends:
             print(
-                "WARNING: golden_prompt_extends is a legacy frontmatter alias; "
-                "use agent_base_extends instead.",
+                "DeprecationWarning: golden_prompt_extends is deprecated; "
+                "use agent_base_extends.",
                 file=sys.stderr,
             )
         layer1_override = (
@@ -293,6 +298,13 @@ def compose(
                 file=sys.stderr,
             )
             sys.exit(1)
+        if _is_legacy_agent_base_path(layer1_path):
+            print(
+                f"DeprecationWarning: agent_base '{agent_base_extends}' resolved "
+                "from legacy golden-prompts directory; migrate it to "
+                ".agents/agent-bases/.",
+                file=sys.stderr,
+            )
         layer1_body = extract_body(layer1_path)
 
     # ---------------------------------------------------------------------------

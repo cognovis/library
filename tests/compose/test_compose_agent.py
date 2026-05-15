@@ -161,7 +161,10 @@ def test_compose_accepts_legacy_frontmatter_alias(tmp_path):
     assert "Legacy Frontmatter Agent" in stdout, (
         f"Layer 2 body not found for legacy alias.\nstdout: {stdout}\nstderr: {stderr}"
     )
-    assert "golden_prompt_extends is a legacy frontmatter alias" in stderr
+    assert (
+        "DeprecationWarning: golden_prompt_extends is deprecated; "
+        "use agent_base_extends."
+    ) in stderr
     print("PASS test_compose_accepts_legacy_frontmatter_alias")
 
 
@@ -183,6 +186,10 @@ def test_compose_finds_legacy_global_agent_base_dir(tmp_path):
     assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout, (
         f"Layer 1 marker not found from legacy global dir.\nstdout: {stdout}\nstderr: {stderr}"
     )
+    assert (
+        "DeprecationWarning: agent_base 'cognovis-base' resolved "
+        "from legacy golden-prompts directory"
+    ) in stderr
     print("PASS test_compose_finds_legacy_global_agent_base_dir")
 
 
