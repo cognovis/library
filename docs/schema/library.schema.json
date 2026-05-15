@@ -278,8 +278,21 @@
           "enum": [
             "personal",
             "team",
-            "public"
+            "public",
+            "platform"
           ]
+        },
+        "local_path": {
+          "description": "Optional filesystem checkout path for this source provider. Use null for remote-only sources.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "writable": {
+          "description": "True when promotion tools may create or update primitives in this source provider.",
+          "type": "boolean",
+          "default": false
         },
         "content_types": {
           "description": "Types of content that live in this repo.",
@@ -294,10 +307,43 @@
               "standards",
               "guardrails",
               "prompts",
-              "scripts"
+              "scripts",
+              "mcp_servers",
+              "model_standards",
+              "golden_prompts",
+              "project_tooling",
+              "plugins"
             ]
           },
           "default": []
+        },
+        "scope": {
+          "description": "Routing scope metadata used by catalog match.",
+          "type": "object",
+          "required": [
+            "topics"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "topics": {
+              "description": "Topic tags this source provider accepts.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9:-]*$"
+              },
+              "default": []
+            },
+            "excludes": {
+              "description": "Topic tags this source provider explicitly does not accept.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9:-]*$"
+              },
+              "default": []
+            }
+          }
         },
         "skeleton": {
           "description": "Directory skeleton per harness \u2014 documents what directories exist in this repo.",
@@ -752,6 +798,69 @@
             "basic"
           ],
           "default": "none"
+        },
+        "local_path": {
+          "description": "Optional filesystem checkout path for this marketplace. Use null for remote-only sources.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "writable": {
+          "description": "True when promotion tools may create or update primitives in this marketplace.",
+          "type": "boolean",
+          "default": false
+        },
+        "content_types": {
+          "description": "Types of content this marketplace provides.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "skills",
+              "agents",
+              "commands",
+              "hooks",
+              "standards",
+              "guardrails",
+              "prompts",
+              "scripts",
+              "mcp_servers",
+              "model_standards",
+              "golden_prompts",
+              "project_tooling",
+              "plugins"
+            ]
+          },
+          "default": []
+        },
+        "scope": {
+          "description": "Routing scope metadata used by catalog match.",
+          "type": "object",
+          "required": [
+            "topics"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "topics": {
+              "description": "Topic tags this marketplace accepts.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9:-]*$"
+              },
+              "default": []
+            },
+            "excludes": {
+              "description": "Topic tags this marketplace explicitly does not accept.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9:-]*$"
+              },
+              "default": []
+            }
+          }
         }
       },
       "additionalProperties": false

@@ -33,6 +33,7 @@ Usage examples:
   python3 scripts/library.py skill use dolt --dry-run --json
   python3 scripts/library.py skill use dolt --symlink --json
   python3 scripts/library.py search firecrawl
+  python3 scripts/library.py catalog match --primitive-type=standard --topics=python,uv --writable-only
   python3 scripts/library.py installed --diff-catalog
 """
 
@@ -63,6 +64,7 @@ from lib.installed import cmd_installed_impl, format_installed_output
 from lib.output import (
     format_list_output,
     format_search_output,
+    format_table,
     print_json,
     dry_run_result,
     success,
@@ -347,6 +349,68 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["claude_code", "codex", "opencode", "all"],
         default="all",
     )
+
+    # Top-level catalog source commands
+    catalog_parser = subparsers.add_parser(
+        "catalog",
+        help="Query and refresh source catalog metadata",
+    )
+    catalog_verb_sub = catalog_parser.add_subparsers(
+        dest="verb",
+        metavar="verb",
+        help="Catalog source action",
+    )
+
+    catalog_match_parser = catalog_verb_sub.add_parser(
+        "match",
+        help="Rank source catalogs for promotion routing",
+    )
+    catalog_match_parser.add_argument(
+        "--primitive-type",
+        required=True,
+        choices=VALID_PRIMITIVES,
+        help="Primitive type to route, e.g. standard or skill",
+    )
+    catalog_match_parser.add_argument(
+        "--topics",
+        default="",
+        help="Comma-separated topic tags to match against source scope",
+    )
+    catalog_match_parser.add_argument(
+        "--writable-only",
+        action="store_true",
+        help="Only consider writable source catalogs",
+    )
+    catalog_match_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    catalog_sync_parser = catalog_verb_sub.add_parser(
+        "sync",
+        help="Convention-scan local source checkouts and refresh catalog entries",
+    )
+    catalog_sync_parser.add_argument(
+        "--source",
+        action="append",
+        dest="sources",
+        default=None,
+        help="Source catalog name to scan; may be repeated",
+    )
+    catalog_sync_parser.add_argument(
+        "--primitive-type",
+        choices=VALID_PRIMITIVES,
+        default=None,
+        help="Limit refresh to one primitive type",
+    )
+    catalog_sync_parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Write refreshed entries to library.yaml; default is dry-run",
+    )
+    catalog_sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview generated entries without mutating library.yaml",
+    )
+    catalog_sync_parser.add_argument("--json", action="store_true", help="Output JSON")
 
     return parser
 
@@ -1119,6 +1183,99 @@ def cmd_installed(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_catalog_match(args: argparse.Namespace, catalog: dict) -> int:
+    """Handle: catalog match --primitive-type=... --topics=..."""
+    from lib.catalog_inventory import match_catalogs
+
+    use_json = getattr(args, "json", False)
+    try:
+        result = match_catalogs(
+            catalog,
+            getattr(args, "primitive_type"),
+            getattr(args, "topics", ""),
+            writable_only=getattr(args, "writable_only", False),
+        )
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    if use_json:
+        print_json(result)
+        return 0
+
+    matches = result.get("matches", [])
+    if not matches:
+        print("No catalog matches.")
+        return 0
+
+    rows = [
+        {
+            "Name": match.get("name", ""),
+            "Registry": match.get("registry", ""),
+            "Writable": "yes" if match.get("writable") else "no",
+            "Score": str(match.get("score", 0)),
+            "Confidence": str(match.get("confidence", 0)),
+            "Selection": match.get("selection", ""),
+            "Topics": ",".join(match.get("matched_topics", [])),
+        }
+        for match in matches
+    ]
+    print(format_table(rows, ["Name", "Registry", "Writable", "Score", "Confidence", "Selection", "Topics"]))
+    return 0
+
+
+def cmd_catalog_sync(args: argparse.Namespace, catalog_root: Path, catalog: dict) -> int:
+    """Handle: catalog sync [--source=...] [--write] [--json]."""
+    from lib.catalog_inventory import sync_catalog_inventory
+
+    use_json = getattr(args, "json", False)
+    write = getattr(args, "write", False)
+    dry_run = getattr(args, "dry_run", False)
+    if write and dry_run:
+        msg = "catalog sync accepts either --write or --dry-run, not both"
+        if use_json:
+            print_json(error_result(msg))
+        else:
+            print(f"Error: {msg}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    try:
+        result = sync_catalog_inventory(
+            catalog,
+            catalog_root,
+            source_names=getattr(args, "sources", None),
+            primitive_type=getattr(args, "primitive_type", None),
+            write=write,
+        )
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    if use_json:
+        print_json(result)
+        return 0
+
+    status = result.get("status", "dry-run")
+    generated = result.get("generated", {})
+    total = result.get("total_generated", 0)
+    if status == "ok":
+        print(f"Catalog sync: wrote {total} generated entries to {result.get('written')}")
+    else:
+        print(f"Catalog sync dry-run: generated {total} entries")
+    for primitive_name, count in generated.items():
+        print(f"  {primitive_name}: {count}")
+    for source in result.get("sources", []):
+        if source.get("status") != "scanned":
+            print(f"  skipped {source.get('name')}: {source.get('reason', source.get('status'))}")
+    return 0
+
+
 def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
     """Handle: sync [--force] [--dry-run] [--scope=...] [--json]
 
@@ -1336,6 +1493,31 @@ def main(argv: list[str] | None = None) -> int:
             return exc.exit_code
         repo_root = _resolve_lifecycle_project_root(args)
         return cmd_sync_all(args, repo_root, catalog)
+
+    # Top-level catalog source commands
+    if args.primitive == "catalog":
+        verb = getattr(args, "verb", None)
+        if not verb:
+            parser.parse_args(["catalog", "--help"])
+            return EXIT_FAILURE
+        try:
+            catalog_root = _resolve_catalog_root()
+            catalog = load_catalog(catalog_root)
+        except LibraryError as exc:
+            use_json = getattr(args, "json", False)
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+
+        if verb == "match":
+            return cmd_catalog_match(args, catalog)
+        if verb == "sync":
+            return cmd_catalog_sync(args, catalog_root, catalog)
+
+        print("Error: Unknown catalog verb.", file=sys.stderr)
+        return EXIT_FAILURE
 
     # Validate primitive
     prim_info = get_primitive(args.primitive)

@@ -14,6 +14,38 @@ does not itself contain installed primitives.
 `library add-marketplace <github-url>`. Users browse or search them and then pull
 specific items into their repos.
 
+**Promotion routing metadata.** Registered source providers in `library.yaml`
+can declare routing fields used by `lib catalog match`:
+
+- `local_path`: local checkout path, or `null` for remote-only sources.
+- `writable`: whether tools may create or update primitives in that source.
+- `content_types`: primitive families the source accepts, such as `skills`,
+  `agents`, `standards`, or `hooks`.
+- `scope.topics`: positive topic tags used for ranking promotion targets.
+- `scope.excludes`: optional anti-tags that disqualify a source for a request.
+
+Promotion tools should query the catalog instead of hard-coding repository
+knowledge. Example:
+
+```bash
+lib catalog match --primitive-type=standard --topics=python,uv --writable-only --json
+```
+
+The command returns ranked candidates plus the selected top candidate or tie
+set. Writable first-party catalogs such as Cognovis Core, Sussdorff Core, and
+Open-Brain can therefore become promotion targets without client-specific
+repository routing tables.
+
+**Inventory refresh.** Local writable sources can be scanned by convention with:
+
+```bash
+lib catalog sync --source=cognovis-library-core --primitive-type=standard --write --json
+```
+
+The sync path reads `local_path` and regenerates catalog entries from standard
+repository locations such as `skills/**/SKILL.md`, `agents/**/*.md`, and
+`standards/**/*.md`, avoiding hand-edited entry blocks for refreshed inventory.
+
 **Cost.** No runtime cost. Marketplaces are a distribution mechanism only.
 
 **When to choose it.** Register a marketplace when:

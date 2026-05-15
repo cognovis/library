@@ -59,11 +59,23 @@ sources:
         primitive contracts, and platform-owned forge skills.
       visibility: private
       owner: cognovis
-      audience: team
+      audience: platform
+      local_path: /Users/malte/code/library/meta
+      writable: true
       content_types:
         - skills
         - scripts
         - standards
+        - project_tooling
+      scope:
+        topics:
+          - library
+          - platform
+          - cli
+          - schema
+          - forge
+        excludes:
+          - personal
       skeleton:
         platform:
           - skills/
@@ -82,12 +94,25 @@ sources:
       visibility: private
       owner: sussdorff
       audience: personal
+      local_path: /Users/malte/code/library/sussdorff-core
+      writable: true
       content_types:
         - skills
         - agents
         - commands
         - hooks
         - standards
+      scope:
+        topics:
+          - personal
+          - home-infra
+          - business
+          - content
+          - transcribe
+          - documents
+        excludes:
+          - team
+          - healthcare
       skeleton:
         claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
         codex: [.agents/skills/, .agents/standards/, agents/]
@@ -105,12 +130,31 @@ sources:
       visibility: private
       owner: cognovis
       audience: team
+      local_path: /Users/malte/code/library/cognovis-core
+      writable: true
       content_types:
         - skills
         - agents
         - commands
         - hooks
         - standards
+        - prompts
+        - model_standards
+        - golden_prompts
+      scope:
+        topics:
+          - team
+          - python
+          - uv
+          - testing
+          - git
+          - beads
+          - agents
+          - open-brain
+          - healthcare
+          - library
+        excludes:
+          - personal
       skeleton:
         claude_code: [.claude/agents/, .claude/skills/, .claude/commands/, .claude/hooks/]
         codex: [.agents/skills/, .agents/standards/, agents/]
@@ -127,26 +171,106 @@ sources:
       source: https://github.com/anthropics
       description: Anthropic-curated Claude plugins and extensions
       type: git
+      local_path: null
+      writable: false
+      content_types:
+        - plugins
+        - skills
+      scope:
+        topics:
+          - anthropic
+          - claude
+          - plugins
+          - official
+        excludes:
+          - private
     - name: cognovis-samurai
       source: https://github.com/cognovis/samurai-skills
       description: Cognovis Samurai skills collection (FHIR/Aidbox tooling, ex-global plugin)
       type: git
+      local_path: /Users/malte/code/HealthSamurai/samurai-skills
+      writable: false
+      content_types:
+        - skills
+      scope:
+        topics:
+          - fhir
+          - aidbox
+          - healthcare
+          - healthsamurai
+        excludes:
+          - personal
     - name: open-brain
       source: https://github.com/sussdorff/open-brain
       description: Open-Brain memory store with skills+hooks for memory capture across coding sessions
       type: git
+      local_path: /Users/malte/code/open-brain
+      writable: true
+      content_types:
+        - skills
+        - agents
+        - hooks
+        - scripts
+      scope:
+        topics:
+          - open-brain
+          - memory
+          - retrieval
+          - continuity
+          - people
+          - triage
+        excludes:
+          - healthcare
     - name: disler
       source: https://github.com/disler
       description: Public skill/agent/hooks repos for Claude Code and AI agents
       type: git
+      local_path: null
+      writable: false
+      content_types:
+        - skills
+        - agents
+        - hooks
+      scope:
+        topics:
+          - public
+          - claude
+          - skills
+          - agents
+        excludes:
+          - private
     - name: pbakaus
       source: https://github.com/pbakaus
       description: Paul Bakaus' public agentic content (Impeccable frontend design skill)
       type: git
+      local_path: null
+      writable: false
+      content_types:
+        - skills
+      scope:
+        topics:
+          - frontend
+          - design
+          - ui
+          - public
+        excludes:
+          - private
     - name: thadenorigar
       source: https://github.com/ThadeNorigar
       description: Private K2SO and related agent repos
       type: git
+      local_path: null
+      writable: false
+      content_types:
+        - agents
+        - skills
+      scope:
+        topics:
+          - private
+          - k2so
+          - agents
+        excludes:
+          - team
 
 library:
   scripts: []
