@@ -49,12 +49,6 @@ def cmd_sync_impl(
     lock_data = load_lockfile(lockfile_path)
     installed = lock_data.get("installed", [])
 
-    # Filter to primitive if specified (not 'all')
-    if primitive and primitive not in ("all", "search"):
-        entries = [e for e in installed if e.get("type") == primitive]
-    else:
-        entries = list(installed)
-
     if target_name is not None:
         primitive_type = primitive if primitive and primitive not in ("all", "search") else None
         entry = get_entry(lock_data, target_name, primitive_type=primitive_type)
@@ -65,6 +59,10 @@ def cmd_sync_impl(
                 exit_code=EXIT_NOT_FOUND,
             )
         entries = [entry]
+    elif primitive and primitive not in ("all", "search"):
+        entries = [e for e in installed if e.get("type") == primitive]
+    else:
+        entries = list(installed)
 
     if dry_run:
         ops = []

@@ -100,7 +100,7 @@ silently-skipped-entry reporting.
 | `/library <primitive> add <details>`     | Register a new catalog entry             |
 | `/library <primitive> push <name>`       | Push local changes back to source        |
 | `/library <primitive> remove <name>`     | Remove from catalog and optionally local |
-| `/library <primitive> sync`              | Re-pull all installed entries of one primitive type |
+| `/library <primitive> sync [name]`       | Re-pull all installed entries of one primitive type, or just the named entry |
 | `/library <primitive> audit`             | Detect local drift for one primitive type |
 | `/library <primitive> search <keyword>`  | Search within a primitive section        |
 | `/library search <keyword>`              | Search across all primitives             |
