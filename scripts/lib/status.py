@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .lockfile import find_lockfile, load_lockfile
-from .source import parse_source
+from .source import get_local_commit_sha, parse_source
 
 
 def get_remote_sha(clone_url: str, ref: str = "HEAD") -> Optional[str]:
@@ -163,14 +163,33 @@ def cmd_status_impl(
             else:
                 upstream_status = "unknown"
                 any_unknown = True
+        elif source and installed_sha and installed_sha != "local":
+            parsed = parse_source(source)
+            if parsed.is_local() and parsed.local_path:
+                local_sha = get_local_commit_sha(parsed.local_path)
+                if local_sha != "local":
+                    remote_sha = local_sha
+                    if local_sha == installed_sha:
+                        upstream_status = "current"
+                    else:
+                        upstream_status = "behind"
+                        behind = True
+                        any_behind = True
+                else:
+                    upstream_status = "unknown"
+                    any_unknown = True
+            else:
+                upstream_status = "unknown"
+                any_unknown = True
         else:
-            # Local source or no source_commit: unknown
+            # Non-git local source or no source_commit: unknown
             upstream_status = "unknown"
             any_unknown = True
 
         result_entries.append({
             "name": entry_name,
             "primitive": entry_type,
+            "scope": scope,
             "installed_sha": installed_sha,
             "remote_sha": remote_sha,
             "upstream_status": upstream_status,

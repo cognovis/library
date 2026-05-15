@@ -33,6 +33,7 @@ Usage examples:
   python3 scripts/library.py skill use dolt --dry-run --json
   python3 scripts/library.py skill use dolt --symlink --json
   python3 scripts/library.py search firecrawl
+  python3 scripts/library.py installed --diff-catalog
 """
 
 from __future__ import annotations
@@ -58,6 +59,7 @@ from lib.errors import (
     LibraryError,
 )
 from lib.lockfile import find_lockfile, load_lockfile
+from lib.installed import cmd_installed_impl, format_installed_output
 from lib.output import (
     format_list_output,
     format_search_output,
@@ -264,6 +266,31 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["project", "global", "both"],
         default="project",
         help="Scope to check (default: project)",
+    )
+
+    # Top-level installed (cross-primitive, cross-scope installed view)
+    installed_parser = subparsers.add_parser(
+        "installed",
+        help="Show installed entries across project and global scopes",
+    )
+    installed_parser.add_argument("--json", action="store_true", help="Output JSON")
+    installed_parser.add_argument(
+        "--scope",
+        choices=["project", "global", "both"],
+        default="both",
+        help="Scope to show (default: both)",
+    )
+    installed_parser.add_argument(
+        "--primitive",
+        dest="primitive_filter",
+        choices=VALID_PRIMITIVES,
+        default=None,
+        help="Filter to one primitive type",
+    )
+    installed_parser.add_argument(
+        "--diff-catalog",
+        action="store_true",
+        help="Compare installed entries against the resolved library.yaml catalog",
     )
 
     # Top-level sync (cross-primitive, with skip-on-current logic)
@@ -987,11 +1014,56 @@ def cmd_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     return EXIT_DRIFT if overall == "behind" else 0
 
 
+def cmd_installed(args: argparse.Namespace) -> int:
+    """Handle: installed [--scope=...] [--primitive=...] [--diff-catalog] [--json]."""
+    use_json = getattr(args, "json", False)
+    scope = getattr(args, "scope", "both")
+    primitive_filter = getattr(args, "primitive_filter", None)
+    include_catalog_diff = getattr(args, "diff_catalog", False)
+    repo_root = _find_git_root(Path.cwd()) or Path.cwd().resolve()
+
+    catalog: dict | None = None
+    warnings: list[str] = []
+    if include_catalog_diff:
+        try:
+            catalog_root = _resolve_catalog_root()
+            catalog = load_catalog(catalog_root)
+        except LibraryError:
+            warnings.append(
+                "catalog not found at current parents or "
+                f"{TOOL_ROOT / 'library.yaml'}; catalog diff omitted"
+            )
+
+    try:
+        result = cmd_installed_impl(
+            repo_root=repo_root,
+            scope=scope,
+            primitive_filter=primitive_filter,
+            catalog=catalog,
+            include_catalog_diff=include_catalog_diff,
+        )
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    if warnings:
+        result["warnings"] = warnings
+
+    if use_json:
+        print_json(result)
+    else:
+        print(format_installed_output(result))
+    return 0
+
+
 def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: sync [--force] [--dry-run] [--scope=...] [--json]
 
     Top-level sync that iterates ALL primitives across all scopes.
-    By default skips entries where upstream_status == 'current'.
+    By default refreshes only entries where upstream_status == 'behind'.
     With --force, re-installs all entries regardless.
     """
     use_json = getattr(args, "json", False)
@@ -1016,15 +1088,15 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
                     repo_root=repo_root,
                     scope=s,
                 )
-                current_set = {
+                status_by_key = {
                     (e["name"], e.get("primitive", e.get("type", "")))
+                    : e.get("upstream_status", "unknown")
                     for e in status_result.get("entries", [])
-                    if e.get("upstream_status") == "current"
                 }
             except LibraryError:
-                current_set = set()
+                status_by_key = {}
         else:
-            current_set = set()
+            status_by_key = {}
 
         lockfile_path = find_lockfile(repo_root, global_scope=(s == "global"))
         lock_data = load_lockfile(lockfile_path)
@@ -1036,7 +1108,8 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
             entry_label = f"{entry_type}:{entry_name}"
             key = (entry_name, entry_type)
 
-            should_skip = (not force) and (key in current_set)
+            should_refresh = force or status_by_key.get(key) == "behind"
+            should_skip = not should_refresh
 
             if dry_run:
                 if should_skip:
@@ -1074,7 +1147,7 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
     if dry_run:
         result["summary"] = (
             f"Would refresh {len(all_refreshed)} entries, "
-            f"skip {len(all_skipped)} already-current entries"
+            f"skip {len(all_skipped)} entries not reported behind"
         )
 
     if use_json:
@@ -1085,9 +1158,9 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
             for label in all_refreshed:
                 print(f"  [would-refresh] {label}")
             for label in all_skipped:
-                print(f"  [skip-current]  {label}")
+                print(f"  [skip-not-behind] {label}")
         else:
-            print(f"Synced: {len(all_refreshed)} refreshed, {len(all_skipped)} skipped (current)")
+            print(f"Synced: {len(all_refreshed)} refreshed, {len(all_skipped)} skipped (not behind)")
 
     if all_failed:
         return EXIT_FAILURE
@@ -1158,6 +1231,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
         return cmd_status(args, repo_root, catalog)
+
+    # Top-level installed (cross-primitive, no catalog required unless diffing)
+    if args.primitive == "installed":
+        return cmd_installed(args)
 
     # Top-level sync (cross-primitive)
     if args.primitive == "sync":

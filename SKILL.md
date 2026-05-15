@@ -58,10 +58,14 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
 # Check upstream status for all installed entries (no clone):
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py status --json
 
+# See what is installed across project and global scopes:
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog
+
 # Detect local drift across all primitives (exit 2 if drift):
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py audit --drift-only --json
 
-# Sync all installed entries, skip current, dry-run first:
+# Sync all installed entries reported behind by status, dry-run first:
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync
 ```
@@ -91,9 +95,28 @@ handled by the CLI — do NOT implement these manually.
 | `/library <primitive> audit`             | Detect local drift for one primitive type |
 | `/library <primitive> search <keyword>`  | Search within a primitive section        |
 | `/library search <keyword>`              | Search across all primitives             |
+| `/library installed [--diff-catalog]`    | Show installed entries, source, scope, upstream status, and precedence |
 | `/library audit [--drift-only]`          | Detect local drift across all primitives; exit 2 on drift |
 | `/library status`                        | Check upstream SHA for all installed entries (no clone) |
-| `/library sync [--dry-run] [--force]`    | Re-sync all installed entries across primitives; skip current by default |
+| `/library sync [--dry-run] [--force]`    | Re-sync entries reported behind across primitives; use `--force` for all |
+
+### Installed View
+
+Use `/library installed` when the user asks what is installed or where an entry
+came from. It reads project and global lockfiles without requiring the current
+directory to contain `library.yaml`.
+
+Examples:
+
+```bash
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --scope project --primitive skill
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog --json
+```
+
+The `precedence` column is `active` for the entry the harness should load.
+When the same `(primitive, name)` exists in both project and global scope, the
+project entry wins and the global entry is shown as `shadowed`.
 
 ## Cookbook
 
