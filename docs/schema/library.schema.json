@@ -384,9 +384,9 @@
       ]
     },
     "typed_dependency": {
-      "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2: skill, agent, prompt, standard, hook, mcp, script.",
+      "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2 plus later primitive additions.",
       "type": "string",
-      "pattern": "^(skill|agent|prompt|standard|hook|mcp|script):.+$",
+      "pattern": "^(skill|agent|prompt|standard|hook|mcp|script|model-standard|agent-base):.+$",
       "examples": [
         "skill:firecrawl",
         "agent:video-processor",
@@ -394,7 +394,9 @@
         "standard:english-only",
         "hook:block-destructive-bash",
         "mcp:open-brain",
-        "script:validate-spec"
+        "script:validate-spec",
+        "agent-base:cognovis-base",
+        "model-standard:claude-sonnet-4-6"
       ]
     },
     "script_asset": {
@@ -1641,6 +1643,14 @@
         "source": {
           "description": "GitHub URL or local path to the agent base prompt file.",
           "type": "string"
+        },
+        "requires": {
+          "description": "Transitive dependencies on other library primitives.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/typed_dependency"
+          },
+          "default": []
         },
         "tags": {
           "description": "Optional tags for search and filtering.",

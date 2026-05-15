@@ -195,6 +195,13 @@ For each entry in `.library.lock` where `type` is `agent`:
 > **Layer resolution search order** for `compose-agent.py`:
 > 1. `<proj_root>/.agents/agent-bases/<name>.md` (project-local)
 > 2. `~/.agents/agent-bases/<name>.md` (user-global)
+> 3. `<proj_root>/.agents/golden-prompts/<name>.md` (legacy fallback)
+> 4. `~/.agents/golden-prompts/<name>.md` (legacy fallback)
+>
+> `agent_base_extends: cognovis-base` is a logical alias. For Claude and Codex
+> targets, the composer first tries the per-harness Layer 1 file
+> (`claude-agent-base.md` or `codex-agent-base.md`) in each search directory,
+> then falls back to `cognovis-base.md` for one release.
 
 ### 5. Recreate Bridge Symlinks
 

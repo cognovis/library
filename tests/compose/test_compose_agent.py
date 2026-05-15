@@ -75,6 +75,19 @@ def make_base_dir(tmp_path: Path) -> Path:
     return base_dir
 
 
+def make_per_harness_base_dir(tmp_path: Path) -> Path:
+    """Create a temp agent-bases dir with per-harness test fixture bases."""
+    base_dir = tmp_path / "agent-bases"
+    base_dir.mkdir()
+    fixtures = {
+        "claude-agent-base.md": FIXTURES_DIR / "base-claude-agent-base.md",
+        "codex-agent-base.md": FIXTURES_DIR / "base-codex-agent-base.md",
+    }
+    for filename, fixture in fixtures.items():
+        (base_dir / filename).write_text(fixture.read_text())
+    return base_dir
+
+
 def make_model_standard_dir(tmp_path: Path) -> Path:
     """Create a temp model-standards dir with the test fixture standard."""
     std_dir = tmp_path / "model-standards"
@@ -191,6 +204,31 @@ def test_compose_finds_legacy_global_agent_base_dir(tmp_path):
         "from legacy golden-prompts directory"
     ) in stderr
     print("PASS test_compose_finds_legacy_global_agent_base_dir")
+
+
+def test_compose_dispatches_cognovis_base_alias_by_harness(tmp_path):
+    """cognovis-base resolves to distinct per-harness Layer 1 base files."""
+    base_dir = make_per_harness_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    claude_rc, claude_stdout, claude_stderr = run_compose(
+        agent_file,
+        base_dir,
+        harness="claude",
+    )
+    codex_rc, codex_stdout, codex_stderr = run_compose(
+        agent_file,
+        base_dir,
+        harness="codex",
+    )
+
+    assert claude_rc == 0, f"compose-agent.py exited {claude_rc}: {claude_stderr}"
+    assert codex_rc == 0, f"compose-agent.py exited {codex_rc}: {codex_stderr}"
+    assert "CLAUDE_AGENT_BASE_LAYER1_MARKER" in claude_stdout
+    assert "CODEX_AGENT_BASE_LAYER1_MARKER" not in claude_stdout
+    assert "CODEX_AGENT_BASE_LAYER1_MARKER" in codex_stdout
+    assert "CLAUDE_AGENT_BASE_LAYER1_MARKER" not in codex_stdout
+    print("PASS test_compose_dispatches_cognovis_base_alias_by_harness")
 
 
 def test_compose_with_base_contains_layer2(tmp_path):
@@ -372,6 +410,7 @@ ALL_TESTS = [
     test_compose_with_base_contains_layer1,
     test_compose_accepts_legacy_frontmatter_alias,
     test_compose_finds_legacy_global_agent_base_dir,
+    test_compose_dispatches_cognovis_base_alias_by_harness,
     test_compose_with_base_contains_layer2,
     test_compose_layer_order,
     test_compose_with_model_standard_contains_layer3,

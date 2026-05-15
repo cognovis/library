@@ -58,12 +58,16 @@ that is the vendor's Claude Code / Codex prompt and is configured separately
 
 ## The Three Layers
 
-### Layer 1: Cognovis Base Agent Base Prompt
+### Layer 1: Per-Harness Cognovis Agent Base Prompt
 
-**File:** `.agents/agent-bases/cognovis-base.md`
+**Files:** `.agents/agent-bases/claude-agent-base.md` and
+`.agents/agent-bases/codex-agent-base.md`. The logical
+`agent_base_extends: cognovis-base` value resolves to one of these files by
+target harness, with `.agents/agent-bases/cognovis-base.md` retained as a
+one-release fallback alias.
 
-**Purpose:** Global behavioral rules, safety checks, confirmation gates, content isolation,
-and tool constraint encoding. Applies to ALL agents regardless of harness or model.
+**Purpose:** Cross-cutting behavioral rules that the target harness cannot
+fully enforce at runtime. Applies to all composed agents for that harness.
 
 **Why it exists:**
 - Agents do not inherit the harness or orchestrator system prompt (see the
@@ -72,16 +76,17 @@ and tool constraint encoding. Applies to ALL agents regardless of harness or mod
   Base centralizes that material in one Library-owned file rather than
   re-inlining it in every agent persona.
 - Cross-harness portability: a Codex agent and a Claude Code agent need the
-  same safety baseline. Encoding it once in a Library-owned file lets the
-  composer inject it during install for whichever harness file is generated.
+  same safety baseline, but not the same runtime-enforcement prose. Encoding
+  one slim base per harness lets the composer inject only the behavior the
+  target harness cannot enforce directly.
 - Drift control: when the Anthropic or OpenAI harness prompt changes, the
   agents do not silently pick it up — but our base prompt is also not silently
   pinned to the harness. We update the Cognovis Base deliberately, on review.
 
-**Content:** Safety checks (Dolt push pattern, `bd init` block, payment/PII stop), confirmation
-gates (bd close, git push --force, etc.), content isolation rule (untrusted content via
-content-processor), core behavioral rules (English source code, task tracking via bd, no emoji),
-tool constraint encoding, session close protocol.
+**Content:** English source code, beads task tracking, content isolation,
+risk flagging, tool-grant honoring, and product-capability discipline. Runtime
+command gates and destructive-action blocks belong in harness policy, hooks,
+rules, permissions, sandboxing, or judge-layer flows.
 
 **Extends pattern:**
 - `agent_base_extends: cognovis-base` — use Cognovis Base as Layer 1 (default for all agents)
@@ -134,8 +139,18 @@ INPUT:
 
 ALGORITHM:
   1. Load Layer 1:
-       path = .agents/agent-bases/<agent_base_extends>.md
-       L1   = read(path)
+       if agent_base_extends = cognovis-base and harness is claude:
+         preferred = claude-agent-base
+       else if agent_base_extends = cognovis-base and harness is codex:
+         preferred = codex-agent-base
+       else:
+         preferred = agent_base_extends
+
+       Search project-local and user-global agent-bases dirs for:
+         a) .agents/agent-bases/<preferred>.md
+         b) .agents/agent-bases/<agent_base_extends>.md
+
+       L1 = read(first match)
      Skip if agent_base_extends = from-scratch OR path not found (warn)
 
   2. Load Layer 2:
@@ -184,7 +199,9 @@ tool grant as a prose statement at the top of the composed prompt for Codex targ
 
 | Artifact | Path | Scope |
 |----------|------|-------|
-| Cognovis Base Agent Base Prompt | `.agents/agent-bases/cognovis-base.md` | Library-global |
+| Claude Agent Base Prompt | `.agents/agent-bases/claude-agent-base.md` | Library-global |
+| Codex Agent Base Prompt | `.agents/agent-bases/codex-agent-base.md` | Library-global |
+| Cognovis Base alias fallback | `.agents/agent-bases/cognovis-base.md` | Library-global |
 | Additional agent base prompts | `.agents/agent-bases/<name>.md` | Library-global |
 | Model-standards | `.agents/model-standards/<model-name>.md` | Project-local or user-global |
 | Agent definition (source) | `.claude/agents/<name>.md` | Claude Code |
@@ -233,16 +250,16 @@ model_standards: []
 ### Cross-Harness Validation
 
 **Claude Code path:**
-- `agent_base_extends: cognovis-base` → Layer 1 = `.agents/agent-bases/cognovis-base.md`
+- `agent_base_extends: cognovis-base` → Layer 1 = `.agents/agent-bases/claude-agent-base.md`
 - `model_standards: []` → Layer 3 = empty (no model-standard for haiku yet)
-- Composed body = `cognovis-base.md` content + agent persona body
+- Composed body = `claude-agent-base.md` content + agent persona body
 - Written to: `.claude/agents/changelog-updater.md` body (harness-native)
 - Claude Code reads the body directly — composition is transparent
 
 **Codex path (forward translation):**
 - `agent_base_extends: cognovis-base` → added as comment: `# agent_base_extends: cognovis-base`
 - `model_standards: []` → added as comment: `# model_standards: []`
-- `developer_instructions` = composed body (Layer 1 + Layer 2, same as Claude Code)
+- `developer_instructions` = composed body (Codex Layer 1 + Layer 2)
 - `sandbox_mode` = inferred from tools list: [Bash, Read, Edit] → `workspace-write`
   (Edit requires write access; Bash is present)
 - `model` = `haiku` → vocabulary lookup required (gpt-4.1-mini or equivalent when targeting OpenAI)
@@ -273,7 +290,7 @@ model_standards: []
 
 - **Harness drift:** When Anthropic adds something useful to the Claude Code
   orchestrator system prompt, how do we decide whether to incorporate it into
-  `cognovis-base.md`? Note that the orchestrator prompt change does not
+  `claude-agent-base.md` or `codex-agent-base.md`? Note that the orchestrator prompt change does not
   automatically reach agents (agents do not inherit it), so any inclusion is
   a deliberate copy-down decision, not a propagation. Not addressed in this
   bead. Manual review process assumed.
@@ -293,7 +310,7 @@ model_standards: []
 - `docs/primitives/model-standard.md` — MODEL-STANDARD primitive definition and composition algorithm
 - `docs/primitives/agent-base.md` — AGENT-BASE primitive definition
 - `docs/research/agents-format-mapping.md` (CL-11p) — field mapping with new composition fields
-- `.agents/agent-bases/cognovis-base.md` — Cognovis Base Agent Base Prompt source
+- `.agents/agent-bases/claude-agent-base.md` and `.agents/agent-bases/codex-agent-base.md` — per-harness Layer 1 sources
 - `.agents/model-standards/` — model-standard file directory
 - `scripts/standards-loader.sh` — loader script (`--load-model-standard` operation)
 - `tests/smoke/run-smoke.sh` `smoke_agent_bases()` — structural validation

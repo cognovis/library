@@ -1146,53 +1146,105 @@ smoke_migration() {
 
 # ---------------------------------------------------------------------------
 # smoke_agent_bases
-#  1. .agents/agent-bases/cognovis-base.md exists
-#  2. cognovis-base.md has YAML frontmatter with name, version, description
-#  3. .agents/model-standards/ directory exists with at least 2 .md files
-#  4. Each model-standard has YAML frontmatter
-#  5. standards-loader.sh supports --load-model-standard operation
-#  6. PRIMITIVES.md §10 cross-references standards-loader and model-standards path
-#  7. agents-format-mapping.md documents agent_base_extends and model_standards fields
+#  1. per-harness agent base files exist
+#  2. agent base files have YAML frontmatter with name, version, description
+#  3. cognovis-base.md is retained as a dependency alias
+#  4. model-standards directory exists with at least 2 .md files
+#  5. Each model-standard has YAML frontmatter
+#  6. standards-loader.sh supports --load-model-standard operation
+#  7. PRIMITIVES.md cross-references standards-loader and model-standards path
+#  8. agents-format-mapping.md documents agent_base_extends and model_standards fields
 # ---------------------------------------------------------------------------
 smoke_agent_bases() {
     section "agent-bases"
 
     local agent_bases_dir="${REPO_ROOT}/.agents/agent-bases"
+    local sibling_agent_bases_dir
+    sibling_agent_bases_dir="$(cd "${REPO_ROOT}/.." && pwd)/cognovis-core/agent-bases"
+    if [[ ! -d "${agent_bases_dir}" && -d "${sibling_agent_bases_dir}" ]]; then
+        agent_bases_dir="${sibling_agent_bases_dir}"
+    fi
     local model_standards_dir="${REPO_ROOT}/.agents/model-standards"
+    local sibling_model_standards_dir
+    sibling_model_standards_dir="$(cd "${REPO_ROOT}/.." && pwd)/cognovis-core/model-standards"
+    if [[ ! -d "${model_standards_dir}" && -d "${sibling_model_standards_dir}" ]]; then
+        model_standards_dir="${sibling_model_standards_dir}"
+    fi
     local cognovis_base="${agent_bases_dir}/cognovis-base.md"
     local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
     local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
     local format_mapping_doc="${REPO_ROOT}/docs/research/agents-format-mapping.md"
 
     # -----------------------------------------------------------------------
-    # CHECK 1: cognovis-base.md exists
+    # CHECK 1: per-harness agent base files exist
     # -----------------------------------------------------------------------
-    if [[ -f "${cognovis_base}" ]]; then
-        pass "agent-bases/cognovis-base: .agents/agent-bases/cognovis-base.md exists"
-    else
-        fail "agent-bases/cognovis-base: .agents/agent-bases/cognovis-base.md NOT found"
+    local -a agent_base_names=(
+        "claude-agent-base"
+        "codex-agent-base"
+        "cognovis-base"
+    )
+    local base_name
+    for base_name in "${agent_base_names[@]}"; do
+        local base_file="${agent_bases_dir}/${base_name}.md"
+        if [[ -f "${base_file}" ]]; then
+            pass "agent-bases/${base_name}: ${base_file} exists"
+        else
+            fail "agent-bases/${base_name}: ${base_file} NOT found"
+        fi
+    done
+
+    # -----------------------------------------------------------------------
+    # CHECK 2: agent base files have required YAML frontmatter fields
+    # -----------------------------------------------------------------------
+    local all_base_frontmatter=true
+    for base_name in "${agent_base_names[@]}"; do
+        local base_file="${agent_bases_dir}/${base_name}.md"
+        if [[ -f "${base_file}" ]]; then
+            local field
+            for field in "name" "version" "description"; do
+                if ! grep -q "^${field}:" "${base_file}" 2>/dev/null; then
+                    fail "agent-bases/${base_name}-frontmatter: '${field}' field NOT found"
+                    all_base_frontmatter=false
+                fi
+            done
+        fi
+    done
+    if [[ "${all_base_frontmatter}" == "true" ]]; then
+        pass "agent-bases/frontmatter: all agent bases have required frontmatter"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 2: cognovis-base.md has required YAML frontmatter fields
+    # CHECK 3: per-harness base files stay slim and cognovis-base remains an alias
     # -----------------------------------------------------------------------
-    if [[ -f "${cognovis_base}" ]]; then
-        local all_frontmatter=true
-        for field in "name" "version" "description"; do
-            if ! grep -q "^${field}:" "${cognovis_base}" 2>/dev/null; then
-                fail "agent-bases/cognovis-base-frontmatter: '${field}' field NOT found in cognovis-base.md frontmatter"
-                all_frontmatter=false
+    local slim_counts_ok=true
+    for base_name in "claude-agent-base" "codex-agent-base"; do
+        local base_file="${agent_bases_dir}/${base_name}.md"
+        if [[ -f "${base_file}" ]]; then
+            local line_count
+            line_count="$(wc -l < "${base_file}" | tr -d ' ')"
+            if [[ "${line_count}" -lt 20 || "${line_count}" -gt 30 ]]; then
+                fail "agent-bases/${base_name}-line-count: ${line_count} lines, expected 20-30"
+                slim_counts_ok=false
             fi
-        done
-        if [[ "${all_frontmatter}" == "true" ]]; then
-            pass "agent-bases/cognovis-base-frontmatter: cognovis-base.md has required frontmatter (name, version, description)"
+        fi
+    done
+    if [[ "${slim_counts_ok}" == "true" ]]; then
+        pass "agent-bases/line-count: per-harness base files are 20-30 lines"
+    fi
+
+    if [[ -f "${cognovis_base}" ]]; then
+        if grep -q "agent-base:claude-agent-base" "${cognovis_base}" 2>/dev/null \
+            && grep -q "agent-base:codex-agent-base" "${cognovis_base}" 2>/dev/null; then
+            pass "agent-bases/cognovis-base-alias: declares per-harness dependencies"
+        else
+            fail "agent-bases/cognovis-base-alias: missing per-harness dependency declarations"
         fi
     else
-        fail "agent-bases/cognovis-base-frontmatter: cognovis-base.md not found — cannot check frontmatter"
+        fail "agent-bases/cognovis-base-alias: cognovis-base.md not found"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 3: model-standards directory has at least 2 .md files
+    # CHECK 4: model-standards directory has at least 2 .md files
     # -----------------------------------------------------------------------
     if [[ -d "${model_standards_dir}" ]]; then
         local ms_count

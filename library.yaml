@@ -2641,9 +2641,22 @@ library:
   agent_bases:
     - name: cognovis-base
       description: >-
-        Layer 1 of the three-layer agent composition model. Safety, confirmation
-        gates, content isolation, source-language, session-close protocol.
-      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
+        Deprecated logical Layer 1 alias. Composer resolves this name to the
+        per-harness Claude or Codex agent base when those files are installed.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-base.md
+      requires:
+        - agent-base:claude-agent-base
+        - agent-base:codex-agent-base
+    - name: claude-agent-base
+      description: >-
+        Claude Code Layer 1 of the three-layer agent composition model. Carries
+        only generative behavior not enforced by Claude runtime controls.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/claude-agent-base.md
+    - name: codex-agent-base
+      description: >-
+        Codex Layer 1 of the three-layer agent composition model. Carries
+        Codex-specific behavioral rules not fully enforced by runtime policy.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/codex-agent-base.md
 
 project_tooling:
   - name: beads-prime

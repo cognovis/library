@@ -81,8 +81,10 @@ Source and target are always SEPARATE paths. The source agent file (library copy
 never overwritten — the composed prompt is written to the installed copy only.
 
 ```
-1. Load Layer 1: read .agents/agent-bases/<agent_base_extends>.md
-   (skip if agent_base_extends=from-scratch or file not found)
+1. Load Layer 1: resolve .agents/agent-bases/<agent_base_extends>.md
+   (skip if agent_base_extends=from-scratch or file not found). The logical
+   cognovis-base alias resolves to claude-agent-base or codex-agent-base for
+   those harnesses before falling back to cognovis-base.md.
 
 2. Load Layer 2: read the SOURCE agent file body (library copy, never the installed copy)
    This reads the original unmodified persona. Repeat installs always read the same source.
@@ -109,14 +111,16 @@ never overwritten — the composed prompt is written to the installed copy only.
 NOT enforced by all harnesses at the sandbox level (Codex global sandbox semantics
 ignore per-agent tool constraints). Therefore, the Library MUST encode the agent's
 effective tool grant in the composed system prompt body, not rely on frontmatter alone.
-The Cognovis Base Agent Base Prompt (`Layer 1`) includes a "Tool Constraints" section that
-instructs the agent to honor its declared tool list behaviorally even when the harness
-would technically allow broader access.
+The Codex agent base retains explicit behavioral tool-grant honoring for this
+reason; Claude Code primarily relies on per-agent tool declarations and runtime
+permissions.
 
 **Canonical source locations (CL-9b1).**
 
 - Agent base prompts: `.agents/agent-bases/<name>.md`
-  - Cognovis base: `.agents/agent-bases/cognovis-base.md`
+  - Claude base: `.agents/agent-bases/claude-agent-base.md`
+  - Codex base: `.agents/agent-bases/codex-agent-base.md`
+  - Cognovis alias fallback: `.agents/agent-bases/cognovis-base.md`
 - Model standards: `.agents/model-standards/<model-name>.md`
   - Sonnet conciseness: `.agents/model-standards/claude-sonnet-4-6.md`
   - Opus thinking budget: `.agents/model-standards/claude-opus-4-7.md`

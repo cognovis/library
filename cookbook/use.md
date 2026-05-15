@@ -533,6 +533,13 @@ If the installed entry is an `agent` AND the fetched file's YAML frontmatter con
 > **Layer resolution search order** for `compose-agent.py`:
 > 1. `<proj_root>/.agents/agent-bases/<name>.md` (project-local)
 > 2. `~/.agents/agent-bases/<name>.md` (user-global)
+> 3. `<proj_root>/.agents/golden-prompts/<name>.md` (legacy fallback)
+> 4. `~/.agents/golden-prompts/<name>.md` (legacy fallback)
+>
+> `agent_base_extends: cognovis-base` is a logical alias. For Claude and Codex
+> targets, the composer first tries the per-harness Layer 1 file
+> (`claude-agent-base.md` or `codex-agent-base.md`) in each search directory,
+> then falls back to `cognovis-base.md` for one release.
 >
 > Install the required layers first: `/library agent-base use cognovis-base`
 > and `/library model-standard use claude-haiku-4-5` (or whichever

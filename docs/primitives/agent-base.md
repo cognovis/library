@@ -66,14 +66,23 @@ library:
   agent_bases:
     - name: cognovis-base
       description: >-
-        Layer 1 of the three-layer agent composition model. Safety, confirmation
-        gates, content isolation, source-language, session-close protocol.
-      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
+        Deprecated logical Layer 1 alias. Composer resolves this name to the
+        per-harness Claude or Codex agent base when those files are installed.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-base.md
+      requires:
+        - agent-base:claude-agent-base
+        - agent-base:codex-agent-base
+    - name: claude-agent-base
+      description: Claude Code Layer 1 agent base.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/claude-agent-base.md
+    - name: codex-agent-base
+      description: Codex Layer 1 agent base.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/codex-agent-base.md
 ```
 
-The catalog key and install target are `agent_bases` / `agent-base`; a source URL
-may still point at a legacy physical `golden-prompts/` directory until that source
-repository migrates its file layout.
+The catalog key and install target are `agent_bases` / `agent-base`. Source
+repositories should store these files under `agent-bases/`; the composer keeps a
+one-release runtime fallback for already-installed `golden-prompts/` directories.
 
 **When to choose it.** Create an agent-base when:
 

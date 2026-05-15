@@ -59,6 +59,12 @@ CLAUDE_FRONTMATTER_EXCLUDE = {
     "model_standards",
     "requires",
 }
+PER_HARNESS_AGENT_BASE_ALIASES = {
+    "cognovis-base": {
+        "claude": "claude-agent-base",
+        "codex": "codex-agent-base",
+    }
+}
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +167,21 @@ def _is_legacy_agent_base_path(path: Path) -> bool:
     return "golden-prompts" in path.parts
 
 
-def resolve_layer1(name: str, proj_root: Path, override_dir: str | None = None) -> Path | None:
+def _layer1_candidate_names(name: str, harness: str) -> list[str]:
+    """Return Layer 1 filenames to try for a logical agent-base name."""
+    harness_aliases = PER_HARNESS_AGENT_BASE_ALIASES.get(name, {})
+    preferred = harness_aliases.get(harness)
+    if preferred and preferred != name:
+        return [preferred, name]
+    return [name]
+
+
+def resolve_layer1(
+    name: str,
+    proj_root: Path,
+    override_dir: str | None = None,
+    harness: str = "claude",
+) -> tuple[Path, str] | None:
     """Resolve agent base prompt Layer 1 file.
 
     Search order (when no override_dir):
@@ -174,9 +194,10 @@ def resolve_layer1(name: str, proj_root: Path, override_dir: str | None = None) 
     ONLY that directory is searched — no fallback. This enables test isolation.
     """
     for d in _layer1_search_dirs(proj_root, override_dir):
-        result = _find_in_dir(name, d)
-        if result:
-            return result
+        for candidate_name in _layer1_candidate_names(name, harness):
+            result = _find_in_dir(candidate_name, d)
+            if result:
+                return result, candidate_name
     return None
 
 
@@ -285,12 +306,13 @@ def compose(
             or os.environ.get("AGENT_BASES_DIR")
         )
         searched_dirs = _layer1_search_dirs(proj_root, layer1_override)
-        layer1_path = resolve_layer1(
+        resolved_layer1 = resolve_layer1(
             agent_base_extends,
             proj_root,
             override_dir=layer1_override,
+            harness=harness,
         )
-        if layer1_path is None:
+        if resolved_layer1 is None:
             print(
                 f"ERROR: agent_base '{agent_base_extends}' not found.\n"
                 f"  Searched:\n{_format_search_dirs(searched_dirs)}\n"
@@ -298,6 +320,15 @@ def compose(
                 file=sys.stderr,
             )
             sys.exit(1)
+        layer1_path, resolved_layer1_name = resolved_layer1
+        preferred_names = _layer1_candidate_names(agent_base_extends, harness)
+        if len(preferred_names) > 1 and resolved_layer1_name == agent_base_extends:
+            print(
+                f"DeprecationWarning: agent_base '{agent_base_extends}' resolved "
+                f"through generic fallback for harness '{harness}'; install "
+                f"{preferred_names[0]}.md for per-harness Layer 1 behavior.",
+                file=sys.stderr,
+            )
         if _is_legacy_agent_base_path(layer1_path):
             print(
                 f"DeprecationWarning: agent_base '{agent_base_extends}' resolved "

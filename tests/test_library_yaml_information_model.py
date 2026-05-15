@@ -91,15 +91,23 @@ def test_cognovis_base_catalog_source_matches_current_source_layout() -> None:
     data = yaml.safe_load(LIBRARY_PATH.read_text())
     agent_bases = data["library"]["agent_bases"]
     entry = next(item for item in agent_bases if item["name"] == "cognovis-base")
+    names = {item["name"] for item in agent_bases}
 
-    assert entry["source"].endswith("/golden-prompts/cognovis-base.md")
+    assert {"cognovis-base", "claude-agent-base", "codex-agent-base"} <= names
+    assert entry["source"].endswith("/agent-bases/cognovis-base.md")
+    assert set(entry.get("requires", [])) == {
+        "agent-base:claude-agent-base",
+        "agent-base:codex-agent-base",
+    }
 
     catalogs = {item["name"]: item for item in data["sources"]["catalogs"]}
     local_path = catalogs["cognovis-library-core"].get("local_path")
     if local_path:
         source_root = Path(local_path).expanduser()
         if source_root.exists():
-            assert (source_root / "golden-prompts" / "cognovis-base.md").exists()
+            assert (source_root / "agent-bases" / "cognovis-base.md").exists()
+            assert (source_root / "agent-bases" / "claude-agent-base.md").exists()
+            assert (source_root / "agent-bases" / "codex-agent-base.md").exists()
 
 
 def test_schema_accepts_canonical_primitive_sections() -> None:
