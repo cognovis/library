@@ -165,6 +165,18 @@ library:
       tags:
         - origin:original
         - tier:core
+    - name: adr-gap
+      description: >-
+        Audit a repo for ADR hoist debt and pre-trinity packages. Use when checking
+        architecture drift, ADR hoist conditions, or packages not yet covered by
+        Architecture Trinity decisions.
+      source: https://github.com/cognovis/library-core/blob/main/skills/adr-gap/SKILL.md
+      requires:
+        - "standard:english-only"
+      tags:
+        - origin:original
+        - tier:domain
+        - domain:architecture
     - name: angebotserstellung
       description: >-
         Professionelle Angebote fuer IT-Projekte und Beratungsleistungen erstellen.
@@ -583,6 +595,8 @@ library:
         lockfile, render-summary, turn-log upload, plugin-cache sync. Consumed by the
         `session-close` agent (Claude .md + Codex .toml) — not invoked directly by users.
       source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
+      requires:
+        - "skill:beads"
       tags:
         - origin:original
         - tier:core
@@ -706,6 +720,7 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/standards/SKILL.md
       requires:
         - "standard:english-only"
+        - "skill:beads"
       tags:
         - origin:original
         - tier:domain
@@ -1405,6 +1420,7 @@ library:
         codex: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.toml
       requires:
         - "mcp:open-brain"
+        - "skill:beads"
       tags:
         - origin:original
         - tier:core
@@ -1532,6 +1548,7 @@ library:
         - "agent:review-agent"
         - "agent:session-close"
         - "skill:factory-check"
+        - "skill:beads"
       tags:
         - origin:original
         - tier:core
@@ -1549,6 +1566,8 @@ library:
         verifies MoC coverage, and validates acceptance criteria. Returns structured CLEAN or
         FINDINGS report.
       source: https://github.com/cognovis/library-core/blob/main/agents/review-agent.md
+      requires:
+        - "skill:beads"
       tags:
         - origin:original
         - tier:domain
@@ -1563,6 +1582,7 @@ library:
       requires:
         - "mcp:open-brain"
         - "skill:session-close"
+        - "skill:beads"
       tags:
         - origin:original
         - tier:core
@@ -1583,6 +1603,16 @@ library:
         - origin:original
         - tier:domain
         - tier:domain
+    - name: test-engineer
+      description: >-
+        Framework-agnostic test engineer that writes, reviews, and executes unit tests.
+        Detects the project's test framework automatically and applies appropriate patterns.
+      source: https://github.com/cognovis/library-core/blob/main/agents/test-engineer.md
+      requires:
+        - "mcp:open-brain"
+      tags:
+        - origin:original
+        - tier:domain
     - name: uat-validator
       description: >-
         Runs user acceptance tests against a deployed artifact from an external-user perspective.
@@ -1598,6 +1628,8 @@ library:
         that completion reports are accurate, tests actually pass, and acceptance criteria are
         genuinely met. Read-only except for running tests.
       source: https://github.com/cognovis/library-core/blob/main/agents/verification-agent.md
+      requires:
+        - "skill:beads"
       tags:
         - origin:original
         - tier:domain
@@ -1606,6 +1638,8 @@ library:
         Long-lived Haiku subagent that polls wave completion status on behalf of the
         wave-orchestrator. Returns a structured JSON verdict when the wave reaches a terminal state.
       source: https://github.com/cognovis/library-core/blob/main/agents/wave-monitor.md
+      requires:
+        - "skill:beads"
       tags:
         - origin:original
         - tier:domain
@@ -1621,6 +1655,7 @@ library:
         - agent:wave-monitor
         - agent:bead-orchestrator
         - agent:quick-fix
+        - skill:wave-dispatch
         - skill:wave-reviewer
         - skill:factory-check
       tags:
