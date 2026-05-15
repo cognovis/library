@@ -58,6 +58,8 @@ CLAUDE_FRONTMATTER_EXCLUDE = {
     "golden_prompt_extends",
     "model_standards",
     "requires",
+    "capabilities",
+    "mcp_servers",
 }
 PER_HARNESS_AGENT_BASE_ALIASES = {
     "cognovis-base": {

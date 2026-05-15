@@ -1,15 +1,16 @@
 ---
 name: agent-name
 description: Describe when and why to use this agent. Be specific with trigger keywords. Include phrases like "Use PROACTIVELY when..." or "Delegate when..." for better auto-delegation.
-tools: Read, Grep, Glob
-model: sonnet
+model:
+  tier: standard
+  reasoning: medium
+  context: large
+  cost_priority: balanced
+capabilities:
+  - read_files
 agent_base_extends: cognovis-base
-model_standards: [claude-sonnet-4-6]
 color: blue
 codex:
-  model: gpt-5.4
-  model_reasoning_effort: medium
-  sandbox_mode: workspace-write
   nickname_candidates:
     - agent-name
 ---
@@ -153,23 +154,19 @@ Before returning your final result, create a structured debrief documenting what
   - "Reviews code for security vulnerabilities. Use PROACTIVELY when code changes are made."
   - "Runs tests and analyzes failures. Use when implementing features or fixing bugs."
 
-**tools** (optional, but recommended)
-- Omit to inherit ALL tools (including MCP) - use with caution!
-- Specify minimal required tools for security and focus
-- Common patterns:
-  - Read-only: `Read, Grep, Glob`
-  - Implementation: `Read, Write, Edit, Bash, Grep, Glob`
-  - Research: `Read, WebFetch, WebSearch, Grep, Glob`
-  - Orchestration: `Agent, Read`
-- See agent-frontmatter-reference.md for complete tool list
+**capabilities** (optional, recommended)
+- Closed vocabulary from `capabilities.yaml`; the builder projects these to harness-native tools, MCP notes, and sandbox settings
+- Specify the smallest needed set for security and focus
+- Common entries:
+  - Read-only: `read_files`
+  - Implementation: `read_files`, `edit_files`, `run_shell`
+  - Research: `read_files`, `search_web`
+  - Orchestration: `spawn_subagents`, `manage_beads`
 
 **model** (optional)
-- Defaults to `inherit` (caller's model) if omitted — always set explicitly
-- Options: `haiku` | `sonnet` | `opus` | `inherit`
-  - `opus`: Full reasoning, best quality
-  - `sonnet`: Balanced, good for moderate complexity (recommended default)
-  - `haiku`: Fast, routine, deterministic tasks only (test running, formatting, linting)
-  - `inherit`: Match caller's model (can cause surprises in pipelines)
+- Prefer a requirement block resolved by `models.yaml`
+- Set `tier`, `reasoning`, `context`, and `cost_priority`
+- Per-harness escape hatches are allowed when required, for example `claude-code: claude-opus-4-7`
 
 **color** (optional)
 - Visual identifier in CLI output

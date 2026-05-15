@@ -54,15 +54,16 @@ name: {name}
 description: >-
   TODO: Describe when and why to use this agent. Be specific with trigger keywords.
   Example: Reviews code for security vulnerabilities. Use PROACTIVELY when code changes are made.
-tools: Read, Grep, Glob
-model: sonnet
+model:
+  tier: standard
+  reasoning: medium
+  context: large
+  cost_priority: balanced
+capabilities:
+  - read_files
 agent_base_extends: cognovis-base
-model_standards: [claude-sonnet-4-6]
 color: blue
 codex:
-  model: gpt-5.4
-  model_reasoning_effort: medium
-  sandbox_mode: workspace-write
   nickname_candidates:
     - {name}
 ---
@@ -156,8 +157,8 @@ def create_agent(name: str, output_path: str, template: str = "agent") -> bool:
         else:
             print(f"1. Edit {agent_file}")
             print("   - description: Specific, keyword-rich (critical for auto-delegation!)")
-            print("   - tools: Only necessary tools")
-            print("   - model: haiku (fast) | sonnet (balanced) | opus (full reasoning) | inherit (caller's model)")
+            print("   - capabilities: Only necessary capability names from capabilities.yaml")
+            print("   - model: simple alias or requirement block resolved through models.yaml")
             print("   - color: Visual identifier (red, blue, green, yellow, purple, orange, pink, cyan)")
             print("2. Replace all TODO items with actual content")
             print("3. Write clear, numbered instructions")

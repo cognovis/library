@@ -2631,6 +2631,21 @@ library:
         Layer 3 model-standard for Claude Haiku 4.5 — avoid under-scoping
         multi-step plans, no terse-skip on verification steps.
       source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-haiku-4-5.md
+    - name: gpt-5.4-mini
+      description: >-
+        Layer 3 model-standard for GPT-5.4 Mini in Codex agents — fast routine
+        execution with explicit uncertainty escalation.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.4-mini.md
+    - name: gpt-5.4
+      description: >-
+        Layer 3 model-standard for GPT-5.4 in Codex agents — direct execution
+        and concise verification discipline.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.4.md
+    - name: gpt-5.5
+      description: >-
+        Layer 3 model-standard for GPT-5.5 in Codex agents — deeper reasoning,
+        pre-mortem, and explicit trade-off analysis.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.5.md
 
   agent_bases:
     - name: cognovis-base

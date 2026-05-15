@@ -86,7 +86,7 @@ def _validate_agentskills_rules(data: dict) -> list:
             if len(name) > 64:
                 errors.append(f"{prefix} name exceeds 64 chars (got {len(name)})")
 
-            if not _NAME_PATTERN.match(name):
+            if primitive_name != "model-standard" and not _NAME_PATTERN.match(name):
                 errors.append(
                     f"{prefix} name must match [a-z][a-z0-9-]* "
                     "(lowercase letters, digits, hyphens only)"

@@ -158,14 +158,15 @@ name: kebab-case-name              # Required
 description: |                     # Required (critical for auto-delegation!)
   Describe when and why to use this agent.
   Use PROACTIVELY when [trigger scenario].
-tools: Read, Grep, Glob           # Optional (omit = all tools)
-model: sonnet                     # haiku|sonnet|opus|inherit (default: inherit)
+model:
+  tier: standard                  # economy|standard|premium|frontier
+  reasoning: medium               # low|medium|high|max
+  context: large                  # small|medium|large
+  cost_priority: balanced         # cheapest|balanced|quality-first
+capabilities:                    # Closed vocabulary from capabilities.yaml
+  - read_files
 agent_base_extends: cognovis-base # Layer 1 logical alias
-model_standards: [claude-sonnet-4-6]
 codex:                            # Optional Codex overrides
-  model: gpt-5.4
-  model_reasoning_effort: medium
-  sandbox_mode: workspace-write
   nickname_candidates:
     - kebab-case-name
 ---
@@ -177,9 +178,10 @@ codex:                            # Optional Codex overrides
 |-------|------|----------|---------|-------------|
 | `name` | string | Yes | — | Kebab-case identifier |
 | `description` | string | Yes | — | When to delegate (critical for auto-delegation) |
-| `tools` | list | No | all | Tools the agent can use |
+| `capabilities` | list | No | — | Closed capability names projected to harness-native bindings |
+| `tools` | list | No | all | Legacy Claude tool list; prefer capabilities for new agents |
 | `disallowedTools` | list | No | — | Tools to deny from inherited set |
-| `model` | string | No | inherit | `haiku`, `sonnet`, `opus`, `inherit`, or full model ID |
+| `model` | string or object | No | inherit | Requirement block resolved through `models.yaml`, or legacy alias/full model ID |
 | `permissionMode` | string | No | default | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan` |
 | `mcpServers` | list | No | — | MCP servers (inline or string references) |
 | `hooks` | object | No | — | PreToolUse, PostToolUse, Stop hooks |
@@ -188,7 +190,7 @@ codex:                            # Optional Codex overrides
 | `maxTurns` | integer | No | — | Auto-stop after N turns |
 | `color` | string | No | — | Visual identifier in CLI |
 | `agent_base_extends` | string | No | `cognovis-base` | Layer 1 base for Library composition |
-| `model_standards` | list | No | [] | Layer 3 model overlays |
+| `model_standards` | list | No | auto | Layer 3 model overlays; builder auto-loads resolved model ID |
 | `codex` | object | No | — | Codex-only overrides emitted into TOML |
 
 **Harness-specific body blocks:**
@@ -208,20 +210,21 @@ Codex-only instructions.
 Malformed, nested, or unclosed directive blocks fail `scripts/build-agent.py`.
 
 **Model selection:**
-- `inherit` -- match caller's model (default when omitted)
-- `haiku` -- fast, routine, deterministic (cheapest, use for simple transforms)
-- `sonnet` -- balanced, good for moderate complexity work
-- `opus` -- full reasoning power, best quality
+- Prefer requirement blocks. The builder resolves the cheapest model per harness
+  that satisfies `tier`, `reasoning`, and `context`.
+- Use `cost_priority: cheapest`, `balanced`, or `quality-first`.
+- Escape hatch per harness when required: `claude-code: claude-opus-4-7` or
+  `codex: { tier: premium, reasoning: high }`.
 
 **Important:** `model` defaults to `inherit`, not `opus`. An agent without `model:` gets whatever model the caller uses. Always set model explicitly to avoid surprises in pipelines.
 
-**Tool access patterns:**
-- Read-only: `Read, Grep, Glob`
-- Implementation: `Read, Write, Edit, Bash, Grep, Glob`
-- Research: `Read, WebFetch, WebSearch, Grep, Glob`
-- Orchestration: `Agent, Read`
+**Capability patterns:**
+- Read-only: `read_files`
+- Implementation: `read_files`, `edit_files`, `run_shell`
+- Research: `read_files`, `search_web`
+- Orchestration: `spawn_subagents`, `manage_beads`
 
-Minimal tools reduce attack surface and keep the agent focused.
+Minimal capabilities reduce attack surface and keep the agent focused.
 
 Full field documentation: `references/agent-frontmatter-reference.md`
 

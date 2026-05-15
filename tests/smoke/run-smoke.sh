@@ -1344,12 +1344,12 @@ smoke_agent_bases() {
 #
 #  Checks per agent file in ~/code/claude-code-plugins/**/agents/*.md:
 #  1. agent_base_extends field is present in YAML frontmatter
-#  2. model_standards field is present in YAML frontmatter
+#  2. model_standards field or capability-era model block is present in YAML frontmatter
 #
 #  Cross-harness validation: verifies at least 3 agents across different plugins
 #  (beads-workflow, core, dev-tools) have both fields.
 #
-#  agent-forge: init-agent.py template emits agent_base_extends and model_standards.
+#  agent-forge: init-agent.py template emits agent_base_extends and capability-era model fields.
 #
 #  Note: This smoke uses ~/code/claude-code-plugins as the source of truth.
 #  It is excluded from 'all' (same pattern as smoke_migration) because it relies
@@ -1384,12 +1384,12 @@ smoke_fleet_migration() {
     pass "fleet-migration/agent-count: found ${total} agent .md files in claude-code-plugins"
 
     # -----------------------------------------------------------------------
-    # CHECK 1+2: All agents have agent_base_extends and model_standards
+    # CHECK 1+2: All agents have agent_base_extends and a Layer 3 model path
     # -----------------------------------------------------------------------
     local missing_base=0
-    local missing_std=0
+    local missing_model=0
     local missing_list_base=()
-    local missing_list_std=()
+    local missing_list_model=()
 
     for f in "${agent_files[@]}"; do
         local rel
@@ -1398,9 +1398,9 @@ smoke_fleet_migration() {
             missing_base=$((missing_base + 1))
             missing_list_base+=("${rel}")
         fi
-        if ! grep -q "^model_standards:" "${f}" 2>/dev/null; then
-            missing_std=$((missing_std + 1))
-            missing_list_std+=("${rel}")
+        if ! grep -q "^model_standards:" "${f}" 2>/dev/null && ! grep -q "^model:" "${f}" 2>/dev/null; then
+            missing_model=$((missing_model + 1))
+            missing_list_model+=("${rel}")
         fi
     done
 
@@ -1413,11 +1413,11 @@ smoke_fleet_migration() {
         done
     fi
 
-    if [[ "${missing_std}" -eq 0 ]]; then
-        pass "fleet-migration/model-standards: all ${total} agents have model_standards frontmatter"
+    if [[ "${missing_model}" -eq 0 ]]; then
+        pass "fleet-migration/model-layer: all ${total} agents have model_standards or model frontmatter"
     else
-        fail "fleet-migration/model-standards: ${missing_std} of ${total} agents missing model_standards"
-        for m in "${missing_list_std[@]}"; do
+        fail "fleet-migration/model-layer: ${missing_model} of ${total} agents missing model_standards/model"
+        for m in "${missing_list_model[@]}"; do
             echo "    MISSING: ${m}"
         done
     fi
@@ -1443,14 +1443,15 @@ smoke_fleet_migration() {
         local rel
         rel="$(echo "${sample_file}" | sed "s|${plugins_root}/||")"
         local has_base=false
-        local has_std=false
+        local has_model=false
         grep -q "^agent_base_extends:" "${sample_file}" 2>/dev/null && has_base=true
-        grep -q "^model_standards:" "${sample_file}" 2>/dev/null && has_std=true
-        if [[ "${has_base}" == "true" && "${has_std}" == "true" ]]; then
-            pass "fleet-migration/cross-harness-${plugin}: ${rel} has agent_base_extends + model_standards"
+        grep -q "^model_standards:" "${sample_file}" 2>/dev/null && has_model=true
+        grep -q "^model:" "${sample_file}" 2>/dev/null && has_model=true
+        if [[ "${has_base}" == "true" && "${has_model}" == "true" ]]; then
+            pass "fleet-migration/cross-harness-${plugin}: ${rel} has agent_base_extends + model layer"
             cross_ok=$((cross_ok + 1))
         else
-            fail "fleet-migration/cross-harness-${plugin}: ${rel} missing agent_base_extends=${has_base} model_standards=${has_std}"
+            fail "fleet-migration/cross-harness-${plugin}: ${rel} missing agent_base_extends=${has_base} model_layer=${has_model}"
         fi
     done
 
@@ -1463,13 +1464,13 @@ smoke_fleet_migration() {
     # -----------------------------------------------------------------------
     if [[ -f "${init_agent_script}" ]]; then
         local has_base_template=false
-        local has_ms_template=false
+        local has_model_template=false
         grep -q "agent_base_extends" "${init_agent_script}" 2>/dev/null && has_base_template=true
-        grep -q "model_standards" "${init_agent_script}" 2>/dev/null && has_ms_template=true
-        if [[ "${has_base_template}" == "true" && "${has_ms_template}" == "true" ]]; then
-            pass "fleet-migration/agent-forge-template: init-agent.py template emits agent_base_extends + model_standards"
+        grep -q "cost_priority" "${init_agent_script}" 2>/dev/null && has_model_template=true
+        if [[ "${has_base_template}" == "true" && "${has_model_template}" == "true" ]]; then
+            pass "fleet-migration/agent-forge-template: init-agent.py template emits agent_base_extends + model requirements"
         else
-            fail "fleet-migration/agent-forge-template: init-agent.py template missing agent_base_extends=${has_base_template} model_standards=${has_ms_template}"
+            fail "fleet-migration/agent-forge-template: init-agent.py template missing agent_base_extends=${has_base_template} model_requirements=${has_model_template}"
         fi
     else
         fail "fleet-migration/agent-forge-template: init-agent.py not found at ${init_agent_script}"

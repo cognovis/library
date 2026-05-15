@@ -1,0 +1,88 @@
+version: 1
+capabilities:
+  - name: read_files
+    description: Read project files and search local source trees.
+    claude:
+      tools: [Read, Grep, Glob]
+    codex:
+      sandbox_mode: read-only
+  - name: write_files
+    description: Create new files in the workspace.
+    claude:
+      tools: [Write]
+    codex:
+      sandbox_mode: workspace-write
+  - name: edit_files
+    description: Modify existing files in the workspace.
+    claude:
+      tools: [Edit]
+    codex:
+      sandbox_mode: workspace-write
+  - name: run_shell
+    description: Run shell commands in the workspace.
+    claude:
+      tools: [Bash]
+    codex:
+      sandbox_mode: workspace-write
+  - name: inspect_git
+    description: Inspect git status, diffs, history, and branch metadata.
+    claude:
+      tools: [Bash, Read, Grep, Glob]
+    codex:
+      sandbox_mode: read-only
+  - name: spawn_subagents
+    description: Delegate bounded work to harness-native subagents.
+    claude:
+      tools: [Agent]
+    codex:
+      sandbox_mode: workspace-write
+  - name: query_memory
+    description: Query and update the open-brain project memory.
+    claude:
+      tools:
+        - mcp__open-brain__save_memory
+        - mcp__open-brain__search
+        - mcp__open-brain__timeline
+        - mcp__open-brain__get_context
+      mcpServers: [open-brain]
+    codex:
+      mcp_servers: [open-brain]
+      skills: [ob-cli]
+      sandbox_mode: workspace-write
+  - name: search_web
+    description: Search and fetch web content for research tasks.
+    claude:
+      tools: [WebFetch, WebSearch]
+    codex:
+      mcp_servers: [searxng]
+      sandbox_mode: read-only
+  - name: browser
+    description: Drive browser automation for local or remote web targets.
+    claude:
+      tools: [Bash]
+      mcpServers: [playwright]
+    codex:
+      mcp_servers: [playwright]
+      sandbox_mode: workspace-write
+  - name: manage_beads
+    description: Read, claim, update, export, and close beads issues.
+    claude:
+      tools: [Bash, Read, Grep, Glob]
+      skills: [beads]
+    codex:
+      skills: [beads]
+      sandbox_mode: workspace-write
+  - name: update_docs
+    description: Edit documentation and changelog files.
+    claude:
+      tools: [Read, Write, Edit, Grep, Glob]
+    codex:
+      sandbox_mode: workspace-write
+  - name: send_email
+    description: Prepare email drafts through the local mail-send workflow.
+    claude:
+      tools: [Bash, Read]
+      skills: [mail-send]
+    codex:
+      skills: [mail-send]
+      sandbox_mode: workspace-write

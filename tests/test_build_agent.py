@@ -78,6 +78,103 @@ def write_source_without_codex_override(tmp_path: Path) -> Path:
     return source
 
 
+def write_capability_source(tmp_path: Path) -> Path:
+    source = tmp_path / "capability-agent.md"
+    source.write_text(
+        "---\n"
+        "name: capability-agent\n"
+        "description: Capability agent description.\n"
+        "model:\n"
+        "  tier: standard\n"
+        "  reasoning: high\n"
+        "  context: large\n"
+        "  cost_priority: cheapest\n"
+        "capabilities:\n"
+        "  - read_files\n"
+        "  - edit_files\n"
+        "  - run_shell\n"
+        "  - query_memory\n"
+        "agent_base_extends: cognovis-base\n"
+        "---\n\n"
+        "# Capability Agent\n\nShared body.\n"
+    )
+    return source
+
+
+def write_escape_hatch_source(tmp_path: Path) -> Path:
+    source = tmp_path / "escape-agent.md"
+    source.write_text(
+        "---\n"
+        "name: escape-agent\n"
+        "description: Escape hatch agent description.\n"
+        "model:\n"
+        "  tier: standard\n"
+        "  reasoning: high\n"
+        "  context: large\n"
+        "  claude-code: claude-opus-4-7\n"
+        "  codex:\n"
+        "    tier: premium\n"
+        "    reasoning: high\n"
+        "    context: large\n"
+        "capabilities:\n"
+        "  - read_files\n"
+        "agent_base_extends: cognovis-base\n"
+        "---\n\n"
+        "# Escape Agent\n\nShared body.\n"
+    )
+    return source
+
+
+def write_unknown_capability_source(tmp_path: Path) -> Path:
+    source = tmp_path / "unknown-capability-agent.md"
+    source.write_text(
+        "---\n"
+        "name: unknown-capability-agent\n"
+        "description: Unknown capability agent description.\n"
+        "model:\n"
+        "  tier: standard\n"
+        "capabilities:\n"
+        "  - not_registered\n"
+        "agent_base_extends: cognovis-base\n"
+        "---\n\n"
+        "# Unknown Capability Agent\n\nShared body.\n"
+    )
+    return source
+
+
+def write_no_match_model_source(tmp_path: Path) -> Path:
+    source = tmp_path / "no-match-agent.md"
+    source.write_text(
+        "---\n"
+        "name: no-match-agent\n"
+        "description: No match agent description.\n"
+        "model:\n"
+        "  tier: frontier\n"
+        "  reasoning: max\n"
+        "  context: large\n"
+        "capabilities:\n"
+        "  - read_files\n"
+        "agent_base_extends: cognovis-base\n"
+        "---\n\n"
+        "# No Match Agent\n\nShared body.\n"
+    )
+    return source
+
+
+def make_model_standards(tmp_path: Path, names: list[str]) -> Path:
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+    for name in names:
+        (model_standards_dir / f"{name}.md").write_text(
+            "---\n"
+            f"name: {name}\n"
+            f"model_id: {name}\n"
+            "---\n\n"
+            f"{name.upper()}_LAYER3_MARKER\n"
+        )
+    return model_standards_dir
+
+
 def run_build(
     source: Path,
     output_dir: Path,
@@ -176,6 +273,79 @@ def test_build_agent_derives_codex_defaults_without_override(tmp_path: Path) -> 
     assert codex["model_reasoning_effort"] == "high"
     assert codex["sandbox_mode"] == "read-only"
     assert codex["nickname_candidates"] == ["plain-agent"]
+
+
+def test_build_agent_resolves_models_and_capabilities_per_harness(tmp_path: Path) -> None:
+    """Capability-era model and tool declarations project to concrete artifacts."""
+    source = write_capability_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = make_model_standards(tmp_path, ["claude-sonnet-4-6", "gpt-5.4"])
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
+
+    assert result.returncode == 0, result.stderr
+    claude = (output_dir / "capability-agent.md").read_text()
+    codex_text = (output_dir / "capability-agent.toml").read_text()
+    codex = tomllib.loads(codex_text)
+
+    assert "model: claude-sonnet-4-6" in claude
+    assert "tools: Read, Grep, Glob, Edit, Bash" in claude
+    assert "mcp__open-brain__search" in claude
+    assert "mcpServers:\n- open-brain" in claude
+    assert "CLAUDE-SONNET-4-6_LAYER3_MARKER" in claude
+
+    assert codex["model"] == "gpt-5.4"
+    assert codex["model_reasoning_effort"] == "high"
+    assert codex["sandbox_mode"] == "workspace-write"
+    assert '# mcp_servers: ["open-brain"]' in codex_text
+    assert "GPT-5.4_LAYER3_MARKER" in codex["developer_instructions"]
+
+
+def test_build_agent_model_escape_hatch_overrides_per_harness(tmp_path: Path) -> None:
+    """Explicit per-harness model declarations beat registry resolution."""
+    source = write_escape_hatch_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = make_model_standards(tmp_path, ["claude-opus-4-7", "gpt-5.5"])
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
+
+    assert result.returncode == 0, result.stderr
+    claude = (output_dir / "escape-agent.md").read_text()
+    codex = tomllib.loads((output_dir / "escape-agent.toml").read_text())
+    assert "model: claude-opus-4-7" in claude
+    assert "CLAUDE-OPUS-4-7_LAYER3_MARKER" in claude
+    assert codex["model"] == "gpt-5.5"
+    assert "GPT-5.5_LAYER3_MARKER" in codex["developer_instructions"]
+
+
+def test_build_agent_rejects_unknown_capability(tmp_path: Path) -> None:
+    """Capabilities are a closed vocabulary."""
+    source = write_unknown_capability_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
+
+    assert result.returncode == 1
+    assert "Unknown capability 'not_registered'" in result.stderr
+
+
+def test_build_agent_rejects_model_requirements_with_no_match(tmp_path: Path) -> None:
+    """Model requirements fail clearly when no registry row satisfies them."""
+    source = write_no_match_model_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
+
+    assert result.returncode == 1
+    assert "No model in models.yaml matches harness" in result.stderr
 
 
 def test_build_agent_rejects_unclosed_directives(tmp_path: Path) -> None:

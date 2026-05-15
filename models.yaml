@@ -1,0 +1,62 @@
+version: 1
+models:
+  - id: claude-haiku-4-5
+    harness: claude-code
+    tier: economy
+    reasoning_levels: [low, medium]
+    default_reasoning: medium
+    context: medium
+    vision: true
+    cost:
+      input: 1.0
+      output: 5.0
+  - id: claude-sonnet-4-6
+    harness: claude-code
+    tier: standard
+    reasoning_levels: [low, medium, high]
+    default_reasoning: high
+    context: large
+    vision: true
+    cost:
+      input: 3.0
+      output: 15.0
+  - id: claude-opus-4-7
+    harness: claude-code
+    tier: premium
+    reasoning_levels: [medium, high, max]
+    default_reasoning: high
+    context: large
+    vision: true
+    cost:
+      input: 15.0
+      output: 75.0
+  - id: gpt-5.4-mini
+    harness: codex
+    tier: economy
+    reasoning_levels: [low, medium, high]
+    default_reasoning: medium
+    context: medium
+    vision: true
+    cost:
+      input: 0.4
+      output: 1.6
+  - id: gpt-5.4
+    harness: codex
+    tier: standard
+    reasoning_levels: [low, medium, high]
+    default_reasoning: high
+    context: large
+    vision: true
+    cost:
+      input: 2.0
+      output: 8.0
+  - id: gpt-5.5
+    harness: codex
+    tier: premium
+    reasoning_levels: [medium, high, max]
+    default_reasoning: high
+    context: large
+    vision: true
+    cost:
+      input: 8.0
+      output: 32.0

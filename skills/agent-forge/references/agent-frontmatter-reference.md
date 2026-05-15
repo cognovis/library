@@ -12,15 +12,16 @@ Agent as a single Markdown file with YAML frontmatter:
 ---
 name: agent-name
 description: When and why to use this agent
-tools: Tool1, Tool2, Tool3
-model: sonnet
+model:
+  tier: standard
+  reasoning: medium
+  context: large
+  cost_priority: balanced
+capabilities:
+  - read_files
 agent_base_extends: cognovis-base
-model_standards: [claude-sonnet-4-6]
 color: blue
 codex:
-  model: gpt-5.4
-  model_reasoning_effort: medium
-  sandbox_mode: workspace-write
   nickname_candidates:
     - agent name
 ---

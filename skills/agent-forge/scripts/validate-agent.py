@@ -257,9 +257,11 @@ class AgentValidator:
     def _validate_tools(self):
         """Validate tools field if present."""
         if "tools" not in self.frontmatter:
+            if "capabilities" in self.frontmatter:
+                return
             self.warnings.append(
-                "No tools field specified. Agent will inherit ALL tools (including MCP). "
-                "Consider specifying minimal required tools for security"
+                "No tools or capabilities field specified. Agent will inherit ALL tools "
+                "(including MCP). Consider specifying minimal required access for security"
             )
             return
 
@@ -301,10 +303,31 @@ class AgentValidator:
 
         model = self.frontmatter["model"]
 
-        if model not in self.VALID_MODELS:
+        if isinstance(model, dict):
+            valid_keys = {
+                "tier",
+                "reasoning",
+                "context",
+                "cost_priority",
+                "vision",
+                "claude",
+                "claude-code",
+                "codex",
+                "opencode",
+            }
+            unknown_keys = sorted(set(model) - valid_keys)
+            if unknown_keys:
+                self.errors.append(
+                    f"Invalid model requirement keys: {', '.join(unknown_keys)}"
+                )
+            return
+
+        full_model_id = isinstance(model, str) and re.match(r"^[a-z][a-z0-9.-]*$", model)
+        if model not in self.VALID_MODELS and not full_model_id:
             self.errors.append(
                 f"Invalid model '{model}'. "
-                f"Valid options: {', '.join(sorted(self.VALID_MODELS))}"
+                f"Valid options: {', '.join(sorted(self.VALID_MODELS))}, "
+                "a model requirement mapping, or a full model id"
             )
 
         # Best practices suggestions

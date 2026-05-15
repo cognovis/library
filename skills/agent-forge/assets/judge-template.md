@@ -1,10 +1,14 @@
 ---
 name: <judge-name>
 description: Use when a side-effecting actor submits an Action Proposal and needs a pre-action authorization decision before returning ALLOW, BLOCK, REVISE, or ESCALATE.
-tools: Read, Grep, Glob
-model: opus
+model:
+  tier: premium
+  reasoning: high
+  context: large
+  cost_priority: balanced
+capabilities:
+  - read_files
 agent_base_extends: cognovis-base
-model_standards: [claude-opus-4-7]
 requires_standards: [judge-layer]
 color: red
 ---

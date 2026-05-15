@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cognovis/cognovis-library/docs/schema/capabilities.schema.json",
+  "title": "Library Agent Capability Registry",
+  "type": "object",
+  "required": ["version", "capabilities"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "claude": {
+            "$ref": "#/$defs/claude_binding"
+          },
+          "claude-code": {
+            "$ref": "#/$defs/claude_binding"
+          },
+          "codex": {
+            "$ref": "#/$defs/codex_binding"
+          },
+          "opencode": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "pi": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "claude_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "$ref": "#/$defs/string_list"
+        },
+        "mcpServers": {
+          "$ref": "#/$defs/string_list"
+        },
+        "skills": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    },
+    "codex_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sandbox_mode": {
+          "type": "string",
+          "enum": ["read-only", "workspace-write", "danger-full-access"]
+        },
+        "mcp_servers": {
+          "$ref": "#/$defs/string_list"
+        },
+        "skills": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    }
+  }
+}
