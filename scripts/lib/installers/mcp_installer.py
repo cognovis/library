@@ -209,7 +209,7 @@ def remove_mcp(
                 removed_harnesses.append(h)
 
         lock_data = load_lockfile(lockfile_path)
-        remove_entry(lock_data, mcp_name)
+        remove_entry(lock_data, mcp_name, primitive_type="mcp")
         save_lockfile(lockfile_path, lock_data)
 
         return success(

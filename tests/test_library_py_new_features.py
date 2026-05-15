@@ -164,6 +164,8 @@ default_dirs:
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/
+    - default_codex: .codex/agents/
+    - global_codex: ~/.codex/agents/
   prompts:
     - default: .claude/commands/
     - global: ~/.claude/commands/
@@ -980,6 +982,25 @@ class TestHarnessFlag:
             cwd=project_dir,
         )
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert (project_dir / ".claude" / "agents" / "multi-harness-agent.md").exists()
+        assert (project_dir / ".codex" / "agents" / "multi-harness-agent.toml").exists()
+        data = json.loads(result.stdout)
+        installed_paths = {
+            item["path"]
+            for item in data["data"].get("installed_targets", [])
+        }
+        assert str(project_dir / ".claude" / "agents" / "multi-harness-agent.md") in installed_paths
+        assert str(project_dir / ".codex" / "agents" / "multi-harness-agent.toml") in installed_paths
+
+    def test_harness_codex_installs_toml_target(self, project_dir):
+        result = run_library(
+            "agent", "use", "multi-harness-agent",
+            "--harness", "codex", "--json",
+            cwd=project_dir,
+        )
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert not (project_dir / ".claude" / "agents" / "multi-harness-agent.md").exists()
+        assert (project_dir / ".codex" / "agents" / "multi-harness-agent.toml").exists()
 
 
 # ---------------------------------------------------------------------------

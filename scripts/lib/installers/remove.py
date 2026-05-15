@@ -87,7 +87,7 @@ def remove_skill(
         _remove_path(bridge_dir)
 
     lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name)
+    remove_entry(lock_data, name, primitive_type="skill")
     save_lockfile(lockfile_path, lock_data)
 
     return success(
@@ -151,7 +151,7 @@ def remove_standard(
         removed_files.append(str(canonical_dir))
 
     lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name)
+    remove_entry(lock_data, name, primitive_type="standard")
     save_lockfile(lockfile_path, lock_data)
 
     return success(

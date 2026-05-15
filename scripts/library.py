@@ -434,7 +434,7 @@ def _install_with_deps(
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
         # Skip if already installed (lockfile-aware)
-        if is_already_installed(dep_name, repo_root, scope):
+        if is_already_installed(dep_name, repo_root, scope, dep_prim):
             continue
         install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
         rc = _dispatch_use(

@@ -18,6 +18,8 @@ default_dirs:
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/
+    - default_codex: .codex/agents/
+    - global_codex: ~/.codex/agents/
   prompts:
     - default: .claude/commands/
     - global: ~/.claude/commands/

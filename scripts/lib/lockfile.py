@@ -97,10 +97,11 @@ def upsert_entry(
     data: dict[str, Any],
     entry: dict[str, Any],
 ) -> dict[str, Any]:
-    """Insert or update a lockfile entry by name.
+    """Insert or update a lockfile entry by name and primitive type.
 
-    If an entry with the same `name` exists, it is replaced in place.
-    Otherwise a new entry is appended.
+    If an entry with the same `name` and `type` exists, it is replaced in
+    place. Otherwise a new entry is appended. This allows cross-primitive name
+    collisions such as `skill:session-close` and `agent:session-close`.
 
     Args:
         data: Parsed lockfile dict (mutated in place).
@@ -111,9 +112,10 @@ def upsert_entry(
     """
     installed = data.setdefault("installed", [])
     name = entry["name"]
+    primitive_type = entry.get("type")
 
     for i, existing in enumerate(installed):
-        if existing.get("name") == name:
+        if existing.get("name") == name and existing.get("type") == primitive_type:
             installed[i] = entry
             return data
 
@@ -121,22 +123,41 @@ def upsert_entry(
     return data
 
 
-def remove_entry(data: dict[str, Any], name: str) -> bool:
-    """Remove the entry with the given name from the lockfile.
+def remove_entry(
+    data: dict[str, Any],
+    name: str,
+    primitive_type: str | None = None,
+) -> bool:
+    """Remove matching entries from the lockfile.
+
+    When `primitive_type` is provided, remove only that primitive. When omitted,
+    keep the historical behavior and remove every entry with the given name.
 
     Returns:
         True if an entry was removed, False if name was not found.
     """
     installed = data.get("installed", [])
     original_len = len(installed)
-    data["installed"] = [e for e in installed if e.get("name") != name]
+    data["installed"] = [
+        e for e in installed
+        if not (
+            e.get("name") == name
+            and (primitive_type is None or e.get("type") == primitive_type)
+        )
+    ]
     return len(data["installed"]) < original_len
 
 
-def get_entry(data: dict[str, Any], name: str) -> Optional[dict[str, Any]]:
-    """Return the lockfile entry for the given name, or None."""
+def get_entry(
+    data: dict[str, Any],
+    name: str,
+    primitive_type: str | None = None,
+) -> Optional[dict[str, Any]]:
+    """Return the lockfile entry for the given name/type, or None."""
     for entry in data.get("installed", []):
-        if entry.get("name") == name:
+        if entry.get("name") == name and (
+            primitive_type is None or entry.get("type") == primitive_type
+        ):
             return entry
     return None
 

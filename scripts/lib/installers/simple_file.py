@@ -259,7 +259,7 @@ def remove_simple_file(
             removed_files.append(str(candidate))
 
     lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name)
+    remove_entry(lock_data, name, primitive_type=primitive_name)
     save_lockfile(lockfile_path, lock_data)
 
     return success(

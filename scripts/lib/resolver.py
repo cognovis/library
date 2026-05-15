@@ -93,13 +93,14 @@ def is_already_installed(
     name: str,
     repo_root: Path,
     scope: str = "project",
+    primitive_type: str | None = None,
 ) -> bool:
-    """Return True if `name` is present in the lockfile and still materialized."""
+    """Return True if `name`/`primitive_type` is present and materialized."""
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
     if not lockfile_path.exists():
         return False
     lock_data = load_lockfile(lockfile_path)
-    entry = get_entry(lock_data, name)
+    entry = get_entry(lock_data, name, primitive_type)
     if entry is None:
         return False
     install_target = entry.get("install_target")

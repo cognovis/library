@@ -1,9 +1,8 @@
 """
 installers/agent.py — Agent install/remove logic.
 
-Agents are deployed as composed .md files (and optionally .toml for Codex)
-at ~/.claude/agents/<name>.md (global) or <project>/.claude/agents/<name>.md
-(project scope).
+Agents are deployed as composed .md files for Claude Code and .toml files for
+Codex at the configured agent directories.
 
 Composition is performed by scripts/compose-agent.py if the agent frontmatter
 references golden_prompt_extends or model_standards. If compose-agent.py is not
@@ -106,42 +105,32 @@ def install_agent(
     entry = lookup_entry(catalog, "agent", name)
     agent_name = entry.get("name", name)
 
-    # 2. Resolve source for the requested harness
-    harness_missing: list[str] = []
-    try:
-        source_str = _resolve_agent_source(entry, harness)
-    except SourceError:
-        # If specific harness has no source, fall back to any available
-        harness_missing = _harness_missing_sources(entry, harness)
-        try:
-            source_str = _resolve_agent_source(entry, "all")
-        except SourceError as exc:
-            raise InstallError(f"Agent '{agent_name}' has no source for harness '{harness}'.") from exc
-
-    # 3. Parse source
-    parsed = parse_source(source_str)
+    # 2. Resolve sources and install targets for the requested harness.
+    targets, harness_missing = _resolve_agent_targets(
+        catalog=catalog,
+        entry=entry,
+        prim=prim,
+        agent_name=agent_name,
+        repo_root=repo_root,
+        scope=scope,
+        harness=harness,
+    )
     marketplace = resolve_marketplace(catalog, entry)
 
-    # 4. Determine install paths
-    install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
-    canonical_base = install_paths["canonical"]
-
-    if canonical_base is None:
-        raise InstallError(
-            f"Cannot determine install path for agent '{agent_name}' (scope={scope}). "
-            "Check default_dirs.agents in library.yaml."
-        )
-
-    # 5. Dry-run mode
+    # 3. Dry-run mode.
     if dry_run:
-        ops = plan_cache_writes(
-            primitive_type="agent",
-            marketplace=marketplace,
-            name=agent_name,
-            source_commit="<commit-sha>",
-            install_target=canonical_base / f"{agent_name}.md",
-            bridge_path=None,
-        )
+        ops: list[dict[str, Any]] = []
+        for target in targets:
+            ops.extend(
+                plan_cache_writes(
+                    primitive_type="agent",
+                    marketplace=marketplace,
+                    name=target["cache_name"],
+                    source_commit="<commit-sha>",
+                    install_target=target["install_target"],
+                    bridge_path=None,
+                )
+            )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append({
             "operation": "write_lockfile",
@@ -150,84 +139,230 @@ def install_agent(
         })
         result = dry_run_result(
             ops,
-            summary=f"Would install agent '{agent_name}' to {canonical_base}",
+            summary=f"Would install agent '{agent_name}' to "
+                    + ", ".join(str(t["install_target"]) for t in targets),
         )
         if harness_missing:
             result["harness_missing"] = harness_missing
         return result
 
-    # 6. Fetch source
-    source_file, source_commit, temp_root = _fetch_agent_source(parsed, agent_name)
+    # 4. Materialize every requested harness target.
+    installed: list[dict[str, Any]] = []
+    compose_script = repo_root / "scripts" / "compose-agent.py"
+
+    for target in targets:
+        parsed = parse_source(target["source"])
+        source_file, source_commit, temp_root = _fetch_agent_source(parsed, agent_name)
+        try:
+            cache_path = compute_cache_path(
+                "agent",
+                marketplace,
+                target["cache_name"],
+                source_commit,
+            )
+
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            if cache_path.exists():
+                shutil.rmtree(str(cache_path))
+            cache_path.mkdir(parents=True, exist_ok=True)
+
+            agent_filename = source_file.name
+            if not agent_filename.endswith(target["extension"]):
+                agent_filename = f"{agent_name}{target['extension']}"
+
+            cached_file = cache_path / agent_filename
+            shutil.copy2(str(source_file), str(cached_file))
+
+            if target["harness"] == "claude_code" and compose_script.exists():
+                _try_compose(compose_script, cached_file, agent_name)
+
+            install_target = target["install_target"]
+            install_target.parent.mkdir(parents=True, exist_ok=True)
+            if install_target.is_symlink():
+                install_target.unlink()
+            elif install_target.exists():
+                install_target.unlink()
+
+            shutil.copy2(str(cached_file), str(install_target))
+            checksum = compute_checksum(cached_file)
+            installed.append({
+                "harness": target["harness"],
+                "source": target["source"],
+                "source_commit": source_commit,
+                "cache_path": cache_path,
+                "cached_file": cached_file,
+                "install_target": install_target,
+                "checksum": checksum,
+            })
+        finally:
+            _cleanup_source(temp_root)
+
+    if not installed:
+        raise InstallError(f"Agent '{agent_name}' had no installable targets.")
+
+    primary = next(
+        (item for item in installed if item["harness"] == "claude_code"),
+        installed[0],
+    )
+    bridge_symlinks = [
+        f"{item['install_target']} -> {item['cached_file']}"
+        for item in installed
+        if item is not primary
+    ]
+
+    lockfile_entry = make_entry(
+        name=agent_name,
+        primitive_type="agent",
+        marketplace=marketplace,
+        source=primary["source"],
+        source_commit=primary["source_commit"],
+        cache_path=str(primary["cache_path"]) + "/",
+        install_target=str(primary["install_target"]),
+        checksum_sha256=primary["checksum"],
+        content_sha256=primary["checksum"],
+        install_mode="vendor",
+        license_id=entry.get("license", "unknown"),
+        bridge_symlinks=bridge_symlinks,
+    )
+    lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+    lock_data = load_lockfile(lockfile_path)
+    upsert_entry(lock_data, lockfile_entry)
+    save_lockfile(lockfile_path, lock_data)
+
+    result = success(
+        data={
+            "name": agent_name,
+            "install_target": str(primary["install_target"]),
+            "installed_targets": [
+                {
+                    "harness": item["harness"],
+                    "path": str(item["install_target"]),
+                    "source_commit": item["source_commit"],
+                }
+                for item in installed
+            ],
+            "cache": str(primary["cache_path"]),
+            "source_commit": primary["source_commit"],
+        },
+        message="Agent '{}' installed at {}".format(
+            agent_name,
+            ", ".join(str(item["install_target"]) for item in installed),
+        ),
+    )
+    if harness_missing:
+        result["harness_missing"] = harness_missing
+    return result
+
+
+def _resolve_agent_targets(
+    *,
+    catalog: dict,
+    entry: dict,
+    prim: Any,
+    agent_name: str,
+    repo_root: Path,
+    scope: str,
+    harness: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Return install target specs for the requested agent harness."""
+    sources_map = entry.get("sources") or {}
+    harness_missing: list[str] = []
+
+    def target(
+        harness_name: str,
+        source: str,
+        extension: str,
+        cache_suffix: str = "",
+    ) -> dict[str, Any]:
+        base = _resolve_agent_base(catalog, prim, scope, repo_root, harness_name)
+        return {
+            "harness": harness_name,
+            "source": source,
+            "extension": extension,
+            "cache_name": f"{agent_name}{cache_suffix}",
+            "install_target": base / f"{agent_name}{extension}",
+        }
+
+    if harness == "all" and sources_map:
+        targets: list[dict[str, Any]] = []
+        if sources_map.get("claude"):
+            targets.append(target("claude_code", sources_map["claude"], ".md"))
+        if sources_map.get("codex"):
+            targets.append(target("codex", sources_map["codex"], ".toml", "-codex"))
+        if targets:
+            return targets, harness_missing
+
+    if harness == "codex" and sources_map.get("codex"):
+        return [target("codex", sources_map["codex"], ".toml", "-codex")], harness_missing
 
     try:
-        cache_path = compute_cache_path("agent", marketplace, agent_name, source_commit)
+        source = _resolve_agent_source(entry, harness)
+    except SourceError:
+        harness_missing = _harness_missing_sources(entry, harness)
+        try:
+            source = _resolve_agent_source(entry, "all")
+        except SourceError as exc:
+            raise InstallError(
+                f"Agent '{agent_name}' has no source for harness '{harness}'."
+            ) from exc
 
-        # 6b. Materialize cache
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        if cache_path.exists():
-            shutil.rmtree(str(cache_path))
-        cache_path.mkdir(parents=True, exist_ok=True)
+    if harness != "all":
+        harness_missing = _harness_missing_sources(entry, harness)
 
-        # Determine agent filename
-        agent_filename = source_file.name
-        if not agent_filename.endswith(".md"):
-            agent_filename = f"{agent_name}.md"
+    return [target("claude_code", source, ".md")], harness_missing
 
-        # Copy source file to cache
-        cached_file = cache_path / agent_filename
-        shutil.copy2(str(source_file), str(cached_file))
 
-        # 7. Run compose-agent.py if available
-        compose_script = repo_root / "scripts" / "compose-agent.py"
-        if compose_script.exists():
-            _try_compose(compose_script, cached_file, agent_name)
+def _resolve_agent_base(
+    catalog: dict,
+    prim: Any,
+    scope: str,
+    repo_root: Path,
+    harness: str,
+) -> Path:
+    """Resolve the base install directory for a Claude or Codex agent."""
+    if harness == "codex":
+        codex_path = _resolve_codex_agent_base(catalog, scope, repo_root)
+        if codex_path is not None:
+            return codex_path
+        return (Path.home() / ".codex" / "agents") if scope == "global" else (repo_root / ".codex" / "agents")
 
-        # 8. Install to target location
-        canonical_base.mkdir(parents=True, exist_ok=True)
-        install_target = canonical_base / f"{agent_name}.md"
-        if install_target.is_symlink():
-            install_target.unlink()
-        elif install_target.exists():
-            install_target.unlink()
-
-        # Copy (not symlink) the composed file — agents are typically single files
-        shutil.copy2(str(cached_file), str(install_target))
-
-        # 9. Write lockfile
-        checksum = compute_checksum(cached_file)
-        lockfile_entry = make_entry(
-            name=agent_name,
-            primitive_type="agent",
-            marketplace=marketplace,
-            source=source_str,
-            source_commit=source_commit,
-            cache_path=str(cache_path) + "/",
-            install_target=str(install_target),
-            checksum_sha256=checksum,
-            content_sha256=checksum,
-            install_mode="vendor",
-            license_id=entry.get("license", "unknown"),
+    install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
+    canonical_base = install_paths["canonical"]
+    if canonical_base is None:
+        raise InstallError(
+            f"Cannot determine install path for agent (scope={scope}). "
+            "Check default_dirs.agents in library.yaml."
         )
-        lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-        lock_data = load_lockfile(lockfile_path)
-        upsert_entry(lock_data, lockfile_entry)
-        save_lockfile(lockfile_path, lock_data)
+    return canonical_base
 
-        result = success(
-            data={
-                "name": agent_name,
-                "install_target": str(install_target),
-                "cache": str(cache_path),
-                "source_commit": source_commit,
-            },
-            message=f"Agent '{agent_name}' installed at {install_target}",
-        )
-        if harness_missing:
-            result["harness_missing"] = harness_missing
-        return result
 
-    finally:
-        _cleanup_source(temp_root)
+def _resolve_codex_agent_base(
+    catalog: dict,
+    scope: str,
+    repo_root: Path,
+) -> Path | None:
+    """Resolve default_dirs.agents default_codex/global_codex, if configured."""
+    default_dirs = catalog.get("default_dirs", {}) or {}
+    dirs_for_type = default_dirs.get("agents", []) or []
+    home = Path.home()
+    for entry in dirs_for_type:
+        if not isinstance(entry, dict):
+            continue
+        for key, value in entry.items():
+            if scope == "project" and key == "default_codex":
+                return _expand_agent_path(value, home, repo_root)
+            if scope == "global" and key == "global_codex":
+                return _expand_agent_path(value, home, repo_root)
+    return None
+
+
+def _expand_agent_path(raw: str, home: Path, root: Path) -> Path:
+    """Expand a configured agent path."""
+    if raw.startswith("~/"):
+        return home / raw[2:]
+    if raw.startswith("/"):
+        return Path(raw)
+    return root / raw
 
 
 def remove_agent(
@@ -276,7 +411,7 @@ def remove_agent(
         removed_files.append(str(install_target))
 
     lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name)
+    remove_entry(lock_data, name, primitive_type="agent")
     save_lockfile(lockfile_path, lock_data)
 
     return success(

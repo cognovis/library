@@ -171,7 +171,7 @@ def remove_guardrail(
         pass
 
     lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, guardrail_name)
+        remove_entry(lock_data, guardrail_name, primitive_type="guardrail")
     save_lockfile(lockfile_path, lock_data)
 
     return success(

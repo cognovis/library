@@ -915,6 +915,39 @@ class TestLockfile:
         assert len(data["installed"]) == 1, "Should have exactly one entry after upsert"
         assert data["installed"][0]["source_commit"] == "def", "Should have updated to v2"
 
+    def test_lockfile_upsert_keeps_same_name_different_type(self, tmp_path: Path):
+        """upsert_entry must allow cross-primitive name collisions."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.lockfile import get_entry, make_entry, upsert_entry
+
+        data = {"installed": []}
+        skill_entry = make_entry(
+            name="session-close",
+            primitive_type="skill",
+            marketplace="local",
+            source="/tmp/session-close/SKILL.md",
+            source_commit="abc",
+            cache_path="",
+            install_target=".agents/skills/session-close/",
+            checksum_sha256="d" * 64,
+        )
+        agent_entry = make_entry(
+            name="session-close",
+            primitive_type="agent",
+            marketplace="local",
+            source="/tmp/session-close.md",
+            source_commit="def",
+            cache_path="",
+            install_target=".claude/agents/session-close.md",
+            checksum_sha256="e" * 64,
+        )
+        upsert_entry(data, skill_entry)
+        upsert_entry(data, agent_entry)
+
+        assert len(data["installed"]) == 2
+        assert get_entry(data, "session-close", "skill")["source_commit"] == "abc"
+        assert get_entry(data, "session-close", "agent")["source_commit"] == "def"
+
     def test_lockfile_round_trip(self, tmp_path: Path):
         """save_lockfile + load_lockfile must be lossless round-trip."""
         sys.path.insert(0, str(SCRIPTS_DIR))
