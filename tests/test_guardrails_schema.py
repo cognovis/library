@@ -9,12 +9,15 @@ Tests:
   3. guardrail_entry requires name
   4. guardrail_entry requires description
   5. guardrail_entry requires purpose
-  6. purpose enum validates correctly
-  7. capability section accepts all valid harness keys
-  8. Unknown harness key in capability is rejected
-  9. sources section accepts valid harness keys
-  10. lockfile schema now accepts type: guardrail
-  11. Full block-destructive-bash example validates cleanly
+  6. guardrail_entry requires enforcement
+  7. purpose enum validates correctly
+  8. catalog enum typo values are rejected
+  9. capability section accepts all valid harness keys
+  10. Unknown harness key in capability is rejected
+  11. sources section accepts valid harness keys
+  12. lockfile schema now accepts type: guardrail
+  13. Guardrail catalog metadata fields validate cleanly
+  14. Full block-destructive-bash example validates cleanly
 
 Run with:
     python3 -m pytest tests/test_guardrails_schema.py -v
@@ -77,6 +80,21 @@ def minimal_library(extra: dict | None = None) -> dict:
     return base
 
 
+def minimal_guardrail(**overrides: object) -> dict:
+    """Return a minimal valid single-hook guardrail entry."""
+    entry = {
+        "name": "my-guardrail",
+        "description": "A test guardrail",
+        "enforcement": "veto",
+        "purpose": "pre-tool-veto",
+    }
+    entry.update(overrides)
+    for key, value in list(overrides.items()):
+        if value is None:
+            entry.pop(key, None)
+    return entry
+
+
 def assert_valid(data: dict, schema: dict, label: str) -> None:
     validator = jsonschema.Draft202012Validator(schema)
     errors = list(validator.iter_errors(data))
@@ -110,11 +128,7 @@ def test_guardrails_section_accepted():
     schema = load_schema()
     data = minimal_library({
         "guardrails": [
-            {
-                "name": "my-guardrail",
-                "description": "A test guardrail",
-                "purpose": "pre-tool-veto",
-            }
+            minimal_guardrail()
         ]
     })
     assert_valid(data, schema, "guardrails with minimal valid entry")
@@ -126,10 +140,7 @@ def test_guardrail_requires_name():
     schema = load_schema()
     data = minimal_library({
         "guardrails": [
-            {
-                "description": "Missing name field",
-                "purpose": "pre-tool-veto",
-            }
+            minimal_guardrail(name=None)
         ]
     })
     assert_invalid(data, schema, "guardrail_entry missing name")
@@ -141,10 +152,7 @@ def test_guardrail_requires_description():
     schema = load_schema()
     data = minimal_library({
         "guardrails": [
-            {
-                "name": "my-guardrail",
-                "purpose": "pre-tool-veto",
-            }
+            minimal_guardrail(description=None)
         ]
     })
     assert_invalid(data, schema, "guardrail_entry missing description")
@@ -156,14 +164,23 @@ def test_guardrail_requires_purpose():
     schema = load_schema()
     data = minimal_library({
         "guardrails": [
-            {
-                "name": "my-guardrail",
-                "description": "A test guardrail",
-            }
+            minimal_guardrail(purpose=None)
         ]
     })
     assert_invalid(data, schema, "guardrail_entry missing purpose")
     print("PASS test_guardrail_requires_purpose")
+
+
+def test_guardrail_requires_enforcement():
+    """guardrail_entry without enforcement is rejected."""
+    schema = load_schema()
+    data = minimal_library({
+        "guardrails": [
+            minimal_guardrail(enforcement=None)
+        ]
+    })
+    assert_invalid(data, schema, "guardrail_entry missing enforcement")
+    print("PASS test_guardrail_requires_enforcement")
 
 
 def test_guardrail_purpose_enum():
@@ -173,26 +190,39 @@ def test_guardrail_purpose_enum():
     for valid_purpose in ("pre-tool-veto", "post-tool-reaction", "session-init", "cleanup", "audit-log"):
         data = minimal_library({
             "guardrails": [
-                {
-                    "name": "my-guardrail",
-                    "description": "A test guardrail",
-                    "purpose": valid_purpose,
-                }
+                minimal_guardrail(purpose=valid_purpose)
             ]
         })
         assert_valid(data, schema, f"purpose={valid_purpose}")
 
     data_invalid = minimal_library({
         "guardrails": [
-            {
-                "name": "my-guardrail",
-                "description": "A test guardrail",
-                "purpose": "block-everything",
-            }
+            minimal_guardrail(purpose="block-everything")
         ]
     })
     assert_invalid(data_invalid, schema, "purpose=block-everything (invalid)")
     print("PASS test_guardrail_purpose_enum")
+
+
+def test_guardrail_catalog_enum_strictness():
+    """Catalog enum fields reject typoed values instead of accepting arbitrary strings."""
+    schema = load_schema()
+    invalid_values = {
+        "kind": "single-hoook",
+        "purpose": "pre-tool-vetoo",
+        "tier": "projeckt",
+        "default_scope": "local",
+        "codex_status": "unsupported",
+        "enforcement": "warn",
+    }
+    for field, value in invalid_values.items():
+        data = minimal_library({
+            "guardrails": [
+                minimal_guardrail(**{field: value})
+            ]
+        })
+        assert_invalid(data, schema, f"{field}={value} (invalid)")
+    print("PASS test_guardrail_catalog_enum_strictness")
 
 
 def test_guardrail_capability_harnesses():
@@ -203,6 +233,7 @@ def test_guardrail_capability_harnesses():
             {
                 "name": "my-guardrail",
                 "description": "A test guardrail",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
                 "capability": {
                     "claude_code": {"events": ["PreToolUse"], "handler": "bash-script"},
@@ -226,6 +257,7 @@ def test_guardrail_unknown_harness_rejected():
             {
                 "name": "my-guardrail",
                 "description": "A test guardrail",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
                 "capability": {
                     "unknown_harness": {"events": ["PreToolUse"]},
@@ -245,6 +277,7 @@ def test_guardrail_sources_section():
             {
                 "name": "my-guardrail",
                 "description": "A test guardrail",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
                 "sources": {
                     "claude_code": "guardrails/my-guardrail/claude-code.sh",
@@ -283,6 +316,37 @@ def test_lockfile_type_includes_guardrail():
     print("PASS test_lockfile_type_includes_guardrail")
 
 
+def test_guardrail_catalog_metadata_fields():
+    """Guardrail entries accept catalog metadata used by library.guardrails."""
+    schema = load_schema()
+    data = minimal_library({
+        "guardrails": [
+            {
+                "name": "healthcare-guardrail",
+                "description": "A healthcare guardrail.",
+                "kind": "single-hook",
+                "source": "https://github.com/cognovis/library/blob/main/guardrails/healthcare/claude-code.sh",
+                "enforcement": "session-block",
+                "codex_status": "not-supported",
+                "tier": "project",
+                "default_scope": "project",
+                "provider_notes": "Claude Code hook copied from a healthcare repository.",
+                "metadata": {"library": {"plane": "dev"}},
+                "purpose": "session-init",
+                "capability": {
+                    "claude_code": {"events": ["SessionStart"], "handler": "bash-script"},
+                },
+                "sources": {
+                    "claude_code": "guardrails/healthcare/claude-code.sh",
+                },
+                "tags": ["origin:healthcare", "tier:project"],
+            }
+        ]
+    })
+    assert_valid(data, schema, "guardrail catalog metadata fields")
+    print("PASS test_guardrail_catalog_metadata_fields")
+
+
 def test_full_example_validates():
     """The full block-destructive-bash example validates cleanly."""
     schema = load_schema()
@@ -291,6 +355,8 @@ def test_full_example_validates():
             {
                 "name": "block-destructive-bash",
                 "description": "Blocks destructive bash commands that cannot be undone",
+                "enforcement": "veto",
+                "codex_status": "supported",
                 "purpose": "pre-tool-veto",
                 "capability": {
                     "claude_code": {
@@ -350,11 +416,14 @@ ALL_TESTS = [
     test_guardrail_requires_name,
     test_guardrail_requires_description,
     test_guardrail_requires_purpose,
+    test_guardrail_requires_enforcement,
     test_guardrail_purpose_enum,
+    test_guardrail_catalog_enum_strictness,
     test_guardrail_capability_harnesses,
     test_guardrail_unknown_harness_rejected,
     test_guardrail_sources_section,
     test_lockfile_type_includes_guardrail,
+    test_guardrail_catalog_metadata_fields,
     test_full_example_validates,
     test_guardrails_is_array_not_object,
 ]

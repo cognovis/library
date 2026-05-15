@@ -53,6 +53,20 @@ Ask the user. Default suggestion: Claude Code only.
 
 For EACH target harness, check the guardrail's `capability` section:
 
+First apply hard catalog support gates:
+
+```python
+if target_harness in ("codex_cli", "all") and guardrail.get("codex_status") == "not-supported":
+    raise Blocked(
+        f"{guardrail['name']} is codex_status=not-supported and has no Codex source. "
+        "Use Claude Code only or add sources.codex_cli first."
+    )
+```
+
+Do not silently install a Claude-only guardrail when the user requested Codex or
+all harnesses. `codex_status: planned` is also not installable for Codex until a
+`sources.codex_cli` implementation exists.
+
 ```python
 # Pseudocode for capability check
 guardrail = library_yaml['guardrails'][matched_entry]
@@ -192,6 +206,11 @@ the hook entry under `hooks.PreToolUse` (or the relevant event for the guardrail
 If the event already has entries in settings.json, append — do NOT overwrite existing hooks.
 
 #### Codex CLI installation (if user confirmed despite mismatch warning)
+
+This section only applies when the entry has `codex_status: supported` and
+`sources.codex_cli`. Entries marked `codex_status: not-supported` or `planned`
+are refused before this point.
+
 ```bash
 SOURCE_FILE="<repo_root>/<sources.codex_cli>"
 TARGET_DIR="<resolved_default_codex_path>"

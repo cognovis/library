@@ -2254,6 +2254,8 @@ library:
         Blocks destructive bash commands (force-pushes, recursive deletes, DROP TABLE, etc.)
         that cannot be undone. The only deterministic safety layer — runs outside the LLM loop
         and cannot be bypassed by the model.
+      enforcement: veto
+      codex_status: supported
       purpose: pre-tool-veto
       capability:
         claude_code:
@@ -2311,6 +2313,8 @@ library:
         (the plugin manifest was removed; hooks now install via /library use).
       kind: hooks-manifest
       source: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
+      enforcement: inform
+      codex_status: supported
       sources:
         claude_code: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.json
         codex_cli: https://github.com/sussdorff/open-brain/blob/main/hooks/hooks.codex.json
@@ -2329,6 +2333,155 @@ library:
         - origin:personal
         - workflow:memory
         - hooks-manifest
+
+    - name: gitleaks-guard
+      description: >-
+        Claude Code PreToolUse guardrail that blocks git push commands when
+        gitleaks detects secrets in outgoing commits, blocks shell commands
+        that would print sensitive environment variables into chat, and fails
+        closed when the gitleaks binary is unavailable.
+      kind: single-hook
+      source: https://github.com/cognovis/library/blob/main/guardrails/gitleaks-guard/claude-code.py
+      enforcement: veto
+      codex_status: not-supported
+      tier: project
+      default_scope: project
+      provider_notes: >-
+        Claude Code only. Requires the gitleaks binary on PATH at install time
+        and runtime. Missing gitleaks is a hard failure: install is refused and
+        runtime push attempts are blocked.
+      metadata:
+        library:
+          plane: dev
+      runtime_requirements:
+        binaries: [gitleaks]
+      purpose: pre-tool-veto
+      capability:
+        claude_code:
+          events: [PreToolUse]
+          handler: python3
+          matcher: Bash
+          note: >-
+            Blocks git push when gitleaks reports secrets in commits not yet on
+            origin/main. Also blocks direct shell attempts to print sensitive
+            environment variables.
+      sources:
+        claude_code: guardrails/gitleaks-guard/claude-code.py
+      tags:
+        - origin:healthcare
+        - tier:project
+        - security
+        - secrets
+        - pre-tool-veto
+
+    - name: beads-version-gate
+      description: >-
+        Claude Code SessionStart guardrail that checks the installed bd version
+        against the latest published beads release and blocks the session when
+        versions differ.
+      kind: single-hook
+      source: https://github.com/cognovis/library/blob/main/guardrails/beads-version-gate/claude-code.sh
+      enforcement: session-block
+      codex_status: not-supported
+      tier: project
+      default_scope: project
+      provider_notes: >-
+        Claude Code only. Requires bd on PATH. Uses gh, curl, or wget to query
+        the steveyegge/beads GitHub release API.
+      metadata:
+        library:
+          plane: dev
+      runtime_requirements:
+        binaries: [bd]
+      purpose: session-init
+      capability:
+        claude_code:
+          events: [SessionStart]
+          handler: bash-script
+          note: >-
+            Warns when latest release cannot be fetched, but exits nonzero when
+            the local bd semver differs from the latest release semver.
+      sources:
+        claude_code: guardrails/beads-version-gate/claude-code.sh
+      tags:
+        - origin:healthcare
+        - tier:project
+        - beads
+        - session-init
+
+    - name: inject-standards-on-agent
+      description: >-
+        Claude Code PreToolUse guardrail that adds project standards path
+        guidance to Agent tool prompts when the prompt does not already mention
+        standards.
+      kind: single-hook
+      source: https://github.com/cognovis/library/blob/main/guardrails/inject-standards-on-agent/claude-code.sh
+      enforcement: mutate
+      codex_status: not-supported
+      tier: project
+      default_scope: project
+      provider_notes: >-
+        Claude Code only. Requires jq and a project .claude/standards/index.yml
+        file. It mutates Agent prompts by adding standards guidance and does not
+        block the Agent tool call.
+      metadata:
+        library:
+          plane: dev
+      runtime_requirements:
+        binaries: [jq]
+      purpose: pre-tool-veto
+      capability:
+        claude_code:
+          events: [PreToolUse]
+          handler: bash-script
+          matcher: Agent
+          note: >-
+            Emits standards-loading guidance for subagents unless the prompt
+            already references standards paths.
+      sources:
+        claude_code: guardrails/inject-standards-on-agent/claude-code.sh
+      tags:
+        - origin:healthcare
+        - tier:project
+        - standards
+        - subagents
+        - pre-tool-veto
+
+    - name: session-catchup
+      description: >-
+        Claude Code SessionStart guardrail that pulls the git repository,
+        attempts bd dolt pull, summarizes commits and bead activity since the
+        last session, and refreshes per-project session timestamp state.
+      kind: single-hook
+      source: https://github.com/cognovis/library/blob/main/guardrails/session-catchup/claude-code.zsh
+      enforcement: inform
+      codex_status: not-supported
+      tier: project
+      default_scope: project
+      provider_notes: >-
+        Claude Code only. Requires zsh and git on PATH. Mutates local session
+        timestamp state under ~/.claude/session-state and may update
+        .claude/settings.local.json spinner tips when jq is present.
+      metadata:
+        library:
+          plane: dev
+      runtime_requirements:
+        binaries: [zsh, git]
+      purpose: session-init
+      capability:
+        claude_code:
+          events: [SessionStart]
+          handler: zsh
+          note: >-
+            Runs a fast-forward-only git pull, best-effort bd dolt pull, and
+            session activity summary before updating the session timestamp.
+      sources:
+        claude_code: guardrails/session-catchup/claude-code.zsh
+      tags:
+        - origin:healthcare
+        - tier:project
+        - session-init
+        - catchup
 
   mcp_servers:
     - name: open-brain

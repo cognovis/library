@@ -92,6 +92,7 @@ def test_schema_accepts_canonical_primitive_sections() -> None:
             {
                 "name": "sample-guardrail",
                 "description": "A sample guardrail.",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
             }
         ],

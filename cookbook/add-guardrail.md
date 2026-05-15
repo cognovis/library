@@ -14,6 +14,8 @@ The user provides:
 - Name (kebab-case, e.g. `block-destructive-bash`)
 - Description (what it enforces)
 - Purpose: `pre-tool-veto | post-tool-reaction | session-init | cleanup | audit-log`
+- Enforcement: `veto | session-block | mutate | inform`
+- Codex support status: `supported | not-supported | planned`
 - Source files per harness (at least one harness required)
 - Supported harnesses and their capabilities
 
@@ -40,6 +42,9 @@ which harnesses natively support it:
 
 If a harness is listed as NOT SUPPORTED: omit it from the `capability` section.
 If a harness is WORKAROUND or BLUNT: document the limitation in the `capability.note` field.
+If the guardrail has no Codex implementation, set `codex_status: not-supported`;
+the installer refuses `--harness codex` and `--harness all` until
+`sources.codex_cli` exists.
 
 ### 3. Prepare Source Files
 
@@ -95,6 +100,14 @@ library:
   guardrails:
     - name: <name>
       description: <one-line description of what is enforced>
+      kind: single-hook
+      enforcement: <veto | session-block | mutate | inform>
+      codex_status: <supported | not-supported | planned>
+      tier: <core | domain | project>
+      default_scope: <global | project | ask>
+      provider_notes: <runtime and harness caveats>
+      runtime_requirements:
+        binaries: []                  # e.g. [gitleaks], [jq], [zsh, git]
       purpose: <purpose>
       capability:
         claude_code:
@@ -129,6 +142,10 @@ library:
 - Omit harness keys where support is NOT available (not just unsupported but omit entirely)
 - Keep entries alphabetically sorted by name within the `library.guardrails:` list
 - `mismatch_warning` text is shown verbatim to the user by `use-guardrail`
+- Use `enforcement`, not `purpose`, to state whether the hook actually blocks,
+  blocks session startup, mutates payloads, or only informs.
+- `tier: project` and `default_scope: project` are appropriate when the
+  guardrail assumes project-local workflow, files, or binaries.
 
 ### 5. Validate the Entry
 Run the schema validator to confirm the entry is well-formed:

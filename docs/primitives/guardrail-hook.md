@@ -12,6 +12,20 @@ This is the *only* deterministic safety layer in the agentic stack — everythin
 (system prompts, skill instructions, agent restrictions) is best-effort and can be
 overridden by the model.
 
+Not every hook is a pre-tool veto. Catalog entries MUST declare `enforcement` so
+installers and reviewers can distinguish true blocking guardrails from prompt
+mutators and information hooks:
+
+| Enforcement | Meaning | Example |
+|-------------|---------|---------|
+| `veto` | Blocks a tool/action at the tool boundary. | `gitleaks-guard` blocks unsafe `git push`. |
+| `session-block` | Blocks session startup before model work proceeds. | Version gates that fail SessionStart. |
+| `mutate` | Rewrites or supplements a harness payload without blocking. | Agent prompt standards injection. |
+| `inform` | Emits context, logs, or summaries only. | Session catch-up summaries. |
+
+Consumers MUST filter by `enforcement` rather than assuming every cataloged
+guardrail has veto semantics.
+
 **Trigger semantics.** The harness fires guardrails at predefined lifecycle events. The
 mechanism differs per harness: hooks run as external processes (Claude Code, Codex CLI),
 TypeScript extension handlers execute in-process (Pi), or static policies gate tool
@@ -62,12 +76,38 @@ detects when a target harness does not support the guardrail's declared purpose 
 emits a warning with options (install with workaround / skip / cancel). See
 `cookbook/use-guardrail.md` Step 4 for the full decision table.
 
+`codex_status` is mandatory for Codex routing decisions:
+- `supported` — a `sources.codex_cli` implementation exists, or the entry is a
+  manifest with a Codex source.
+- `not-supported` — Codex install requests are refused for `--harness codex`
+  and `--harness all`.
+- `planned` — the gap is known, but installers must still refuse Codex until a
+  Codex source exists.
+
+`runtime_requirements.binaries` lists external commands that must be present
+before enabling a guardrail. Installers refuse non-dry-run installs when a
+required binary is missing; runtime hooks should fail closed when the missing
+binary would weaken enforcement.
+
 **Purpose classes:**
 - `pre-tool-veto` — block a tool call before execution. Primary use: security gates.
 - `post-tool-reaction` — run side effects after tool completion. Primary use: audit, formatting.
 - `session-init` — inject context or setup at session start. Primary use: standards loading.
 - `cleanup` — teardown at session end. Primary use: state cleanup, metrics flush.
 - `audit-log` — record every tool call. Primary use: compliance logging.
+
+**Tier and default scope semantics:**
+- `tier: core` — broadly applicable fleet safety such as destructive-command
+  blocking. Default scope is usually `global` or `ask`.
+- `tier: domain` — applies to a class of projects such as healthcare, finance,
+  or infrastructure. Default scope is usually `ask`.
+- `tier: project` — assumes project-local conventions, binaries, bead workflow,
+  or domain files. Default scope is usually `project`.
+- `default_scope: global` — install globally without prompting only when the
+  guardrail is broadly safe and has no project assumptions.
+- `default_scope: project` — install into the target project when project-local
+  state, policy, or auditability matters.
+- `default_scope: ask` — require an explicit choice when either scope is plausible.
 
 **Cost.** Hooks run as external processes — low LLM token cost, but each hook adds
 latency to the event it intercepts. Keep hook scripts fast (<100 ms) for

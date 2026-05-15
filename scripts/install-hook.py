@@ -35,6 +35,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -250,6 +251,29 @@ def _selected_harness_keys(harness: str) -> set[str]:
     return set(HARNESS_SETTINGS)
 
 
+def _refuse_unsupported_codex(entry: dict, selected: set[str]) -> None:
+    codex_status = entry.get("codex_status")
+    if "codex_cli" in selected and codex_status in {"not-supported", "planned"}:
+        sys.exit(
+            f"{entry['name']!r}: Codex status is {codex_status!r} for this guardrail. "
+            "Install with --harness claude, or add a codex_cli source before using "
+            "--harness codex/all."
+        )
+
+
+def _check_runtime_requirements(entry: dict) -> None:
+    missing = [
+        binary
+        for binary in (entry.get("runtime_requirements") or {}).get("binaries", [])
+        if shutil.which(binary) is None
+    ]
+    if missing:
+        sys.exit(
+            f"{entry['name']!r}: missing required runtime binaries: "
+            f"{', '.join(missing)}. Install them before enabling this guardrail."
+        )
+
+
 def _load_json(path: Path) -> dict:
     if not path.is_file():
         return {}
@@ -278,6 +302,8 @@ def _command_for_hook(path: Path, handler: str | None) -> str:
         return f"node {quoted}"
     if handler in {"bash", "bash-script", "sh"} or path.suffix in {".sh", ".bash"}:
         return f"bash {quoted}"
+    if handler == "zsh" or path.suffix == ".zsh":
+        return f"zsh {quoted}"
     return quoted
 
 
@@ -309,6 +335,9 @@ def install_single_hook(entry: dict, harness: str, dry_run: bool = False) -> int
         sys.exit(f"{name!r}: kind=single-hook but no sources: map")
 
     selected = _selected_harness_keys(harness)
+    _refuse_unsupported_codex(entry, selected)
+    if not dry_run:
+        _check_runtime_requirements(entry)
     total = 0
     for harness, rel_path in sources.items():
         if harness not in selected:

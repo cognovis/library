@@ -231,6 +231,7 @@ def test_legacy_primitive_alias_warning_when_canonical_present():
             {
                 "name": "legacy-guardrail",
                 "description": "A legacy guardrail.",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
             }
         ],
@@ -297,6 +298,7 @@ def test_legacy_only_alias_warning_mentions_compatibility_fallback():
             {
                 "name": "legacy-guardrail",
                 "description": "A legacy guardrail.",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
             }
         ],
@@ -322,6 +324,7 @@ def test_strict_aliases_rejects_legacy_aliases_even_without_canonical():
             {
                 "name": "legacy-guardrail",
                 "description": "A legacy guardrail.",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
             }
         ],
@@ -365,6 +368,7 @@ def test_strict_aliases_reports_semantic_errors_in_same_run():
             {
                 "name": "legacy-guardrail",
                 "description": "A legacy guardrail.",
+                "enforcement": "veto",
                 "purpose": "pre-tool-veto",
             }
         ],

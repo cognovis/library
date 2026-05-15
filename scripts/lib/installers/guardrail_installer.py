@@ -20,11 +20,41 @@ from ..lockfile import (
     save_lockfile,
     upsert_entry,
 )
-from ..output import dry_run_result, success
+from ..output import blocked_result, dry_run_result, success
 from ..source import resolve_marketplace
 
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def _selected_harness_keys(harness: str) -> set[str]:
+    if harness == "claude_code":
+        return {"claude_code"}
+    if harness == "codex":
+        return {"codex_cli"}
+    if harness == "all":
+        return {"claude_code", "codex_cli"}
+    return {harness}
+
+
+def _unsupported_codex_block(entry: dict, harness: str) -> dict[str, Any] | None:
+    if "codex_cli" not in _selected_harness_keys(harness):
+        return None
+    codex_status = entry.get("codex_status")
+    if codex_status not in {"not-supported", "planned"}:
+        return None
+
+    guardrail_name = entry.get("name", "unknown")
+    return blocked_result(
+        reason=(
+            f"Guardrail '{guardrail_name}' is marked codex_status={codex_status} "
+            "and has no Codex CLI source."
+        ),
+        suggestion=(
+            "Install with --harness claude_code, or add a sources.codex_cli "
+            "implementation before using --harness codex/all."
+        ),
+    )
 
 
 def _import_install_hook():
@@ -66,6 +96,10 @@ def install_guardrail(
     guardrail_name = entry.get("name", name)
     marketplace = resolve_marketplace(catalog, entry)
 
+    codex_block = _unsupported_codex_block(entry, harness)
+    if codex_block is not None:
+        return codex_block
+
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
 
     if dry_run:
@@ -104,13 +138,17 @@ def install_guardrail(
             try:
                 if hasattr(mod, "main"):
                     mod.main()
-            except SystemExit:
-                pass
+            except SystemExit as exc:
+                if exc.code not in (0, None):
+                    raise InstallError(f"Guardrail '{guardrail_name}' install failed: {exc.code}") from exc
             finally:
                 _sys.argv = old_argv
 
-    except (SystemExit, Exception):
-        pass
+    except SystemExit as exc:
+        if exc.code not in (0, None):
+            raise InstallError(f"Guardrail '{guardrail_name}' install failed: {exc.code}") from exc
+    except Exception as exc:
+        raise InstallError(f"Guardrail '{guardrail_name}' install failed: {exc}") from exc
 
     # 3. Write lockfile
     source_str = entry.get("source") or f"guardrail:{guardrail_name}"
@@ -163,15 +201,16 @@ def remove_guardrail(
         try:
             if hasattr(mod, "main"):
                 mod.main()
-        except SystemExit:
-            pass
+        except SystemExit as exc:
+            if exc.code not in (0, None):
+                raise InstallError(f"Guardrail '{guardrail_name}' remove failed: {exc.code}") from exc
         finally:
             _sys.argv = old_argv
-    except Exception:
-        pass
+    except Exception as exc:
+        raise InstallError(f"Guardrail '{guardrail_name}' remove failed: {exc}") from exc
 
     lock_data = load_lockfile(lockfile_path)
-        remove_entry(lock_data, guardrail_name, primitive_type="guardrail")
+    remove_entry(lock_data, guardrail_name, primitive_type="guardrail")
     save_lockfile(lockfile_path, lock_data)
 
     return success(

@@ -125,6 +125,10 @@ Details: [Agent](primitives/agent.md). Judge remains a specialization of Agent.
 
 Details: [Guardrail / Hook](primitives/guardrail-hook.md).
 
+Source ownership exception: most primitive source files live in marketplace
+repos, but installer-coupled guardrail hook files may live in this `meta` repo
+under `guardrails/<name>/` when covered by ADR-0006.
+
 ### 5. Plugin
 
 Details: [Plugin](primitives/plugin.md).

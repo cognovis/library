@@ -1153,7 +1153,8 @@
       "type": "object",
       "required": [
         "name",
-        "description"
+        "description",
+        "enforcement"
       ],
       "allOf": [
         {
@@ -1196,6 +1197,67 @@
           "description": "URL of the manifest file (required when kind=hooks-manifest unless sources.<harness> is provided). For single-hook entries use the 'sources' map instead. Typically a hooks.json from a marketplace repo.",
           "type": "string",
           "format": "uri"
+        },
+        "tier": {
+          "description": "Catalog tier for search and install guidance.",
+          "type": "string",
+          "enum": [
+            "core",
+            "domain",
+            "project"
+          ]
+        },
+        "default_scope": {
+          "description": "Default install scope recommendation for this guardrail.",
+          "type": "string",
+          "enum": [
+            "global",
+            "project",
+            "ask"
+          ]
+        },
+        "provider_notes": {
+          "description": "Provider or harness-specific caveats for this guardrail.",
+          "type": "string",
+          "minLength": 1
+        },
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
+        },
+        "enforcement": {
+          "description": "What the hook actually enforces, independent of event cadence. Consumers must use this field rather than assuming every guardrail is a pre-tool veto.",
+          "type": "string",
+          "enum": [
+            "veto",
+            "session-block",
+            "mutate",
+            "inform"
+          ]
+        },
+        "codex_status": {
+          "description": "Codex support status for this guardrail. not-supported entries must refuse codex/all installs until a Codex source exists.",
+          "type": "string",
+          "enum": [
+            "supported",
+            "not-supported",
+            "planned"
+          ]
+        },
+        "runtime_requirements": {
+          "description": "Runtime binaries required for install or correct hook behavior.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "binaries": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "default": []
+            }
+          },
+          "default": {}
         },
         "requires": {
           "description": "Transitive dependencies on other library primitives (skill:, agent:, prompt:, hook:, mcp:). Authoritative source is the artefact's frontmatter; this mirror is for offline lookup.",

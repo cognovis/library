@@ -66,6 +66,11 @@ Marketplace repos are the exception. In this `meta/` repo and the library-core
 marketplaces, source content lives under top-level `skills/`, `standards/`,
 `agents/`, and `prompts/`; `.agents/` remains an ignored install destination.
 
+Guardrails have one platform-source exception: installer-coupled hook sources
+may live in this repo under `guardrails/<name>/` when `scripts/install-hook.py`
+binds directly to those files. ADR-0006 defines the boundary. Other primitive
+source files remain marketplace-owned unless another ADR grants an exception.
+
 ## Launchers (cld/cdx)
 
 Per **ADR-0002 Decision 2**, the canonical source for all CLI launchers is `cognovis-library/bin/`:
