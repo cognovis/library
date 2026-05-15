@@ -419,7 +419,7 @@ class AgentValidator:
                     f"{label} detected in prompt. {script_hint}"
                 )
 
-    # Known plugin folders in this repo — keep in sync with skill-auditor's validator.
+    # Known plugin folders in this repo — keep in sync with skill-forge validators.
     PLUGIN_FOLDERS = (
         "beads-workflow", "core", "dev-tools", "meta", "infra",
         "business", "content", "medical", "open-brain",

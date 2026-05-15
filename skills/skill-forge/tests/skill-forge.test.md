@@ -41,9 +41,9 @@ findings or "No findings".
 ## Test 5 — audit-fleet mode
 
 **Input:** "Audit all skills" / "skill health check"
-**Expected behavior:** Dispatches to `skill-auditor` Opus agent with no
-implementation context passed.
-**Pass criteria:** Agent spawned; fleet report returned
+**Expected behavior:** Runs the bundled `scan-skills.sh` and
+`scan-codex-compat.py` checks.
+**Pass criteria:** Scanner output is summarized into a fleet report
 
 ## Test 6 — Description hard-limit
 

@@ -52,6 +52,30 @@ tag_vocabulary:
 
 sources:
   catalogs:
+    - name: library-platform
+      source: https://github.com/cognovis/library
+      description: >-
+        Library platform self-description: installer, catalog schema,
+        primitive contracts, and platform-owned forge skills.
+      visibility: private
+      owner: cognovis
+      audience: team
+      content_types:
+        - skills
+        - scripts
+        - standards
+      skeleton:
+        platform:
+          - skills/
+          - scripts/
+          - docs/
+      notes: >-
+        Canonical source for platform-owned primitives such as skill-forge,
+        agent-forge, standard-forge, script-forge, and hook-forge.
+      tags:
+        - first-party
+        - platform
+
     - name: sussdorff-library-core
       source: https://github.com/sussdorff/library-core
       description: Malte Sussdorff personal agentic content (skills, agents, commands, hooks)
@@ -1598,14 +1622,6 @@ library:
       tags:
         - origin:original
         - tier:core
-    - name: skill-auditor
-      description: >-
-        Audit and score agent skills fleet-wide against quality standards. Produces grade tables
-        with token costs and findings. Triggers on audit skills, skill health check, fleet quality.
-      source: https://github.com/cognovis/library-core/blob/main/agents/skill-auditor.md
-      tags:
-        - origin:original
-        - tier:domain
     - name: test-author
       description: >-
         Writes TDD tests from spec intent and acceptance criteria. Use when a bead's acceptance

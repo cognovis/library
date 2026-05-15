@@ -1,5 +1,5 @@
 #!/bin/bash
-# scan-skills.sh - Discover and measure Claude Code skills
+# scan-skills.sh - Discover and measure installed skills
 # Usage: scan-skills.sh [additional-paths...]
 #
 # Scans default skill locations and any additional paths provided.
@@ -10,10 +10,17 @@ set -euo pipefail
 # Collect skill directories
 skill_files=()
 
-# Default search locations
+# Default search locations across supported harnesses.
 default_paths=(
+    "$HOME/.agents/skills"
     "$HOME/.claude/skills"
+    "$HOME/.codex/skills"
+    "$HOME/.opencode/skills"
+    ".agents/skills"
     ".claude/skills"
+    ".codex/skills"
+    ".opencode/skills"
+    "skills"
 )
 
 # Add argument paths
@@ -32,7 +39,7 @@ for base in "${default_paths[@]}"; do
 $resolved"
                 skill_files+=("$f")
             fi
-        done < <(find "$base" -maxdepth 2 -name "SKILL.md" -type f 2>/dev/null)
+        done < <(find -L "$base" -maxdepth 2 -name "SKILL.md" -type f 2>/dev/null)
     fi
 done
 

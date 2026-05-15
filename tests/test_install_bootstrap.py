@@ -20,6 +20,8 @@ def test_install_sh_links_library_and_platform_forges(tmp_path: Path) -> None:
     home.mkdir()
     (home / ".agents").mkdir()
     (home / ".claude").mkdir()
+    (home / ".codex").mkdir()
+    (home / ".opencode").mkdir()
 
     env = os.environ.copy()
     env["HOME"] = str(home)
@@ -35,7 +37,12 @@ def test_install_sh_links_library_and_platform_forges(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
 
-    for skill_root in (home / ".agents" / "skills", home / ".claude" / "skills"):
+    for skill_root in (
+        home / ".agents" / "skills",
+        home / ".claude" / "skills",
+        home / ".codex" / "skills",
+        home / ".opencode" / "skills",
+    ):
         for name, expected_target in PLATFORM_SKILLS.items():
             installed = skill_root / name
             assert installed.is_symlink(), f"{installed} was not created as a symlink"

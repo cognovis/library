@@ -6,15 +6,14 @@ description: >-
   a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill,
   check skill, audit skills, skill health check, fleet quality, skill creation,
   action_boundary declarations, Gas City pack metadata for skills, script declarations,
-  provider-neutral skill design, absorbs skill-auditor.
+  provider-neutral skill design.
 requires_standards: [agentic-primitives, primitive-placement, judge-layer, english-only, no-emoji]
 ---
 
 # Skill Forge
 
 Create, validate, and audit `SKILL.md` files — the context files that models auto-load
-via description matching. Absorbs the previous `skill-auditor` skill as `audit-fleet`
-mode. The Opus worker (`agents/skill-auditor.md`) is kept as the back-end for fleet audits.
+via description matching. This skill owns the former `skill-auditor` checks directly.
 
 ## When to Use
 
@@ -394,14 +393,16 @@ Report findings verbatim. Suggest scripts/ extraction for EXTRACTABLE_CODE viola
 
 ## Mode 3: audit-fleet
 
-Dispatches to the Opus-backed `skill-auditor` agent for fleet-wide scoring.
+Run the bundled deterministic scanners directly:
 
-```
-Agent(subagent_type="skill-auditor")
+```bash
+bash skills/skill-forge/scripts/scan-skills.sh
+python3 skills/skill-forge/scripts/scan-codex-compat.py
 ```
 
-The agent handles: skill discovery, quality scoring (5 dimensions), tier violations,
-description hard-limit checks, extractable-code detection, and improve mode.
+Use the output to report skill discovery, description hard-limit checks,
+extractable-code detection, and Codex portability findings. Do not dispatch to a
+separate `skill-auditor` agent; that worker has been retired.
 
 ---
 
