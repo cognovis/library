@@ -10,7 +10,7 @@ primitive-scoped:
 ```
 
 Valid primitive values are `skill`, `agent`, `prompt`, `standard`, `guardrail`,
-`mcp`, `model-standard`, and `golden-prompt`.
+`mcp`, `model-standard`, and `agent-base`.
 
 ## CLI Shortcut (preferred for deterministic output)
 
@@ -49,7 +49,7 @@ git pull
   - `guardrail` -> `library.guardrails`
   - `mcp` -> `library.mcp_servers`
   - `model-standard` -> `library.model_standards`
-  - `golden-prompt` -> `library.golden_prompts`
+  - `agent-base` -> `library.agent_bases`
 - Parse only that section
 
 ### 3. Check Install Status

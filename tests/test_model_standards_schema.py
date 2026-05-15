@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-test_model_standards_schema.py — Tests for model_standards: and golden_prompts: schema
+test_model_standards_schema.py — Tests for model_standards: and agent_bases: schema
 
 Bead: CL-08n
 Tests:
   1. model_standards section present in library.yaml is accepted by validator
-  2. golden_prompts section present in library.yaml is accepted by validator
+  2. agent_bases section present in library.yaml is accepted by validator
   3. model_standards entry requires name and description
-  4. golden_prompts entry requires name and description
+  4. agent_bases entry requires name and description
   5. default_dirs gains model_standards entries
-  6. default_dirs gains golden_prompts entries
+  6. default_dirs gains agent_bases entries
   7. library.yaml on disk (after changes) passes the validator
 
 Run with:
@@ -63,6 +63,9 @@ def minimal_library(extra: dict | None = None) -> dict:
         "marketplaces": [],
     }
     if extra:
+        if "library" in extra and isinstance(extra["library"], dict):
+            base["library"].update(extra["library"])
+            extra = {key: value for key, value in extra.items() if key != "library"}
         base.update(extra)
     return base
 
@@ -92,69 +95,51 @@ def assert_invalid(data: dict, schema: dict, label: str) -> None:
 def test_model_standards_section_accepted():
     """model_standards array is accepted by schema."""
     schema = load_schema()
-    data = minimal_library({
-        "model_standards": [
-            {
-                "name": "claude-sonnet-4-6",
-                "description": "Layer 3 model-standard for Claude Sonnet 4.6",
-                "source": "https://github.com/cognovis/library-core/blob/main/model-standards/claude-sonnet-4-6.md",
-            }
-        ]
-    })
+    data = minimal_library({"library": {"model_standards": [{
+        "name": "claude-sonnet-4-6",
+        "description": "Layer 3 model-standard for Claude Sonnet 4.6",
+        "source": "https://github.com/cognovis/library-core/blob/main/model-standards/claude-sonnet-4-6.md",
+    }]}})
     assert_valid(data, schema, "model_standards with one entry")
     print("PASS test_model_standards_section_accepted")
 
 
-def test_golden_prompts_section_accepted():
-    """golden_prompts array is accepted by schema."""
+def test_agent_bases_section_accepted():
+    """agent_bases array is accepted by schema."""
     schema = load_schema()
-    data = minimal_library({
-        "golden_prompts": [
-            {
-                "name": "cognovis-base",
-                "description": "Layer 1 of the three-layer agent composition model.",
-                "source": "https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md",
-            }
-        ]
-    })
-    assert_valid(data, schema, "golden_prompts with one entry")
-    print("PASS test_golden_prompts_section_accepted")
+    data = minimal_library({"library": {"agent_bases": [{
+        "name": "cognovis-base",
+        "description": "Layer 1 of the three-layer agent composition model.",
+        "source": "https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-base.md",
+    }]}})
+    assert_valid(data, schema, "agent_bases with one entry")
+    print("PASS test_agent_bases_section_accepted")
 
 
 def test_model_standards_entry_requires_name():
     """model_standards entry without name is rejected."""
     schema = load_schema()
-    data = minimal_library({
-        "model_standards": [
-            {
-                "description": "Missing name field",
-            }
-        ]
-    })
+    data = minimal_library({"library": {"model_standards": [{
+        "description": "Missing name field",
+    }]}})
     assert_invalid(data, schema, "model_standards entry missing name")
     print("PASS test_model_standards_entry_requires_name")
 
 
-def test_golden_prompts_entry_requires_name():
-    """golden_prompts entry without name is rejected."""
+def test_agent_bases_entry_requires_name():
+    """agent_bases entry without name is rejected."""
     schema = load_schema()
-    data = minimal_library({
-        "golden_prompts": [
-            {
-                "description": "Missing name field",
-            }
-        ]
-    })
-    assert_invalid(data, schema, "golden_prompts entry missing name")
-    print("PASS test_golden_prompts_entry_requires_name")
+    data = minimal_library({"library": {"agent_bases": [{
+        "description": "Missing name field",
+    }]}})
+    assert_invalid(data, schema, "agent_bases entry missing name")
+    print("PASS test_agent_bases_entry_requires_name")
 
 
 def test_default_dirs_model_standards_accepted():
     """default_dirs with model_standards entries is accepted."""
     schema = load_schema()
-    data = minimal_library({
-        "model_standards": [],
-    })
+    data = minimal_library({"library": {"model_standards": []}})
     data["default_dirs"]["model_standards"] = [
         {"default": ".agents/model-standards/"},
         {"global": "~/.agents/model-standards/"},
@@ -163,22 +148,20 @@ def test_default_dirs_model_standards_accepted():
     print("PASS test_default_dirs_model_standards_accepted")
 
 
-def test_default_dirs_golden_prompts_accepted():
-    """default_dirs with golden_prompts entries is accepted."""
+def test_default_dirs_agent_bases_accepted():
+    """default_dirs with agent_bases entries is accepted."""
     schema = load_schema()
-    data = minimal_library({
-        "golden_prompts": [],
-    })
-    data["default_dirs"]["golden_prompts"] = [
-        {"default": ".agents/golden-prompts/"},
-        {"global": "~/.agents/golden-prompts/"},
+    data = minimal_library({"library": {"agent_bases": []}})
+    data["default_dirs"]["agent_bases"] = [
+        {"default": ".agents/agent-bases/"},
+        {"global": "~/.agents/agent-bases/"},
     ]
-    assert_valid(data, schema, "default_dirs with golden_prompts")
-    print("PASS test_default_dirs_golden_prompts_accepted")
+    assert_valid(data, schema, "default_dirs with agent_bases")
+    print("PASS test_default_dirs_agent_bases_accepted")
 
 
 def test_library_yaml_with_new_sections_passes_validator():
-    """library.yaml on disk (with model_standards + golden_prompts) passes the validator."""
+    """library.yaml on disk (with model_standards + agent_bases) passes the validator."""
     if not LIBRARY_PATH.exists():
         print("SKIP test_library_yaml_with_new_sections_passes_validator: library.yaml not found")
         return
@@ -186,10 +169,10 @@ def test_library_yaml_with_new_sections_passes_validator():
     with LIBRARY_PATH.open() as f:
         data = yaml.safe_load(f)
     lib = data.get("library", {}) or {}
-    if "model_standards" not in lib or "golden_prompts" not in lib:
+    if "model_standards" not in lib or "agent_bases" not in lib:
         print("SKIP test_library_yaml_with_new_sections_passes_validator: sections not yet in library.yaml")
         return
-    assert_valid(data, schema, "library.yaml on disk with library.model_standards + library.golden_prompts")
+    assert_valid(data, schema, "library.yaml on disk with library.model_standards + library.agent_bases")
     print("PASS test_library_yaml_with_new_sections_passes_validator")
 
 
@@ -197,27 +180,27 @@ def test_model_standards_is_array_not_object():
     """model_standards must be an array, not an object."""
     schema = load_schema()
     data = minimal_library({
-        "model_standards": {"sonnet": {"description": "bad — object not array"}}
+        "library": {"model_standards": {"sonnet": {"description": "bad - object not array"}}}
     })
     assert_invalid(data, schema, "model_standards as object instead of array")
     print("PASS test_model_standards_is_array_not_object")
 
 
-def test_golden_prompts_is_array_not_object():
-    """golden_prompts must be an array, not an object."""
+def test_agent_bases_is_array_not_object():
+    """agent_bases must be an array, not an object."""
     schema = load_schema()
     data = minimal_library({
-        "golden_prompts": {"base": {"description": "bad — object not array"}}
+        "library": {"agent_bases": {"base": {"description": "bad - object not array"}}}
     })
-    assert_invalid(data, schema, "golden_prompts as object instead of array")
-    print("PASS test_golden_prompts_is_array_not_object")
+    assert_invalid(data, schema, "agent_bases as object instead of array")
+    print("PASS test_agent_bases_is_array_not_object")
 
 
 def test_three_model_standards_validate():
     """All three model standards from bead description validate cleanly."""
     schema = load_schema()
     data = minimal_library({
-        "model_standards": [
+        "library": {"model_standards": [
             {
                 "name": "claude-sonnet-4-6",
                 "description": "Layer 3 model-standard for Claude Sonnet 4.6 — conciseness, lower tool-hopping bias.",
@@ -233,7 +216,7 @@ def test_three_model_standards_validate():
                 "description": "Layer 3 model-standard for Claude Haiku 4.5 — avoid under-scoping multi-step plans, no terse-skip on verification steps.",
                 "source": "https://github.com/cognovis/library-core/blob/main/model-standards/claude-haiku-4-5.md",
             },
-        ]
+        ]}
     })
     assert_valid(data, schema, "all three model standards from bead description")
     print("PASS test_three_model_standards_validate")
@@ -245,14 +228,14 @@ def test_three_model_standards_validate():
 
 ALL_TESTS = [
     test_model_standards_section_accepted,
-    test_golden_prompts_section_accepted,
+    test_agent_bases_section_accepted,
     test_model_standards_entry_requires_name,
-    test_golden_prompts_entry_requires_name,
+    test_agent_bases_entry_requires_name,
     test_default_dirs_model_standards_accepted,
-    test_default_dirs_golden_prompts_accepted,
+    test_default_dirs_agent_bases_accepted,
     test_library_yaml_with_new_sections_passes_validator,
     test_model_standards_is_array_not_object,
-    test_golden_prompts_is_array_not_object,
+    test_agent_bases_is_array_not_object,
     test_three_model_standards_validate,
 ]
 

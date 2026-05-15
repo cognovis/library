@@ -343,7 +343,7 @@ class TestStatusCLI:
         (tmp_path / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
-            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
 
         result = run_library("status", "--scope=project", "--project", str(tmp_path), "--json", cwd=tmp_path)
@@ -360,7 +360,7 @@ class TestStatusCLI:
         (tmp_path / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
-            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
         result = run_library("status", "--scope=project", "--project", str(tmp_path), "--json", cwd=tmp_path)
         # No entries = current/unknown, exit 0

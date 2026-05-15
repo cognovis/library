@@ -218,7 +218,7 @@ authoritative reference for hook-forge and any future hook authoring.
 
 - C1-C6 justification (`standards/agentic-primitives.md`) is more rigorous than
   CrewAI/AutoGen role definitions. Keep.
-- Three-layer composition (golden_prompt + body + model-standard) via
+- Three-layer composition (agent_base + body + model-standard) via
   `compose-agent.py` — closest analog is hand-rolled system-prompt fragments in
   other teams. Our automation is ahead.
 - AGENTS.md adapter (CL-v56 loader) — industry is converging here.

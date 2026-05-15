@@ -72,7 +72,7 @@ make_tmp() {
 make_fake_base_dir() {
     local tmp_dir="$1"
     local marker="${2:-COGNOVIS_BASE_LAYER1_MARKER}"
-    local base_dir="${tmp_dir}/golden-prompts"
+    local base_dir="${tmp_dir}/agent-bases"
     mkdir -p "$base_dir"
     cat > "${base_dir}/cognovis-base.md" << MDEOF
 ---
@@ -85,7 +85,7 @@ description: Test fixture base
 
 ${marker}
 
-This is the smoke test base golden prompt.
+This is the smoke test base agent base prompt.
 MDEOF
     echo "$base_dir"
 }
@@ -109,7 +109,7 @@ else
         TMP1=$(make_tmp)
         BASE_DIR=$(make_fake_base_dir "$TMP1")
 
-        if GOLDEN_PROMPTS_DIR="$BASE_DIR" \
+        if AGENT_BASES_DIR="$BASE_DIR" \
            python3 "$COMPOSE_SCRIPT" "$AGENT_FILE" > "${TMP1}/composed.md" 2>&1; then
             if grep -q "COGNOVIS_BASE_LAYER1_MARKER" "${TMP1}/composed.md"; then
                 pass "changelog-updater composed body contains COGNOVIS_BASE_LAYER1_MARKER"
@@ -141,8 +141,8 @@ FIXTURE_AGENT="${REPO_ROOT}/tests/compose/fixtures/agent-with-base.md"
 if [[ ! -f "$FIXTURE_AGENT" ]]; then
     fail "idempotent test [fixture agent not found: ${FIXTURE_AGENT}]"
 else
-    GOLDEN_PROMPTS_DIR="$BASE_DIR2" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP2}/run1.md"
-    GOLDEN_PROMPTS_DIR="$BASE_DIR2" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP2}/run2.md"
+    AGENT_BASES_DIR="$BASE_DIR2" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP2}/run1.md"
+    AGENT_BASES_DIR="$BASE_DIR2" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP2}/run2.md"
 
     if diff -q "${TMP2}/run1.md" "${TMP2}/run2.md" > /dev/null 2>&1; then
         pass "idempotent re-compose: run1 and run2 are identical"
@@ -163,13 +163,13 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 TMP3=$(make_tmp)
 BASE_DIR3=$(make_fake_base_dir "$TMP3")
 
-GOLDEN_PROMPTS_DIR="$BASE_DIR3" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP3}/before.md"
+AGENT_BASES_DIR="$BASE_DIR3" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP3}/before.md"
 
 # Mutate the base file
 echo "" >> "${BASE_DIR3}/cognovis-base.md"
 echo "DRIFT_MARKER_ADDED_BY_SMOKE_TEST" >> "${BASE_DIR3}/cognovis-base.md"
 
-GOLDEN_PROMPTS_DIR="$BASE_DIR3" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP3}/after.md"
+AGENT_BASES_DIR="$BASE_DIR3" python3 "$COMPOSE_SCRIPT" "$FIXTURE_AGENT" > "${TMP3}/after.md"
 
 if diff -q "${TMP3}/before.md" "${TMP3}/after.md" > /dev/null 2>&1; then
     fail "drift detection: output did NOT change after mutating base file"
@@ -196,7 +196,7 @@ SCRATCH_AGENT="${REPO_ROOT}/tests/compose/fixtures/agent-from-scratch.md"
 if [[ ! -f "$SCRATCH_AGENT" ]]; then
     fail "from-scratch test [fixture not found: ${SCRATCH_AGENT}]"
 else
-    GOLDEN_PROMPTS_DIR="$BASE_DIR4" python3 "$COMPOSE_SCRIPT" "$SCRATCH_AGENT" > "${TMP4}/scratch.md"
+    AGENT_BASES_DIR="$BASE_DIR4" python3 "$COMPOSE_SCRIPT" "$SCRATCH_AGENT" > "${TMP4}/scratch.md"
     if ! grep -q "COGNOVIS_BASE_LAYER1_MARKER" "${TMP4}/scratch.md"; then
         pass "from-scratch: Layer 1 marker absent in composed output"
     else

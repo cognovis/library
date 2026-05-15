@@ -126,7 +126,7 @@ For each entry in `.library.lock` where `type` is `agent`:
 1. **Read the freshly re-pulled agent file** at `install_target/<name>.md` (or the `.toml`
    sibling for Codex).
 
-2. **Check the YAML frontmatter**: if `golden_prompt_extends:` is present AND the value is
+2. **Check the YAML frontmatter**: if `agent_base_extends:` is present AND the value is
    NOT `from-scratch`, the agent requires composition.
 
 3. **Locate the composer script** in the library root (the same directory that contains
@@ -178,7 +178,7 @@ For each entry in `.library.lock` where `type` is `agent`:
 
    entry["composed_sha"] = hashlib.sha256(body_after_frontmatter.encode()).hexdigest()
    entry["composed_layers"] = {
-       "layer1": "<golden_prompt_extends value>",   # e.g. "cognovis-base"
+       "layer1": "<agent_base_extends value>",   # e.g. "cognovis-base"
        "layer3": "<model_standards list or []>",    # e.g. ["claude-haiku-4-5"]
    }
 
@@ -193,8 +193,8 @@ For each entry in `.library.lock` where `type` is `agent`:
 > which triggers re-composition automatically.
 
 > **Layer resolution search order** for `compose-agent.py`:
-> 1. `<proj_root>/.agents/golden-prompts/<name>.md` (project-local)
-> 2. `~/.agents/golden-prompts/<name>.md` (user-global)
+> 1. `<proj_root>/.agents/agent-bases/<name>.md` (project-local)
+> 2. `~/.agents/agent-bases/<name>.md` (user-global)
 
 ### 5. Recreate Bridge Symlinks
 

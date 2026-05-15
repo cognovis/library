@@ -103,13 +103,13 @@ PRIMITIVES: list[PrimitiveInfo] = [
         install_subdir="model-standards",
     ),
     PrimitiveInfo(
-        name="golden-prompt",
-        yaml_section="library.golden_prompts",
-        yaml_key="library/golden_prompts",
-        legacy_yaml_keys=["golden_prompts"],
-        description="Golden prompt base layers for agent composition (Layer 1)",
-        aliases=["golden_prompt"],
-        install_subdir="golden-prompts",
+        name="agent-base",
+        yaml_section="library.agent_bases",
+        yaml_key="library/agent_bases",
+        legacy_yaml_keys=[],
+        description="Agent base prompt layers for agent composition (Layer 1)",
+        aliases=["agent_base"],
+        install_subdir="agent-bases",
     ),
 ]
 
@@ -126,9 +126,20 @@ def get_primitive(name: str) -> Optional[PrimitiveInfo]:
     return _BY_NAME.get(name) or _BY_ALIAS.get(name)
 
 
+def canonical_primitive_name(name: str) -> Optional[str]:
+    """Return the canonical primitive name for a name or alias."""
+    primitive = get_primitive(name)
+    return primitive.name if primitive else None
+
+
 def all_primitive_names() -> list[str]:
     """Return all canonical primitive names."""
     return [p.name for p in PRIMITIVES]
+
+
+def all_primitive_aliases() -> list[str]:
+    """Return all configured primitive aliases."""
+    return sorted(_BY_ALIAS)
 
 
 _MISSING = object()

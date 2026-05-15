@@ -29,7 +29,7 @@ TARGETED_SYNC_PRIMITIVES = [
     "guardrail",
     "mcp",
     "model-standard",
-    "golden-prompt",
+    "agent-base",
 ]
 
 
@@ -186,12 +186,12 @@ description: A test model standard
 # Test Model Standard Content
 """
 
-FIXTURE_GOLDEN_PROMPT_MD = """---
-name: test-golden-prompt
-description: A test golden prompt
+FIXTURE_AGENT_BASE_MD = """---
+name: test-agent-base
+description: A test agent base prompt
 ---
 
-# Test Golden Prompt Content
+# Test Agent Base Prompt Content
 """
 
 MULTI_HARNESS_AGENT_MD = """---
@@ -226,9 +226,9 @@ default_dirs:
   model_standards:
     - default: .agents/model-standards/
     - global: ~/.agents/model-standards/
-  golden_prompts:
-    - default: .agents/golden-prompts/
-    - global: ~/.agents/golden-prompts/
+  agent_bases:
+    - default: .agents/agent-bases/
+    - global: ~/.agents/agent-bases/
 
 library:
   skills:
@@ -288,6 +288,14 @@ library:
     - name: test-prompt
       description: A test prompt
       source: {prompt_source}
+  model_standards:
+    - name: test-model-standard
+      description: A test model standard
+      source: {model_standard_source}
+  agent_bases:
+    - name: test-agent-base
+      description: A test agent base prompt
+      source: {agent_base_source}
   standards: []
 
 marketplaces: []
@@ -303,14 +311,6 @@ mcp_servers:
             type: stdio
             command: node
             args: ["/usr/local/lib/test-mcp/index.js"]
-model_standards:
-  - name: test-model-standard
-    description: A test model standard
-    source: {model_standard_source}
-golden_prompts:
-  - name: test-golden-prompt
-    description: A test golden prompt
-    source: {golden_prompt_source}
 """
 
 
@@ -370,9 +370,9 @@ def project_dir(tmp_path):
     model_std_dir.mkdir()
     (model_std_dir / "test-model-standard.md").write_text(FIXTURE_MODEL_STANDARD_MD)
 
-    golden_prompt_dir = tmp_path / "fixture-golden-prompt"
-    golden_prompt_dir.mkdir()
-    (golden_prompt_dir / "test-golden-prompt.md").write_text(FIXTURE_GOLDEN_PROMPT_MD)
+    agent_base_dir = tmp_path / "fixture-agent-base"
+    agent_base_dir.mkdir()
+    (agent_base_dir / "test-agent-base.md").write_text(FIXTURE_AGENT_BASE_MD)
 
     multi_harness_claude_dir = tmp_path / "fixture-multi-harness"
     multi_harness_claude_dir.mkdir()
@@ -398,7 +398,7 @@ def project_dir(tmp_path):
         chain_c_source=str(chain_c_skill_dir / "SKILL.md"),
         prompt_source=str(prompt_dir / "test-prompt.md"),
         model_standard_source=str(model_std_dir / "test-model-standard.md"),
-        golden_prompt_source=str(golden_prompt_dir / "test-golden-prompt.md"),
+        agent_base_source=str(agent_base_dir / "test-agent-base.md"),
         multi_harness_claude_source=str(multi_harness_claude_dir / "multi-harness-agent.md"),
         multi_harness_codex_source=str(multi_harness_codex_dir / "multi-harness-agent.toml"),
     )
@@ -604,41 +604,41 @@ class TestModelStandardRemove:
 
 
 # ---------------------------------------------------------------------------
-# AK9: golden-prompt use
+# AK9: agent-base use
 # ---------------------------------------------------------------------------
 
-class TestGoldenPromptUse:
-    def test_golden_prompt_use_exits_zero(self, project_dir):
-        result = run_library("golden-prompt", "use", "test-golden-prompt", "--json", cwd=project_dir)
+class TestAgentBaseUse:
+    def test_agent_base_use_exits_zero(self, project_dir):
+        result = run_library("agent-base", "use", "test-agent-base", "--json", cwd=project_dir)
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
-    def test_golden_prompt_use_updates_lockfile(self, project_dir):
-        run_library("golden-prompt", "use", "test-golden-prompt", "--json", cwd=project_dir)
+    def test_agent_base_use_updates_lockfile(self, project_dir):
+        run_library("agent-base", "use", "test-agent-base", "--json", cwd=project_dir)
         lockfile = project_dir / ".library.lock"
         import yaml
         data = yaml.safe_load(lockfile.read_text())
         names = [e["name"] for e in data.get("installed", [])]
-        assert "test-golden-prompt" in names
+        assert "test-agent-base" in names
 
 
 # ---------------------------------------------------------------------------
-# AK10: golden-prompt remove
+# AK10: agent-base remove
 # ---------------------------------------------------------------------------
 
-class TestGoldenPromptRemove:
-    def test_golden_prompt_remove_exits_zero(self, project_dir):
-        run_library("golden-prompt", "use", "test-golden-prompt", "--json", cwd=project_dir)
-        result = run_library("golden-prompt", "remove", "test-golden-prompt", "--json", cwd=project_dir)
+class TestAgentBaseRemove:
+    def test_agent_base_remove_exits_zero(self, project_dir):
+        run_library("agent-base", "use", "test-agent-base", "--json", cwd=project_dir)
+        result = run_library("agent-base", "remove", "test-agent-base", "--json", cwd=project_dir)
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
-    def test_golden_prompt_remove_updates_lockfile(self, project_dir):
-        run_library("golden-prompt", "use", "test-golden-prompt", "--json", cwd=project_dir)
-        run_library("golden-prompt", "remove", "test-golden-prompt", "--json", cwd=project_dir)
+    def test_agent_base_remove_updates_lockfile(self, project_dir):
+        run_library("agent-base", "use", "test-agent-base", "--json", cwd=project_dir)
+        run_library("agent-base", "remove", "test-agent-base", "--json", cwd=project_dir)
         lockfile = project_dir / ".library.lock"
         import yaml
         data = yaml.safe_load(lockfile.read_text())
         names = [e["name"] for e in data.get("installed", [])]
-        assert "test-golden-prompt" not in names
+        assert "test-agent-base" not in names
 
 
 # ---------------------------------------------------------------------------

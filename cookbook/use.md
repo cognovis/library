@@ -13,7 +13,7 @@ The user invokes the primitive-scoped command:
 
 The primitive is required for this workflow. Valid values are `skill`, `agent`,
 `prompt`, `standard`, `guardrail`, `mcp`, `model-standard`, and
-`golden-prompt`.
+`agent-base`.
 
 ## CLI Shortcut (preferred for all primitives)
 
@@ -29,14 +29,14 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --json
 # Real install with global scope:
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --scope global --json
 
-# Install with specific harness (agent / prompt / model-standard / golden-prompt):
+# Install with specific harness (agent / prompt / model-standard / agent-base):
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py agent use <name> --harness claude_code --json
 ```
 
 The CLI handles the three-layer cache model, symlink creation, Claude bridge,
 transitive `requires:` dependency resolution, and lockfile write deterministically
 for every primitive (`skill`, `agent`, `prompt`, `standard`, `guardrail`, `mcp`,
-`model-standard`, `golden-prompt`). The steps below apply only to operations
+`model-standard`, `agent-base`). The steps below apply only to operations
 requiring user judgment (collision resolution, scope selection).
 
 ## Steps
@@ -58,7 +58,7 @@ git pull
   - `guardrail` -> `library.guardrails`
   - `mcp` -> `library.mcp_servers`
   - `model-standard` -> `library.model_standards`
-  - `golden-prompt` -> `library.golden_prompts`
+  - `agent-base` -> `library.agent_bases`
 - Search only that section
 - Match by name (exact) or description (fuzzy/keyword match)
 - If multiple matches remain within the primitive, show them and ask the user to pick one
@@ -115,7 +115,7 @@ If the entry comes from the `library.mcp_servers` list:
 4. Skip directly to Step 9 (Confirm).
 
 For all other entries (skills, agents, prompts, standards, model-standards,
-golden-prompts, and single-hook guardrails), continue with Step 3.
+agent-bases, and single-hook guardrails), continue with Step 3.
 
 ### 3. Resolve Marketplace Reference
 
@@ -495,7 +495,7 @@ After copying files to `<install_target>/`, update `.library.lock`. Do not modif
 > **Applies to agent entries only.** Skills, prompts, and guardrails are not composed.
 
 If the installed entry is an `agent` AND the fetched file's YAML frontmatter contains
-`golden_prompt_extends:` AND the value is NOT `from-scratch`:
+`agent_base_extends:` AND the value is NOT `from-scratch`:
 
 1. Locate `scripts/compose-agent.py` in the library root (same directory as `library.yaml`).
 
@@ -531,10 +531,10 @@ If the installed entry is an `agent` AND the fetched file's YAML frontmatter con
 > changes and `/library sync` re-composes automatically.
 
 > **Layer resolution search order** for `compose-agent.py`:
-> 1. `<proj_root>/.agents/golden-prompts/<name>.md` (project-local)
-> 2. `~/.agents/golden-prompts/<name>.md` (user-global)
+> 1. `<proj_root>/.agents/agent-bases/<name>.md` (project-local)
+> 2. `~/.agents/agent-bases/<name>.md` (user-global)
 >
-> Install the required layers first: `/library golden-prompt use cognovis-base`
+> Install the required layers first: `/library agent-base use cognovis-base`
 > and `/library model-standard use claude-haiku-4-5` (or whichever
 > model-standard the agent declares).
 

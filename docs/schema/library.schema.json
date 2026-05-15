@@ -102,11 +102,11 @@
           },
           "default": []
         },
-        "golden_prompts": {
-          "description": "Catalog of Layer 1 golden prompt entries.",
+        "agent_bases": {
+          "description": "Catalog of Layer 1 agent base prompt entries.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/golden_prompt_entry"
+            "$ref": "#/$defs/agent_base_entry"
           },
           "default": []
         }
@@ -200,14 +200,6 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/model_standard_entry"
-      },
-      "default": []
-    },
-    "golden_prompts": {
-      "description": "Deprecated compatibility alias for library.golden_prompts. New catalog files should use library.golden_prompts.",
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/golden_prompt_entry"
       },
       "default": []
     }
@@ -310,7 +302,7 @@
               "scripts",
               "mcp_servers",
               "model_standards",
-              "golden_prompts",
+              "agent_bases",
               "project_tooling",
               "plugins"
             ]
@@ -827,7 +819,7 @@
               "scripts",
               "mcp_servers",
               "model_standards",
-              "golden_prompts",
+              "agent_bases",
               "project_tooling",
               "plugins"
             ]
@@ -1628,8 +1620,8 @@
       },
       "additionalProperties": false
     },
-    "golden_prompt_entry": {
-      "description": "A Layer 1 golden prompt catalog entry. Describes the base behavioral document prepended to every composed agent. Installed to .agents/golden-prompts/<name>.md (project) or ~/.agents/golden-prompts/<name>.md (global).",
+    "agent_base_entry": {
+      "description": "A Layer 1 agent base prompt catalog entry. Describes the base behavioral document prepended to every composed agent. Installed to .agents/agent-bases/<name>.md (project) or ~/.agents/agent-bases/<name>.md (global).",
       "type": "object",
       "required": [
         "name",
@@ -1637,17 +1629,17 @@
       ],
       "properties": {
         "name": {
-          "description": "Unique identifier for this golden prompt (kebab-case, matches the filename without .md extension).",
+          "description": "Unique identifier for this agent base prompt (kebab-case, matches the filename without .md extension).",
           "type": "string",
           "minLength": 1
         },
         "description": {
-          "description": "Human-readable description of the golden prompt's purpose and behavioral scope.",
+          "description": "Human-readable description of the agent base prompt's purpose and behavioral scope.",
           "type": "string",
           "minLength": 1
         },
         "source": {
-          "description": "GitHub URL or local path to the golden prompt file.",
+          "description": "GitHub URL or local path to the agent base prompt file.",
           "type": "string"
         },
         "tags": {

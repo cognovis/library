@@ -22,6 +22,7 @@ from .lockfile import (
     load_lockfile,
 )
 from .output import dry_run_result, success
+from .primitives import get_primitive
 
 
 def cmd_sync_impl(
@@ -47,6 +48,14 @@ def cmd_sync_impl(
     Returns:
         Operation result dict with list of synced entries.
     """
+    primitive_info = (
+        get_primitive(primitive)
+        if primitive not in ("all", "search", None)
+        else None
+    )
+    if primitive_info is not None:
+        primitive = primitive_info.name
+
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
     lock_data = load_lockfile(lockfile_path)
     installed = lock_data.get("installed", [])
@@ -137,9 +146,9 @@ def reinstall_entry(
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="model-standard", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
-    elif entry_type == "golden-prompt":
+    elif entry_type == "agent-base":
         from .installers.simple_file import install_simple_file
-        install_simple_file(catalog=catalog, primitive_name="golden-prompt", name=entry_name,
+        install_simple_file(catalog=catalog, primitive_name="agent-base", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "mcp":
         from .installers.mcp_installer import install_mcp
@@ -184,6 +193,14 @@ def cmd_audit_impl(
     Returns:
         Audit result dict with stable schema.
     """
+    primitive_info = (
+        get_primitive(primitive)
+        if primitive not in ("all", "search", None)
+        else None
+    )
+    if primitive_info is not None:
+        primitive = primitive_info.name
+
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
     lock_data = load_lockfile(lockfile_path)
     installed = lock_data.get("installed", [])

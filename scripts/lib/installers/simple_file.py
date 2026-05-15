@@ -1,6 +1,6 @@
 """
 installers/simple_file.py — Generic single-file installer for prompt, script,
-model-standard, and golden-prompt primitives.
+model-standard, and agent-base primitives.
 
 All four follow the same pattern:
   1. Fetch source file
@@ -47,11 +47,11 @@ def install_simple_file(
     harness: str = "all",
     install_mode: str = "vendor",
 ) -> dict[str, Any]:
-    """Generic install for prompt, script, model-standard, golden-prompt.
+    """Generic install for prompt, script, model-standard, agent-base.
 
     Args:
         catalog: Parsed library.yaml dict.
-        primitive_name: One of 'prompt', 'script', 'model-standard', 'golden-prompt'.
+        primitive_name: One of 'prompt', 'script', 'model-standard', 'agent-base'.
         name: Entry name.
         repo_root: Project root.
         scope: 'project' or 'global'.
@@ -68,6 +68,7 @@ def install_simple_file(
     prim = get_primitive(primitive_name)
     if prim is None:
         raise InstallError(f"Unknown primitive: {primitive_name}")
+    primitive_name = prim.name
 
     # 1. Catalog lookup
     entry = lookup_entry(catalog, primitive_name, name)
@@ -106,7 +107,7 @@ def install_simple_file(
         install_filename = f"{item_name}.py"
     elif primitive_name == "model-standard":
         install_filename = f"{item_name}.md"
-    elif primitive_name == "golden-prompt":
+    elif primitive_name == "agent-base":
         install_filename = f"{item_name}.md"
     else:
         install_filename = f"{item_name}.md"
@@ -225,10 +226,11 @@ def remove_simple_file(
     scope: str = "project",
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Generic remove for prompt, script, model-standard, golden-prompt."""
+    """Generic remove for prompt, script, model-standard, agent-base."""
     prim = get_primitive(primitive_name)
     if prim is None:
         raise InstallError(f"Unknown primitive: {primitive_name}")
+    primitive_name = prim.name
 
     install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
     canonical_base = install_paths["canonical"]

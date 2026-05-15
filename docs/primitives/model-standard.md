@@ -45,7 +45,7 @@ When the Library installs an agent, the **composed agent system prompt** is
 built from three layers in order:
 
 ```
-Layer 1: Cognovis Base (golden-prompt)
+Layer 1: Cognovis Base (agent-base)
   └── Global behavioral rules, safety checks, confirmation gates,
       content isolation, core skill access. Applies to all agents.
       Without this layer, agents start blank — the harness gives them
@@ -67,7 +67,7 @@ Layer 3: Model-Standard (optional)
 
 ```yaml
 # In an agent's frontmatter (.claude/agents/<name>.md):
-golden_prompt_extends: cognovis-base   # which base golden prompt to use
+agent_base_extends: cognovis-base   # which base agent base prompt to use
 model: claude-sonnet-4-6               # triggers model-standard lookup
 model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrides
 ```
@@ -81,8 +81,8 @@ Source and target are always SEPARATE paths. The source agent file (library copy
 never overwritten — the composed prompt is written to the installed copy only.
 
 ```
-1. Load Layer 1: read .agents/golden-prompts/<golden_prompt_extends>.md
-   (skip if golden_prompt_extends=from-scratch or file not found)
+1. Load Layer 1: read .agents/agent-bases/<agent_base_extends>.md
+   (skip if agent_base_extends=from-scratch or file not found)
 
 2. Load Layer 2: read the SOURCE agent file body (library copy, never the installed copy)
    This reads the original unmodified persona. Repeat installs always read the same source.
@@ -109,14 +109,14 @@ never overwritten — the composed prompt is written to the installed copy only.
 NOT enforced by all harnesses at the sandbox level (Codex global sandbox semantics
 ignore per-agent tool constraints). Therefore, the Library MUST encode the agent's
 effective tool grant in the composed system prompt body, not rely on frontmatter alone.
-The Cognovis Base Golden Prompt (`Layer 1`) includes a "Tool Constraints" section that
+The Cognovis Base Agent Base Prompt (`Layer 1`) includes a "Tool Constraints" section that
 instructs the agent to honor its declared tool list behaviorally even when the harness
 would technically allow broader access.
 
 **Canonical source locations (CL-9b1).**
 
-- Golden prompts: `.agents/golden-prompts/<name>.md`
-  - Cognovis base: `.agents/golden-prompts/cognovis-base.md`
+- Agent base prompts: `.agents/agent-bases/<name>.md`
+  - Cognovis base: `.agents/agent-bases/cognovis-base.md`
 - Model standards: `.agents/model-standards/<model-name>.md`
   - Sonnet conciseness: `.agents/model-standards/claude-sonnet-4-6.md`
   - Opus thinking budget: `.agents/model-standards/claude-opus-4-7.md`
@@ -131,7 +131,7 @@ would technically allow broader access.
 - Do NOT put model-specific guidance in the agent persona file — that locks the
   persona to one model and makes model-swapping harder.
 - Do NOT create a model-standard for a behavior that applies to all models — that
-  belongs in the base golden prompt or a general standard.
+  belongs in the base agent base prompt or a general standard.
 - Do NOT introduce a parallel loader for model-standards — reuse
   `scripts/standards-loader.sh --load-model-standard <name>` (same contract).
 

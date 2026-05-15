@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .lockfile import find_lockfile, load_lockfile
+from .primitives import get_primitive
 from .source import get_local_commit_sha, parse_source
 
 
@@ -133,6 +134,14 @@ def cmd_status_impl(
             "overall": "current" | "behind" | "unknown"
         }
     """
+    primitive_info = (
+        get_primitive(primitive)
+        if primitive not in ("all", "search", "status", None)
+        else None
+    )
+    if primitive_info is not None:
+        primitive = primitive_info.name
+
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
     lock_data = load_lockfile(lockfile_path)
     installed = lock_data.get("installed", [])

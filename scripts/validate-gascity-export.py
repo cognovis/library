@@ -134,7 +134,7 @@ def _iter_entries(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         "guardrail": "guardrail",
         "mcp": "mcp",
         "model-standard": "model-standard",
-        "golden-prompt": "golden-prompt",
+        "agent-base": "agent-base",
     }
     entries: list[tuple[str, dict[str, Any]]] = []
     for primitive_name in all_primitive_names():

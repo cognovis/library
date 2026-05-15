@@ -2,7 +2,7 @@
 name: test-agent-scratch
 description: Test agent that extends from-scratch (no Layer 1)
 model: claude-sonnet-4-6
-golden_prompt_extends: from-scratch
+agent_base_extends: from-scratch
 model_standards: []
 ---
 

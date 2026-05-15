@@ -73,7 +73,7 @@ Does it replace or extend the ORCHESTRATOR's system prompt or tool set
 >   — top-level `cld` / `cdx` session. Default = vendor prompt; override via
 >   CLI flags or the `system-prompts/registry.yml` mechanism.
 > - **Agent system prompt** ([agent](primitives/agent.md) + Layer 1
->   [golden-prompt](primitives/golden-prompt.md) + Layer 3
+>   [agent-base](primitives/agent-base.md) + Layer 3
 >   [model-standard](primitives/model-standard.md)) — each spawned subagent.
 >   Composed at install time by the Library.
 >
@@ -105,7 +105,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 8 | [MCP-Server](primitives/mcp-server.md) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | details |
 | 9 | [Script](primitives/script.md) | **YES** — Python file plus Library metadata | callable from skills/hooks/commands | callable from skills/hooks | callable from CI/export | callable through adapters | callable through adapters | details |
 | 10 | [Model-Standard](primitives/model-standard.md) | partial — concept portable, mechanism per-harness | yes | yes | partial | unverified | unverified | details |
-| 11 | [Golden-Prompt (Agent Base Prompt)](primitives/golden-prompt.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition into agent system prompt | install-time composition into agent system prompt | partial | unverified | unverified | details |
+| 11 | [Agent Base (Agent Base Prompt)](primitives/agent-base.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition into agent system prompt | install-time composition into agent system prompt | partial | unverified | unverified | details |
 | 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
 
 **How to read this:**
@@ -170,9 +170,9 @@ Details: [Script](primitives/script.md).
 
 Details: [Model-Standard](primitives/model-standard.md).
 
-### 11. Golden-Prompt (Agent Base Prompt)
+### 11. Agent Base (Agent Base Prompt)
 
-Details: [Golden-Prompt](primitives/golden-prompt.md). Layer 1 of the
+Details: [Agent Base](primitives/agent-base.md). Layer 1 of the
 composed **agent** system prompt. Distinct from the orchestrator system
 prompt (see #12).
 
@@ -250,13 +250,13 @@ Library treats managed skills as read-only and does not override them.
   definitions to classify all 44 agents in scope.
 - **Agent Format Mapping** (`docs/research/agents-format-mapping.md`, CL-11p): Field
   mapping for Claude Code ↔ Codex agent translation. Covers new frontmatter fields
-  `golden_prompt_extends` and `model_standards` introduced in CL-9b1.
-- **Golden Prompts** (CL-9b1): Canonical sources at `.agents/golden-prompts/` and
-  `.agents/model-standards/`. See [Model-Standard](primitives/model-standard.md) and [Golden-Prompt](primitives/golden-prompt.md) for the composition algorithm.
+  `agent_base_extends` and `model_standards` introduced in CL-9b1.
+- **Agent Base Prompts** (CL-9b1): Canonical sources at `.agents/agent-bases/` and
+  `.agents/model-standards/`. See [Model-Standard](primitives/model-standard.md) and [Agent Base](primitives/agent-base.md) for the composition algorithm.
 - **Research beads**:
   - `CL-qzw` — Codex Layer 3 (prompts/skills) parity research (source of Codex
     NORMATIVE claims in this doc)
   - `CL-xcm` — Hook distribution across harnesses
   - `CL-11p` — Agent format translation spec (Claude Code ↔ Codex)
   - `CL-7ii` — Marketplace implementation
-  - `CL-9b1` — Golden Prompt composition + Model-Standards implementation
+  - `CL-9b1` — Agent Base Prompt composition + Model-Standards implementation

@@ -222,6 +222,22 @@ def test_marketplace_local_is_valid():
     print("PASS test_marketplace_local_is_valid")
 
 
+def test_agent_base_type_is_valid():
+    """`agent-base` is the canonical Layer 1 primitive type."""
+    schema = load_lockfile_schema()
+    entry = minimal_valid_entry(type="agent-base", name="cognovis-base")
+    assert_valid(lockfile_with(entry), schema, "type=agent-base")
+    print("PASS test_agent_base_type_is_valid")
+
+
+def test_golden_prompt_type_is_removed():
+    """`golden-prompt` is rejected by the lockfile schema after migration."""
+    schema = load_lockfile_schema()
+    entry = minimal_valid_entry(type="golden-prompt", name="cognovis-base")
+    assert_invalid(lockfile_with(entry), schema, "type=golden-prompt")
+    print("PASS test_golden_prompt_type_is_removed")
+
+
 # ---------------------------------------------------------------------------
 # Main runner (no pytest required)
 # ---------------------------------------------------------------------------
@@ -238,6 +254,8 @@ ALL_TESTS = [
     test_adr0003_project_install_example,
     test_marketplace_unknown_is_valid,
     test_marketplace_local_is_valid,
+    test_agent_base_type_is_valid,
+    test_golden_prompt_type_is_removed,
 ]
 
 

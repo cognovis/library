@@ -64,18 +64,18 @@ make_tmp() {
 # ---------------------------------------------------------------------------
 # Helper: build a minimal fake library checkout in tmp_lib_dir with:
 #   - scripts/compose-agent.py (symlink to real script)
-#   - .agents/golden-prompts/cognovis-base.md (fake Layer 1)
+#   - .agents/agent-bases/cognovis-base.md (fake Layer 1)
 # ---------------------------------------------------------------------------
 make_fake_library() {
     local lib_dir="$1"
     mkdir -p "${lib_dir}/scripts"
-    mkdir -p "${lib_dir}/.agents/golden-prompts"
+    mkdir -p "${lib_dir}/.agents/agent-bases"
 
     # Symlink (not copy) compose script so we use the real implementation
     ln -sf "${COMPOSE_SCRIPT}" "${lib_dir}/scripts/compose-agent.py"
 
     # Fake Layer 1 (cognovis-base)
-    cat > "${lib_dir}/.agents/golden-prompts/cognovis-base.md" << 'LAYER1EOF'
+    cat > "${lib_dir}/.agents/agent-bases/cognovis-base.md" << 'LAYER1EOF'
 ---
 name: cognovis-base
 version: "2026.05.12"
@@ -86,14 +86,14 @@ description: Smoke test fixture for cognovis-base Layer 1
 
 COGNOVIS_BASE_LAYER1_MARKER
 
-Base golden prompt content for smoke test.
+Base agent base prompt content for smoke test.
 LAYER1EOF
 }
 
 # ---------------------------------------------------------------------------
 # Helper: simulate cookbook use.md Step 6.5 sequence:
 #   1. Copy agent file to temp project's .claude/agents/
-#   2. Check frontmatter for golden_prompt_extends
+#   2. Check frontmatter for agent_base_extends
 #   3. Run compose-agent.py
 #   4. Replace body with composed output (or keep original on failure)
 # Returns 0 on success (compose ran and replaced body), 1 on graceful failure.
@@ -111,7 +111,7 @@ cookbook_use_step65() {
     # Step 4 equivalent: copy the agent file (simulate fetch)
     cp "${agent_src}" "${installed}"
 
-    # Step 6.5: check frontmatter for golden_prompt_extends
+    # Step 6.5: check frontmatter for agent_base_extends
     local extends
     extends=$(python3 - "${installed}" <<'PYEOF'
 import sys, re
@@ -126,7 +126,7 @@ for i, line in enumerate(lines[1:], 1):
         fm_text = '\n'.join(lines[1:i])
         import yaml
         fm = yaml.safe_load(fm_text) or {}
-        val = fm.get('golden_prompt_extends', '')
+        val = fm.get('agent_base_extends', '')
         print(val if val else '')
         sys.exit(0)
 print('')
@@ -148,7 +148,7 @@ PYEOF
     # Run composer; capture composed body
     local composed_body
     local compose_rc=0
-    composed_body=$(GOLDEN_PROMPTS_DIR="${lib_dir}/.agents/golden-prompts" \
+    composed_body=$(AGENT_BASES_DIR="${lib_dir}/.agents/agent-bases" \
         python3 "${compose_py}" "${installed}" 2>/tmp/compose_err_$$) || compose_rc=$?
 
     if [[ "${compose_rc}" -ne 0 ]]; then
@@ -268,11 +268,11 @@ else
     TMP3=$(make_tmp)
     PROJ3="${TMP3}/project"
     LIB3="${TMP3}/library"
-    # Build library WITHOUT cognovis-base (empty golden-prompts dir)
+    # Build library WITHOUT cognovis-base (empty agent-bases dir)
     mkdir -p "${LIB3}/scripts"
-    mkdir -p "${LIB3}/.agents/golden-prompts"
+    mkdir -p "${LIB3}/.agents/agent-bases"
     ln -sf "${COMPOSE_SCRIPT}" "${LIB3}/scripts/compose-agent.py"
-    # golden-prompts dir is empty -- Layer 1 missing
+    # agent-bases dir is empty -- Layer 1 missing
 
     # cookbook_use_step65 should return 1 (compose failed) and keep uncomposed body
     INSTALL_RC=0
@@ -324,7 +324,7 @@ else
     # Verify key invariant phrases from the original Step 6.5 are still present
     MISSING=0
     for phrase in \
-        "golden_prompt_extends" \
+        "agent_base_extends" \
         "compose-agent.py" \
         "graceful degradation" \
         "from-scratch" \

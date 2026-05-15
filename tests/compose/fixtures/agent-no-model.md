@@ -1,7 +1,7 @@
 ---
 name: test-agent-no-model
 description: Test agent with no model field and empty model_standards
-golden_prompt_extends: cognovis-base
+agent_base_extends: cognovis-base
 model_standards: []
 ---
 

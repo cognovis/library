@@ -6,7 +6,7 @@ Canonical command grammar:
   python3 scripts/library.py <primitive> <verb> [name-or-query] [options]
 
 Supported primitives: skill, agent, prompt, script, standard, guardrail, mcp,
-                      model-standard, golden-prompt
+                      model-standard, agent-base
 
 Supported verbs: list, use, remove, sync, search, audit
 
@@ -109,8 +109,10 @@ def build_parser() -> argparse.ArgumentParser:
         prim = get_primitive(prim_name)
         prim_parser = subparsers.add_parser(
             prim_name,
+            aliases=prim.aliases if prim else (),
             help=prim.description if prim else f"{prim_name} primitives",
         )
+        prim_parser.set_defaults(primitive=prim_name)
 
         verb_sub = prim_parser.add_subparsers(
             dest="verb",
@@ -536,8 +538,8 @@ def _dispatch_use(
         return _use_simple_file(args, repo_root, catalog, "script", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "model-standard":
         return _use_simple_file(args, repo_root, catalog, "model-standard", name, scope, dry_run, use_json, harness, install_mode)
-    elif primitive == "golden-prompt":
-        return _use_simple_file(args, repo_root, catalog, "golden-prompt", name, scope, dry_run, use_json, harness, install_mode)
+    elif primitive == "agent-base":
+        return _use_simple_file(args, repo_root, catalog, "agent-base", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "mcp":
         return _use_mcp(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
     elif primitive == "guardrail":
@@ -671,7 +673,7 @@ def _use_simple_file(
     harness: str,
     install_mode: str,
 ) -> int:
-    """Install a prompt, model-standard, or golden-prompt."""
+    """Install a prompt, model-standard, or agent-base."""
     from lib.installers.simple_file import install_simple_file
 
     try:
@@ -867,9 +869,9 @@ def _dispatch_remove(
         from lib.installers.simple_file import remove_simple_file
         return remove_simple_file(catalog=catalog, primitive_name="model-standard", name=name,
                                   repo_root=repo_root, scope=scope, dry_run=dry_run)
-    elif primitive == "golden-prompt":
+    elif primitive == "agent-base":
         from lib.installers.simple_file import remove_simple_file
-        return remove_simple_file(catalog=catalog, primitive_name="golden-prompt", name=name,
+        return remove_simple_file(catalog=catalog, primitive_name="agent-base", name=name,
                                   repo_root=repo_root, scope=scope, dry_run=dry_run)
     elif primitive == "mcp":
         from lib.installers.mcp_installer import remove_mcp

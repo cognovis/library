@@ -16,7 +16,7 @@ root level:
 - primitive catalog entries: `library.skills`, `library.agents`,
   `library.prompts`, `library.scripts`, `library.standards`
 - later primitive catalog entries: `guardrails`, `mcp_servers`,
-  `model_standards`, `golden_prompts`
+  `model_standards`, `agent_bases`
 - source registries: `catalog`, `marketplaces`
 - fleet policy: `project_tooling`
 
@@ -39,7 +39,7 @@ and which were root-level exceptions.
 | `guardrails` | root | `library.guardrails` | primitive catalog | guardrail installer, list/search, Gas City validator |
 | `mcp_servers` | root | `library.mcp_servers` | primitive catalog | MCP installer, list/search, resolver |
 | `model_standards` | root | `library.model_standards` | primitive catalog | simple-file installer, agent composer inputs |
-| `golden_prompts` | root | `library.golden_prompts` | primitive catalog | simple-file installer, agent composer inputs |
+| `agent_bases` | n/a | `library.agent_bases` | primitive catalog | simple-file installer, agent composer inputs |
 | `catalog` | root | `sources.catalogs` | source registry | source provenance, docs, future source management |
 | `marketplaces` | root | `sources.marketplaces` | source registry | marketplace resolution, lockfile migration |
 | `project_tooling` | root | root | fleet policy | `scripts/sync_project_tooling.py` |
@@ -65,7 +65,7 @@ library:
   guardrails:
   mcp_servers:
   model_standards:
-  golden_prompts:
+  agent_bases:
 
 project_tooling:
 ```
@@ -82,18 +82,17 @@ loaders keep read compatibility for older catalogs:
 - `guardrails` falls back to root `guardrails`
 - `mcp_servers` falls back to root `mcp_servers`
 - `model_standards` falls back to root `model_standards`
-- `golden_prompts` falls back to root `golden_prompts`
+- `agent_bases` has no root-level compatibility alias
 - `sources.catalogs` falls back to root `catalog`
 - `sources.marketplaces` falls back to root `marketplaces`
 
 Canonical keys win when both canonical and legacy keys exist. This avoids
 silently merging duplicate entries from two ownership models.
 
-The JSON Schema also accepts the legacy root aliases during the compatibility
-period, but descriptions mark them deprecated. New catalog edits should use only
-the canonical locations. `scripts/validate-library.py` emits compatibility
-warnings for legacy aliases and supports `--strict-aliases` to reject them when
-the compatibility period ends.
+The JSON Schema accepts the legacy root aliases listed above during the
+compatibility period. `agent_bases` is intentionally not aliased; the
+`golden_prompts` catalog key was removed during the agent-base rename.
+New catalog edits should use only the canonical locations.
 
 ## Consequences
 

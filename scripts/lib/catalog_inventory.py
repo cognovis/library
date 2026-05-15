@@ -27,7 +27,12 @@ PRIMITIVE_CONTENT_TYPES: dict[str, set[str]] = {
     "guardrail": {"guardrail", "guardrails", "hook", "hooks"},
     "mcp": {"mcp", "mcp_server", "mcp_servers"},
     "model-standard": {"model-standard", "model_standard", "model-standards", "model_standards"},
-    "golden-prompt": {"golden-prompt", "golden_prompt", "golden-prompts", "golden_prompts"},
+    "agent-base": {
+        "agent-base",
+        "agent_base",
+        "agent-bases",
+        "agent_bases",
+    },
 }
 
 CONTENT_TYPE_PRIMITIVES: dict[str, str] = {
@@ -42,7 +47,7 @@ SCAN_PRIMITIVES = {
     "prompt",
     "standard",
     "model-standard",
-    "golden-prompt",
+    "agent-base",
 }
 
 IGNORED_PATH_PARTS = {
@@ -389,8 +394,8 @@ def scan_primitive(
         files = sorted((root / "standards").glob("**/*.md"))
     elif primitive_name == "model-standard":
         files = sorted((root / "model-standards").glob("**/*.md"))
-    elif primitive_name == "golden-prompt":
-        files = sorted((root / "golden-prompts").glob("**/*.md"))
+    elif primitive_name == "agent-base":
+        files = sorted((root / "agent-bases").glob("**/*.md"))
     else:
         files = []
 

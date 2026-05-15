@@ -4,12 +4,12 @@ test_compose_agent.py — Unit tests for scripts/compose-agent.py
 
 Bead: CL-08n
 Tests:
-  1. Compose agent with golden_prompt_extends: cognovis-base — Layer1+Layer2 in output
+  1. Compose agent with agent_base_extends: cognovis-base — Layer1+Layer2 in output
   2. Compose agent with model_standards: [claude-sonnet-4-6] — Layer3 appended
   3. from-scratch → no Layer 1 in output
   4. empty model_standards: [] and no model: field → no Layer 3
   5. --harness=codex produces TOML-safe output (no raw triple-quotes breaking TOML)
-  6. Composer exits non-zero when golden_prompt base is missing
+  6. Composer exits non-zero when agent_base base is missing
   7. Layer separators are present in composed output
 
 Run with:
@@ -44,7 +44,7 @@ def run_compose(
     Returns (returncode, stdout, stderr).
     """
     env = os.environ.copy()
-    env["GOLDEN_PROMPTS_DIR"] = str(base_dir)
+    env["AGENT_BASES_DIR"] = str(base_dir)
     if model_standard_dir:
         env["MODEL_STANDARDS_DIR"] = str(model_standard_dir)
 
@@ -61,8 +61,8 @@ def run_compose(
 # ---------------------------------------------------------------------------
 
 def make_base_dir(tmp_path: Path) -> Path:
-    """Create a temp golden-prompts dir with the test fixture base."""
-    base_dir = tmp_path / "golden-prompts"
+    """Create a temp agent-bases dir with the test fixture base."""
+    base_dir = tmp_path / "agent-bases"
     base_dir.mkdir()
     fixture_base = FIXTURES_DIR / "base-cognovis-base.md"
     (base_dir / "cognovis-base.md").write_text(fixture_base.read_text())
@@ -91,7 +91,7 @@ mcpServers:
   open-brain:
     command: ob
 permissionMode: acceptEdits
-golden_prompt_extends: cognovis-base
+agent_base_extends: cognovis-base
 model_standards: [claude-sonnet-4-6]
 cache_control: ephemeral
 requires:
@@ -101,6 +101,25 @@ requires:
 # Frontmatter Agent
 
 This agent verifies runtime frontmatter emission.
+"""
+    )
+    return agent_file
+
+
+def make_agent_with_legacy_frontmatter(tmp_path: Path) -> Path:
+    """Create an agent fixture that uses the one-release frontmatter alias."""
+    agent_file = tmp_path / "agent-with-legacy-frontmatter.md"
+    agent_file.write_text(
+        """---
+name: legacy-frontmatter-agent
+description: Agent with legacy composer frontmatter
+golden_prompt_extends: cognovis-base
+model_standards: []
+---
+
+# Legacy Frontmatter Agent
+
+This agent verifies the legacy frontmatter alias.
 """
     )
     return agent_file
@@ -121,6 +140,22 @@ def test_compose_with_base_contains_layer1(tmp_path):
         f"Layer 1 marker not found in output.\nstdout: {stdout}\nstderr: {stderr}"
     )
     print("PASS test_compose_with_base_contains_layer1")
+
+
+def test_compose_accepts_legacy_frontmatter_alias(tmp_path):
+    """golden_prompt_extends remains accepted as a one-release frontmatter alias."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = make_agent_with_legacy_frontmatter(tmp_path)
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout, (
+        f"Layer 1 marker not found for legacy alias.\nstdout: {stdout}\nstderr: {stderr}"
+    )
+    assert "Legacy Frontmatter Agent" in stdout, (
+        f"Layer 2 body not found for legacy alias.\nstdout: {stdout}\nstderr: {stderr}"
+    )
+    print("PASS test_compose_accepts_legacy_frontmatter_alias")
 
 
 def test_compose_with_base_contains_layer2(tmp_path):
@@ -166,7 +201,7 @@ def test_compose_with_model_standard_contains_layer3(tmp_path):
 
 
 def test_from_scratch_no_layer1(tmp_path):
-    """from-scratch golden_prompt_extends produces no Layer 1 content."""
+    """from-scratch agent_base_extends produces no Layer 1 content."""
     base_dir = make_base_dir(tmp_path)
     agent_file = FIXTURES_DIR / "agent-from-scratch.md"
 
@@ -226,9 +261,9 @@ def test_claude_harness_emits_runtime_frontmatter(tmp_path):
     assert "permissionMode:" in frontmatter, (
         f"Missing permissionMode in frontmatter:\n{frontmatter}"
     )
-    for field in ("golden_prompt_extends:", "model_standards:", "cache_control:", "requires:"):
+    for field in ("agent_base_extends:", "model_standards:", "cache_control:", "requires:"):
         assert field not in frontmatter, f"Composer field leaked into frontmatter:\n{frontmatter}"
-    assert body.lstrip("\n").startswith("# Cognovis Base Golden Prompt"), (
+    assert body.lstrip("\n").startswith("# Cognovis Base Agent Base Prompt"), (
         f"Composed body should follow Claude frontmatter.\nbody: {body}"
     )
     assert "SONNET_LAYER3_MARKER" in body, (
@@ -244,7 +279,7 @@ def test_codex_harness_does_not_emit_frontmatter(tmp_path):
 
     rc, stdout, stderr = run_compose(agent_file, base_dir, harness="codex")
     assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
-    assert stdout.startswith("# Cognovis Base Golden Prompt"), (
+    assert stdout.startswith("# Cognovis Base Agent Base Prompt"), (
         f"Codex output should remain body-only.\nstdout: {stdout}"
     )
     assert not stdout.startswith("---\n"), f"Codex output should not emit frontmatter.\nstdout: {stdout}"
@@ -282,8 +317,8 @@ def test_layer3_separator_present(tmp_path):
 
 
 def test_missing_base_exits_nonzero(tmp_path):
-    """Composer exits non-zero when the required golden_prompt base is missing."""
-    empty_base_dir = tmp_path / "empty-golden-prompts"
+    """Composer exits non-zero when the required agent_base base is missing."""
+    empty_base_dir = tmp_path / "empty-agent-bases"
     empty_base_dir.mkdir()
     agent_file = FIXTURES_DIR / "agent-with-base.md"
 
@@ -300,6 +335,7 @@ def test_missing_base_exits_nonzero(tmp_path):
 
 ALL_TESTS = [
     test_compose_with_base_contains_layer1,
+    test_compose_accepts_legacy_frontmatter_alias,
     test_compose_with_base_contains_layer2,
     test_compose_layer_order,
     test_compose_with_model_standard_contains_layer3,

@@ -66,9 +66,9 @@ default_dirs:
   model_standards:
     - default: .agents/model-standards/
     - global: ~/.agents/model-standards/
-  golden_prompts:
-    - default: .agents/golden-prompts/
-    - global: ~/.agents/golden-prompts/
+  agent_bases:
+    - default: .agents/agent-bases/
+    - global: ~/.agents/agent-bases/
 
 library:
   skills:
@@ -83,7 +83,6 @@ marketplaces: []
 guardrails: []
 mcp_servers: []
 model_standards: []
-golden_prompts: []
 """
 
 
@@ -477,7 +476,7 @@ class TestTopLevelSync:
         (project_dir / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
-            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
 
     def _make_lockfile_with_entries(self, project_dir: Path) -> None:
@@ -549,7 +548,7 @@ class TestTopLevelSync:
         (tmp_path / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
-            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
 
         # Write lockfile with one current and one behind entry
@@ -691,7 +690,7 @@ class TestHookScript:
         (project_dir / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
-            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
 
         result = subprocess.run(
@@ -759,7 +758,7 @@ class TestHookScript:
         (tmp_path / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
-            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
         (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
 

@@ -35,7 +35,7 @@ SUPPORTED_PRIMITIVES = [
     "guardrail",
     "mcp",
     "model-standard",
-    "golden-prompt",
+    "agent-base",
 ]
 
 

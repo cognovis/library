@@ -8,7 +8,7 @@ can be spawned by the orchestrating model to run a subtask in isolation.
 
 > **Two prompts, not one.** "System prompt" is ambiguous in this stack. The
 > agent's system prompt (this primitive) is the composed body of the agent's
-> definition file — see [Golden-Prompt](golden-prompt.md) + [Model-Standard](model-standard.md)
+> definition file — see [Agent Base](agent-base.md) + [Model-Standard](model-standard.md)
 > for how Layer 1/2/3 are stitched together. It is distinct from the
 > [orchestrator system prompt](system-prompt.md) of the top-level `cld` / `cdx`
 > session. Subagents do **not** inherit the orchestrator's system prompt

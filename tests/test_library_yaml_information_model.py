@@ -64,6 +64,7 @@ def test_library_yaml_uses_normalized_root_sections() -> None:
         "guardrails",
         "mcp_servers",
         "model_standards",
+        "agent_bases",
         "golden_prompts",
     ):
         assert legacy_key not in data
@@ -77,7 +78,7 @@ def test_library_yaml_uses_normalized_root_sections() -> None:
         "guardrails",
         "mcp_servers",
         "model_standards",
-        "golden_prompts",
+        "agent_bases",
     ):
         assert primitive_key in data["library"]
 
@@ -107,10 +108,10 @@ def test_schema_accepts_canonical_primitive_sections() -> None:
                 "description": "A sample model standard.",
             }
         ],
-        golden_prompts=[
+        agent_bases=[
             {
-                "name": "sample-golden-prompt",
-                "description": "A sample golden prompt.",
+                "name": "sample-agent-base",
+                "description": "A sample agent base prompt.",
             }
         ],
     )
@@ -148,30 +149,41 @@ def test_loader_reads_canonical_primitive_sections() -> None:
         guardrails=[{"name": "canonical-guardrail"}],
         mcp_servers=[{"name": "canonical-mcp"}],
         model_standards=[{"name": "canonical-model-standard"}],
-        golden_prompts=[{"name": "canonical-golden-prompt"}],
+        agent_bases=[{"name": "canonical-agent-base"}],
     )
 
     assert get_entries(data, "guardrail")[0]["name"] == "canonical-guardrail"
     assert get_entries(data, "mcp")[0]["name"] == "canonical-mcp"
     assert get_entries(data, "model-standard")[0]["name"] == "canonical-model-standard"
-    assert get_entries(data, "golden-prompt")[0]["name"] == "canonical-golden-prompt"
+    assert get_entries(data, "agent-base")[0]["name"] == "canonical-agent-base"
 
 
 def test_loader_keeps_legacy_primitive_fallbacks() -> None:
-    """Older root primitive sections remain readable when canonical keys are absent."""
+    """Older root primitive sections remain readable except removed agent-base aliases."""
     data = {
         "default_dirs": {"skills": [{"default": ".agents/skills/"}]},
         "library": {"skills": [], "agents": [], "prompts": []},
         "guardrails": [{"name": "legacy-guardrail"}],
         "mcp_servers": [{"name": "legacy-mcp"}],
         "model_standards": [{"name": "legacy-model-standard"}],
+        "agent_bases": [{"name": "legacy-agent-base"}],
         "golden_prompts": [{"name": "legacy-golden-prompt"}],
     }
 
     assert get_entries(data, "guardrail")[0]["name"] == "legacy-guardrail"
     assert get_entries(data, "mcp")[0]["name"] == "legacy-mcp"
     assert get_entries(data, "model-standard")[0]["name"] == "legacy-model-standard"
-    assert get_entries(data, "golden-prompt")[0]["name"] == "legacy-golden-prompt"
+    assert get_entries(data, "agent-base") == []
+
+
+def test_schema_rejects_removed_agent_base_root_aliases() -> None:
+    """agent_bases must live under library.*; golden_prompts is removed."""
+    for removed_key in ("agent_bases", "golden_prompts"):
+        data = _minimal_catalog()
+        data[removed_key] = [{"name": "removed", "description": "Removed alias."}]
+        validator = jsonschema.Draft202012Validator(_schema())
+        errors = list(validator.iter_errors(data))
+        assert errors, f"Expected schema to reject root {removed_key}"
 
 
 def test_loader_reads_canonical_sources_with_legacy_fallbacks() -> None:

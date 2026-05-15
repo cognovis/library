@@ -1,8 +1,8 @@
-# Golden-Prompt (Agent Base Prompt)
+# Agent Base (Agent Base Prompt)
 
 > Primitive reference extracted from the agent composition model in [PRIMITIVES.md](../PRIMITIVES.md).
 
-> **What this primitive is — and isn't.** A golden-prompt is the shared
+> **What this primitive is — and isn't.** An agent-base is the shared
 > **agent-level** base layer that the Library prepends to an agent persona at
 > install time. It is **not** the orchestrator's system prompt (the prompt
 > Claude Code / Codex itself loads at session start). The two layers live in
@@ -11,7 +11,7 @@
 > | Layer | Primitive | Whose context |
 > |---|---|---|
 > | Orchestrator system prompt | [System-Prompt](system-prompt.md) | Top-level `cld` / `cdx` session |
-> | **Agent system prompt — Layer 1 (base)** | **Golden-Prompt** (this doc) | Each spawned subagent |
+> | **Agent system prompt — Layer 1 (base)** | **Agent Base** (this doc) | Each spawned subagent |
 > | Agent system prompt — Layer 2 (persona) | [Agent](agent.md) | Each spawned subagent |
 > | Agent system prompt — Layer 3 (model overlay) | [Model-Standard](model-standard.md) | Each spawned subagent |
 >
@@ -21,31 +21,31 @@
 > spawned agents.
 
 **Definition.** A markdown document containing the base behavioral layer for
-composed **agent system prompts**. A golden-prompt is prepended to an agent
+composed **agent system prompts**. An agent-base is prepended to an agent
 persona at install/sync time when the agent declares
-`golden_prompt_extends: <name>`.
+`agent_base_extends: <name>`.
 
-**Key constitutive feature.** Agent base prompt layer: golden-prompts encode
+**Key constitutive feature.** Agent base prompt layer: agent-bases encode
 common safety, confirmation, content-isolation, and operating-policy guidance
 that should apply to a family of agents without duplicating that text in every
 agent file. The corresponding rules for the **orchestrator** session live in
 the [system-prompt](system-prompt.md) override mechanism instead.
 
-**Storage.** `.agents/golden-prompts/<name>.md` (project-local) or
-`~/.agents/golden-prompts/<name>.md` (user-global).
+**Storage.** `.agents/agent-bases/<name>.md` (project-local) or
+`~/.agents/agent-bases/<name>.md` (user-global).
 
-**Loading.** Golden-prompts are not runtime tools and are not auto-selected by the
-model. The Library composer reads them during agent install/sync and writes the fully
-composed prompt to the harness-specific installed agent file.
+**Loading.** Agent-bases are not runtime tools and are not auto-selected by the
+model. The Library composer reads them during agent install/sync and writes the
+fully composed prompt to the harness-specific installed agent file.
 
-**Composition role.** Golden-prompts are Layer 1 of the three-layer **agent
+**Composition role.** Agent-bases are Layer 1 of the three-layer **agent
 system prompt** model (the prompt the harness sees when an agent runs — not
 the orchestrator's prompt):
 
 ```
 Composed agent system prompt =
 
-  Layer 1: Golden-Prompt (this primitive)
+  Layer 1: Agent Base (this primitive)
     └── Shared behavioral base for a family of agents.
 
   Layer 2: Agent Persona
@@ -59,19 +59,19 @@ Composition happens **once at install time** by the Library composer
 (`scripts/compose-agent.py`). The harness reads the fully-composed result
 as the agent's system prompt — there is no runtime composition.
 
-**Catalog format.** Golden-prompts live under `library.golden_prompts` in `library.yaml`:
+**Catalog format.** Agent-bases live under `library.agent_bases` in `library.yaml`:
 
 ```yaml
 library:
-  golden_prompts:
+  agent_bases:
     - name: cognovis-base
       description: >-
         Layer 1 of the three-layer agent composition model. Safety, confirmation
         gates, content isolation, source-language, session-close protocol.
-      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-base.md
 ```
 
-**When to choose it.** Create a golden-prompt when:
+**When to choose it.** Create an agent-base when:
 
 - the same base behavioral policy must apply to multiple agents;
 - the behavior belongs below every persona, not inside one specialized agent;
@@ -79,8 +79,8 @@ library:
 
 **Counter-examples.**
 
-- Do NOT put one agent's domain expertise in a golden-prompt; that belongs in the
+- Do NOT put one agent's domain expertise in an agent-base; that belongs in the
   agent persona.
-- Do NOT put model-specific tuning in a golden-prompt; that belongs in a
+- Do NOT put model-specific tuning in an agent-base; that belongs in a
   model-standard.
-- Do NOT use a golden-prompt as an invocable workflow; that is a skill or command.
+- Do NOT use an agent-base as an invocable workflow; that is a skill or command.

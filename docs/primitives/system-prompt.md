@@ -13,7 +13,7 @@ distinct prompts:
 | Layer | Whose prompt? | Whose tool set? | Composed how? |
 |---|---|---|---|
 | **Orchestrator system prompt** (this primitive) | The top-level `cld` / `cdx` session | Built-in harness tools (Bash, Read, Edit, …) + MCP tools | Vendor default, optionally overridden at CLI launch |
-| **Agent system prompt** (see [Agent](agent.md), [Golden-Prompt](golden-prompt.md), [Model-Standard](model-standard.md)) | A subagent spawned via the `Agent` tool / nickname | Per-agent `tools:` grant in frontmatter / TOML | Install-time three-layer composition by the Library |
+| **Agent system prompt** (see [Agent](agent.md), [Agent Base](agent-base.md), [Model-Standard](model-standard.md)) | A subagent spawned via the `Agent` tool / nickname | Per-agent `tools:` grant in frontmatter / TOML | Install-time three-layer composition by the Library |
 
 A subagent does **not** inherit the orchestrator's system prompt. Quoting the
 upstream Claude Code docs (`code.claude.com/docs/en/sub-agents`):
@@ -108,8 +108,8 @@ is not re-resolved when the user runs `/clear`, `/compact`, or `--resume`.
 
 **Counter-examples.**
 
-- Do NOT use this primitive to add agent-level instructions. Use [Golden-Prompt
-  (Agent Base Prompt)](golden-prompt.md) — those are composed into the agent's
+- Do NOT use this primitive to add agent-level instructions. Use [Agent Base
+  (Agent Base Prompt)](agent-base.md) — those are composed into the agent's
   own system prompt at install time.
 - Do NOT use this primitive to add cross-cutting safety rules that should
   apply to every spawned subagent. Those agents do not inherit the
@@ -129,7 +129,7 @@ no-ops and the vendor default is used. To activate, create
 **Cross-references.**
 
 - [Agent](agent.md) — the OTHER primitive that has a system prompt (agent-level)
-- [Golden-Prompt](golden-prompt.md) — Layer 1 of the agent system prompt
+- [Agent Base](agent-base.md) — Layer 1 of the agent system prompt
 - [Model-Standard](model-standard.md) — Layer 3 of the agent system prompt
 - `bin/cld` (lines 156-200) — orchestrator prompt injection wiring
 - `bin/lib/cld-system-prompt.zsh` — registry resolver

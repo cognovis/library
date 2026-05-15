@@ -5,8 +5,8 @@ Agents are deployed as composed .md files for Claude Code and .toml files for
 Codex at the configured agent directories.
 
 Composition is performed by scripts/compose-agent.py if the agent frontmatter
-references golden_prompt_extends or model_standards. If compose-agent.py is not
-found, the raw file is copied as-is.
+references agent_base_extends, golden_prompt_extends, or model_standards. If
+compose-agent.py is not found, the raw file is copied as-is.
 """
 
 from __future__ import annotations

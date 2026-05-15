@@ -38,9 +38,9 @@ default_dirs:
   model_standards:
     - default: .agents/model-standards/
     - global: ~/.agents/model-standards/
-  golden_prompts:
-    - default: .agents/golden-prompts/
-    - global: ~/.agents/golden-prompts/
+  agent_bases:
+    - default: .agents/agent-bases/
+    - global: ~/.agents/agent-bases/
 
 tag_vocabulary:
   - tag: judge-layer
@@ -140,7 +140,7 @@ sources:
         - standards
         - prompts
         - model_standards
-        - golden_prompts
+        - agent_bases
       scope:
         topics:
           - team
@@ -2638,12 +2638,12 @@ library:
         multi-step plans, no terse-skip on verification steps.
       source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-haiku-4-5.md
 
-  golden_prompts:
+  agent_bases:
     - name: cognovis-base
       description: >-
         Layer 1 of the three-layer agent composition model. Safety, confirmation
         gates, content isolation, source-language, session-close protocol.
-      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-base.md
 
 project_tooling:
   - name: beads-prime

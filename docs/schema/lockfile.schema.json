@@ -40,7 +40,7 @@
         "type": {
           "description": "Primitive type of the installed item.",
           "type": "string",
-          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "golden-prompt", "mcp"]
+          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "mcp"]
         },
         "marketplace": {
           "description": "Name of the source-provider marketplace entry in library.yaml.marketplaces. Identifies which marketplace this item was fetched from. Use 'local' for local-path sources and 'unknown' for sources that cannot be matched to a registered marketplace.",
@@ -108,19 +108,19 @@
           "default": []
         },
         "composed_layers": {
-          "description": "Composition metadata for agents installed with layered prompt composition (CL-08n). Present only when the agent was composed from golden-prompt (Layer 1) and/or model-standard (Layer 3) files. Omit for non-composed installs.",
+          "description": "Composition metadata for agents installed with layered prompt composition (CL-08n). Present only when the agent was composed from an agent-base (Layer 1) and/or model-standard (Layer 3) files. Omit for non-composed installs.",
           "type": "object",
           "properties": {
-            "golden_prompt": {
-              "description": "Layer 1 golden prompt used during composition.",
+            "agent_base": {
+              "description": "Layer 1 agent base prompt used during composition.",
               "type": "object",
               "properties": {
                 "name": {
-                  "description": "Name of the golden prompt (matches the filename without .md).",
+                  "description": "Name of the agent base prompt (matches the filename without .md).",
                   "type": "string"
                 },
                 "sha": {
-                  "description": "SHA-256 checksum of the golden prompt file at compose time.",
+                  "description": "SHA-256 checksum of the agent base prompt file at compose time.",
                   "type": "string"
                 }
               },

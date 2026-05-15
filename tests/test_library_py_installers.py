@@ -50,7 +50,6 @@ marketplaces: []
 guardrails: []
 mcp_servers: []
 model_standards: []
-golden_prompts: []
 """
 
 
@@ -574,7 +573,6 @@ marketplaces: []
 guardrails: []
 mcp_servers: []
 model_standards: []
-golden_prompts: []
 """
         )
 
@@ -988,6 +986,38 @@ class TestLockfile:
         data = load_lockfile(lockfile)
         assert data == {"installed": []}, f"Expected empty data, got {data}"
 
+    def test_lockfile_load_migrates_agent_base_type(self, tmp_path: Path):
+        """Legacy golden-prompt lockfile entries load as agent-base entries."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.lockfile import load_lockfile, save_lockfile
+
+        lockfile = tmp_path / ".library.lock"
+        lockfile.write_text(
+            "installed:\n"
+            "  - name: cognovis-base\n"
+            "    type: golden-prompt\n"
+            "    marketplace: local\n"
+            "    source: /tmp/cognovis-base.md\n"
+            "    source_commit: local\n"
+            "    cache_path: /tmp/cache/\n"
+            "    install_target: .agents/agent-bases/cognovis-base.md\n"
+            "    install_timestamp: 2026-05-12T07:30:00Z\n"
+            f"    checksum_sha256: {'a' * 64}\n"
+            "    composed_layers:\n"
+            "      golden_prompt:\n"
+            "        name: cognovis-base\n"
+            f"        sha: {'b' * 64}\n"
+        )
+
+        data = load_lockfile(lockfile)
+        entry = data["installed"][0]
+        assert entry["type"] == "agent-base"
+        assert "agent_base" in entry["composed_layers"]
+        assert "golden_prompt" not in entry["composed_layers"]
+
+        save_lockfile(lockfile, data)
+        assert "type: agent-base" in lockfile.read_text()
+
     def test_lockfile_schema_validation(self, tmp_path: Path):
         """Written lockfile must conform to docs/schema/lockfile.schema.json."""
         try:
@@ -1098,6 +1128,23 @@ class TestPrimitiveMapping:
         prim = get_primitive("model_standard")
         assert prim is not None
         assert prim.name == "model-standard"
+
+    def test_agent_base_maps_to_library_agent_bases(self):
+        """agent-base primitive maps to library.agent_bases."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.primitives import get_primitive
+
+        prim = get_primitive("agent-base")
+        assert prim is not None
+        assert prim.yaml_key == "library/agent_bases"
+        assert prim.install_subdir == "agent-bases"
+
+    def test_golden_prompt_primitive_alias_removed(self):
+        """golden-prompt is no longer accepted as a primitive alias."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.primitives import get_primitive
+
+        assert get_primitive("golden-prompt") is None
 
     def test_catalog_lookup_exact(self, project_dir: Path):
         """Exact name lookup must find the entry."""

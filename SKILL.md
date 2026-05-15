@@ -31,7 +31,7 @@ Primitive-scoped commands use the primitive name before the verb:
 ```
 
 Valid primitive names are singular: `skill`, `agent`, `prompt`, `script`,
-`standard`, `guardrail`, `mcp`, `model-standard`, and `golden-prompt`.
+`standard`, `guardrail`, `mcp`, `model-standard`, and `agent-base`.
 
 The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
 filtering, dependency resolution, and install/update behavior live in
@@ -74,7 +74,7 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync
 
 **The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
 all primitive types (skill, agent, prompt, script, standard, guardrail, mcp, model-standard,
-golden-prompt). Dependency resolution, lockfile writes, and harness selection are all
+agent-base). Dependency resolution, lockfile writes, and harness selection are all
 handled by the CLI — do NOT implement these manually.
 
 **Developing the CLI** (modifying `scripts/library.py` or `scripts/lib/*.py`):
@@ -280,14 +280,15 @@ The schema (`docs/schema/library.schema.json`) covers:
 | `library.guardrails` | Defined | Capability matrix per harness |
 | `library.mcp_servers` | Defined | Canonical MCP server model |
 | `library.model_standards` | Defined | Layer 3 model-standard catalog entries |
-| `library.golden_prompts` | Defined | Layer 1 golden prompt catalog entries |
+| `library.agent_bases` | Defined | Layer 1 agent base prompt catalog entries |
 | `sources.catalogs` | Defined | First-party source repositories |
 | `sources.marketplaces` | Defined | Third-party source providers |
 | `project_tooling` | Defined | Fleet-wide project file/hook distribution policy |
 
 Deprecated root aliases for `guardrails`, `mcp_servers`, `model_standards`,
-`golden_prompts`, `catalog`, and `marketplaces` are accepted for read
-compatibility, but new edits should use the canonical locations above.
+`catalog`, and `marketplaces` are accepted for read compatibility, but new
+edits should use the canonical locations above. `agent_bases` has no root-level
+compatibility alias.
 
 ### Pre-commit hook integration
 

@@ -25,6 +25,46 @@ LOCKFILE_NAME = ".library.lock"
 # Global lockfile path (XDG-compliant)
 GLOBAL_LOCKFILE = Path.home() / ".config" / "library" / "global.lock"
 
+LEGACY_PRIMITIVE_TYPES = {
+    "golden-prompt": "agent-base",
+}
+
+
+def canonical_lockfile_type(primitive_type: str | None) -> str | None:
+    """Return the canonical lockfile primitive type for legacy aliases."""
+    if primitive_type is None:
+        return None
+    return LEGACY_PRIMITIVE_TYPES.get(primitive_type, primitive_type)
+
+
+def migrate_lockfile_primitive_types(data: dict[str, Any]) -> bool:
+    """Migrate legacy lockfile primitive type strings in memory.
+
+    Returns True when at least one entry changed.
+    """
+    changed = False
+    installed = data.get("installed", [])
+    if not isinstance(installed, list):
+        data["installed"] = []
+        return changed
+
+    for entry in installed:
+        if not isinstance(entry, dict):
+            continue
+        entry_type = entry.get("type")
+        canonical_type = canonical_lockfile_type(entry_type)
+        if canonical_type != entry_type:
+            entry["type"] = canonical_type
+            changed = True
+        composed_layers = entry.get("composed_layers")
+        if isinstance(composed_layers, dict) and "golden_prompt" in composed_layers:
+            if "agent_base" not in composed_layers:
+                composed_layers["agent_base"] = composed_layers["golden_prompt"]
+            del composed_layers["golden_prompt"]
+            changed = True
+
+    return changed
+
 
 def find_lockfile(
     project_root: Optional[Path] = None, *, global_scope: bool = False
@@ -71,6 +111,7 @@ def load_lockfile(lockfile_path: Path) -> dict[str, Any]:
 
     if "installed" not in data:
         data["installed"] = []
+    migrate_lockfile_primitive_types(data)
 
     return data
 
@@ -85,6 +126,7 @@ def save_lockfile(lockfile_path: Path, data: dict[str, Any]) -> None:
     Raises:
         LockfileError: On write failure.
     """
+    migrate_lockfile_primitive_types(data)
     try:
         lockfile_path.parent.mkdir(parents=True, exist_ok=True)
         with lockfile_path.open("w") as f:
@@ -112,7 +154,8 @@ def upsert_entry(
     """
     installed = data.setdefault("installed", [])
     name = entry["name"]
-    primitive_type = entry.get("type")
+    primitive_type = canonical_lockfile_type(entry.get("type"))
+    entry["type"] = primitive_type
 
     for i, existing in enumerate(installed):
         if existing.get("name") == name and existing.get("type") == primitive_type:
@@ -137,6 +180,7 @@ def remove_entry(
         True if an entry was removed, False if name was not found.
     """
     installed = data.get("installed", [])
+    primitive_type = canonical_lockfile_type(primitive_type)
     original_len = len(installed)
     data["installed"] = [
         e for e in installed
@@ -154,6 +198,7 @@ def get_entry(
     primitive_type: str | None = None,
 ) -> Optional[dict[str, Any]]:
     """Return the lockfile entry for the given name/type, or None."""
+    primitive_type = canonical_lockfile_type(primitive_type)
     for entry in data.get("installed", []):
         if entry.get("name") == name and (
             primitive_type is None or entry.get("type") == primitive_type
@@ -244,7 +289,7 @@ def make_entry(
     """
     return {
         "name": name,
-        "type": primitive_type,
+        "type": canonical_lockfile_type(primitive_type),
         "marketplace": marketplace,
         "source": source,
         "source_commit": source_commit,

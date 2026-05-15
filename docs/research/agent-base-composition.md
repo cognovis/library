@@ -1,4 +1,4 @@
-# Agent Golden Prompt Composition: Design + Prototype
+# Agent Base Prompt Composition: Design + Prototype
 
 > **Bead:** CL-9b1 | **Epic:** CL-36o (Multi-Harness Library) | **Date:** 2026-04-30
 > **Status:** NORMATIVE — this document is the design decision record for the three-layer
@@ -13,11 +13,10 @@
 
 ## Executive Summary
 
-> **Terminology note (2026-05-15).** This document uses the legacy term "golden
-> prompt" because the frontmatter field, catalog key, and Python module names
-> still use it. In prose, "agent system prompt Layer 1" or "agent base prompt"
-> is the preferred phrasing — see [system-prompt.md](../primitives/system-prompt.md)
-> for the orchestrator/agent distinction and [golden-prompt.md](../primitives/golden-prompt.md)
+> **Terminology note (2026-05-15).** This document uses the current term
+> "agent base prompt" for agent system prompt Layer 1; see
+> [system-prompt.md](../primitives/system-prompt.md) for the
+> orchestrator/agent distinction and [agent-base.md](../primitives/agent-base.md)
 > for the agent-level primitive.
 
 > **Premise correction (2026-05-15).** An earlier version of this doc claimed
@@ -44,7 +43,7 @@ base layer without duplicating it across files.
 
 ```
 Composed Agent System Prompt = compose(
-  Layer 1: Cognovis Base (agent base prompt, a.k.a. "golden prompt"),
+  Layer 1: Cognovis Base (agent base prompt, a.k.a. "agent base prompt"),
   Layer 2: Agent Persona,
   Layer 3: Model-Standard(s) for the agent's declared model
 )
@@ -59,9 +58,9 @@ that is the vendor's Claude Code / Codex prompt and is configured separately
 
 ## The Three Layers
 
-### Layer 1: Cognovis Base Golden Prompt
+### Layer 1: Cognovis Base Agent Base Prompt
 
-**File:** `.agents/golden-prompts/cognovis-base.md`
+**File:** `.agents/agent-bases/cognovis-base.md`
 
 **Purpose:** Global behavioral rules, safety checks, confirmation gates, content isolation,
 and tool constraint encoding. Applies to ALL agents regardless of harness or model.
@@ -85,8 +84,8 @@ content-processor), core behavioral rules (English source code, task tracking vi
 tool constraint encoding, session close protocol.
 
 **Extends pattern:**
-- `golden_prompt_extends: cognovis-base` — use Cognovis Base as Layer 1 (default for all agents)
-- `golden_prompt_extends: from-scratch` — skip Layer 1 entirely (rare; only for test/isolated agents)
+- `agent_base_extends: cognovis-base` — use Cognovis Base as Layer 1 (default for all agents)
+- `agent_base_extends: from-scratch` — skip Layer 1 entirely (rare; only for test/isolated agents)
 
 ### Layer 2: Agent Persona
 
@@ -95,7 +94,7 @@ tool constraint encoding, session close protocol.
 **Purpose:** Agent-specific instructions: purpose, tool grants, workflow steps, domain expertise.
 
 **This layer is not changed by the composition model.** Existing agent files continue to work as-is.
-Adding `golden_prompt_extends` and `model_standards` frontmatter fields opts the agent into
+Adding `agent_base_extends` and `model_standards` frontmatter fields opts the agent into
 the composition model — without those fields, the agent is treated as "from-scratch" (no composition).
 
 ### Layer 3: Model-Standard
@@ -129,15 +128,15 @@ receives the fully-composed prompt — there is no runtime composition.
 INPUT:
   source_agent_file = library copy of agent (e.g., plugin-bundle/agents/<name>.md)
                       This is the SOURCE — it is NEVER overwritten by composition.
-  golden_prompt_extends = frontmatter field value from source_agent_file (default: cognovis-base)
+  agent_base_extends = frontmatter field value from source_agent_file (default: cognovis-base)
   model_standards       = frontmatter field value from source_agent_file (default: [])
   model                 = frontmatter model field from source_agent_file (used for alias lookup)
 
 ALGORITHM:
   1. Load Layer 1:
-       path = .agents/golden-prompts/<golden_prompt_extends>.md
+       path = .agents/agent-bases/<agent_base_extends>.md
        L1   = read(path)
-     Skip if golden_prompt_extends = from-scratch OR path not found (warn)
+     Skip if agent_base_extends = from-scratch OR path not found (warn)
 
   2. Load Layer 2:
        L2 = body of source_agent_file (content below the --- frontmatter marker)
@@ -163,7 +162,7 @@ ALGORITHM:
      Codex:       target = .codex/agents/<name>.toml
                   developer_instructions = composed
                   add composition metadata as comment headers:
-                    # golden_prompt_extends: <value>
+                    # agent_base_extends: <value>
                     # model_standards: <list>
      OpenCode:    target = .opencode/agents/<name>.md (installed copy)
      Pi:          export composed string from TypeScript extension module
@@ -174,7 +173,7 @@ ALGORITHM:
 ```
 
 **Tool constraint encoding in composed prompt:** Because Codex ignores per-agent tool
-frontmatter (`tools:` list) at the sandbox level, the Cognovis Base Golden Prompt (Layer 1)
+frontmatter (`tools:` list) at the sandbox level, the Cognovis Base Agent Base Prompt (Layer 1)
 includes a "Tool Constraints" section that instructs the agent to honor its declared tool
 list behaviorally. The Library composer additionally SHOULD inject the agent's effective
 tool grant as a prose statement at the top of the composed prompt for Codex targets.
@@ -185,8 +184,8 @@ tool grant as a prose statement at the top of the composed prompt for Codex targ
 
 | Artifact | Path | Scope |
 |----------|------|-------|
-| Cognovis Base Golden Prompt | `.agents/golden-prompts/cognovis-base.md` | Library-global |
-| Additional golden prompts | `.agents/golden-prompts/<name>.md` | Library-global |
+| Cognovis Base Agent Base Prompt | `.agents/agent-bases/cognovis-base.md` | Library-global |
+| Additional agent base prompts | `.agents/agent-bases/<name>.md` | Library-global |
 | Model-standards | `.agents/model-standards/<model-name>.md` | Project-local or user-global |
 | Agent definition (source) | `.claude/agents/<name>.md` | Claude Code |
 | Codex TOML (derived) | `.codex/agents/<name>.toml` | Codex |
@@ -226,7 +225,7 @@ tools:
   - Bash
   - Read
   - Edit
-golden_prompt_extends: cognovis-base
+agent_base_extends: cognovis-base
 model_standards: []
 ---
 ```
@@ -234,14 +233,14 @@ model_standards: []
 ### Cross-Harness Validation
 
 **Claude Code path:**
-- `golden_prompt_extends: cognovis-base` → Layer 1 = `.agents/golden-prompts/cognovis-base.md`
+- `agent_base_extends: cognovis-base` → Layer 1 = `.agents/agent-bases/cognovis-base.md`
 - `model_standards: []` → Layer 3 = empty (no model-standard for haiku yet)
 - Composed body = `cognovis-base.md` content + agent persona body
 - Written to: `.claude/agents/changelog-updater.md` body (harness-native)
 - Claude Code reads the body directly — composition is transparent
 
 **Codex path (forward translation):**
-- `golden_prompt_extends: cognovis-base` → added as comment: `# golden_prompt_extends: cognovis-base`
+- `agent_base_extends: cognovis-base` → added as comment: `# agent_base_extends: cognovis-base`
 - `model_standards: []` → added as comment: `# model_standards: []`
 - `developer_instructions` = composed body (Layer 1 + Layer 2, same as Claude Code)
 - `sandbox_mode` = inferred from tools list: [Bash, Read, Edit] → `workspace-write`
@@ -249,7 +248,7 @@ model_standards: []
 - `model` = `haiku` → vocabulary lookup required (gpt-4.1-mini or equivalent when targeting OpenAI)
 
 **Graceful degradation (fields unknown to harness):**
-- Codex ignores unknown frontmatter fields silently. `golden_prompt_extends` and
+- Codex ignores unknown frontmatter fields silently. `agent_base_extends` and
   `model_standards` in the Claude Code `.md` frontmatter are unknown to Codex and
   are dropped on forward translation (not written to TOML). The composition result
   is already inlined in `developer_instructions`.
@@ -269,7 +268,7 @@ model_standards: []
 ## Open Questions
 
 - **Extension chains:** Does the composition model support `cognovis-base → cognovis-strict → team-specific`?
-  Decision deferred. Current implementation: single-extends only (`golden_prompt_extends` is a scalar).
+  Decision deferred. Current implementation: single-extends only (`agent_base_extends` is a scalar).
   Multiple inheritance via `model_standards` list is already supported (each entry is a file).
 
 - **Harness drift:** When Anthropic adds something useful to the Claude Code
@@ -279,9 +278,9 @@ model_standards: []
   a deliberate copy-down decision, not a propagation. Not addressed in this
   bead. Manual review process assumed.
 
-- **from-scratch testing:** Agents that set `golden_prompt_extends: from-scratch` bypass Layer 1.
+- **from-scratch testing:** Agents that set `agent_base_extends: from-scratch` bypass Layer 1.
   This is useful for test agents that should NOT follow Cognovis safety rules.
-  Implementation: if `golden_prompt_extends: from-scratch`, skip Layer 1 entirely.
+  Implementation: if `agent_base_extends: from-scratch`, skip Layer 1 entirely.
 
 - **haiku model-standard:** `changelog-updater` declares `model_standards: []` because
   `claude-haiku.md` is not yet defined. Create it as a follow-up when haiku behavioral
@@ -292,9 +291,9 @@ model_standards: []
 ## Cross-References
 
 - `docs/primitives/model-standard.md` — MODEL-STANDARD primitive definition and composition algorithm
-- `docs/primitives/golden-prompt.md` — GOLDEN-PROMPT primitive definition
+- `docs/primitives/agent-base.md` — AGENT-BASE primitive definition
 - `docs/research/agents-format-mapping.md` (CL-11p) — field mapping with new composition fields
-- `.agents/golden-prompts/cognovis-base.md` — Cognovis Base Golden Prompt source
+- `.agents/agent-bases/cognovis-base.md` — Cognovis Base Agent Base Prompt source
 - `.agents/model-standards/` — model-standard file directory
 - `scripts/standards-loader.sh` — loader script (`--load-model-standard` operation)
-- `tests/smoke/run-smoke.sh` `smoke_golden_prompts()` — structural validation
+- `tests/smoke/run-smoke.sh` `smoke_agent_bases()` — structural validation

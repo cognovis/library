@@ -48,7 +48,6 @@ marketplaces: []
 guardrails: []
 mcp_servers: []
 model_standards: []
-golden_prompts: []
 """
 
 FIXTURE_LIBRARY_YAML_GLOBS_ONLY = """
@@ -75,7 +74,6 @@ marketplaces: []
 guardrails: []
 mcp_servers: []
 model_standards: []
-golden_prompts: []
 """
 
 FIXTURE_LIBRARY_YAML_NO_FIELDS = """
@@ -99,7 +97,6 @@ marketplaces: []
 guardrails: []
 mcp_servers: []
 model_standards: []
-golden_prompts: []
 """
 
 FIXTURE_LIBRARY_YAML_STANDARD_ALWAYS_APPLY = """
@@ -124,7 +121,6 @@ marketplaces: []
 guardrails: []
 mcp_servers: []
 model_standards: []
-golden_prompts: []
 """
 
 

@@ -83,7 +83,7 @@ def write_minimal_catalog(project: Path) -> None:
         "  guardrails: []\n"
         "  mcp_servers: []\n"
         "  model_standards: []\n"
-        "  golden_prompts: []\n"
+        "  agent_bases: []\n"
     )
 
 

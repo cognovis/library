@@ -1145,21 +1145,21 @@ smoke_migration() {
 }
 
 # ---------------------------------------------------------------------------
-# smoke_golden_prompts
-#  1. .agents/golden-prompts/cognovis-base.md exists
+# smoke_agent_bases
+#  1. .agents/agent-bases/cognovis-base.md exists
 #  2. cognovis-base.md has YAML frontmatter with name, version, description
 #  3. .agents/model-standards/ directory exists with at least 2 .md files
 #  4. Each model-standard has YAML frontmatter
 #  5. standards-loader.sh supports --load-model-standard operation
 #  6. PRIMITIVES.md §10 cross-references standards-loader and model-standards path
-#  7. agents-format-mapping.md documents golden_prompt_extends and model_standards fields
+#  7. agents-format-mapping.md documents agent_base_extends and model_standards fields
 # ---------------------------------------------------------------------------
-smoke_golden_prompts() {
-    section "golden-prompts"
+smoke_agent_bases() {
+    section "agent-bases"
 
-    local golden_prompts_dir="${REPO_ROOT}/.agents/golden-prompts"
+    local agent_bases_dir="${REPO_ROOT}/.agents/agent-bases"
     local model_standards_dir="${REPO_ROOT}/.agents/model-standards"
-    local cognovis_base="${golden_prompts_dir}/cognovis-base.md"
+    local cognovis_base="${agent_bases_dir}/cognovis-base.md"
     local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
     local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
     local format_mapping_doc="${REPO_ROOT}/docs/research/agents-format-mapping.md"
@@ -1168,9 +1168,9 @@ smoke_golden_prompts() {
     # CHECK 1: cognovis-base.md exists
     # -----------------------------------------------------------------------
     if [[ -f "${cognovis_base}" ]]; then
-        pass "golden-prompts/cognovis-base: .agents/golden-prompts/cognovis-base.md exists"
+        pass "agent-bases/cognovis-base: .agents/agent-bases/cognovis-base.md exists"
     else
-        fail "golden-prompts/cognovis-base: .agents/golden-prompts/cognovis-base.md NOT found"
+        fail "agent-bases/cognovis-base: .agents/agent-bases/cognovis-base.md NOT found"
     fi
 
     # -----------------------------------------------------------------------
@@ -1180,15 +1180,15 @@ smoke_golden_prompts() {
         local all_frontmatter=true
         for field in "name" "version" "description"; do
             if ! grep -q "^${field}:" "${cognovis_base}" 2>/dev/null; then
-                fail "golden-prompts/cognovis-base-frontmatter: '${field}' field NOT found in cognovis-base.md frontmatter"
+                fail "agent-bases/cognovis-base-frontmatter: '${field}' field NOT found in cognovis-base.md frontmatter"
                 all_frontmatter=false
             fi
         done
         if [[ "${all_frontmatter}" == "true" ]]; then
-            pass "golden-prompts/cognovis-base-frontmatter: cognovis-base.md has required frontmatter (name, version, description)"
+            pass "agent-bases/cognovis-base-frontmatter: cognovis-base.md has required frontmatter (name, version, description)"
         fi
     else
-        fail "golden-prompts/cognovis-base-frontmatter: cognovis-base.md not found — cannot check frontmatter"
+        fail "agent-bases/cognovis-base-frontmatter: cognovis-base.md not found — cannot check frontmatter"
     fi
 
     # -----------------------------------------------------------------------
@@ -1198,12 +1198,12 @@ smoke_golden_prompts() {
         local ms_count
         ms_count="$(find "${model_standards_dir}" -name "*.md" -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
         if [[ "${ms_count}" -ge 2 ]]; then
-            pass "golden-prompts/model-standards-count: .agents/model-standards/ has ${ms_count} model-standard(s) (>= 2 required)"
+            pass "agent-bases/model-standards-count: .agents/model-standards/ has ${ms_count} model-standard(s) (>= 2 required)"
         else
-            fail "golden-prompts/model-standards-count: .agents/model-standards/ has only ${ms_count} model-standard(s) — at least 2 required"
+            fail "agent-bases/model-standards-count: .agents/model-standards/ has only ${ms_count} model-standard(s) — at least 2 required"
         fi
     else
-        fail "golden-prompts/model-standards-dir: .agents/model-standards/ directory NOT found"
+        fail "agent-bases/model-standards-dir: .agents/model-standards/ directory NOT found"
     fi
 
     # -----------------------------------------------------------------------
@@ -1216,16 +1216,16 @@ smoke_golden_prompts() {
             ms_name="$(basename "${ms_file}" .md)"
             for field in "name" "version" "description"; do
                 if ! grep -q "^${field}:" "${ms_file}" 2>/dev/null; then
-                    fail "golden-prompts/model-standard-frontmatter: '${ms_name}.md' missing '${field}' in frontmatter"
+                    fail "agent-bases/model-standard-frontmatter: '${ms_name}.md' missing '${field}' in frontmatter"
                     all_ms_frontmatter=false
                 fi
             done
         done < <(find "${model_standards_dir}" -name "*.md" -maxdepth 1 2>/dev/null)
         if [[ "${all_ms_frontmatter}" == "true" ]]; then
-            pass "golden-prompts/model-standard-frontmatter: all model-standards have required frontmatter"
+            pass "agent-bases/model-standard-frontmatter: all model-standards have required frontmatter"
         fi
     else
-        fail "golden-prompts/model-standard-frontmatter: model-standards dir not found — cannot check frontmatter"
+        fail "agent-bases/model-standard-frontmatter: model-standards dir not found — cannot check frontmatter"
     fi
 
     # -----------------------------------------------------------------------
@@ -1233,12 +1233,12 @@ smoke_golden_prompts() {
     # -----------------------------------------------------------------------
     if [[ -f "${loader_script}" ]]; then
         if grep -q "load-model-standard\|model.standard\|model_standard" "${loader_script}" 2>/dev/null; then
-            pass "golden-prompts/loader-model-standard: standards-loader.sh supports model-standard loading"
+            pass "agent-bases/loader-model-standard: standards-loader.sh supports model-standard loading"
         else
-            fail "golden-prompts/loader-model-standard: standards-loader.sh does NOT support --load-model-standard"
+            fail "agent-bases/loader-model-standard: standards-loader.sh does NOT support --load-model-standard"
         fi
     else
-        fail "golden-prompts/loader-model-standard: standards-loader.sh not found"
+        fail "agent-bases/loader-model-standard: standards-loader.sh not found"
     fi
 
     # -----------------------------------------------------------------------
@@ -1247,18 +1247,18 @@ smoke_golden_prompts() {
     if [[ -f "${primitives_doc}" ]]; then
         local cross_ref_ok=true
         if ! grep -q "standards-loader\|model-standards" "${primitives_doc}" 2>/dev/null; then
-            fail "golden-prompts/primitives-model-standard: PRIMITIVES.md §10 does NOT cross-reference standards-loader or model-standards path"
+            fail "agent-bases/primitives-model-standard: PRIMITIVES.md §10 does NOT cross-reference standards-loader or model-standards path"
             cross_ref_ok=false
         fi
         if ! grep -q "three.layer\|three layer\|Layer 1\|Layer 2\|Layer 3\|composition" "${primitives_doc}" 2>/dev/null; then
-            fail "golden-prompts/primitives-composition: PRIMITIVES.md does NOT document three-layer composition"
+            fail "agent-bases/primitives-composition: PRIMITIVES.md does NOT document three-layer composition"
             cross_ref_ok=false
         fi
         if [[ "${cross_ref_ok}" == "true" ]]; then
-            pass "golden-prompts/primitives-model-standard: PRIMITIVES.md §10 references standards-loader and composition model"
+            pass "agent-bases/primitives-model-standard: PRIMITIVES.md §10 references standards-loader and composition model"
         fi
     else
-        fail "golden-prompts/primitives-model-standard: docs/PRIMITIVES.md NOT found"
+        fail "agent-bases/primitives-model-standard: docs/PRIMITIVES.md NOT found"
     fi
 
     # -----------------------------------------------------------------------
@@ -1266,38 +1266,38 @@ smoke_golden_prompts() {
     # -----------------------------------------------------------------------
     if [[ -f "${format_mapping_doc}" ]]; then
         local mapping_ok=true
-        if ! grep -q "golden_prompt_extends\|golden-prompt-extends" "${format_mapping_doc}" 2>/dev/null; then
-            fail "golden-prompts/format-mapping-golden: agents-format-mapping.md does NOT document golden_prompt_extends field"
+        if ! grep -q "agent_base_extends\|agent-base-extends" "${format_mapping_doc}" 2>/dev/null; then
+            fail "agent-bases/format-mapping-agent-base: agents-format-mapping.md does NOT document agent_base_extends field"
             mapping_ok=false
         fi
         if ! grep -q "model_standards\|model-standards" "${format_mapping_doc}" 2>/dev/null; then
-            fail "golden-prompts/format-mapping-model-standards: agents-format-mapping.md does NOT document model_standards field"
+            fail "agent-bases/format-mapping-model-standards: agents-format-mapping.md does NOT document model_standards field"
             mapping_ok=false
         fi
         if [[ "${mapping_ok}" == "true" ]]; then
-            pass "golden-prompts/format-mapping: agents-format-mapping.md documents golden_prompt_extends and model_standards fields"
+            pass "agent-bases/format-mapping: agents-format-mapping.md documents agent_base_extends and model_standards fields"
         fi
     else
-        fail "golden-prompts/format-mapping: docs/research/agents-format-mapping.md NOT found"
+        fail "agent-bases/format-mapping: docs/research/agents-format-mapping.md NOT found"
     fi
 
-    echo "  NOTE  golden-prompts/runtime: End-to-end composition (install-time write to harness-native) requires a live library install session."
+    echo "  NOTE  agent-bases/runtime: End-to-end composition (install-time write to harness-native) requires a live library install session."
     echo "        Structural checks above confirm the files, frontmatter, and loader support satisfy the composition contract."
 }
 
 # ---------------------------------------------------------------------------
 # smoke_fleet_migration
 #  Validates that all agents in claude-code-plugins have been migrated to the
-#  Golden-Prompt composition model (CL-xpg).
+#  Agent Base composition model (CL-xpg).
 #
 #  Checks per agent file in ~/code/claude-code-plugins/**/agents/*.md:
-#  1. golden_prompt_extends field is present in YAML frontmatter
+#  1. agent_base_extends field is present in YAML frontmatter
 #  2. model_standards field is present in YAML frontmatter
 #
 #  Cross-harness validation: verifies at least 3 agents across different plugins
 #  (beads-workflow, core, dev-tools) have both fields.
 #
-#  agent-forge: init-agent.py template emits golden_prompt_extends and model_standards.
+#  agent-forge: init-agent.py template emits agent_base_extends and model_standards.
 #
 #  Note: This smoke uses ~/code/claude-code-plugins as the source of truth.
 #  It is excluded from 'all' (same pattern as smoke_migration) because it relies
@@ -1332,19 +1332,19 @@ smoke_fleet_migration() {
     pass "fleet-migration/agent-count: found ${total} agent .md files in claude-code-plugins"
 
     # -----------------------------------------------------------------------
-    # CHECK 1+2: All agents have golden_prompt_extends and model_standards
+    # CHECK 1+2: All agents have agent_base_extends and model_standards
     # -----------------------------------------------------------------------
-    local missing_golden=0
+    local missing_base=0
     local missing_std=0
-    local missing_list_golden=()
+    local missing_list_base=()
     local missing_list_std=()
 
     for f in "${agent_files[@]}"; do
         local rel
         rel="$(echo "${f}" | sed "s|${plugins_root}/||")"
-        if ! grep -q "^golden_prompt_extends:" "${f}" 2>/dev/null; then
-            missing_golden=$((missing_golden + 1))
-            missing_list_golden+=("${rel}")
+        if ! grep -q "^agent_base_extends:" "${f}" 2>/dev/null; then
+            missing_base=$((missing_base + 1))
+            missing_list_base+=("${rel}")
         fi
         if ! grep -q "^model_standards:" "${f}" 2>/dev/null; then
             missing_std=$((missing_std + 1))
@@ -1352,11 +1352,11 @@ smoke_fleet_migration() {
         fi
     done
 
-    if [[ "${missing_golden}" -eq 0 ]]; then
-        pass "fleet-migration/golden-prompt-extends: all ${total} agents have golden_prompt_extends frontmatter"
+    if [[ "${missing_base}" -eq 0 ]]; then
+        pass "fleet-migration/agent-base-extends: all ${total} agents have agent_base_extends frontmatter"
     else
-        fail "fleet-migration/golden-prompt-extends: ${missing_golden} of ${total} agents missing golden_prompt_extends"
-        for m in "${missing_list_golden[@]}"; do
+        fail "fleet-migration/agent-base-extends: ${missing_base} of ${total} agents missing agent_base_extends"
+        for m in "${missing_list_base[@]}"; do
             echo "    MISSING: ${m}"
         done
     fi
@@ -1390,15 +1390,15 @@ smoke_fleet_migration() {
         fi
         local rel
         rel="$(echo "${sample_file}" | sed "s|${plugins_root}/||")"
-        local has_golden=false
+        local has_base=false
         local has_std=false
-        grep -q "^golden_prompt_extends:" "${sample_file}" 2>/dev/null && has_golden=true
+        grep -q "^agent_base_extends:" "${sample_file}" 2>/dev/null && has_base=true
         grep -q "^model_standards:" "${sample_file}" 2>/dev/null && has_std=true
-        if [[ "${has_golden}" == "true" && "${has_std}" == "true" ]]; then
-            pass "fleet-migration/cross-harness-${plugin}: ${rel} has golden_prompt_extends + model_standards"
+        if [[ "${has_base}" == "true" && "${has_std}" == "true" ]]; then
+            pass "fleet-migration/cross-harness-${plugin}: ${rel} has agent_base_extends + model_standards"
             cross_ok=$((cross_ok + 1))
         else
-            fail "fleet-migration/cross-harness-${plugin}: ${rel} missing golden_prompt_extends=${has_golden} model_standards=${has_std}"
+            fail "fleet-migration/cross-harness-${plugin}: ${rel} missing agent_base_extends=${has_base} model_standards=${has_std}"
         fi
     done
 
@@ -1410,14 +1410,14 @@ smoke_fleet_migration() {
     # CHECK 4: agent-forge init-agent.py template emits composition frontmatter
     # -----------------------------------------------------------------------
     if [[ -f "${init_agent_script}" ]]; then
-        local has_gp_template=false
+        local has_base_template=false
         local has_ms_template=false
-        grep -q "golden_prompt_extends" "${init_agent_script}" 2>/dev/null && has_gp_template=true
+        grep -q "agent_base_extends" "${init_agent_script}" 2>/dev/null && has_base_template=true
         grep -q "model_standards" "${init_agent_script}" 2>/dev/null && has_ms_template=true
-        if [[ "${has_gp_template}" == "true" && "${has_ms_template}" == "true" ]]; then
-            pass "fleet-migration/agent-forge-template: init-agent.py template emits golden_prompt_extends + model_standards"
+        if [[ "${has_base_template}" == "true" && "${has_ms_template}" == "true" ]]; then
+            pass "fleet-migration/agent-forge-template: init-agent.py template emits agent_base_extends + model_standards"
         else
-            fail "fleet-migration/agent-forge-template: init-agent.py template missing golden_prompt_extends=${has_gp_template} model_standards=${has_ms_template}"
+            fail "fleet-migration/agent-forge-template: init-agent.py template missing agent_base_extends=${has_base_template} model_standards=${has_ms_template}"
         fi
     else
         fail "fleet-migration/agent-forge-template: init-agent.py not found at ${init_agent_script}"
@@ -1542,8 +1542,8 @@ main() {
         standards)
             smoke_standards
             ;;
-        golden-prompts)
-            smoke_golden_prompts
+        agent-bases)
+            smoke_agent_bases
             ;;
         migration)
             smoke_migration
@@ -1569,12 +1569,12 @@ main() {
             smoke_name_collision
             smoke_lockfile
             smoke_standards
-            smoke_golden_prompts
+            smoke_agent_bases
             smoke_use_cookbook_path
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|golden-prompts|migration|fleet-migration|library-core|use-cookbook-path|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|agent-bases|migration|fleet-migration|library-core|use-cookbook-path|all]"
             exit 1
             ;;
     esac

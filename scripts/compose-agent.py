@@ -6,8 +6,8 @@ Implements layered agent prompt composition (Part C of bead CL-08n).
 
 Algorithm:
   1. Parse YAML frontmatter from the agent file.
-  2. Resolve Layer 1 (golden_prompt_extends):
-       - "cognovis-base" (or any name): load from golden-prompts dir; extract body.
+  2. Resolve Layer 1 (agent_base_extends):
+       - "cognovis-base" (or any name): load from agent-bases dir; extract body.
        - "from-scratch": skip Layer 1.
   3. Read agent body (Layer 2): everything after the closing --- in the agent file.
   4. Resolve Layer 3 (model_standards list + model: field alias lookup):
@@ -22,12 +22,12 @@ Usage:
   compose-agent.py <agent-file> [--harness=claude|codex|opencode]
 
 Environment variables (for testing / overrides):
-  GOLDEN_PROMPTS_DIR   — Override the golden-prompts search directory.
+  AGENT_BASES_DIR      — Override the agent-bases search directory.
   MODEL_STANDARDS_DIR  — Override the model-standards search directory.
 
 Exit codes:
   0 — Composition succeeded; composed body on stdout.
-  1 — Missing required layer (Layer 1 base not found when golden_prompt_extends
+  1 — Missing required layer (Layer 1 base not found when agent_base_extends
       is not from-scratch); error details on stderr.
   2 — Invalid arguments or unreadable agent file.
 """
@@ -54,6 +54,7 @@ SEP_PERSONA = "--- AGENT PERSONA ---"
 SEP_MODEL_STANDARD = "--- MODEL STANDARD ---"
 CLAUDE_FRONTMATTER_EXCLUDE = {
     "cache_control",
+    "agent_base_extends",
     "golden_prompt_extends",
     "model_standards",
     "requires",
@@ -138,13 +139,13 @@ def _find_in_dir(name: str, search_dir: Path) -> Path | None:
 
 
 def resolve_layer1(name: str, proj_root: Path, override_dir: str | None = None) -> Path | None:
-    """Resolve golden-prompt Layer 1 file.
+    """Resolve agent base prompt Layer 1 file.
 
     Search order (when no override_dir):
-      1. <proj_root>/.agents/golden-prompts/<name>.md
-      2. ~/.agents/golden-prompts/<name>.md
+      1. <proj_root>/.agents/agent-bases/<name>.md
+      2. ~/.agents/agent-bases/<name>.md
 
-    When override_dir is provided (e.g. via GOLDEN_PROMPTS_DIR env var),
+    When override_dir is provided (e.g. via AGENT_BASES_DIR env var),
     ONLY that directory is searched — no fallback. This enables test isolation.
     """
     if override_dir:
@@ -152,8 +153,8 @@ def resolve_layer1(name: str, proj_root: Path, override_dir: str | None = None) 
         return result
 
     search_dirs: list[Path] = [
-        proj_root / ".agents" / "golden-prompts",
-        Path.home() / ".agents" / "golden-prompts",
+        proj_root / ".agents" / "agent-bases",
+        Path.home() / ".agents" / "agent-bases",
     ]
     for d in search_dirs:
         result = _find_in_dir(name, d)
@@ -228,7 +229,7 @@ def escape_for_toml(text: str) -> str:
 def compose(
     agent_file: Path,
     harness: str = "claude",
-    golden_prompts_dir: str | None = None,
+    agent_bases_dir: str | None = None,
     model_standards_dir: str | None = None,
 ) -> str:
     """Compose the three-layer agent prompt.
@@ -249,23 +250,27 @@ def compose(
     proj_root = _find_proj_root(agent_file)
 
     # ---------------------------------------------------------------------------
-    # Layer 1: golden_prompt_extends
+    # Layer 1: agent_base_extends
     # ---------------------------------------------------------------------------
-    golden_prompt_extends = fm.get("golden_prompt_extends", "")
+    agent_base_extends = fm.get("agent_base_extends", fm.get("golden_prompt_extends", ""))
     layer1_body: str | None = None
 
-    if golden_prompt_extends and golden_prompt_extends != "from-scratch":
+    if agent_base_extends and agent_base_extends != "from-scratch":
+        layer1_override = (
+            agent_bases_dir
+            or os.environ.get("AGENT_BASES_DIR")
+        )
         layer1_path = resolve_layer1(
-            golden_prompt_extends,
+            agent_base_extends,
             proj_root,
-            override_dir=golden_prompts_dir or os.environ.get("GOLDEN_PROMPTS_DIR"),
+            override_dir=layer1_override,
         )
         if layer1_path is None:
             print(
-                f"ERROR: golden_prompt '{golden_prompt_extends}' not found.\n"
-                f"  Searched: {proj_root / '.agents' / 'golden-prompts'} and "
-                f"{Path.home() / '.agents' / 'golden-prompts'}\n"
-                f"  Install it first: /library use {golden_prompt_extends}",
+                f"ERROR: agent_base '{agent_base_extends}' not found.\n"
+                f"  Searched: {proj_root / '.agents' / 'agent-bases'} and "
+                f"{Path.home() / '.agents' / 'agent-bases'}\n"
+                f"  Install it first: /library agent-base use {agent_base_extends}",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -359,9 +364,10 @@ def main() -> int:
         help="Target harness (default: claude). 'codex' escapes output for TOML embedding.",
     )
     parser.add_argument(
-        "--golden-prompts-dir",
+        "--agent-bases-dir",
+        dest="agent_bases_dir",
         default=None,
-        help="Override the golden-prompts search directory.",
+        help="Override the agent-bases search directory.",
     )
     parser.add_argument(
         "--model-standards-dir",
@@ -374,7 +380,7 @@ def main() -> int:
     composed = compose(
         agent_file=args.agent_file,
         harness=args.harness,
-        golden_prompts_dir=args.golden_prompts_dir,
+        agent_bases_dir=args.agent_bases_dir,
         model_standards_dir=args.model_standards_dir,
     )
     print(composed, end="")
