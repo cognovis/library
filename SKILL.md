@@ -77,6 +77,13 @@ all primitive types (skill, agent, prompt, script, standard, guardrail, mcp, mod
 golden-prompt). Dependency resolution, lockfile writes, and harness selection are all
 handled by the CLI — do NOT implement these manually.
 
+**Developing the CLI** (modifying `scripts/library.py` or `scripts/lib/*.py`):
+read [standards/library-cli/invariants.md](standards/library-cli/invariants.md)
+before touching lifecycle verbs (`status`, `audit`, `sync`, `installed`). It
+captures the platform-internal rules that aren't enforced by the schema or
+tests — lockfile lookup, catalog-diff math, offline mode, default scope, and
+silently-skipped-entry reporting.
+
 **Interpreting JSON output**: The CLI returns a JSON object with:
 - `status`: `"ok"`, `"dry-run"`, `"blocked"`, or `"error"`
 - `data`: operation-specific results (name, canonical path, cache path, etc.)
