@@ -1410,6 +1410,17 @@ library:
         - tier:project
         - domain:fhir
   agents:
+    - name: architecture-scout
+      description: >-
+        Read-only haiku agent that scans docs/adr/, vision.md, and packages/**/CLAUDE.md
+        to produce a Coverage-Matrix report (Contract x Package x ADR/Helper/Proactive/Reactive)
+        before /plan and /epic-init. Detects missing ADRs, hoist-debt, and pre-trinity packages.
+        Returns structured JSON + human-readable Markdown.
+      source: https://github.com/cognovis/library-core/blob/main/agents/architecture-scout.md
+      requires: []
+      tags:
+        - origin:original
+        - tier:domain
     - name: bead-orchestrator
       description: >-
         Autonomous orchestrator for single-bead implementation. Runs Phase 0-16: sizing/claim,
