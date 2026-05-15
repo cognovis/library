@@ -1144,6 +1144,23 @@ class TestPrimitiveMapping:
         assert parsed.file_path == "skills/dolt/SKILL.md"
         assert parsed.path_type == "file"
 
+    def test_source_parse_github_repo_urls(self):
+        """Plain HTTPS and SSH GitHub repo URLs parse with repo metadata."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.source import parse_source
+
+        https = parse_source("https://github.com/cognovis/library-core.git")
+        ssh = parse_source("git@github.com:cognovis/library-core.git")
+
+        assert https.kind == "github_repo"
+        assert https.org == "cognovis"
+        assert https.repo == "library-core"
+        assert https.clone_url == "https://github.com/cognovis/library-core.git"
+        assert ssh.kind == "github_repo"
+        assert ssh.org == "cognovis"
+        assert ssh.repo == "library-core"
+        assert ssh.clone_url == "git@github.com:cognovis/library-core.git"
+
     def test_cache_path_computation(self):
         """Cache path must follow the documented format."""
         sys.path.insert(0, str(SCRIPTS_DIR))

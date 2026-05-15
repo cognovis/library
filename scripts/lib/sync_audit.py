@@ -205,6 +205,7 @@ def cmd_audit_impl(
                 audit_entries.append({
                     "name": entry_name,
                     "primitive": entry.get("type", ""),
+                    "scope": scope,
                     "expected_sha": expected_sha,
                     "actual_sha": "",
                     "drift": False,
@@ -282,6 +283,7 @@ def cmd_audit_impl(
         audit_entries.append({
             "name": entry_name,
             "primitive": entry.get("type", ""),
+            "scope": scope,
             "expected_sha": expected_sha,
             "actual_sha": actual_sha,
             "drift": drift,

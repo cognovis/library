@@ -346,7 +346,7 @@ class TestStatusCLI:
             "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
         )
 
-        result = run_library("status", "--json", cwd=tmp_path)
+        result = run_library("status", "--scope=project", "--project", str(tmp_path), "--json", cwd=tmp_path)
         assert result.returncode in (0, 2), \
             f"Unexpected exit code: {result.returncode}\nstderr: {result.stderr}"
 
@@ -362,7 +362,7 @@ class TestStatusCLI:
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
             "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\ngolden_prompts: []\n"
         )
-        result = run_library("status", "--json", cwd=tmp_path)
+        result = run_library("status", "--scope=project", "--project", str(tmp_path), "--json", cwd=tmp_path)
         # No entries = current/unknown, exit 0
         assert result.returncode in (0,), \
             f"Expected exit 0, got {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"

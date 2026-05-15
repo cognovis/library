@@ -24,7 +24,7 @@ class ParsedSource:
     """Parsed representation of a library entry source field."""
 
     kind: str
-    """'local', 'github_browser', 'github_raw', or 'unknown'."""
+    """'local', 'github_browser', 'github_raw', 'github_repo', or 'unknown'."""
 
     raw: str
     """Original source string."""
@@ -42,7 +42,7 @@ class ParsedSource:
     local_path: Optional[Path] = None
 
     def is_github(self) -> bool:
-        return self.kind in ("github_browser", "github_raw")
+        return self.kind in ("github_browser", "github_raw", "github_repo")
 
     def is_local(self) -> bool:
         return self.kind == "local"
@@ -120,6 +120,34 @@ def parse_source(source: str) -> ParsedSource:
             file_path=file_path,
             clone_url=f"https://github.com/{org}/{repo}.git",
             path_type="file",
+        )
+
+    # Plain GitHub repository URLs
+    m = re.match(r"https://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", source)
+    if m:
+        org, repo = m.groups()
+        return ParsedSource(
+            kind="github_repo",
+            raw=source,
+            org=org,
+            repo=repo,
+            branch=None,
+            clone_url=f"https://github.com/{org}/{repo}.git",
+            path_type="directory",
+        )
+
+    # SSH GitHub repository URLs
+    m = re.match(r"git@github\.com:([^/]+)/([^/]+?)(?:\.git)?/?$", source)
+    if m:
+        org, repo = m.groups()
+        return ParsedSource(
+            kind="github_repo",
+            raw=source,
+            org=org,
+            repo=repo,
+            branch=None,
+            clone_url=f"git@github.com:{org}/{repo}.git",
+            path_type="directory",
         )
 
     # Unrecognized

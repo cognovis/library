@@ -19,11 +19,11 @@ fi
 [[ -f "$LIBRARY_PY" ]] || exit 0
 
 # Local drift — exit code 2 means drift, 0 means clean; capture separately
-DRIFT_JSON=$(python3 "$LIBRARY_PY" audit --scope project --drift-only --json 2>/dev/null; true)
+DRIFT_JSON=$(python3 "$LIBRARY_PY" audit --scope project --project "$PWD" --drift-only --json 2>/dev/null; true)
 DRIFT_STATUS=$(echo "$DRIFT_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('status','unknown'))" 2>/dev/null || echo "unknown")
 
 # Upstream status — exit code 2 means behind, 0 means current
-STATUS_JSON=$(python3 "$LIBRARY_PY" status --scope project --json 2>/dev/null; true)
+STATUS_JSON=$(python3 "$LIBRARY_PY" status --scope project --project "$PWD" --json 2>/dev/null; true)
 OVERALL=$(echo "$STATUS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('overall','unknown'))" 2>/dev/null || echo "unknown")
 
 # Print summary only if issues found

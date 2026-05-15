@@ -41,6 +41,10 @@ def write_lockfile(path: Path, entries: list[dict]) -> None:
     path.write_text(yaml.dump({"installed": entries}))
 
 
+def init_git(project: Path) -> None:
+    subprocess.run(["git", "init"], cwd=project, check=True, capture_output=True, text=True)
+
+
 def entry(
     name: str,
     primitive: str = "skill",
@@ -87,6 +91,7 @@ def test_installed_detects_precedence_conflict(tmp_path: Path):
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
+    init_git(project)
 
     write_lockfile(project / ".library.lock", [entry("shared", source_commit=PROJECT_SHA)])
     write_lockfile(
@@ -115,6 +120,7 @@ def test_installed_human_output_has_required_columns(tmp_path: Path):
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
+    init_git(project)
     write_lockfile(project / ".library.lock", [entry("visible")])
 
     result = run_library("installed", cwd=project, home=home)
@@ -137,6 +143,7 @@ def test_installed_diff_catalog_classifies_available_and_orphan(tmp_path: Path):
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
+    init_git(project)
     write_minimal_catalog(project)
     write_lockfile(
         project / ".library.lock",
@@ -150,6 +157,7 @@ def test_installed_diff_catalog_classifies_available_and_orphan(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
 
+    assert data["catalog_source"] == str(project / "library.yaml")
     assert data["catalog_diff"]["available_not_installed"] == {
         "skill": ["available-skill"],
     }
@@ -179,16 +187,16 @@ def test_installed_empty_lockfiles_exit_zero(tmp_path: Path):
 
     result = run_library("installed", "--json", cwd=cwd, home=home)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {
-        "entries": [],
-        "precedence_conflicts": [],
-    }
+    data = json.loads(result.stdout)
+    assert data["entries"] == []
+    assert data["precedence_conflicts"] == []
 
 
 def test_installed_scope_and_primitive_filters(tmp_path: Path):
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
+    init_git(project)
     write_lockfile(
         project / ".library.lock",
         [
@@ -217,6 +225,7 @@ def test_sync_dry_run_refreshes_same_set_status_reports_behind(tmp_path: Path):
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
+    init_git(project)
     write_minimal_catalog(project)
     write_lockfile(
         project / ".library.lock",
@@ -236,6 +245,17 @@ def test_sync_dry_run_refreshes_same_set_status_reports_behind(tmp_path: Path):
             entry("agent-unknown", primitive="agent", source_commit="local"),
         ],
     )
+    write_lockfile(
+        home / ".config" / "library" / "global.lock",
+        [
+            entry(
+                "global-behind",
+                primitive="skill",
+                source_commit=GLOBAL_SHA,
+                source="https://github.com/test/repo-global-behind",
+            ),
+        ],
+    )
 
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
@@ -246,6 +266,7 @@ def test_sync_dry_run_refreshes_same_set_status_reports_behind(tmp_path: Path):
         "  case \"$2\" in\n"
         f"    *repo-current*) printf '{PROJECT_SHA}\\tHEAD\\n' ;;\n"
         f"    *repo-behind*) printf '{REMOTE_SHA}\\tHEAD\\n' ;;\n"
+        f"    *repo-global-behind*) printf '{REMOTE_SHA}\\tHEAD\\n' ;;\n"
         "    *) exit 128 ;;\n"
         "  esac\n"
         "  exit 0\n"
@@ -269,3 +290,134 @@ def test_sync_dry_run_refreshes_same_set_status_reports_behind(tmp_path: Path):
     sync_data = json.loads(sync.stdout)
     assert set(sync_data["refreshed"]) == behind_labels
     assert "agent:agent-unknown" in sync_data["skipped"]
+    assert sync_data["unknown_skipped"] == 1
+    assert sync_data["skipped_by_status"]["unknown"] == ["agent:agent-unknown"]
+    assert "warnings" in sync_data
+
+
+def test_project_scope_ignores_stray_lockfile_outside_git(tmp_path: Path):
+    home = tmp_path / "home"
+    home.mkdir()
+    write_lockfile(home / ".library.lock", [entry("stray-project")])
+
+    result = run_library("installed", "--scope=project", "--json", cwd=home, home=home)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+
+    assert data["entries"] == []
+    assert data["warnings"]
+    assert "project scope skipped" in data["warnings"][0]
+
+
+def test_installed_diff_catalog_uses_all_scopes_for_classification(tmp_path: Path):
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    init_git(project)
+    write_minimal_catalog(project)
+    write_lockfile(
+        home / ".config" / "library" / "global.lock",
+        [entry("installed-skill")],
+    )
+
+    result = run_library(
+        "installed",
+        "--scope=project",
+        "--diff-catalog",
+        "--json",
+        cwd=project,
+        home=home,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+
+    assert data["entries"] == []
+    assert data["catalog_diff"]["available_not_installed"] == {
+        "skill": ["available-skill"],
+    }
+
+
+def test_status_audit_and_sync_run_outside_catalog_checkout(tmp_path: Path):
+    cwd = tmp_path / "anywhere"
+    home = tmp_path / "home"
+    cwd.mkdir()
+    write_lockfile(
+        home / ".config" / "library" / "global.lock",
+        [entry("global-only", source_commit="local")],
+    )
+
+    status = run_library("status", "--offline", "--json", cwd=cwd, home=home)
+    assert status.returncode == 0, status.stderr
+    status_data = json.loads(status.stdout)
+    assert [(item["scope"], item["name"]) for item in status_data["entries"]] == [
+        ("global", "global-only")
+    ]
+
+    audit = run_library("audit", "--json", cwd=cwd, home=home)
+    assert audit.returncode == 0, audit.stderr
+    audit_data = json.loads(audit.stdout)
+    assert [(item["scope"], item["name"]) for item in audit_data["entries"]] == [
+        ("global", "global-only")
+    ]
+
+    sync = run_library("sync", "--dry-run", "--json", cwd=cwd, home=home)
+    assert sync.returncode == 0, sync.stderr
+    sync_data = json.loads(sync.stdout)
+    assert sync_data["skipped_by_status"]["unknown"] == ["skill:global-only"]
+    assert sync_data["warnings"]
+
+
+def test_installed_offline_does_not_call_git_for_upstream_status(tmp_path: Path):
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    marker = tmp_path / "git-called"
+    project.mkdir()
+    write_lockfile(
+        project / ".library.lock",
+        [entry("remote-skill", source="https://github.com/test/repo/blob/main/SKILL.md")],
+    )
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 42\n")
+    fake_git.chmod(0o755)
+
+    result = run_library(
+        "installed",
+        "--offline",
+        "--project",
+        str(project),
+        "--json",
+        cwd=tmp_path,
+        home=home,
+        extra_env={"PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"},
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["entries"][0]["upstream"] == "unknown"
+    assert not marker.exists()
+
+
+def test_installed_diff_catalog_human_omits_empty_sections(tmp_path: Path):
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    init_git(project)
+    project.joinpath("library.yaml").write_text(
+        "library:\n"
+        "  skills:\n"
+        "    - name: installed-skill\n"
+        "      source: /tmp/source/installed-skill/SKILL.md\n"
+    )
+    write_lockfile(project / ".library.lock", [entry("installed-skill")])
+
+    result = run_library(
+        "installed",
+        "--diff-catalog",
+        "--offline",
+        cwd=project,
+        home=home,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Available in catalog but not installed" not in result.stdout
+    assert "Installed but not in catalog" not in result.stdout

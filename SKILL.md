@@ -57,10 +57,12 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
 
 # Check upstream status for all installed entries (no clone):
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py status --json
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py status --offline --json
 
 # See what is installed across project and global scopes:
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
 
 # Detect local drift across all primitives (exit 2 if drift):
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py audit --drift-only --json
@@ -96,27 +98,41 @@ handled by the CLI — do NOT implement these manually.
 | `/library <primitive> search <keyword>`  | Search within a primitive section        |
 | `/library search <keyword>`              | Search across all primitives             |
 | `/library installed [--diff-catalog]`    | Show installed entries, source, scope, upstream status, and precedence |
-| `/library audit [--drift-only]`          | Detect local drift across all primitives; exit 2 on drift |
-| `/library status`                        | Check upstream SHA for all installed entries (no clone) |
-| `/library sync [--dry-run] [--force]`    | Re-sync entries reported behind across primitives; use `--force` for all |
+| `/library audit [--drift-only]`          | Detect local drift across project and global scopes; exit 2 on drift |
+| `/library status [--offline]`            | Check upstream SHA across project and global scopes (no clone) |
+| `/library sync [--dry-run] [--force]`    | Re-sync entries reported behind across project and global scopes; use `--force` for all |
 
 ### Installed View
 
 Use `/library installed` when the user asks what is installed or where an entry
 came from. It reads project and global lockfiles without requiring the current
-directory to contain `library.yaml`.
+directory to contain `library.yaml`. Project-scope reads only use a project
+lockfile when the current directory is inside a git worktree or when
+`--project <path>` is passed; this prevents stray `.library.lock` files in
+home or scratch directories from being reported as project installs.
 
 Examples:
 
 ```bash
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --scope project --primitive skill
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --project /path/to/project
+python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
 python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog --json
 ```
 
 The `precedence` column is `active` for the entry the harness should load.
 When the same `(primitive, name)` exists in both project and global scope, the
 project entry wins and the global entry is shown as `shadowed`.
+
+With `--diff-catalog`, catalog classification is computed against the union of
+project and global installed entries even when the visible table is filtered by
+`--scope`. This avoids suggesting that globally installed entries should be
+installed again at project scope. JSON output includes `catalog_source` so the
+caller can see which `library.yaml` was used.
+
+Use `--offline` for inventory-only checks when network calls are unwanted. The
+installed rows still render, but `upstream` is reported as `unknown`.
 
 ## Cookbook
 

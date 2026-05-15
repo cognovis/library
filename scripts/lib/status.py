@@ -15,7 +15,11 @@ from .lockfile import find_lockfile, load_lockfile
 from .source import get_local_commit_sha, parse_source
 
 
-def get_remote_sha(clone_url: str, ref: str = "HEAD") -> Optional[str]:
+def get_remote_sha(
+    clone_url: str,
+    ref: str = "HEAD",
+    cache: dict[tuple[str, str], Optional[str]] | None = None,
+) -> Optional[str]:
     """Get remote HEAD SHA without cloning.
 
     Runs `git ls-remote <clone_url> <ref>` and parses the output.
@@ -29,6 +33,10 @@ def get_remote_sha(clone_url: str, ref: str = "HEAD") -> Optional[str]:
         40-character hex SHA string, or None on any failure (network error,
         timeout, invalid output, git not found).
     """
+    cache_key = (clone_url, ref)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+
     try:
         result = subprocess.run(
             ["git", "ls-remote", clone_url, ref],
@@ -37,6 +45,8 @@ def get_remote_sha(clone_url: str, ref: str = "HEAD") -> Optional[str]:
             timeout=10,
         )
         if result.returncode != 0:
+            if cache is not None:
+                cache[cache_key] = None
             return None
         accepted = {ref, f"refs/heads/{ref}"}
         if ref == "HEAD":
@@ -46,9 +56,16 @@ def get_remote_sha(clone_url: str, ref: str = "HEAD") -> Optional[str]:
                 continue
             sha, name = line.split("\t", 1)
             if name.strip() in accepted:
-                return sha.strip()
+                resolved = sha.strip()
+                if cache is not None:
+                    cache[cache_key] = resolved
+                return resolved
     except (subprocess.TimeoutExpired, OSError):
+        if cache is not None:
+            cache[cache_key] = None
         return None
+    if cache is not None:
+        cache[cache_key] = None
     return None
 
 
@@ -85,6 +102,8 @@ def cmd_status_impl(
     primitive: str,
     repo_root: Path,
     scope: str = "project",
+    offline: bool = False,
+    remote_cache: dict[tuple[str, str], Optional[str]] | None = None,
 ) -> dict[str, Any]:
     """Check upstream status for all installed entries.
 
@@ -138,7 +157,10 @@ def cmd_status_impl(
         upstream_status = "unknown"
         behind = False
 
-        if _is_remote_source(source) and installed_sha and installed_sha != "local":
+        if offline:
+            upstream_status = "unknown"
+            any_unknown = True
+        elif _is_remote_source(source) and installed_sha and installed_sha != "local":
             # For GitHub browser/raw URLs, extract branch to compare against the
             # correct ref rather than always defaulting to remote HEAD.
             parsed = parse_source(source)
@@ -149,7 +171,7 @@ def cmd_status_impl(
                 clone_url = _clone_url_from_source(source)
                 ref = "HEAD"
             if clone_url:
-                remote_sha = get_remote_sha(clone_url, ref)
+                remote_sha = get_remote_sha(clone_url, ref, remote_cache)
                 if remote_sha is not None:
                     if remote_sha == installed_sha:
                         upstream_status = "current"

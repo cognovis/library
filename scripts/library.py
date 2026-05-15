@@ -75,6 +75,7 @@ from lib.sync_audit import cmd_audit_impl, cmd_sync_impl, reinstall_entry
 
 VALID_PRIMITIVES = all_primitive_names()
 VALID_VERBS = ["list", "use", "remove", "sync", "search", "audit"]
+DEFAULT_LIFECYCLE_SCOPE = "both"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -246,13 +247,19 @@ def build_parser() -> argparse.ArgumentParser:
     top_audit_parser.add_argument(
         "--scope",
         choices=["project", "global", "both"],
-        default="project",
-        help="Scope to audit (default: project)",
+        default=DEFAULT_LIFECYCLE_SCOPE,
+        help=f"Scope to audit (default: {DEFAULT_LIFECYCLE_SCOPE})",
     )
     top_audit_parser.add_argument(
         "--drift-only",
         action="store_true",
         help="Only show drifted entries; exit 2 if any drift, 0 if clean",
+    )
+    top_audit_parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="Explicit project root for project-scope reads",
     )
 
     # Top-level status (cross-primitive, checks upstream SHAs without cloning)
@@ -264,8 +271,19 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument(
         "--scope",
         choices=["project", "global", "both"],
-        default="project",
-        help="Scope to check (default: project)",
+        default=DEFAULT_LIFECYCLE_SCOPE,
+        help=f"Scope to check (default: {DEFAULT_LIFECYCLE_SCOPE})",
+    )
+    status_parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="Explicit project root for project-scope reads",
+    )
+    status_parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Do not query upstream remotes; report upstream as unknown",
     )
 
     # Top-level installed (cross-primitive, cross-scope installed view)
@@ -292,6 +310,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Compare installed entries against the resolved library.yaml catalog",
     )
+    installed_parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="Explicit project root for project-scope reads",
+    )
+    installed_parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Do not query upstream remotes; report upstream as unknown",
+    )
 
     # Top-level sync (cross-primitive, with skip-on-current logic)
     top_sync_parser = subparsers.add_parser(
@@ -304,8 +333,14 @@ def build_parser() -> argparse.ArgumentParser:
     top_sync_parser.add_argument(
         "--scope",
         choices=["project", "global", "both"],
-        default="both",
-        help="Scope to sync (default: both)",
+        default=DEFAULT_LIFECYCLE_SCOPE,
+        help=f"Scope to sync (default: {DEFAULT_LIFECYCLE_SCOPE})",
+    )
+    top_sync_parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="Explicit project root for project-scope reads and writes",
     )
     top_sync_parser.add_argument(
         "--harness",
@@ -890,7 +925,7 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-def cmd_audit_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+def cmd_audit_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
     """Handle: audit [--scope=...] [--drift-only] [--json]
 
     Top-level audit command that checks all primitives across the given scope(s).
@@ -899,17 +934,22 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> i
     scope = getattr(args, "scope", "project")
     drift_only = getattr(args, "drift_only", False)
 
-    scopes_to_check = ["project", "global"] if scope == "both" else [scope]
+    scopes_to_check = _scopes_to_check(scope)
 
     all_entries = []
     any_drift = False
+    warnings: list[str] = []
 
     for s in scopes_to_check:
+        if s == "project" and repo_root is None:
+            if scope == "project":
+                warnings.append(_missing_project_warning())
+            continue
         try:
             result = cmd_audit_impl(
                 catalog=catalog,
                 primitive="all",
-                repo_root=repo_root,
+                repo_root=repo_root or Path.cwd(),
                 scope=s,
                 drift_only=drift_only,
             )
@@ -928,6 +968,8 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> i
         "status": overall_status,
         "entries": all_entries,
     }
+    if warnings:
+        combined_result["warnings"] = warnings
 
     if use_json:
         print_json(combined_result)
@@ -939,11 +981,13 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> i
             print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(all_entries)} entries")
             for e in drift_entries:
                 print(f"  DRIFT: {e['primitive']}:{e['name']}")
+        for warning in warnings:
+            print(f"Warning: {warning}")
 
     return EXIT_DRIFT if any_drift else 0
 
 
-def cmd_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
     """Handle: status [--scope=...] [--json]
 
     Top-level status command that checks upstream SHAs for all installed entries
@@ -951,23 +995,28 @@ def cmd_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "project")
+    offline = getattr(args, "offline", False)
 
-    scopes_to_check = []
-    if scope == "both":
-        scopes_to_check = ["project", "global"]
-    else:
-        scopes_to_check = [scope]
+    scopes_to_check = _scopes_to_check(scope)
 
     all_entries = []
     any_behind = False
+    warnings: list[str] = []
+    remote_cache: dict[tuple[str, str], str | None] = {}
 
     for s in scopes_to_check:
+        if s == "project" and repo_root is None:
+            if scope == "project":
+                warnings.append(_missing_project_warning())
+            continue
         try:
             result = cmd_status_impl(
                 catalog=catalog,
                 primitive="all",
-                repo_root=repo_root,
+                repo_root=repo_root or Path.cwd(),
                 scope=s,
+                offline=offline,
+                remote_cache=remote_cache,
             )
             all_entries.extend(result.get("entries", []))
             if result.get("overall") == "behind":
@@ -994,6 +1043,8 @@ def cmd_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         "entries": all_entries,
         "overall": overall,
     }
+    if warnings:
+        combined_result["warnings"] = warnings
 
     if use_json:
         print_json(combined_result)
@@ -1010,6 +1061,8 @@ def cmd_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
                     print(f"  BEHIND: {e['primitive']}:{e['name']} ({installed} -> {remote})")
         else:
             print(f"Status: UNKNOWN ({len(all_entries)} entries checked)")
+        for warning in warnings:
+            print(f"Warning: {warning}")
 
     return EXIT_DRIFT if overall == "behind" else 0
 
@@ -1020,10 +1073,14 @@ def cmd_installed(args: argparse.Namespace) -> int:
     scope = getattr(args, "scope", "both")
     primitive_filter = getattr(args, "primitive_filter", None)
     include_catalog_diff = getattr(args, "diff_catalog", False)
-    repo_root = _find_git_root(Path.cwd()) or Path.cwd().resolve()
+    offline = getattr(args, "offline", False)
+    repo_root = _resolve_lifecycle_project_root(args)
 
     catalog: dict | None = None
     warnings: list[str] = []
+    catalog_root: Path | None = None
+    if scope == "project" and repo_root is None:
+        warnings.append(_missing_project_warning())
     if include_catalog_diff:
         try:
             catalog_root = _resolve_catalog_root()
@@ -1041,6 +1098,7 @@ def cmd_installed(args: argparse.Namespace) -> int:
             primitive_filter=primitive_filter,
             catalog=catalog,
             include_catalog_diff=include_catalog_diff,
+            offline=offline,
         )
     except LibraryError as exc:
         if use_json:
@@ -1051,6 +1109,8 @@ def cmd_installed(args: argparse.Namespace) -> int:
 
     if warnings:
         result["warnings"] = warnings
+    if include_catalog_diff and catalog_root is not None:
+        result["catalog_source"] = str(catalog_root / "library.yaml")
 
     if use_json:
         print_json(result)
@@ -1059,7 +1119,7 @@ def cmd_installed(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
     """Handle: sync [--force] [--dry-run] [--scope=...] [--json]
 
     Top-level sync that iterates ALL primitives across all scopes.
@@ -1072,28 +1132,41 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
     scope = getattr(args, "scope", "both")
     harness = getattr(args, "harness", "all")
 
-    scopes_to_check = ["project", "global"] if scope == "both" else [scope]
+    scopes_to_check = _scopes_to_check(scope)
 
     all_refreshed = []
     all_skipped = []
     all_failed = []
+    skipped_by_status: dict[str, list[str]] = {
+        "current": [],
+        "unknown": [],
+        "other": [],
+    }
+    warnings: list[str] = []
+    remote_cache: dict[tuple[str, str], str | None] = {}
 
     for s in scopes_to_check:
+        if s == "project" and repo_root is None:
+            if scope == "project":
+                warnings.append(_missing_project_warning())
+            continue
         # Get upstream status to determine what needs syncing
         if not force:
             try:
                 status_result = cmd_status_impl(
                     catalog=catalog,
                     primitive="all",
-                    repo_root=repo_root,
+                    repo_root=repo_root or Path.cwd(),
                     scope=s,
+                    remote_cache=remote_cache,
                 )
                 status_by_key = {
                     (e["name"], e.get("primitive", e.get("type", "")))
                     : e.get("upstream_status", "unknown")
                     for e in status_result.get("entries", [])
                 }
-            except LibraryError:
+            except LibraryError as exc:
+                warnings.append(f"status check failed for {s} scope: {exc}")
                 status_by_key = {}
         else:
             status_by_key = {}
@@ -1108,18 +1181,25 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
             entry_label = f"{entry_type}:{entry_name}"
             key = (entry_name, entry_type)
 
-            should_refresh = force or status_by_key.get(key) == "behind"
+            upstream_status = status_by_key.get(key, "unknown")
+            should_refresh = force or upstream_status == "behind"
             should_skip = not should_refresh
 
             if dry_run:
                 if should_skip:
                     all_skipped.append(entry_label)
+                    skipped_by_status[
+                        upstream_status if upstream_status in skipped_by_status else "other"
+                    ].append(entry_label)
                 else:
                     all_refreshed.append(entry_label)
                 continue
 
             if should_skip:
                 all_skipped.append(entry_label)
+                skipped_by_status[
+                    upstream_status if upstream_status in skipped_by_status else "other"
+                ].append(entry_label)
                 continue
 
             # Re-install this entry
@@ -1135,14 +1215,25 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
                 if not use_json:
                     print(f"  ERROR: {entry.get('name')}: {exc}", file=sys.stderr)
 
+    unknown_skipped = len(skipped_by_status["unknown"])
+    if unknown_skipped:
+        warnings.append(
+            f"skipped {unknown_skipped} entries with unknown upstream status; "
+            "use --force to refresh them"
+        )
+
     result = {
         "status": "dry-run" if dry_run else "ok",
         "refreshed": all_refreshed,
         "skipped": all_skipped,
+        "skipped_by_status": skipped_by_status,
+        "unknown_skipped": unknown_skipped,
         "failed": all_failed,
         "total_refreshed": len(all_refreshed),
         "total_skipped": len(all_skipped),
     }
+    if warnings:
+        result["warnings"] = warnings
 
     if dry_run:
         result["summary"] = (
@@ -1157,10 +1248,13 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path, catalog: dict) -> in
             print(f"Dry-run: {result['summary']}")
             for label in all_refreshed:
                 print(f"  [would-refresh] {label}")
-            for label in all_skipped:
-                print(f"  [skip-not-behind] {label}")
+            for status_name, labels in skipped_by_status.items():
+                for label in labels:
+                    print(f"  [skip-{status_name}] {label}")
         else:
             print(f"Synced: {len(all_refreshed)} refreshed, {len(all_skipped)} skipped (not behind)")
+        for warning in warnings:
+            print(f"Warning: {warning}")
 
     if all_failed:
         return EXIT_FAILURE
@@ -1207,8 +1301,8 @@ def main(argv: list[str] | None = None) -> int:
     # Top-level audit (cross-primitive)
     if args.primitive == "audit":
         try:
-            repo_root = find_repo_root()
-            catalog = load_catalog(repo_root)
+            catalog_root = _resolve_catalog_root()
+            catalog = load_catalog(catalog_root)
         except LibraryError as exc:
             use_json = getattr(args, "json", False)
             if use_json:
@@ -1216,21 +1310,13 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
+        repo_root = _resolve_lifecycle_project_root(args)
         return cmd_audit_all(args, repo_root, catalog)
 
     # Top-level status (cross-primitive, no clone)
     if args.primitive == "status":
-        try:
-            repo_root = find_repo_root()
-            catalog = load_catalog(repo_root)
-        except LibraryError as exc:
-            use_json = getattr(args, "json", False)
-            if use_json:
-                print_json(error_result(str(exc), exc.exit_code))
-            else:
-                print(f"Error: {exc}", file=sys.stderr)
-            return exc.exit_code
-        return cmd_status(args, repo_root, catalog)
+        repo_root = _resolve_lifecycle_project_root(args)
+        return cmd_status(args, repo_root, {})
 
     # Top-level installed (cross-primitive, no catalog required unless diffing)
     if args.primitive == "installed":
@@ -1239,8 +1325,8 @@ def main(argv: list[str] | None = None) -> int:
     # Top-level sync (cross-primitive)
     if args.primitive == "sync":
         try:
-            repo_root = find_repo_root()
-            catalog = load_catalog(repo_root)
+            catalog_root = _resolve_catalog_root()
+            catalog = load_catalog(catalog_root)
         except LibraryError as exc:
             use_json = getattr(args, "json", False)
             if use_json:
@@ -1248,6 +1334,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
+        repo_root = _resolve_lifecycle_project_root(args)
         return cmd_sync_all(args, repo_root, catalog)
 
     # Validate primitive
@@ -1305,6 +1392,31 @@ def _resolve_catalog_root() -> Path:
         return find_repo_root()
     except LibraryError:
         return find_repo_root(TOOL_ROOT)
+
+
+def _scopes_to_check(scope: str) -> list[str]:
+    """Return concrete scopes for a lifecycle command."""
+    return ["project", "global"] if scope == "both" else [scope]
+
+
+def _resolve_lifecycle_project_root(args: argparse.Namespace) -> Path | None:
+    """Return a trusted project root for read-only lifecycle commands.
+
+    Project-scope lockfiles are only considered when the user is inside a git
+    worktree or explicitly passes --project. This avoids treating stray
+    .library.lock files in arbitrary directories as project state.
+    """
+    explicit_project = getattr(args, "project", None)
+    if explicit_project is not None:
+        return explicit_project.expanduser().resolve()
+    return _find_git_root(Path.cwd())
+
+
+def _missing_project_warning() -> str:
+    return (
+        "project scope skipped because the current directory is not inside a "
+        "git worktree; pass --project <path> to inspect a project lockfile"
+    )
 
 
 def _resolve_target_root(args: argparse.Namespace, catalog_root: Path) -> Path:

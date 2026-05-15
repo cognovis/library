@@ -31,16 +31,17 @@ INSTALLED_COLUMNS = [
 
 def cmd_installed_impl(
     *,
-    repo_root: Path,
+    repo_root: Path | None,
     scope: str = "both",
     primitive_filter: str | None = None,
     catalog: dict[str, Any] | None = None,
     include_catalog_diff: bool = False,
+    offline: bool = False,
 ) -> dict[str, Any]:
     """Build the installed-entry result for human or JSON output."""
     visible_scopes = _scopes_for(scope)
     conflict_index = _build_conflict_index(repo_root, primitive_filter)
-    status_index = _build_status_index(repo_root, visible_scopes, primitive_filter)
+    status_index = _build_status_index(repo_root, visible_scopes, primitive_filter, offline)
 
     entries: list[dict[str, Any]] = []
     for current_scope in visible_scopes:
@@ -67,7 +68,7 @@ def cmd_installed_impl(
     if include_catalog_diff and catalog is not None:
         result["catalog_diff"] = build_catalog_diff(
             catalog=catalog,
-            installed_entries=entries,
+            installed_entries=_load_all_scope_entries(repo_root, primitive_filter),
             primitive_filter=primitive_filter,
         )
 
@@ -83,7 +84,10 @@ def format_installed_output(result: dict[str, Any]) -> str:
     sections = [_format_installed_table(rows)]
 
     catalog_diff = result.get("catalog_diff")
-    if catalog_diff is not None:
+    if catalog_diff is not None and (
+        catalog_diff.get("available_not_installed")
+        or catalog_diff.get("installed_not_in_catalog")
+    ):
         sections.append("")
         sections.append(_format_catalog_diff_section(
             "Available in catalog but not installed",
@@ -112,9 +116,9 @@ def build_catalog_diff(
     """Compare visible installed entries against catalog entries."""
     catalog_keys = _catalog_keys(catalog, primitive_filter)
     installed_keys = {
-        (entry.get("primitive", ""), entry.get("name", ""))
+        (entry.get("primitive") or entry.get("type", ""), entry.get("name", ""))
         for entry in installed_entries
-        if entry.get("primitive") and entry.get("name")
+        if (entry.get("primitive") or entry.get("type")) and entry.get("name")
     }
 
     available_not_installed = _group_keys(catalog_keys - installed_keys)
@@ -133,10 +137,12 @@ def _scopes_for(scope: str) -> list[str]:
 
 
 def _load_scope_entries(
-    repo_root: Path,
+    repo_root: Path | None,
     scope: str,
     primitive_filter: str | None,
 ) -> list[dict[str, Any]]:
+    if scope == "project" and repo_root is None:
+        return []
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
     lock_data = load_lockfile(lockfile_path)
     entries = lock_data.get("installed", [])
@@ -145,15 +151,36 @@ def _load_scope_entries(
     return list(entries)
 
 
+def _load_all_scope_entries(
+    repo_root: Path | None,
+    primitive_filter: str | None,
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for scope in ["project", "global"]:
+        entries.extend(_load_scope_entries(repo_root, scope, primitive_filter))
+    return entries
+
+
 def _build_status_index(
-    repo_root: Path,
+    repo_root: Path | None,
     scopes: list[str],
     primitive_filter: str | None,
+    offline: bool,
 ) -> dict[tuple[str, str, str], dict[str, Any]]:
     status_index: dict[tuple[str, str, str], dict[str, Any]] = {}
     primitive = primitive_filter or "all"
+    remote_cache: dict[tuple[str, str], str | None] = {}
     for scope in scopes:
-        result = cmd_status_impl({}, primitive, repo_root, scope=scope)
+        if scope == "project" and repo_root is None:
+            continue
+        result = cmd_status_impl(
+            {},
+            primitive,
+            repo_root or Path.cwd(),
+            scope=scope,
+            offline=offline,
+            remote_cache=remote_cache,
+        )
         for entry in result.get("entries", []):
             key = (scope, entry.get("primitive", ""), entry.get("name", ""))
             status_index[key] = entry
@@ -161,7 +188,7 @@ def _build_status_index(
 
 
 def _build_conflict_index(
-    repo_root: Path,
+    repo_root: Path | None,
     primitive_filter: str | None,
 ) -> dict[tuple[str, str], set[str]]:
     index: dict[tuple[str, str], set[str]] = {}
@@ -209,7 +236,7 @@ def _precedence_for_scope(
 def _format_entry(
     *,
     lock_entry: dict[str, Any],
-    repo_root: Path,
+    repo_root: Path | None,
     scope: str,
     upstream_status: str,
     precedence: str,
@@ -245,7 +272,7 @@ def _date_only(timestamp: str) -> str:
     return timestamp[:10]
 
 
-def _short_source(source: str, repo_root: Path) -> str:
+def _short_source(source: str, repo_root: Path | None) -> str:
     if not source:
         return "unknown"
 
@@ -260,25 +287,18 @@ def _short_source(source: str, repo_root: Path) -> str:
 
     if parsed and parsed.is_local() and parsed.local_path:
         path = parsed.local_path.expanduser()
-        try:
-            rel = path.resolve().relative_to(repo_root.resolve())
-            return f"local:./{rel}"
-        except (OSError, ValueError):
-            home = Path.home()
+        if repo_root is not None:
             try:
-                rel_home = path.resolve().relative_to(home.resolve())
-                return f"local:~/{rel_home}"
+                rel = path.resolve().relative_to(repo_root.resolve())
+                return f"local:./{rel}"
             except (OSError, ValueError):
-                return f"local:{path}"
-
-    if source.startswith("git@github.com:"):
-        repo_part = source.removeprefix("git@github.com:").removesuffix(".git")
-        return f"{repo_part}@HEAD"
-
-    if source.startswith("https://github.com/"):
-        parts = source.removeprefix("https://github.com/").split("/")
-        if len(parts) >= 2:
-            return f"{parts[0]}/{parts[1].removesuffix('.git')}@HEAD"
+                pass
+        home = Path.home()
+        try:
+            rel_home = path.resolve().relative_to(home.resolve())
+            return f"local:~/{rel_home}"
+        except (OSError, ValueError):
+            return f"local:{path}"
 
     return source
 
