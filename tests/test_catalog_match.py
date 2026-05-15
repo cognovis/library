@@ -149,6 +149,55 @@ def test_catalog_sync_dry_run_scans_local_inventory(tmp_path: Path) -> None:
     assert data["entries"][0]["name"] == "python-uv"
 
 
+def test_catalog_sync_scans_legacy_agent_base_source_directory(tmp_path: Path) -> None:
+    """Inventory sync maps current agent-base catalog entries from golden-prompts sources."""
+    source_root = tmp_path / "source"
+    legacy_dir = source_root / "golden-prompts"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "cognovis-base.md").write_text(
+        "---\nname: cognovis-base\ndescription: Cognovis base Layer 1.\n---\n# Cognovis Base\n"
+    )
+    catalog = f"""
+default_dirs:
+  agent_bases:
+    - default: .agents/agent-bases/
+sources:
+  catalogs:
+    - name: test-core
+      source: https://github.com/example/core
+      description: Test source catalog.
+      local_path: {source_root}
+      writable: true
+      content_types:
+        - agent_bases
+      scope:
+        topics:
+          - agents
+  marketplaces: []
+library:
+  skills: []
+  agents: []
+  prompts: []
+  agent_bases: []
+"""
+    (tmp_path / "library.yaml").write_text(catalog)
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=agent-base",
+        "--json",
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+
+    assert data["generated"]["agent-base"] == 1
+    assert data["entries"][0]["name"] == "cognovis-base"
+    assert data["entries"][0]["source"].endswith("/golden-prompts/cognovis-base.md")
+
+
 def test_catalog_sync_write_refreshes_generated_entries(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     standards_dir = source_root / "standards"

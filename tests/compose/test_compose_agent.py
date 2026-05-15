@@ -34,19 +34,25 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 def run_compose(
     agent_file: Path,
-    base_dir: Path,
+    base_dir: Path | None,
     model_standard_dir: Path | None = None,
     harness: str | None = None,
     expect_success: bool = True,
+    extra_env: dict[str, str] | None = None,
 ) -> tuple[int, str, str]:
     """Run compose-agent.py against agent_file with given base dirs.
 
     Returns (returncode, stdout, stderr).
     """
     env = os.environ.copy()
-    env["AGENT_BASES_DIR"] = str(base_dir)
+    if base_dir is not None:
+        env["AGENT_BASES_DIR"] = str(base_dir)
+    else:
+        env.pop("AGENT_BASES_DIR", None)
     if model_standard_dir:
         env["MODEL_STANDARDS_DIR"] = str(model_standard_dir)
+    if extra_env:
+        env.update(extra_env)
 
     cmd = [sys.executable, str(COMPOSE_SCRIPT), str(agent_file)]
     if harness:
@@ -155,7 +161,29 @@ def test_compose_accepts_legacy_frontmatter_alias(tmp_path):
     assert "Legacy Frontmatter Agent" in stdout, (
         f"Layer 2 body not found for legacy alias.\nstdout: {stdout}\nstderr: {stderr}"
     )
+    assert "golden_prompt_extends is a legacy frontmatter alias" in stderr
     print("PASS test_compose_accepts_legacy_frontmatter_alias")
+
+
+def test_compose_finds_legacy_global_agent_base_dir(tmp_path):
+    """Composer finds a Layer 1 base when only ~/.agents/golden-prompts exists."""
+    home = tmp_path / "home"
+    legacy_dir = home / ".agents" / "golden-prompts"
+    legacy_dir.mkdir(parents=True)
+    fixture_base = FIXTURES_DIR / "base-cognovis-base.md"
+    (legacy_dir / "cognovis-base.md").write_text(fixture_base.read_text())
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, stdout, stderr = run_compose(
+        agent_file,
+        None,
+        extra_env={"HOME": str(home)},
+    )
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout, (
+        f"Layer 1 marker not found from legacy global dir.\nstdout: {stdout}\nstderr: {stderr}"
+    )
+    print("PASS test_compose_finds_legacy_global_agent_base_dir")
 
 
 def test_compose_with_base_contains_layer2(tmp_path):
@@ -336,6 +364,7 @@ def test_missing_base_exits_nonzero(tmp_path):
 ALL_TESTS = [
     test_compose_with_base_contains_layer1,
     test_compose_accepts_legacy_frontmatter_alias,
+    test_compose_finds_legacy_global_agent_base_dir,
     test_compose_with_base_contains_layer2,
     test_compose_layer_order,
     test_compose_with_model_standard_contains_layer3,

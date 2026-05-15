@@ -2643,7 +2643,7 @@ library:
       description: >-
         Layer 1 of the three-layer agent composition model. Safety, confirmation
         gates, content isolation, source-language, session-close protocol.
-      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-base.md
+      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
 
 project_tooling:
   - name: beads-prime

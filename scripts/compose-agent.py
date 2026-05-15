@@ -138,25 +138,37 @@ def _find_in_dir(name: str, search_dir: Path) -> Path | None:
     return None
 
 
+def _layer1_search_dirs(proj_root: Path, override_dir: str | None = None) -> list[Path]:
+    """Return agent-base Layer 1 search dirs in resolution order."""
+    if override_dir:
+        return [Path(override_dir).expanduser()]
+
+    return [
+        proj_root / ".agents" / "agent-bases",
+        Path.home() / ".agents" / "agent-bases",
+        proj_root / ".agents" / "golden-prompts",
+        Path.home() / ".agents" / "golden-prompts",
+    ]
+
+
+def _format_search_dirs(paths: list[Path]) -> str:
+    """Format searched paths for human-readable CLI errors."""
+    return "\n".join(f"    - {path}" for path in paths)
+
+
 def resolve_layer1(name: str, proj_root: Path, override_dir: str | None = None) -> Path | None:
     """Resolve agent base prompt Layer 1 file.
 
     Search order (when no override_dir):
       1. <proj_root>/.agents/agent-bases/<name>.md
       2. ~/.agents/agent-bases/<name>.md
+      3. <proj_root>/.agents/golden-prompts/<name>.md
+      4. ~/.agents/golden-prompts/<name>.md
 
     When override_dir is provided (e.g. via AGENT_BASES_DIR env var),
     ONLY that directory is searched — no fallback. This enables test isolation.
     """
-    if override_dir:
-        result = _find_in_dir(name, Path(override_dir).expanduser())
-        return result
-
-    search_dirs: list[Path] = [
-        proj_root / ".agents" / "agent-bases",
-        Path.home() / ".agents" / "agent-bases",
-    ]
-    for d in search_dirs:
+    for d in _layer1_search_dirs(proj_root, override_dir):
         result = _find_in_dir(name, d)
         if result:
             return result
@@ -252,14 +264,22 @@ def compose(
     # ---------------------------------------------------------------------------
     # Layer 1: agent_base_extends
     # ---------------------------------------------------------------------------
+    uses_legacy_extends = "agent_base_extends" not in fm and "golden_prompt_extends" in fm
     agent_base_extends = fm.get("agent_base_extends", fm.get("golden_prompt_extends", ""))
     layer1_body: str | None = None
 
     if agent_base_extends and agent_base_extends != "from-scratch":
+        if uses_legacy_extends:
+            print(
+                "WARNING: golden_prompt_extends is a legacy frontmatter alias; "
+                "use agent_base_extends instead.",
+                file=sys.stderr,
+            )
         layer1_override = (
             agent_bases_dir
             or os.environ.get("AGENT_BASES_DIR")
         )
+        searched_dirs = _layer1_search_dirs(proj_root, layer1_override)
         layer1_path = resolve_layer1(
             agent_base_extends,
             proj_root,
@@ -268,8 +288,7 @@ def compose(
         if layer1_path is None:
             print(
                 f"ERROR: agent_base '{agent_base_extends}' not found.\n"
-                f"  Searched: {proj_root / '.agents' / 'agent-bases'} and "
-                f"{Path.home() / '.agents' / 'agent-bases'}\n"
+                f"  Searched:\n{_format_search_dirs(searched_dirs)}\n"
                 f"  Install it first: /library agent-base use {agent_base_extends}",
                 file=sys.stderr,
             )

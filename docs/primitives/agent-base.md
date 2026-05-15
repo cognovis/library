@@ -68,8 +68,12 @@ library:
       description: >-
         Layer 1 of the three-layer agent composition model. Safety, confirmation
         gates, content isolation, source-language, session-close protocol.
-      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-base.md
+      source: https://github.com/cognovis/library-core/blob/main/golden-prompts/cognovis-base.md
 ```
+
+The catalog key and install target are `agent_bases` / `agent-base`; a source URL
+may still point at a legacy physical `golden-prompts/` directory until that source
+repository migrates its file layout.
 
 **When to choose it.** Create an agent-base when:
 

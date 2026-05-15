@@ -86,6 +86,22 @@ def test_library_yaml_uses_normalized_root_sections() -> None:
     assert "marketplaces" in data["sources"]
 
 
+def test_cognovis_base_catalog_source_matches_current_source_layout() -> None:
+    """The agent-base catalog entry must match the current cognovis-core path."""
+    data = yaml.safe_load(LIBRARY_PATH.read_text())
+    agent_bases = data["library"]["agent_bases"]
+    entry = next(item for item in agent_bases if item["name"] == "cognovis-base")
+
+    assert entry["source"].endswith("/golden-prompts/cognovis-base.md")
+
+    catalogs = {item["name"]: item for item in data["sources"]["catalogs"]}
+    local_path = catalogs["cognovis-library-core"].get("local_path")
+    if local_path:
+        source_root = Path(local_path).expanduser()
+        if source_root.exists():
+            assert (source_root / "golden-prompts" / "cognovis-base.md").exists()
+
+
 def test_schema_accepts_canonical_primitive_sections() -> None:
     """New primitive-like sections are valid under library.*."""
     data = _minimal_catalog(

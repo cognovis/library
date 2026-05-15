@@ -7,6 +7,10 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ## [Unreleased]
 
+### Fixed
+
+- **Agent-base rename hotfix: legacy filesystem fallback + live source path** (`scripts/compose-agent.py`, `scripts/lib/catalog_inventory.py`, `library.yaml`): `compose-agent.py` now resolves Layer 1 agent bases from `.agents/agent-bases/` first and then the legacy `.agents/golden-prompts/` project/global directories, so existing installs with `~/.agents/golden-prompts/cognovis-base.md` continue to compose while machines migrate local state. The `cognovis-base` catalog entry now keeps the canonical `library.agent_bases` section but points at the current `cognovis-core/golden-prompts/cognovis-base.md` source path because the source repository has not migrated its physical directory yet. `golden_prompts` remains removed as a catalog/schema alias and `golden-prompt` remains removed as a CLI primitive alias; use `agent_bases` and `agent-base`. Paired catalog-source updates rename agent frontmatter and Layer 1 prose to `agent_base_extends` / Agent Base terminology. Added regression tests for the legacy global runtime path and catalog inventory scanning of the legacy source directory. Closes CL-8kx hotfix.
+
 ### Added
 
 - **`library status` — lightweight upstream check without cloning** (`scripts/lib/status.py`, `scripts/library.py`): New top-level `status` command compares the `source_commit` stored in the lockfile against the live remote HEAD SHA via `git ls-remote`, without cloning the repository. Reports each installed entry as `current`, `behind`, or `unknown`. The `--json` flag emits a structured result including `remote_sha`, `installed_sha`, `upstream_status`, and `behind` fields per entry, plus an `overall` field (`current`/`behind`/`unknown`). `--scope` selects project or global lockfile. Local-path sources and entries without `source_commit` are reported as `unknown`. Closes CL-7oy (AK3, AK4).

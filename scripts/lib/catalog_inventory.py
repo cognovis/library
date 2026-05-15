@@ -396,6 +396,8 @@ def scan_primitive(
         files = sorted((root / "model-standards").glob("**/*.md"))
     elif primitive_name == "agent-base":
         files = sorted((root / "agent-bases").glob("**/*.md"))
+        if not files:
+            files = sorted((root / "golden-prompts").glob("**/*.md"))
     else:
         files = []
 
