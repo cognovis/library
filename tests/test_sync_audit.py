@@ -352,6 +352,122 @@ class TestAuditDriftOnly:
 
 
 # ---------------------------------------------------------------------------
+# CL-a01: Claude agent frontmatter health checks
+# ---------------------------------------------------------------------------
+
+class TestAuditClaudeAgentFrontmatter:
+    def _write_agent_lockfile(self, project_dir: Path, name: str, body: str) -> Path:
+        """Write one installed Claude agent fixture plus matching lockfile entry."""
+        from lib.lockfile import compute_checksum
+
+        agent_path = project_dir / ".claude" / "agents" / f"{name}.md"
+        agent_path.parent.mkdir(parents=True, exist_ok=True)
+        agent_path.write_text(body)
+
+        lockfile_path = project_dir / ".library.lock"
+        entry = {
+            "name": name,
+            "type": "agent",
+            "marketplace": "local",
+            "source": "local",
+            "source_commit": "abc123",
+            "cache_path": str(agent_path) + "/",
+            "install_target": str(agent_path),
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": compute_checksum(agent_path),
+            "checksum_type": "file",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        lockfile_path.write_text(yaml.dump({"installed": [entry]}))
+        return agent_path
+
+    def test_audit_detects_claude_agent_missing_frontmatter(self, project_dir):
+        """Agent audit flags installed Claude agent files whose first line is not frontmatter."""
+        from lib.sync_audit import cmd_audit_impl
+
+        agent_path = self._write_agent_lockfile(
+            project_dir,
+            "broken-agent",
+            "# Composed Body\n\nNo YAML frontmatter.",
+        )
+
+        result = cmd_audit_impl({}, "agent", project_dir, scope="project")
+
+        assert result["status"] == "drift"
+        entry = result["entries"][0]
+        assert entry["drift"] is True
+        issue = entry["agent_frontmatter_issue"]
+        assert issue["code"] == "missing_frontmatter"
+        assert issue["path"] == str(agent_path)
+        assert issue["repair_hint"] == (
+            "library agent sync broken-agent --scope project --harness claude_code"
+        )
+
+    def test_audit_detects_claude_agent_missing_description(self, project_dir):
+        """Agent audit flags installed Claude agent frontmatter without description."""
+        from lib.sync_audit import cmd_audit_impl
+
+        agent_path = self._write_agent_lockfile(
+            project_dir,
+            "missing-description",
+            "---\nname: missing-description\nmodel: sonnet\n---\n\n# Body\n",
+        )
+
+        result = cmd_audit_impl({}, "agent", project_dir, scope="project")
+
+        assert result["status"] == "drift"
+        entry = result["entries"][0]
+        issue = entry["agent_frontmatter_issue"]
+        assert issue["code"] == "missing_description"
+        assert issue["path"] == str(agent_path)
+        assert "library agent sync missing-description" in entry["repair_hint"]
+
+    def test_audit_accepts_healthy_claude_agent_frontmatter(self, project_dir):
+        """Agent audit passes when installed Claude agent frontmatter has description."""
+        from lib.sync_audit import cmd_audit_impl
+
+        self._write_agent_lockfile(
+            project_dir,
+            "healthy-agent",
+            (
+                "---\n"
+                "name: healthy-agent\n"
+                "description: Healthy test agent\n"
+                "model: sonnet\n"
+                "---\n\n"
+                "# Body\n"
+            ),
+        )
+
+        result = cmd_audit_impl({}, "agent", project_dir, scope="project")
+
+        assert result["status"] == "clean"
+        entry = result["entries"][0]
+        assert entry["drift"] is False
+        assert entry["status"] == "clean"
+        assert "agent_frontmatter_issue" not in entry
+
+    def test_agent_audit_json_output_includes_frontmatter_repair_hint(self, project_dir):
+        """CLI JSON output includes path and targeted sync hint for frontmatter failures."""
+        self._write_agent_lockfile(
+            project_dir,
+            "cli-broken-agent",
+            "# Body without frontmatter\n",
+        )
+
+        result = run_library("agent", "audit", "--json", cwd=project_dir)
+        data = json.loads(result.stdout)
+
+        assert result.returncode == 2, result.stderr
+        entry = data["entries"][0]
+        assert entry["agent_frontmatter_issue"]["path"].endswith("cli-broken-agent.md")
+        assert entry["repair_hint"] == (
+            "library agent sync cli-broken-agent --scope project --harness claude_code"
+        )
+
+
+# ---------------------------------------------------------------------------
 # AK5: Top-level sync skips entries reported as 'current' by status
 # ---------------------------------------------------------------------------
 

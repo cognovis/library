@@ -11,6 +11,8 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from .errors import EXIT_NOT_FOUND, InstallError, LibraryError
 from .lockfile import (
     compute_checksum,
@@ -212,23 +214,12 @@ def cmd_audit_impl(
         drift = False
         entry_status = "unknown"
 
-        # Entries without checksum_type report unknown, never drift.
-        if checksum_type is None or checksum_type == "file":
+        # Entries without checksum_type report unknown, never drift unless an
+        # additional health check below finds a broken installed artifact.
+        if checksum_type is None:
+            entry_status = "unknown"
+        elif checksum_type == "file":
             # For file-type: check single file
-            if checksum_type is None:
-                # Missing strategy: always report unknown (cannot verify intent)
-                audit_entries.append({
-                    "name": entry_name,
-                    "primitive": entry.get("type", ""),
-                    "scope": scope,
-                    "expected_sha": expected_sha,
-                    "actual_sha": "",
-                    "drift": False,
-                    "status": "unknown",
-                })
-                continue
-
-            # checksum_type == "file": check single file
             for path_str in [install_target_str, cache_path_str]:
                 if not path_str:
                     continue
@@ -295,7 +286,7 @@ def cmd_audit_impl(
             # Unknown checksum_type: report unknown
             entry_status = "unknown"
 
-        audit_entries.append({
+        audit_entry = {
             "name": entry_name,
             "primitive": entry.get("type", ""),
             "scope": scope,
@@ -303,7 +294,21 @@ def cmd_audit_impl(
             "actual_sha": actual_sha,
             "drift": drift,
             "status": entry_status,
-        })
+        }
+
+        agent_frontmatter_issue = _audit_claude_agent_frontmatter(
+            entry=entry,
+            repo_root=repo_root,
+            scope=scope,
+        )
+        if agent_frontmatter_issue:
+            audit_entry["agent_frontmatter_issue"] = agent_frontmatter_issue
+            audit_entry["repair_hint"] = agent_frontmatter_issue["repair_hint"]
+            audit_entry["drift"] = True
+            audit_entry["status"] = "drift"
+            any_drift = True
+
+        audit_entries.append(audit_entry)
 
     # Apply drift_only filter: exclude non-drifted entries
     if drift_only:
@@ -328,6 +333,114 @@ def _find_primary_artifact(cache_dir: Path, name: str) -> Path | None:
             return c
     md_files = list(cache_dir.rglob("*.md"))
     return md_files[0] if md_files else None
+
+
+def _audit_claude_agent_frontmatter(
+    entry: dict[str, Any],
+    repo_root: Path,
+    scope: str,
+) -> dict[str, str] | None:
+    """Return a frontmatter issue for an installed Claude agent, if any."""
+    if entry.get("type") != "agent":
+        return None
+
+    entry_name = entry.get("name", "")
+    agent_path = _resolve_agent_markdown_path(
+        entry.get("install_target", ""),
+        entry_name,
+        repo_root,
+    )
+    if agent_path is None:
+        return None
+
+    try:
+        text = agent_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return _agent_frontmatter_issue(
+            code="missing_frontmatter",
+            message="Claude agent file does not start with YAML frontmatter.",
+            path=agent_path,
+            name=entry_name,
+            scope=scope,
+        )
+
+    closing_index = None
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            closing_index = index
+            break
+    if closing_index is None:
+        return _agent_frontmatter_issue(
+            code="invalid_frontmatter",
+            message="Claude agent frontmatter has no closing delimiter.",
+            path=agent_path,
+            name=entry_name,
+            scope=scope,
+        )
+
+    frontmatter_text = "\n".join(lines[1:closing_index])
+    try:
+        frontmatter = yaml.safe_load(frontmatter_text) or {}
+    except yaml.YAMLError:
+        frontmatter = {}
+
+    description = frontmatter.get("description") if isinstance(frontmatter, dict) else None
+    if not description:
+        return _agent_frontmatter_issue(
+            code="missing_description",
+            message="Claude agent frontmatter is missing a description field.",
+            path=agent_path,
+            name=entry_name,
+            scope=scope,
+        )
+
+    return None
+
+
+def _resolve_agent_markdown_path(
+    install_target: str,
+    entry_name: str,
+    repo_root: Path,
+) -> Path | None:
+    """Resolve an installed Claude agent markdown file from a lockfile target."""
+    if not install_target:
+        return None
+
+    target = _entry_path(install_target, repo_root)
+    if target.is_symlink():
+        target = target.resolve()
+
+    if target.is_file() and target.suffix == ".md":
+        return target
+    if not target.is_dir():
+        return None
+
+    primary = _find_primary_artifact(target, entry_name)
+    if primary and primary.suffix == ".md":
+        return primary
+    return None
+
+
+def _agent_frontmatter_issue(
+    code: str,
+    message: str,
+    path: Path,
+    name: str,
+    scope: str,
+) -> dict[str, str]:
+    """Build a stable Claude agent frontmatter issue payload."""
+    return {
+        "code": code,
+        "message": message,
+        "path": str(path),
+        "repair_hint": (
+            f"library agent sync {name} --scope {scope} --harness claude_code"
+        ),
+    }
 
 
 def _entry_path(path_str: str, repo_root: Path) -> Path:

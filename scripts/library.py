@@ -975,6 +975,7 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
                 print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(entries)} entries")
                 for e in drift_entries:
                     print(f"  DRIFT: {e['primitive']}:{e['name']}")
+                    _print_agent_frontmatter_issue(e)
             else:
                 print(f"Audit: {status}")
         # Exit 2 if drift detected, 0 if clean
@@ -1048,10 +1049,20 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path | None, catalog: dic
             print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(all_entries)} entries")
             for e in drift_entries:
                 print(f"  DRIFT: {e['primitive']}:{e['name']}")
+                _print_agent_frontmatter_issue(e)
         for warning in warnings:
             print(f"Warning: {warning}")
 
     return EXIT_DRIFT if any_drift else 0
+
+
+def _print_agent_frontmatter_issue(entry: dict) -> None:
+    """Print extra context for Claude agent frontmatter audit failures."""
+    issue = entry.get("agent_frontmatter_issue")
+    if not issue:
+        return
+    print(f"    {issue.get('code', 'frontmatter')}: {issue.get('path', '')}")
+    print(f"    repair: {issue.get('repair_hint', '')}")
 
 
 def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
