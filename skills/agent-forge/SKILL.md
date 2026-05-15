@@ -132,7 +132,7 @@ Details and real-world examples: `references/agent-patterns.md`
 ### Step 3: Initialize Agent File
 
 ```bash
-# Creates <name>.md single-file agent with YAML frontmatter
+# Creates <name>.md unified agent source with YAML frontmatter
 python3 scripts/init-agent.py <agent-name>
 ```
 
@@ -142,11 +142,12 @@ For a judge agent:
 python3 scripts/init-agent.py <agent-name> --template judge
 ```
 
-Creates a single `.md` file with YAML frontmatter and system prompt.
-See your harness adapter for the exact storage path and supported formats.
+Creates a single `.md` source file with YAML frontmatter and system prompt.
+The Library builder emits harness-native Claude `.md` and Codex `.toml`
+artifacts from that source at install time.
 
 ```
-agents/<agent-name>.md    # Frontmatter + system prompt in one file (portable path)
+agents/<agent-name>.md    # Unified source; build-agent.py emits harness artifacts
 ```
 
 ### Step 4: Configure Frontmatter
@@ -159,6 +160,14 @@ description: |                     # Required (critical for auto-delegation!)
   Use PROACTIVELY when [trigger scenario].
 tools: Read, Grep, Glob           # Optional (omit = all tools)
 model: sonnet                     # haiku|sonnet|opus|inherit (default: inherit)
+agent_base_extends: cognovis-base # Layer 1 logical alias
+model_standards: [claude-sonnet-4-6]
+codex:                            # Optional Codex overrides
+  model: gpt-5.4
+  model_reasoning_effort: medium
+  sandbox_mode: workspace-write
+  nickname_candidates:
+    - kebab-case-name
 ---
 ```
 
@@ -178,6 +187,25 @@ model: sonnet                     # haiku|sonnet|opus|inherit (default: inherit)
 | `memory` | string | No | — | `user`, `project`, or `local` |
 | `maxTurns` | integer | No | — | Auto-stop after N turns |
 | `color` | string | No | — | Visual identifier in CLI |
+| `agent_base_extends` | string | No | `cognovis-base` | Layer 1 base for Library composition |
+| `model_standards` | list | No | [] | Layer 3 model overlays |
+| `codex` | object | No | — | Codex-only overrides emitted into TOML |
+
+**Harness-specific body blocks:**
+
+```markdown
+Shared instructions appear outside directive blocks.
+
+::: harness claude :::
+Claude-only instructions.
+::: end :::
+
+::: harness codex :::
+Codex-only instructions.
+::: end :::
+```
+
+Malformed, nested, or unclosed directive blocks fail `scripts/build-agent.py`.
 
 **Model selection:**
 - `inherit` -- match caller's model (default when omitted)

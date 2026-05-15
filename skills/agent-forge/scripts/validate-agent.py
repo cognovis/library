@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import yaml
+
 
 class AgentValidator:
     """Validator for Claude Code agent files."""
@@ -118,24 +120,17 @@ class AgentValidator:
             self.errors.append(f"Missing prompt.md in {agent_dir}")
             return False
 
-        # Parse agent.yml (simple key: value, no yaml library)
+        # Parse agent.yml
         try:
-            yml_text = yml_file.read_text()
+            parsed = yaml.safe_load(yml_file.read_text()) or {}
         except Exception as e:
-            self.errors.append(f"Failed to read {yml_file}: {e}")
+            self.errors.append(f"Failed to parse {yml_file}: {e}")
             return False
 
-        for line in yml_text.strip().split("\n"):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if ":" in line:
-                key, value = line.split(":", 1)
-                val = value.strip()
-                # Strip surrounding quotes if present
-                if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
-                    val = val[1:-1]
-                self.frontmatter[key.strip()] = val
+        if not isinstance(parsed, dict):
+            self.errors.append("agent.yml must be a YAML mapping")
+            return False
+        self.frontmatter = parsed
 
         # Read prompt.md as body
         try:
@@ -171,11 +166,15 @@ class AgentValidator:
         frontmatter_text = content[4:frontmatter_end-4]
         self.body = content[frontmatter_end:].strip()
 
-        # Parse frontmatter (simple key: value parsing)
-        for line in frontmatter_text.strip().split("\n"):
-            if ":" in line and not line.strip().startswith("#"):
-                key, value = line.split(":", 1)
-                self.frontmatter[key.strip()] = value.strip()
+        try:
+            parsed = yaml.safe_load(frontmatter_text) or {}
+        except yaml.YAMLError as e:
+            self.errors.append(f"Malformed YAML frontmatter: {e}")
+            return False
+        if not isinstance(parsed, dict):
+            self.errors.append("Frontmatter must be a YAML mapping")
+            return False
+        self.frontmatter = parsed
 
         return True
 
@@ -264,13 +263,16 @@ class AgentValidator:
             )
             return
 
-        tools_str = self.frontmatter["tools"]
-        if not tools_str:
+        tools_value = self.frontmatter["tools"]
+        if not tools_value:
             self.warnings.append("Tools field is empty")
             return
 
         # Parse tools
-        tools = [t.strip() for t in tools_str.split(",")]
+        if isinstance(tools_value, list):
+            tools = [str(t).strip() for t in tools_value]
+        else:
+            tools = [t.strip() for t in str(tools_value).split(",")]
 
         # Check for common typos
         for tool in tools:

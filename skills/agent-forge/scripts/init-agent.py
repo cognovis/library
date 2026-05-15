@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Initialize a new Claude Code agent as a single .md file with YAML frontmatter.
+Initialize a new unified Library agent as a single .md file with YAML frontmatter.
 
 Usage:
     python3 init-agent.py <agent-name> [--path <output-directory>] [--template agent|judge]
@@ -48,7 +48,7 @@ def validate_agent_name(name: str) -> tuple[bool, str]:
 
 
 def get_agent_template(name: str) -> str:
-    """Generate single-file agent template with YAML frontmatter."""
+    """Generate single-file unified agent template with YAML frontmatter."""
     return f"""---
 name: {name}
 description: >-
@@ -59,6 +59,12 @@ model: sonnet
 agent_base_extends: cognovis-base
 model_standards: [claude-sonnet-4-6]
 color: blue
+codex:
+  model: gpt-5.4
+  model_reasoning_effort: medium
+  sandbox_mode: workspace-write
+  nickname_candidates:
+    - {name}
 ---
 
 # Purpose

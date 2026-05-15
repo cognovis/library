@@ -119,31 +119,21 @@ agent-bases, and single-hook guardrails), continue with Step 3.
 
 ### 3. Resolve Marketplace Reference
 
-#### 3a. Handle `sources:` map (per-harness file paths)
+#### 3a. Handle agent source shape
 
-If the entry has a `sources:` map instead of (or in addition to) a singular `source:`,
-resolve files per harness:
+For agents, prefer a singular Markdown `source:`. The Library builder emits both
+Claude `.md` and Codex `.toml` artifacts from that one source:
 
 ```yaml
-# Example: agent with both Claude and Codex files
-sources:
-  claude: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
-  codex: https://github.com/cognovis/library-core/blob/main/.codex/agents/bead-orchestrator.toml
+source: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
 ```
 
-- **`sources.claude`**: Install the `.md` file to the Claude agents directory
-  (e.g. `~/.claude/agents/<name>.md` for global install).
-- **`sources.codex`**: Install the `.toml` file to the Codex agents directory
-  (e.g. `~/.codex/agents/<name>.toml` for global install).
-- **Codex coverage gap**: If the entry has `sources.claude` but no `sources.codex`
-  (or a singular `source:` pointing to a `.md` file only), emit:
-  > "Codex coverage gap: agent `<name>` has no Codex `.toml` sibling.
-  > Claude install complete. To add Codex coverage: author a `.toml` file
-  > and add it to `library.yaml` under `sources.codex:`."
-  Do NOT auto-convert `.md` to `.toml` — they have different runtime semantics.
-- Fetch each file in `sources:` separately using the normal GitHub clone flow.
+Unified sources may include `codex:` frontmatter overrides and
+`::: harness <name> :::` body blocks for irreducible per-harness prose.
 
-If the entry has a singular `source:` field, skip step 3a and continue.
+Legacy `sources:` maps remain accepted for old catalog entries. If present,
+fetch each file in `sources:` separately and install the declared harness file
+directly. Do not add new dual-source agent entries.
 
 #### 3b. (Original Step 3) Marketplace Reference
 
@@ -490,29 +480,27 @@ After copying files to `<install_target>/`, update `.library.lock`. Do not modif
   git clone --depth 1 --branch <branch> git@github.com:<org>/<repo>.git "$tmp_dir"
   ```
 
-### 6.5: Compose Agent Body
+### 6.5: Build/Compose Agent Body
 
 > **Applies to agent entries only.** Skills, prompts, and guardrails are not composed.
 
-If the installed entry is an `agent` AND the fetched file's YAML frontmatter contains
-`agent_base_extends:` AND the value is NOT `from-scratch`:
+If the installed entry is an `agent` with a singular Markdown `source:`, run the
+unified builder for the target harness:
 
-1. Locate `scripts/compose-agent.py` in the library root (same directory as `library.yaml`).
+1. Locate `scripts/build-agent.py` in the Library platform checkout.
 
-2. Run the composer for the target harness:
+2. Run the builder:
    ```bash
-   # For Claude Code (default):
-   python3 <LIBRARY_ROOT>/scripts/compose-agent.py <fetched-agent-file>
-
-   # For Codex:
-   python3 <LIBRARY_ROOT>/scripts/compose-agent.py <fetched-agent-file> --harness=codex
+   python3 <LIBRARY_ROOT>/scripts/build-agent.py <fetched-agent-file> \
+     --harness=<claude|codex|all> \
+     --output-dir <cache-dir>
    ```
 
-3. **On success** (exit code 0): replace the body of the fetched agent file (everything
-   after the closing `---` of the frontmatter) with the composed output.
+3. **On success** (exit code 0): install the generated `<name>.md` and/or
+   `<name>.toml` artifact to the harness target directory.
 
-4. **On failure** (non-zero exit — missing Layer 1 or Layer 3):
-   - Warn the user: "Compose failed: <error>. Installing uncomposed agent body.
+4. **On failure** (non-zero exit - missing Layer 1, malformed directive, etc.):
+   - Warn the user: "Build failed: <error>. Installing uncomposed agent body.
      Run `/library sync` after installing the required base/model-standard."
    - Continue with the original fetched body (graceful degradation). Do NOT abort
      the install — an uncomposed agent still works; it just runs with its
@@ -520,12 +508,13 @@ If the installed entry is an `agent` AND the fetched file's YAML frontmatter con
      prepended. (Agents do not inherit the orchestrator / harness system prompt,
      so the persona body IS the agent system prompt.)
 
-5. **For Codex agents** (`.toml` format): write the composed body into the
-   `developer_instructions` field in the TOML file.
+Legacy dual-source Claude Markdown entries still use `compose-agent.py` for
+backward compatibility when `agent_base_extends:` is present and not
+`from-scratch`.
 
 6. Continue with Step 7 (Verify Installation).
 
-> **Idempotency**: The composer is deterministic given the same input files.
+> **Idempotency**: The builder/composer is deterministic given the same input files.
 > Re-running install produces the same composed body. If a Layer 1 (`cognovis-base`)
 > or Layer 3 (model-standard) source file changes, the tree-SHA in the lockfile
 > changes and `/library sync` re-composes automatically.

@@ -55,9 +55,10 @@ Composed agent system prompt =
     └── Model-specific overlays such as verbosity or tool-use tuning.
 ```
 
-Composition happens **once at install time** by the Library composer
-(`scripts/compose-agent.py`). The harness reads the fully-composed result
-as the agent's system prompt — there is no runtime composition.
+Composition happens **once at install time** by the Library builder
+(`scripts/build-agent.py`, backed by `scripts/compose-agent.py` for layer
+assembly). The harness reads the fully-composed result as the agent's system
+prompt — there is no runtime composition.
 
 **Catalog format.** Agent-bases live under `library.agent_bases` in `library.yaml`:
 

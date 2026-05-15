@@ -118,19 +118,25 @@ omit the `git checkout <source_commit>` pin and use the current branch HEAD inst
 
 > **Applies to agent entries only.** Skills, prompts, and guardrails are not composed.
 
-After re-pulling a fresh agent body in Step 4, check whether the agent requires composition
-before restoring bridge symlinks or updating the lockfile.
+After re-pulling a fresh agent body in Step 4, check whether the agent requires
+a unified build or legacy composition before restoring bridge symlinks or
+updating the lockfile.
 
 For each entry in `.library.lock` where `type` is `agent`:
 
-1. **Read the freshly re-pulled agent file** at `install_target/<name>.md` (or the `.toml`
-   sibling for Codex).
+1. **Read the freshly re-pulled agent file** at the cached Markdown source path.
 
-2. **Check the YAML frontmatter**: if `agent_base_extends:` is present AND the value is
-   NOT `from-scratch`, the agent requires composition.
+2. **For singular Markdown `source:` entries**, run the unified builder. It
+   emits Claude `.md` and Codex `.toml` artifacts from the same source:
+   ```bash
+   LIBRARY_ROOT="<path to the library platform checkout>"
+   BUILD_SCRIPT="${LIBRARY_ROOT}/scripts/build-agent.py"
+   python3 "${BUILD_SCRIPT}" "<cache>/<name>.md" --harness=<claude|codex|all> --output-dir "<cache>"
+   ```
 
-3. **Locate the composer script** in the library root (the same directory that contains
-   `library.yaml`):
+3. **For legacy dual-source Claude Markdown entries**, check the YAML
+   frontmatter: if `agent_base_extends:` is present AND the value is NOT
+   `from-scratch`, the agent requires composition. Locate the composer script:
    ```bash
    LIBRARY_ROOT="<path to the library checkout>"
    COMPOSE_SCRIPT="${LIBRARY_ROOT}/scripts/compose-agent.py"

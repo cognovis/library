@@ -3,7 +3,15 @@ name: agent-name
 description: Describe when and why to use this agent. Be specific with trigger keywords. Include phrases like "Use PROACTIVELY when..." or "Delegate when..." for better auto-delegation.
 tools: Read, Grep, Glob
 model: sonnet
+agent_base_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 color: blue
+codex:
+  model: gpt-5.4
+  model_reasoning_effort: medium
+  sandbox_mode: workspace-write
+  nickname_candidates:
+    - agent-name
 ---
 
 # Purpose

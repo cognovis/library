@@ -4,9 +4,10 @@ installers/agent.py — Agent install/remove logic.
 Agents are deployed as composed .md files for Claude Code and .toml files for
 Codex at the configured agent directories.
 
-Composition is performed by scripts/compose-agent.py if the agent frontmatter
-references agent_base_extends, golden_prompt_extends, or model_standards. If
-compose-agent.py is not found, the raw file is copied as-is.
+Single-source Markdown agents are built by scripts/build-agent.py into
+harness-native Claude .md and Codex .toml artifacts. Legacy dual-source agents
+remain supported; their Claude Markdown source is composed by scripts/compose-agent.py
+when it references agent_base_extends, golden_prompt_extends, or model_standards.
 """
 
 from __future__ import annotations
@@ -148,7 +149,9 @@ def install_agent(
 
     # 4. Materialize every requested harness target.
     installed: list[dict[str, Any]] = []
-    compose_script = repo_root / "scripts" / "compose-agent.py"
+    scripts_root = Path(__file__).resolve().parents[2]
+    compose_script = scripts_root / "compose-agent.py"
+    build_script = scripts_root / "build-agent.py"
 
     for target in targets:
         parsed = parse_source(target["source"])
@@ -166,15 +169,28 @@ def install_agent(
                 shutil.rmtree(str(cache_path))
             cache_path.mkdir(parents=True, exist_ok=True)
 
-            agent_filename = source_file.name
-            if not agent_filename.endswith(target["extension"]):
-                agent_filename = f"{agent_name}{target['extension']}"
+            source_copy = cache_path / source_file.name
+            shutil.copy2(str(source_file), str(source_copy))
 
-            cached_file = cache_path / agent_filename
-            shutil.copy2(str(source_file), str(cached_file))
+            if target.get("build_from_unified"):
+                cached_file = _try_build_agent(
+                    build_script=build_script,
+                    source_file=source_copy,
+                    output_dir=cache_path,
+                    harness=target["harness"],
+                    agent_name=agent_name,
+                )
+            else:
+                agent_filename = source_file.name
+                if not agent_filename.endswith(target["extension"]):
+                    agent_filename = f"{agent_name}{target['extension']}"
 
-            if target["harness"] == "claude_code" and compose_script.exists():
-                _try_compose(compose_script, cached_file, agent_name)
+                cached_file = cache_path / agent_filename
+                if source_copy != cached_file:
+                    shutil.copy2(str(source_copy), str(cached_file))
+
+                if target["harness"] == "claude_code" and compose_script.exists():
+                    _try_compose(compose_script, cached_file, agent_name)
 
             install_target = target["install_target"]
             install_target.parent.mkdir(parents=True, exist_ok=True)
@@ -273,6 +289,7 @@ def _resolve_agent_targets(
         source: str,
         extension: str,
         cache_suffix: str = "",
+        build_from_unified: bool = False,
     ) -> dict[str, Any]:
         base = _resolve_agent_base(catalog, prim, scope, repo_root, harness_name)
         return {
@@ -281,6 +298,7 @@ def _resolve_agent_targets(
             "extension": extension,
             "cache_name": f"{agent_name}{cache_suffix}",
             "install_target": base / f"{agent_name}{extension}",
+            "build_from_unified": build_from_unified,
         }
 
     if harness == "all" and sources_map:
@@ -294,6 +312,17 @@ def _resolve_agent_targets(
 
     if harness == "codex" and sources_map.get("codex"):
         return [target("codex", sources_map["codex"], ".toml", "-codex")], harness_missing
+
+    if not sources_map and entry.get("source"):
+        source = entry["source"]
+        if harness == "all":
+            return [
+                target("claude_code", source, ".md", build_from_unified=True),
+                target("codex", source, ".toml", "-codex", build_from_unified=True),
+            ], harness_missing
+        if harness == "codex":
+            return [target("codex", source, ".toml", "-codex", build_from_unified=True)], harness_missing
+        return [target("claude_code", source, ".md", build_from_unified=True)], harness_missing
 
     try:
         source = _resolve_agent_source(entry, harness)
@@ -432,6 +461,47 @@ def _try_compose(compose_script: Path, agent_file: Path, agent_name: str) -> Non
             agent_file.write_text(result.stdout)
     except (subprocess.SubprocessError, OSError):
         pass  # compose is optional
+
+
+def _try_build_agent(
+    *,
+    build_script: Path,
+    source_file: Path,
+    output_dir: Path,
+    harness: str,
+    agent_name: str,
+) -> Path:
+    """Run build-agent.py and return the harness-native built file."""
+    if not build_script.exists():
+        raise InstallError(
+            f"build-agent.py not found at {build_script}; cannot build unified agent '{agent_name}'."
+        )
+
+    build_harness = {"claude_code": "claude"}.get(harness, harness)
+    result = subprocess.run(
+        [
+            "python3",
+            str(build_script),
+            str(source_file),
+            f"--harness={build_harness}",
+            "--output-dir",
+            str(output_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise InstallError(
+            f"Failed to build unified agent '{agent_name}' for {harness}: {result.stderr.strip()}"
+        )
+
+    extension = ".toml" if build_harness == "codex" else ".md"
+    built_file = output_dir / f"{agent_name}{extension}"
+    if not built_file.exists():
+        raise InstallError(
+            f"Unified agent build for '{agent_name}' did not produce {built_file}."
+        )
+    return built_file
 
 
 def _fetch_agent_source(

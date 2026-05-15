@@ -1,36 +1,10 @@
 # Agent Frontmatter Reference
 
-Complete reference for all agent frontmatter fields in Claude Code.
+Complete reference for unified Library agent frontmatter.
 
 ## Structure
 
-### Split format (preferred)
-
-Agent directory with separate metadata and prompt files:
-
-```
-.claude/agents/<agent-name>/
-  agent.yml    # Metadata only (machine-parseable with yq)
-  prompt.md    # System prompt (pure markdown, no frontmatter)
-```
-
-**agent.yml:**
-```yaml
-name: agent-name
-description: When and why to use this agent
-tools: Tool1, Tool2, Tool3
-model: sonnet
-color: blue
-```
-
-**prompt.md:**
-```markdown
-# Agent system prompt content here
-
-... rest of agent instructions ...
-```
-
-### Single-file format (legacy)
+### Unified source format (preferred)
 
 Agent as a single Markdown file with YAML frontmatter:
 
@@ -40,13 +14,32 @@ name: agent-name
 description: When and why to use this agent
 tools: Tool1, Tool2, Tool3
 model: sonnet
+agent_base_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 color: blue
+codex:
+  model: gpt-5.4
+  model_reasoning_effort: medium
+  sandbox_mode: workspace-write
+  nickname_candidates:
+    - agent name
 ---
 
-# Agent system prompt content here
+Shared agent system prompt content here.
 
-... rest of agent instructions ...
+::: harness claude :::
+Claude-only details.
+::: end :::
+
+::: harness codex :::
+Codex-only details.
+::: end :::
 ```
+
+The Library builder emits `.claude/agents/<name>.md` and
+`.codex/agents/<name>.toml` from this one source. Split `agent.yml` +
+`prompt.md` directories are still accepted by the validator for older local
+Claude-only agents, but marketplace agents should use the unified source.
 
 ## Required Fields
 

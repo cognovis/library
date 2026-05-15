@@ -315,7 +315,7 @@ if [[ ! -f "${USE_MD}" ]]; then
     fail "use-md-unchanged/exists: cookbook/use.md not found"
 else
     # Verify Step 6.5 section heading exists
-    if grep -q "^### 6\.5: Compose Agent Body" "${USE_MD}"; then
+    if grep -q "^### 6\.5: Build/Compose Agent Body" "${USE_MD}"; then
         pass "use-md-unchanged/heading: Step 6.5 heading present"
     else
         fail "use-md-unchanged/heading: Step 6.5 heading missing or altered in cookbook/use.md"

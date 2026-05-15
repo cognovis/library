@@ -10,9 +10,9 @@ Tests:
     3. sources map with only claude key is valid
     4. sources map with only codex key is valid
   AK3:
-    5. library.yaml bead-orchestrator entry has sources: map
-    6. library.yaml session-close entry has sources: map
-    7. library.yaml wave-orchestrator entry has sources: map
+    5. library.yaml bead-orchestrator entry has one Markdown source
+    6. library.yaml session-close entry has one Markdown source
+    7. library.yaml wave-orchestrator entry has one Markdown source
     8. library.yaml still passes schema validation after sources migration
   AK4:
     9. install-hook.py accepts --harness flag
@@ -225,7 +225,7 @@ def test_agent_entry_sources_codex_only():
 
 
 # ---------------------------------------------------------------------------
-# AK3: library.yaml has sources: map for 3 Codex agents
+# AK3: library.yaml has one source for formerly dual-source agents
 # ---------------------------------------------------------------------------
 
 
@@ -236,46 +236,37 @@ def _find_agent_entry(library: dict, name: str) -> dict | None:
     return None
 
 
-def test_bead_orchestrator_uses_sources_map():
-    """library.yaml bead-orchestrator entry uses sources: map (not legacy source:)."""
+def test_bead_orchestrator_uses_single_source():
+    """library.yaml bead-orchestrator entry uses one Markdown source."""
     library = load_library()
     entry = _find_agent_entry(library, "bead-orchestrator")
     assert entry is not None, "bead-orchestrator not found in library.yaml agents"
-    assert "sources" in entry, (
-        f"bead-orchestrator should use sources: map, found: {list(entry.keys())}"
-    )
-    sources = entry["sources"]
-    assert "claude" in sources, f"sources.claude missing: {sources}"
-    assert "codex" in sources, f"sources.codex missing: {sources}"
-    print("PASS test_bead_orchestrator_uses_sources_map")
+    assert "source" in entry, f"bead-orchestrator should use source:, found: {list(entry.keys())}"
+    assert "sources" not in entry, "bead-orchestrator should not use dual sources"
+    assert entry["source"].endswith("/agents/bead-orchestrator.md")
+    print("PASS test_bead_orchestrator_uses_single_source")
 
 
-def test_session_close_uses_sources_map():
-    """library.yaml session-close entry uses sources: map."""
+def test_session_close_uses_single_source():
+    """library.yaml session-close entry uses one Markdown source."""
     library = load_library()
     entry = _find_agent_entry(library, "session-close")
     assert entry is not None, "session-close not found in library.yaml agents"
-    assert "sources" in entry, (
-        f"session-close should use sources: map, found: {list(entry.keys())}"
-    )
-    sources = entry["sources"]
-    assert "claude" in sources, f"sources.claude missing: {sources}"
-    assert "codex" in sources, f"sources.codex missing: {sources}"
-    print("PASS test_session_close_uses_sources_map")
+    assert "source" in entry, f"session-close should use source:, found: {list(entry.keys())}"
+    assert "sources" not in entry, "session-close should not use dual sources"
+    assert entry["source"].endswith("/agents/session-close.md")
+    print("PASS test_session_close_uses_single_source")
 
 
-def test_wave_orchestrator_uses_sources_map():
-    """library.yaml wave-orchestrator entry uses sources: map."""
+def test_wave_orchestrator_uses_single_source():
+    """library.yaml wave-orchestrator entry uses one Markdown source."""
     library = load_library()
     entry = _find_agent_entry(library, "wave-orchestrator")
     assert entry is not None, "wave-orchestrator not found in library.yaml agents"
-    assert "sources" in entry, (
-        f"wave-orchestrator should use sources: map, found: {list(entry.keys())}"
-    )
-    sources = entry["sources"]
-    assert "claude" in sources, f"sources.claude missing: {sources}"
-    assert "codex" in sources, f"sources.codex missing: {sources}"
-    print("PASS test_wave_orchestrator_uses_sources_map")
+    assert "source" in entry, f"wave-orchestrator should use source:, found: {list(entry.keys())}"
+    assert "sources" not in entry, "wave-orchestrator should not use dual sources"
+    assert entry["source"].endswith("/agents/wave-orchestrator.md")
+    print("PASS test_wave_orchestrator_uses_single_source")
 
 
 def test_library_yaml_still_valid_after_sources_migration():
@@ -429,9 +420,9 @@ if __name__ == "__main__":
         test_agent_entry_legacy_source_still_accepted,
         test_agent_entry_sources_claude_only,
         test_agent_entry_sources_codex_only,
-        test_bead_orchestrator_uses_sources_map,
-        test_session_close_uses_sources_map,
-        test_wave_orchestrator_uses_sources_map,
+        test_bead_orchestrator_uses_single_source,
+        test_session_close_uses_single_source,
+        test_wave_orchestrator_uses_single_source,
         test_library_yaml_still_valid_after_sources_migration,
         test_install_hook_accepts_harness_flag,
         test_install_hook_codex_dry_run_shows_sessionstart,

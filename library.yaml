@@ -1575,9 +1575,7 @@ library:
         context, implementation (Sonnet), review (Opus, 1 fix cycle), Codex adversarial,
         verification (Opus VETO), MoC, UAT, constraints, changelog, session-close.
         Does NOT close beads — session-close handles closing after merge+push.
-      sources:
-        claude: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
-        codex: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.toml
+      source: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
       requires:
         - "mcp:open-brain"
         - "skill:beads"
@@ -1736,9 +1734,7 @@ library:
         Orchestrates a full session close with double-merge strategy for parallel safety. Commits,
         generates changelog, version tags, extracts learnings, saves session summary, and pushes.
         Use when ending a session or releasing. Triggers on session-close, session close, release.
-      sources:
-        claude: https://github.com/cognovis/library-core/blob/main/agents/session-close.md
-        codex: https://github.com/cognovis/library-core/blob/main/agents/session-close.toml
+      source: https://github.com/cognovis/library-core/blob/main/agents/session-close.md
       requires:
         - "mcp:open-brain"
         - "skill:session-close"
@@ -1800,9 +1796,7 @@ library:
         Orchestrate parallel implementation of multiple beads across cmux panes in
         dependency-aware waves. Use when implementing a whole feature area or dispatching
         multiple beads at once.
-      sources:
-        claude: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.md
-        codex: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.toml
+      source: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.md
       requires:
         - agent:wave-monitor
         - agent:bead-orchestrator
