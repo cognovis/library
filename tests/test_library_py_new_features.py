@@ -874,6 +874,19 @@ class TestDependencyResolver:
         assert "chain-b" in names
         assert "chain-c" in names
 
+    def test_resolver_reinstalls_when_lockfile_target_missing(self, project_dir):
+        result = run_library("agent", "use", "parent-agent", "--json", cwd=project_dir)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+
+        installed_skill = project_dir / ".agents" / "skills" / "child-skill"
+        assert installed_skill.exists()
+        shutil.rmtree(installed_skill)
+        assert not installed_skill.exists()
+
+        result = run_library("agent", "use", "parent-agent", "--json", cwd=project_dir)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert installed_skill.exists(), "stale lockfile entry must not suppress reinstall"
+
 
 # ---------------------------------------------------------------------------
 # AK24: cycle detection

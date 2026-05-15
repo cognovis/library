@@ -1153,7 +1153,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/wave-dispatch/SKILL.md
       requires:
         - "standard:english-only"
-        - "agent:wave-orchestrator"
       tags:
         - origin:original
         - tier:core
