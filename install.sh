@@ -76,35 +76,53 @@ fi
 
 # --- Phase 2: harness skill/command entries --------------------------------
 # Detect each harness by the presence of its global dir. For every present
-# harness, create the slash-command/skill entry pointing back at this meta
-# checkout. Until the harness has its own protocol-specific surface file
-# (e.g. SKILL.md for Claude Code, .toml for Codex), we install the
-# SKILL.md as the universal Claude-style entry — Codex CLI accepts
-# agentskills.io SKILL.md too.
+# harness, create skill entries pointing back at this meta checkout.
+# Until the harness has its own protocol-specific surface file (e.g. SKILL.md
+# for Claude Code, .toml for Codex), we install SKILL.md directories as the
+# universal agentskills.io entry — Codex CLI accepts SKILL.md too.
 
-declare -a HARNESS_SKILL_TARGETS=(
-    "claude:${HOME}/.claude/skills/library"
-    "codex:${HOME}/.codex/skills/library"
-    "agents:${HOME}/.agents/skills/library"
-    "opencode:${HOME}/.opencode/skills/library"
+declare -a PLATFORM_SKILLS=(
+    "library:${META_ROOT}"
+    "skill-forge:${META_ROOT}/skills/skill-forge"
+    "agent-forge:${META_ROOT}/skills/agent-forge"
+    "standard-forge:${META_ROOT}/skills/standard-forge"
+    "script-forge:${META_ROOT}/skills/script-forge"
+    "hook-forge:${META_ROOT}/skills/hook-forge"
+)
+
+declare -a HARNESS_SKILL_ROOTS=(
+    "claude:${HOME}/.claude/skills"
+    "codex:${HOME}/.codex/skills"
+    "agents:${HOME}/.agents/skills"
+    "opencode:${HOME}/.opencode/skills"
 )
 
 echo ""
 echo "Installing harness skill entries:"
 
 installed_any=0
-for entry in "${HARNESS_SKILL_TARGETS[@]}"; do
+for entry in "${HARNESS_SKILL_ROOTS[@]}"; do
     harness="${entry%%:*}"
-    dest_dir="${entry#*:}"
-    parent="$(dirname "$(dirname "$dest_dir")")"   # e.g. ~/.claude
+    skill_root="${entry#*:}"
+    parent="$(dirname "$skill_root")"   # e.g. ~/.claude
 
     if [[ ! -d "$parent" ]]; then
         echo "  skip  $harness (no $parent)"
         continue
     fi
 
-    _link "$META_ROOT" "$dest_dir"
-    (( installed_any++ )) || true
+    for platform_skill in "${PLATFORM_SKILLS[@]}"; do
+        skill_name="${platform_skill%%:*}"
+        src_dir="${platform_skill#*:}"
+
+        if [[ ! -d "$src_dir" ]]; then
+            echo "  warn  $skill_name source missing at $src_dir"
+            continue
+        fi
+
+        _link "$src_dir" "$skill_root/$skill_name"
+        (( installed_any++ )) || true
+    done
 done
 
 if [[ "$installed_any" -eq 0 ]]; then
@@ -128,6 +146,7 @@ echo "Done."
 echo ""
 echo "Next steps:"
 echo "  - In any harness: /library list"
+echo "  - Platform forges are installed globally: skill-forge, agent-forge, standard-forge, script-forge, hook-forge"
 echo "  - To install a primitive transitively: /library use <name>"
 echo "  - To update the library itself: /library update library"
 echo ""

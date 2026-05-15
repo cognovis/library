@@ -61,14 +61,19 @@ def get_registered_names(library_data):
 
 # Expected cognovis skills (names as they appear in library.yaml)
 EXPECTED_COGNOVIS_SKILLS = {
-    "agent-forge", "angebotserstellung", "beads", "billing-reviewer", "binary-explorer",
+    "angebotserstellung", "beads", "billing-reviewer", "binary-explorer",
     "brand-forge", "bug-triage", "claude-md-pruner", "cmux", "cmux-browser", "cmux-markdown",
     "codex", "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
-    "hook-forge", "infra-principles", "inject-standards", "mail-send", "mira-aidbox",
+    "infra-principles", "inject-standards", "mail-send", "mira-aidbox",
     "nbj-audit", "op-credentials", "pencil", "people-query", "playwright-cli",
     "plugin-management", "portless", "project-context", "project-health", "project-setup",
     "prompt-refiner", "spec-developer", "standards", "summarize",
     "sync-standards", "system-prompt-audit", "token-cost", "ui-cli", "vision", "vision-author",
+}
+
+# Expected platform-owned skills
+EXPECTED_PLATFORM_SKILLS = {
+    "agent-forge", "hook-forge", "script-forge", "skill-forge", "standard-forge",
 }
 
 # Expected sussdorff skills
@@ -104,6 +109,7 @@ EXPECTED_STANDARDS = {
 }
 
 ALLOWED_SOURCE_REPOS = (
+    "cognovis/library",
     "cognovis/library-core",
     "sussdorff/library-core",
     "sussdorff/open-brain",
@@ -121,6 +127,14 @@ def test_cognovis_skills_registered():
     skills, _, _, _ = get_registered_names(library)
     missing = EXPECTED_COGNOVIS_SKILLS - skills
     assert not missing, f"Missing cognovis skills in library.yaml: {sorted(missing)}"
+
+
+def test_platform_skills_registered():
+    """All expected platform-owned skills must be registered in library.skills."""
+    library = load_library()
+    skills, _, _, _ = get_registered_names(library)
+    missing = EXPECTED_PLATFORM_SKILLS - skills
+    assert not missing, f"Missing platform skills in library.yaml: {sorted(missing)}"
 
 
 def test_sussdorff_skills_registered():

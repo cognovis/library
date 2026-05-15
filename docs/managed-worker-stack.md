@@ -52,7 +52,7 @@ are Standard sub-types, and `action_boundary` is frontmatter metadata.
 
 The action_boundary frontmatter block — declared on any side-effecting Skill or
 Agent — is what wires a primitive into the Judgment slot. See PRIMITIVES.md §1
-(Skill) and §3 (Agent) for the shape and `cognovis-core/skills/skill-forge/
+(Skill) and §3 (Agent) for the shape and `meta/skills/skill-forge/
 references/action-boundary.md` for the gate-question reference.
 
 ## Runtime-Portability Thesis

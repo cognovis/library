@@ -339,7 +339,9 @@ The canonical home of the library command is the `meta` repo
    `~/.opencode/`, `~/.pi/` — present-iff-directory-exists): create
    a slash-command/skill entry that shells to `~/.local/bin/library`.
    Concretely: `~/.claude/skills/library` → `meta/SKILL.md` (symlink);
-   Codex analogous.
+   Codex analogous. Platform-owned primitive forges are seeded the same
+   way: `skill-forge`, `agent-forge`, `standard-forge`, `script-forge`,
+   and `hook-forge` point at `meta/skills/<name>/`.
 4. After step 3, `library` works from any shell, and `/library`
    works from any present harness.
 5. **Self-hosted update path**: once installed, the library updates

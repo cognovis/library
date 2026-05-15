@@ -152,7 +152,7 @@ library:
         or asking about agent best practices, multi-agent pipelines, and model selection.
         MUST BE USED when the user says "create agent", "new subagent", "review agent",
         "audit agent", "agent vs skill", or asks about multi-agent architecture.
-      source: https://github.com/cognovis/library-core/blob/main/skills/agent-forge/SKILL.md
+      source: https://github.com/cognovis/library/blob/main/skills/agent-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
         - "standard:primitive-placement"
@@ -161,7 +161,7 @@ library:
       metadata:
         library:
           plane: dev
-          steward: cognovis-core
+          steward: library-platform
           gascity:
             exportable: false
       tags:
@@ -380,7 +380,7 @@ library:
         Create and manage Claude Code hooks across all 8 hook types. Use when adding automated
         behaviors, troubleshooting hooks, or learning best practices. Triggers on create hook,
         hook-forge, hook-creator, hooks, PreToolUse, PostToolUse, security hook.
-      source: https://github.com/cognovis/library-core/blob/main/skills/hook-forge/SKILL.md
+      source: https://github.com/cognovis/library/blob/main/skills/hook-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
         - "standard:primitive-placement"
@@ -389,7 +389,7 @@ library:
       metadata:
         library:
           plane: dev
-          steward: cognovis-core
+          steward: library-platform
           gascity:
             exportable: false
       tags:
@@ -610,7 +610,7 @@ library:
         a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill,
         check skill, audit skills, skill health check, fleet quality, skill creation,
         Gas City pack metadata for skills, script declarations, provider-neutral skill design.
-      source: https://github.com/cognovis/library-core/blob/main/skills/skill-forge/SKILL.md
+      source: https://github.com/cognovis/library/blob/main/skills/skill-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
         - "standard:primitive-placement"
@@ -619,7 +619,7 @@ library:
       metadata:
         library:
           plane: dev
-          steward: cognovis-core
+          steward: library-platform
           gascity:
             exportable: false
       tags:
@@ -631,7 +631,7 @@ library:
         Use when deterministic helper logic should be reusable across skills, agents, hooks,
         standards, commands, or Gas City packs. Triggers on create script, script-forge,
         first-class script, Python helper, pack command script, doctor script, formula script.
-      source: https://github.com/cognovis/library-core/blob/main/skills/script-forge/SKILL.md
+      source: https://github.com/cognovis/library/blob/main/skills/script-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
         - "standard:primitive-placement"
@@ -646,7 +646,7 @@ library:
       metadata:
         library:
           plane: dev
-          steward: cognovis-core
+          steward: library-platform
           gascity:
             exportable: false
       tags:
@@ -671,7 +671,7 @@ library:
         Use when creating standards, asking "is this a standard?", or wiring requires_standards
         into a skill. Triggers on create standard, new standard, scaffold standard,
         standard for skill, requires_standards, standard-forge.
-      source: https://github.com/cognovis/library-core/blob/main/skills/standard-forge/SKILL.md
+      source: https://github.com/cognovis/library/blob/main/skills/standard-forge/SKILL.md
       requires:
         - "standard:agentic-primitives"
         - "standard:primitive-placement"
@@ -680,7 +680,7 @@ library:
       metadata:
         library:
           plane: dev
-          steward: cognovis-core
+          steward: library-platform
           gascity:
             exportable: false
       tags:

@@ -108,6 +108,15 @@ Apply the profile from a project root with:
 python3 <LIBRARY_SKILL_DIR>/scripts/sync_project_tooling.py --profile consumer --verbose
 ```
 
+### Platform-Owned Primitive Forges
+
+Primitive forge skills live in this repository because they define the Library
+platform's own primitive contracts, templates, validators, and authoring rules.
+The platform-owned forges are `skill-forge`, `agent-forge`, `standard-forge`,
+`script-forge`, and `hook-forge` under `skills/`. `install.sh` installs these
+forges into each detected harness alongside the `library` skill so they are
+available on a fresh platform bootstrap.
+
 ### Typed Dependencies
 
 Dependencies use typed references to avoid name collisions:
