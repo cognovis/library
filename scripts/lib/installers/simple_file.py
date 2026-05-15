@@ -21,6 +21,11 @@ from typing import Any, Optional
 
 from ..cache import compute_cache_path
 from ..catalog import lookup_entry
+from ..collisions import (
+    collision_result,
+    has_source_collision,
+    skip_collision_result,
+)
 from ..errors import InstallError, SourceError
 from ..lockfile import (
     compute_checksum,
@@ -46,6 +51,9 @@ def install_simple_file(
     dry_run: bool = False,
     harness: str = "all",
     install_mode: str = "vendor",
+    replace: bool = False,
+    merge_into: str | None = None,
+    skip: bool = False,
 ) -> dict[str, Any]:
     """Generic install for prompt, script, model-standard, golden-prompt.
 
@@ -58,6 +66,9 @@ def install_simple_file(
         dry_run: If True, return planned ops without mutating.
         harness: Target harness (used for determining install sub-path for prompts).
         install_mode: 'vendor' (default) or 'symlink'.
+        replace: Overwrite an existing prompt install from a different source.
+        merge_into: Canonical repo that should receive merged prompt content.
+        skip: Leave an existing prompt unchanged when a source collision exists.
 
     Returns:
         Operation result dict.
@@ -112,6 +123,39 @@ def install_simple_file(
         install_filename = f"{item_name}.md"
 
     install_target = canonical_base / install_filename
+    lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+    lock_data = load_lockfile(lockfile_path)
+
+    if primitive_name == "prompt" and not dry_run:
+        collides, existing = has_source_collision(
+            lock_data=lock_data,
+            name=item_name,
+            primitive_type=primitive_name,
+            install_target=install_target,
+            incoming_source=source_str,
+            incoming_marketplace=marketplace,
+        )
+        if collides and skip:
+            return skip_collision_result(
+                primitive_type=primitive_name,
+                name=item_name,
+                install_target=install_target,
+            )
+        if collides and merge_into:
+            return skip_collision_result(
+                primitive_type=primitive_name,
+                name=item_name,
+                install_target=install_target,
+                merge_into=merge_into,
+            )
+        if collides and not replace:
+            return collision_result(
+                primitive_type=primitive_name,
+                name=item_name,
+                install_target=install_target,
+                existing=existing,
+                incoming_source=source_str,
+            )
 
     # 4. Dry-run mode
     if dry_run:
@@ -127,7 +171,6 @@ def install_simple_file(
                 "details": f"install {primitive_name} '{item_name}' to {install_target}",
             },
         ]
-        lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append({
             "operation": "write_lockfile",
             "path": str(lockfile_path),
@@ -197,8 +240,6 @@ def install_simple_file(
             install_mode=install_mode,
             license_id=entry.get("license", "unknown"),
         )
-        lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-        lock_data = load_lockfile(lockfile_path)
         upsert_entry(lock_data, lockfile_entry)
         save_lockfile(lockfile_path, lock_data)
 

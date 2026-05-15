@@ -19,6 +19,11 @@ from typing import Any, Optional
 
 from ..cache import compute_cache_path, materialize_cache, plan_cache_writes
 from ..catalog import lookup_entry
+from ..collisions import (
+    collision_result,
+    has_source_collision,
+    skip_collision_result,
+)
 from ..errors import InstallError, NotFoundError, SourceError
 from ..lockfile import (
     compute_checksum,
@@ -85,6 +90,9 @@ def install_agent(
     scope: str = "project",
     dry_run: bool = False,
     harness: str = "all",
+    replace: bool = False,
+    merge_into: str | None = None,
+    skip: bool = False,
 ) -> dict[str, Any]:
     """Install an agent from the catalog.
 
@@ -95,6 +103,9 @@ def install_agent(
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
         harness: Target harness ('claude_code', 'codex', 'opencode', 'all').
+        replace: Overwrite an existing install from a different source.
+        merge_into: Canonical repo that should receive merged content.
+        skip: Leave an existing install unchanged when a source collision exists.
 
     Returns:
         Operation result dict.
@@ -117,6 +128,40 @@ def install_agent(
     )
     marketplace = resolve_marketplace(catalog, entry)
 
+    lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+    lock_data = load_lockfile(lockfile_path)
+    if not dry_run:
+        for target in targets:
+            collides, existing = has_source_collision(
+                lock_data=lock_data,
+                name=agent_name,
+                primitive_type="agent",
+                install_target=target["install_target"],
+                incoming_source=target["source"],
+                incoming_marketplace=marketplace,
+            )
+            if collides and skip:
+                return skip_collision_result(
+                    primitive_type="agent",
+                    name=agent_name,
+                    install_target=target["install_target"],
+                )
+            if collides and merge_into:
+                return skip_collision_result(
+                    primitive_type="agent",
+                    name=agent_name,
+                    install_target=target["install_target"],
+                    merge_into=merge_into,
+                )
+            if collides and not replace:
+                return collision_result(
+                    primitive_type="agent",
+                    name=agent_name,
+                    install_target=target["install_target"],
+                    existing=existing,
+                    incoming_source=target["source"],
+                )
+
     # 3. Dry-run mode.
     if dry_run:
         ops: list[dict[str, Any]] = []
@@ -131,7 +176,6 @@ def install_agent(
                     bridge_path=None,
                 )
             )
-        lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append({
             "operation": "write_lockfile",
             "path": str(lockfile_path),

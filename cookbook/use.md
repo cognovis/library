@@ -302,12 +302,32 @@ The resolution chain is `.claude/skills/<name>` → `.agents/skills/<name>`.
 Claude Code follows the bridge; Codex reads `.agents/skills/<name>` directly.
 Layer-B remains a per-machine resolver cache, not a runtime path.
 
-#### 5d. Name Collision Check (MANDATORY for skill installs)
+#### 5d. Name Collision Check (MANDATORY for skill, agent, and prompt installs)
 
 > **Policy reference**: `docs/policy/name-collision.md` (CL-b4o). Run this
-> check whenever installing a skill. Use the **resolved paths from Step 5b** —
-> do NOT hard-code `.agents/skills/` or `.claude/skills/`; the user may have
-> specified global or custom paths.
+> check whenever installing a skill, agent, or prompt. Use the **resolved paths
+> from Step 5b** — do NOT hard-code `.agents/skills/`, `.claude/skills/`, or
+> `.claude/agents/`; the user may have specified global or custom paths.
+
+**Agents and prompts: cross-marketplace collision rule**
+
+Agents and prompts install to flat target filenames. Before writing, check
+whether the resolved install target already exists and the lockfile records the
+same name from a different source or marketplace.
+
+If an agent or prompt with the same name already exists at the target from a
+different source, stop and present exactly these resolution options:
+
+1. `--replace` — overwrite the existing install.
+2. `--merge-into=<canonical-repo>` — skip installing the new source; merge the
+   content into the canonical repo and reinstall from that canonical source.
+3. `--skip` — leave the existing install and lockfile unchanged.
+
+Same-marketplace refreshes are unaffected and remain last-write-wins. An
+existing target without a lockfile entry is treated as an unknown source and
+requires one of the explicit options above.
+
+**Skills: canonical and bridge collision rule**
 
 Detect the current state of canonical and Claude-bridge paths before writing:
 

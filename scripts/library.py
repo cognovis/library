@@ -157,6 +157,26 @@ def build_parser() -> argparse.ArgumentParser:
             default="all",
             help="Target harness (default: all)",
         )
+        collision_group = use_p.add_mutually_exclusive_group()
+        collision_group.add_argument(
+            "--replace",
+            action="store_true",
+            help="Overwrite an existing agent or prompt install from a different source",
+        )
+        collision_group.add_argument(
+            "--merge-into",
+            metavar="CANONICAL_REPO",
+            default=None,
+            help=(
+                "Skip install and record that the new agent or prompt content "
+                "should be merged into the canonical repo"
+            ),
+        )
+        collision_group.add_argument(
+            "--skip",
+            action="store_true",
+            help="Leave an existing agent or prompt install unchanged on collision",
+        )
 
         # remove
         remove_p = verb_sub.add_parser("remove", help="Remove an installed entry")
@@ -433,8 +453,10 @@ def _install_with_deps(
 
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
-        # Skip if already installed (lockfile-aware)
-        if is_already_installed(dep_name, repo_root, scope, dep_prim):
+        # Skip already-installed dependencies, but still run the requested
+        # entry so refreshes and collision checks happen at the install target.
+        is_requested_entry = dep_prim == primitive and dep_name == name
+        if not is_requested_entry and is_already_installed(dep_name, repo_root, scope, dep_prim):
             continue
         install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
         rc = _dispatch_use(
@@ -578,6 +600,9 @@ def _use_agent(
             scope=scope,
             dry_run=dry_run,
             harness=harness,
+            replace=getattr(args, "replace", False),
+            merge_into=getattr(args, "merge_into", None),
+            skip=getattr(args, "skip", False),
         )
         if use_json:
             print_json(result)
@@ -619,6 +644,9 @@ def _use_simple_file(
             dry_run=dry_run,
             harness=harness,
             install_mode=install_mode,
+            replace=getattr(args, "replace", False),
+            merge_into=getattr(args, "merge_into", None),
+            skip=getattr(args, "skip", False),
         )
         if use_json:
             print_json(result)
@@ -728,6 +756,8 @@ def _print_human_result(result: dict) -> None:
         print(f"Blocked: {result.get('reason', '')}")
         if result.get("suggestion"):
             print(f"  Suggestion: {result['suggestion']}")
+        for option in result.get("options", []):
+            print(f"  Option: {option}")
     elif status == "error":
         print(f"Error: {result.get('message', 'unknown error')}", file=sys.stderr)
     else:

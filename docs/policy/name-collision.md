@@ -13,7 +13,13 @@
 ## Quick Reference: Decision Tree
 
 ```
-A skill with this name already exists somewhere. What do I do?
+A skill, agent, or prompt with this name already exists somewhere. What do I do?
+
+Is this an agent or prompt already installed at the target from a different source?
+ └─ YES → Cross-marketplace agent/prompt collision (Decision 8):
+           Stop. Do not silently overwrite.
+           Choose --replace, --merge-into=<canonical-repo>, or --skip.
+ └─ NO  → Continue with the skill-specific checks below when installing a skill.
 
 Is the collision within the same harness (same path prefix)?
  └─ YES → Same-harness collision (Decision 1):
@@ -452,6 +458,40 @@ outside the Library's install path.
 **Evidence level**: INFERRED — Anthropic's force-enable behavior is not publicly
 documented in detail. The policy above is conservative (treat managed as higher
 authority). Revisit when vendor docs become available.
+
+---
+
+## Decision 8: Cross-Marketplace Agent (and Prompt) Collisions — Combine, Don't Shadow
+
+Two marketplaces shipping an agent (or prompt) with the same name is an
+anti-pattern: if the name is the same, the agent is doing the same job and the
+two versions should be reconciled into a single canonical version, not silently
+shadowed.
+
+**Rule**: `/library use <agent>` MUST fail loudly when an agent of the same name
+already exists at the install target from a different source. The user is
+presented three resolution options:
+
+1. `--replace` — overwrite (use only when intentionally swapping).
+2. `--merge-into=<canonical-repo>` — fold the new version's content into the
+   existing canonical repo; the installer then re-installs from the canonical
+   source only.
+3. `--skip` — leave existing install; do not register the new source for this
+   name.
+
+Same-marketplace re-install (CL-83q tree-SHA cache) is unaffected and continues
+to use last-write-wins.
+
+**Canonical homes for orchestrator-family agents** (informational, by current
+convention; not enforced by tooling): `cognovis-core` owns
+`bead-orchestrator`, `wave-orchestrator`, `session-close`, `review-agent`,
+`verification-agent`, `quick-fix`, `doc-changelog-updater`,
+`feature-doc-updater`, `wave-monitor`, `judge-default`. `sussdorff-core` MUST
+NOT ship same-named alternatives — if a personal customization is needed,
+contribute upstream to cognovis-core or fork into a differently-named agent.
+
+The same rule applies to prompts because they share the flat install-target
+model. It does not apply to skills (covered by Decisions 1-7) or standards.
 
 ---
 
