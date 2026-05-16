@@ -3,8 +3,8 @@
 test_personal_migration.py — Tests for CL-4mt: personal artefacts in sussdorff/library-core
 
 Tests:
-  1. All 13 personal artefacts exist at correct skeleton paths in sussdorff/library-core
-  2. Each SKILL.md / AGENT.md has frontmatter with description: field
+  1. All 12 personal skills exist at correct skeleton paths in sussdorff/library-core
+  2. Each SKILL.md has frontmatter with description: field
   3. mm-cli smoke: SKILL.md accessible and has correct frontmatter (installable)
   4. home-infra smoke: SKILL.md accessible and has correct frontmatter (installable)
   5. Migration commit exists on origin/main of sussdorff/library-core
@@ -22,7 +22,7 @@ import pytest
 
 REPO = "sussdorff/library-core"
 
-# All 13 artefacts: (path_in_repo, display_name)
+# All current personal skills: (path_in_repo, display_name)
 EXPECTED_SKILL_FILES = [
     ("skills/business/ai-readiness/SKILL.md", "ai-readiness"),
     ("skills/business/amazon/SKILL.md", "amazon"),
@@ -37,8 +37,6 @@ EXPECTED_SKILL_FILES = [
     ("skills/infra/paperless-cli/SKILL.md", "paperless-cli"),
     ("skills/infra/piler-cli/SKILL.md", "piler-cli"),
 ]
-
-AGENT_FILE = "agents/home.md"
 
 MIGRATION_COMMIT_PREFIX = "feat(CL-4mt):"
 
@@ -78,7 +76,7 @@ def get_frontmatter(content: str) -> str:
 
 
 class TestAllArtefactsExist:
-    """Test 1: All 13 PERSONAL artefacts exist at correct skeleton paths."""
+    """Test 1: All PERSONAL skills exist at correct skeleton paths."""
 
     @pytest.mark.parametrize("path,name", EXPECTED_SKILL_FILES)
     def test_skill_file_exists(self, path, name):
@@ -87,15 +85,9 @@ class TestAllArtefactsExist:
         assert data["type"] == "file", f"{name} SKILL.md is not a file: {data}"
         assert data["size"] > 0, f"{name} SKILL.md is empty"
 
-    def test_agent_home_exists(self):
-        """home.md agent must exist at .claude/agents/home.md."""
-        data = gh_api(AGENT_FILE)
-        assert data["type"] == "file", f"home.md is not a file: {data}"
-        assert data["size"] > 0, "home.md is empty"
-
 
 class TestFrontmatterPreserved:
-    """Test 2: Each SKILL.md / AGENT.md has frontmatter with description: field."""
+    """Test 2: Each SKILL.md has frontmatter with description: field."""
 
     @pytest.mark.parametrize("path,name", EXPECTED_SKILL_FILES)
     def test_skill_has_description(self, path, name):
@@ -111,21 +103,6 @@ class TestFrontmatterPreserved:
         )
         assert "description:" in frontmatter, (
             f"{name}: SKILL.md missing 'description:' field in frontmatter"
-        )
-
-    def test_agent_has_description(self):
-        """Agent home.md must have description: in its YAML frontmatter block."""
-        data = gh_api(AGENT_FILE)
-        content = decode_content(data)
-        assert content.startswith("---"), (
-            "home.md does not start with YAML frontmatter (---)"
-        )
-        frontmatter = get_frontmatter(content)
-        assert frontmatter, (
-            "home.md has no parseable YAML frontmatter block"
-        )
-        assert "description:" in frontmatter, (
-            "home.md missing 'description:' field in frontmatter"
         )
 
 
