@@ -1,18 +1,18 @@
 # Agent Patterns & Examples
 
-Real-world patterns for Claude Code agents. Choose the pattern that fits your use case, then compose into pipelines.
+Real-world patterns for Library agents. Choose the pattern that fits your use case, then compose into pipelines.
 
 ## Pattern Summary
 
-| Pattern | Model | Tools | Use case |
+| Pattern | Model | Capabilities | Use case |
 |---------|-------|-------|----------|
-| Code Reviewer | sonnet | Read, Grep, Glob | Isolated analysis, read-only |
-| Test Runner | haiku | Bash, Read, Grep, Edit | Fast execution, fix feedback |
-| Security Auditor | opus | Read, Grep, Glob, WebFetch | Critical security, CVSS scoring |
-| Feature Implementer | sonnet | Read, Write, Edit, Bash, Grep, Glob | Full dev toolkit |
-| Task Orchestrator | sonnet | Agent, Read | Decomposes work, coordinates specialists |
-| Meta-Agent | opus | Write, Read, WebFetch, Grep | Creates other agents |
-| API Researcher | sonnet | Read, WebFetch, WebSearch, Grep | External integrations |
+| Code Reviewer | standard | read_files, inspect_git | Isolated analysis, read-only |
+| Test Runner | economy | read_files, run_shell, edit_files | Fast execution, fix feedback |
+| Security Auditor | premium | read_files, search_web | Critical security, CVSS scoring |
+| Feature Implementer | standard | read_files, write_files, edit_files, run_shell | Full dev toolkit |
+| Task Orchestrator | standard | read_files, spawn_subagents | Decomposes work, coordinates specialists |
+| Meta-Agent | premium | read_files, write_files, search_web | Creates other agents |
+| API Researcher | standard | read_files, search_web | External integrations |
 
 ## Single-Purpose Agent (Complete Example)
 
@@ -20,8 +20,14 @@ Real-world patterns for Claude Code agents. Choose the pattern that fits your us
 ---
 name: code-reviewer
 description: Reviews code for security vulnerabilities, performance issues, and best practices. Use proactively when code changes are made or user requests code review.
-tools: Read, Grep, Glob
-model: sonnet
+capabilities:
+  - read_files
+  - inspect_git
+model:
+  tier: standard
+  reasoning: high
+  context: large
+  cost_priority: balanced
 color: blue
 ---
 
@@ -50,7 +56,7 @@ Expert code reviewer for security, performance, and best practices.
 - Recommendation: [Approve/Request Changes/Reject]
 ```
 
-Key characteristics: read-only tools (safe), sonnet (needs judgment), structured output.
+Key characteristics: read-only capabilities, standard tier with high reasoning, structured output.
 
 ## Multi-Agent Pipeline Pattern
 
@@ -59,18 +65,18 @@ Three stages with clear handoffs and status transitions:
 ```yaml
 # Stage 1: PM Specification → sets status READY_FOR_ARCH
 name: pm-spec
-tools: Read, Write, WebFetch
-model: sonnet
+capabilities: [read_files, write_files, search_web]
+model: {tier: standard, reasoning: medium, context: large, cost_priority: balanced}
 
 # Stage 2: Architect Review → sets status READY_FOR_BUILD
 name: architect-review
-tools: Read, Write, Grep, Glob
-model: opus
+capabilities: [read_files, write_files]
+model: {tier: premium, reasoning: high, context: large, cost_priority: quality-first}
 
 # Stage 3: Implementation → sets status DONE
 name: implementer-tester
-tools: Read, Write, Edit, Bash, Grep, Glob
-model: sonnet
+capabilities: [read_files, write_files, edit_files, run_shell]
+model: {tier: standard, reasoning: medium, context: large, cost_priority: balanced}
 ```
 
 Key principles:
@@ -85,8 +91,14 @@ Key principles:
 ---
 name: task-orchestrator
 description: Decomposes complex tasks and coordinates specialized agents. Use PROACTIVELY for multi-step workflows requiring coordination.
-tools: Agent, Read
-model: sonnet
+capabilities:
+  - read_files
+  - spawn_subagents
+model:
+  tier: standard
+  reasoning: medium
+  context: large
+  cost_priority: balanced
 color: purple
 ---
 
@@ -110,8 +122,8 @@ Hybrid: spec → parallel(backend, frontend) → integration-test
 ```yaml
 name: meta-agent
 description: Generates complete Claude Code agent configurations from user descriptions. Use when creating new agents.
-tools: Write, Read, WebFetch, Grep
-model: opus
+capabilities: [read_files, write_files, search_web]
+model: {tier: premium, reasoning: high, context: large, cost_priority: quality-first}
 color: cyan
 ```
 
@@ -121,26 +133,29 @@ Meta-agents need opus (complex meta-reasoning) and Write access to create agent 
 
 | Task Type | Model | Reason |
 |-----------|-------|--------|
-| Routine/deterministic | haiku | Fast, cost-effective |
-| Moderate complexity | sonnet | Balanced judgment |
-| Complex reasoning / critical | opus | Full reasoning, high stakes |
+| Routine/deterministic | economy | Fast, cost-effective |
+| Moderate complexity | standard | Balanced judgment |
+| Complex reasoning / critical | premium | Full reasoning, high stakes |
 
-Multi-model cost optimization: haiku workers + sonnet orchestrator = 50-70% cost reduction vs all-sonnet.
+Multi-model cost optimization: economy workers plus a standard orchestrator can reduce cost versus using the same model tier everywhere.
 
-## Tool Access Patterns
+## Capability Access Patterns
 
 ```yaml
 # Read-only analysis
-tools: Read, Grep, Glob
+capabilities: [read_files]
 
 # Research
-tools: Read, WebFetch, WebSearch, Grep, Glob
+capabilities: [read_files, search_web]
+
+# SearXNG-only research
+capabilities: [search_searxng, use_skills]
 
 # Implementation
-tools: Read, Write, Edit, Bash, Grep, Glob
+capabilities: [read_files, write_files, edit_files, run_shell]
 
 # Orchestration
-tools: Agent, Read
+capabilities: [read_files, spawn_subagents]
 ```
 
-Always use minimal tools for the agent's purpose — reduces attack surface and keeps agents focused.
+Always use minimal capabilities for the agent's purpose -- this reduces attack surface and keeps agents focused.

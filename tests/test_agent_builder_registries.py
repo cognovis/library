@@ -59,5 +59,9 @@ def test_capabilities_yaml_validates_against_schema() -> None:
         "spawn_subagents",
         "query_memory",
         "search_web",
+        "search_searxng",
+        "use_skills",
+        "query_executive_library",
+        "refine_prompts",
         "browser",
     } <= set(capability_names)

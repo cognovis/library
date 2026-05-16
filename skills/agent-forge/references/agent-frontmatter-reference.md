@@ -120,11 +120,57 @@ description: Reviews stuff     # Not specific enough
 
 ## Optional Fields
 
-### `tools` (Optional)
+### `capabilities` (Optional, recommended)
+
+**Type:** YAML list
+**Default:** None
+**Purpose:** Declare what the agent must be able to do in harness-neutral terms.
+
+New and migrated marketplace agents should use `capabilities:` instead of raw
+Claude `tools:`. The Library builder projects capability names to per-harness
+tools, MCP bindings, and Codex sandbox settings.
+
+```yaml
+capabilities:
+  - read_files
+  - run_shell
+  - query_memory
+```
+
+Use only names registered in `capabilities.yaml`. If an existing agent cannot be
+expressed with the closed vocabulary, add one capability with Claude and Codex
+bindings before migrating that agent.
+
+Common patterns:
+
+```yaml
+# Read-only agent
+capabilities: [read_files]
+
+# Implementation agent
+capabilities: [read_files, write_files, edit_files, run_shell]
+
+# Review agent that inspects diffs
+capabilities: [read_files, inspect_git]
+
+# SearXNG-only research agent
+capabilities: [search_searxng, use_skills]
+
+# Orchestrator agent
+capabilities: [read_files, run_shell, spawn_subagents, manage_beads]
+```
+
+---
+
+### `tools` (Optional, legacy)
 
 **Type:** Comma-separated string
 **Default:** All available tools (if omitted)
-**Purpose:** Restrict which tools the agent can access
+**Purpose:** Restrict which Claude Code tools the agent can access.
+
+This is a Claude-specific legacy field for marketplace agents. Keep it only for
+repo-local Claude-only agents or explicit escape hatches. For new or migrated
+Library marketplace agents, use `capabilities:` instead.
 
 **Rules:**
 - Comma-separated list (e.g., `Read, Write, Grep`)
@@ -141,14 +187,13 @@ description: Reviews stuff     # Not specific enough
 - `Glob` - Find files by pattern
 - `WebFetch` - Fetch web content
 - `WebSearch` - Search the web
-- `Task` - Launch other agents
+- `Agent` - Launch other agents
 - `Skill` - Invoke skills
-- `TodoWrite` - Manage todo lists
 - `AskUserQuestion` - Ask clarifying questions
 - `NotebookEdit` - Edit Jupyter notebooks
 - Plus any MCP tools installed
 
-**Common patterns:**
+**Legacy Claude-only patterns:**
 
 ```yaml
 # Read-only agent (research, analysis)
@@ -161,7 +206,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 tools: Read, Grep, Glob
 
 # Orchestrator agent (delegates to others)
-tools: Read, Task, TodoWrite
+tools: Read, Agent
 
 # Documentation agent
 tools: Read, Write, Grep, Glob, WebFetch
@@ -173,17 +218,31 @@ tools: Read, Bash, Grep, Glob, Edit
 # Simply omit the tools field entirely
 ```
 
-**Best practice:** Start with minimal tools, add more only if needed. Token-efficient agents with focused tool sets are more reliable.
+**Best practice:** Start with minimal capabilities, add more only if needed.
+Token-efficient agents with focused access are more reliable.
 
 ---
 
 ### `model` (Optional)
 
-**Type:** String
-**Default:** `sonnet` (if omitted)
-**Purpose:** Specify which Claude model to use
+**Type:** Mapping preferred; scalar aliases are legacy
+**Default:** `inherit` in the builder if omitted
+**Purpose:** Specify model requirements that resolve per harness
 
-**Valid values:**
+Preferred marketplace shape:
+
+```yaml
+model:
+  tier: standard
+  reasoning: high
+  context: large
+  cost_priority: balanced
+```
+
+The builder resolves this to a concrete model per harness and auto-loads the
+Layer 3 model standard for the resolved model ID.
+
+**Legacy scalar values:**
 - `haiku` - Claude Haiku 4.5 (fastest, most cost-effective)
 - `sonnet` - Claude Sonnet 4.5 (balanced, default)
 - `opus` - Claude Opus 4 (most capable, complex reasoning)
@@ -242,17 +301,29 @@ model: haiku
 
 # Orchestrator
 name: task-orchestrator
-model: sonnet
-tools: Task, TodoWrite
+model:
+  tier: standard
+  reasoning: high
+  context: large
+  cost_priority: balanced
+capabilities: [read_files, run_shell, spawn_subagents]
 
 # Workers
 name: test-runner
-model: haiku
-tools: Bash, Read
+model:
+  tier: economy
+  reasoning: medium
+  context: medium
+  cost_priority: cheapest
+capabilities: [read_files, run_shell]
 
 name: linter
-model: haiku
-tools: Bash, Read, Edit
+model:
+  tier: economy
+  reasoning: medium
+  context: medium
+  cost_priority: cheapest
+capabilities: [read_files, edit_files, run_shell]
 ```
 
 ---
@@ -329,8 +400,13 @@ Provide clear, actionable feedback.
 ---
 name: code-reviewer
 description: Reviews code for security vulnerabilities, performance issues, and best practices. Use proactively when code changes are made or user requests review.
-tools: Read, Grep, Glob
-model: sonnet
+model:
+  tier: standard
+  reasoning: high
+  context: large
+  cost_priority: balanced
+capabilities:
+  - read_files
 color: blue
 ---
 
@@ -356,8 +432,15 @@ description: |
   Generates complete Claude Code sub-agent configuration from user descriptions.
   Use this to create new agents. Use PROACTIVELY when the user asks to create
   a new sub-agent or mentions needing specialized automation.
-tools: Write, Read, WebFetch, Grep, Glob
-model: opus
+model:
+  tier: premium
+  reasoning: high
+  context: large
+  cost_priority: balanced
+capabilities:
+  - read_files
+  - write_files
+  - search_web
 color: cyan
 ---
 
@@ -373,7 +456,7 @@ Transform user prompts into complete, production-ready sub-agent configuration f
 3. **Generate Agent Name:** Create concise, kebab-case identifier
 4. **Select Visual Identity:** Choose appropriate color
 5. **Craft Delegation Description:** Write clear, action-oriented description
-6. **Determine Required Tools:** Identify minimal tool set needed
+6. **Determine Required Capabilities:** Identify minimal capability set needed
 7. **Develop System Prompt:** Create comprehensive instructions
 8. **Define Workflow:** Establish numbered action sequence
 9. **Document Best Practices:** List domain-specific best practices
@@ -393,8 +476,14 @@ Transform user prompts into complete, production-ready sub-agent configuration f
 ---
 name: api-researcher
 description: Researches API documentation and external services. Use when integrating with new APIs or external services.
-tools: Read, WebFetch, WebSearch, Grep, Glob
-model: sonnet
+model:
+  tier: standard
+  reasoning: high
+  context: large
+  cost_priority: balanced
+capabilities:
+  - read_files
+  - search_web
 color: purple
 ---
 
@@ -417,8 +506,15 @@ Specialized researcher for API documentation, service integration patterns, and 
 ---
 name: test-runner
 description: Runs tests and analyzes failures. Use when implementing features, fixing bugs, or user requests test execution.
-tools: Bash, Read, Grep, Glob, Edit
-model: haiku
+model:
+  tier: economy
+  reasoning: medium
+  context: medium
+  cost_priority: cheapest
+capabilities:
+  - read_files
+  - edit_files
+  - run_shell
 color: green
 ---
 
@@ -445,8 +541,8 @@ Before deploying an agent, verify:
 - [ ] `name` is unique across all agents
 - [ ] `description` is specific and includes trigger keywords
 - [ ] `description` mentions when to use the agent
-- [ ] `tools` (if specified) includes only necessary tools
-- [ ] `model` (if specified) is appropriate for task complexity
+- [ ] `capabilities` includes only necessary capabilities
+- [ ] `model` requirement block is appropriate for task complexity
 - [ ] `color` (if specified) is from valid set
 - [ ] YAML syntax is valid (no tabs, proper indentation)
 - [ ] Frontmatter closes with `---`
@@ -466,22 +562,28 @@ description: Reviews Python code for PEP-8 compliance and common bugs. Use when 
 
 ### Mistake 2: Too many tools
 ```yaml
-# BAD - grants everything explicitly
-tools: Read, Write, Edit, Bash, Grep, Glob, WebFetch, WebSearch, Task, Skill, TodoWrite
+# BAD - grants too many capabilities for the task
+capabilities: [read_files, write_files, edit_files, run_shell, search_web, use_skills, spawn_subagents]
 
 # GOOD - minimal set
-tools: Read, Grep, Glob
+capabilities: [read_files]
 ```
 
 ### Mistake 3: Wrong model for task
 ```yaml
-# BAD - using Opus for simple task (expensive!)
+# BAD - using premium tier for simple task
 name: code-formatter
-model: opus
+model:
+  tier: premium
+  reasoning: high
 
-# GOOD - using Haiku for deterministic task
+# GOOD - using economy tier for deterministic task
 name: code-formatter
-model: haiku
+model:
+  tier: economy
+  reasoning: medium
+  context: medium
+  cost_priority: cheapest
 ```
 
 ### Mistake 4: Inconsistent naming

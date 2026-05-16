@@ -147,13 +147,13 @@ Agents coordinate sequentially:
 - Can bundle scripts that execute independently
 
 ### Agents
-- **Configurable tool access** via `tools:` frontmatter
-- Grant only necessary tools for security/focus
-- Can omit `tools:` field to inherit all tools
+- **Configurable capability access** via `capabilities:` frontmatter
+- Grant only necessary capabilities for security/focus
+- Use raw `tools:` only for Claude-only repo-local escape hatches
 - Examples:
-  - Read-only agent: `tools: Read, Grep, Glob`
-  - Implementation agent: `tools: Read, Write, Edit, Bash, Grep, Glob`
-  - Research agent: `tools: Read, WebFetch, WebSearch`
+  - Read-only agent: `capabilities: [read_files]`
+  - Implementation agent: `capabilities: [read_files, write_files, edit_files, run_shell]`
+  - Research agent: `capabilities: [read_files, search_web]`
 
 ---
 

@@ -222,11 +222,41 @@ Malformed, nested, or unclosed directive blocks fail `scripts/build-agent.py`.
 - Read-only: `read_files`
 - Implementation: `read_files`, `edit_files`, `run_shell`
 - Research: `read_files`, `search_web`
+- SearXNG-only research: `search_searxng`, `use_skills`
 - Orchestration: `spawn_subagents`, `manage_beads`
 
 Minimal capabilities reduce attack surface and keep the agent focused.
 
 Full field documentation: `references/agent-frontmatter-reference.md`
+
+## Fleet Migration Mode
+
+Use this mode when updating existing marketplace agents after builder or
+frontmatter changes. Migration is mechanical, but every file still needs a
+semantic access review.
+
+For each existing agent:
+
+1. Read the current frontmatter and identify the actual tool intent.
+2. Replace Claude-specific `tools:` with `capabilities:` from `capabilities.yaml`.
+   Add a capability only when no existing vocabulary entry expresses the intent.
+3. Replace scalar model aliases (`haiku`, `sonnet`, `opus`) with a requirement
+   block using `tier`, `reasoning`, `context`, and `cost_priority`.
+4. Remove manual `model_standards:` when the builder can auto-load the resolved
+   model ID. Keep it only as an explicit escape hatch and document why.
+5. Keep harness override blocks only for true harness differences such as
+   descriptions, nicknames, or explicitly approved model/sandbox exceptions.
+6. Build both targets with `scripts/build-agent.py --harness all` and inspect the
+   emitted Claude frontmatter plus Codex TOML.
+7. Grep body prose for stale harness claims introduced by older runtime limits.
+   Correct factual drift during the migration.
+
+Validator policy:
+
+- `tools:` without `capabilities:` is legacy. The validator warns by default and
+  fails in `--strict` mode.
+- Scalar `model:` with manual `model_standards:` is legacy for migrated
+  marketplace agents. Prefer model requirements plus automatic Layer 3 loading.
 
 ### Step 5: Write System Prompt
 

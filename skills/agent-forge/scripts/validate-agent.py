@@ -265,6 +265,16 @@ class AgentValidator:
             )
             return
 
+        if "capabilities" not in self.frontmatter:
+            msg = (
+                "Legacy tools-only frontmatter. Marketplace agents should declare "
+                "capabilities so build-agent.py can project harness-native bindings."
+            )
+            if self.strict:
+                self.errors.append(msg)
+            else:
+                self.warnings.append(msg)
+
         tools_value = self.frontmatter["tools"]
         if not tools_value:
             self.warnings.append("Tools field is empty")
@@ -321,6 +331,17 @@ class AgentValidator:
                     f"Invalid model requirement keys: {', '.join(unknown_keys)}"
                 )
             return
+
+        if "model_standards" in self.frontmatter:
+            msg = (
+                "Manual model_standards with scalar model is legacy for migrated "
+                "marketplace agents. Prefer a model requirement block and let the "
+                "builder auto-load the resolved model standard."
+            )
+            if self.strict:
+                self.errors.append(msg)
+            else:
+                self.warnings.append(msg)
 
         full_model_id = isinstance(model, str) and re.match(r"^[a-z][a-z0-9.-]*$", model)
         if model not in self.VALID_MODELS and not full_model_id:

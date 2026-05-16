@@ -19,10 +19,10 @@
 **Problem:** Agent can't perform required operations.
 
 **Solutions:**
-- Add needed tools to `tools:` field
-- Remember: omitting `tools` grants ALL tools
-- Verify tool names are correct (case-sensitive)
-- Check tool availability with `/tools` command
+- Add the smallest needed entries to `capabilities:`
+- Use names registered in `capabilities.yaml`
+- If no registered capability fits, add one with Claude and Codex bindings
+- Use raw `tools:` only for Claude-only repo-local escape hatches
 
 ---
 

@@ -161,6 +161,7 @@ Before returning your final result, create a structured debrief documenting what
   - Read-only: `read_files`
   - Implementation: `read_files`, `edit_files`, `run_shell`
   - Research: `read_files`, `search_web`
+  - SearXNG-only research: `search_searxng`, `use_skills`
   - Orchestration: `spawn_subagents`, `manage_beads`
 
 **model** (optional)
@@ -231,8 +232,8 @@ If auto-delegation fails, improve the description with more specific trigger key
 - Examples: pm-spec → architect-review → implementer-tester
 
 **Orchestrator Agent** (coordinates others):
-- Uses Task tool to delegate
-- TodoWrite for tracking
+- Uses the harness-native delegation capability
+- Tracks durable work in the project issue tracker
 - Minimal other tools
 - Usually Sonnet or Opus model
 

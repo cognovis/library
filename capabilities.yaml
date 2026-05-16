@@ -53,8 +53,37 @@ capabilities:
     description: Search and fetch web content for research tasks.
     claude:
       tools: [WebFetch, WebSearch]
+      mcpServers: [searxng]
     codex:
       mcp_servers: [searxng]
+      sandbox_mode: read-only
+  - name: search_searxng
+    description: Search web content through the SearXNG MCP server without built-in web tools.
+    claude:
+      tools: [mcp__searxng__searxng_web_search]
+      mcpServers: [searxng]
+    codex:
+      mcp_servers: [searxng]
+      sandbox_mode: read-only
+  - name: use_skills
+    description: Invoke harness-native skills from an agent workflow.
+    claude:
+      tools: [Skill]
+    codex:
+      sandbox_mode: read-only
+  - name: query_executive_library
+    description: Query the Executive Circle content archive.
+    claude:
+      mcpServers: [executive-circle]
+    codex:
+      mcp_servers: [executive-circle]
+      sandbox_mode: read-only
+  - name: refine_prompts
+    description: Use HeyPresto prompt refinement capability.
+    claude:
+      mcpServers: [heypresto]
+    codex:
+      mcp_servers: [heypresto]
       sandbox_mode: read-only
   - name: browser
     description: Drive browser automation for local or remote web targets.
