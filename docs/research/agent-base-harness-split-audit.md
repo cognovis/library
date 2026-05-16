@@ -5,8 +5,8 @@ CL-13p split the generic `cognovis-base` Layer 1 prompt into per-harness files:
 - `claude-agent-base.md`
 - `codex-agent-base.md`
 
-`agent_base_extends: cognovis-base` remains the logical alias. The composer maps
-that alias to the correct per-harness file for `--harness=claude` and
+`agent_base: auto` is the preferred logical selector. The composer maps that
+selector to the correct per-harness file for `--harness=claude` and
 `--harness=codex`, then falls back to `cognovis-base.md` for one release if the
 per-harness file is not installed.
 

@@ -1,0 +1,21 @@
+name: Source URL liveness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  github-source-urls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Verify library.yaml GitHub source URLs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NETWORK_TESTS: "1"
+        run: uv run pytest tests/test_library_yaml_urls.py -q

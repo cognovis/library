@@ -19,7 +19,7 @@ model:
   cost_priority: balanced
 capabilities:
   - read_files
-agent_base_extends: cognovis-base
+agent_base: auto
 color: blue
 codex:
   nickname_candidates:
@@ -119,6 +119,26 @@ description: Reviews stuff     # Not specific enough
 ---
 
 ## Optional Fields
+
+### `agent_base` (Optional, recommended)
+
+**Type:** String
+**Default:** `auto`
+**Purpose:** Select the Layer 1 agent base prompt used during Library composition.
+
+Use `agent_base: auto` for normal marketplace agents. The builder resolves
+`auto` to the harness-appropriate Cognovis Layer 1 file (`claude-agent-base.md`
+or `codex-agent-base.md`). Use `agent_base: from-scratch` only for isolated test
+or intentionally unbased agents.
+
+`agent_base_extends:` is accepted as a legacy alias, but new and migrated agents
+should use `agent_base:`.
+
+```yaml
+agent_base: auto
+```
+
+---
 
 ### `capabilities` (Optional, recommended)
 

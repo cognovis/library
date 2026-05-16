@@ -94,7 +94,7 @@ EXPECTED_COGNOVIS_AGENTS = {
 }
 
 # Expected sussdorff agents
-EXPECTED_SUSSDORFF_AGENTS = {"home"}
+EXPECTED_SUSSDORFF_AGENTS: set[str] = set()
 
 # Expected prompts (commands only)
 EXPECTED_PROMPTS = {

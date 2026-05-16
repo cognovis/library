@@ -67,7 +67,7 @@ Layer 3: Model-Standard (optional)
 
 ```yaml
 # In an agent's frontmatter (.claude/agents/<name>.md):
-agent_base_extends: cognovis-base   # which base agent base prompt to use
+agent_base: auto                       # choose the harness-appropriate base prompt
 model: claude-sonnet-4-6               # triggers model-standard lookup
 model_standards: [conciseness, tool-use-efficiency]  # optional explicit overrides
 ```
@@ -81,10 +81,10 @@ Source and target are always SEPARATE paths. The source agent file (library copy
 never overwritten — the composed prompt is written to the installed copy only.
 
 ```
-1. Load Layer 1: resolve .agents/agent-bases/<agent_base_extends>.md
-   (skip if agent_base_extends=from-scratch or file not found). The logical
-   cognovis-base alias resolves to claude-agent-base or codex-agent-base for
-   those harnesses before falling back to cognovis-base.md.
+1. Load Layer 1: resolve .agents/agent-bases/<agent_base>.md
+   (skip if agent_base=from-scratch or file not found). The logical `auto`
+   value resolves to claude-agent-base or codex-agent-base for those harnesses
+   before falling back to cognovis-base.md.
 
 2. Load Layer 2: read the SOURCE agent file body (library copy, never the installed copy)
    This reads the original unmodified persona. Repeat installs always read the same source.

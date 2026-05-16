@@ -1153,7 +1153,7 @@ smoke_migration() {
 #  5. Each model-standard has YAML frontmatter
 #  6. standards-loader.sh supports --load-model-standard operation
 #  7. PRIMITIVES.md cross-references standards-loader and model-standards path
-#  8. agents-format-mapping.md documents agent_base_extends and model_standards fields
+#  8. agents-format-mapping.md documents agent_base and model_standards fields
 # ---------------------------------------------------------------------------
 smoke_agent_bases() {
     section "agent-bases"
@@ -1318,8 +1318,8 @@ smoke_agent_bases() {
     # -----------------------------------------------------------------------
     if [[ -f "${format_mapping_doc}" ]]; then
         local mapping_ok=true
-        if ! grep -q "agent_base_extends\|agent-base-extends" "${format_mapping_doc}" 2>/dev/null; then
-            fail "agent-bases/format-mapping-agent-base: agents-format-mapping.md does NOT document agent_base_extends field"
+        if ! grep -q "agent_base\|agent-base" "${format_mapping_doc}" 2>/dev/null; then
+            fail "agent-bases/format-mapping-agent-base: agents-format-mapping.md does NOT document agent_base field"
             mapping_ok=false
         fi
         if ! grep -q "model_standards\|model-standards" "${format_mapping_doc}" 2>/dev/null; then
@@ -1327,7 +1327,7 @@ smoke_agent_bases() {
             mapping_ok=false
         fi
         if [[ "${mapping_ok}" == "true" ]]; then
-            pass "agent-bases/format-mapping: agents-format-mapping.md documents agent_base_extends and model_standards fields"
+            pass "agent-bases/format-mapping: agents-format-mapping.md documents agent_base and model_standards fields"
         fi
     else
         fail "agent-bases/format-mapping: docs/research/agents-format-mapping.md NOT found"
@@ -1343,13 +1343,13 @@ smoke_agent_bases() {
 #  Agent Base composition model (CL-xpg).
 #
 #  Checks per agent file in ~/code/claude-code-plugins/**/agents/*.md:
-#  1. agent_base_extends field is present in YAML frontmatter
+#  1. agent_base field is present in YAML frontmatter
 #  2. model_standards field or capability-era model block is present in YAML frontmatter
 #
 #  Cross-harness validation: verifies at least 3 agents across different plugins
 #  (beads-workflow, core, dev-tools) have both fields.
 #
-#  agent-forge: init-agent.py template emits agent_base_extends and capability-era model fields.
+#  agent-forge: init-agent.py template emits agent_base and capability-era model fields.
 #
 #  Note: This smoke uses ~/code/claude-code-plugins as the source of truth.
 #  It is excluded from 'all' (same pattern as smoke_migration) because it relies
@@ -1384,7 +1384,7 @@ smoke_fleet_migration() {
     pass "fleet-migration/agent-count: found ${total} agent .md files in claude-code-plugins"
 
     # -----------------------------------------------------------------------
-    # CHECK 1+2: All agents have agent_base_extends and a Layer 3 model path
+    # CHECK 1+2: All agents have agent_base and a Layer 3 model path
     # -----------------------------------------------------------------------
     local missing_base=0
     local missing_model=0
@@ -1394,7 +1394,7 @@ smoke_fleet_migration() {
     for f in "${agent_files[@]}"; do
         local rel
         rel="$(echo "${f}" | sed "s|${plugins_root}/||")"
-        if ! grep -q "^agent_base_extends:" "${f}" 2>/dev/null; then
+        if ! grep -q "^agent_base:" "${f}" 2>/dev/null; then
             missing_base=$((missing_base + 1))
             missing_list_base+=("${rel}")
         fi
@@ -1405,9 +1405,9 @@ smoke_fleet_migration() {
     done
 
     if [[ "${missing_base}" -eq 0 ]]; then
-        pass "fleet-migration/agent-base-extends: all ${total} agents have agent_base_extends frontmatter"
+        pass "fleet-migration/agent-base: all ${total} agents have agent_base frontmatter"
     else
-        fail "fleet-migration/agent-base-extends: ${missing_base} of ${total} agents missing agent_base_extends"
+        fail "fleet-migration/agent-base: ${missing_base} of ${total} agents missing agent_base"
         for m in "${missing_list_base[@]}"; do
             echo "    MISSING: ${m}"
         done
@@ -1444,14 +1444,14 @@ smoke_fleet_migration() {
         rel="$(echo "${sample_file}" | sed "s|${plugins_root}/||")"
         local has_base=false
         local has_model=false
-        grep -q "^agent_base_extends:" "${sample_file}" 2>/dev/null && has_base=true
+        grep -q "^agent_base:" "${sample_file}" 2>/dev/null && has_base=true
         grep -q "^model_standards:" "${sample_file}" 2>/dev/null && has_model=true
         grep -q "^model:" "${sample_file}" 2>/dev/null && has_model=true
         if [[ "${has_base}" == "true" && "${has_model}" == "true" ]]; then
-            pass "fleet-migration/cross-harness-${plugin}: ${rel} has agent_base_extends + model layer"
+            pass "fleet-migration/cross-harness-${plugin}: ${rel} has agent_base + model layer"
             cross_ok=$((cross_ok + 1))
         else
-            fail "fleet-migration/cross-harness-${plugin}: ${rel} missing agent_base_extends=${has_base} model_layer=${has_model}"
+            fail "fleet-migration/cross-harness-${plugin}: ${rel} missing agent_base=${has_base} model_layer=${has_model}"
         fi
     done
 
@@ -1465,12 +1465,12 @@ smoke_fleet_migration() {
     if [[ -f "${init_agent_script}" ]]; then
         local has_base_template=false
         local has_model_template=false
-        grep -q "agent_base_extends" "${init_agent_script}" 2>/dev/null && has_base_template=true
+        grep -q "agent_base:" "${init_agent_script}" 2>/dev/null && has_base_template=true
         grep -q "cost_priority" "${init_agent_script}" 2>/dev/null && has_model_template=true
         if [[ "${has_base_template}" == "true" && "${has_model_template}" == "true" ]]; then
-            pass "fleet-migration/agent-forge-template: init-agent.py template emits agent_base_extends + model requirements"
+            pass "fleet-migration/agent-forge-template: init-agent.py template emits agent_base + model requirements"
         else
-            fail "fleet-migration/agent-forge-template: init-agent.py template missing agent_base_extends=${has_base_template} model_requirements=${has_model_template}"
+            fail "fleet-migration/agent-forge-template: init-agent.py template missing agent_base=${has_base_template} model_requirements=${has_model_template}"
         fi
     else
         fail "fleet-migration/agent-forge-template: init-agent.py not found at ${init_agent_script}"

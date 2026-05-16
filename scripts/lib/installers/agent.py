@@ -7,7 +7,7 @@ Codex at the configured agent directories.
 Single-source Markdown agents are built by scripts/build-agent.py into
 harness-native Claude .md and Codex .toml artifacts. Legacy dual-source agents
 remain supported; their Claude Markdown source is composed by scripts/compose-agent.py
-when it references agent_base_extends, golden_prompt_extends, or model_standards.
+when it references agent_base, agent_base_extends, golden_prompt_extends, or model_standards.
 """
 
 from __future__ import annotations

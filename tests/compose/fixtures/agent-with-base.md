@@ -2,7 +2,7 @@
 name: test-agent
 description: Test agent fixture for compose tests
 model: claude-sonnet-4-6
-agent_base_extends: cognovis-base
+agent_base: auto
 model_standards: []
 ---
 

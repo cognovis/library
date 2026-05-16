@@ -35,6 +35,8 @@ def test_cognovis_agents_are_capability_first() -> None:
     """Every first-party agent uses capability declarations after CL-2yp."""
     for path in sorted(AGENTS_DIR.glob("*.md")):
         frontmatter = _frontmatter(path)
+        assert frontmatter.get("agent_base") == "auto", f"{path.name} missing agent_base: auto"
+        assert "agent_base_extends" not in frontmatter, f"{path.name} still uses agent_base_extends"
         assert "capabilities" in frontmatter, f"{path.name} missing capabilities"
         assert isinstance(frontmatter.get("model"), dict), f"{path.name} model is not a mapping"
         assert "tools" not in frontmatter, f"{path.name} still has tools"

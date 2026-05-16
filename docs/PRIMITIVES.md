@@ -250,7 +250,7 @@ Library treats managed skills as read-only and does not override them.
   definitions to classify all 44 agents in scope.
 - **Agent Format Mapping** (`docs/research/agents-format-mapping.md`, CL-11p): Field
   mapping for Claude Code ↔ Codex agent translation. Covers new frontmatter fields
-  `agent_base_extends` and `model_standards` introduced in CL-9b1.
+  `agent_base` and `model_standards` introduced in CL-9b1.
 - **Agent Base Prompts** (CL-9b1): Canonical sources at `.agents/agent-bases/` and
   `.agents/model-standards/`. See [Model-Standard](primitives/model-standard.md) and [Agent Base](primitives/agent-base.md) for the composition algorithm.
 - **Research beads**:

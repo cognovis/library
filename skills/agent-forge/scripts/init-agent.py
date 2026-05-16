@@ -61,7 +61,7 @@ model:
   cost_priority: balanced
 capabilities:
   - read_files
-agent_base_extends: cognovis-base
+agent_base: auto
 color: blue
 codex:
   nickname_candidates:

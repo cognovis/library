@@ -135,7 +135,7 @@ For each entry in `.library.lock` where `type` is `agent`:
    ```
 
 3. **For legacy dual-source Claude Markdown entries**, check the YAML
-   frontmatter: if `agent_base_extends:` is present AND the value is NOT
+   frontmatter: if `agent_base:` or legacy `agent_base_extends:` is present AND the value is NOT
    `from-scratch`, the agent requires composition. Locate the composer script:
    ```bash
    LIBRARY_ROOT="<path to the library checkout>"
@@ -184,7 +184,7 @@ For each entry in `.library.lock` where `type` is `agent`:
 
    entry["composed_sha"] = hashlib.sha256(body_after_frontmatter.encode()).hexdigest()
    entry["composed_layers"] = {
-       "layer1": "<agent_base_extends value>",   # e.g. "cognovis-base"
+       "layer1": "<agent_base value>",   # e.g. "auto"
        "layer3": "<model_standards list or []>",    # e.g. ["claude-haiku-4-5"]
    }
 
@@ -204,8 +204,8 @@ For each entry in `.library.lock` where `type` is `agent`:
 > 3. `<proj_root>/.agents/golden-prompts/<name>.md` (legacy fallback)
 > 4. `~/.agents/golden-prompts/<name>.md` (legacy fallback)
 >
-> `agent_base_extends: cognovis-base` is a logical alias. For Claude and Codex
-> targets, the composer first tries the per-harness Layer 1 file
+> `agent_base: auto` chooses the harness-appropriate Cognovis Layer 1. For
+> Claude and Codex targets, the composer first tries the per-harness Layer 1 file
 > (`claude-agent-base.md` or `codex-agent-base.md`) in each search directory,
 > then falls back to `cognovis-base.md` for one release.
 

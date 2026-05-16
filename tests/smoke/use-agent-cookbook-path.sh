@@ -93,7 +93,7 @@ LAYER1EOF
 # ---------------------------------------------------------------------------
 # Helper: simulate cookbook use.md Step 6.5 sequence:
 #   1. Copy agent file to temp project's .claude/agents/
-#   2. Check frontmatter for agent_base_extends
+#   2. Check frontmatter for agent_base
 #   3. Run compose-agent.py
 #   4. Replace body with composed output (or keep original on failure)
 # Returns 0 on success (compose ran and replaced body), 1 on graceful failure.
@@ -111,7 +111,7 @@ cookbook_use_step65() {
     # Step 4 equivalent: copy the agent file (simulate fetch)
     cp "${agent_src}" "${installed}"
 
-    # Step 6.5: check frontmatter for agent_base_extends
+    # Step 6.5: check frontmatter for agent_base
     local extends
     extends=$(python3 - "${installed}" <<'PYEOF'
 import sys, re
@@ -126,7 +126,7 @@ for i, line in enumerate(lines[1:], 1):
         fm_text = '\n'.join(lines[1:i])
         import yaml
         fm = yaml.safe_load(fm_text) or {}
-        val = fm.get('agent_base_extends', '')
+        val = fm.get('agent_base', fm.get('agent_base_extends', ''))
         print(val if val else '')
         sys.exit(0)
 print('')
@@ -324,7 +324,7 @@ else
     # Verify key invariant phrases from the original Step 6.5 are still present
     MISSING=0
     for phrase in \
-        "agent_base_extends" \
+        "agent_base" \
         "compose-agent.py" \
         "graceful degradation" \
         "from-scratch" \

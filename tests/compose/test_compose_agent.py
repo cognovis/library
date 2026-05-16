@@ -4,7 +4,7 @@ test_compose_agent.py — Unit tests for scripts/compose-agent.py
 
 Bead: CL-08n
 Tests:
-  1. Compose agent with agent_base_extends: cognovis-base — Layer1+Layer2 in output
+  1. Compose agent with agent_base: auto — Layer1+Layer2 in output
   2. Compose agent with model_standards: [claude-sonnet-4-6] — Layer3 appended
   3. from-scratch → no Layer 1 in output
   4. empty model_standards: [] and no model: field → no Layer 3
@@ -110,7 +110,7 @@ mcpServers:
   open-brain:
     command: ob
 permissionMode: acceptEdits
-agent_base_extends: cognovis-base
+agent_base: auto
 model_standards: [claude-sonnet-4-6]
 cache_control: ephemeral
 requires:
@@ -139,6 +139,25 @@ model_standards: []
 # Legacy Frontmatter Agent
 
 This agent verifies the legacy frontmatter alias.
+"""
+    )
+    return agent_file
+
+
+def make_agent_with_legacy_agent_base_extends(tmp_path: Path) -> Path:
+    """Create an agent fixture that uses the legacy agent_base_extends field."""
+    agent_file = tmp_path / "agent-with-legacy-agent-base-extends.md"
+    agent_file.write_text(
+        """---
+name: legacy-agent-base-agent
+description: Agent with legacy agent base frontmatter
+agent_base_extends: cognovis-base
+model_standards: []
+---
+
+# Legacy Agent Base Agent
+
+This agent verifies the legacy agent_base_extends field.
 """
     )
     return agent_file
@@ -176,9 +195,21 @@ def test_compose_accepts_legacy_frontmatter_alias(tmp_path):
     )
     assert (
         "DeprecationWarning: golden_prompt_extends is deprecated; "
-        "use agent_base_extends."
+        "use agent_base."
     ) in stderr
     print("PASS test_compose_accepts_legacy_frontmatter_alias")
+
+
+def test_compose_accepts_legacy_agent_base_extends(tmp_path):
+    """agent_base_extends remains accepted as a compatibility alias."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = make_agent_with_legacy_agent_base_extends(tmp_path)
+
+    rc, stdout, stderr = run_compose(agent_file, base_dir)
+    assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
+    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout
+    assert "Legacy Agent Base Agent" in stdout
+    print("PASS test_compose_accepts_legacy_agent_base_extends")
 
 
 def test_compose_finds_legacy_global_agent_base_dir(tmp_path):
@@ -200,7 +231,7 @@ def test_compose_finds_legacy_global_agent_base_dir(tmp_path):
         f"Layer 1 marker not found from legacy global dir.\nstdout: {stdout}\nstderr: {stderr}"
     )
     assert (
-        "DeprecationWarning: agent_base 'cognovis-base' resolved "
+        "DeprecationWarning: agent_base 'auto' resolved "
         "from legacy golden-prompts directory"
     ) in stderr
     print("PASS test_compose_finds_legacy_global_agent_base_dir")
@@ -274,7 +305,7 @@ def test_compose_with_model_standard_contains_layer3(tmp_path):
 
 
 def test_from_scratch_no_layer1(tmp_path):
-    """from-scratch agent_base_extends produces no Layer 1 content."""
+    """from-scratch agent_base produces no Layer 1 content."""
     base_dir = make_base_dir(tmp_path)
     agent_file = FIXTURES_DIR / "agent-from-scratch.md"
 
@@ -334,7 +365,7 @@ def test_claude_harness_emits_runtime_frontmatter(tmp_path):
     assert "permissionMode:" in frontmatter, (
         f"Missing permissionMode in frontmatter:\n{frontmatter}"
     )
-    for field in ("agent_base_extends:", "model_standards:", "cache_control:", "requires:"):
+    for field in ("agent_base:", "agent_base_extends:", "model_standards:", "cache_control:", "requires:"):
         assert field not in frontmatter, f"Composer field leaked into frontmatter:\n{frontmatter}"
     assert body.lstrip("\n").startswith("# Cognovis Base Agent Base Prompt"), (
         f"Composed body should follow Claude frontmatter.\nbody: {body}"
@@ -409,6 +440,7 @@ def test_missing_base_exits_nonzero(tmp_path):
 ALL_TESTS = [
     test_compose_with_base_contains_layer1,
     test_compose_accepts_legacy_frontmatter_alias,
+    test_compose_accepts_legacy_agent_base_extends,
     test_compose_finds_legacy_global_agent_base_dir,
     test_compose_dispatches_cognovis_base_alias_by_harness,
     test_compose_with_base_contains_layer2,

@@ -1,7 +1,7 @@
 ---
 name: test-agent-with-standard
 description: Test agent with explicit model_standards list
-agent_base_extends: cognovis-base
+agent_base: auto
 model_standards: [claude-sonnet-4-6]
 ---
 

@@ -23,7 +23,7 @@
 **Definition.** A markdown document containing the base behavioral layer for
 composed **agent system prompts**. An agent-base is prepended to an agent
 persona at install/sync time when the agent declares
-`agent_base_extends: <name>`.
+`agent_base: <name>`.
 
 **Key constitutive feature.** Agent base prompt layer: agent-bases encode
 common safety, confirmation, content-isolation, and operating-policy guidance

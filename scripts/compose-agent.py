@@ -6,7 +6,8 @@ Implements layered agent prompt composition (Part C of bead CL-08n).
 
 Algorithm:
   1. Parse YAML frontmatter from the agent file.
-  2. Resolve Layer 1 (agent_base_extends):
+  2. Resolve Layer 1 (agent_base):
+       - "auto": resolve the harness-appropriate Cognovis base.
        - "cognovis-base" (or any name): load from agent-bases dir; extract body.
        - "from-scratch": skip Layer 1.
   3. Read agent body (Layer 2): everything after the closing --- in the agent file.
@@ -27,8 +28,8 @@ Environment variables (for testing / overrides):
 
 Exit codes:
   0 — Composition succeeded; composed body on stdout.
-  1 — Missing required layer (Layer 1 base not found when agent_base_extends
-      is not from-scratch); error details on stderr.
+  1 — Missing required layer (Layer 1 base not found when agent_base is not
+      from-scratch); error details on stderr.
   2 — Invalid arguments or unreadable agent file.
 """
 
@@ -54,6 +55,7 @@ SEP_PERSONA = "--- AGENT PERSONA ---"
 SEP_MODEL_STANDARD = "--- MODEL STANDARD ---"
 CLAUDE_FRONTMATTER_EXCLUDE = {
     "cache_control",
+    "agent_base",
     "agent_base_extends",
     "golden_prompt_extends",
     "model_standards",
@@ -171,6 +173,8 @@ def _is_legacy_agent_base_path(path: Path) -> bool:
 
 def _layer1_candidate_names(name: str, harness: str) -> list[str]:
     """Return Layer 1 filenames to try for a logical agent-base name."""
+    if name == "auto":
+        name = "cognovis-base"
     harness_aliases = PER_HARNESS_AGENT_BASE_ALIASES.get(name, {})
     preferred = harness_aliases.get(harness)
     if preferred and preferred != name:
@@ -290,17 +294,27 @@ def compose(
     proj_root = _find_proj_root(agent_file)
 
     # ---------------------------------------------------------------------------
-    # Layer 1: agent_base_extends
+    # Layer 1: agent_base
     # ---------------------------------------------------------------------------
-    uses_legacy_extends = "agent_base_extends" not in fm and "golden_prompt_extends" in fm
-    agent_base_extends = fm.get("agent_base_extends", fm.get("golden_prompt_extends", ""))
+    uses_golden_prompt_alias = (
+        "agent_base" not in fm
+        and "agent_base_extends" not in fm
+        and "golden_prompt_extends" in fm
+    )
+    agent_base = fm.get("agent_base", fm.get("agent_base_extends", fm.get("golden_prompt_extends", "")))
+    if agent_base == "auto":
+        layer1_display_name = "auto"
+        layer1_lookup_name = "cognovis-base"
+    else:
+        layer1_display_name = str(agent_base)
+        layer1_lookup_name = str(agent_base)
     layer1_body: str | None = None
 
-    if agent_base_extends and agent_base_extends != "from-scratch":
-        if uses_legacy_extends:
+    if layer1_lookup_name and layer1_lookup_name != "from-scratch":
+        if uses_golden_prompt_alias:
             print(
                 "DeprecationWarning: golden_prompt_extends is deprecated; "
-                "use agent_base_extends.",
+                "use agent_base.",
                 file=sys.stderr,
             )
         layer1_override = (
@@ -309,31 +323,31 @@ def compose(
         )
         searched_dirs = _layer1_search_dirs(proj_root, layer1_override)
         resolved_layer1 = resolve_layer1(
-            agent_base_extends,
+            layer1_lookup_name,
             proj_root,
             override_dir=layer1_override,
             harness=harness,
         )
         if resolved_layer1 is None:
             print(
-                f"ERROR: agent_base '{agent_base_extends}' not found.\n"
+                f"ERROR: agent_base '{layer1_display_name}' not found.\n"
                 f"  Searched:\n{_format_search_dirs(searched_dirs)}\n"
-                f"  Install it first: /library agent-base use {agent_base_extends}",
+                f"  Install it first: /library agent-base use {layer1_lookup_name}",
                 file=sys.stderr,
             )
             sys.exit(1)
         layer1_path, resolved_layer1_name = resolved_layer1
-        preferred_names = _layer1_candidate_names(agent_base_extends, harness)
-        if len(preferred_names) > 1 and resolved_layer1_name == agent_base_extends:
+        preferred_names = _layer1_candidate_names(layer1_lookup_name, harness)
+        if len(preferred_names) > 1 and resolved_layer1_name == layer1_lookup_name:
             print(
-                f"DeprecationWarning: agent_base '{agent_base_extends}' resolved "
+                f"DeprecationWarning: agent_base '{layer1_display_name}' resolved "
                 f"through generic fallback for harness '{harness}'; install "
                 f"{preferred_names[0]}.md for per-harness Layer 1 behavior.",
                 file=sys.stderr,
             )
         if _is_legacy_agent_base_path(layer1_path):
             print(
-                f"DeprecationWarning: agent_base '{agent_base_extends}' resolved "
+                f"DeprecationWarning: agent_base '{layer1_display_name}' resolved "
                 "from legacy golden-prompts directory; migrate it to "
                 ".agents/agent-bases/.",
                 file=sys.stderr,

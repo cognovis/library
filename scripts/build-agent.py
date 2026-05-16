@@ -40,6 +40,7 @@ DEFAULT_MODELS_REGISTRY = REPO_ROOT / "models.yaml"
 DEFAULT_CAPABILITIES_REGISTRY = REPO_ROOT / "capabilities.yaml"
 SUPPORTED_HARNESSES = {"claude", "codex", "opencode"}
 COMPOSER_ONLY_KEYS = {
+    "agent_base",
     "agent_base_extends",
     "golden_prompt_extends",
     "model_standards",

@@ -44,10 +44,18 @@ class AgentValidator:
         re.IGNORECASE | re.DOTALL,
     )
 
-    def __init__(self, agent_path: Path, strict: bool = False):
+    def __init__(
+        self,
+        agent_path: Path,
+        strict: bool = False,
+        skip_quality_gates: bool = False,
+        frontmatter_only: bool = False,
+    ):
         """Initialize validator with agent path (file or directory)."""
         self.agent_path = agent_path
         self.strict = strict
+        self.skip_quality_gates = skip_quality_gates
+        self.frontmatter_only = frontmatter_only
         self.errors = []
         self.warnings = []
         self.frontmatter = {}
@@ -72,11 +80,12 @@ class AgentValidator:
         self._validate_tools()
         self._validate_model()
         self._validate_color()
-        self._validate_body()
-        self._check_extractable_code()
-        self._check_plugin_paths()
-        self._check_token_count()
-        self._check_todos()
+        if not self.frontmatter_only:
+            self._validate_body()
+            self._check_extractable_code()
+            self._check_plugin_paths()
+            self._check_token_count()
+            self._check_todos()
 
         return len(self.errors) == 0
 
@@ -394,17 +403,18 @@ class AgentValidator:
                 "No numbered lists found. Use numbered steps in Instructions for clarity"
             )
 
-        # Quality Gate sections (mandatory)
-        for pattern, section_name in self.QUALITY_GATE_SECTIONS:
-            if not re.search(pattern, self.body):
-                msg = (
-                    f"Missing '## {section_name}' quality gate section. "
-                    "See agent-quality-gates standard"
-                )
-                if self.strict:
-                    self.errors.append(msg)
-                else:
-                    self.warnings.append(msg)
+        if not self.skip_quality_gates:
+            # Quality Gate sections (mandatory)
+            for pattern, section_name in self.QUALITY_GATE_SECTIONS:
+                if not re.search(pattern, self.body):
+                    msg = (
+                        f"Missing '## {section_name}' quality gate section. "
+                        "See agent-quality-gates standard"
+                    )
+                    if self.strict:
+                        self.errors.append(msg)
+                    else:
+                        self.warnings.append(msg)
 
     def _check_token_count(self):
         """Estimate token count and warn if excessive."""
@@ -601,6 +611,10 @@ Validation Checks:
 Quality Gates:
   By default, missing quality gate sections produce warnings.
   Use --strict to treat them as errors.
+  Use --skip-quality-gates for migration CI that should enforce frontmatter
+  policy without requiring prompt-body quality gate backfills.
+  Use --frontmatter-only for marketplace CI that should enforce schema and
+  migration policy without evaluating prompt-body content.
         """
     )
 
@@ -615,11 +629,26 @@ Quality Gates:
         action="store_true",
         help="Treat missing quality gate sections as errors instead of warnings"
     )
+    parser.add_argument(
+        "--skip-quality-gates",
+        action="store_true",
+        help="Skip prompt-body quality gate section checks."
+    )
+    parser.add_argument(
+        "--frontmatter-only",
+        action="store_true",
+        help="Validate frontmatter and migration policy without prompt-body checks."
+    )
 
     args = parser.parse_args()
 
     # Validate
-    validator = AgentValidator(args.agent_path, strict=args.strict)
+    validator = AgentValidator(
+        args.agent_path,
+        strict=args.strict,
+        skip_quality_gates=args.skip_quality_gates,
+        frontmatter_only=args.frontmatter_only,
+    )
     is_valid = validator.validate()
     validator.print_report()
 

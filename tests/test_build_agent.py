@@ -37,7 +37,7 @@ def write_unified_source(tmp_path: Path, body: str | None = None) -> Path:
         "description: Shared agent description.\n"
         "model: sonnet\n"
         "tools: Read, Grep\n"
-        "agent_base_extends: cognovis-base\n"
+        "agent_base: auto\n"
         "model_standards: []\n"
         "codex:\n"
         "  model: gpt-5.4\n"
@@ -70,7 +70,7 @@ def write_source_without_codex_override(tmp_path: Path) -> Path:
         "description: Plain agent description.\n"
         "model: sonnet\n"
         "tools: Read, Grep\n"
-        "agent_base_extends: cognovis-base\n"
+        "agent_base: auto\n"
         "model_standards: []\n"
         "---\n\n"
         "# Plain Agent\n\nShared body.\n"
@@ -94,7 +94,7 @@ def write_capability_source(tmp_path: Path) -> Path:
         "  - edit_files\n"
         "  - run_shell\n"
         "  - query_memory\n"
-        "agent_base_extends: cognovis-base\n"
+        "agent_base: auto\n"
         "---\n\n"
         "# Capability Agent\n\nShared body.\n"
     )
@@ -118,7 +118,7 @@ def write_escape_hatch_source(tmp_path: Path) -> Path:
         "    context: large\n"
         "capabilities:\n"
         "  - read_files\n"
-        "agent_base_extends: cognovis-base\n"
+        "agent_base: auto\n"
         "---\n\n"
         "# Escape Agent\n\nShared body.\n"
     )
@@ -135,7 +135,7 @@ def write_unknown_capability_source(tmp_path: Path) -> Path:
         "  tier: standard\n"
         "capabilities:\n"
         "  - not_registered\n"
-        "agent_base_extends: cognovis-base\n"
+        "agent_base: auto\n"
         "---\n\n"
         "# Unknown Capability Agent\n\nShared body.\n"
     )
@@ -154,7 +154,7 @@ def write_no_match_model_source(tmp_path: Path) -> Path:
         "  context: large\n"
         "capabilities:\n"
         "  - read_files\n"
-        "agent_base_extends: cognovis-base\n"
+        "agent_base: auto\n"
         "---\n\n"
         "# No Match Agent\n\nShared body.\n"
     )

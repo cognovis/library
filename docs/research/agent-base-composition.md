@@ -62,7 +62,7 @@ that is the vendor's Claude Code / Codex prompt and is configured separately
 
 **Files:** `.agents/agent-bases/claude-agent-base.md` and
 `.agents/agent-bases/codex-agent-base.md`. The logical
-`agent_base_extends: cognovis-base` value resolves to one of these files by
+`agent_base: auto` value resolves to one of these files by
 target harness, with `.agents/agent-bases/cognovis-base.md` retained as a
 one-release fallback alias.
 
@@ -89,8 +89,8 @@ command gates and destructive-action blocks belong in harness policy, hooks,
 rules, permissions, sandboxing, or judge-layer flows.
 
 **Extends pattern:**
-- `agent_base_extends: cognovis-base` — use Cognovis Base as Layer 1 (default for all agents)
-- `agent_base_extends: from-scratch` — skip Layer 1 entirely (rare; only for test/isolated agents)
+- `agent_base: auto` — use Cognovis Base as Layer 1 (default for all agents)
+- `agent_base: from-scratch` — skip Layer 1 entirely (rare; only for test/isolated agents)
 
 ### Layer 2: Agent Persona
 
@@ -99,7 +99,7 @@ rules, permissions, sandboxing, or judge-layer flows.
 **Purpose:** Agent-specific instructions: purpose, tool grants, workflow steps, domain expertise.
 
 **This layer is not changed by the composition model.** Existing agent files continue to work as-is.
-Adding `agent_base_extends` and `model_standards` frontmatter fields opts the agent into
+Adding `agent_base` and `model_standards` frontmatter fields opts the agent into
 the composition model — without those fields, the agent is treated as "from-scratch" (no composition).
 
 ### Layer 3: Model-Standard
@@ -133,25 +133,25 @@ receives the fully-composed prompt — there is no runtime composition.
 INPUT:
   source_agent_file = library copy of agent (e.g., plugin-bundle/agents/<name>.md)
                       This is the SOURCE — it is NEVER overwritten by composition.
-  agent_base_extends = frontmatter field value from source_agent_file (default: cognovis-base)
+  agent_base = frontmatter field value from source_agent_file (default: auto)
   model_standards       = frontmatter field value from source_agent_file (default: [])
   model                 = frontmatter model field from source_agent_file (used for alias lookup)
 
 ALGORITHM:
   1. Load Layer 1:
-       if agent_base_extends = cognovis-base and harness is claude:
+       if agent_base = auto and harness is claude:
          preferred = claude-agent-base
-       else if agent_base_extends = cognovis-base and harness is codex:
+       else if agent_base = auto and harness is codex:
          preferred = codex-agent-base
        else:
-         preferred = agent_base_extends
+         preferred = agent_base
 
        Search project-local and user-global agent-bases dirs for:
          a) .agents/agent-bases/<preferred>.md
-         b) .agents/agent-bases/<agent_base_extends>.md
+         b) .agents/agent-bases/<agent_base>.md
 
        L1 = read(first match)
-     Skip if agent_base_extends = from-scratch OR path not found (warn)
+     Skip if agent_base = from-scratch OR path not found (warn)
 
   2. Load Layer 2:
        L2 = body of source_agent_file (content below the --- frontmatter marker)
@@ -177,7 +177,7 @@ ALGORITHM:
      Codex:       target = .codex/agents/<name>.toml
                   developer_instructions = composed
                   add composition metadata as comment headers:
-                    # agent_base_extends: <value>
+                    # agent_base: <value>
                     # model_standards: <list>
      OpenCode:    target = .opencode/agents/<name>.md (installed copy)
      Pi:          export composed string from TypeScript extension module
@@ -242,7 +242,7 @@ tools:
   - Bash
   - Read
   - Edit
-agent_base_extends: cognovis-base
+agent_base: auto
 model_standards: []
 ---
 ```
@@ -250,14 +250,14 @@ model_standards: []
 ### Cross-Harness Validation
 
 **Claude Code path:**
-- `agent_base_extends: cognovis-base` → Layer 1 = `.agents/agent-bases/claude-agent-base.md`
+- `agent_base: auto` → Layer 1 = `.agents/agent-bases/claude-agent-base.md`
 - `model_standards: []` → Layer 3 = empty (no model-standard for haiku yet)
 - Composed body = `claude-agent-base.md` content + agent persona body
 - Written to: `.claude/agents/changelog-updater.md` body (harness-native)
 - Claude Code reads the body directly — composition is transparent
 
 **Codex path (forward translation):**
-- `agent_base_extends: cognovis-base` → added as comment: `# agent_base_extends: cognovis-base`
+- `agent_base: auto` → added as comment: `# agent_base: auto`
 - `model_standards: []` → added as comment: `# model_standards: []`
 - `developer_instructions` = composed body (Codex Layer 1 + Layer 2)
 - `sandbox_mode` = inferred from tools list: [Bash, Read, Edit] → `workspace-write`
@@ -265,7 +265,7 @@ model_standards: []
 - `model` = `haiku` → vocabulary lookup required (gpt-4.1-mini or equivalent when targeting OpenAI)
 
 **Graceful degradation (fields unknown to harness):**
-- Codex ignores unknown frontmatter fields silently. `agent_base_extends` and
+- Codex ignores unknown frontmatter fields silently. `agent_base` and
   `model_standards` in the Claude Code `.md` frontmatter are unknown to Codex and
   are dropped on forward translation (not written to TOML). The composition result
   is already inlined in `developer_instructions`.
@@ -285,7 +285,7 @@ model_standards: []
 ## Open Questions
 
 - **Extension chains:** Does the composition model support `cognovis-base → cognovis-strict → team-specific`?
-  Decision deferred. Current implementation: single-extends only (`agent_base_extends` is a scalar).
+  Decision deferred. Current implementation: single-extends only (`agent_base` is a scalar).
   Multiple inheritance via `model_standards` list is already supported (each entry is a file).
 
 - **Harness drift:** When Anthropic adds something useful to the Claude Code
@@ -295,9 +295,9 @@ model_standards: []
   a deliberate copy-down decision, not a propagation. Not addressed in this
   bead. Manual review process assumed.
 
-- **from-scratch testing:** Agents that set `agent_base_extends: from-scratch` bypass Layer 1.
+- **from-scratch testing:** Agents that set `agent_base: from-scratch` bypass Layer 1.
   This is useful for test agents that should NOT follow Cognovis safety rules.
-  Implementation: if `agent_base_extends: from-scratch`, skip Layer 1 entirely.
+  Implementation: if `agent_base: from-scratch`, skip Layer 1 entirely.
 
 - **haiku model-standard:** `changelog-updater` declares `model_standards: []` because
   `claude-haiku.md` is not yet defined. Create it as a follow-up when haiku behavioral

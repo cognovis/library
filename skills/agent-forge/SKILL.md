@@ -165,7 +165,7 @@ model:
   cost_priority: balanced         # cheapest|balanced|quality-first
 capabilities:                    # Closed vocabulary from capabilities.yaml
   - read_files
-agent_base_extends: cognovis-base # Layer 1 logical alias
+agent_base: auto                 # Harness-appropriate Layer 1 base
 codex:                            # Optional Codex overrides
   nickname_candidates:
     - kebab-case-name
@@ -189,7 +189,8 @@ codex:                            # Optional Codex overrides
 | `memory` | string | No | — | `user`, `project`, or `local` |
 | `maxTurns` | integer | No | — | Auto-stop after N turns |
 | `color` | string | No | — | Visual identifier in CLI |
-| `agent_base_extends` | string | No | `cognovis-base` | Layer 1 base for Library composition |
+| `agent_base` | string | No | `auto` | Layer 1 base for Library composition; `auto` chooses the harness-specific Cognovis base |
+| `agent_base_extends` | string | No | — | Legacy alias for `agent_base` |
 | `model_standards` | list | No | auto | Layer 3 model overlays; builder auto-loads resolved model ID |
 | `codex` | object | No | — | Codex-only overrides emitted into TOML |
 

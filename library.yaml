@@ -1807,15 +1807,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-    - name: home
-      description: >-
-        Home infrastructure and smart home agent. Manages Proxmox VMs/LXCs, UniFi network,
-        Home Assistant, Homematic CCU3, and local VMs. Baked-in topology knowledge eliminates
-        repeated skill loading.
-      source: https://github.com/sussdorff/library-core/blob/main/agents/home.md
-      tags:
-        - origin:personal
-        - tier:project
   prompts:
     - name: compact-reference
       description: >-

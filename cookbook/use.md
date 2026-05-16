@@ -509,8 +509,8 @@ unified builder for the target harness:
      so the persona body IS the agent system prompt.)
 
 Legacy dual-source Claude Markdown entries still use `compose-agent.py` for
-backward compatibility when `agent_base_extends:` is present and not
-`from-scratch`.
+backward compatibility when `agent_base:` or legacy `agent_base_extends:` is
+present and not `from-scratch`.
 
 6. Continue with Step 7 (Verify Installation).
 
@@ -525,8 +525,8 @@ backward compatibility when `agent_base_extends:` is present and not
 > 3. `<proj_root>/.agents/golden-prompts/<name>.md` (legacy fallback)
 > 4. `~/.agents/golden-prompts/<name>.md` (legacy fallback)
 >
-> `agent_base_extends: cognovis-base` is a logical alias. For Claude and Codex
-> targets, the composer first tries the per-harness Layer 1 file
+> `agent_base: auto` chooses the harness-appropriate Cognovis Layer 1. For
+> Claude and Codex targets, the composer first tries the per-harness Layer 1 file
 > (`claude-agent-base.md` or `codex-agent-base.md`) in each search directory,
 > then falls back to `cognovis-base.md` for one release.
 >

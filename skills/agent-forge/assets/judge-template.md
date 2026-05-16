@@ -8,7 +8,7 @@ model:
   cost_priority: balanced
 capabilities:
   - read_files
-agent_base_extends: cognovis-base
+agent_base: auto
 requires_standards: [judge-layer]
 color: red
 ---
