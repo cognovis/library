@@ -5,6 +5,14 @@ Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
 
 ---
 
+## [2026.05.34] - 2026-05-17
+
+### Fixed
+
+- **Library audit/use detect upstream drift** (`scripts/lib/sync_audit.py`, `scripts/lib/installers/skill.py`): `cmd_audit_impl` now pre-computes upstream status via `cmd_status_impl` and flags `drift_kind: upstream/local/both`. `_install_with_deps` checks upstream + local-tamper before short-circuiting; refreshes automatically on either; prints explicit `[skip]/[refresh]` messages instead of silent no-ops. Added `--no-upstream` flag for offline/CI. 3 new regression tests in `TestAuditUpstreamDrift`. Full suite 539 passed. Closes CL-wjr.
+
+---
+
 ## [Unreleased]
 
 ### Fixed
