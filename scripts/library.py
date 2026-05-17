@@ -517,18 +517,30 @@ def _install_with_deps(
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
         # Already-installed handling. is_already_installed() only checks
-        # (lockfile_has_entry AND install_target_exists) — it does NOT detect
-        # that catalog HEAD has moved beyond the lockfile's pinned source_commit.
-        # Without the upstream-drift check below, `use` silently no-ops when
-        # the catalog has newer commits, leaving deployed files stale.
+        # (lockfile_has_entry AND install_target_exists) — it does NOT detect:
+        #   (a) catalog HEAD has moved beyond the lockfile's pinned source_commit
+        #       ("upstream drift"), or
+        #   (b) the deployed dir content no longer matches the lockfile's
+        #       content_sha256 ("local tamper" — e.g. someone ran a manual cp,
+        #       a partial-write left bad files, or another tool overwrote it).
+        # Without these checks `use` silently no-ops in both cases, leaving
+        # deployed files stale or broken.
         if is_already_installed(dep_name, repo_root, scope, dep_prim):
             upstream_status = _check_upstream_status_for_entry(
                 catalog, repo_root, scope, dep_prim, dep_name
             )
+            local_drift = _has_local_tamper(repo_root, scope, dep_prim, dep_name)
             if upstream_status == "behind":
                 if not use_json:
                     print(
                         f"[refresh] {dep_prim}:{dep_name} is behind upstream — reinstalling",
+                        file=sys.stderr,
+                    )
+                # Fall through to reinstall
+            elif local_drift:
+                if not use_json:
+                    print(
+                        f"[refresh] {dep_prim}:{dep_name} deployed files diverge from lockfile (local tamper) — reinstalling",
                         file=sys.stderr,
                     )
                 # Fall through to reinstall
@@ -581,6 +593,62 @@ def _check_upstream_status_for_entry(
         # rather than silently no-opping.
         pass
     return "unknown"
+
+
+def _has_local_tamper(
+    repo_root: Path,
+    scope: str,
+    primitive: str,
+    name: str,
+) -> bool:
+    """Return True iff the installed dir/file no longer matches lockfile checksum.
+
+    Catches the case where someone manually edited / `cp`'d / partially wrote
+    the deployed files, leaving them out of sync with the lockfile. `use` then
+    auto-refreshes from cache. Mirrors the local-tamper logic in
+    cmd_audit_impl but for a single entry, with failure tolerance.
+    """
+    try:
+        from lib.lockfile import (
+            compute_checksum,
+            compute_directory_hash,
+            find_lockfile,
+            get_entry,
+            load_lockfile,
+        )
+
+        lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+        if not lockfile_path.exists():
+            return False
+        lock_data = load_lockfile(lockfile_path)
+        entry = get_entry(lock_data, name, primitive)
+        if entry is None:
+            return False
+
+        expected_sha = entry.get("content_sha256") or entry.get("checksum_sha256", "")
+        checksum_type = entry.get("checksum_type")
+        install_target_str = entry.get("install_target", "")
+        if not (expected_sha and checksum_type and install_target_str):
+            return False
+
+        target = Path(install_target_str.rstrip("/"))
+        if target.is_symlink():
+            target = target.resolve()
+        if not target.exists():
+            return False
+
+        if checksum_type == "directory" and target.is_dir():
+            actual = compute_directory_hash(target)
+        elif checksum_type == "file" and target.is_file():
+            actual = compute_checksum(target)
+        else:
+            return False
+
+        return actual != expected_sha
+    except Exception:
+        # Best-effort: any failure means we don't know — be conservative and
+        # don't trigger a refresh just because the check itself broke.
+        return False
 
 
 def _dispatch_use(
