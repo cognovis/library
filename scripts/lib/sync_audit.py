@@ -165,16 +165,22 @@ def cmd_audit_impl(
     repo_root: Path,
     scope: str = "project",
     drift_only: bool = False,
+    skip_upstream: bool = False,
 ) -> dict[str, Any]:
-    """Audit: compute checksums for installed entries and compare against lockfile.
+    """Audit: compute checksums and compare against lockfile + check upstream drift.
 
     Returns a result with status 'clean' or 'drift'.
     Schema: {"status": "clean"|"drift", "entries": [...]}
 
-    Each entry has a "status" field:
-      - "drift": checksum mismatch (directory or file, depending on checksum_type)
-      - "clean": checksums match
-      - "unknown": entry without checksum_type, or path not found
+    Each entry has a "status" field and a "drift_kind" field:
+      - status:
+        - "drift": local-tamper, upstream-behind, or both
+        - "clean": no drift
+        - "unknown": entry without checksum_type, or path not found
+      - drift_kind (present when status="drift"):
+        - "local":    installed files differ from lockfile content_sha
+        - "upstream": catalog source has moved beyond lockfile source_commit
+        - "both":     both local-tamper and upstream-behind
 
     With drift_only=True, only entries with status="drift" are included in output.
 
@@ -189,6 +195,8 @@ def cmd_audit_impl(
         repo_root: Project root.
         scope: 'project' or 'global'.
         drift_only: If True, filter output to only drifted entries.
+        skip_upstream: If True, do not perform the network-bound git ls-remote
+            checks. Use in tests or offline contexts. Local-tamper checks still run.
 
     Returns:
         Audit result dict with stable schema.
@@ -216,6 +224,30 @@ def cmd_audit_impl(
             "status": "clean",
             "entries": [],
         }
+
+    # Pre-compute upstream status for all entries in one batch so we share the
+    # remote_cache across git ls-remote calls (one network request per repo).
+    # cmd_status_impl handles offline gracefully — if a probe fails, the entry
+    # gets upstream_status="unknown" and we don't flag drift on that axis.
+    upstream_by_key: dict[tuple[str, str], str] = {}
+    if not skip_upstream:
+        try:
+            from .status import cmd_status_impl  # local import to avoid cycle
+
+            status_result = cmd_status_impl(
+                catalog=catalog,
+                primitive=primitive if primitive else "all",
+                repo_root=repo_root,
+                scope=scope,
+                offline=False,
+            )
+            for status_entry in status_result.get("entries", []):
+                key = (status_entry.get("name", ""), status_entry.get("primitive", ""))
+                upstream_by_key[key] = status_entry.get("upstream_status", "unknown")
+        except Exception:
+            # Upstream probe is best-effort. Network failures must not break audit
+            # of local-tamper drift; we report upstream as "unknown" for everything.
+            upstream_by_key = {}
 
     audit_entries = []
     any_drift = False
@@ -303,15 +335,32 @@ def cmd_audit_impl(
             # Unknown checksum_type: report unknown
             entry_status = "unknown"
 
+        # Upstream-drift check: did the catalog source move beyond what's pinned
+        # in the lockfile? This is independent of local-tamper drift.
+        entry_type = entry.get("type", "")
+        upstream_status = upstream_by_key.get((entry_name, entry_type), "unknown")
+        upstream_behind = upstream_status == "behind"
+
         audit_entry = {
             "name": entry_name,
-            "primitive": entry.get("type", ""),
+            "primitive": entry_type,
             "scope": scope,
             "expected_sha": expected_sha,
             "actual_sha": actual_sha,
             "drift": drift,
             "status": entry_status,
+            "upstream_status": upstream_status,
         }
+
+        # Promote to "drift" if upstream has moved. Track drift_kind so consumers
+        # can tell why (local tamper vs upstream behind vs both — different fixes).
+        if upstream_behind:
+            audit_entry["drift"] = True
+            audit_entry["status"] = "drift"
+            audit_entry["drift_kind"] = "both" if drift else "upstream"
+            any_drift = True
+        elif drift:
+            audit_entry["drift_kind"] = "local"
 
         agent_frontmatter_issue = _audit_claude_agent_frontmatter(
             entry=entry,
@@ -323,6 +372,8 @@ def cmd_audit_impl(
             audit_entry["repair_hint"] = agent_frontmatter_issue["repair_hint"]
             audit_entry["drift"] = True
             audit_entry["status"] = "drift"
+            # Preserve drift_kind from upstream check; otherwise mark as local.
+            audit_entry.setdefault("drift_kind", "local")
             any_drift = True
 
         audit_entries.append(audit_entry)

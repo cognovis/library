@@ -351,6 +351,167 @@ class TestAuditDriftOnly:
 
 
 # ---------------------------------------------------------------------------
+# CL-wjr: Upstream-drift detection (catalog HEAD moved beyond lockfile pin)
+# ---------------------------------------------------------------------------
+
+class TestAuditUpstreamDrift:
+    """Audit must flag entries whose lockfile source_commit is behind catalog HEAD.
+
+    Pre-CL-wjr, audit only compared installed-dir hash vs lockfile content_sha256
+    and reported CLEAN whenever the install was untampered — even if the catalog
+    had moved on for weeks. That made `library skill audit` useless for detecting
+    "your deploy is stale, run sync" situations, which is the primary thing it
+    needs to detect on developer workstations.
+    """
+
+    def test_audit_skips_upstream_check_when_requested(self, project_dir, tmp_path):
+        """skip_upstream=True must not perform network calls and must not raise.
+
+        Test environments often have no network and no real remotes; the audit
+        must remain usable in CI by passing skip_upstream=True.
+        """
+        from lib.sync_audit import cmd_audit_impl
+
+        # Minimal lockfile with one local entry (no real remote)
+        cache_dir = project_dir / "fake-cache" / "skill-x"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "SKILL.md").write_bytes(b"# X")
+        from lib.lockfile import compute_directory_hash
+        real_hash = compute_directory_hash(cache_dir)
+
+        lockfile_path = project_dir / ".library.lock"
+        entry = {
+            "name": "skill-x",
+            "type": "skill",
+            "marketplace": "local",
+            "source": "local",
+            "source_commit": "abc123",
+            "cache_path": str(cache_dir) + "/",
+            "install_target": str(cache_dir) + "/",
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": real_hash,
+            "checksum_type": "directory",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        lockfile_path.write_text(yaml.dump({"installed": [entry]}))
+
+        # Should not raise, should not call git ls-remote
+        result = cmd_audit_impl({}, "skill", project_dir, scope="project", skip_upstream=True)
+        assert result["status"] == "clean"
+        # When skip_upstream=True the entry must report unknown upstream status
+        entries = result.get("entries", [])
+        assert entries[0].get("upstream_status") == "unknown"
+
+    def test_audit_marks_upstream_behind_as_drift(self, project_dir, monkeypatch):
+        """When cmd_status_impl reports upstream_status='behind', audit must
+        report status='drift' and drift_kind='upstream'.
+
+        We stub cmd_status_impl so the test does not need network access.
+        """
+        from lib.sync_audit import cmd_audit_impl
+
+        # Create a clean install (no local tamper)
+        cache_dir = project_dir / "fake-cache" / "behind-skill"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "SKILL.md").write_bytes(b"# behind-skill")
+        from lib.lockfile import compute_directory_hash
+        real_hash = compute_directory_hash(cache_dir)
+
+        lockfile_path = project_dir / ".library.lock"
+        entry = {
+            "name": "behind-skill",
+            "type": "skill",
+            "marketplace": "local",
+            "source": "https://github.com/example/repo/blob/main/skills/behind-skill/SKILL.md",
+            "source_commit": "old1234",
+            "cache_path": str(cache_dir) + "/",
+            "install_target": str(cache_dir) + "/",
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": real_hash,
+            "checksum_type": "directory",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        lockfile_path.write_text(yaml.dump({"installed": [entry]}))
+
+        # Stub status to report 'behind' for our entry
+        def fake_status(catalog, primitive, repo_root, scope, offline=False, remote_cache=None):
+            return {
+                "status": "ok",
+                "entries": [
+                    {
+                        "name": "behind-skill",
+                        "primitive": "skill",
+                        "upstream_status": "behind",
+                        "behind": True,
+                    }
+                ],
+            }
+
+        import lib.status as status_mod
+        monkeypatch.setattr(status_mod, "cmd_status_impl", fake_status)
+
+        result = cmd_audit_impl({}, "skill", project_dir, scope="project")
+        assert result["status"] == "drift", \
+            f"Expected status=drift for upstream-behind entry, got: {result}"
+        drift_entries = [e for e in result["entries"] if e.get("drift")]
+        assert len(drift_entries) == 1
+        assert drift_entries[0].get("drift_kind") == "upstream"
+        assert drift_entries[0].get("upstream_status") == "behind"
+
+    def test_audit_combines_local_and_upstream_drift_as_both(self, project_dir, monkeypatch):
+        """Entry that has both local tamper AND upstream-behind must report
+        drift_kind='both' so consumers can fix in the right order
+        (sync first to bring lockfile forward, then resolve local tamper)."""
+        from lib.sync_audit import cmd_audit_impl
+
+        cache_dir = project_dir / "fake-cache" / "double-drift"
+        cache_dir.mkdir(parents=True)
+        (cache_dir / "SKILL.md").write_bytes(b"# original")
+
+        from lib.lockfile import compute_directory_hash
+        original_hash = compute_directory_hash(cache_dir)
+        # Now tamper
+        (cache_dir / "SKILL.md").write_bytes(b"# tampered")
+
+        lockfile_path = project_dir / ".library.lock"
+        entry = {
+            "name": "double-drift",
+            "type": "skill",
+            "marketplace": "local",
+            "source": "https://github.com/example/repo/blob/main/skills/double-drift/SKILL.md",
+            "source_commit": "old5678",
+            "cache_path": str(cache_dir) + "/",
+            "install_target": str(cache_dir) + "/",
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": original_hash,  # pre-tamper hash
+            "checksum_type": "directory",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        lockfile_path.write_text(yaml.dump({"installed": [entry]}))
+
+        def fake_status(catalog, primitive, repo_root, scope, offline=False, remote_cache=None):
+            return {
+                "status": "ok",
+                "entries": [
+                    {"name": "double-drift", "primitive": "skill", "upstream_status": "behind"}
+                ],
+            }
+
+        import lib.status as status_mod
+        monkeypatch.setattr(status_mod, "cmd_status_impl", fake_status)
+
+        result = cmd_audit_impl({}, "skill", project_dir, scope="project")
+        assert result["status"] == "drift"
+        entries = result["entries"]
+        assert len(entries) == 1
+        assert entries[0].get("drift_kind") == "both", \
+            f"Expected drift_kind=both, got: {entries[0]}"
+
+
+# ---------------------------------------------------------------------------
 # CL-a01: Claude agent frontmatter health checks
 # ---------------------------------------------------------------------------
 

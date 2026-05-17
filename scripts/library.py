@@ -226,6 +226,14 @@ def build_parser() -> argparse.ArgumentParser:
             help="Only show drifted entries; exit 2 if any drift, 0 if clean",
         )
         audit_p.add_argument(
+            "--no-upstream",
+            action="store_true",
+            help=(
+                "Skip the upstream-drift check (git ls-remote). Use in offline "
+                "or CI contexts. Local-tamper drift is still detected."
+            ),
+        )
+        audit_p.add_argument(
             "--target-project",
             type=Path,
             default=None,
@@ -259,6 +267,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--drift-only",
         action="store_true",
         help="Only show drifted entries; exit 2 if any drift, 0 if clean",
+    )
+    top_audit_parser.add_argument(
+        "--no-upstream",
+        action="store_true",
+        help=(
+            "Skip the upstream-drift check (git ls-remote). Use in offline "
+            "or CI contexts. Local-tamper drift is still detected."
+        ),
     )
     top_audit_parser.add_argument(
         "--project",
@@ -500,9 +516,29 @@ def _install_with_deps(
 
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
-        # Skip if already installed (lockfile-aware)
+        # Already-installed handling. is_already_installed() only checks
+        # (lockfile_has_entry AND install_target_exists) — it does NOT detect
+        # that catalog HEAD has moved beyond the lockfile's pinned source_commit.
+        # Without the upstream-drift check below, `use` silently no-ops when
+        # the catalog has newer commits, leaving deployed files stale.
         if is_already_installed(dep_name, repo_root, scope, dep_prim):
-            continue
+            upstream_status = _check_upstream_status_for_entry(
+                catalog, repo_root, scope, dep_prim, dep_name
+            )
+            if upstream_status == "behind":
+                if not use_json:
+                    print(
+                        f"[refresh] {dep_prim}:{dep_name} is behind upstream — reinstalling",
+                        file=sys.stderr,
+                    )
+                # Fall through to reinstall
+            else:
+                if not use_json:
+                    print(
+                        f"[skip] {dep_prim}:{dep_name} already installed (upstream: {upstream_status})",
+                        file=sys.stderr,
+                    )
+                continue
         install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
         rc = _dispatch_use(
             args, repo_root, catalog, dep_prim, dep_name, scope, harness, False, use_json, install_mode
@@ -511,6 +547,40 @@ def _install_with_deps(
             return rc
 
     return 0
+
+
+def _check_upstream_status_for_entry(
+    catalog: dict,
+    repo_root: Path,
+    scope: str,
+    primitive: str,
+    name: str,
+) -> str:
+    """Return upstream_status for a single (primitive, name) entry.
+
+    Returns one of 'current', 'behind', 'unknown'. Wraps cmd_status_impl with
+    network/IO failure tolerance so a `library use` call never hard-fails on
+    a transient git ls-remote error.
+    """
+    try:
+        from lib.status import cmd_status_impl
+
+        result = cmd_status_impl(
+            catalog=catalog,
+            primitive=primitive,
+            repo_root=repo_root,
+            scope=scope,
+            offline=False,
+        )
+        for entry in result.get("entries", []):
+            if entry.get("name") == name and entry.get("primitive") == primitive:
+                return entry.get("upstream_status", "unknown")
+    except Exception:
+        # Best-effort: a status probe failure must not block `use`. Treat as
+        # unknown so the short-circuit path (skip with explicit message) wins
+        # rather than silently no-opping.
+        pass
+    return "unknown"
 
 
 def _dispatch_use(
@@ -951,10 +1021,11 @@ def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
 
 def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
-    """Handle: <primitive> audit [--drift-only]"""
+    """Handle: <primitive> audit [--drift-only] [--no-upstream]"""
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "project")
     drift_only = getattr(args, "drift_only", False)
+    skip_upstream = getattr(args, "no_upstream", False)
     primitive = args.primitive
 
     try:
@@ -964,6 +1035,7 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             repo_root=repo_root,
             scope=scope,
             drift_only=drift_only,
+            skip_upstream=skip_upstream,
         )
         if use_json:
             print_json(result)
@@ -976,7 +1048,8 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             elif status == "drift":
                 print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(entries)} entries")
                 for e in drift_entries:
-                    print(f"  DRIFT: {e['primitive']}:{e['name']}")
+                    kind = e.get("drift_kind", "?")
+                    print(f"  DRIFT [{kind}]: {e['primitive']}:{e['name']}")
                     _print_agent_frontmatter_issue(e)
             else:
                 print(f"Audit: {status}")
@@ -1003,6 +1076,7 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path | None, catalog: dic
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "project")
     drift_only = getattr(args, "drift_only", False)
+    skip_upstream = getattr(args, "no_upstream", False)
 
     scopes_to_check = _scopes_to_check(scope)
 
@@ -1022,6 +1096,7 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path | None, catalog: dic
                 repo_root=repo_root or Path.cwd(),
                 scope=s,
                 drift_only=drift_only,
+                skip_upstream=skip_upstream,
             )
             all_entries.extend(result.get("entries", []))
             if result.get("status") == "drift":
