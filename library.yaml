@@ -442,6 +442,20 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: code-navigator
+      description: >-
+        Navigate source code by symbol: find where a function/class is defined (smart_search),
+        see the structural skeleton of a file (smart_outline), or extract one specific
+        function/class AST-bounded (smart_unfold). Works on Python (full AST) and TS/JS/Go/Rust
+        (tree-sitter with regex fallback). Not for full-text search inside function bodies
+        (use Grep) or files under ~100 lines (plain Read is cheaper).
+      source: https://github.com/cognovis/library-core/blob/main/skills/code-navigator/SKILL.md
+      requires:
+        - "standard:english-only"
+      tags:
+        - origin:original
+        - tier:domain
+        - workflow:codenav
     - name: codex
       description: >-
         OpenAI Codex CLI wrapper: three modes. Code review (independent diff review with pass/fail
@@ -615,7 +629,7 @@ library:
         Provides dual-mode routing guidance: use `ob` CLI for coding sessions (search,
         save, context, timeline), use MCP for mobile (claude.ai/iOS) and admin operations.
         Triggers on memory, open-brain, ob CLI, recall, past work, save observation.
-      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-cli/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/ob-cli/SKILL.md
       tags:
         - origin:original
         - tier:core
@@ -1343,18 +1357,6 @@ library:
         - origin:personal
         - tier:core
         - workflow:memory
-    - name: learnings-pipeline
-      description: >-
-        Extract, review, and materialize learnings from conversation histories into
-        standards or skills. Use when processing session insights or materializing learnings.
-      source: https://github.com/sussdorff/open-brain/blob/main/skills/learnings-pipeline/SKILL.md
-      requires:
-        - "standard:english-only"
-        - "mcp:open-brain"
-      tags:
-        - origin:personal
-        - tier:core
-        - workflow:memory
     - name: memory-heartbeat
       description: >-
         Periodic memory maintenance for open-brain. Runs lifecycle pipeline during
@@ -1391,42 +1393,6 @@ library:
         - origin:personal
         - tier:core
         - workflow:memory
-    - name: ob-smart-outline
-      description: >-
-        Show the structural skeleton of a file: classes, methods, functions with line
-        numbers. Use when "outline file", "show structure", "what's in this file".
-      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-outline/SKILL.md
-      requires:
-        - "standard:english-only"
-        - "mcp:open-brain"
-      tags:
-        - origin:personal
-        - tier:domain
-        - workflow:codenav
-    - name: ob-smart-search
-      description: >-
-        Find symbols (functions, classes, methods) across a codebase using AST analysis.
-        Use when "where is X defined", "find function X", "find symbol".
-      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-search/SKILL.md
-      requires:
-        - "standard:english-only"
-        - "mcp:open-brain"
-      tags:
-        - origin:personal
-        - tier:domain
-        - workflow:codenav
-    - name: ob-smart-unfold
-      description: >-
-        Extract a complete function or class from a file, AST-bounded (no mid-function
-        cuts). Use when "unfold symbol", "show function X", "extract class X".
-      source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-smart-unfold/SKILL.md
-      requires:
-        - "standard:english-only"
-        - "mcp:open-brain"
-      tags:
-        - origin:personal
-        - tier:domain
-        - workflow:codenav
     - name: ob-triage
       description: >-
         Triage open-brain memories with human-in-the-loop review. Classifies into
