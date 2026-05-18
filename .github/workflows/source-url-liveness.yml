@@ -16,6 +16,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Verify library.yaml GitHub source URLs
         env:
-          GH_TOKEN: ${{ github.token }}
+          # LIBRARY_CATALOG_READ_TOKEN: fine-grained PAT with contents:read on
+          # cognovis/library-core and sussdorff/library-core (both private).
+          # Falls back to the default GITHUB_TOKEN so the job still runs (but
+          # will report private-repo URLs as 404) until the secret is set.
+          GH_TOKEN: ${{ secrets.LIBRARY_CATALOG_READ_TOKEN || github.token }}
           NETWORK_TESTS: "1"
         run: uv run --extra dev pytest tests/test_library_yaml_urls.py -q
