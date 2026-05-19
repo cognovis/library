@@ -143,8 +143,8 @@ def build_parser() -> argparse.ArgumentParser:
         use_p.add_argument(
             "--scope",
             choices=["project", "global"],
-            default="project",
-            help="Scope (default: project)",
+            default=None,
+            help="Scope (project or global; default: from catalog entry's default_scope, fallback project)",
         )
         use_p.add_argument(
             "--target-project",
@@ -447,12 +447,30 @@ def cmd_list(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     return 0
 
 
+def _resolve_default_scope(catalog: dict, primitive: str, name: str) -> str:
+    """Return scope from catalog entry's default_scope field, falling back to 'project'.
+
+    Uses the same lookup semantics (fuzzy=True) as the installer so that keyword
+    queries and exact names both resolve to the same entry and scope.
+    """
+    from lib.catalog import lookup_entry
+    try:
+        entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+        default_scope = entry.get("default_scope", "project")
+        if default_scope == "global":
+            return "global"
+        # 'ask' and 'project' both fall back to project for CLI invocations
+        return "project"
+    except Exception:
+        return "project"
+
+
 def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: <primitive> use [name] [--dry-run] [--json]"""
     use_json = getattr(args, "json", False)
     dry_run = getattr(args, "dry_run", False)
     name = getattr(args, "name", None)
-    scope = getattr(args, "scope", "project")
+    explicit_scope = args.scope  # None if --scope not passed (default=None now)
     harness = getattr(args, "harness", "all")
     install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
     primitive = args.primitive
@@ -464,6 +482,12 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         else:
             print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
+
+    # Resolve scope: explicit --scope takes priority; otherwise use catalog entry's default_scope
+    if explicit_scope is not None:
+        scope = explicit_scope
+    else:
+        scope = _resolve_default_scope(catalog, primitive, name)
 
     # Resolve transitive dependencies before installing
     if not dry_run:
