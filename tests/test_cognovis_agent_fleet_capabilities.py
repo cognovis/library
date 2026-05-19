@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tomllib
@@ -87,6 +88,63 @@ def _resolve_requires_refs(
                 f"Malformed ref (empty name after prefix): {ref!r}"
             )
         results.append((ref, name, name in registry))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Body-ref helpers: plugin-prefixed subagent_type refs in agent body prose
+# ---------------------------------------------------------------------------
+
+# Prose placeholders like subagent_type="..." appear in documentation text and
+# are not real runtime refs.
+_BODY_REF_PLACEHOLDER_RE = re.compile(r'^\.+$')
+
+_BODY_SUBAGENT_TYPE_RE = re.compile(r'subagent_type=["\']([^"\']+)["\']')
+
+
+def _extract_body_subagent_type_refs(text: str) -> list[str]:
+    """Return all subagent_type="..." values found in *text*, excluding prose placeholders.
+
+    Skips values that look like documentation placeholders (e.g. ``"..."``).
+    """
+    return [
+        m
+        for m in _BODY_SUBAGENT_TYPE_RE.findall(text)
+        if not _BODY_REF_PLACEHOLDER_RE.match(m)
+    ]
+
+
+def _resolve_plugin_prefixed_body_refs(
+    refs: list[str],
+    plugin_registry: dict[str, set[str]],
+) -> list[tuple[str, str, str, bool]]:
+    """Resolve plugin-prefixed subagent_type refs against a registry.
+
+    Plugin-prefixed means the value contains a colon, e.g. ``codex:codex-rescue``.
+    Plain refs (no colon) are skipped and not included in the returned list.
+
+    *plugin_registry* maps namespace strings (e.g. ``"codex"``) to sets of known
+    agent names within that namespace.
+
+    Returns a list of ``(ref, namespace, name, resolved)`` tuples — one entry per
+    plugin-prefixed ref.
+
+    Raises ValueError for malformed prefixed refs (empty namespace or empty name
+    after the colon).
+    """
+    results: list[tuple[str, str, str, bool]] = []
+    for ref in refs:
+        if ":" not in ref:
+            continue  # plain ref — not in scope
+        namespace, _, name = ref.partition(":")
+        namespace = namespace.strip()
+        name = name.strip()
+        if not namespace:
+            raise ValueError(f"Malformed plugin ref (empty namespace): {ref!r}")
+        if not name:
+            raise ValueError(f"Malformed plugin ref (empty name after prefix): {ref!r}")
+        resolved = name in plugin_registry.get(namespace, set())
+        results.append((ref, namespace, name, resolved))
     return results
 
 
@@ -374,3 +432,99 @@ def test_catalog_agent_requires_refs_resolve() -> None:
                 f"{agent_file.name}: requires: {ref!r} — "
                 f"'{name}' is not listed in the library.yaml catalog"
             )
+
+
+# ---------------------------------------------------------------------------
+# Plugin-prefixed body ref unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_body_ref_extractor_finds_plugin_prefixed_refs() -> None:
+    """Extractor returns plugin-prefixed refs and skips prose placeholders."""
+    text = (
+        'Agent(subagent_type="codex:codex-rescue", prompt="...")\n'
+        'Agent(subagent_type="general-purpose", prompt="do the thing")\n'
+        '- **Claude**: Uses `Agent(subagent_type="...", prompt="...")` for docs.\n'
+    )
+    refs = _extract_body_subagent_type_refs(text)
+    assert "codex:codex-rescue" in refs
+    assert "general-purpose" in refs
+    assert "..." not in refs
+
+
+def test_plugin_ref_resolver_resolves_known_ref() -> None:
+    """Resolver returns resolved=True when the agent name is in the namespace registry."""
+    registry = {"codex": {"codex-rescue", "other-agent"}}
+    results = _resolve_plugin_prefixed_body_refs(["codex:codex-rescue"], registry)
+    assert results == [("codex:codex-rescue", "codex", "codex-rescue", True)]
+
+
+def test_plugin_ref_resolver_reports_unresolved_ref() -> None:
+    """Resolver returns resolved=False for a name absent from the registry."""
+    results = _resolve_plugin_prefixed_body_refs(["codex:missing-agent"], {"codex": set()})
+    assert results == [("codex:missing-agent", "codex", "missing-agent", False)]
+
+
+def test_plugin_ref_resolver_skips_plain_refs() -> None:
+    """Resolver ignores non-prefixed refs — they are not plugin-prefixed body refs."""
+    results = _resolve_plugin_prefixed_body_refs(["general-purpose", "review-agent"], {})
+    assert results == []
+
+
+def test_plugin_ref_resolver_rejects_empty_name_after_prefix() -> None:
+    """Resolver raises ValueError for a ref with an empty name after the namespace colon."""
+    with pytest.raises(ValueError, match="empty name after prefix"):
+        _resolve_plugin_prefixed_body_refs(["codex:"], {})
+
+    with pytest.raises(ValueError, match="empty name after prefix"):
+        _resolve_plugin_prefixed_body_refs(["codex:   "], {})
+
+
+def test_catalog_agent_body_plugin_refs_are_well_formed() -> None:
+    """All plugin-prefixed subagent_type refs in agent body prose are syntactically valid.
+
+    This is the always-run tier: it only checks well-formedness (non-empty namespace
+    and name). Resolution against an installed registry is handled by the optional
+    integration-tier test below.
+    """
+    for agent_file in sorted(AGENTS_DIR.glob("*.md")):
+        refs = _extract_body_subagent_type_refs(agent_file.read_text())
+        # Raises ValueError for any malformed plugin-prefixed ref.
+        _resolve_plugin_prefixed_body_refs(refs, {})
+
+
+_INSTALLED_CODEX_AGENTS = Path.home() / ".codex" / "agents"
+
+# Codex-native runtime agents that are NOT managed by the library installer.
+# These ship with (or alongside) the Codex CLI itself; they have no
+# ~/.codex/agents/<name>.toml on disk and must not be checked for installation.
+# Documented as intentional in docs/audit/library-go-live-2026-05-15.md.
+_CODEX_RUNTIME_BUILTINS: frozenset[str] = frozenset({
+    "codex-rescue",  # canonical Codex escape-hatch agent; invoked via codex: prefix
+})
+
+
+@pytest.mark.skipif(
+    not _INSTALLED_CODEX_AGENTS.exists()
+    or not list(_INSTALLED_CODEX_AGENTS.glob("*.toml")),
+    reason="no installed Codex agents found at ~/.codex/agents/ — integration tier skipped",
+)
+def test_installed_codex_plugin_refs_resolve_against_local_agents() -> None:
+    """Integration tier: non-builtin codex:* body refs resolve to ~/.codex/agents/<name>.toml.
+
+    Skipped when no Codex agents are installed locally. Agents in
+    _CODEX_RUNTIME_BUILTINS are Codex-native and are not checked for installation.
+    """
+    installed_names = {p.stem for p in _INSTALLED_CODEX_AGENTS.glob("*.toml")}
+    plugin_registry = {"codex": installed_names}
+
+    for agent_file in sorted(AGENTS_DIR.glob("*.md")):
+        refs = _extract_body_subagent_type_refs(agent_file.read_text())
+        results = _resolve_plugin_prefixed_body_refs(refs, plugin_registry)
+        for ref, namespace, name, resolved in results:
+            if namespace == "codex" and name not in _CODEX_RUNTIME_BUILTINS:
+                assert resolved, (
+                    f"{agent_file.name}: body ref {ref!r} not found — "
+                    f"~/.codex/agents/{name}.toml does not exist "
+                    f"(add to _CODEX_RUNTIME_BUILTINS if this is a Codex-native agent)"
+                )
