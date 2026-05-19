@@ -12,13 +12,20 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
-from ..cache import compute_cache_path, materialize_install_target, plan_cache_writes
+from ..cache import (
+    compute_cache_path,
+    materialize_install_target,
+    materialize_vendor_copy,
+    plan_cache_writes,
+)
 from ..catalog import lookup_entry
 from ..errors import InstallError, SourceError
 from ..lockfile import (
+    compute_checksum,
     compute_directory_hash,
     find_lockfile,
     load_lockfile,
@@ -30,6 +37,27 @@ from ..output import blocked_result, dry_run_result, success
 from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 from ..source import get_local_commit_sha, parse_source, resolve_marketplace
+
+
+def _parse_standard_category(file_path: str) -> tuple[str, str] | tuple[None, None]:
+    """Parse category and filename from a standards/ path.
+
+    Handles paths like:
+      standards/workflow/bead-hygiene.md
+      some/prefix/standards/workflow/bead-hygiene.md
+
+    Returns (category, filename) or (None, None) if the pattern is not found.
+    """
+    if not file_path:
+        return None, None
+    parts = file_path.split("/")
+    for i, part in enumerate(parts):
+        if part == "standards" and i + 2 < len(parts):
+            category = parts[i + 1]
+            filename = parts[i + 2]
+            if category and filename:
+                return category, filename
+    return None, None
 
 
 def install_standard(
@@ -85,7 +113,33 @@ def install_standard(
             "Check default_dirs.standards in library.yaml."
         )
 
-    canonical_dir = canonical_base / standard_name
+    # For single-file (blob/raw) sources, compute the category-mirror install path.
+    # For directory (tree) sources, keep the old per-name subdir behavior.
+    is_single_file = parsed.path_type == "file"
+    canonical_install: Path
+    is_file_install = False
+
+    if is_single_file and parsed.file_path:
+        category, filename = _parse_standard_category(parsed.file_path)
+        if category is not None and filename is not None:
+            # Category-mirror path: <base>/<category>/<filename>
+            canonical_install = canonical_base / category / filename
+            is_file_install = True
+        else:
+            # Fallback: cannot parse category — use old per-name subdir with warning
+            warnings.warn(
+                f"Cannot parse category from standard source path '{parsed.file_path}'. "
+                f"Falling back to per-name subdir for standard '{standard_name}'.",
+                UserWarning,
+                stacklevel=2,
+            )
+            canonical_install = canonical_base / standard_name
+    else:
+        # Bundle (directory) source: old per-name subdir behavior unchanged
+        canonical_install = canonical_base / standard_name
+
+    # For dry-run, use canonical_install as the reported target
+    canonical_dir = canonical_install
 
     # 4. Dry-run mode
     if dry_run:
@@ -129,43 +183,74 @@ def install_standard(
             shutil.copytree(str(source_dir), str(cache_path))
 
         # 6. Create canonical install (Layer C)
-        materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
+        if is_file_install:
+            # Single-file: copy directly to the category-mirror file path
+            filename = canonical_install.name
+            materialize_vendor_copy(cache_path / filename, canonical_install)
+        else:
+            materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
 
-        # 7. Write lockfile — hash local installed content (all files matter)
-        try:
-            checksum = compute_directory_hash(canonical_dir)
-        except OSError:
-            checksum = "0" * 64
-
-        lockfile_entry = make_entry(
-            name=standard_name,
-            primitive_type="standard",
-            marketplace=marketplace,
-            source=source_str,
-            source_commit=source_commit,
-            cache_path=str(cache_path) + "/",
-            install_target=str(canonical_dir) + "/",
-            checksum_sha256=checksum,
-            checksum_type="directory",
-            content_sha256=checksum,
-            install_mode=install_mode,
-            license_id=entry.get("license", "unknown"),
-        )
+        # 7. Write lockfile — hash local installed content
+        if is_file_install:
+            try:
+                checksum = compute_checksum(canonical_install)
+            except OSError:
+                checksum = "0" * 64
+            lockfile_entry = make_entry(
+                name=standard_name,
+                primitive_type="standard",
+                marketplace=marketplace,
+                source=source_str,
+                source_commit=source_commit,
+                cache_path=str(cache_path) + "/",
+                install_target=str(canonical_install),
+                checksum_sha256=checksum,
+                checksum_type="file",
+                content_sha256=checksum,
+                install_mode=install_mode,
+                license_id=entry.get("license", "unknown"),
+            )
+        else:
+            try:
+                checksum = compute_directory_hash(canonical_dir)
+            except OSError:
+                checksum = "0" * 64
+            lockfile_entry = make_entry(
+                name=standard_name,
+                primitive_type="standard",
+                marketplace=marketplace,
+                source=source_str,
+                source_commit=source_commit,
+                cache_path=str(cache_path) + "/",
+                install_target=str(canonical_dir) + "/",
+                checksum_sha256=checksum,
+                checksum_type="directory",
+                content_sha256=checksum,
+                install_mode=install_mode,
+                license_id=entry.get("license", "unknown"),
+            )
 
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         lock_data = load_lockfile(lockfile_path)
         upsert_entry(lock_data, lockfile_entry)
         save_lockfile(lockfile_path, lock_data)
 
+        # 8. Migration: remove old per-name subdir if it still exists and is different
+        #    from the new category-mirror parent directory
+        if is_file_install:
+            old_path = canonical_base / standard_name
+            if old_path.is_dir() and old_path != canonical_install.parent:
+                shutil.rmtree(str(old_path), ignore_errors=True)
+
         result_data: dict[str, Any] = {
             "name": standard_name,
-            "canonical": str(canonical_dir),
+            "canonical": str(canonical_install),
             "cache": str(cache_path),
             "source_commit": source_commit,
             "install_mode": install_mode,
         }
 
-        msg = f"Standard '{standard_name}' installed at {canonical_dir}"
+        msg = f"Standard '{standard_name}' installed at {canonical_install}"
 
         return success(data=result_data, message=msg)
 
