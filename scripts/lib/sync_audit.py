@@ -431,12 +431,18 @@ def cmd_audit_impl(
             audit_entry.setdefault("drift_kind", "local")
             any_drift = True
 
-        # Path conformance check: single-file standards should be at category-mirror paths
+        # Path conformance check: single-file standards should be at category-mirror paths.
+        # When path drift co-occurs with upstream drift, upgrade drift_kind to "both"
+        # so that the user can see there are two separate issues. setdefault() is wrong
+        # here: it silently discards the path-drift signal when "upstream" is already set.
         if _check_standard_path_drift(entry, catalog, repo_root, scope):
             audit_entry["drift"] = True
             audit_entry["status"] = "drift"
-            audit_entry.setdefault("drift_kind", "local")
             any_drift = True
+            if audit_entry.get("drift_kind") == "upstream":
+                audit_entry["drift_kind"] = "both"
+            else:
+                audit_entry.setdefault("drift_kind", "local")
 
         audit_entries.append(audit_entry)
 
