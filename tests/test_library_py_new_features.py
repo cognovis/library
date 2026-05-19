@@ -1271,6 +1271,158 @@ class TestAuditDriftDetection:
                 assert "drift" in e
 
 
+# ---------------------------------------------------------------------------
+# CL-brl: default_scope from catalog entry
+# ---------------------------------------------------------------------------
+
+FIXTURE_GLOBAL_SCOPE_STANDARD_MD = """---
+name: global-standard
+description: A standard that should install globally by default
+---
+
+# Global Standard Content
+"""
+
+FIXTURE_PROJECT_SCOPE_STANDARD_MD = """---
+name: project-standard
+description: A standard that should install project-scoped by default
+---
+
+# Project Standard Content
+"""
+
+
+@pytest.fixture
+def project_dir_with_default_scope(tmp_path):
+    """Project dir fixture extended with standards that have default_scope set."""
+    global_std_dir = tmp_path / "fixture-global-standard"
+    global_std_dir.mkdir()
+    (global_std_dir / "global-standard.md").write_text(FIXTURE_GLOBAL_SCOPE_STANDARD_MD)
+
+    project_std_dir = tmp_path / "fixture-project-standard"
+    project_std_dir.mkdir()
+    (project_std_dir / "project-standard.md").write_text(FIXTURE_PROJECT_SCOPE_STANDARD_MD)
+
+    library_yaml = """
+default_dirs:
+  standards:
+    - default: .agents/standards/
+    - global: ~/.agents/standards/
+  skills: []
+  agents: []
+  prompts: []
+  guardrails: []
+  model_standards: []
+  agent_bases: []
+
+library:
+  standards:
+    - name: global-standard
+      description: Standard with default_scope global
+      default_scope: global
+      source: {global_std_source}
+    - name: project-standard
+      description: Standard with default_scope project
+      default_scope: project
+      source: {project_std_source}
+    - name: noscope-standard
+      description: Standard with no default_scope field
+      source: {project_std_source}
+
+marketplaces: []
+guardrails: []
+mcp_servers: []
+""".format(
+        global_std_source=str(global_std_dir / "global-standard.md"),
+        project_std_source=str(project_std_dir / "project-standard.md"),
+    )
+    (tmp_path / "library.yaml").write_text(library_yaml)
+    (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
+    return tmp_path
+
+
+class TestDefaultScopeFromCatalog:
+    """CL-brl: cmd_use honors default_scope from catalog entries."""
+
+    def test_global_default_scope_uses_global_lockfile(self, project_dir_with_default_scope):
+        """Entry with default_scope: global installs to global lockfile without --scope."""
+        result = run_library(
+            "standard", "use", "global-standard", "--dry-run", "--json",
+            cwd=project_dir_with_default_scope,
+        )
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["status"] == "dry-run"
+        # The lockfile operation should target the global lockfile (~/.library.lock)
+        lockfile_ops = [
+            op for op in data.get("operations", [])
+            if op.get("operation") == "write_lockfile"
+        ]
+        assert len(lockfile_ops) == 1, f"Expected one lockfile op, got: {lockfile_ops}"
+        lockfile_path = lockfile_ops[0]["path"]
+        assert lockfile_path == str(Path.home() / ".config" / "library" / "global.lock"), (
+            f"Expected global lockfile at ~/.config/library/global.lock, got: {lockfile_path}"
+        )
+
+    def test_project_default_scope_uses_project_lockfile(self, project_dir_with_default_scope):
+        """Entry with default_scope: project installs to project lockfile without --scope."""
+        result = run_library(
+            "standard", "use", "project-standard", "--dry-run", "--json",
+            cwd=project_dir_with_default_scope,
+        )
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["status"] == "dry-run"
+        lockfile_ops = [
+            op for op in data.get("operations", [])
+            if op.get("operation") == "write_lockfile"
+        ]
+        assert len(lockfile_ops) == 1, f"Expected one lockfile op, got: {lockfile_ops}"
+        lockfile_path = lockfile_ops[0]["path"]
+        assert lockfile_path == str(project_dir_with_default_scope / ".library.lock"), (
+            f"Expected project lockfile, got: {lockfile_path}"
+        )
+
+    def test_no_default_scope_uses_project_lockfile(self, project_dir_with_default_scope):
+        """Entry with no default_scope field falls back to project scope."""
+        result = run_library(
+            "standard", "use", "noscope-standard", "--dry-run", "--json",
+            cwd=project_dir_with_default_scope,
+        )
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["status"] == "dry-run"
+        lockfile_ops = [
+            op for op in data.get("operations", [])
+            if op.get("operation") == "write_lockfile"
+        ]
+        assert len(lockfile_ops) == 1, f"Expected one lockfile op, got: {lockfile_ops}"
+        lockfile_path = lockfile_ops[0]["path"]
+        assert lockfile_path == str(project_dir_with_default_scope / ".library.lock"), (
+            f"Expected project lockfile for no-scope entry, got: {lockfile_path}"
+        )
+
+    def test_explicit_scope_overrides_default_scope(self, project_dir_with_default_scope):
+        """Explicit --scope project overrides a catalog entry's default_scope: global."""
+        result = run_library(
+            "standard", "use", "global-standard", "--dry-run", "--json",
+            "--scope", "project",
+            cwd=project_dir_with_default_scope,
+        )
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["status"] == "dry-run"
+        lockfile_ops = [
+            op for op in data.get("operations", [])
+            if op.get("operation") == "write_lockfile"
+        ]
+        assert len(lockfile_ops) == 1, f"Expected one lockfile op, got: {lockfile_ops}"
+        lockfile_path = lockfile_ops[0]["path"]
+        assert lockfile_path == str(project_dir_with_default_scope / ".library.lock"), (
+            f"--scope project should override default_scope global, got: {lockfile_path}"
+        )
+
+
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-v"]))
