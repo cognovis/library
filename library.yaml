@@ -1622,6 +1622,18 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: judge-default
+      description: >-
+        Generic pre-action judge. Evaluates structured Action Proposals before side effects
+        execute and returns ALLOW, BLOCK, REVISE, or ESCALATE per the shared judge-layer
+        contracts. Required by bead-orchestrator's Phase 4.5 pre-action gate.
+      source: https://github.com/cognovis/library-core/blob/main/agents/judge-default.md
+      requires:
+        - "standard:judge-layer"
+      tags:
+        - origin:original
+        - tier:core
+        - judge-layer
     - name: learning-extractor
       description: >-
         Extracts learnings and session insights from conversation history and project context.
