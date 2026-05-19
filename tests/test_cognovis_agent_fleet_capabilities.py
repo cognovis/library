@@ -496,8 +496,13 @@ def test_catalog_agent_body_plugin_refs_are_well_formed() -> None:
 _INSTALLED_CODEX_AGENTS = Path.home() / ".codex" / "agents"
 
 # Codex-native runtime agents that are NOT managed by the library installer.
-# These ship with (or alongside) the Codex CLI itself; they have no
-# ~/.codex/agents/<name>.toml on disk and must not be checked for installation.
+# These either ship with the Codex CLI itself or live in a marketplace plugin
+# cache (e.g. ~/.claude/plugins/marketplaces/openai-codex/plugins/codex/agents/)
+# rather than at ~/.codex/agents/<name>.toml. The integration test below only
+# scans the top-level ~/.codex/agents/ directory by design — extending it to
+# walk marketplace caches would add registry-builder complexity for little gain.
+# When a new codex:* body ref is added that lives in a marketplace cache (not
+# installed via `library use sync-codex-agents`), append the name here.
 # Documented as intentional in docs/audit/library-go-live-2026-05-15.md.
 _CODEX_RUNTIME_BUILTINS: frozenset[str] = frozenset({
     "codex-rescue",  # canonical Codex escape-hatch agent; invoked via codex: prefix
@@ -513,7 +518,8 @@ def test_installed_codex_plugin_refs_resolve_against_local_agents() -> None:
     """Integration tier: non-builtin codex:* body refs resolve to ~/.codex/agents/<name>.toml.
 
     Skipped when no Codex agents are installed locally. Agents in
-    _CODEX_RUNTIME_BUILTINS are Codex-native and are not checked for installation.
+    _CODEX_RUNTIME_BUILTINS are Codex-native (or marketplace-cache-only) and
+    are not checked for installation in the top-level ~/.codex/agents/ directory.
     """
     installed_names = {p.stem for p in _INSTALLED_CODEX_AGENTS.glob("*.toml")}
     plugin_registry = {"codex": installed_names}
@@ -524,7 +530,11 @@ def test_installed_codex_plugin_refs_resolve_against_local_agents() -> None:
         for ref, namespace, name, resolved in results:
             if namespace == "codex" and name not in _CODEX_RUNTIME_BUILTINS:
                 assert resolved, (
-                    f"{agent_file.name}: body ref {ref!r} not found — "
-                    f"~/.codex/agents/{name}.toml does not exist "
-                    f"(add to _CODEX_RUNTIME_BUILTINS if this is a Codex-native agent)"
+                    f"{agent_file.name}: body ref {ref!r} not found at "
+                    f"~/.codex/agents/{name}.toml. Resolution paths:\n"
+                    f"  (a) install via `library use {name}` (top-level scope), or\n"
+                    f"  (b) add {name!r} to _CODEX_RUNTIME_BUILTINS if it lives in a "
+                    f"marketplace plugin cache (e.g. "
+                    f"~/.claude/plugins/marketplaces/openai-codex/plugins/codex/agents/) "
+                    f"or is a Codex CLI built-in."
                 )
