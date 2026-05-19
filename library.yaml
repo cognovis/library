@@ -1118,6 +1118,19 @@ library:
         - origin:original
         - tier:core
         - workflow:beads
+    - name: bead-reviewer
+      description: >-
+        Evaluate bead spec quality via 3-pass review: Pass 1 (structural, 6 factory-ready
+        criteria), Pass 2 (semantic, anti-pattern + ADR-Gap), Pass 3 (project overlay,
+        bead-hygiene.md rules). Recommends FACTORY READY or NEEDS INTERACTIVE WORK.
+      source: https://github.com/cognovis/library-core/blob/main/skills/bead-reviewer/SKILL.md
+      requires:
+        - "standard:english-only"
+        - "standard:bead-hygiene"
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
     - name: compound
       description: >-
         Structured 4-stage retrospective for completed beads. Creates Trap/Pattern/Decision
@@ -1325,9 +1338,12 @@ library:
       description: >-
         Review a wave or epic subtree before dispatch. Finds defects single-bead review
         misses — dependency ordering, ownership collisions, lifecycle contradictions.
+        Calls bead-reviewer per bead and adds Wave-Goal Coverage Matrix.
       source: https://github.com/cognovis/library-core/blob/main/skills/wave-reviewer/SKILL.md
       requires:
         - "standard:english-only"
+        - "standard:bead-hygiene"
+        - "skill:bead-reviewer"
       tags:
         - origin:original
         - tier:core
@@ -2310,6 +2326,20 @@ library:
         - tier:domain
         - category:standard
         - fhir
+    - name: bead-hygiene
+      description: >-
+        Universal bead spec quality baseline for Pass 3 review. Defines required MoC table
+        format and two library-default anti-patterns ("Tests folgen später", "IG-Version pinnen").
+        Auto-loaded by bead-reviewer as Source A. Projects extend via per-repo overlay at
+        $REPO_ROOT/.agents/standards/bead-hygiene.md.
+      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md
+      tier: core
+      default_scope: global
+      tags:
+        - origin:original
+        - tier:core
+        - category:standard
+        - workflow:beads
     - name: no-emoji
       description: >-
         Do not add emojis to source code files, configuration files, or technical documentation.
