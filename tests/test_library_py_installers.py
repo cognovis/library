@@ -1264,3 +1264,441 @@ class TestPrimitiveMapping:
 
         cache = compute_cache_path("skill", "local", "my-skill", "local")
         assert "my-skill@local" in str(cache)
+
+
+# ---------------------------------------------------------------------------
+# CL-pq4: Standard installer flat-file installs from category-mirror source paths
+# ---------------------------------------------------------------------------
+
+
+class TestStandardInstallCategoryMirror:
+    """AC tests for CL-pq4: single-file standards install to category-mirror paths."""
+
+    @staticmethod
+    def _patch_git_clone(
+        monkeypatch: pytest.MonkeyPatch, standard_mod, fake_repo: Path
+    ) -> None:
+        """Patch standard installer git commands to clone from a local fixture."""
+        def fake_run(cmd, capture_output=False, text=False, cwd=None):
+            if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
+                target = Path(cmd[-1])
+                shutil.copytree(fake_repo, target, dirs_exist_ok=True)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            if cmd == ["git", "rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
+            raise AssertionError(f"Unexpected command: {cmd}")
+
+        monkeypatch.setattr(standard_mod.subprocess, "run", fake_run)
+
+    def test_single_file_standard_installs_to_category_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC1: Single-file standard with blob URL installs to <base>/<category>/<file>.md."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import standard as standard_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        (fake_repo / "standards" / "workflow").mkdir(parents=True)
+        (fake_repo / "standards" / "workflow" / "bead-hygiene.md").write_text(
+            "# Bead Hygiene Standard\n"
+        )
+
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+        monkeypatch.setattr(
+            standard_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bead-hygiene",
+                        "description": "Bead hygiene workflow standard.",
+                        "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                    }
+                ]
+            },
+            "marketplaces": [],
+        }
+
+        result = standard_mod.install_standard(catalog, "bead-hygiene", project)
+
+        assert result["status"] == "ok", result
+        # Must be a file path (category-mirror), NOT a per-name subdir
+        install_target = result["data"]["canonical"]
+        assert install_target.endswith("workflow/bead-hygiene.md"), (
+            f"Expected category-mirror path ending with 'workflow/bead-hygiene.md', got: {install_target}"
+        )
+        target_path = Path(install_target)
+        assert target_path.is_file(), f"Expected a file at {install_target}"
+        assert not target_path.is_dir()
+
+    def test_bundle_install_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC2: Bundle (tree URL) installs still go to <base>/<standard_name>/."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import standard as standard_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        bundle = fake_repo / "standards" / "bundle-standard"
+        bundle.mkdir(parents=True)
+        (bundle / "bundle-standard.md").write_text("# Bundle Standard\n")
+        (bundle / "detail.md").write_text("# Detail\n")
+
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+        monkeypatch.setattr(
+            standard_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bundle-standard",
+                        "description": "Directory-backed standard fixture.",
+                        "source": "https://github.com/example/repo/tree/main/standards/bundle-standard/",
+                    }
+                ]
+            },
+            "marketplaces": [],
+        }
+
+        result = standard_mod.install_standard(catalog, "bundle-standard", project)
+
+        assert result["status"] == "ok", result
+        canonical = project / ".agents" / "standards" / "bundle-standard"
+        assert canonical.is_dir(), f"Expected directory bundle at {canonical}"
+        assert (canonical / "bundle-standard.md").exists()
+        assert (canonical / "detail.md").exists()
+
+    def test_lockfile_install_target_no_trailing_slash(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC3: Lockfile install_target for single-file standard has no trailing slash."""
+        try:
+            import yaml
+        except ImportError:
+            pytest.skip("PyYAML not installed")
+
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import standard as standard_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        (fake_repo / "standards" / "workflow").mkdir(parents=True)
+        (fake_repo / "standards" / "workflow" / "bead-hygiene.md").write_text(
+            "# Bead Hygiene\n"
+        )
+
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+        monkeypatch.setattr(
+            standard_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bead-hygiene",
+                        "description": "Single-file standard.",
+                        "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                    }
+                ]
+            },
+            "marketplaces": [],
+        }
+
+        standard_mod.install_standard(catalog, "bead-hygiene", project)
+
+        lockfile = project / ".library.lock"
+        assert lockfile.exists()
+        with lockfile.open() as f:
+            lock_data = yaml.safe_load(f)
+
+        entry = next(
+            (e for e in lock_data.get("installed", []) if e.get("name") == "bead-hygiene"),
+            None,
+        )
+        assert entry is not None, "No lockfile entry for bead-hygiene"
+        install_target = entry.get("install_target", "")
+        assert not install_target.endswith("/"), (
+            f"Single-file install_target must not have trailing slash, got: {install_target}"
+        )
+        assert install_target.endswith(".md"), (
+            f"Single-file install_target must end with .md, got: {install_target}"
+        )
+
+    def test_audit_detects_old_path_as_drift(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC4: audit detects existing install at old per-name subdir path as drift."""
+        try:
+            import yaml
+        except ImportError:
+            pytest.skip("PyYAML not installed")
+
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import sync_audit
+        from lib.lockfile import make_entry, save_lockfile
+
+        project = tmp_path / "project"
+        project.mkdir()
+
+        # Create the old-style install: <base>/bead-hygiene/bead-hygiene.md
+        old_install_dir = project / ".agents" / "standards" / "bead-hygiene"
+        old_install_dir.mkdir(parents=True)
+        old_file = old_install_dir / "bead-hygiene.md"
+        old_file.write_text("# Bead Hygiene Standard\n")
+
+        # Write lockfile entry with old-style install_target (per-name subdir, trailing slash)
+        from lib.lockfile import compute_checksum, compute_directory_hash
+        checksum = compute_directory_hash(old_install_dir)
+        entry = make_entry(
+            name="bead-hygiene",
+            primitive_type="standard",
+            marketplace="cognovis-core",
+            source="https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+            source_commit="abcdef1234567890",
+            cache_path=str(tmp_path / "cache" / "standards" / "cognovis-core" / "bead-hygiene@abcdef1") + "/",
+            install_target=str(old_install_dir) + "/",
+            checksum_sha256=checksum,
+            checksum_type="directory",
+            content_sha256=checksum,
+        )
+
+        lockfile = project / ".library.lock"
+        save_lockfile(lockfile, {"installed": [entry]})
+
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {"standards": [
+                {
+                    "name": "bead-hygiene",
+                    "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                }
+            ]},
+            "marketplaces": [],
+        }
+
+        result = sync_audit.cmd_audit_impl(
+            catalog=catalog,
+            primitive="standard",
+            repo_root=project,
+            skip_upstream=True,
+        )
+
+        # The audit should detect path drift (install_target doesn't match category-mirror)
+        drift_entries = [e for e in result.get("entries", []) if e.get("drift") is True]
+        assert any(e.get("name") == "bead-hygiene" for e in drift_entries), (
+            f"Expected drift for 'bead-hygiene' at old path, got: {result}"
+        )
+
+    def test_sync_removes_old_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC5: sync (re-install) removes old per-name subdir after installing to new path."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import standard as standard_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        (fake_repo / "standards" / "workflow").mkdir(parents=True)
+        (fake_repo / "standards" / "workflow" / "bead-hygiene.md").write_text(
+            "# Bead Hygiene Standard\n"
+        )
+
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+        monkeypatch.setattr(
+            standard_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bead-hygiene",
+                        "description": "Single-file standard.",
+                        "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                    }
+                ]
+            },
+            "marketplaces": [],
+        }
+
+        # Create old-path dir before running install (simulates migration scenario)
+        old_path = project / ".agents" / "standards" / "bead-hygiene"
+        old_path.mkdir(parents=True)
+        (old_path / "bead-hygiene.md").write_text("# old content\n")
+
+        # Run install — should install to new path AND remove old path
+        result = standard_mod.install_standard(catalog, "bead-hygiene", project)
+
+        assert result["status"] == "ok", result
+
+        # New path must exist
+        new_path = project / ".agents" / "standards" / "workflow" / "bead-hygiene.md"
+        assert new_path.is_file(), f"Expected new file at {new_path}"
+
+        # Old path (per-name subdir) must be removed
+        assert not old_path.exists(), (
+            f"Old per-name subdir {old_path} was not removed after migration"
+        )
+
+    def test_nonparseable_category_falls_back_with_warning(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC6: Source URL without parseable category falls back to old behavior with a warning."""
+        import warnings
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import standard as standard_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        # No 'standards/' component in the path
+        (fake_repo / "content").mkdir(parents=True)
+        (fake_repo / "content" / "my-rule.md").write_text("# My Rule\n")
+
+        self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
+        monkeypatch.setattr(
+            standard_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "my-rule",
+                        "description": "Standard without standards/ in path.",
+                        # blob URL but path doesn't have standards/<cat>/<file> structure
+                        "source": "https://github.com/example/repo/blob/main/content/my-rule.md",
+                    }
+                ]
+            },
+            "marketplaces": [],
+        }
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = standard_mod.install_standard(catalog, "my-rule", project)
+
+        assert result["status"] == "ok", result
+
+        # Should fall back to old per-name subdir behavior
+        install_target = result["data"]["canonical"]
+        expected_old_path = str(project / ".agents" / "standards" / "my-rule")
+        assert install_target.rstrip("/") == expected_old_path or install_target == expected_old_path, (
+            f"Expected fallback to old path {expected_old_path}, got: {install_target}"
+        )
+
+        # A warning must have been emitted
+        warning_messages = [str(w.message) for w in caught]
+        assert any("category" in m.lower() or "fallback" in m.lower() or "warning" in m.lower() or "standard" in m.lower()
+                   for m in warning_messages), (
+            f"Expected a warning about category parsing, got: {warning_messages}"
+        )
+
+    def test_audit_no_false_drift_for_relative_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC7: audit does not report false drift for a correctly-installed entry with a relative install_target.
+
+        Project-scope installs write relative install_target values (e.g.
+        '.agents/standards/workflow/bead-hygiene.md').  The audit path-drift
+        check must resolve both the actual and expected paths before comparing;
+        otherwise a relative actual path can never equal an absolute expected
+        path and every project-scope install is wrongly flagged.
+        """
+        try:
+            import yaml
+        except ImportError:
+            pytest.skip("PyYAML not installed")
+
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import sync_audit
+        from lib.lockfile import compute_checksum, make_entry, save_lockfile
+
+        project = tmp_path / "project"
+        project.mkdir()
+
+        # Create the correctly-installed file at the category-mirror path
+        installed_dir = project / ".agents" / "standards" / "workflow"
+        installed_dir.mkdir(parents=True)
+        installed_file = installed_dir / "bead-hygiene.md"
+        installed_file.write_text("# Bead Hygiene Standard\n")
+
+        checksum = compute_checksum(installed_file)
+
+        # Simulate a project-scope lockfile entry with a RELATIVE install_target
+        relative_target = ".agents/standards/workflow/bead-hygiene.md"
+        entry = make_entry(
+            name="bead-hygiene",
+            primitive_type="standard",
+            marketplace="cognovis-core",
+            source="https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+            source_commit="abcdef1234567890",
+            cache_path=str(tmp_path / "cache" / "standards" / "cognovis-core" / "bead-hygiene@abcdef1") + "/",
+            install_target=relative_target,
+            checksum_sha256=checksum,
+            checksum_type="file",
+            content_sha256=checksum,
+        )
+
+        lockfile = project / ".library.lock"
+        save_lockfile(lockfile, {"installed": [entry]})
+
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {"standards": [
+                {
+                    "name": "bead-hygiene",
+                    "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                }
+            ]},
+            "marketplaces": [],
+        }
+
+        result = sync_audit.cmd_audit_impl(
+            catalog=catalog,
+            primitive="standard",
+            repo_root=project,
+            skip_upstream=True,
+        )
+
+        # No drift should be reported — relative path points to the correct location
+        drift_entries = [e for e in result.get("entries", []) if e.get("drift") is True]
+        assert not any(e.get("name") == "bead-hygiene" for e in drift_entries), (
+            f"False drift reported for 'bead-hygiene' with correct relative install_target, got: {result}"
+        )

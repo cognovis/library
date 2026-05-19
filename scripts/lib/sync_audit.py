@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 
 from .errors import EXIT_NOT_FOUND, InstallError, LibraryError
+from .installers.standard import _parse_standard_category
 from .lockfile import (
     compute_checksum,
     compute_directory_hash,
@@ -22,7 +23,61 @@ from .lockfile import (
     load_lockfile,
 )
 from .output import dry_run_result, success
+from .paths import resolve_install_paths
 from .primitives import get_primitive
+from .source import parse_source
+
+
+def _check_standard_path_drift(
+    entry: dict[str, Any],
+    catalog: dict[str, Any],
+    repo_root: Path,
+    scope: str,
+) -> bool:
+    """Return True if a standard entry's install_target doesn't match the expected category-mirror path.
+
+    Returns False if:
+    - entry type is not 'standard'
+    - source is not a single-file URL (path_type != 'file')
+    - category cannot be parsed from the source path
+    - any exception occurs (audit path must never raise)
+    """
+    try:
+        if entry.get("type") != "standard":
+            return False
+
+        source_str = entry.get("source", "")
+        if not source_str:
+            return False
+
+        parsed = parse_source(source_str)
+
+        if parsed.path_type != "file":
+            return False
+
+        if not parsed.file_path:
+            return False
+
+        category, filename = _parse_standard_category(parsed.file_path)
+        if category is None or filename is None:
+            return False
+
+        prim = get_primitive("standard")
+        if prim is None:
+            return False
+
+        install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
+        canonical_base = install_paths.get("canonical")
+        if canonical_base is None:
+            return False
+
+        expected_install_target = canonical_base / category / filename
+        actual_resolved = _entry_path(entry.get("install_target", "").rstrip("/"), repo_root)
+
+        return actual_resolved != expected_install_target
+
+    except (OSError, ValueError, AttributeError, KeyError, ImportError):
+        return False
 
 
 def cmd_sync_impl(
@@ -373,6 +428,13 @@ def cmd_audit_impl(
             audit_entry["drift"] = True
             audit_entry["status"] = "drift"
             # Preserve drift_kind from upstream check; otherwise mark as local.
+            audit_entry.setdefault("drift_kind", "local")
+            any_drift = True
+
+        # Path conformance check: single-file standards should be at category-mirror paths
+        if _check_standard_path_drift(entry, catalog, repo_root, scope):
+            audit_entry["drift"] = True
+            audit_entry["status"] = "drift"
             audit_entry.setdefault("drift_kind", "local")
             any_drift = True
 
