@@ -448,10 +448,14 @@ def cmd_list(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
 
 def _resolve_default_scope(catalog: dict, primitive: str, name: str) -> str:
-    """Return scope from catalog entry's default_scope field, falling back to 'project'."""
+    """Return scope from catalog entry's default_scope field, falling back to 'project'.
+
+    Uses the same lookup semantics (fuzzy=True) as the installer so that keyword
+    queries and exact names both resolve to the same entry and scope.
+    """
     from lib.catalog import lookup_entry
     try:
-        entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+        entry = lookup_entry(catalog, primitive, name, fuzzy=True)
         default_scope = entry.get("default_scope", "project")
         if default_scope == "global":
             return "global"
