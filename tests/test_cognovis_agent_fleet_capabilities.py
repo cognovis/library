@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -19,6 +20,74 @@ AGENT_BASES_DIR = COGNOVIS_CORE / "agent-bases"
 MODEL_STANDARDS_DIR = COGNOVIS_CORE / "model-standards"
 BUILD_AGENT = REPO_ROOT / "scripts" / "build-agent.py"
 LIBRARY_YAML = REPO_ROOT / "library.yaml"
+
+# Minimum length for developer_instructions in a real Codex artifact.
+# The smallest catalog agent (ci-monitor) produces ~3 000 chars; a prompt_file
+# stub produces 0 chars. 200 is well below any real value and well above any stub.
+_MIN_DEV_INSTRUCTIONS_CHARS = 200
+
+# Minimum body length (chars after frontmatter) for a real Claude .md artifact.
+# ci-monitor produces ~5 000 chars; 200 guards against empty-body stubs.
+_MIN_CLAUDE_BODY_CHARS = 200
+
+
+# ---------------------------------------------------------------------------
+# Quality-check helpers (used both by the fleet test and the regression fixture)
+# ---------------------------------------------------------------------------
+
+
+def _assert_codex_artifact_quality(name: str, parsed: dict[str, Any], toml_text: str) -> None:
+    """Raise AssertionError if the Codex .toml artifact looks like a stub."""
+    assert parsed.get("prompt_file") is None, (
+        f"{name}: Codex artifact has top-level 'prompt_file' key — stub indirection pattern"
+    )
+    dev_inst = parsed.get("developer_instructions", "")
+    assert len(dev_inst) >= _MIN_DEV_INSTRUCTIONS_CHARS, (
+        f"{name}: developer_instructions is only {len(dev_inst)} chars "
+        f"(threshold: {_MIN_DEV_INSTRUCTIONS_CHARS}) — looks like a stub"
+    )
+    assert parsed.get("name"), f"{name}: Codex artifact missing 'name' field"
+
+
+def _assert_claude_artifact_quality(name: str, md_text: str) -> None:
+    """Raise AssertionError if the Claude .md artifact looks like a stub."""
+    assert md_text.startswith("---\n"), f"{name}: Claude artifact missing frontmatter delimiter"
+    parts = md_text.split("---", 2)
+    body = parts[2] if len(parts) >= 3 else ""
+    assert len(body) >= _MIN_CLAUDE_BODY_CHARS, (
+        f"{name}: Claude artifact body is only {len(body)} chars "
+        f"(threshold: {_MIN_CLAUDE_BODY_CHARS}) — looks like a stub"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Resolver helper (used by fleet checks and resolver unit tests)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_requires_refs(
+    refs: list[str], registry: dict[str, Any]
+) -> list[tuple[str, str, bool]]:
+    """Parse and resolve a list of 'primitive:name' require refs.
+
+    Returns a list of (ref, name, resolved) tuples where *resolved* is True if
+    *name* exists in *registry*.
+
+    Raises ValueError for refs that are missing the colon separator or have an
+    empty name after the prefix (prefix-without-subagent).
+    """
+    results: list[tuple[str, str, bool]] = []
+    for ref in refs:
+        if ":" not in ref:
+            raise ValueError(f"Malformed ref (no colon separator): {ref!r}")
+        _, name = ref.split(":", 1)
+        name = name.strip()
+        if not name:
+            raise ValueError(
+                f"Malformed ref (empty name after prefix): {ref!r}"
+            )
+        results.append((ref, name, name in registry))
+    return results
 
 
 pytestmark = pytest.mark.skipif(
@@ -165,11 +234,7 @@ def test_catalog_agents_build_with_non_stub_artifacts(tmp_path: Path) -> None:
         md_files = list(output_dir.glob("*.md"))
         assert md_files, f"{name}: builder emitted no Claude .md artifact"
         md_text = md_files[0].read_text(encoding="utf-8")
-        md_lines = md_text.splitlines()
-        assert len(md_lines) >= 50, (
-            f"{name}: Claude artifact has only {len(md_lines)} lines (stub threshold: 50)"
-        )
-        assert "---" in md_text, f"{name}: Claude artifact missing frontmatter delimiter '---'"
+        _assert_claude_artifact_quality(name, md_text)
         built_frontmatter = yaml.safe_load(md_text.split("---", 2)[1]) or {}
         assert built_frontmatter.get("name") == declared_name, (
             f"{name}: Claude artifact frontmatter 'name' field is "
@@ -180,38 +245,132 @@ def test_catalog_agents_build_with_non_stub_artifacts(tmp_path: Path) -> None:
         toml_files = list(output_dir.glob("*.toml"))
         assert toml_files, f"{name}: builder emitted no Codex .toml artifact"
         toml_text = toml_files[0].read_text(encoding="utf-8")
-        toml_lines = toml_text.splitlines()
-        assert len(toml_lines) >= 50, (
-            f"{name}: Codex artifact has only {len(toml_lines)} lines (stub threshold: 50)"
-        )
-        assert "prompt_file = " not in toml_text, (
-            f"{name}: Codex artifact contains 'prompt_file = ' indirection — this is a stub"
-        )
         parsed_toml = tomllib.loads(toml_text)
+        _assert_codex_artifact_quality(name, parsed_toml, toml_text)
         assert parsed_toml.get("name") == declared_name, (
             f"{name}: Codex artifact TOML 'name' field is "
             f"{parsed_toml.get('name')!r}, expected {declared_name!r}"
         )
 
 
-def test_stub_detection_catches_prompt_file_indirection() -> None:
-    """Regression: stub-detection logic would catch the original quick-fix.toml stub format."""
-    stub_toml = """\
-# Generated stub — do not use in production
-name = "quick-fix"
-description = "Lightweight quick fix orchestrator."
-model = "gpt-5.4"
-prompt_file = "agents/quick-fix.md"
-"""
-    # Simulate the same checks applied in test_catalog_agents_build_with_non_stub_artifacts.
-    lines = stub_toml.splitlines()
-    assert len(lines) < 50, "Fixture must be a stub (fewer than 50 lines)"
-    assert "prompt_file = " in stub_toml, "Fixture must contain prompt_file indirection"
+def test_builder_rejects_source_missing_frontmatter(tmp_path: Path) -> None:
+    """Builder must fail loudly on a source file with no YAML frontmatter."""
+    broken = tmp_path / "broken-agent.md"
+    broken.write_text("Just prose, no YAML frontmatter delimiter.\nSecond line.\n")
+    output_dir = tmp_path / "out"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(BUILD_AGENT),
+            str(broken),
+            "--harness",
+            "all",
+            "--output-dir",
+            str(output_dir),
+            "--agent-bases-dir",
+            str(AGENT_BASES_DIR),
+            "--model-standards-dir",
+            str(MODEL_STANDARDS_DIR),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0, (
+        "Builder should reject a source with no frontmatter, but exited 0"
+    )
+    assert result.stderr, "Builder should emit a diagnostic on stderr when rejecting bad input"
 
-    # Assert the stub would fail both quality gates.
-    assert not (len(lines) >= 50), (
-        "Stub should fail the line-count gate (< 50 lines)"
+
+def test_quality_checks_reject_prompt_file_stub() -> None:
+    """Regression fixture: quality helpers reject the original quick-fix.toml stub pattern.
+
+    The original stub was 34 lines with a top-level prompt_file key and no
+    developer_instructions. This test confirms the helpers used by
+    test_catalog_agents_build_with_non_stub_artifacts would have caught it.
+    """
+    stub_toml = (
+        'name = "quick-fix"\n'
+        'description = "Lightweight quick fix orchestrator."\n'
+        'model = "gpt-5.4"\n'
+        'prompt_file = "agents/quick-fix.md"\n'
     )
-    assert "prompt_file = " in stub_toml, (
-        "Stub should fail the prompt_file indirection gate"
+    parsed = tomllib.loads(stub_toml)
+    # prompt_file stub: helper must raise on the prompt_file key
+    with pytest.raises(AssertionError, match="prompt_file"):
+        _assert_codex_artifact_quality("quick-fix", parsed, stub_toml)
+
+
+def test_quality_checks_reject_empty_developer_instructions() -> None:
+    """Quality helper rejects a .toml with absent or trivially short developer_instructions."""
+    # No developer_instructions at all
+    stub_toml = 'name = "thin-agent"\ndescription = "stub"\nmodel = "gpt-5.4"\n'
+    with pytest.raises(AssertionError, match="developer_instructions"):
+        _assert_codex_artifact_quality("thin-agent", tomllib.loads(stub_toml), stub_toml)
+
+    # Trivially short developer_instructions
+    short_toml = (
+        'name = "thin-agent"\n'
+        'description = "stub"\n'
+        'model = "gpt-5.4"\n'
+        f'developer_instructions = "{"x" * 10}"\n'
     )
+    with pytest.raises(AssertionError, match="developer_instructions"):
+        _assert_codex_artifact_quality("thin-agent", tomllib.loads(short_toml), short_toml)
+
+
+# ---------------------------------------------------------------------------
+# Resolver unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_resolver_resolves_known_agent_refs() -> None:
+    """Resolver returns resolved=True for refs that exist in the registry."""
+    registry = {"review-agent": {}, "session-close": {}}
+    results = _resolve_requires_refs(["agent:review-agent", "agent:session-close"], registry)
+    assert results == [
+        ("agent:review-agent", "review-agent", True),
+        ("agent:session-close", "session-close", True),
+    ]
+
+
+def test_resolver_reports_unresolved_refs() -> None:
+    """Resolver returns resolved=False for refs not present in the registry."""
+    results = _resolve_requires_refs(["agent:nonexistent"], {})
+    assert results == [("agent:nonexistent", "nonexistent", False)]
+
+
+def test_resolver_rejects_prefix_without_subagent() -> None:
+    """Resolver raises ValueError for a ref with an empty name after the colon."""
+    with pytest.raises(ValueError, match="empty name after prefix"):
+        _resolve_requires_refs(["agent:"], {})
+
+    with pytest.raises(ValueError, match="empty name after prefix"):
+        _resolve_requires_refs(["agent:   "], {})  # whitespace-only name
+
+
+def test_resolver_rejects_ref_without_colon() -> None:
+    """Resolver raises ValueError for a ref that has no colon separator."""
+    with pytest.raises(ValueError, match="no colon separator"):
+        _resolve_requires_refs(["agent"], {})
+
+
+def test_catalog_agent_requires_refs_resolve() -> None:
+    """Every requires: agent:* ref in cognovis-core agent sources resolves to a catalog entry."""
+    catalog = yaml.safe_load(LIBRARY_YAML.read_text(encoding="utf-8")) or {}
+    catalog_agents = {a["name"]: a for a in catalog.get("library", {}).get("agents", [])}
+
+    for agent_file in sorted(AGENTS_DIR.glob("*.md")):
+        fm = _frontmatter(agent_file)
+        agent_refs = [
+            r for r in fm.get("requires", [])
+            if isinstance(r, str) and r.startswith("agent:")
+        ]
+        if not agent_refs:
+            continue
+        results = _resolve_requires_refs(agent_refs, catalog_agents)
+        for ref, name, resolved in results:
+            assert resolved, (
+                f"{agent_file.name}: requires: {ref!r} — "
+                f"'{name}' is not listed in the library.yaml catalog"
+            )
