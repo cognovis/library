@@ -259,6 +259,12 @@ if [[ -n "$bead_id" ]]; then
     bead_id=$(_expand_bead_id "$bead_id")
     local bead_short=$(_bead_short "$bead_id")
 
+    # Export CLD_BEAD_LINE=cld so the bead-orchestrator agent resolves
+    # impl/reviewer models from perspective_policy.cld in
+    # .agents/orchestrator-config.yml. Symmetric to cdx's CLD_BEAD_LINE=cdx
+    # export for the cdx-line entry points.
+    export CLD_BEAD_LINE=cld
+
     # ── Epic guard: refuse parent beads (has children) ────────────
     local _child_count
     _child_count=$(_bead_child_count "$bead_id")
@@ -322,6 +328,12 @@ fi
 if [[ -n "$bead_quick_id" ]]; then
     bead_quick_id=$(_expand_bead_id "$bead_quick_id")
     local bead_quick_short=$(_bead_short "$bead_quick_id")
+
+    # Export CLD_BEAD_LINE=cld so the quick-fix agent resolves the impl model
+    # from perspective_policy.cld.tier_impl_override.quick (= gpt-5.4-mini in
+    # the default user-global config, routed via codex-impl.py). Symmetric to
+    # cdx -bq's CLD_BEAD_LINE=cdx export.
+    export CLD_BEAD_LINE=cld
 
     # ── Claim gate: refuse if bead is already in_progress or closed ──
     local _QF_STATUS

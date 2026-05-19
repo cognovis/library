@@ -111,6 +111,12 @@ if [[ -n "$bead_id" ]]; then
         exit 1
     }
 
+    # Export CLD_BEAD_LINE=cdx so any downstream tooling spawned from this
+    # codex session (codex-impl.py, codex-exec.py, nested Claude invocations)
+    # sees the cdx line and resolves impl/reviewer models from
+    # perspective_policy.cdx in .agents/orchestrator-config.yml.
+    export CLD_BEAD_LINE=cdx
+
     prompt="implement bead ${bead_id}. Execute the full bead-orchestrator workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase. Do not spawn another agent; this invocation is the bead-orchestrator agent entrypoint. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context below and the agent's developer_instructions are sufficient.
 
 ## Bead Context
@@ -132,6 +138,12 @@ if [[ -n "$bead_quick_id" ]]; then
         echo "ERROR: Could not fetch bead context for ${bead_quick_id}. Is the bead ID correct?"
         exit 1
     }
+
+    # Export CLD_BEAD_LINE=cdx so downstream tools (codex-impl.py, any nested
+    # Claude Agent dispatch) resolve impl model from perspective_policy.cdx
+    # in .agents/orchestrator-config.yml (= claude-haiku-4-5 for quick tier
+    # in the default user-global config).
+    export CLD_BEAD_LINE=cdx
 
     prompt="Quick-fix bead ${bead_quick_id}. This is a small/micro bead (XS/S effort). Use the inline lightweight quick-fix workflow and implement a targeted fix. Do not spawn another agent. Complete all acceptance criteria and commit. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer).
 
@@ -159,6 +171,9 @@ if [[ -n "$bead_review_id" ]]; then
         echo "ERROR: Could not fetch bead context for ${bead_review_id}. Is the bead ID correct?"
         exit 1
     }
+
+    # cdx-line review mode — set CLD_BEAD_LINE=cdx for downstream tools.
+    export CLD_BEAD_LINE=cdx
 
     prompt="Review the implementation for bead ${bead_review_id}. Check all acceptance criteria are met. Run 'codex exec review' patterns to validate code quality.
 
