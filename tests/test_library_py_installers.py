@@ -1629,3 +1629,76 @@ class TestStandardInstallCategoryMirror:
                    for m in warning_messages), (
             f"Expected a warning about category parsing, got: {warning_messages}"
         )
+
+    def test_audit_no_false_drift_for_relative_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """AC7: audit does not report false drift for a correctly-installed entry with a relative install_target.
+
+        Project-scope installs write relative install_target values (e.g.
+        '.agents/standards/workflow/bead-hygiene.md').  The audit path-drift
+        check must resolve both the actual and expected paths before comparing;
+        otherwise a relative actual path can never equal an absolute expected
+        path and every project-scope install is wrongly flagged.
+        """
+        try:
+            import yaml
+        except ImportError:
+            pytest.skip("PyYAML not installed")
+
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import sync_audit
+        from lib.lockfile import compute_checksum, make_entry, save_lockfile
+
+        project = tmp_path / "project"
+        project.mkdir()
+
+        # Create the correctly-installed file at the category-mirror path
+        installed_dir = project / ".agents" / "standards" / "workflow"
+        installed_dir.mkdir(parents=True)
+        installed_file = installed_dir / "bead-hygiene.md"
+        installed_file.write_text("# Bead Hygiene Standard\n")
+
+        checksum = compute_checksum(installed_file)
+
+        # Simulate a project-scope lockfile entry with a RELATIVE install_target
+        relative_target = ".agents/standards/workflow/bead-hygiene.md"
+        entry = make_entry(
+            name="bead-hygiene",
+            primitive_type="standard",
+            marketplace="cognovis-core",
+            source="https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+            source_commit="abcdef1234567890",
+            cache_path=str(tmp_path / "cache" / "standards" / "cognovis-core" / "bead-hygiene@abcdef1") + "/",
+            install_target=relative_target,
+            checksum_sha256=checksum,
+            checksum_type="file",
+            content_sha256=checksum,
+        )
+
+        lockfile = project / ".library.lock"
+        save_lockfile(lockfile, {"installed": [entry]})
+
+        catalog = {
+            "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
+            "library": {"standards": [
+                {
+                    "name": "bead-hygiene",
+                    "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                }
+            ]},
+            "marketplaces": [],
+        }
+
+        result = sync_audit.cmd_audit_impl(
+            catalog=catalog,
+            primitive="standard",
+            repo_root=project,
+            skip_upstream=True,
+        )
+
+        # No drift should be reported — relative path points to the correct location
+        drift_entries = [e for e in result.get("entries", []) if e.get("drift") is True]
+        assert not any(e.get("name") == "bead-hygiene" for e in drift_entries), (
+            f"False drift reported for 'bead-hygiene' with correct relative install_target, got: {result}"
+        )

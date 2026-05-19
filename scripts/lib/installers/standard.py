@@ -243,8 +243,12 @@ def install_standard(
         #    from the new category-mirror parent directory
         if is_file_install:
             old_path = canonical_base / standard_name
-            if old_path.is_dir() and old_path != canonical_install.parent:
-                shutil.rmtree(str(old_path), ignore_errors=True)
+            if old_path != canonical_install.parent and old_path.exists():
+                if old_path.is_symlink():
+                    old_path.unlink()
+                elif old_path.is_dir():
+                    shutil.rmtree(str(old_path), ignore_errors=True)
+                # else: it's a file — leave it alone (unexpected, not our install)
 
         result_data: dict[str, Any] = {
             "name": standard_name,

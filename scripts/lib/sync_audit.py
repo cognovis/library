@@ -72,9 +72,9 @@ def _check_standard_path_drift(
             return False
 
         expected_install_target = canonical_base / category / filename
-        actual_target = Path(entry.get("install_target", "").rstrip("/"))
+        actual_resolved = _entry_path(entry.get("install_target", "").rstrip("/"), repo_root)
 
-        return actual_target != expected_install_target
+        return actual_resolved != expected_install_target
 
     except (OSError, ValueError, AttributeError, KeyError, ImportError):
         return False
