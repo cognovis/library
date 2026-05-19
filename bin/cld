@@ -6,8 +6,6 @@
 #
 # Wrapper flags (not passed to claude):
 #   --skip-perms    → translates to --dangerously-skip-permissions (overrides default auto mode)
-#   --force-check   → force update check even if cache is fresh
-#   --no-check      → skip update check entirely
 #   -v, --verbose   → enable verbose mode (reasoning traces + token counts)
 #   -c, --caveman   → enable caveman mode for this session (exports CAVEMAN_MODE=1)
 #   -b, --bead ID   → launch with bead orchestrator for the given bead ID
@@ -17,8 +15,6 @@
 #   -bw, --bead-wave ID → dispatch wave-orchestrator for a parent bead's children
 #   -bl, --bead-label LABELS → dispatch wave-orchestrator for beads with LABELS (comma-separated, AND)
 #   -bi, --bead-ids IDS → dispatch wave-orchestrator for explicit bead IDs (comma-separated)
-#
-# Optional: claude-updater (uv tool install claude-updater) for pre-launch update checks
 
 set -uo pipefail
 
@@ -33,8 +29,6 @@ fi
 
 caveman=false
 skip_perms=false
-force_check=false
-no_check=false
 verbose=false
 bead_id=""
 bead_quick_id=""
@@ -57,14 +51,6 @@ while (( $# > 0 )); do
             ;;
         --skip-perms)
             skip_perms=true
-            shift
-            ;;
-        --force-check)
-            force_check=true
-            shift
-            ;;
-        --no-check)
-            no_check=true
             shift
             ;;
         -v|--verbose)
@@ -126,8 +112,6 @@ Wrapper flags (consumed by cld, not passed to claude):
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
     -v,  --verbose              Pass --verbose to claude
          --skip-perms           Use --dangerously-skip-permissions
-         --force-check          Force claude-updater check
-         --no-check              Skip claude-updater check
     -h,  --help                 Show this help, then claude --help
 
 ────────────────────────────────────────────────────────────
@@ -481,18 +465,6 @@ if [[ -n "$bead_ids" ]]; then
 
     local prompt="Wave orchestration request: dispatch ${_wave_count} explicit beads in dependency-aware waves across cmux panes. Invoke the beads-workflow:wave-orchestrator skill. Bead IDs: ${_wave_id_list}."
     claude_args+=("$prompt")
-fi
-
-# ── Update check via claude-updater (optional) ───────────────────
-
-if ! ${no_check}; then
-    if command -v claude-updater &>/dev/null; then
-        if ${force_check}; then
-            claude-updater check --force 2>&1
-        else
-            claude-updater check 2>&1
-        fi
-    fi
 fi
 
 # ── Launch claude ────────────────────────────────────────────────

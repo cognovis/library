@@ -31,3 +31,6 @@ tests/__pycache__/
 .agents/agents/
 .agents/prompts/
 .library.lock
+
+# Beads JSONL export is local; Dolt is the source of truth.
+.beads/issues.jsonl
