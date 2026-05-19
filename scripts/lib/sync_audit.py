@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 
 from .errors import EXIT_NOT_FOUND, InstallError, LibraryError
+from .installers.standard import _parse_standard_category
 from .lockfile import (
     compute_checksum,
     compute_directory_hash,
@@ -22,28 +23,9 @@ from .lockfile import (
     load_lockfile,
 )
 from .output import dry_run_result, success
+from .paths import resolve_install_paths
 from .primitives import get_primitive
-
-
-def _parse_standard_category_for_audit(file_path: str) -> tuple[str, str] | tuple[None, None]:
-    """Parse category and filename from a standards/ path.
-
-    Handles paths like:
-      standards/workflow/bead-hygiene.md
-      some/prefix/standards/workflow/bead-hygiene.md
-
-    Returns (category, filename) or (None, None) if the pattern is not found.
-    """
-    if not file_path:
-        return None, None
-    parts = file_path.split("/")
-    for i, part in enumerate(parts):
-        if part == "standards" and i + 2 < len(parts):
-            category = parts[i + 1]
-            filename = parts[i + 2]
-            if category and filename:
-                return category, filename
-    return None, None
+from .source import parse_source
 
 
 def _check_standard_path_drift(
@@ -68,7 +50,6 @@ def _check_standard_path_drift(
         if not source_str:
             return False
 
-        from .source import parse_source
         parsed = parse_source(source_str)
 
         if parsed.path_type != "file":
@@ -77,31 +58,25 @@ def _check_standard_path_drift(
         if not parsed.file_path:
             return False
 
-        category, filename = _parse_standard_category_for_audit(parsed.file_path)
+        category, filename = _parse_standard_category(parsed.file_path)
         if category is None or filename is None:
             return False
 
-        from .primitives import get_primitive
         prim = get_primitive("standard")
         if prim is None:
             return False
 
-        from .paths import resolve_install_paths
         install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
         canonical_base = install_paths.get("canonical")
         if canonical_base is None:
             return False
 
         expected_install_target = canonical_base / category / filename
-        actual_install_target = entry.get("install_target", "")
+        actual_target = Path(entry.get("install_target", "").rstrip("/"))
 
-        # Normalize: remove trailing slash, compare as strings
-        actual_normalized = actual_install_target.rstrip("/")
-        expected_normalized = str(expected_install_target)
+        return actual_target != expected_install_target
 
-        return actual_normalized != expected_normalized
-
-    except Exception:
+    except (OSError, ValueError, AttributeError, KeyError, ImportError):
         return False
 
 

@@ -18,6 +18,7 @@ from typing import Any, Optional
 
 from ..cache import (
     compute_cache_path,
+    create_harness_symlink,
     materialize_install_target,
     materialize_vendor_copy,
     plan_cache_writes,
@@ -184,9 +185,12 @@ def install_standard(
 
         # 6. Create canonical install (Layer C)
         if is_file_install:
-            # Single-file: copy directly to the category-mirror file path
-            filename = canonical_install.name
-            materialize_vendor_copy(cache_path / filename, canonical_install)
+            # Single-file: install directly to the category-mirror file path
+            cache_file = cache_path / canonical_install.name
+            if install_mode == "symlink":
+                create_harness_symlink(canonical_install, cache_file)
+            else:
+                materialize_vendor_copy(cache_file, canonical_install)
         else:
             materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
 
