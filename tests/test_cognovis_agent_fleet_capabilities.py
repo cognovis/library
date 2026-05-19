@@ -480,17 +480,65 @@ def test_plugin_ref_resolver_rejects_empty_name_after_prefix() -> None:
         _resolve_plugin_prefixed_body_refs(["codex:   "], {})
 
 
+def _composed_layer_sources() -> list[Path]:
+    """Return every .md file that the builder composes into the final artifact.
+
+    Covers all three layers that the builder reads:
+      - cognovis-core/agents/*.md         (agent source bodies)
+      - cognovis-core/agent-bases/*.md    (Claude/Codex agent-base layers)
+      - cognovis-core/model-standards/*.md (model-standard prose layers)
+
+    A subagent_type ref appearing in any of these ends up in the composed
+    .toml's developer_instructions string at runtime.
+    """
+    sources: list[Path] = []
+    for layer_dir in (AGENTS_DIR, AGENT_BASES_DIR, MODEL_STANDARDS_DIR):
+        if layer_dir.exists():
+            sources.extend(sorted(layer_dir.glob("*.md")))
+    return sources
+
+
+def test_body_ref_extractor_catches_malformed_ref_in_any_layer(tmp_path: Path) -> None:
+    """Regression: a malformed subagent_type ref in any composed layer is caught.
+
+    Closes finding B from third-pass review (.md only, kein .toml): the fleet
+    well-formedness check must scan every layer the builder composes, not just
+    the agent source bodies. This fixture writes a synthetic agent-base file
+    containing a malformed plugin-prefixed ref and confirms the extractor +
+    resolver pair would flag it via ValueError.
+    """
+    malformed_layer = tmp_path / "broken-base.md"
+    malformed_layer.write_text(
+        'Some base prose.\n'
+        '\n'
+        '    Agent(subagent_type="codex:", prompt="oops empty name")\n'
+    )
+    refs = _extract_body_subagent_type_refs(malformed_layer.read_text())
+    assert "codex:" in refs, "Extractor must surface the malformed ref for downstream validation"
+    with pytest.raises(ValueError, match="empty name after prefix"):
+        _resolve_plugin_prefixed_body_refs(refs, {})
+
+
 def test_catalog_agent_body_plugin_refs_are_well_formed() -> None:
-    """All plugin-prefixed subagent_type refs in agent body prose are syntactically valid.
+    """All plugin-prefixed subagent_type refs across composed layers are syntactically valid.
 
     This is the always-run tier: it only checks well-formedness (non-empty namespace
     and name). Resolution against an installed registry is handled by the optional
     integration-tier test below.
+
+    Scans every layer that contributes to the composed Codex .toml output
+    (agents, agent-bases, model-standards) — not just the agent source bodies —
+    so that a subagent_type ref injected via a base or standard layer cannot
+    silently bypass well-formedness checks.
     """
-    for agent_file in sorted(AGENTS_DIR.glob("*.md")):
-        refs = _extract_body_subagent_type_refs(agent_file.read_text())
-        # Raises ValueError for any malformed plugin-prefixed ref.
-        _resolve_plugin_prefixed_body_refs(refs, {})
+    for layer_file in _composed_layer_sources():
+        refs = _extract_body_subagent_type_refs(layer_file.read_text())
+        try:
+            _resolve_plugin_prefixed_body_refs(refs, {})
+        except ValueError as exc:
+            raise AssertionError(
+                f"{layer_file.relative_to(COGNOVIS_CORE)}: {exc}"
+            ) from exc
 
 
 _INSTALLED_CODEX_AGENTS = Path.home() / ".codex" / "agents"
@@ -524,13 +572,14 @@ def test_installed_codex_plugin_refs_resolve_against_local_agents() -> None:
     installed_names = {p.stem for p in _INSTALLED_CODEX_AGENTS.glob("*.toml")}
     plugin_registry = {"codex": installed_names}
 
-    for agent_file in sorted(AGENTS_DIR.glob("*.md")):
-        refs = _extract_body_subagent_type_refs(agent_file.read_text())
+    for layer_file in _composed_layer_sources():
+        refs = _extract_body_subagent_type_refs(layer_file.read_text())
         results = _resolve_plugin_prefixed_body_refs(refs, plugin_registry)
         for ref, namespace, name, resolved in results:
             if namespace == "codex" and name not in _CODEX_RUNTIME_BUILTINS:
+                rel = layer_file.relative_to(COGNOVIS_CORE)
                 assert resolved, (
-                    f"{agent_file.name}: body ref {ref!r} not found at "
+                    f"{rel}: body ref {ref!r} not found at "
                     f"~/.codex/agents/{name}.toml. Resolution paths:\n"
                     f"  (a) install via `library use {name}` (top-level scope), or\n"
                     f"  (b) add {name!r} to _CODEX_RUNTIME_BUILTINS if it lives in a "
