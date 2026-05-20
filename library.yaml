@@ -1166,16 +1166,6 @@ library:
         - origin:original
         - tier:core
         - workflow:beads
-    - name: factory-check
-      description: >-
-        Evaluate factory-ready spec quality for a bead before autonomous execution.
-      source: https://github.com/cognovis/library-core/blob/main/skills/factory-check/SKILL.md
-      requires:
-        - "standard:english-only"
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
     - name: impl
       description: >-
         Implement plan autonomously with DoD verification. Triggers on implement plan,
