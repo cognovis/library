@@ -1990,7 +1990,7 @@ library:
         counter-examples into an in-context briefing for the *-forge skills. Loaded via
         requires_standards by skill-forge, agent-forge, hook-forge, and standard-forge so
         primitive-type selection is consistent and self-correcting.
-      source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives.md
+      source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/agentic-primitives.md
       tier: core
       default_scope: ask
       metadata:
@@ -2478,6 +2478,7 @@ library:
   mcp_servers:
     - name: open-brain
       description: Stateless memory store via search/save/get — persists observations across sessions
+      source: https://github.com/sussdorff/open-brain/blob/main/mcp.yaml
       coding_strategy: cli
       mobile_strategy: mcp
       capabilities:

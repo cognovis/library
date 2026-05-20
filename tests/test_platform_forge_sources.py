@@ -18,7 +18,7 @@ FORGE_NAMES = (
     "hook-forge",
 )
 PLATFORM_STANDARD_PATHS = {
-    "agentic-primitives": "standards/agentic-primitives.md",
+    "agentic-primitives": "standards/agentic-primitives/agentic-primitives.md",
     "primitive-placement": "standards/agentic-primitives/primitive-placement.md",
     "english-only": "standards/workflow/english-only.md",
     "no-emoji": "standards/workflow/no-emoji.md",

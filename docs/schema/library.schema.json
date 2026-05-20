@@ -1090,6 +1090,11 @@
           "type": "string",
           "minLength": 1
         },
+        "source": {
+          "description": "Optional upstream source URL (GitHub browser/raw URL or absolute local path) pointing to a canonical manifest file in the MCP server's source repo. When present, `library status`/`library sync` compares the installed lockfile SHA against this file's upstream commit. Omit for built-in or unversioned MCP entries.",
+          "type": "string",
+          "minLength": 1
+        },
         "coding_strategy": {
           "description": "How coding harnesses (Claude Code, Codex, OpenCode) should consume this server: cli = install the CLI wrapper package, mcp = add to harness MCP config.",
           "type": "string",
