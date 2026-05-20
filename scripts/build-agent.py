@@ -77,8 +77,8 @@ CODEX_REASONING_BY_MODEL = {
 }
 TIER_RANK = {"economy": 0, "standard": 1, "premium": 2, "frontier": 3}
 CONTEXT_RANK = {"small": 0, "medium": 1, "large": 2}
-REASONING_RANK = {"low": 0, "medium": 1, "high": 2, "max": 3}
-CODEX_REASONING_VALUE = {"low": "low", "medium": "medium", "high": "high", "max": "xhigh"}
+REASONING_RANK = {"low": 0, "medium": 1, "high": 2, "max": 3, "xhigh": 3}
+CODEX_REASONING_VALUE = {"low": "low", "medium": "medium", "high": "high", "max": "xhigh", "xhigh": "xhigh"}
 SANDBOX_RANK = {"read-only": 0, "workspace-write": 1, "danger-full-access": 2}
 
 

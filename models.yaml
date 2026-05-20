@@ -23,7 +23,7 @@ models:
   - id: claude-opus-4-7
     harness: claude-code
     tier: premium
-    reasoning_levels: [medium, high, max]
+    reasoning_levels: [medium, high, xhigh]
     default_reasoning: high
     context: large
     vision: true
@@ -43,7 +43,7 @@ models:
   - id: gpt-5.4
     harness: codex
     tier: standard
-    reasoning_levels: [low, medium, high]
+    reasoning_levels: [low, medium, high, xhigh]
     default_reasoning: high
     context: large
     vision: true
@@ -53,7 +53,7 @@ models:
   - id: gpt-5.5
     harness: codex
     tier: premium
-    reasoning_levels: [medium, high, max]
+    reasoning_levels: [low, medium, high, xhigh]
     default_reasoning: high
     context: large
     vision: true
