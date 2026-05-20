@@ -145,7 +145,7 @@ if [[ -n "$bead_quick_id" ]]; then
     # in the default user-global config).
     export CLD_BEAD_LINE=cdx
 
-    prompt="Quick-fix bead ${bead_quick_id}. This is a small/micro bead (XS/S effort). Use the inline lightweight quick-fix workflow and implement a targeted fix. Do not spawn another agent. Complete all acceptance criteria and commit. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer).
+    prompt="Bead ID: ${bead_quick_id}. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer).
 
 ## Bead Context
 
