@@ -1174,7 +1174,7 @@ library:
       requires:
         - "standard:english-only"
         - "skill:plan"
-        - "skill:factory-check"
+        - "skill:bead-reviewer"
       tags:
         - origin:original
         - tier:core
@@ -1689,7 +1689,7 @@ library:
       requires:
         - "agent:review-agent"
         - "agent:session-close"
-        - "skill:factory-check"
+        - "skill:bead-reviewer"
         - "skill:beads"
       tags:
         - origin:original
@@ -1787,7 +1787,7 @@ library:
         - agent:quick-fix
         - skill:wave-dispatch
         - skill:wave-reviewer
-        - skill:factory-check
+        - skill:bead-reviewer
       tags:
         - origin:original
         - tier:domain

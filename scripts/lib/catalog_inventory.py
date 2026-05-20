@@ -7,11 +7,13 @@ hard-coding repository names in callers.
 
 from __future__ import annotations
 
+import io
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import yaml
+from ruamel.yaml import YAML
 
 from .catalog import get_catalogs, get_marketplaces
 from .errors import CatalogError
@@ -264,12 +266,29 @@ def sync_catalog_inventory(
     if not write:
         return plan
 
-    updated = apply_inventory_plan(catalog_data, plan)
     yaml_path = catalog_root / "library.yaml"
-    yaml_path.write_text(
-        yaml.safe_dump(updated, sort_keys=False, allow_unicode=False),
-        encoding="utf-8",
-    )
+
+    # Round-trip via ruamel.yaml so top-level documentation comments
+    # (e.g. the default_dirs.skills cross-harness header) survive the
+    # regeneration. Mid-file section dividers nested INSIDE library
+    # entry lists are still lost because apply_inventory_plan replaces
+    # those lists wholesale — that part is acceptable since the
+    # dividers can be reconstructed from source-group conventions.
+    yaml_rt = YAML(typ="rt")
+    yaml_rt.preserve_quotes = True
+    yaml_rt.width = 4096
+    # Match the existing library.yaml style: list items indented under their
+    # parent mapping ("    - foo" not "  - foo").
+    yaml_rt.indent(mapping=2, sequence=4, offset=2)
+    with yaml_path.open(encoding="utf-8") as f:
+        rt_data = yaml_rt.load(f)
+
+    updated = apply_inventory_plan(rt_data, plan)
+
+    buf = io.StringIO()
+    yaml_rt.dump(updated, buf)
+    yaml_path.write_text(buf.getvalue(), encoding="utf-8")
+
     result = deepcopy(plan)
     result["status"] = "ok"
     result["written"] = str(yaml_path)

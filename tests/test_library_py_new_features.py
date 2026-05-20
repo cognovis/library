@@ -1215,7 +1215,7 @@ class TestWaveOrchestratorE2E:
         assert "bead-orchestrator" in names, f"bead-orchestrator not in order: {names}"
         assert "quick-fix" in names, f"quick-fix not in order: {names}"
         assert "wave-reviewer" in names, f"wave-reviewer not in order: {names}"
-        assert "factory-check" in names, f"factory-check not in order: {names}"
+        assert "bead-reviewer" in names, f"bead-reviewer not in order: {names}"
         # wave-orchestrator itself must be last
         assert names[-1] == "wave-orchestrator", f"wave-orchestrator should be last: {names}"
 
@@ -1243,7 +1243,7 @@ class TestWaveOrchestratorE2E:
         assert "agent:bead-orchestrator" in primitives_names
         assert "agent:quick-fix" in primitives_names
         assert "skill:wave-reviewer" in primitives_names
-        assert "skill:factory-check" in primitives_names
+        assert "skill:bead-reviewer" in primitives_names
 
 
 # ---------------------------------------------------------------------------
