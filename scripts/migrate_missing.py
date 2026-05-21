@@ -25,9 +25,9 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 BEADS_WORKFLOW_SKILLS = [
-    "bd-release-notes", "bead-metrics", "compound", "create", "epic-init",
+    "bd-release-notes", "bead-metrics", "compound",
     "factory-check", "impl", "intake", "plan", "refactor-note", "retro",
-    "review-conventions", "wave-orchestrator", "wave-reviewer", "workplan",
+    "review-conventions", "wave-orchestrator", "workplan",
 ]
 
 BEADS_WORKFLOW_AGENTS = [

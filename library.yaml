@@ -1143,29 +1143,6 @@ library:
         - origin:original
         - tier:core
         - workflow:beads
-    - name: create
-      description: >-
-        Create new beads with validated metadata, deps, and acceptance criteria.
-        Triggers on create bead, neuer bead, file a bead.
-      source: https://github.com/cognovis/library-core/blob/main/skills/create/SKILL.md
-      requires:
-        - "standard:english-only"
-        - "skill:epic-init"
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-    - name: epic-init
-      description: >-
-        Guided planning dialog for larger initiatives producing Beads epics with sub-tasks.
-        Triggers on epic init, plan epic, create epic, plan feature, break down feature.
-      source: https://github.com/cognovis/library-core/blob/main/skills/epic-init/SKILL.md
-      requires:
-        - "standard:english-only"
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
     - name: impl
       description: >-
         Implement plan autonomously with DoD verification. Triggers on implement plan,
@@ -1320,20 +1297,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/wave-dispatch/SKILL.md
       requires:
         - "standard:english-only"
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-    - name: wave-reviewer
-      description: >-
-        Review a wave or epic subtree before dispatch. Finds defects single-bead review
-        misses — dependency ordering, ownership collisions, lifecycle contradictions.
-        Calls bead-reviewer per bead and adds Wave-Goal Coverage Matrix.
-      source: https://github.com/cognovis/library-core/blob/main/skills/wave-reviewer/SKILL.md
-      requires:
-        - "standard:english-only"
-        - "standard:bead-hygiene"
-        - "skill:bead-reviewer"
       tags:
         - origin:original
         - tier:core
@@ -1797,7 +1760,6 @@ library:
         - agent:bead-orchestrator
         - agent:quick-fix
         - skill:wave-dispatch
-        - skill:wave-reviewer
         - skill:bead-reviewer
       tags:
         - origin:original

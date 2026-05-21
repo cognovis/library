@@ -1214,7 +1214,6 @@ class TestWaveOrchestratorE2E:
         assert "wave-monitor" in names, f"wave-monitor not in order: {names}"
         assert "bead-orchestrator" in names, f"bead-orchestrator not in order: {names}"
         assert "quick-fix" in names, f"quick-fix not in order: {names}"
-        assert "wave-reviewer" in names, f"wave-reviewer not in order: {names}"
         assert "bead-reviewer" in names, f"bead-reviewer not in order: {names}"
         # wave-orchestrator itself must be last
         assert names[-1] == "wave-orchestrator", f"wave-orchestrator should be last: {names}"
@@ -1237,12 +1236,11 @@ class TestWaveOrchestratorE2E:
         catalog = load_catalog(repo_root)
         entry = lookup_entry(catalog, "agent", "wave-orchestrator")
         requires = entry.get("requires") or []
-        assert len(requires) >= 5, f"Expected >= 5 requires, got {requires}"
+        assert len(requires) >= 4, f"Expected >= 4 requires, got {requires}"
         primitives_names = requires
         assert "agent:wave-monitor" in primitives_names
         assert "agent:bead-orchestrator" in primitives_names
         assert "agent:quick-fix" in primitives_names
-        assert "skill:wave-reviewer" in primitives_names
         assert "skill:bead-reviewer" in primitives_names
 
 
