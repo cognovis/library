@@ -1551,6 +1551,7 @@ library:
       requires:
         - "mcp:open-brain"
         - "skill:beads"
+        - "agent:fix-agent"
       tags:
         - origin:original
         - tier:core
@@ -1602,6 +1603,16 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: fix-agent
+      description: >-
+        Targeted code-fix worker for bead workflows. Use when bead-orchestrator needs an
+        independent reviewer's findings resolved — Codex adversarial regressions (Phase 8)
+        and auto-fixable verification disputes (Phase 10). Fixes ONLY the listed findings,
+        runs affected tests, commits, and reports. Premium (Opus) tier by design.
+      source: https://github.com/cognovis/library-core/blob/main/agents/fix-agent.md
+      tags:
+        - origin:original
+        - tier:core
     - name: holdout-validator
       description: >-
         Runs holdout scenarios from tests/holdout/ against a built artifact. Use proactively
