@@ -26,6 +26,8 @@ from ..lockfile import (
 )
 from ..output import dry_run_result, success
 from ..source import resolve_marketplace
+from ..source import parse_source
+from ..status import get_remote_sha
 
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
@@ -131,12 +133,13 @@ def install_mcp(
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         lock_data = load_lockfile(lockfile_path)
         source_str = entry.get("source") or f"mcp:{mcp_name}"
+        source_commit = _resolve_source_commit(mcp_name, entry.get("source"))
         lockfile_entry = make_entry(
             name=mcp_name,
             primitive_type="mcp",
             marketplace=marketplace,
             source=source_str,
-            source_commit="local",
+            source_commit=source_commit,
             cache_path=f"mcp:{mcp_name}",
             install_target=",".join(installed_harnesses) or "none",
             checksum_sha256="0" * 64,
@@ -160,6 +163,43 @@ def install_mcp(
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+
+def _resolve_source_commit(name: str, source: str | None) -> str:
+    """Resolve the upstream commit SHA for an MCP source URL."""
+    if not source:
+        return "local"
+
+    try:
+        parsed = parse_source(source)
+    except Exception:
+        print(
+            f"Warning: could not capture upstream SHA for mcp:{name}: {source}",
+            file=sys.stderr,
+        )
+        return "local"
+
+    if parsed.kind not in ("github_browser", "github_raw", "github_repo"):
+        return "local"
+
+    clone_url = parsed.clone_url
+    if not clone_url:
+        print(
+            f"Warning: could not capture upstream SHA for mcp:{name}: {source}",
+            file=sys.stderr,
+        )
+        return "local"
+
+    ref = parsed.branch or "HEAD"
+    remote_sha = get_remote_sha(clone_url, ref)
+    if remote_sha is None:
+        print(
+            f"Warning: could not capture upstream SHA for mcp:{name}: {source}",
+            file=sys.stderr,
+        )
+        return "local"
+
+    return remote_sha
 
 
 def remove_mcp(

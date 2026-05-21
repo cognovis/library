@@ -326,6 +326,46 @@ class TestCmdStatusImpl:
         assert len(entries) == 1
         assert entries[0]["upstream_status"] == "unknown"
 
+    def test_mcp_with_source_is_classified(self, tmp_path, monkeypatch):
+        """MCP installs with a source URL should round-trip to current status."""
+        from lib.installers.mcp_installer import install_mcp
+        from lib.status import cmd_status_impl
+
+        catalog = {
+            "mcp_servers": [
+                {
+                    "name": "open-brain",
+                    "source": "https://github.com/sussdorff/open-brain/blob/main/mcp.yaml",
+                    "install": {
+                        "mcp": {
+                            "claude_code": {
+                                "command": "open-brain",
+                            }
+                        }
+                    },
+                }
+            ],
+            "marketplaces": [],
+        }
+
+        monkeypatch.setattr("lib.installers.mcp_installer._import_install_mcp", lambda: object())
+        monkeypatch.setattr("lib.installers.mcp_installer._install_to_harness", lambda *args, **kwargs: 0)
+        monkeypatch.setattr("lib.installers.mcp_installer.get_remote_sha", lambda *args, **kwargs: INSTALLED_SHA)
+
+        install_result = install_mcp(catalog, "open-brain", tmp_path, scope="project")
+        assert install_result["status"] == "ok"
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = f"{INSTALLED_SHA}\trefs/heads/main\n"
+
+        with patch("subprocess.run", return_value=mock_result):
+            result = cmd_status_impl({}, "all", tmp_path, scope="project")
+
+        entries = result["entries"]
+        assert len(entries) == 1
+        assert entries[0]["upstream_status"] == "current"
+
 
 # ---------------------------------------------------------------------------
 # CLI integration tests for top-level status command
