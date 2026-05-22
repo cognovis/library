@@ -6,6 +6,12 @@ capabilities:
       tools: [Read, Grep, Glob]
     codex:
       sandbox_mode: read-only
+  - name: search_files
+    description: Search local source trees without modifying files.
+    claude:
+      tools: [Grep, Glob]
+    codex:
+      sandbox_mode: read-only
   - name: write_files
     description: Create new files in the workspace.
     claude:
@@ -24,6 +30,12 @@ capabilities:
       tools: [Bash]
     codex:
       sandbox_mode: workspace-write
+  - name: bash_read_only
+    description: Run read-only shell commands for inspection and local analysis.
+    claude:
+      tools: [Bash]
+    codex:
+      sandbox_mode: read-only
   - name: inspect_git
     description: Inspect git status, diffs, history, and branch metadata.
     claude:
@@ -53,6 +65,14 @@ capabilities:
     description: Search and fetch web content for research tasks.
     claude:
       tools: [WebFetch, WebSearch]
+      mcpServers: [searxng]
+    codex:
+      mcp_servers: [searxng]
+      sandbox_mode: read-only
+  - name: read_external_registries
+    description: Inspect package, implementation-guide, and other public registry metadata.
+    claude:
+      tools: [Bash, WebFetch, WebSearch]
       mcpServers: [searxng]
     codex:
       mcp_servers: [searxng]

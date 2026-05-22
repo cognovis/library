@@ -43,13 +43,13 @@
             "minItems": 1,
             "items": {
               "type": "string",
-              "enum": ["low", "medium", "high", "max"]
+              "enum": ["low", "medium", "high", "xhigh", "max"]
             },
             "uniqueItems": true
           },
           "default_reasoning": {
             "type": "string",
-            "enum": ["low", "medium", "high", "max"]
+            "enum": ["low", "medium", "high", "xhigh", "max"]
           },
           "context": {
             "type": "string",

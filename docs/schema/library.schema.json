@@ -1616,6 +1616,13 @@
           "description": "GitHub URL or local path to the model-standard file.",
           "type": "string"
         },
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
+        },
+        "version": {
+          "description": "Optional semantic version or tag of the entry.",
+          "type": "string"
+        },
         "tags": {
           "description": "Optional tags for search and filtering.",
           "type": "array",
@@ -1656,6 +1663,13 @@
             "$ref": "#/$defs/typed_dependency"
           },
           "default": []
+        },
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
+        },
+        "version": {
+          "description": "Optional semantic version or tag of the entry.",
+          "type": "string"
         },
         "tags": {
           "description": "Optional tags for search and filtering.",

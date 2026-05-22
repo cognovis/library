@@ -53,6 +53,7 @@ def find_repo_root() -> Path:
 
 
 _NAME_PATTERN = re.compile(r'^[a-z][a-z0-9-]*$')
+_SCRIPT_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)*$')
 
 
 def _validate_agentskills_rules(data: dict) -> list:
@@ -61,6 +62,7 @@ def _validate_agentskills_rules(data: dict) -> list:
     Rules (apply to skills, agents, prompts, standards, scripts):
     - name: max 64 chars
     - name: must match [a-z][a-z0-9-]* (lowercase letters, digits, hyphens only)
+      except scripts, which may use path-like names such as triage/audit_log
     - name: must not end with hyphen
     - name: must not contain consecutive hyphens (--)
     - description: max 1024 chars
@@ -86,10 +88,17 @@ def _validate_agentskills_rules(data: dict) -> list:
             if len(name) > 64:
                 errors.append(f"{prefix} name exceeds 64 chars (got {len(name)})")
 
-            if primitive_name != "model-standard" and not _NAME_PATTERN.match(name):
+            name_pattern = (
+                _SCRIPT_NAME_PATTERN if primitive_name == "script" else _NAME_PATTERN
+            )
+            if primitive_name != "model-standard" and not name_pattern.match(name):
+                expected = (
+                    "[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)*"
+                    if primitive_name == "script"
+                    else "[a-z][a-z0-9-]*"
+                )
                 errors.append(
-                    f"{prefix} name must match [a-z][a-z0-9-]* "
-                    "(lowercase letters, digits, hyphens only)"
+                    f"{prefix} name must match {expected}"
                 )
 
             if name.endswith('-'):

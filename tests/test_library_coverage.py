@@ -116,7 +116,15 @@ ALLOWED_SOURCE_REPOS = (
     "cognovis/samurai-skills",
 )
 
-ALLOWED_DEPENDENCY_PREFIXES = ("skill:", "agent:", "prompt:", "standard:", "hook:", "mcp:")
+ALLOWED_DEPENDENCY_PREFIXES = (
+    "skill:",
+    "agent:",
+    "prompt:",
+    "standard:",
+    "hook:",
+    "mcp:",
+    "script:",
+)
 
 
 # ---- Tests ----------------------------------------------------------------

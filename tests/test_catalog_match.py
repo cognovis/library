@@ -75,6 +75,10 @@ library:
     - name: old-python-uv
       description: Old generated entry.
       source: https://github.com/example/core/blob/main/standards/old-python-uv.md
+      metadata:
+        library:
+          source_catalog: test-core
+          inventory: convention-scan
 """
 
 
@@ -147,6 +151,63 @@ def test_catalog_sync_dry_run_scans_local_inventory(tmp_path: Path) -> None:
     assert data["status"] == "dry-run"
     assert data["generated"]["standard"] == 1
     assert data["entries"][0]["name"] == "python-uv"
+
+
+def test_catalog_sync_scans_only_top_level_skill_dirs(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    real_skill = source_root / "skills" / "real-skill"
+    real_skill.mkdir(parents=True)
+    (real_skill / "skill.md").write_text(
+        "---\nname: real-skill\ndescription: Real lowercase skill.\n---\n# Real Skill\n"
+    )
+    fixture_skill = source_root / "skills" / "owner" / "tests" / "fixtures" / "skills" / "my-skill"
+    fixture_skill.mkdir(parents=True)
+    (fixture_skill / "SKILL.md").write_text(
+        "---\nname: my-skill\ndescription: Fixture skill.\n---\n# Fixture Skill\n"
+    )
+    (tmp_path / "library.yaml").write_text(minimal_library(source_root))
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=skill",
+        "--json",
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    names = {entry["name"] for entry in data["entries"]}
+
+    assert names == {"real-skill"}
+    assert data["entries"][0]["source"].endswith("/skills/real-skill/skill.md")
+
+
+def test_catalog_sync_uses_agent_file_stem_over_frontmatter_name(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    agent_dir = source_root / "agents"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "chrome-devtools-tester.md").write_text(
+        "---\nname: browser-tester\ndescription: Browser testing agent.\n---\n# Browser Tester\n"
+    )
+    catalog = minimal_library(source_root).replace(
+        "        - standards\n        - skills\n",
+        "        - standards\n        - skills\n        - agents\n",
+    )
+    (tmp_path / "library.yaml").write_text(catalog)
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=agent",
+        "--json",
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+
+    assert data["entries"][0]["name"] == "chrome-devtools-tester"
 
 
 def test_catalog_sync_scans_legacy_agent_base_source_directory(tmp_path: Path) -> None:
@@ -225,6 +286,112 @@ def test_catalog_sync_write_refreshes_generated_entries(tmp_path: Path) -> None:
     assert names == ["python-uv"]
 
 
+def test_catalog_sync_write_preserves_curated_source_entries(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    standards_dir = source_root / "standards"
+    standards_dir.mkdir(parents=True)
+    (standards_dir / "python-uv.md").write_text(
+        "---\nname: python-uv\ndescription: Python uv standard.\n---\n# Python uv\n"
+    )
+    catalog = minimal_library(source_root).replace(
+        "    - name: old-python-uv\n"
+        "      description: Old generated entry.\n"
+        "      source: https://github.com/example/core/blob/main/standards/old-python-uv.md\n"
+        "      metadata:\n"
+        "        library:\n"
+        "          source_catalog: test-core\n"
+        "          inventory: convention-scan\n",
+        "    - name: curated-standard\n"
+        "      description: Curated source entry.\n"
+        "      source: https://github.com/example/core/blob/main/standards/manual.md\n"
+        "      tags:\n"
+        "        - curated\n",
+    )
+    (tmp_path / "library.yaml").write_text(catalog)
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=standard",
+        "--write",
+        "--json",
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    refreshed = yaml.safe_load((tmp_path / "library.yaml").read_text())
+    by_name = {entry["name"]: entry for entry in refreshed["library"]["standards"]}
+
+    assert set(by_name) == {"curated-standard", "python-uv"}
+    assert by_name["curated-standard"]["tags"] == ["curated"]
+
+
+def test_catalog_sync_write_does_not_add_name_collision_against_kept_entries(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    standards_dir = source_root / "standards"
+    standards_dir.mkdir(parents=True)
+    (standards_dir / "agentic-primitives.md").write_text("# Source Agentic Primitives\n")
+    catalog = minimal_library(source_root).replace(
+        "    - name: old-python-uv\n"
+        "      description: Old generated entry.\n"
+        "      source: https://github.com/example/core/blob/main/standards/old-python-uv.md\n"
+        "      metadata:\n"
+        "        library:\n"
+        "          source_catalog: test-core\n"
+        "          inventory: convention-scan\n",
+        "    - name: agentic-primitives\n"
+        "      description: Platform-owned standard.\n"
+        "      source: https://github.com/example/platform/blob/main/standards/agentic-primitives.md\n",
+    )
+    (tmp_path / "library.yaml").write_text(catalog)
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=standard",
+        "--write",
+        "--json",
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    refreshed = yaml.safe_load((tmp_path / "library.yaml").read_text())
+    standards = refreshed["library"]["standards"]
+
+    assert [entry["name"] for entry in standards] == ["agentic-primitives"]
+    assert standards[0]["source"] == "https://github.com/example/platform/blob/main/standards/agentic-primitives.md"
+
+
+def test_catalog_sync_scans_standard_bundles_and_leaf_standards(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    trigger_bundle = source_root / "standards" / "workflow"
+    trigger_bundle.mkdir(parents=True)
+    (trigger_bundle / "_triggers.yml").write_text("triggers: []\n")
+    (trigger_bundle / "bead-hygiene.md").write_text("# Bead Hygiene\n")
+    leaf_group = source_root / "standards" / "judge-layer"
+    leaf_group.mkdir(parents=True)
+    (leaf_group / "README.md").write_text("# Judge Layer README\n")
+    (leaf_group / "action-proposal.md").write_text("# Action Proposal\n")
+    (source_root / "standards" / "root-standard.md").write_text("# Root Standard\n")
+    (tmp_path / "library.yaml").write_text(minimal_library(source_root))
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=standard",
+        "--json",
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    by_name = {entry["name"]: entry for entry in data["entries"]}
+
+    assert set(by_name) == {"action-proposal", "root-standard", "workflow"}
+    assert by_name["workflow"]["source"].endswith("/tree/main/standards/workflow/")
+    assert "README" not in by_name
+
+
 def test_catalog_sync_write_preserves_remote_only_marketplace_entries(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     skill_dir = source_root / "skills" / "local-skill"
@@ -265,6 +432,10 @@ library:
     - name: old-local-skill
       description: Old generated entry.
       source: https://github.com/example/core/blob/main/skills/old-local-skill/SKILL.md
+      metadata:
+        library:
+          source_catalog: test-core
+          inventory: convention-scan
     - name: remote-skill
       description: Remote marketplace skill.
       from_marketplace: public-marketplace

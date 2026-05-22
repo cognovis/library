@@ -60,6 +60,11 @@ IGNORED_PATH_PARTS = {
     "node_modules",
 }
 
+IGNORED_MARKDOWN_FILENAMES = {
+    "CHANGELOG.md",
+    "README.md",
+}
+
 
 def normalize_topics(raw_topics: str | list[Any] | tuple[Any, ...] | None) -> list[str]:
     """Return stable lowercase topic tokens from CSV text or a sequence."""
@@ -277,6 +282,7 @@ def sync_catalog_inventory(
     yaml_rt = YAML(typ="rt")
     yaml_rt.preserve_quotes = True
     yaml_rt.width = 4096
+    yaml_rt.representer.add_representer(type(None), represent_null)
     # Match the existing library.yaml style: list items indented under their
     # parent mapping ("    - foo" not "  - foo").
     yaml_rt.indent(mapping=2, sequence=4, offset=2)
@@ -293,6 +299,11 @@ def sync_catalog_inventory(
     result["status"] = "ok"
     result["written"] = str(yaml_path)
     return result
+
+
+def represent_null(representer: Any, data: None) -> Any:
+    """Render null explicitly so catalog diffs stay stable."""
+    return representer.represent_scalar("tag:yaml.org,2002:null", "null")
 
 
 def apply_inventory_plan(catalog_data: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
@@ -324,17 +335,119 @@ def apply_inventory_plan(catalog_data: dict[str, Any], plan: dict[str, Any]) -> 
         existing_entries = resolve_yaml_section(updated, primitive)
         source_entries = source_entries_by_primitive.get(primitive_name, [])
         source_names = {str(source.get("name") or "") for source in source_entries}
+        merged_generated_entries, matched_existing_ids = merge_generated_entries(
+            existing_entries,
+            generated_entries,
+            source_entries,
+            source_names,
+        )
         kept_entries = [
             entry
             for entry in existing_entries
-            if not entry_belongs_to_sources(entry, source_entries, source_names)
+            if id(entry) not in matched_existing_ids
+            and (
+                not entry_belongs_to_sources(entry, source_entries, source_names)
+                or not entry_is_inventory_generated(entry)
+            )
+        ]
+        kept_names = {str(entry.get("name") or "") for entry in kept_entries}
+        non_colliding_generated_entries = [
+            entry
+            for entry in merged_generated_entries
+            if str(entry.get("name") or "") not in kept_names
         ]
         updated["library"][section_key] = kept_entries + sorted(
-            generated_entries,
+            non_colliding_generated_entries,
             key=lambda entry: str(entry.get("name", "")),
         )
 
     return updated
+
+
+def merge_generated_entries(
+    existing_entries: list[dict[str, Any]],
+    generated_entries: list[dict[str, Any]],
+    source_entries: list[dict[str, Any]],
+    source_names: set[str],
+) -> tuple[list[dict[str, Any]], set[int]]:
+    """Merge generated entries with matching curated catalog rows.
+
+    Convention scan should update scanner-owned rows, but it must not erase
+    unrelated manual metadata such as tags, tier/default scope, or Gas City
+    annotations from rows that already point at the same source artifact.
+    """
+    existing_by_source: dict[str, dict[str, Any]] = {}
+    existing_by_name: dict[str, dict[str, Any]] = {}
+    for entry in existing_entries:
+        if not entry_belongs_to_sources(entry, source_entries, source_names):
+            continue
+        source = normalize_source_ref(str(entry.get("source") or ""))
+        if source:
+            existing_by_source[source] = entry
+        name = str(entry.get("name") or "")
+        if name:
+            existing_by_name[name] = entry
+
+    matched_existing_ids: set[int] = set()
+    merged_entries: list[dict[str, Any]] = []
+    for generated_entry in generated_entries:
+        source = normalize_source_ref(str(generated_entry.get("source") or ""))
+        name = str(generated_entry.get("name") or "")
+        existing_entry = existing_by_source.get(source) or existing_by_name.get(name)
+        if existing_entry is not None:
+            matched_existing_ids.add(id(existing_entry))
+            merged_entries.append(merge_catalog_entry(existing_entry, generated_entry))
+        else:
+            merged_entries.append(generated_entry)
+
+    return merged_entries, matched_existing_ids
+
+
+def merge_catalog_entry(existing_entry: dict[str, Any], generated_entry: dict[str, Any]) -> dict[str, Any]:
+    """Return a refreshed catalog row while preserving curated metadata."""
+    merged = deepcopy(existing_entry)
+    for key, value in generated_entry.items():
+        merged[key] = value
+
+    if "tags" in existing_entry:
+        merged["tags"] = deepcopy(existing_entry["tags"])
+    if "requires" in existing_entry:
+        merged["requires"] = deepcopy(existing_entry["requires"])
+
+    existing_metadata = existing_entry.get("metadata")
+    generated_metadata = generated_entry.get("metadata")
+    if isinstance(existing_metadata, dict) or isinstance(generated_metadata, dict):
+        metadata: dict[str, Any] = {}
+        if isinstance(existing_metadata, dict):
+            metadata = deepcopy(existing_metadata)
+        if isinstance(generated_metadata, dict):
+            metadata = deep_merge(metadata, generated_metadata)
+        merged["metadata"] = metadata
+
+    return merged
+
+
+def deep_merge(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge dictionaries, with update values taking precedence."""
+    result = deepcopy(base)
+    for key, value in update.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = deepcopy(value)
+    return result
+
+
+def entry_is_inventory_generated(entry: dict[str, Any]) -> bool:
+    """Return True for rows previously written by convention-scan."""
+    metadata = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
+    library_meta = metadata.get("library") if isinstance(metadata.get("library"), dict) else {}
+    return str(library_meta.get("inventory") or "") == "convention-scan"
+
+
+def normalize_source_ref(source: str) -> str:
+    """Normalize source refs for matching file and tree URLs."""
+    return source.rstrip("/")
 
 
 def scan_source_inventory(
@@ -404,13 +517,19 @@ def scan_primitive(
 ) -> list[dict[str, Any]]:
     """Scan one primitive kind under a local source checkout."""
     if primitive_name == "skill":
-        files = sorted((root / "skills").glob("**/SKILL.md"))
+        files = sorted(
+            skill_file
+            for skill_dir in (root / "skills").glob("*")
+            if skill_dir.is_dir()
+            for skill_file in [find_skill_file(skill_dir)]
+            if skill_file is not None
+        )
     elif primitive_name == "agent":
         files = sorted((root / "agents").glob("**/*.md"))
     elif primitive_name == "prompt":
         files = sorted((root / "prompts").glob("**/*.md"))
     elif primitive_name == "standard":
-        files = sorted((root / "standards").glob("**/*.md"))
+        files = scan_standard_artifacts(root / "standards")
     elif primitive_name == "model-standard":
         files = sorted((root / "model-standards").glob("**/*.md"))
     elif primitive_name == "agent-base":
@@ -428,6 +547,42 @@ def scan_primitive(
     return entries
 
 
+def find_skill_file(skill_dir: Path) -> Path | None:
+    """Return the canonical skill file in a top-level skill directory."""
+    files_by_name = {path.name: path for path in skill_dir.iterdir() if path.is_file()}
+    for filename in ("SKILL.md", "skill.md"):
+        if filename in files_by_name:
+            return files_by_name[filename]
+    return None
+
+
+def scan_standard_artifacts(standards_root: Path) -> list[Path]:
+    """Return standards artifacts using bundle-aware conventions."""
+    if not standards_root.exists():
+        return []
+
+    artifacts: list[Path] = []
+    artifacts.extend(
+        path
+        for path in sorted(standards_root.glob("*.md"))
+        if path.name not in IGNORED_MARKDOWN_FILENAMES
+    )
+
+    for child in sorted(standards_root.iterdir()):
+        if not child.is_dir() or any(part in IGNORED_PATH_PARTS for part in child.parts):
+            continue
+        if (child / "_triggers.yml").exists():
+            artifacts.append(child)
+            continue
+        artifacts.extend(
+            path
+            for path in sorted(child.glob("*.md"))
+            if path.name not in IGNORED_MARKDOWN_FILENAMES
+        )
+
+    return artifacts
+
+
 def artifact_entry(
     root: Path,
     source_entry: dict[str, Any],
@@ -436,18 +591,21 @@ def artifact_entry(
 ) -> dict[str, Any]:
     """Build a library.yaml entry from a scanned artifact."""
     frontmatter, heading = read_markdown_metadata(path)
-    name = str(frontmatter.get("name") or default_artifact_name(primitive_name, path))
+    name = str(catalog_artifact_name(primitive_name, path, frontmatter))
     description = str(
         frontmatter.get("description")
         or heading
         or f"{primitive_name} from {source_entry.get('name', 'source')}: {name}"
     )
     relative_path = path.relative_to(root).as_posix()
+    is_directory = path.is_dir()
+    if is_directory and not relative_path.endswith("/"):
+        relative_path = f"{relative_path}/"
 
     entry: dict[str, Any] = {
         "name": name,
         "description": collapse_description(description),
-        "source": source_url(source_entry, relative_path, root),
+        "source": source_url(source_entry, relative_path, root, is_directory=is_directory),
         "metadata": {
             "library": {
                 "source_catalog": source_entry.get("name", ""),
@@ -459,6 +617,8 @@ def artifact_entry(
     tags = frontmatter.get("tags")
     if isinstance(tags, list):
         entry["tags"] = [str(tag) for tag in tags]
+    else:
+        entry["tags"] = default_artifact_tags(source_entry, primitive_name, path)
 
     requires = frontmatter.get("requires")
     if isinstance(requires, list):
@@ -477,8 +637,31 @@ def artifact_entry(
     return entry
 
 
+def default_artifact_tags(source_entry: dict[str, Any], primitive_name: str, path: Path) -> list[str]:
+    """Return conservative tags for convention-scanned entries without tags."""
+    tags: list[str] = []
+    if str(source_entry.get("owner") or "") == "cognovis":
+        tags.append("origin:original")
+    if primitive_name in {"skill", "agent", "standard"}:
+        tags.append("tier:domain")
+    if primitive_name == "standard":
+        tags.append("category:standard-bundle" if path.is_dir() else "category:standard")
+    return tags or ["inventory:convention-scan"]
+
+
 def read_markdown_metadata(path: Path) -> tuple[dict[str, Any], str]:
     """Read YAML frontmatter and the first Markdown heading from a file."""
+    if path.is_dir():
+        candidates = [
+            path / f"{path.name}.md",
+            path / "README.md",
+            *sorted(path.glob("*.md")),
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return read_markdown_metadata(candidate)
+        return {}, ""
+
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
@@ -504,9 +687,18 @@ def read_markdown_metadata(path: Path) -> tuple[dict[str, Any], str]:
     return frontmatter, heading
 
 
+def catalog_artifact_name(primitive_name: str, path: Path, frontmatter: dict[str, Any]) -> str:
+    """Return the catalog name for a scanned artifact."""
+    if primitive_name == "agent":
+        return path.stem
+    return str(frontmatter.get("name") or default_artifact_name(primitive_name, path))
+
+
 def default_artifact_name(primitive_name: str, path: Path) -> str:
     """Derive a catalog name from an artifact path."""
-    if primitive_name == "skill" and path.name == "SKILL.md":
+    if path.is_dir():
+        return path.name
+    if primitive_name == "skill" and path.name.lower() == "skill.md":
         return path.parent.name
     return path.stem
 
@@ -516,11 +708,18 @@ def collapse_description(description: str) -> str:
     return " ".join(str(description).split())
 
 
-def source_url(source_entry: dict[str, Any], relative_path: str, root: Path) -> str:
+def source_url(
+    source_entry: dict[str, Any],
+    relative_path: str,
+    root: Path,
+    *,
+    is_directory: bool = False,
+) -> str:
     """Build a source reference for a scanned artifact."""
     base = str(source_entry.get("source") or "").rstrip("/")
     if is_github_repo_url(base):
-        return f"{base}/blob/main/{relative_path}"
+        mode = "tree" if is_directory else "blob"
+        return f"{base}/{mode}/main/{relative_path}"
     return str(root / relative_path)
 
 
