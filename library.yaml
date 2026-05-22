@@ -2289,6 +2289,33 @@ library:
         - tier:domain
         - category:standard
         - fhir
+    - name: fhir-sync-versions
+      description: >-
+        Reconcile FHIR package version pins across all locally-checked-out fhir-* repos
+        (fhir-praxis-de, fhir-dental-de, bundle package.json files) against the canonical
+        fhir-versions.lock.yaml manifest. Detects UPDATE and MANIFEST-BEHIND drift, applies
+        fixes in --apply mode, and reports unpublished packages. Triggers: /fhir-sync-versions,
+        fhir version sync, reconcile fhir pins, sync fhir versions.
+      source: https://github.com/cognovis/library-core/blob/main/skills/fhir-sync-versions/SKILL.md
+      requires:
+        - "standard:english-only"
+      metadata:
+        library:
+          plane: dev
+          steward: cognovis-core
+          product_counterpart:
+            repo: fhir-terminology-de
+            primitive_type: workflow
+            notes: >-
+              Reads fhir-versions.lock.yaml from fhir-terminology-de; applies version pin
+              updates to fhir-praxis-de and fhir-dental-de sushi-config.yaml files and
+              to bundle package.json deps. Not a global skill — install per fhir-* repo.
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:project
+        - domain:fhir
     - name: bead-hygiene
       description: >-
         Universal bead spec quality baseline for Pass 3 review. Defines required MoC table
