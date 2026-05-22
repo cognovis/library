@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # Make `lib` importable when running as a script
@@ -72,6 +73,7 @@ from lib.output import (
 )
 from lib.primitives import PRIMITIVES, all_primitive_names, get_primitive
 from lib.status import cmd_status_impl
+from lib.source import ParsedSource, parse_source
 from lib.sync_audit import cmd_audit_impl, cmd_sync_impl, reinstall_entry
 
 
@@ -1479,81 +1481,105 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     all_failed = []
     skipped_by_status: dict[str, list[str]] = {
         "current": [],
+        "path_unchanged": [],
         "unknown": [],
         "other": [],
     }
     warnings: list[str] = []
     remote_cache: dict[tuple[str, str], str | None] = {}
+    path_repo_cache: dict[tuple[str, str, str], Path | None] = {}
 
-    for s in scopes_to_check:
-        if s == "project" and repo_root is None:
-            if scope == "project":
-                warnings.append(_missing_project_warning())
-            continue
-        # Get upstream status to determine what needs syncing
-        if not force:
-            try:
-                status_result = cmd_status_impl(
-                    catalog=catalog,
-                    primitive="all",
-                    repo_root=repo_root or Path.cwd(),
-                    scope=s,
-                    remote_cache=remote_cache,
-                )
-                status_by_key = {
-                    (e["name"], e.get("primitive", e.get("type", "")))
-                    : e.get("upstream_status", "unknown")
-                    for e in status_result.get("entries", [])
-                }
-            except LibraryError as exc:
-                warnings.append(f"status check failed for {s} scope: {exc}")
+    with tempfile.TemporaryDirectory(prefix="library-sync-paths-") as temp_dir:
+        path_check_root = Path(temp_dir)
+
+        for s in scopes_to_check:
+            if s == "project" and repo_root is None:
+                if scope == "project":
+                    warnings.append(_missing_project_warning())
+                continue
+            # Get upstream status to determine what needs syncing. This is a
+            # repository-level check; a second path-aware filter below prevents
+            # refreshing every installed entry from a marketplace when only one
+            # source path changed.
+            if not force:
+                try:
+                    status_result = cmd_status_impl(
+                        catalog=catalog,
+                        primitive="all",
+                        repo_root=repo_root or Path.cwd(),
+                        scope=s,
+                        remote_cache=remote_cache,
+                    )
+                    status_by_key = {
+                        (e["name"], e.get("primitive", e.get("type", ""))): e
+                        for e in status_result.get("entries", [])
+                    }
+                except LibraryError as exc:
+                    warnings.append(f"status check failed for {s} scope: {exc}")
+                    status_by_key = {}
+            else:
                 status_by_key = {}
-        else:
-            status_by_key = {}
 
-        lockfile_path = find_lockfile(repo_root, global_scope=(s == "global"))
-        lock_data = load_lockfile(lockfile_path)
-        installed = lock_data.get("installed", [])
+            lockfile_path = find_lockfile(repo_root, global_scope=(s == "global"))
+            lock_data = load_lockfile(lockfile_path)
+            installed = lock_data.get("installed", [])
 
-        for entry in installed:
-            entry_name = entry.get("name", "")
-            entry_type = entry.get("type", "")
-            entry_label = f"{entry_type}:{entry_name}"
-            key = (entry_name, entry_type)
+            for entry in installed:
+                entry_name = entry.get("name", "")
+                entry_type = entry.get("type", "")
+                entry_label = f"{entry_type}:{entry_name}"
+                key = (entry_name, entry_type)
 
-            upstream_status = status_by_key.get(key, "unknown")
-            should_refresh = force or upstream_status == "behind"
-            should_skip = not should_refresh
+                status_entry = status_by_key.get(key, {})
+                upstream_status = status_entry.get("upstream_status", "unknown")
+                should_refresh = force or upstream_status == "behind"
+                if should_refresh and not force:
+                    path_changed = _entry_source_path_changed(
+                        entry=entry,
+                        remote_sha=status_entry.get("remote_sha"),
+                        temp_root=path_check_root,
+                        repo_cache=path_repo_cache,
+                    )
+                    if path_changed is False:
+                        should_refresh = False
+                        upstream_status = "path_unchanged"
+                    elif path_changed is None:
+                        # Unknown means conservative behavior: refresh. This
+                        # preserves old correctness for repo-only sources or
+                        # remotes that cannot be diffed by path.
+                        should_refresh = True
 
-            if dry_run:
+                should_skip = not should_refresh
+
+                if dry_run:
+                    if should_skip:
+                        all_skipped.append(entry_label)
+                        skipped_by_status[
+                            upstream_status if upstream_status in skipped_by_status else "other"
+                        ].append(entry_label)
+                    else:
+                        all_refreshed.append(entry_label)
+                    continue
+
                 if should_skip:
                     all_skipped.append(entry_label)
                     skipped_by_status[
                         upstream_status if upstream_status in skipped_by_status else "other"
                     ].append(entry_label)
-                else:
+                    continue
+
+                # Re-install this entry
+                try:
+                    reinstall_entry(catalog, entry, repo_root, s, harness)
                     all_refreshed.append(entry_label)
-                continue
-
-            if should_skip:
-                all_skipped.append(entry_label)
-                skipped_by_status[
-                    upstream_status if upstream_status in skipped_by_status else "other"
-                ].append(entry_label)
-                continue
-
-            # Re-install this entry
-            try:
-                reinstall_entry(catalog, entry, repo_root, s, harness)
-                all_refreshed.append(entry_label)
-            except (LibraryError, Exception) as exc:
-                all_failed.append({
-                    "name": entry.get("name", ""),
-                    "type": entry.get("type", ""),
-                    "error": str(exc),
-                })
-                if not use_json:
-                    print(f"  ERROR: {entry.get('name')}: {exc}", file=sys.stderr)
+                except (LibraryError, Exception) as exc:
+                    all_failed.append({
+                        "name": entry.get("name", ""),
+                        "type": entry.get("type", ""),
+                        "error": str(exc),
+                    })
+                    if not use_json:
+                        print(f"  ERROR: {entry.get('name')}: {exc}", file=sys.stderr)
 
     unknown_skipped = len(skipped_by_status["unknown"])
     if unknown_skipped:
@@ -1599,6 +1625,168 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     if all_failed:
         return EXIT_FAILURE
     return 0
+
+
+def _entry_source_path_changed(
+    *,
+    entry: dict,
+    remote_sha: str | None,
+    temp_root: Path,
+    repo_cache: dict[tuple[str, str, str], Path | None],
+) -> bool | None:
+    """Return whether an installed entry's source path changed upstream.
+
+    `library status` is intentionally repository-level and cheap. Bulk sync
+    needs a narrower decision so one marketplace commit does not reinstall
+    every installed primitive from that repo. `None` means the path check could
+    not be performed and callers should keep conservative repo-level behavior.
+    """
+    source = str(entry.get("source") or "")
+    installed_sha = str(entry.get("source_commit") or "")
+    if not source or not installed_sha or installed_sha == "local" or not remote_sha:
+        return None
+
+    parsed = parse_source(source)
+    if not parsed.is_github() or not parsed.clone_url:
+        return None
+
+    source_path = _entry_git_source_scope(entry, parsed)
+    if not source_path:
+        return None
+
+    repo_dir = _ensure_remote_diff_repo(
+        clone_url=parsed.clone_url,
+        old_sha=installed_sha,
+        new_sha=remote_sha,
+        temp_root=temp_root,
+        repo_cache=repo_cache,
+    )
+    if repo_dir is None:
+        return None
+
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_dir),
+                "diff",
+                "--quiet",
+                installed_sha,
+                remote_sha,
+                "--",
+                source_path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode == 0:
+        return False
+    if result.returncode == 1:
+        return True
+    return None
+
+
+def _entry_git_source_scope(entry: dict, parsed: ParsedSource) -> str | None:
+    """Return the git path that determines whether an entry needs refresh."""
+    if not parsed.file_path:
+        return None
+    if parsed.path_type == "directory":
+        return parsed.file_path
+    if entry.get("type") == "skill":
+        return parsed.parent_dir_in_repo() or parsed.file_path
+    return parsed.file_path
+
+
+def _ensure_remote_diff_repo(
+    *,
+    clone_url: str,
+    old_sha: str,
+    new_sha: str,
+    temp_root: Path,
+    repo_cache: dict[tuple[str, str, str], Path | None],
+) -> Path | None:
+    cache_key = (clone_url, old_sha, new_sha)
+    if cache_key in repo_cache:
+        return repo_cache[cache_key]
+
+    repo_dir = temp_root / f"repo-{len(repo_cache)}"
+    try:
+        init = subprocess.run(
+            ["git", "init", "--quiet", str(repo_dir)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if init.returncode != 0:
+            repo_cache[cache_key] = None
+            return None
+        remote = subprocess.run(
+            ["git", "-C", str(repo_dir), "remote", "add", "origin", clone_url],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if remote.returncode != 0:
+            repo_cache[cache_key] = None
+            return None
+        if not _fetch_commit_for_diff(repo_dir, old_sha):
+            repo_cache[cache_key] = None
+            return None
+        if not _fetch_commit_for_diff(repo_dir, new_sha):
+            repo_cache[cache_key] = None
+            return None
+    except (OSError, subprocess.TimeoutExpired):
+        repo_cache[cache_key] = None
+        return None
+
+    repo_cache[cache_key] = repo_dir
+    return repo_dir
+
+
+def _fetch_commit_for_diff(repo_dir: Path, commit_sha: str) -> bool:
+    commands = [
+        [
+            "git",
+            "-C",
+            str(repo_dir),
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--filter=blob:none",
+            "--depth=1",
+            "origin",
+            commit_sha,
+        ],
+        [
+            "git",
+            "-C",
+            str(repo_dir),
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--depth=1",
+            "origin",
+            commit_sha,
+        ],
+    ]
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0:
+            return True
+    return False
 
 
 VERB_HANDLERS = {

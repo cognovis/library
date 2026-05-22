@@ -782,6 +782,86 @@ class TestTopLevelSync:
         assert data.get("skipped", []) == [], \
             f"Expected no skipped entries with --force, got: {data.get('skipped')}"
 
+    def test_sync_all_skips_repo_behind_entries_when_source_path_unchanged(
+        self, tmp_path, capsys, monkeypatch
+    ):
+        """Bulk sync must not reinstall every entry from a repo when only one path changed."""
+        import argparse
+        import library as library_cli
+
+        old_sha = "1" * 40
+        new_sha = "2" * 40
+        entries = [
+            {
+                "name": "skill-unchanged",
+                "type": "skill",
+                "marketplace": "cognovis-core",
+                "source": "https://github.com/cognovis/library-core/blob/main/skills/skill-unchanged/SKILL.md",
+                "source_commit": old_sha,
+                "cache_path": str(tmp_path / "cache-unchanged") + "/",
+                "install_target": str(tmp_path / ".agents/skills/skill-unchanged") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": "a" * 64,
+                "checksum_type": "directory",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+            {
+                "name": "skill-changed",
+                "type": "skill",
+                "marketplace": "cognovis-core",
+                "source": "https://github.com/cognovis/library-core/blob/main/skills/skill-changed/SKILL.md",
+                "source_commit": old_sha,
+                "cache_path": str(tmp_path / "cache-changed") + "/",
+                "install_target": str(tmp_path / ".agents/skills/skill-changed") + "/",
+                "install_timestamp": "2024-01-01T00:00:00Z",
+                "checksum_sha256": "b" * 64,
+                "checksum_type": "directory",
+                "license": "unknown",
+                "bridge_symlinks": [],
+            },
+        ]
+        (tmp_path / ".library.lock").write_text(yaml.dump({"installed": entries}))
+
+        def fake_status(**kwargs):
+            return {
+                "status": "ok",
+                "overall": "behind",
+                "entries": [
+                    {
+                        "name": entry["name"],
+                        "primitive": entry["type"],
+                        "upstream_status": "behind",
+                        "behind": True,
+                        "installed_sha": old_sha,
+                        "remote_sha": new_sha,
+                    }
+                    for entry in entries
+                ],
+            }
+
+        def fake_path_changed(*, entry, remote_sha, temp_root, repo_cache):
+            return entry["name"] == "skill-changed"
+
+        monkeypatch.setattr(library_cli, "cmd_status_impl", fake_status)
+        monkeypatch.setattr(library_cli, "_entry_source_path_changed", fake_path_changed)
+
+        args = argparse.Namespace(
+            json=True,
+            dry_run=True,
+            force=False,
+            scope="project",
+            harness="all",
+        )
+        rc = library_cli.cmd_sync_all(args, tmp_path, catalog={})
+
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert data["refreshed"] == ["skill:skill-changed"]
+        assert data["skipped_by_status"]["path_unchanged"] == [
+            "skill:skill-unchanged"
+        ]
+
 
 # ---------------------------------------------------------------------------
 # AK7: Hook script smoke test
