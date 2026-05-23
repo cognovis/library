@@ -490,6 +490,18 @@ library:
       tags:
         - origin:personal
         - tier:project
+    - name: customer-invoice
+      description: >-
+        Create outgoing Cognovis customer invoices with collmex-cli, Timing.app,
+        MoneyMoney travel costs, ZUGFeRD/PDF output, Collmex booking, and visible
+        Apple Mail drafts. Triggers on Ausgangsrechnung, customer invoice,
+        Kundenrechnung, cognovis billing.
+      source: https://github.com/sussdorff/library-core/blob/main/skills/business/customer-invoice/SKILL.md
+      requires:
+        - "standard:english-only"
+      tags:
+        - origin:personal
+        - tier:project
     - name: mm-cli
       description: >-
         CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts,
