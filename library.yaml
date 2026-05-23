@@ -452,7 +452,7 @@ library:
         Structured AI-Readiness Self-Assessment across 6 dimensions. Use for career planning or
         evaluating AI capability readiness. Triggers on AI readiness, self assessment, AI capability
         check, career readiness.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/business/ai-readiness/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/ai-readiness/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -463,7 +463,7 @@ library:
         Amazon.de automation via playwright-cli with local purchases database. Use for downloading
         invoices, searching order history, or querying past purchases. Triggers on amazon rechnung,
         amazon bestellung, amazon order, was habe ich gekauft.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/business/amazon/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/amazon/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -474,7 +474,7 @@ library:
         Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment.
         Use when evaluating career positioning or assessing AI impact. Triggers on career check,
         career analysis, career collapse, AI career, role assessment.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/business/career-check/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/career-check/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -484,7 +484,7 @@ library:
       description: >-
         Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML,
         and send to accounting. Triggers on google rechnung, google invoice, google one beleg.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/business/google-invoice/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/google-invoice/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -496,7 +496,7 @@ library:
         MoneyMoney travel costs, ZUGFeRD/PDF output, Collmex booking, and visible
         Apple Mail drafts. Triggers on Ausgangsrechnung, customer invoice,
         Kundenrechnung, cognovis billing.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/business/customer-invoice/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/customer-invoice/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -507,7 +507,7 @@ library:
         CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts,
         balances, transactions, cashflow, or spending. Triggers on MoneyMoney, bank accounts,
         transactions, cashflow, spending, balance.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/business/mm-cli/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/mm-cli/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -518,7 +518,7 @@ library:
         LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles,
         reading feeds, writing recommendations, or searching people. Triggers on LinkedIn,
         profile extraction, connections, feed, LinkedIn search, recommendation.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/content/linkedin/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/linkedin/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -528,7 +528,7 @@ library:
       description: >-
         Transcribe audio files with speaker diarization via AssemblyAI. Supports local files
         and Plaud AI cloud recordings.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/content/transcribe/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/transcribe/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -539,7 +539,7 @@ library:
         Manage Hetzner Cloud infrastructure via hcloud CLI and Robot. Use when creating/modifying
         DNS records, managing servers, switching projects, or transferring domains. Triggers on
         hetzner, hcloud, dns zone, domain transfer.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/infra/hetzner-cloud/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/hetzner-cloud/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -550,7 +550,7 @@ library:
         Home infrastructure overview: hardware, network, services, and CLI tools. Use when finding
         what runs where, choosing CLI tools, or planning infra changes. Triggers on home infra,
         home network, what devices, home server.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/infra/home-infra/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/home-infra/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -561,7 +561,7 @@ library:
         Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when
         SSH fails due to stopped VMs, or to start/stop/check VM status. Triggers on VM not
         running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/infra/local-vm/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/local-vm/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -572,7 +572,7 @@ library:
         Interact with Paperless-ngx document management via REST API. Use when searching
         documents, downloading PDFs, uploading scans, or querying tags. Triggers on paperless,
         scanned document, document archive.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/infra/paperless-cli/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/paperless-cli/SKILL.md
       requires:
         - "standard:english-only"
       tags:
@@ -583,7 +583,7 @@ library:
         CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when
         querying archived emails, searching mail history, or reading past messages. Triggers
         on mailpiler, mail archive, piler search, alte mails, email archiv.
-      source: https://github.com/sussdorff/library-core/blob/main/skills/infra/piler-cli/SKILL.md
+      source: https://github.com/sussdorff/library-core/blob/main/skills/piler-cli/SKILL.md
       requires:
         - "standard:english-only"
       tags:
