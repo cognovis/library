@@ -195,6 +195,114 @@ def resolve_marketplace(
     return "unknown"
 
 
+def resolve_marketplace_source(
+    catalog_data: dict,
+    entry: dict,
+    *,
+    default_branch: str = "main",
+) -> Optional[str]:
+    """Resolve a from_marketplace catalog entry to a GitHub tree URL."""
+    marketplace_name = entry.get("from_marketplace")
+    source_path = entry.get("path")
+    if not marketplace_name or not source_path:
+        return None
+
+    marketplace = _find_marketplace(catalog_data, marketplace_name)
+    if marketplace is None:
+        raise SourceError(
+            f"Catalog entry '{entry.get('name')}' references unknown marketplace "
+            f"'{marketplace_name}'."
+        )
+
+    marketplace_type = marketplace.get("type", "git")
+    if marketplace_type != "git":
+        raise SourceError(
+            f"Marketplace '{marketplace_name}' uses unsupported type "
+            f"'{marketplace_type}' for direct installs."
+        )
+
+    base_source = (
+        marketplace.get("source")
+        or marketplace.get("clone_url")
+        or marketplace.get("repo")
+        or ""
+    )
+    if not base_source:
+        raise SourceError(f"Marketplace '{marketplace_name}' has no source URL.")
+
+    repo_url = _resolve_github_marketplace_repo_url(
+        base_source,
+        entry.get("repo"),
+        marketplace_name,
+    )
+    branch = (
+        entry.get("branch")
+        or entry.get("ref")
+        or marketplace.get("branch")
+        or marketplace.get("default_branch")
+        or default_branch
+    )
+    normalized_path = str(source_path).strip("/")
+    if not normalized_path:
+        raise SourceError(
+            f"Catalog entry '{entry.get('name')}' has an empty marketplace path."
+        )
+
+    return f"{repo_url}/tree/{branch}/{normalized_path}"
+
+
+def _find_marketplace(catalog_data: dict, marketplace_name: str) -> Optional[dict]:
+    """Find a marketplace by id or name."""
+    for marketplace in get_marketplaces(catalog_data):
+        if not isinstance(marketplace, dict):
+            continue
+        if marketplace_name in (marketplace.get("id"), marketplace.get("name")):
+            return marketplace
+    return None
+
+
+def _resolve_github_marketplace_repo_url(
+    base_source: str,
+    repo_name: Optional[str],
+    marketplace_name: str,
+) -> str:
+    """Resolve a marketplace source URL and optional repo name to a GitHub repo URL."""
+    parsed = urlparse(base_source)
+    if parsed.scheme not in ("http", "https") or parsed.netloc.lower() != "github.com":
+        raise SourceError(
+            f"Marketplace '{marketplace_name}' source is not a GitHub URL: {base_source}"
+        )
+
+    path_parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if not path_parts:
+        raise SourceError(
+            f"Marketplace '{marketplace_name}' source has no GitHub owner: {base_source}"
+        )
+
+    owner = path_parts[0]
+    if len(path_parts) == 1:
+        if not repo_name:
+            raise SourceError(
+                f"Marketplace '{marketplace_name}' source points to an owner; "
+                "the catalog entry must provide a repo."
+            )
+        repository = repo_name
+    elif len(path_parts) == 2:
+        repository = path_parts[1].removesuffix(".git")
+        if repo_name and repository != repo_name:
+            raise SourceError(
+                f"Marketplace '{marketplace_name}' source already points to "
+                f"repository '{repository}', cannot resolve repo '{repo_name}'."
+            )
+    else:
+        raise SourceError(
+            f"Marketplace '{marketplace_name}' source must be a GitHub owner or "
+            f"repository URL: {base_source}"
+        )
+
+    return f"https://github.com/{owner}/{repository}"
+
+
 def _url_matches_marketplace(source_url: str, marketplace_url: str) -> bool:
     """Check if a source URL belongs to a marketplace's repo."""
     # Strip .git suffix for comparison

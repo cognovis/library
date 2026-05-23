@@ -39,7 +39,13 @@ from ..lockfile import (
 from ..output import dry_run_result, success
 from ..paths import resolve_install_paths
 from ..primitives import get_primitive
-from ..source import ParsedSource, get_local_commit_sha, parse_source, resolve_marketplace
+from ..source import (
+    ParsedSource,
+    get_local_commit_sha,
+    parse_source,
+    resolve_marketplace,
+    resolve_marketplace_source,
+)
 from .harness_materializer import materialize_harness_fields
 
 
@@ -82,7 +88,7 @@ def install_skill(
     # 1. Catalog lookup
     entry = lookup_entry(catalog, "skill", name)
     skill_name = entry.get("name", name)
-    source_str = _resolve_entry_source(entry)
+    source_str = _resolve_entry_source(catalog, entry)
 
     # 2. Parse source
     parsed = parse_source(source_str)
@@ -104,11 +110,18 @@ def install_skill(
 
     # 4. Dry-run mode
     if dry_run:
+        planned_commit = "<commit-sha>"
+        planned_cache = compute_cache_path(
+            "skill",
+            marketplace,
+            skill_name,
+            planned_commit,
+        )
         ops = plan_cache_writes(
             primitive_type="skill",
             marketplace=marketplace,
             name=skill_name,
-            source_commit="<commit-sha>",
+            source_commit=planned_commit,
             install_target=canonical_dir,
             bridge_path=bridge_dir,
             install_mode=install_mode,
@@ -133,13 +146,29 @@ def install_skill(
         for w in harness.get("warnings", []):
             import sys as _sys
             print(f"WARNING: {w}", file=_sys.stderr)
-        return dry_run_result(
+        result = dry_run_result(
             ops,
             summary=(
                 f"Would install skill '{skill_name}' to {canonical_dir}"
                 + (f" with bridge {bridge_dir}" if bridge_dir else "")
             ),
         )
+        result["data"] = {
+            "name": skill_name,
+            "marketplace": marketplace,
+            "source": source_str,
+            "clone_url": parsed.clone_url,
+            "source_path": parsed.file_path or (
+                str(parsed.local_path) if parsed.local_path else None
+            ),
+            "cache": str(planned_cache),
+            "cache_path": str(planned_cache),
+            "canonical": str(canonical_dir),
+            "install_target": str(canonical_dir),
+            "bridge": str(bridge_dir) if bridge_dir else None,
+            "install_mode": install_mode,
+        }
+        return result
 
     # 5. Fetch source and get commit SHA
     source_dir, source_commit, temp_root = _fetch_source_dir(parsed, skill_name)
@@ -214,7 +243,7 @@ def install_skill(
             shutil.rmtree(str(temp_root), ignore_errors=True)
 
 
-def _resolve_entry_source(entry: dict) -> str:
+def _resolve_entry_source(catalog: dict, entry: dict) -> str:
     """Extract a single source string from a catalog entry."""
     if entry.get("source"):
         return entry["source"]
@@ -227,14 +256,9 @@ def _resolve_entry_source(entry: dict) -> str:
         return sources_map["codex"]
 
     # Handle from_marketplace + repo + path
-    if entry.get("from_marketplace") and entry.get("repo") and entry.get("path"):
-        # Build a plausible GitHub URL from the marketplace reference
-        # We do NOT fabricate URLs — use what's in the catalog
-        raise SourceError(
-            f"Skill '{entry.get('name')}' uses from_marketplace reference. "
-            "Direct install not yet supported for marketplace-resolved entries. "
-            "Use /library skill use via the skill wrapper."
-        )
+    marketplace_source = resolve_marketplace_source(catalog, entry)
+    if marketplace_source:
+        return marketplace_source
 
     raise SourceError(
         f"Skill '{entry.get('name')}' has no resolvable source field."
@@ -264,21 +288,27 @@ def _fetch_source_dir(
         return source_dir, commit, None
 
     if parsed.is_github():
-        # Clone to temp dir
         tmp = Path(tempfile.mkdtemp())
 
-        # Try HTTPS first, fall back to SSH
         clone_url = parsed.clone_url or ""
+        clone_cmd = ["git", "clone", "--quiet", "--depth", "1"]
+        if parsed.branch:
+            clone_cmd.extend(["--branch", parsed.branch])
+        clone_cmd.extend([clone_url, str(tmp)])
+
         result = subprocess.run(
-            ["git", "clone", "--quiet", "--depth", "1", clone_url, str(tmp)],
+            clone_cmd,
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
-            # Try SSH
             ssh_url = clone_url.replace("https://github.com/", "git@github.com:")
+            ssh_cmd = ["git", "clone", "--quiet", "--depth", "1"]
+            if parsed.branch:
+                ssh_cmd.extend(["--branch", parsed.branch])
+            ssh_cmd.extend([ssh_url, str(tmp)])
             result = subprocess.run(
-                ["git", "clone", "--quiet", "--depth", "1", ssh_url, str(tmp)],
+                ssh_cmd,
                 capture_output=True,
                 text=True,
             )
@@ -297,11 +327,26 @@ def _fetch_source_dir(
         )
         commit = sha_result.stdout.strip() if sha_result.returncode == 0 else "unknown"
 
-        # Navigate to the skill directory within the repo
-        parent_dir = parsed.parent_dir_in_repo()
-        skill_dir = tmp / (parent_dir or "") if parent_dir else tmp
-        if not skill_dir.exists():
-            skill_dir = tmp
-        return skill_dir, commit, tmp
+        if parsed.file_path:
+            source_path = tmp / parsed.file_path
+            if not source_path.exists():
+                shutil.rmtree(str(tmp), ignore_errors=True)
+                raise InstallError(
+                    f"Skill source path does not exist in {clone_url}: {parsed.file_path}"
+                )
+            if parsed.path_type == "directory" and not source_path.is_dir():
+                shutil.rmtree(str(tmp), ignore_errors=True)
+                raise InstallError(
+                    f"Skill source path is not a directory for tree URL: {parsed.file_path}"
+                )
+            if parsed.path_type == "file" and not source_path.is_file():
+                shutil.rmtree(str(tmp), ignore_errors=True)
+                raise InstallError(
+                    f"Skill source path is not a file for blob/raw URL: {parsed.file_path}"
+                )
+            source_dir = source_path.parent if source_path.is_file() else source_path
+            return source_dir, commit, tmp
+
+        return tmp, commit, tmp
 
     raise SourceError(f"Cannot fetch source: unsupported source kind '{parsed.kind}'")

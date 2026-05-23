@@ -263,6 +263,269 @@ class TestSkillDryRun:
         assert str(target_project / ".agents" / "skills" / "standard-forge") in ops_text
 
 
+class TestSkillMarketplaceInstall:
+    """Marketplace-backed skill entries should resolve and install like direct sources."""
+
+    @staticmethod
+    def _catalog_yaml() -> str:
+        return """
+default_dirs:
+  skills:
+    - default: .agents/skills/
+    - claude_bridge: .claude/skills/
+
+sources:
+  marketplaces:
+    - name: pbakaus
+      source: https://github.com/pbakaus
+      type: git
+    - name: cognovis-core
+      source: https://github.com/cognovis
+      type: git
+
+library:
+  skills:
+    - name: impeccable
+      description: Marketplace-backed skill fixture
+      from_marketplace: pbakaus
+      repo: impeccable
+      path: .claude/skills/impeccable
+    - name: core-skill
+      description: First-party marketplace-backed skill fixture
+      from_marketplace: cognovis-core
+      repo: library-core
+      path: skills/core-skill
+  standards: []
+  agents: []
+  prompts: []
+"""
+
+    @staticmethod
+    def _patch_git_clone(
+        monkeypatch: pytest.MonkeyPatch, skill_mod, fake_repo: Path
+    ) -> None:
+        """Patch skill installer git commands to clone from a local fixture."""
+        def fake_run(cmd, capture_output=False, text=False, cwd=None):
+            if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
+                target = Path(cmd[-1])
+                shutil.copytree(fake_repo, target, dirs_exist_ok=True)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            if cmd == ["git", "rev-parse", "HEAD"]:
+                return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
+            raise AssertionError(f"Unexpected command: {cmd}")
+
+        monkeypatch.setattr(skill_mod.subprocess, "run", fake_run)
+
+    def test_marketplace_source_resolves_impeccable_tree_url(self):
+        """from_marketplace + repo + path resolves to a GitHub tree source."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.source import resolve_marketplace_source
+
+        catalog = {
+            "sources": {
+                "marketplaces": [
+                    {
+                        "name": "pbakaus",
+                        "source": "https://github.com/pbakaus",
+                        "type": "git",
+                    }
+                ]
+            }
+        }
+        entry = {
+            "name": "impeccable",
+            "from_marketplace": "pbakaus",
+            "repo": "impeccable",
+            "path": ".claude/skills/impeccable",
+        }
+
+        assert resolve_marketplace_source(catalog, entry) == (
+            "https://github.com/pbakaus/impeccable/tree/main/"
+            ".claude/skills/impeccable"
+        )
+
+    def test_marketplace_source_unknown_marketplace_raises(self):
+        """Marketplace resolution should fail loudly for missing registries."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.errors import SourceError
+        from lib.source import resolve_marketplace_source
+
+        entry = {
+            "name": "missing-skill",
+            "from_marketplace": "unknown-marketplace",
+            "repo": "repo",
+            "path": "skills/missing-skill",
+        }
+
+        with pytest.raises(SourceError, match="unknown marketplace"):
+            resolve_marketplace_source({"sources": {"marketplaces": []}}, entry)
+
+    def test_marketplace_skill_dry_run_reports_resolved_source(self, tmp_path: Path):
+        """Dry-run JSON should expose the resolved clone URL and source path."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "library.yaml").write_text(self._catalog_yaml())
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "impeccable",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+        )
+
+        assert result.returncode == 0, (
+            f"skill use --dry-run returned {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        data = json.loads(result.stdout)
+        resolved = data.get("data", {})
+        assert data.get("status") == "dry-run"
+        assert resolved["source"] == (
+            "https://github.com/pbakaus/impeccable/tree/main/"
+            ".claude/skills/impeccable"
+        )
+        assert resolved["clone_url"] == "https://github.com/pbakaus/impeccable.git"
+        assert resolved["source_path"] == ".claude/skills/impeccable"
+        assert resolved["install_target"].endswith(".agents/skills/impeccable")
+        assert "skills/pbakaus/impeccable@<commit-sha>" in resolved["cache_path"]
+
+        op_names = [op.get("operation") for op in data.get("operations", [])]
+        assert "materialize_cache" in op_names
+        assert "write_lockfile" in op_names
+
+    def test_marketplace_skill_install_materializes_skill_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Marketplace tree sources should copy the skill directory, not its parent."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import skill as skill_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        skill_dir = fake_repo / ".claude" / "skills" / "impeccable"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: impeccable\ndescription: Marketplace fixture\n---\n\n# Impeccable\n"
+        )
+        (skill_dir / "references.md").write_text("# Reference\n")
+
+        self._patch_git_clone(monkeypatch, skill_mod, fake_repo)
+        monkeypatch.setattr(
+            skill_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {
+                "skills": [
+                    {"default": ".agents/skills/"},
+                    {"claude_bridge": ".claude/skills/"},
+                ]
+            },
+            "sources": {
+                "marketplaces": [
+                    {
+                        "name": "pbakaus",
+                        "source": "https://github.com/pbakaus",
+                        "type": "git",
+                    }
+                ]
+            },
+            "library": {
+                "skills": [
+                    {
+                        "name": "impeccable",
+                        "description": "Marketplace fixture.",
+                        "from_marketplace": "pbakaus",
+                        "repo": "impeccable",
+                        "path": ".claude/skills/impeccable",
+                    }
+                ]
+            },
+        }
+
+        result = skill_mod.install_skill(catalog, "impeccable", project)
+
+        assert result["status"] == "ok", result
+        canonical = project / ".agents" / "skills" / "impeccable"
+        assert (canonical / "SKILL.md").is_file()
+        assert (canonical / "references.md").is_file()
+        assert not (canonical / "impeccable" / "SKILL.md").exists()
+
+    def test_first_party_marketplace_skill_install_uses_repo_fixture(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """First-party marketplace-style entries should use the same install path."""
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import skill as skill_mod
+
+        fake_repo = tmp_path / "fake-repo"
+        skill_dir = fake_repo / "skills" / "core-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: core-skill\ndescription: First-party fixture\n---\n\n# Core Skill\n"
+        )
+
+        self._patch_git_clone(monkeypatch, skill_mod, fake_repo)
+        monkeypatch.setattr(
+            skill_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        project = tmp_path / "project"
+        project.mkdir()
+        catalog = {
+            "default_dirs": {
+                "skills": [
+                    {"default": ".agents/skills/"},
+                    {"claude_bridge": ".claude/skills/"},
+                ]
+            },
+            "sources": {
+                "marketplaces": [
+                    {
+                        "name": "cognovis-core",
+                        "source": "https://github.com/cognovis",
+                        "type": "git",
+                    }
+                ]
+            },
+            "library": {
+                "skills": [
+                    {
+                        "name": "core-skill",
+                        "description": "First-party fixture.",
+                        "from_marketplace": "cognovis-core",
+                        "repo": "library-core",
+                        "path": "skills/core-skill",
+                    }
+                ]
+            },
+        }
+
+        result = skill_mod.install_skill(catalog, "core-skill", project)
+
+        assert result["status"] == "ok", result
+        canonical = project / ".agents" / "skills" / "core-skill"
+        assert (canonical / "SKILL.md").is_file()
+        assert result["data"]["cache"].endswith("skill/cognovis-core/core-skill@abcdef1")
+
+
 # ---------------------------------------------------------------------------
 # AK5: standard use --dry-run --json
 # ---------------------------------------------------------------------------
