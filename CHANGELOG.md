@@ -1,296 +1,1158 @@
-# Cognovis Library Changelog
+## [unreleased]
 
-This changelog tracks changes made by Cognovis on top of the upstream fork.
-Upstream: https://github.com/disler/the-library (forked at commit `47f455c`)
+### 🚀 Features
 
----
+- *(fhir-sync-versions)* Register skill in library catalog
 
+### 🐛 Bug Fixes
+
+- *(library)* Skip unchanged paths during bulk sync
+- Classify fhir sync versions as skill
+- Harden catalog inventory sync
+- *(library)* Resolve marketplace-backed skill sources
+
+### 💼 Other
+
+- Add fix-agent to catalog, wire as bead-orchestrator dependency
+- Register customer-invoice skill
+- Flatten sussdorff skill paths
+
+### 📚 Documentation
+
+- *(adr)* ADR-0006 — workflow as a first-class Library primitive
+
+### ⚙️ Miscellaneous Tasks
+
+- *(clc-i8qc)* Wave-reviewer sweep — remove create/epic-init/wave-reviewer from library catalog
+- *(catalog)* Add seed-data-parity standard entry
+## [2026.05.37] - 2026-05-21
+
+### 🚀 Features
+
+- *(launchers)* Export CLD_BEAD_LINE in cdx and cld bead modes
+- *(models)* Align gpt-* and claude-opus reasoning_effort vocab to xhigh canonical (refs: clc-dty AK4b)
+- *(CL-zyk)* Capture upstream commit SHA for MCP entries at install time
+
+### 🐛 Bug Fixes
+
+- *(CL-pq4)* Upgrade drift_kind to 'both' when path+upstream drift co-occur
+- *(cdx)* Allow quick-fix implementer dispatch
+- *(catalog)* Preserve top-level comments + scrub factory-check refs
+- *(catalog)* Two sync warnings — agentic-primitives category + mcp:open-brain upstream source
+
+### 💼 Other
+
+- Worktree-bead-CL-zyk
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove factory-check zombie catalog entry
+## [2026.05.36] - 2026-05-19
+
+### 🚀 Features
+
+- *(CL-pq4)* Green — standard installer uses category-mirror paths for single-file installs
+
+### 🐛 Bug Fixes
+
+- *(CL-pq4)* Address review findings iteration 1
+- *(CL-pq4)* Address codex adversarial findings
+
+### 💼 Other
+
+- Worktree-bead-CL-pq4
+
+### 🧪 Testing
+
+- *(CL-pq4)* Red — add TestStandardInstallCategoryMirror for all 6 ACs
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.05.36
+## [2026.05.35] - 2026-05-19
+
+### 🚀 Features
+
+- *(catalog)* Add judge-default agent entry
+- *(clc-dyw.6)* Register bead-hygiene standard + bead-reviewer skill
+
+### 🐛 Bug Fixes
+
+- Repair source-url-liveness workflow and clear open-brain skill drift
+- *(CL-brl)* Honor default_scope from catalog entries in cmd_use
+- *(CL-brl)* Use fuzzy=True in _resolve_default_scope to match installer lookup semantics
+
+### 💼 Other
+
+- Worktree-bead-CL-brl
+
+### 📚 Documentation
+
+- *(catalog)* Clarify integration-test scope and resolution paths in error message
+
+### 🧪 Testing
+
+- *(catalog)* Add builder coverage + anti-stub assertions for catalog agents
+- *(catalog)* Fix stub-detection fixture, use structural checks, add resolver tests
+- *(catalog)* Add plugin-prefixed body-ref resolver for subagent_type body refs
+- *(catalog)* Scan all composed layers for plugin-prefixed body refs
+
+### ⚙️ Miscellaneous Tasks
+
+- *(source-url-liveness)* Allow private catalog access via LIBRARY_CATALOG_READ_TOKEN
+- Ignore beads JSONL export + strip obsolete cld update-check flags
+- Bump version to 2026.05.35
 ## [2026.05.34] - 2026-05-17
 
-### Fixed
+### 🚀 Features
+
+- Normalize library yaml information model
+- *(library)* Add installed inventory view
+- *(library)* Register go-live catalog entries
+- Move primitive forges into platform
+- Add catalog promotion routing
+- *(library)* Add targeted primitive sync
+- *(agent)* Audit claude frontmatter
+- Rename golden prompts to agent bases
+- Split agent bases by harness
+- Add unified agent builder
+- Add capability-based agent builder
+- Harden agent capability migration
+- Anchor agent migration policy
+
+### 🐛 Bug Fixes
+
+- *(library)* Reinstall missing lockfile targets
+- *(library)* Source ob-cli from open-brain
+- *(library)* Align installed lifecycle scopes
+- *(library)* Install codex agent targets
+- *(library)* Catalog architecture-scout, rename changelog
+- Harden platform forge migration
+- Move platform standards into library catalog
+- *(agent)* Preserve claude frontmatter
+- Restore agent base migration fallback
+- Surface agent base migration warnings
+- *(CL-wjr)* Library audit/use detect upstream drift
+- *(CL-wjr)* Also auto-refresh on local tamper in 'use'
 
-- **Library audit/use detect upstream drift** (`scripts/lib/sync_audit.py`, `scripts/lib/installers/skill.py`): `cmd_audit_impl` now pre-computes upstream status via `cmd_status_impl` and flags `drift_kind: upstream/local/both`. `_install_with_deps` checks upstream + local-tamper before short-circuiting; refreshes automatically on either; prints explicit `[skip]/[refresh]` messages instead of silent no-ops. Added `--no-upstream` flag for offline/CI. 3 new regression tests in `TestAuditUpstreamDrift`. Full suite 539 passed. Closes CL-wjr.
+### 💼 Other
 
----
+- Add script primitive metadata
+- Register judge-layer standard
+- Add Gas City projection metadata
+- Harden Gas City projection validation
 
-## [Unreleased]
+### 📚 Documentation
 
-### Fixed
+- Add judge-layer taxonomy
+- Fix judge-layer contract
+- Clarify repository identity
+- Clarify standards v2 frontmatter
+- Split primitive reference
+- Clarify repomix installed-tree cleanup
+- Add managed worker stack reference
+- *(library)* Add library-cli invariants standard from CL-uyp learnings
+- *(library)* Document targeted primitive sync
+- *(primitives)* Separate orchestrator and agent system prompts
+- Add bash tool lockdown research
+- Refresh codex guardrail mapping
 
-- **`cdx -bq` quick-fix prompt allows configured implementer dispatch** (`bin/cdx`): Removed the anti-spawn clause from the Codex quick-fix launcher prompt and aligned it with the `cld -bq` Phase 0-5 workflow prompt, so the quick-fix agent can invoke its configured implementer adapter. (clc-8fi)
+### 🧪 Testing
 
-- **Standard installer: flat-file installs now use category-mirror paths** (`scripts/lib/installers/standard.py`, `scripts/lib/sync_audit.py`): Single-file standards with a `blob` or `raw` source URL (e.g. `standards/workflow/bead-hygiene.md`) now install to `<canonical_base>/<category>/<file>.md` instead of the old per-name subdir `<canonical_base>/<standard_name>/`. Bundle (tree URL) installs are unchanged. The lockfile `install_target` is stored without a trailing slash for file installs. The `audit` command now detects existing installs at the old path as path-conformance drift. The `install_standard` function also performs migration: if the old per-name subdir exists after a successful file install, it is removed automatically. Source URLs whose path does not contain a parseable `standards/<category>/<file>` pattern fall back to the old per-name subdir behavior with a `UserWarning`. **Migration note**: run `library standard sync` (or `library sync`) after upgrading to relocate any standards currently installed at old paths; the `audit --drift-only` output will list them as `drift_kind: local`. Cross-repo follow-up: update catalog entries in `cognovis-core/` and `sussdorff-core/` if any use non-canonical paths. Closes CL-pq4.
+- *(library)* Align suite with vendored layout
+- *(library)* Remove obsolete migration skips
+- Harden primitive regression coverage
+- Cover legacy alias validator warnings
+- Drop retired home agent assertions
 
-- **Agent-base rename hotfix: legacy filesystem fallback + live source path** (`scripts/compose-agent.py`, `scripts/lib/catalog_inventory.py`, `library.yaml`): `compose-agent.py` now resolves Layer 1 agent bases from `.agents/agent-bases/` first and then the legacy `.agents/golden-prompts/` project/global directories, so existing installs with `~/.agents/golden-prompts/cognovis-base.md` continue to compose while machines migrate local state. The `cognovis-base` catalog entry moved under the canonical `library.agent_bases` section and was temporarily kept pointed at the then-current `cognovis-core/golden-prompts/cognovis-base.md` source path until the source repository migrated its physical directory. `golden_prompts` remains removed as a catalog/schema alias and `golden-prompt` remains removed as a CLI primitive alias; use `agent_bases` and `agent-base`. Paired catalog-source updates rename agent frontmatter and Layer 1 prose to `agent_base_extends` / Agent Base terminology. Added regression tests for the legacy global runtime path and catalog inventory scanning of the legacy source directory. Closes CL-8kx hotfix.
+### ⚙️ Miscellaneous Tasks
 
-- **BREAKING: Golden prompt catalog and CLI aliases removed** (`library.yaml`, `docs/schema/library.schema.json`, `scripts/lib/primitives.py`, `scripts/compose-agent.py`): `library.golden_prompts` and the `golden-prompt` primitive are no longer accepted; use `library.agent_bases` and `agent-base`. The agent frontmatter alias `golden_prompt_extends:` remains readable for one release cycle but emits a `DeprecationWarning`; use `agent_base_extends:`. The composer also retains a one-release filesystem fallback from `.agents/agent-bases/` to legacy `.agents/golden-prompts/` and emits a `DeprecationWarning` when that fallback supplies Layer 1.
+- Catalog primitive placement standard
+- Add primitive placement catalog metadata
+- *(CL-usc)* Record repomix vulnerability remediation
+- Catalog promoted healthcare standards
+- Harden library yaml alias validation
+- Catalog normalized healthcare standards
+- Update changelog
+- Bump version to 2026.05.34
+## [2026.05.33] - 2026-05-14
 
-- **Network-gated catalog source URL liveness test** (`tests/test_library_yaml_urls.py`, `library.yaml`): Added `NETWORK_TESTS=1 uv run pytest tests/test_library_yaml_urls.py` to verify GitHub `source:` URLs in `library.yaml` through `gh api`. The new gate checks repository roots, org/user roots, and `blob`/`tree` content paths. It caught and fixed five stale `cognovis/samurai-skills` URLs that pointed at `main`; the repository's live default branch is `master`.
+### 🚀 Features
 
-### Added
+- *(library)* Register python-cli-patterns standard (clc-oal.1 companion)
+- *(library)* Register python-dev + python-test skills (clc-oal.2, clc-oal.3)
+- *(library)* Vendor installs and remove standards composition
 
-- **Capability-based agent declarations** (`models.yaml`, `capabilities.yaml`, `scripts/build-agent.py`): Added build-time model and capability registries. Unified agents can now declare model requirements (`tier`, `reasoning`, `context`, `cost_priority`) plus closed-vocabulary `capabilities`; the builder resolves concrete Claude/Codex models, projects capabilities to Claude tools/MCP bindings and Codex sandbox/MCP notes, and auto-loads Layer 3 model standards for the resolved model IDs. The bead orchestrator, review agent, and verification agent are migrated to capability declarations. Closes CL-8hg.
+### 📚 Documentation
 
-- **Unified single-source agent builder** (`scripts/build-agent.py`, `scripts/lib/installers/agent.py`, `library.yaml`): Added a directive-aware builder that emits Claude `.md` and Codex `.toml` artifacts from one Markdown agent source. Singular agent `source:` entries now build both harness artifacts during `/library agent use --harness all`; legacy `sources:` maps remain readable for older catalog entries. The first-party orchestrator agents now point at one Markdown source, with Codex metadata carried in `codex:` frontmatter overrides and target-only prose in `::: harness ... :::` blocks. Closes CL-s4o.
+- *(primitives)* Standards §7 — folder-form, domain/rule frontmatter, maturity arc, scripts/
+- *(primitives)* Authoring source-of-truth + axis 1 delivery clarifications
 
-- **Per-harness Layer 1 agent bases** (`scripts/compose-agent.py`, `library.yaml`, `docs/research/agent-base-harness-split-audit.md`): Split the generic Cognovis Layer 1 base into `claude-agent-base` and `codex-agent-base`. Agents can keep declaring `agent_base_extends: cognovis-base`; the composer now maps that logical alias to the correct per-harness base for `--harness=claude` and `--harness=codex`, falling back to the generic alias for one release if the per-harness file is missing. Added an audit document listing each rule dropped from the generic base and the runtime enforcement mechanism that replaces it. Closes CL-13p.
+### ⚙️ Miscellaneous Tasks
 
-- **`library status` — lightweight upstream check without cloning** (`scripts/lib/status.py`, `scripts/library.py`): New top-level `status` command compares the `source_commit` stored in the lockfile against the live remote HEAD SHA via `git ls-remote`, without cloning the repository. Reports each installed entry as `current`, `behind`, or `unknown`. The `--json` flag emits a structured result including `remote_sha`, `installed_sha`, `upstream_status`, and `behind` fields per entry, plus an `overall` field (`current`/`behind`/`unknown`). `--scope` selects project or global lockfile. Local-path sources and entries without `source_commit` are reported as `unknown`. Closes CL-7oy (AK3, AK4).
+- *(meta)* Gitignore library-installed symlinks; keep installed-standards in AGENTS.md
+## [2026.05.32] - 2026-05-13
 
-- **`library audit --drift-only` and exit code 2 on drift** (`scripts/lib/sync_audit.py`, `scripts/library.py`): The `audit` command now accepts `--drift-only`, which filters output to only drifted entries and exits with code 2 when drift is found (exit 0 when clean). The new top-level `audit` command (cross-primitive, no `<primitive>` prefix required) supports `--scope project|global|both` and `--drift-only`. Existing `<primitive> audit` subcommands inherit the same `--drift-only` flag. Closes CL-7oy (AK1, AK2).
+### 🚀 Features
 
-- **Directory-aware drift detection: `checksum_type` field and Merkle-style directory hash** (`scripts/lib/lockfile.py`, `scripts/lib/installers/skill.py`, `scripts/lib/installers/standard.py`, `docs/schema/lockfile.schema.json`): Skills and standards now record `checksum_type: directory` in the lockfile and compute `checksum_sha256` over the entire cache directory (sorted recursive SHA-256 Merkle hash) rather than over a single primary artifact file. This means any file edit inside an installed skill or standard directory is detected as drift, not just edits to `SKILL.md`. The `checksum_type` field is optional in the schema (backward-compatible); legacy entries without the field are reported as `unknown` by `audit`. Closes CL-7oy (AK1).
+- *(CL-7oy)* Green — directory hash, checksum_type, drift-only, exit code 2 for drift
+- *(CL-7oy)* Green — status.py, top-level status/sync commands, git ls-remote approach
+- *(CL-7oy)* Green — top-level sync skip-on-current tests pass (AK5, AK6)
+- *(CL-7oy)* Green — hook script, top-level audit, hook smoke tests (AK7)
+- *(clc-0ym.2)* Replace skill-auditor with skill-forge in library catalog
 
-- **`library sync` — primitive-less, skip-on-current, `--dry-run` and `--force`** (`scripts/library.py`): New top-level `sync` command iterates all lockfile entries across primitives and re-installs only entries whose `source_commit` differs from the remote HEAD (skipping current entries). `--force` bypasses the current check and re-installs everything. `--dry-run` prints a plan showing which entries would be skipped and which would be refreshed without performing any writes. `--scope project|global|both` selects which lockfile(s) to sync. Closes CL-7oy (AK5, AK6).
+### 🐛 Bug Fixes
 
-- **Session-start hook: `library-drift-summary.sh`** (`scripts/hooks/library-drift-summary.sh`): Opt-in SessionStart hook that runs `library audit --drift-only` and `library status` at session start and prints a summary only when issues are found. Local drift section lists entries with `DRIFT: <primitive>:<name>`; upstream behind section lists entries with `BEHIND: <primitive>:<name> (<installed_sha> -> <remote_sha>)`. Silent when everything is clean. Install by symlinking into `~/.claude/hooks/`. Closes CL-7oy (AK7).
+- *(CL-7oy)* Address review findings iteration 1
+- *(CL-7oy)* Address codex adversarial findings
+- Route library installs to target project
 
-- **Lockfile schema: `checksum_type` field and expanded `type` enum** (`docs/schema/lockfile.schema.json`): Added optional `checksum_type` field (enum `file`|`directory`, default `file`) to the lockfile entry schema. Expanded the `type` enum to include all eight primitives: `skill`, `agent`, `prompt`, `guardrail`, `standard`, `model-standard`, `golden-prompt`, `mcp`. Both changes are backward-compatible. Closes CL-7oy.
+### 💼 Other
 
-### Technical
+- Worktree-bead-CL-7oy
 
-- **Security housekeeping: removed persistent user-level `repomix` install**: Audited the high transitive findings reported under `repomix` (`fast-xml-builder`, `fast-uri`) and confirmed they were in the user-level Bun project at `/Users/malte`, not in the library platform dependency set. `repomix@1.14.0` was already the latest release, so the persistent manifest/lockfile reference was removed with `bun remove repomix`. Follow-up review found the old installed tree still contained extraneous package directories at `/Users/malte/node_modules/@repomix`, `/Users/malte/node_modules/fast-uri`, and `/Users/malte/node_modules/fast-xml-builder`; those directories were removed from disk. Verification now covers both layers: `find /Users/malte/node_modules ...` returns no matches, `npm ls --prefix /Users/malte repomix fast-xml-builder fast-uri --all` reports `(empty)`, and both `bun audit --cwd /Users/malte --audit-level high --json` and `npm audit --prefix /Users/malte --audit-level=high --json` report no high vulnerabilities. Evidence is recorded on bead CL-usc.
+### 📚 Documentation
 
-- **`reinstall_entry` promoted to public API** (`scripts/lib/sync_audit.py`): Renamed `_reinstall_entry` to `reinstall_entry` (removed leading underscore) to allow the new top-level `sync` command in `library.py` to call it directly for per-entry force-reinstall. No behavioral change.
+- *(CL-7oy)* Update changelog, SKILL.md, and lockfile-format.md for lifecycle commands
+- *(primitives)* Add NORMATIVE rule — model: is forbidden in SKILL.md frontmatter
 
-- **Tests: 1093 new lines across `test_status.py` and `test_sync_audit.py`** (`tests/test_status.py`, `tests/test_sync_audit.py`): New test modules covering directory-hash determinism, mocked `git ls-remote`, upstream SHA comparison, skip-on-current logic, `--drift-only` filter, exit code 2, and hook smoke test. Closes CL-7oy (AK8).
+### 🧪 Testing
 
-- **`library.py` complete primitive coverage — all 34 AKs verified** (`scripts/library.py`, `pyproject.toml`, `uv.lock`, `cookbook/use.md`): All primitive×verb combinations now have working CLI implementations with no cookbook fallbacks remaining. Every primitive (`agent`, `prompt`, `model-standard`, `golden-prompt`, `mcp`, `guardrail`) supports `use` and `remove` via `library.py`. `sync` re-installs all lockfile entries; `audit` computes SHA-256 checksums. The transitive dependency resolver handles `requires:` depth-first with cycle detection (exit 4), lockfile-aware skipping, and cross-primitive traversal. The `--harness` flag is honored across all installers. `wave-orchestrator` installs with 5 transitive deps end-to-end. `pyproject.toml` adds `PyYAML` and `jsonschema` dependencies so `uv run pytest` resolves all `library.py` imports without manual pre-install. `cookbook/use.md` updated to remove stale "not yet implemented" language — all referenced operations are now CLI-handled. Closes CL-0l5.
+- *(CL-7oy)* Red — directory hash, drift-only filter, exit codes, checksum_type
+- *(CL-7oy)* Red — status command, git ls-remote mock, upstream SHA comparison
 
-- **Installer: translate `always_apply` and `globs` into harness-native format** (`scripts/lib/installers/harness_materializer.py`, `scripts/lib/installers/skill.py`, `scripts/lib/installers/standard.py`): `skill use <name>` and `standard use <name>` now read the `always_apply` and `globs` fields from the catalog entry and write the corresponding harness artifacts at install time. For `always_apply: true`: appends an `@<path>` import line to `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) idempotently, and writes `.cursor/rules/<name>.mdc` with `alwaysApply: true` frontmatter (Cursor). For `globs: [...]` without `always_apply`: writes the `.cursor/rules/<name>.mdc` with a `globs:` frontmatter line and emits a warning for Claude Code and Codex (globs are not natively supported by those harnesses). Entries without either field are unaffected — no regression to existing installs. `harness_ops` is included in the install result for dry-run inspection. 24 new tests covering all three harness paths and the no-field fallback. Closes CL-3kq.
+### ⚙️ Miscellaneous Tasks
 
-- **`library.yaml` schema: industry-standard fields on skill and standard entries** (`docs/schema/library.schema.json`): Added four new optional fields to `skill_entry` and two to `standard_entry` to align with agentskills.io and Cursor convergence patterns. Skills and standards now accept `globs` (array of file-glob strings; when a matching file is in context, the entry is suggested) and `always_apply` (boolean; forces the entry into context regardless of file matches — use sparingly). Skills additionally accept `compatibility` (string, max 500 chars; encodes minimum harness version or capability requirement, e.g. `claude_code>=4.0`) and `metadata` (string-to-string map; replaces ad-hoc tags for non-trigger data, per agentskills.io standard). All four fields are optional and backward-compatible with existing `library.yaml` entries. Closes CL-49a M2.
+- Rename hook-creator -> hook-forge in catalog (clc-ecj follow-up)
+- *(clc-c2a)* Drop stale skill/agent EXPECTED set entries
+## [2026.05.31] - 2026-05-13
 
-- **`validate-library.py`: agentskills.io name and description validation** (`scripts/validate-library.py`): Extended the library validator with a new `_validate_agentskills_rules` pass that runs after JSON Schema validation. Enforces across all `skills`, `agents`, `prompts`, and `standards` catalog sections: entry names must be 1-64 characters, match `[a-z][a-z0-9-]*` (lowercase letters, digits, hyphens), must not end with a hyphen, and must not contain consecutive hyphens (`--`); descriptions must not exceed 1024 characters. Violations are reported with section, index, and entry name for easy location. Exit code 1 on any violation; quiet mode prints a summary count. 210 new tests covering all rule combinations. Closes CL-49a M3.
+### 🚀 Features
 
-### Removed
+- *(clc-0ym.5)* Register standard-forge skill in library.yaml
+- *(CL-0l5)* Green — add pyproject.toml with PyYAML and jsonschema dependencies
 
-- **Legacy standards-loader and inject-subagent-standards hooks** (`hooks/standards-loader/`, `hooks/inject-subagent-standards/`, `library.yaml`, `docs/research/standards-loading.md`): Retired the trigger-based context-injection hooks that were superseded by the compose-on-install model (CL-c2d). Removed `hooks/standards-loader/` (SessionStart hook for trigger-based catalog matching) and `hooks/inject-subagent-standards/` (TaskCreated hook for subagent-specific standard scoping). Removed associated guardrail entries from `library.yaml` and the `~/.claude/agent-standards.yml` mapping file. Marked `docs/research/standards-loading.md` as RETIRED with explanation that standards are now embedded directly in AGENTS.md via `/library standard use` instead of injected at runtime. Closes CL-4bv.
+### 🐛 Bug Fixes
 
-### Added
+- *(CL-0l5)* Address review findings — remove stale not-yet-implemented language from cookbook/use.md (AK30)
 
-- **Standards compose-on-install + drift-detect hook** (`scripts/agents-md-block.py`, `hooks/standards-drift-check/`, `library.yaml`, `cookbook/use.md`, `cookbook/remove.md`, `cookbook/sync.md`, `scripts/lib/installers/remove.py`): Replaces trigger-based SessionStart context injection with a compose-on-install model. `/library standard use` now writes a `<!-- BEGIN STANDARD:<name> v:1 hash:<sha256-12> -->` marker block directly into `AGENTS.md` (global `~/.agents/AGENTS.md` or project `<cwd>/AGENTS.md`); both Claude Code and Codex consume the same composed text with no runtime injection overhead. `agents-md-block.py` supports `insert` (idempotent), `update`, `remove`, and `check` (exits 1 on drift/missing). New `standards-drift-check` SessionStart hook scans AGENTS.md/CLAUDE.md files and emits one warning per drifted standard. `library.yaml` standards schema updated: `triggers:` removed from all 23 entries; `tier:` and `default_scope:` added to each. Hook registered in `guardrails:` with both harness mappings. 19 new tests. Closes CL-c2d.
+### 💼 Other
 
-- **Complete `scripts/library.py` — all primitive×verb combinations** (`scripts/library.py`, `scripts/lib/installers/agent.py`, `scripts/lib/installers/simple_file.py`, `scripts/lib/installers/mcp_installer.py`, `scripts/lib/installers/guardrail_installer.py`, `scripts/lib/installers/remove.py`, `scripts/lib/resolver.py`, `scripts/lib/sync_audit.py`, `scripts/lib/paths.py`, `library.yaml`, `SKILL.md`, `tests/test_library_py_new_features.py`): Closes all CL-0bl gaps. Every primitive now has working `use` and `remove`. `sync` re-installs all lockfile entries. `audit` computes SHA-256 checksums with stable JSON schema. Transitive dep resolver handles `requires:` depth-first with cycle detection (exit 4), lockfile-aware skipping, and cross-primitive traversal. `--harness` flag honored in all installers. `wave-orchestrator` now declares 5 transitive deps. SKILL.md no longer references cookbook fallback for CLI-handled operations. 155 tests pass (87 original + 68 new). Closes CL-8ph.
+- Worktree-bead-CL-0l5
 
-### Added
+### 📚 Documentation
 
-- **Deterministic Library Engine: `scripts/library.py` + `scripts/lib/` package** (`scripts/library.py`, `scripts/lib/`, `SKILL.md`, `cookbook/*.md`, `tests/`): Implements the full transition from instruction-heavy `/library` skill behavior to a deterministic Python CLI engine. (1) `scripts/library.py`: argparse-based CLI with canonical primitive-first grammar (`skill list`, `standard use`, `search`, etc.) for all 8 supported primitives. (2) `scripts/lib/` package: 8 modules covering catalog, primitives, paths, source parsing, Layer-B cache (ADR-0003), lockfile, output, and errors. (3) `scripts/lib/installers/skill.py`: three-layer cache model (Source-Cache-Harness symlink + Claude bridge) with lockfile write. (4) `scripts/lib/installers/standard.py`: cache materialization, canonical symlink, optional AGENTS.md block injection. (5) `SKILL.md` updated to CLI delegation pattern. (6) `cookbook/{use,list,search,sync}.md`: CLI shortcut sections. 87 new tests covering all 10 AKs. Closes CL-0bl.
+- *(CL-0l5)* Add changelog entry for full primitive coverage and pyproject.toml addition
+## [2026.05.30] - 2026-05-13
 
-- **Compose-on-Resync + End-to-End Use-Cookbook Smoke Test** (`cookbook/sync.md`, `tests/smoke/use-agent-cookbook-path.sh`, `tests/smoke/run-smoke.sh`): Closed two gaps left by CL-08n. (1) Added Step 4.5 "Compose Agent Body on Resync" to `cookbook/sync.md`, inserted between Step 4 (Re-pull) and Step 5 (Recreate Bridge Symlinks). The step mirrors `use.md` Step 6.5: for each agent entry with `golden_prompt_extends: <non-from-scratch>`, locates `scripts/compose-agent.py`, runs it for the target harness (claude/codex), replaces the body on success, and gracefully degrades (warn + keep uncomposed body) on missing Layer 1 or Layer 3. Updates `composed_sha` and `composed_layers` lockfile fields. (2) Added `tests/smoke/use-agent-cookbook-path.sh` — a self-contained end-to-end smoke test for the full `/library use` cookbook path (fetch → compose → write). Covers: cognovis-base marker present in installed file; idempotent re-run produces zero diff; graceful degradation when Layer 1 absent; `cookbook/use.md` Step 6.5 wording unchanged (AK7 guard). Registered as `use-cookbook-path` harness in `run-smoke.sh` and included in the `all` suite. 7/7 smoke checks passing. Closes CL-o16.
+### 🚀 Features
 
-### Changed
+- *(CL-3kq)* Green — implement harness materializer for always_apply and globs
 
-- **Primitive-Scoped `/library` Command Grammar** (`SKILL.md`, `README.md`, `cookbook/*.md`, `docs/ARCHITECTURE.md`, `docs/lockfile-format.md`, `docs/policy/name-collision.md`): Documented `/library <primitive> <verb> [name-or-query]` as the canonical grammar for primitive-scoped operations. Updated list/use/add/push/remove cookbook language to route by primitive first, restrict catalog lookup to the selected primitive section, and keep `/library` positioned as a chat-facing wrapper for script-backed catalog tooling. Closes CL-wlu.
+### 🐛 Bug Fixes
 
-- **`docs/PRIMITIVES.md` §4 Guardrail/Hook — refreshed Claude Code event list to 15 events** (`docs/PRIMITIVES.md`): Updated the Guardrail/Hook primitive section to reflect the current Claude Code hook event surface. Event count raised from 13 to 15: added `UserPromptExpansion`, `PermissionDenied`, and `StopFailure`; removed the stale `Setup` event. Introduced a "three-cadence" sub-table grouping all 15 events into per-session, per-turn, per-tool-call, per-permission, per-subagent, and other cadences. Portability matrix row #4 updated from 13 to 15 events. Official Claude Code hook reference link added to the per-harness coverage table and footnote. Closes CL-9mx.
+- *(CL-3kq)* Address review findings — unused import, dead var, primitive label, dry-run warnings
 
-### Fixed
+### 💼 Other
 
-- **Agent installer: Codex `.toml` materialization and primitive-aware lockfile entries** (`library.yaml`, `scripts/lib/installers/agent.py`, `scripts/lib/lockfile.py`, `scripts/lib/resolver.py`, `scripts/library.py`): `library agent use --harness all` now installs both Claude `.md` and Codex `.toml` sources for multi-harness agents into their configured global/project agent directories. Lockfile upsert and installed checks now distinguish entries by `(type, name)`, so `skill:session-close` no longer masks `agent:session-close` during dependency resolution or clean reinstall. Added regression tests for multi-harness agent installs and same-name cross-primitive lockfile entries. Closes CL-gbn.
+- Worktree-bead-CL-49a
+- Worktree-bead-CL-3kq
 
-- **`library.yaml` Codex source URL drift + marketplace skeleton** (`library.yaml`, `tests/test_missing_migration.py`): Updated `sources.codex` URL for `session-close` agent entry to point at `agents/session-close.toml` (sibling of the Claude `.md`), matching the existing `bead-orchestrator` and `wave-orchestrator` entries and the ADR-0004 Decision 6 sibling layout. Updated both `sussdorff-library-core` and `cognovis-library-core` catalog skeletons in `library.yaml` to list `agents/` instead of `.codex/agents/` for the Codex content_type — the latter directory has been retired in both first-party content repos. Skipped the obsolete `TestBeadsWorkflowPlugin.test_agent_in_codex_agents` test (which still asserted on the deprecated `.codex/agents/<name>.md` bridge mirror) and updated `TestCodexTomlBridges` to assert on `agents/<name>.toml` instead of `.codex/agents/<name>.toml`. Paired with `cognovis/library-core` which `git rm`d `.codex/agents/` entirely (37 stale Markdown shadows + 3 TOML files relocated to `agents/`).
+### 📚 Documentation
 
-- **`session-close` agent: handler resolution moved out of plugin cache, into skill** (paired change in `cognovis/library-core`): The Claude `.md` and Codex `.toml` source-of-truth agent files now resolve handler scripts from `~/.agents/skills/session-close/handlers/` (canonical, Codex-native) with a Claude-bridge fallback at `~/.claude/skills/session-close/handlers/`, instead of the now-unpopulated `~/.claude/plugins/cache/sussdorff-plugins/core/<version>/agents/session-close-handlers/` path. Added a `session-close` skill entry to `library.yaml` (handler bundle, 19 scripts: bash phase-B prepare/ship/close, changelog, version, docs-check, beads-close, merge in/out, pipeline-watch, ci-monitor, lockfile, render-summary, turn-log-upload, plugin-cache sync, JSON schemas). Added `skill:session-close` to the `session-close` agent's `requires:` field so `/library use session-close` resolves the skill dependency atomically.
+- *(CL-3kq)* Update generated docs and cookbook for harness materializer
+- *(CL-3kq)* Add changelog entry for harness materializer
 
----
+### 🧪 Testing
 
-## [v2026.05.23] - 2026-05-12
+- *(CL-3kq)* Red — harness materializer tests for always_apply and globs
+## [2026.05.29] - 2026-05-13
 
-### Added
+### 🚀 Features
 
-- **Compose-on-Install: Three-Layer Agent Prompt Composition** (`scripts/compose-agent.py`, `library.yaml`, `docs/schema/library.schema.json`, `docs/schema/lockfile.schema.json`, `cookbook/use.md`): Implemented compose-on-install for the three-layer Agent Golden Prompt model (CL-9b1 design). Relocated source files from `library/meta/.agents/` to `library/cognovis-core/{golden-prompts,model-standards}/` (storage-vs-loading separation). Added `claude-haiku-4-5` model-standard with `model_aliases: [haiku, haiku-4-5, claude-haiku-4-5-20251001]`. Extended `library.yaml` with top-level `model_standards:` (3 entries: sonnet-4-6, opus-4-7, haiku-4-5) and `golden_prompts:` (1 entry: cognovis-base) catalog sections, plus `default_dirs` entries for both. Extended JSON Schema validator (`library.schema.json`) with `model_standard_entry` and `golden_prompt_entry` $defs; extended `lockfile.schema.json` with `composed_layers` and `composed_sha` fields. Implemented `scripts/compose-agent.py` with Layer1+Layer2+Layer3 composition algorithm, `from-scratch` support, Codex harness TOML escaping, and override-dir isolation for testing. Inserted `cookbook/use.md` Step 6.5 (compose-on-install) with graceful degradation on missing layers. 20 new TDD tests (10 unit + 5 smoke: compose-agent, schema, changelog-updater end-to-end, idempotent re-install, drift detection). All passing. Closes CL-08n.
+- *(CL-49a)* Green -- M2 schema adds globs/always_apply/compatibility/metadata fields
+- *(CL-49a)* Green -- M3 agentskills.io name/description validation rules
 
-- **Per-Harness MCP Installer: `scripts/install-mcp.py`** (`scripts/install-mcp.py`, `cookbook/use.md`, `tests/test_install_mcp.py`): Completed CL-l0c Deliverable D, finishing the cross-harness install story for MCP servers. Added `install-mcp.py` (~340 lines) — a per-harness MCP installer parallel to `install-hook.py`. Writes `claude_code` entries into `~/.claude/settings.json` (JSON deep-merge), `codex` entries into `~/.codex/config.toml` (via `tomlkit`, preserving TOML formatting), and `opencode` entries into `~/.config/opencode/opencode.json`. For `claude_ai` and `claude_ios` targets, emits the install URL for the user to open manually. All writes tagged with `_origin: library:mcp:<name>` for idempotent re-install and clean `--remove`. Cookbook `use.md` Step 2b extended with the MCP-server branch documenting per-harness payload selection and the deep-merge contract. 13/13 new TDD tests in `tests/test_install_mcp.py` all green. Closes CL-l0c (Deliverable D lands on top of A+B+C shipped in v2026.05.22).
+### 🐛 Bug Fixes
 
-- **Cross-Harness Install: `sources:` Map + Codex Hook Adapter** (`docs/schema/library.schema.json`, `library.yaml`, `scripts/install-hook.py`, `scripts/validate-library.py`, `cookbook/use.md`, `tests/test_agent_sources_schema.py`): Completed ADR-0004 Phase 2 cross-harness install story. Extended `agent_entry` schema with optional `sources:` map (per-harness file paths; `claude:` + `codex:` keys; backward-compat with singular `source:`). Migrated 3 library.yaml agent entries (bead-orchestrator, session-close, wave-orchestrator) to `sources:` map referencing both Claude `.md` and Codex `.toml` files. Extended `install-hook.py` with `--harness` flag (claude/codex/all) and Codex install branch: filters to supported events (SessionStart, SessionEnd, Stop), emits `mismatch_warning` for unsupported events (e.g. SubagentStop), writes to `~/.codex/hooks.json` with deep-merge + `_origin` tagging. Documented Codex slash-command spike: Codex 0.130.0 has no user-defined slash commands; Skills (SKILL.md) are the Codex equivalent; prompt entries remain Claude-only. Updated `cookbook/use.md` Step 3a for `sources:` map handling and Codex coverage gap warning. 11 new TDD tests all passing. Closes CL-l0c.
+- *(installers)* Pass temp clone dir explicitly instead of as Path attribute
+- *(CL-49a)* Address review findings — temp cleanup, trailing-hyphen test, standard entry test, missing-name guard, schema descriptions
 
-- **ADR-0004: Frontmatter-driven dependency resolution + harness-neutral source layout** (`docs/adr/frontmatter-dependency-resolution.md`, `library.yaml`, `docs/schema/library.schema.json`, `cookbook/use.md`, `install.sh`, `scripts/install-hook.py`, `hooks/standards-loader/`): Accepted ADR-0004 and executed Phase 1 + Phase 2 partial. Nine architectural decisions formalized: `requires:` frontmatter is authoritative for dependency resolution; no bundle primitive (top-level entries with rich requires: ARE the bundle); harness-neutral source layout in both library-core repos (skills/agents/prompts/hooks/standards top-level, .claude/.codex/.agents/ retired from source); all 107 library.yaml source URLs rewritten to remote HTTPS; marketplaces are remote-only (dev repos are not the library); library is installable software via `install.sh`; no agent converter (ship-both-files .md + .toml siblings for cross-harness); `hooks/standards-loader/` added as harness-neutral hook implementation. Phase 2 cross-harness install story continues in CL-l0c.
+### 💼 Other
 
-- **open-brain Marketplace Registration** (`library.yaml`): Registered `mcp:open-brain` marketplace and 9 skills + 5 samurai skills from `sussdorff/open-brain`. MCP server entry registered with per-harness install snippets. 5 agent registry entries updated with `mcp:open-brain` dependency in frontmatter. Plugin entries removed from `installed_plugins.json` and `known_marketplaces.json`; open-brain now managed via library install path.
+- Worktree-bead-CL-9mx
 
-- **Standards-Loader Hook Source** (`hooks/standards-loader/`): Added harness-neutral hook implementation for SessionStart trigger-based standards injection. Includes `_core.py` (shared logic), `claude-code.py` (Claude wrapper), and `codex-cli.py` (Codex wrapper). Reads library.yaml triggers, matches project context, injects matched standards content.
+### 📚 Documentation
 
-- **MCP Servers Registry Population** (`library.yaml`): Populated `mcp_servers:` section with 6 canonical registry entries (playwright, pencil, lsp, filesystem, executive-circle, heypresto) from CL-p91 audit. All keep-mcp (stateful browser/editor/LSP/Desktop) and ship-both (executive-circle, heypresto) servers now registered with capabilities, coding_strategy, mobile_strategy, and per-harness install snippets validated against the CL-mfz canonical schema.
+- *(primitives)* Align §7 Standard with compose-on-install architecture
+- *(research)* Forge-patterns industry research (May 2026)
+- *(CL-49a)* Add changelog entries for M2 schema fields and M3 validator rules
+- *(primitives)* Refresh §4 hook event list to 15 events (CL-9mx)
+- *(primitives)* Update guardrails-mapping and ARCHITECTURE for 15 events (CL-9mx)
 
-- **Canonical CLI Launchers: cld and cdx** (`cognovis-library/bin/cld`, `cognovis-library/bin/cdx`, `cognovis-library/bin/lib/cld-system-prompt.zsh`, `cognovis-library/scripts/install-bin.sh`): Established canonical home for Claude Code (`cld`) and Codex (`cdx`) launchers in `cognovis-library/bin/`, implementing Phase 1 of ADR-0002. Created idempotent install script (`install-bin.sh`) that symlinks both launchers from `~/.local/bin/` into the canonical source. Updated `CLAUDE.md` and `docs/ARCHITECTURE.md` to document canonical home and install procedure. Removed `~/.claude/scripts/` from `$PATH`. Smoke test confirms `cld -b <bead-id>` launches worktree sessions cleanly via single editable source.
+### 🧪 Testing
 
-### Changed
+- *(CL-49a)* Red -- M2/M3 validate-library acceptance tests
+## [2026.05.28] - 2026-05-13
 
-- **Skills Polarity Inversion: `.agents/` canonical, `.claude/` bridge** (`library.yaml`, `cookbook/use.md`, `docs/policy/name-collision.md`, `docs/PRIMITIVES.md`, `tests/smoke/run-smoke.sh`, `tests/smoke/README.md`): Inverted the skills install convention to align with the harness-neutral source layout (ADR-0004). New layout: Layer C canonical lives at `~/.agents/skills/<name>/` (read natively by Codex); `~/.claude/skills/<name>` is a Claude-bridge symlink; `~/.codex/skills/<name>` retired entirely. Also replaced the marketplace-HEAD-derived cache key with a **tree-SHA cache key** (content-addressable per skill subtree) in cookbook Step 8b — cache entries no longer churn when the marketplace repo's HEAD changes but the skill itself is unchanged. 55/55 smoke tests PASS; end-to-end verified by reinstalling the `dolt` skill under the new layout (Layer B at `~/.local/share/library/skills/library-core/dolt@<tree-sha>/`, Layer C canonical at `~/.agents/skills/dolt`, Claude bridge at `~/.claude/skills/dolt`). Closes CL-83q.
+### 🚀 Features
 
-- **Skills/Hooks Migration to ob CLI Dual-Mode Pattern** (`library.yaml`, `prime/PRIME.md`, `cognovis/library-core/.claude/skills/ob-cli/SKILL.md`, `~/.claude/standards/workflow/agent-session-capture.md`, `~/.claude/.beads/PRIME.md`, `~/.claude/skills/open-brain/people-query/SKILL.md`): Migrated three skills and hooks from MCP-only (`mcp__open-brain__*`) to ob CLI dual-mode pattern for coding-harness sessions, retaining MCP for mobile + admin operations. New wrapper skill `ob-cli` (cognovis/library-core) documents routing logic (prefer CLI for coding harnesses; fallback to MCP for interactive/mobile). Updated `prime/PRIME.md` memory routing to prefer ob CLI for SessionStart sessions. Migrated `people-query` skill to call ob CLI for coding harness. Updated agent-session-capture standard to use ob CLI. MCP entry retained for non-coding contexts. Closes CL-l4f.
+- *(CL-8ph)* Merge — complete library.py all primitive×verb combinations, dependency resolver, --harness flag
+- *(CL-c2d)* Green — agents-md-block.py insert/update/remove/check with sha256-12 hash
+- *(CL-c2d)* Green — drift-check hook, library.yaml schema update (tier/default_scope, no triggers), cookbook step 5f/remove/sync updates
+- *(CL-c2d)* Green — remove.py calls agents-md-block remove for standard removals (AK4)
+- *(CL-c8g)* Retire standards-loader and inject-subagent-standards hooks
 
-- **cognovis-claude-code-plugins Marketplace Retirement** (Phase 2b of ADR-0002, CL-ns6): Completed content-equivalence audit for the `cognovis-workflow` bundle (5 primitive artefacts: `beads` skill, `epic-init` skill, `session-close` skill, `bead-orchestrator` agent, `workplan` command). All 5 artefacts are superseded by canonical equivalents in `cognovis-core` and `beads-workflow`. The marketplace was never formally registered in `known_marketplaces.json` or `installed_plugins.json`, and `library.yaml` had no cognovis-marketplace entry — no plugin uninstall or YAML changes were required. Fresh session smoke test confirms hooks, agents, and skills resolve cleanly from deployed locations. Audit committed to `docs/audit/cognovis-marketplace-retirement-audit.md`. No follow-up migration beads needed (all 5 artefacts already in canonical locations). ADR-0002 Phase 2b complete.
+### 🐛 Bug Fixes
 
-- **Sussdorff-Plugins Marketplace Retirement** (Phase 2a of ADR-0002): Completed content-equivalence audit for all 8 `sussdorff-plugins` bundles (core, beads-workflow, infra, business, content, meta, medical, dev-tools) and verified parity with canonical sources in `cognovis/library-core` and `sussdorff/library-core`. Uninstalled all bundles, deregistered the marketplace from `known_marketplaces.json`, and cleaned library catalog. Fresh session smoke test confirms hooks, agents, and skills resolve cleanly from deployed locations. Audit report committed to `docs/audit/sussdorff-plugins-retirement-audit.md`. Filed 7 follow-up beads for drift resolution in canonical repos.
+- *(CL-08k)* Cld --agent uses bare user-agent names, not plugin namespace
 
-### Fixed
+### 💼 Other
 
-- **`library.yaml` Codex source URLs point to `agents/` (not `.codex/agents/`)** (`library.yaml`): Updated `sources.codex` URLs for 3 agent entries (bead-orchestrator, session-close, wave-orchestrator) to point at the canonical `agents/<name>.toml` paths in `cognovis/library-core` rather than the legacy `.codex/agents/<name>.toml` paths. Paired with `cognovis/library-core@25262d7` which `git mv`d the `.toml` files into `agents/` to match the harness-neutral source layout (ADR-0004 Decision 6). Closes CL-8qr.
+- Worktree-bead-CL-c8g
 
-- **CalVer version.sh: 4-part tag crash fixed** (`claude-code-plugins` commit `c263a7a`): The inline CalVer fallback in `version.sh` crashed with `Arithmetic syntax error` when the latest tag was a legacy 4-part `vYYYY.MM.DD.MICRO` tag. Fix: (1) `grep -E` filter now matches only strict 3-part `vYYYY.MM.MICRO` tags, ignoring 4-part legacy tags; (2) defensive `CURRENT_MICRO="${CURRENT_MICRO%%.*}"` truncation; (3) `$((10#${CURRENT_MICRO:-0}))` prevents octal-parsing of leading-zero values like `01`. Verified: `version.sh --dry-run` in cognovis-library produces `v2026.05.N` (3-part) without crash. Recent tags in this repo confirm: `v2026.05.13`, `v2026.05.14`, `v2026.05.15`. Closes CL-xlz.
+### 📚 Documentation
 
-### Changed
+- *(CL-c2d)* Add changelog entry for compose-on-install + drift-detect hook
+- *(CL-c8g)* Add changelog entry for retired standards-loader and inject-subagent-standards hooks
 
-- **Lockfile Schema Extension for Three-Layer Model** (`docs/schema/lockfile.schema.json`, `docs/lockfile-format.md`, `cookbook/use.md`, `cookbook/sync.md`, `cookbook/audit.md`, `cookbook/remove.md`, `scripts/migrate-lockfile.py`): Extended `.library.lock` schema with two required fields (`marketplace` and `cache_path`) to support ADR-0003 Three-Layer deployment model (Source/Cache/Harness). Updated `lockfile-format.md` with field documentation, Three-Layer architecture explanation, and global lockfile path (`~/.config/library/global.lock`). Added migration script (`scripts/migrate-lockfile.py`) to auto-derive `marketplace` from existing source URLs and update all four cookbooks with Three-Layer workflow steps (cache materialization in use.md, cache reconciliation in sync.md, symlink verification in audit.md, garbage-collection notes in remove.md). 11 new validator tests added; ADR-0003 success criterion #7 fulfilled.
+### 🧪 Testing
 
----
+- *(CL-c2d)* Red — agents-md-block insert/update/remove/check
+- *(CL-c2d)* Red — standards-drift-check hook scan_file + format_warning
 
-## [v2026.05.11] - 2026-05-02
+### ⚙️ Miscellaneous Tasks
 
-### Added
+- *(CL-c2d)* Bump version to 2026.05.27
+## [2026.05.13.1] - 2026-05-13
 
-- **Cognovis Library-Core Population** (`cognovis/library-core`): Migrated 117 ORIGINAL artefacts in two waves: CL-sxt added 77 artefacts (41 skills, 27 agents, 5 hooks, 3 commands, 1 plugin); CL-8vb completed the migration by adding ~40 remaining audit artefacts including beads-workflow plugin (10 additional agents, 14 skills), 3 Codex bridge files, 5 standards, and 4 misc skills (infra-principles, nbj-audit, people-query, vision-review). Final inventory: 44 skills, 37 agents, 5 hooks, 3 commands, 1 plugin, 3 Codex bridges, 5 standards. All SKILL.md, AGENT.md, and hook frontmatter preserved; all requires_standards references validated; audit-diff shows zero missing. Smoke tests verify 11/11 installations (5+ skills tested via `/library use` workflow). Audit JSON (`docs/audit/skills-origin.json`) updated. Commits pushed to origin/main of cognovis/library-core (52cd370, 1ae1783). Closes CL-sxt and CL-8vb.
+### 🚀 Features
 
-- **Personal Agentic Content Repository** (`sussdorff/library-core`): Migrated 13 personal artefacts (skills and agents for MoneyMoney CLI, Amazon utils, Career Check, Google Invoice, LinkedIn, Transcription, Hetzner Cloud, Home Infra, Local VM, Paperless, Piler, and Home agent) from `claude-code-plugins` into `sussdorff/library-core` at skeleton paths (`.claude/skills/business/`, `.claude/skills/content/`, `.claude/skills/infra/`, `.claude/agents/`). Enables selective skill loading via `/library use` on new devices without cloning the full plugins repo. All SKILL.md/AGENT.md frontmatter preserved; e2e install simulation verified for mm-cli and home-infra. Closes CL-4mt.
+- *(CL-8ph)* Green — implement all primitive×verb combinations, dependency resolver, --harness flag, sync/audit, skill/standard remove
+- Register agentic-primitives standard in library catalog
 
-- **Three-Section /library List Output** (`/library list` command, `cookbook/list.md`): Extended `/library list` to display three sections: (1) Catalog (existing library.yaml inventory), (2) Plugin-Marketplace Installs (reading from `~/.claude/plugins/installed_plugins.json` with plugin name, version, scope, and marketplace), (3) /Library Use Installs (reading from `.library.lock` files in current directory for project-level lockfile installs). Catalog entries are annotated with `[also: plugin-marketplace]` or `[also: /library use (project-local)]` when the entry is also covered by an installed plugin or project-local lockfile. Updated `cookbook/list.md` with the new three-section layout and annotation layout and annotation logic. Closes CL-2x4.
+### 📚 Documentation
 
-- **Library Catalog Registration** (`library.yaml`, `scripts/check-coverage.py`): Registered all 95 migrated artefacts from cognovis/library-core and sussdorff/library-core in `library.yaml`. Added 44 cognovis skills (tier: core/domain/project), 12 sussdorff personal skills (tier: project), 37 cognovis agents, 1 sussdorff agent (home), 3 commands as prompts, and 9 standards as prompts — 107 total entries. All entries include source URL (GitHub blob URL pointing to library-core), description (from SKILL.md/agent.md frontmatter), requires (typed dependencies as `prompt:name` strings), and tags (origin:original/personal + tier:core/domain/project). Added `scripts/check-coverage.py` to verify audit JSON vs library.yaml coverage for CI use. Schema validator passes. Closes CL-yko.
+- *(CL-8ph)* Add changelog entry for complete library.py implementation
 
----
+### 🧪 Testing
 
-## [v2026.05.01.7] - 2026-05-01
+- *(CL-8ph)* Red — comprehensive tests for all 34 AKs (agent/prompt/model-standard/golden-prompt/mcp/guardrail use+remove, skill remove, sync, audit, dep resolver, harness flag)
+- *(CL-8ph)* Add explicit tests for AK14 (guardrail remove) and AK16 (standard remove)
 
-### Fixed
+### ⚙️ Miscellaneous Tasks
 
-- **Cookbook Cleanup Commands: Drop Force Flag** (`cookbook/use.md`, `push.md`, `sync.md`, `remove.md`): Dropped the `-f` (force) flag from 8 recursive-delete cleanup commands across the bd cookbook. Commands now use `rm -r` instead of `rm -rf`, consistent with the dcg guardrail that already enforces non-forced recursive deletes. The guardrail itself was unchanged. Closes CL-qwt.
+- Merge main into worktree-bead-CL-8ph before session-close
+## [2026.05.26] - 2026-05-13
 
----
+### 🚀 Features
 
-## [v2026.05.01.6] - 2026-05-01
+- *(CL-0bl)* Green — implement scripts/library.py deterministic engine
+- *(CL-0bl)* Merge — implement scripts/library.py deterministic library engine
 
-### Changed
+### 🐛 Bug Fixes
 
-- **Dolt Persistent Remote Authentication** (LaunchAgent + skill documentation): Implemented persistent Dolt remote authentication via macOS LaunchAgent that loads `DOLT_REMOTE_PASSWORD` environment variable at login. Users can now run `bd dolt pull` and `bd dolt push --force` reliably after system reboot without manual `launchctl setenv` steps. Documented setup in `core:dolt` skill. Refs CL-6cl.
+- *(CL-4ny)* Resolve Codex startup warnings
+- *(CL-0bl)* Address review findings — fix temp dir cleanup for GitHub sources
 
-- **Chezmoi Externals Cleanup and Gitignore Audit** (`docs/chezmoi-externals.md`, `.gitignore` in sussdorff/claude and sussdorff/codex): Audited `~/.claude/` and `~/.codex/` for runtime artifacts that should not be version-tracked; added `.gitignore` entries covering session transcripts, backups, SQLite files, caches, and OS artifacts. Cleaned existing drift (untracked session JSONL files, backup files, runtime state). Documented file categorization guide (`docs/chezmoi-externals.md`) defining boundaries between config, templates, runtime, caches, and machine-specific files for fleet adoption. `chezmoi update` now runs without dirty-tree warnings on both externals. Refs CL-wn8.
+### 📚 Documentation
 
-### Added
+- *(primitives)* Add portability matrix + restructure AGENTS.md as navigation hub
+- *(library)* Document primitive-scoped command grammar
+- *(CL-0bl)* Update changelog with library.py engine entry
 
-- **pbakaus Marketplace + Impeccable Skill** (`library.yaml`): Registered `pbakaus` as a marketplace source and added the `impeccable` skill entry (Apache-2.0, 24k GitHub stars). Impeccable is a frontend design skill for Claude Code that enables AI-assisted frontend design workflows. Closes CL-16n.
+### 🧪 Testing
 
-- **Project Tooling Schema — Fleet-Wide File/Hook Distribution** (`docs/schema/library.schema.json`, `docs/project-tooling.md`, `library.yaml`, `scripts/sync_project_tooling.py`, `tests/test_project_tooling.py`, `prime/hooks/post-commit.sh`): Introduced `project_tooling:` as a top-level catalog section in `library.yaml` for declarative, per-project synchronization of canonical files, config sections, git hooks, and gitignore patches. Schema defines `target_kind` discriminator with five types (file, file_section, git_hook, gitignore_patch, json_field_enforce), conditions language (file_exists, dir_exists, command_available, env_set), and sync strategies (overwrite_if_source_newer, append_if_missing, replace_section, repair_fields). SessionStart hook runtime (`scripts/sync_project_tooling.py`) iterates registered entries, evaluates conditions, and applies sync operations idempotently. Migrated existing PRIME.md provisional setup (`cognovis-library/prime/PRIME.md` distribution) to registered schema entry. Registered three use cases: beads-prime (file), beads-server-mode (json_field_enforce), and beads-post-commit-hook (git_hook). Schema validator tests pass (40 tests, 100% coverage of target_kind types and strategies). Documentation in `docs/project-tooling.md` covers pattern, schema design decisions, and how-to for registering new targets. Closes CL-3fh.
+- *(CL-0bl)* Red — core library.py and lib/ package structure tests
 
----
+### ⚙️ Miscellaneous Tasks
 
-## [v2026.05.01.3] - 2026-04-30
+- *(library.yaml)* Sync cognovis-core agent fleet consolidation
+- Bump version to 2026.05.26 for CL-0bl release
+## [2026.05.25] - 2026-05-12
 
-### Added
+### 🚀 Features
 
-- **Provisional Canonical Home for bd Workflow Primer** (`prime/PRIME.md`, `prime/README.md`): Established `cognovis-library/prime/PRIME.md` as the provisional single source of truth for the bd workflow primer (formerly scattered across `~/.claude/templates/PRIME.md`, the beads SKILL, and AGENTS.md blocks). The beads SKILL has been deleted from claude-code-plugins; AGENTS.md beads blocks trimmed to 12-line stubs pointing to `bd prime`. PRIME.md rewritten with all 9 bd built-in types, Priority/Effort taxonomy, MoC-at-create-time pattern, and memory routing exclusively to open-brain. Distribution chain: SessionStart hooks in both Claude Code and Codex harnesses now sync PRIME.md from this library to `$XDG_CACHE_HOME/cognovis-prime/PRIME.md` (content-based, not mtime) and from there to each project's `.beads/PRIME.md`. This provisional setup will be superseded by `project_tooling` schema entries when CL-3fh is implemented. Refs CL-3fh.
+- *(CL-o16)* Compose-on-resync for /library sync + e2e use-cookbook smoke test
+- Register session-close skill in library catalog + fix .codex/ drift
+- *(CL-o16)* Compose-on-resync for /library sync + e2e use-cookbook smoke test
 
-- **Bootstrap First-Party Content Repos** (`library.yaml`, `docs/schema/library.schema.json`): Created `sussdorff/library-core` (private, personal agentic content) and `cognovis/library-core` (private, team agentic content). Each repo is initialized with a full skeleton: `.claude/{agents,skills,commands,hooks}/`, `.agents/{skills,standards}/`, `.codex/agents/`. Each README documents audience, directory structure, contribution model, lockfile reference (CL-t21), and canonical-vs-bridge convention per name-collision policy (CL-b4o). Both repos registered in `library.yaml` under a new `catalog:` section (first-party, distinct from `marketplaces:`). `library.schema.json` extended with `catalog_entry` definition including typed `content_types`, `skeleton`, `visibility`, `audience`, and `owner` fields. JSON-schema validator and all 22 schema tests pass. Last bead in epic CL-36o. Closes CL-1rr.
+### 🐛 Bug Fixes
 
-- **Golden-Prompt Fleet Migration: All Agents Migrated to Composition Model** (`tests/smoke/run-smoke.sh`): Completed CL-xpg migration follow-up to CL-9b1. All 39 agents in claude-code-plugins (beads-workflow, core, dev-tools, infra, medical, meta) now declare `golden_prompt_extends: cognovis-base` and `model_standards` frontmatter. Sonnet agents get `model_standards: [claude-sonnet-4-6]`, opus agents get `model_standards: [claude-opus-4-7]`, haiku agents get `model_standards: []`. Updated `agent-forge/scripts/init-agent.py` template to emit both composition fields by default for all new agents. Added `smoke_fleet_migration` harness to run-smoke.sh (8 structural checks: agent count, all-agents golden_prompt_extends coverage, all-agents model_standards coverage, cross-harness validation for 3 plugins, agent-forge template check). Fleet-migration harness is user-state-dependent (excluded from `all` suite; run explicitly: `./run-smoke.sh fleet-migration`). Closes CL-xpg.
+- *(CL-o16)* Restore library-core section comment displaced by smoke_use_cookbook_path insertion
+- *(CL-o16)* Correct awk frontmatter extraction in sync.md Step 4.5 (Codex finding)
 
-- **Standards-Loader Migration: Fleet-Wide requires_standards Adoption** (`tests/smoke/run-smoke.sh`): Completed CL-717 migration follow-up to CL-v56. All 85 skills across claude-code-plugins (beads-workflow, business, content, core, dev-tools, infra, medical, meta) now declare `requires_standards:` frontmatter. Copied 62 global standards from `~/.claude/standards/` to `~/.agents/standards/` (flat naming per ADR) with valid YAML frontmatter. Project-local standards from `claude-code-plugins/.claude/standards/` accessible via the loader's legacy fallback path. `inject-subagent-standards.py` hook marked DEPRECATED with Phase 3 removal planned. Added `smoke_migration` harness to run-smoke.sh (8 structural checks: directory existence, count, core standard presence, frontmatter validity, loader resolution, skill coverage, hook deprecation). Migration harness is user-state-dependent (excluded from `all` suite to avoid CI breakage). Closes CL-717.
+### 💼 Other
 
-- **cdx — Codex Launcher with Beads Workflow Integration** (`scripts/cdx`, `justfile`, `README.md`): Added `cdx` as the Codex parallel to `cld`. The wrapper mirrors the `cld` bead-mode signatures (`-b`, `-bq`, `-br`) using prompt injection via `codex exec` (Codex has no `--bead` flag equivalent). Bead context is fetched via `bd show <id>` and injected as an initial prompt. Added four Justfile targets: `install-cdx` (installs to `~/.local/bin/cdx`), `cdx`, `cdx-quick`, and `cdx-review`. Documented in README with install instructions, usage examples, and how-it-works explanation. Closes CL-tap.
+- Integrate main (session-close skill + codex drift fix) into worktree-bead-CL-o16
 
-- **Guardrails as Fourth Primitive — Cross-Harness Capability Matrix** (`library.yaml`, `docs/schema/library.schema.json`, `docs/schema/lockfile.schema.json`, `docs/research/guardrails-mapping.md`, `cookbook/add-guardrail.md`, `cookbook/use-guardrail.md`, `cookbook/remove-guardrail.md`, `guardrails/block-destructive-bash/`): Introduced `guardrails:` as a first-class catalog category in `library.yaml`, replacing the earlier stub. Each guardrail entry is a conceptual enforcement primitive that compiles to per-harness native format. The schema defines `purpose` (pre-tool-veto / post-tool-reaction / session-init / cleanup / audit-log), per-harness `capability` declarations, and per-harness `source` file paths. Added `default_dirs.guardrails` path map for all five harnesses. Shipped `block-destructive-bash` as the reference guardrail with implementations for Claude Code (PreToolUse bash hook reading from stdin, exits 2 to hard-block), Codex CLI (SessionStart advisory .mjs), Codex Cloud (approval_policy fragment), and OpenCode (JSON deny rules). Lockfile schema extended to accept `type: guardrail`. Three cookbooks added: `add-guardrail.md` (registration with harness compat table), `use-guardrail.md` (install with mandatory capability-mismatch warnings per harness/purpose combination), `remove-guardrail.md` (uninstall + config cleanup). `docs/research/guardrails-mapping.md` documents the full 5-harness event coverage and mismatch decision table. `docs/PRIMITIVES.md` §4 expanded to the full capability matrix. Closes CL-xcm.
+### 📚 Documentation
 
-- **Agent Golden Prompt Composition + MODEL-STANDARD Primitive** (`.agents/golden-prompts/cognovis-base.md`, `.agents/model-standards/`, `docs/research/golden-prompt-composition.md`): Introduced the three-layer Agent System Prompt composition model. Agents now compose their effective system prompt from: Layer 1 (Cognovis Base Golden Prompt — shared safety rules, confirmation gates, tool constraint encoding), Layer 2 (agent persona body), and Layer 3 (model-specific behavioral guidance). Composition happens at Library install time — the harness receives the fully-composed prompt with no runtime overhead. Added `cognovis-base.md` as canonical Layer 1 source; created `claude-sonnet-4-6.md` (conciseness rules) and `claude-opus-4-7.md` (thinking budget + reasoning guidance) as first two model-standards. Agent frontmatter extended with `golden_prompt_extends` and `model_standards` fields. `changelog-updater` migrated as prototype. `scripts/standards-loader.sh` extended with `--load-model-standard` including alias resolution. Closes CL-9b1.
+- *(CL-o16)* Update changelog with compose-on-resync + use-cookbook smoke test
 
-- **MODEL-STANDARD Primitive** (`docs/PRIMITIVES.md` §10 extended): Loading spec, path resolution table, composition algorithm (install-time, source/target separation, alias-based model name resolution), per-harness realization, and tool constraint encoding guidance added. Closes CL-9b1.
+### ⚙️ Miscellaneous Tasks
 
-- **Skills & Primitives Origin Audit** (`docs/audit/skills-origin.md`, `docs/audit/skills-origin.json`): Complete inventory and classification of all 169 artifacts across `~/code/claude-code-plugins/` (beads-workflow, business, content, core, dev-tools, infra, medical, meta), `~/.claude/standards/` (63 standards), `~/.claude/hooks/` (20 hooks), Codex agents, and installed skill copies. Each artifact classified with Origin (ORIGINAL/PERSONAL/WRAPPER), Intent, Correct Type per PRIMITIVES.md, Migration Action, and Tier (core/domain/project). Identifies 13 PERSONAL artifacts for `sussdorff/library-core`, 9 marketplace candidates, and 4 artifacts needing reclassification. Machine-readable JSON output for downstream automation. Closes CL-23z.
+- Bump version to 2026.05.25 for CL-o16 release
+## [2026.05.24] - 2026-05-12
 
-- **MCP Server Canonical Schema** (`docs/schema/library.schema.json`, `library.yaml`, `cookbook/add-mcp.md`): Extended `library.schema.json` with a fully typed `mcp_server_entry` definition replacing the former stub. Each entry captures `name`, `description`, `coding_strategy`, `mobile_strategy`, `capabilities` (stateless, streaming, auth), and per-harness `install` metadata (cli package + manager, mcp config_path + snippet per harness). Added canonical `open-brain` entry to `library.yaml` as reference example. New cookbook `cookbook/add-mcp.md` documents the schema, strategy decision rules, and registration steps. Per-harness translator logic is explicitly out of scope (follow-up bead). JSON-schema validator passes. Closes CL-mfz.
+### 🚀 Features
 
-- **Standards Loading Mechanism** (`docs/research/standards-loading.md`, `scripts/standards-loader.sh`): Design ADR and working prototype for cross-harness standards loading. Defines loader contract: path resolution (project-local `.agents/standards/<name>.md` overrides user-global), warn-and-continue on missing standards, merge order (first-declaration-wins deduplication), frontmatter validation schema, re-read-on-invoke caching policy, and 4-phase compatibility migration timeline. Prototype implements mechanism (a) adapter generation into `AGENTS.md` (`--generate-adapter`) and mechanism (b) skill-script-side runtime loader (`--load`). Recommends mechanism (d) Hybrid (a+b) as primary approach. Portable across macOS and Linux. Closes CL-v56.
+- *(CL-08n)* Compose-on-install for agent golden-prompt + source relocation + haiku model-standard
 
-### Changed
+### 💼 Other
 
-- **Agentic Primitives Glossary** (`docs/PRIMITIVES.md`): Updated STANDARD primitive §7 trigger semantics to describe both the legacy SessionStart hook (Claude Code only) and the new cross-harness convention (`.agents/standards/<name>.md` + adapter generation into `AGENTS.md`). Added `requires_standards` frontmatter documentation. Closes CL-v56.
-- **Smoke Tests** (`tests/smoke/run-smoke.sh`): Added `smoke_standards()` function (10 structural checks) validating research doc existence, all loader contract sections, prototype script existence/executability, precedence rules, warn-on-missing behavior, mechanism (a) and (b) implementation, PRIMITIVES.md update, and index.yml schema documentation. Runnable via `just test-smoke standards`. Closes CL-v56.
+- Resolve conflicts from main — integrate CL-l0c install-mcp.py + CL-08n compose-on-install
 
-### Added
+### ⚙️ Miscellaneous Tasks
 
-- **Library Lockfile** (`.library.lock` format — `docs/lockfile-format.md`, `docs/schema/lockfile.schema.json`): Introduced `.library.lock` as the per-project provenance manifest for all installed library items. Records name, type, source URL, source commit SHA, install target, ISO 8601 timestamp, SHA-256 checksum, SPDX license, and bridge symlinks per entry. JSON Schema provided for machine validation. Closes CL-t21.
-- **Audit Cookbook** (`cookbook/audit.md`): New `/library audit` procedure that reads `.library.lock`, recomputes SHA-256 checksums of installed primary artifact files, and reports CLEAN / DRIFT / MISSING / BRIDGE-BROKEN / UNLOCKED status per item. Detects on-disk modifications made outside the Library without auto-fixing. Closes CL-t21.
-- **Lockfile Smoke Tests** (`tests/smoke/run-smoke.sh`): Added `smoke_lockfile()` (13 structural checks) validating schema presence, format docs, cookbook references, checksum computation, write/read round-trip, drift detection, remove-entry, and bridge_symlinks field. Runnable via `just test-smoke lockfile`. Closes CL-t21.
+- Bump version to 2026.05.24 for CL-08n release
+## [2026.05.23] - 2026-05-12
 
-### Changed
+### 🚀 Features
 
-- **Library Use Cookbook** (`cookbook/use.md`): Added Step 8 (Update .library.lock) — after a successful install, computes SHA-256 checksum of the primary artifact, resolves `source_commit` from the cloned repo (before `rm -rf` cleanup), and writes/updates the lockfile entry. Closes CL-t21.
-- **Library Remove Cookbook** (`cookbook/remove.md`): Step 5 now reads `install_target` and `bridge_symlinks` from `.library.lock` before deletion, removes bridge symlinks first (per CL-b4o policy), removes the canonical directory, then removes the lockfile entry. Closes CL-t21.
-- **Library Sync Cookbook** (`cookbook/sync.md`): Rewritten to use `.library.lock` as source of truth instead of `library.yaml`. Pins each re-fetch to `entry.source_commit` (full clone + `git checkout`) for reproducible installs. Documents upgrade behavior (omit pin when explicitly upgrading). Closes CL-t21.
+- *(CL-l0c)* Cross-harness install -- sources: map + Codex hook adapter + slash-command spike docs
+- *(CL-l0c)* Deliverable D -- install-mcp.py per-harness MCP installer
+- *(CL-08n)* Green — Part A: relocate golden-prompts and model-standards to cognovis-core
+- *(CL-08n)* Green — Parts B-E: schema extension, library.yaml catalog entries, compose-agent.py, cookbook Step 6.5, smoke test
 
-- **Architecture Documentation** (`docs/ARCHITECTURE.md`): Expanded Primitive Definitions section with decision rule for new artifacts (4-question workflow) and harness portability matrix (8 primitive types × 4 harnesses). Fixed factual errors in Codex paths, hook configuration, and MCP syntax; corrected placeholder inconsistency in install paths.
-- **Library Use Cookbook** (`cookbook/use.md`): Added Step 5d (Name Collision Check) — mandatory collision detection for all skill installs using Step 5b resolved paths. Detects two-real-directory collision state, emits warning with three resolution options, enforces bridge-first ordering. Former Step 5d (Translation Warnings) renumbered to 5e. Closes CL-b4o.
-- **Agentic Primitives Glossary** (`docs/PRIMITIVES.md`): Added Precedence and Name Collision Policy section summarizing canonical/bridge path roles, per-harness precedence rules, name uniqueness requirement, uninstall completeness rule, and admin override policy. Closes CL-b4o.
-- **Smoke Tests** (`tests/smoke/`): Added `smoke_name_collision()` function (10 structural checks) validating all CL-b4o policy rules for Claude Code and Codex harnesses. Updated `smoke_codex()` bridge direction to match CL-b4o policy (.agents/skills symlinks to .claude/skills). Added `name-collision` harness target to runner. Updated README with claims 23–32. Closes CL-b4o.
+### 🚜 Refactor
 
-### Added
+- *(CL-8qr)* Point sources.codex URLs at agents/ (not .codex/agents/)
 
-- **Name Collision and Precedence Policy** (`docs/policy/name-collision.md`): Authoritative 7-decision policy for how the library handles skill name collisions across harness paths. Covers per-harness precedence (project-local wins over global), canonical/bridge install pattern (Claude Code path is canonical real file; Codex path is bridge symlink), symlink lifecycle and preservation rules, cross-harness name uniqueness requirement, versioned install behavior, uninstall completeness (bridge-first removal), and admin override semantics for Anthropic marketplace force-enable. Includes enforcement checklist for `/library use` and cross-references to cookbook, PRIMITIVES.md, and smoke tests. Closes CL-b4o.
-- **Cross-Harness Smoke Tests** (`tests/smoke/`): End-to-end validation suite confirming skill discovery, install paths, and symlink handling across harnesses (Claude Code, Codex, Pi, OpenCode). Per-harness fixture skills and test runner (justfile recipe `test-smoke`); comprehensive README documenting verified claims (8 smoke test categories including name collision behavior, project-local overrides, and symlink git preservation). Validates empirically that Library install paths work correctly before broader multi-harness migration. Closes CL-zda.
-- **Marketplace Registry** (`library.yaml` + JSON Schema): Added `marketplaces:` category to library.yaml schema to reference third-party GitHub orgs/repos publishing skills, agents, and prompts. New `/library add-marketplace` and `/library list-marketplaces` cookbooks. Catalog entries now support `from_marketplace` field to pull content from registered marketplaces. Marketplace validation integrated into `validate-library.py`.
-- **Agentic Primitives Glossary** (`docs/PRIMITIVES.md`): Comprehensive v0 taxonomy defining 9 primitive types (skill, command, agent, guardrail, plugin, marketplace, standard, mcp-server, plus design principle on scripts) with decision tree, worked examples, and per-harness capability matrix labeled as NORMATIVE or INFERRED claims. Cross-referenced from `docs/ARCHITECTURE.md`.
-- **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table (13 fields), canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies lossy fields and proposes `codex_*` extended frontmatter convention for round-trip fidelity. Closes CL-11p.
-- **MCP Server Audit** (`docs/audit/mcp-servers.md`): Classification of 11 installed MCP servers across all harnesses (Codex, Claude Desktop, Claude Code) against the PRIMITIVES.md decision matrix. Per-server migration recommendations (convert to CLI+Skill vs. keep MCP for stateful/mobile use) with 8 follow-up implementation beads identified.
-- **Layer 2 Format Translation Spec** (`docs/research/agents-format-mapping.md`): Comprehensive mapping for agent portability between Claude Code `.md` and Codex `.toml` formats. Includes field-by-field translation table, canonical source rationale (Claude Code as primary), forward/reverse translation algorithms with 9-step workflows, model vocabulary mapping, sandbox_mode derivation rules, and worked example translating the researcher agent. Identifies 3 lossy fields (tools→sandbox_mode, mcpServers→comment, system_prompt_file→inline) and proposes `codex_*` extended frontmatter convention for round-trip fidelity.
+### 📚 Documentation
 
-### Changed
+- *(CL-08n)* Add changelog entry for compose-on-install, source relocation, haiku model-standard
 
-- **Golden Prompt Safety Rules** (`.agents/golden-prompts/cognovis-base.md`): Removed the `bd dolt push` confirmation-gate row from the safety rules table. The rule is retained in `~/.claude/CLAUDE.md` (the authoritative source). The golden prompt now defers to the harness-level CLAUDE.md rather than duplicating it, reducing drift risk.
-- **Gitignore** (`.gitignore`): Added runtime artifact patterns: `.claude/buglog.json`, `.claude/worktrees/`, `tests/__pycache__/`, and `**/__pycache__/` to prevent tool-generated files from appearing as untracked.
+### 🧪 Testing
 
----
+- *(CL-08n)* Red — schema tests for model_standards/golden_prompts + compose-agent tests
 
-## [v2026.04.2] - 2026-04-16
+### ⚙️ Miscellaneous Tasks
 
-### Added
+- Release v2026.05.23 -- CL-83q + CL-l0c (D) + CL-8qr
+## [2026.05.22] - 2026-05-12
 
-- `docs/research/codex-prompts.md` (324 lines): CL-qzw research on Codex Layer 3
-  (prompts/skills) parity. Scope expanded during research to cover all 4 layers +
-  Hooks + Observability because findings cross-cut multiple epic deliverables.
-  Key findings:
-  - Codex modern Layer 3 primitive is Skills (`.agents/skills/<name>/SKILL.md`),
-    not custom prompts (`~/.codex/prompts/` is deprecated).
-  - Codex has 3 hook events vs Claude Code's 13 — observability is asymmetric.
-  - No `--bead` flag in Codex CLI; `cdx` wrapper must inject bead context via prompt.
-  - `tools:` frontmatter is Claude-Code-only; Codex uses coarser `sandbox_mode`.
-  - Go/No-Go confirmed for CL-6hg, CL-tap, CL-06x.
-- New bead CL-7hp: Adapt indydevdan multi-agent observability pattern (P2, blocked
-  by CL-xcm + CL-06x).
-- Research notes injected into CL-6hg, CL-tap, CL-06x, CL-xcm.
+### 🚀 Features
 
-### Changed
+- *(CL-4bv)* Library-managed standards-loader hook + inject-subagent-standards (single-hook kind)
+- *(CL-l0c)* Green -- agent_entry sources map + install-hook codex branch + cookbook docs
 
-- `.gitignore`: Added `.claude/anatomy.json` (tool-internal open-brain cache).
+### 🐛 Bug Fixes
 
----
+- *(CL-4bv)* /library use ASK whether standard goes global or project-local (cookbook §5f)
+- *(CL-4bv)* Per-file trigger selection in standards-loader (62% payload reduction)
 
-## [v2026.04.1] - 2026-04-16
+### 💼 Other
 
-### Added
+- Resolve conflicts from main -- integrate single-hook kind + codex harness functions
 
-- Forked from `disler/the-library` at commit `47f455c` as the basis for Cognovis
-  multi-harness distribution (Claude Code + Codex + marketplaces).
-- `docs/ARCHITECTURE.md`: Captures the fork rationale and design decisions:
-  - Catalog + content-repo split (one catalog, many content repos)
-  - Per-repo on-demand distribution over BMAD deploy-all
-  - Codex subagents as first-class citizens alongside Claude Code
-  - Open agent-skills standard shared by both harnesses
-  - IndyDevDan's original pattern as the foundation
-- `AGENTS.md`: Agent instructions for this repo (non-interactive shell, beads workflow)
-- `CLAUDE.md`: Claude Code project instructions (beads integration, session close protocol)
-- `.claude/settings.json`: Project hooks (SessionStart/PreCompact run `bd prime`)
-- `.claude/anatomy.json`: Open-brain anatomy config
-- `.gitignore`: Added beads/Dolt entries (`.dolt/`, `*.db`, `.beads-credential-key`)
-- Seeded 11 beads for multi-harness extension work:
-  - Epic `CL-36o`: Multi-harness library (parent of all sub-beads)
-  - `CL-nvp`: Document architecture
-  - `CL-6hg`: Add Codex paths to default_dirs in library.yaml
-  - `CL-06x`: Extend /library use cookbook with tool-awareness
-  - `CL-7ii`: Add marketplaces: category to library.yaml schema
-  - `CL-xcm`: Add hooks as fourth artifact type
-  - `CL-tap`: Build cdx wrapper script
-  - `CL-qzw`: Research Codex layer-3 format and install path
-  - `CL-11p`: Layer 2 agents format translation spec
-  - `CL-23z`: Third-party origin audit
-  - `CL-1rr`: Bootstrap content repos
-  - Dependency graph wired: epic depends on all subs; inter-sub deps correctly set
+### 🚜 Refactor
+
+- *(CL-83q)* Invert canonical/bridge polarity for skills
+
+### 📚 Documentation
+
+- *(CL-l0c)* Add changelog entry for cross-harness install + sources map + codex hook adapter
+
+### 🧪 Testing
+
+- *(CL-l0c)* Red -- agent_entry sources map + install-hook codex branch tests
+## [2026.05.21] - 2026-05-12
+
+### 🚀 Features
+
+- *(CL-bgo)* ADR-0004 library architecture cleanup
+- Register open-brain marketplace + 9 skills + 5 samurai skills per ADR-0004
+- *(CL-bgo)* Hook-install via /library use per ADR-0004 Phase 2
+- *(CL-bgo)* Drop redundant harness: from skills, derive coverage from source URL
+- *(CL-79m)* Register 14 standard bundles in library.yaml + add triggers field
+- *(CL-bgo)* Mirror mcp:open-brain in 5 agent registry entries
+- *(CL-bgo)* Add standards-loader hook source + fix standard source URLs
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.05.21 and update changelog
+## [2026.05.20] - 2026-05-12
+
+### 🐛 Bug Fixes
+
+- *(CL-ns6)* Correct session-close canonical path to ~/.claude/agents/core/session-close.md
+
+### 📚 Documentation
+
+- *(CL-ns6)* Cognovis-marketplace retirement audit — content-equivalence verified, all 5 artefacts superseded in cognovis-core
+- *(CL-ns6)* Update changelog — cognovis-marketplace retirement Phase 2b
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.05.20 and update changelog
+## [2026.05.19] - 2026-05-12
+
+### 🚀 Features
+
+- *(CL-ast)* Content-equivalence audit for sussdorff-plugins retirement
+
+### 💼 Other
+
+- Origin/main into worktree-bead-CL-ast (resolve changelog conflict)
+- Worktree-bead-CL-ast
+- Worktree-bead-CL-9au
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CL-ast)* Update changelog for sussdorff-plugins retirement (Phase 2a)
+## [2026.05.18] - 2026-05-12
+
+### 🚀 Features
+
+- *(CL-9au)* Populate mcp_servers registry with keep-mcp and ship-both entries
+
+### 🐛 Bug Fixes
+
+- *(CL-9au)* Clean up description meta-commentary in mcp_servers entries
+- *(CL-9au)* Document claude_desktop install gap in pencil and filesystem entries
+
+### 💼 Other
+
+- Worktree-bead-CL-l4f
+
+### 📚 Documentation
+
+- *(CL-9au)* Update changelog with mcp_servers registry population
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CL-ast)* Update changelog for sussdorff-plugins retirement (Phase 2a)
+- Bump version to 2026.05.18
+## [2026.05.17] - 2026-05-12
+
+### 💼 Other
+
+- Worktree-bead-CL-w4g
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CL-w4g)* Update changelog for bin/ canonicalization (ADR-0002 Phase 1)
+## [2026.05.16] - 2026-05-12
+
+### 🚀 Features
+
+- *(CL-w4g)* Canonicalize cld/cdx in bin/, add install-bin.sh, update docs
+
+### 🐛 Bug Fixes
+
+- *(CL-w4g)* Address review findings iteration 1
+- *(CL-xlz)* Document CalVer 4-part tag crash fix in version.sh
+
+### 💼 Other
+
+- Worktree-bead-CL-xlz
+## [2026.05.15] - 2026-05-12
+
+### 🚀 Features
+
+- *(CL-yx2)* Extend lockfile schema with marketplace + cache_path fields
+
+### 💼 Other
+
+- Worktree-bead-CL-603
+- Worktree-bead-CL-yx2
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.05.15
+## [2026.05.14] - 2026-05-12
+
+### 🚀 Features
+
+- *(CL-yx2)* Extend lockfile schema with marketplace + cache_path fields (AK1)
+- *(CL-yx2)* Update lockfile-format.md with new fields, three-layer examples, global lockfile (AK2)
+- *(CL-yx2)* Update cookbooks with three-layer model steps (AK3)
+- *(CL-yx2)* Add scripts/migrate-lockfile.py — ADR-0003 lockfile migration (AK4)
+- *(CL-r92)* Extend marketplace_entry schema with type + auth fields
+
+### 🐛 Bug Fixes
+
+- *(CL-yx2)* Address review findings iteration 1
+- *(CL-603)* Update removal example to use ~/.codex/skills/ as global Codex path
+
+### 💼 Other
+
+- *(CL-603)* Codex skill-loading smoke test — ~/.codex/skills confirmed as real load path
+- Worktree-bead-CL-r92
+
+### 📚 Documentation
+
+- *(CL-lti)* Mark ADR-0003 as accepted
+
+### 🧪 Testing
+
+- *(CL-yx2)* Red — lockfile schema requires marketplace + cache_path
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.05.14
+## [2026.05.13] - 2026-05-12
+
+### 📚 Documentation
+
+- *(CL-7na)* ADR-0002 — full marketplace retirement, library-core canonicalization, deployment-only harness dirs
+- *(CL-lti)* ADR-0003 — three-layer skill deployment architecture (proposed)
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.05.13
+## [2026.05.12] - 2026-05-02
+
+### 📚 Documentation
+
+- *(CL-0va)* ADR-0001 — retire sussdorff-plugins partially, adopt hybrid model
+## [2026.05.11] - 2026-05-02
+
+### 🚀 Features
+
+- *(CL-yko)* Green — register 55 skills, 38 agents, 12 prompts in library.yaml + check-coverage.py
+
+### 🐛 Bug Fixes
+
+- *(CL-yko)* Address codex adversarial findings — check-coverage.py now verifies standards as prompts
+
+### 📚 Documentation
+
+- *(CL-yko)* Update changelog — library catalog registration with 107 entries
+
+### 🧪 Testing
+
+- *(CL-yko)* Red — coverage tests for library.yaml migration registration
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.05.11 and update changelog
+## [2026.05.10] - 2026-05-02
+
+### 🚀 Features
+
+- *(CL-8vb)* Green — migration script + tests pass for ~40 missing artefacts
+
+### 🐛 Bug Fixes
+
+- *(CL-8vb)* Address review findings — wave-reviewer, pyc cleanup, standards, audit-diff test
+- *(CL-8vb)* Update stale skill+agent count assertions (41→44 skills, 27→37 agents after CL-8vb additions)
+
+### 💼 Other
+
+- Worktree-bead-CL-8vb
+
+### 📚 Documentation
+
+- *(CL-8vb)* Update changelog — complete library-core migration with ~40 missing artefacts
+## [2026.05.01.9] - 2026-05-01
+
+### 💼 Other
+
+- Worktree-bead-CL-sxt
+
+### ⚙️ Miscellaneous Tasks
+
+- Merge main into worktree-bead-CL-sxt (resolve changelog conflict)
+## [2026.05.9] - 2026-05-01
+
+### 💼 Other
+
+- Resolve CHANGELOG conflict — keep detailed CL-4mt entry from feature branch
+
+### ⚙️ Miscellaneous Tasks
+
+- Stage CL-4mt+CL-2x4 changelog entries before CL-4mt merge
+## [2026.05.01.8] - 2026-05-01
+
+### 🚀 Features
+
+- *(CL-sxt)* Green — add migrate_originals.py script
+- *(CL-2x4)* Extend /library list with 3-section layout (catalog + plugins + lockfile)
+- *(CL-2x4)* Extend /library list with 3-section layout (catalog + plugins + lockfile)
+
+### 🐛 Bug Fixes
+
+- *(CL-sxt)* Address review findings iteration 1
+- *(CL-sxt)* Address codex adversarial findings
+- *(CL-sxt)* Address auto-fixable verification disputes
+- *(CL-4mt)* Update test to expect SKILL.md (uppercase) for transcribe skill
+- *(CL-4mt)* Address codex adversarial findings
+- *(CL-2x4)* Address review findings iteration 1
+- *(CL-2x4)* Address codex adversarial findings
+
+### 💼 Other
+
+- Worktree-bead-CL-2x4
+
+### 📚 Documentation
+
+- *(CL-sxt)* Update changelog — populate cognovis/library-core with 77 ORIGINAL artefacts
+- *(CL-4mt)* Add changelog entry for personal artefacts migration
+
+### 🧪 Testing
+
+- *(CL-sxt)* Red — migration tests failing before populate
+- *(CL-sxt)* Green — add library-core smoke test section
+- *(CL-4mt)* Red — verify 13 personal artefacts in sussdorff/library-core
+- *(CL-2x4)* Red — verify 3-section list layout in cookbook
+
+### ⚙️ Miscellaneous Tasks
+
+- *(prime)* Switch bd body-file convention from stdin heredoc to file path
+## [2026.05.01.7] - 2026-05-01
+
+### 🐛 Bug Fixes
+
+- *(CL-qwt)* Drop force flag from cookbook cleanup commands
+
+### 📚 Documentation
+
+- *(CL-qwt)* Update changelog — drop force flag from cookbook cleanup commands
+## [2026.05.01.6] - 2026-05-01
+
+### 🚀 Features
+
+- *(CL-16n)* Register pbakaus marketplace + impeccable skill
+
+### 🐛 Bug Fixes
+
+- *(CL-wn8)* Remove duplicate changelog entry from merge artifact
+- *(CL-6cl)* Simplify dolt-auth-fix.md to minimal project note
+- *(CL-6cl)* Clarify dolt-auth-fix.md — reference the LaunchAgent implementation
+
+### 💼 Other
+
+- Worktree-bead-CL-6cl
+
+### 📚 Documentation
+
+- *(CL-6cl)* Record dolt persistent auth infrastructure change
+- *(CL-6cl)* Update changelog — dolt persistent auth via LaunchAgent
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.05.01.6 and update changelog
+## [2026.05.01.5] - 2026-05-01
+
+### 💼 Other
+
+- Worktree-bead-CL-wn8
+
+### 📚 Documentation
+
+- *(CL-3fh)* Update changelog for project_tooling session close
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.05.01.5
+## [2026.05.01.4] - 2026-05-01
+
+### 💼 Other
+
+- Worktree-bead-CL-3fh
+
+### ⚙️ Miscellaneous Tasks
+
+- Gitignore .session-close.lock
+- Bump version to v2026.05.01.4
+## [2026.05.01.3] - 2026-05-01
+
+### ⚙️ Miscellaneous Tasks
+
+- Add gitignore entries for runtime artifacts and promote changelog section
+- *(CL-36o)* Session close — release epic multi-harness library v2026.05.01.3
+- Bump version to v2026.05.01.3
+## [2026.05.01.2] - 2026-05-01
+
+### 🚀 Features
+
+- *(prime)* Provisional canonical home for bd workflow primer (refs CL-3fh)
+- *(CL-3fh)* Green — add project_tooling schema to library.schema.json
+- *(CL-3fh)* Green — add project_tooling entries to library.yaml
+- *(CL-3fh)* Green — add sync_project_tooling.py runtime
+- *(CL-3fh)* Green — add project-tooling.md documentation
+
+### 🐛 Bug Fixes
+
+- *(CL-wn8)* Address review findings in chezmoi-externals doc
+- *(CL-wn8)* Address codex adversarial findings
+- *(CL-3fh)* Address review findings iteration 1
+- *(CL-3fh)* Address codex adversarial findings
+
+### 📚 Documentation
+
+- *(prime)* Update README to reflect XDG cache location (refs CL-3fh)
+- *(CL-wn8)* Add chezmoi-externals categorization guide
+- *(CL-wn8)* Update changelog
+- *(prime)* Update changelog and bump version to v2026.05.01.2
+
+### 🧪 Testing
+
+- *(CL-3fh)* Red — project_tooling schema validator tests
+## [2026.05.01.1] - 2026-05-01
+
+### 🚀 Features
+
+- *(CL-1rr)* Register sussdorff/library-core and cognovis/library-core in catalog
+
+### 📚 Documentation
+
+- *(CL-1rr)* Update changelog
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.05.01.1
+## [2026.04.30.8] - 2026-04-30
+
+### 🐛 Bug Fixes
+
+- *(CL-xpg)* Address codex adversarial findings in fleet-migration smoke
+
+### 📚 Documentation
+
+- *(CL-xpg)* Update changelog for Golden-Prompt fleet migration
+
+### 🧪 Testing
+
+- *(CL-xpg)* Red — fleet-migration smoke checks for golden_prompt_extends + model_standards + agent-forge template
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.30.8
+## [2026.04.30.7] - 2026-04-30
+
+### 🐛 Bug Fixes
+
+- *(CL-717)* Address codex adversarial findings in smoke_migration
+
+### 📚 Documentation
+
+- *(CL-717)* Update changelog for standards-loader migration
+
+### 🧪 Testing
+
+- *(CL-717)* Add smoke_migration test for standards-loader migration
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.30.6
+- Bump version to v2026.04.30.7
+## [2026.04.30.6] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-tap)* Add cdx wrapper script with beads workflow integration
+
+### 🐛 Bug Fixes
+
+- *(CL-tap)* Add explicit BD_BIN check inside each bead mode block
+- *(CL-tap)* Address codex adversarial findings
+
+### 📚 Documentation
+
+- *(CL-tap)* Update changelog
+## [2026.04.30.5] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-xcm)* Green — guardrails: schema + library.yaml entry (AK1)
+- *(CL-xcm)* Green — block-destructive-bash guardrail source files (AK4)
+- *(CL-xcm)* Green — cookbook entries add/use/remove-guardrail (AK2 + AK5)
+- *(CL-xcm)* Green — guardrails-mapping.md + PRIMITIVES.md 5-harness matrix (AK3)
+
+### 🐛 Bug Fixes
+
+- *(CL-xcm)* Address codex adversarial findings
+
+### 📚 Documentation
+
+- *(CL-xcm)* Update changelog
+
+### 🧪 Testing
+
+- *(CL-xcm)* Red — guardrails schema tests (11 tests, 7 failing vs stub)
+## [2026.04.30.4] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-9b1)* Green — golden-prompt composition + model-standards primitive
+- *(CL-9b1)* Green — golden-prompt-composition.md design doc + prototype validation
+
+### 🐛 Bug Fixes
+
+- *(CL-9b1)* Address codex adversarial findings
+
+### 📚 Documentation
+
+- *(CL-9b1)* Update changelog
+
+### 🧪 Testing
+
+- *(CL-9b1)* Red — smoke_golden_prompts checks for golden-prompt composition artifacts
+## [2026.04.30.3] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-23z)* Inventory and classify all primitives in claude-code-plugins
+
+### 🐛 Bug Fixes
+
+- *(CL-23z)* Add missing people-query skill to audit inventory
+- *(CL-23z)* Address codex adversarial findings
+- *(CL-23z)* Correct JSON summary artifact counts to match array
+
+### 📚 Documentation
+
+- *(CL-23z)* Update changelog
+## [2026.04.30.2] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-mfz)* Green — mcp_servers canonical schema, library.yaml entry, cookbook doc
+
+### 📚 Documentation
+
+- *(CL-mfz)* Update changelog with mcp_servers canonical schema entries
+
+### 🧪 Testing
+
+- *(CL-mfz)* Red — mcp_servers schema validation tests
+## [2026.04.30.1] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-v56)* Green — standards-loading ADR, cross-harness loader prototype, updated PRIMITIVES
+
+### 🐛 Bug Fixes
+
+- *(CL-v56)* Address codex adversarial findings — PROJ_ROOT from PWD, dedup, frontmatter validation, macOS realpath
+- *(CL-v56)* Address codex re-check — portable dedup without declare -A, safe tmpfile EXIT trap
+
+### 📚 Documentation
+
+- *(CL-v56)* Update changelog with standards-loading mechanism entries
+
+### 🧪 Testing
+
+- *(CL-v56)* Red — add smoke_standards() checks for standards-loading mechanism
+## [2026.04.12] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-t21)* Green — implement .library.lock format, schema, and cookbook integration
+
+### 🐛 Bug Fixes
+
+- *(CL-t21)* Address codex adversarial findings — source_commit timing + sync pinning
+
+### 📚 Documentation
+
+- *(CL-t21)* Update changelog with lockfile entries
+
+### 🧪 Testing
+
+- *(CL-t21)* Red — add smoke_lockfile() checks for .library.lock infrastructure
+
+### ⚙️ Miscellaneous Tasks
+
+- Gitignore transient orchestrator IPC files
+## [2026.04.30] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-b4o)* Green — name collision policy, cookbook update, and smoke tests
+
+### 🐛 Bug Fixes
+
+- *(CL-b4o)* Fix step reference in use.md detection rule (5e -> 5d)
+- *(CL-b4o)* Address codex adversarial findings
+
+### 📚 Documentation
+
+- *(CL-b4o)* Update changelog with name collision policy entries
+
+### 🧪 Testing
+
+- *(CL-b4o)* Red — docs/policy/name-collision.md scaffolded (policy doc created, smoke test not yet updated)
+
+### ⚙️ Miscellaneous Tasks
+
+- Commit CLAUDE.md schema ownership convention (from prev session)
+- Bump version to v2026.04.30
+## [2026.04.11] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-zda)* Add cross-harness smoke-test fixtures for skill discovery + install
+
+### 🐛 Bug Fixes
+
+- *(CL-zda)* Address review findings iteration 1
+- *(CL-zda)* Address codex adversarial findings
+
+### 💼 Other
+
+- Worktree-bead-CL-zda
+
+### 📚 Documentation
+
+- *(CL-zda)* Update changelog
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.11
+## [2026.04.10] - 2026-04-30
+
+### 💼 Other
+
+- Worktree-bead-CL-7ii
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.10
+## [2026.04.9] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-7ii)* Add marketplaces category to library.yaml schema and cookbooks
+
+### 🐛 Bug Fixes
+
+- *(CL-7ii)* Address review findings iteration 1
+- *(CL-7ii)* Address codex adversarial findings
+
+### 💼 Other
+
+- Worktree-bead-CL-06x
+
+### 📚 Documentation
+
+- *(CL-7ii)* Update changelog
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.9
+## [2026.04.8] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-wud)* Add JSON Schema for library.yaml and validator script
+
+### 🐛 Bug Fixes
+
+- *(CL-wud)* Require default_dirs+library at root and source in catalog entries
+
+### 💼 Other
+
+- Worktree-bead-CL-wud
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.8
+## [2026.04.7] - 2026-04-30
+
+### 💼 Other
+
+- Worktree-bead-CL-nvp
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.7
+## [2026.04.6] - 2026-04-30
+
+### 🐛 Bug Fixes
+
+- *(CL-11p)* Address review findings — consistency, algorithm clarity, model mapping
+- *(CL-11p)* Address codex adversarial findings
+
+### 💼 Other
+
+- Resolve CHANGELOG conflict with origin/main
+
+### 📚 Documentation
+
+- Update CHANGELOG with CL-11p and ARCHITECTURE.md entries
+- *(CL-11p)* Add agents format mapping spec for Claude Code .md ↔ Codex .toml
+- *(CL-11p)* Add changelog entry for agents format mapping spec
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.6
+## [2026.04.5] - 2026-04-30
+
+### 🐛 Bug Fixes
+
+- *(CL-p91)* Correct open-brain CLI assessment — hooks ≠ on-demand CLI
+
+### 💼 Other
+
+- Worktree-bead-CL-p91
+
+### 📚 Documentation
+
+- *(CL-p91)* Add changelog entry for MCP server audit
+- *(CL-p91)* Add MCP server audit — classification and migration plan
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to v2026.04.5
+## [2026.04.4] - 2026-04-30
+
+### 🚀 Features
+
+- *(CL-6hg)* Add Codex paths to default_dirs in library.yaml
+
+### 🐛 Bug Fixes
+
+- *(CL-nvp)* Use <name> placeholder consistently in install paths
+- *(CL-nvp)* Address codex adversarial findings — correct portability matrix facts
+
+### 💼 Other
+
+- Worktree-bead-CL-6hg
+
+### 📚 Documentation
+
+- *(CL-nvp)* Add decision rule and harness portability matrix to ARCHITECTURE.md
+- *(CL-nvp)* Add changelog entry for ARCHITECTURE.md expansion
+## [2026.04.3] - 2026-04-30
+
+### 🐛 Bug Fixes
+
+- *(CL-cmz)* Address review findings — numbering, placeholders, structure, provenance
+- *(CL-cmz)* Address codex adversarial findings
+
+### 💼 Other
+
+- Worktree-bead-CL-cmz
+
+### 📚 Documentation
+
+- *(CL-cmz)* Add PRIMITIVES.md v0 — agentic primitives glossary
+- *(CL-cmz)* Add changelog entry for PRIMITIVES.md v0
+
+### ⚙️ Miscellaneous Tasks
+
+- Gitignore .context/ directory (Codex session tracking files)
+- Bump version to v2026.04.3
+## [2026.04.2] - 2026-04-16
+
+### 📚 Documentation
+
+- Add CL-qzw research on Codex layer 3 (prompts/skills) parity
+
+### ⚙️ Miscellaneous Tasks
+
+- Gitignore .claude/anatomy.json (tool-internal cache)
+- Update changelog and add VERSION for v2026.04.2
+## [2026.04.1] - 2026-04-16
+
+### 📚 Documentation
+
+- Add ARCHITECTURE.md capturing fork rationale and design decisions
+
+### ⚙️ Miscellaneous Tasks
+
+- Bootstrap cognovis fork with beads, agent files, and changelog
