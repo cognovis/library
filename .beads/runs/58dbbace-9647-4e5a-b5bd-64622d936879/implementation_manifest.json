@@ -1,0 +1,139 @@
+{
+    "contract_version": "1",
+    "bead_id": "CL-w5d",
+    "acceptance_criteria": [
+        {
+            "id": "AC1",
+            "status": "done",
+            "changed_files": [
+                "docs/schema/dry-run-contract.md"
+            ],
+            "evidence_refs": [
+                "cmd:targeted-green",
+                "cmd:full-suite"
+            ]
+        },
+        {
+            "id": "AC2",
+            "status": "done",
+            "changed_files": [
+                "scripts/lib/output.py",
+                "scripts/lib/installers/skill.py",
+                "scripts/lib/installers/standard.py",
+                "scripts/lib/installers/agent.py",
+                "scripts/lib/installers/simple_file.py",
+                "scripts/lib/installers/mcp_installer.py",
+                "scripts/lib/installers/guardrail_installer.py",
+                "tests/test_library_py_installers.py"
+            ],
+            "evidence_refs": [
+                "cmd:targeted-green",
+                "cmd:full-suite"
+            ]
+        },
+        {
+            "id": "AC3",
+            "status": "done",
+            "changed_files": [
+                "scripts/lib/installers/guardrail_installer.py",
+                "scripts/lib/installers/mcp_installer.py",
+                "tests/test_library_py_installers.py"
+            ],
+            "evidence_refs": [
+                "cmd:targeted-green",
+                "cmd:full-suite"
+            ]
+        },
+        {
+            "id": "AC4",
+            "status": "done",
+            "changed_files": [
+                "scripts/lib/installers/agent.py",
+                "scripts/lib/installers/mcp_installer.py",
+                "scripts/lib/installers/guardrail_installer.py",
+                "tests/test_library_py_installers.py"
+            ],
+            "evidence_refs": [
+                "cmd:targeted-green",
+                "cmd:full-suite"
+            ]
+        },
+        {
+            "id": "AC5",
+            "status": "done",
+            "changed_files": [
+                "scripts/lib/output.py",
+                "tests/test_library_py_installers.py"
+            ],
+            "evidence_refs": [
+                "cmd:targeted-green",
+                "cmd:full-suite"
+            ]
+        },
+        {
+            "id": "AC6",
+            "status": "done",
+            "changed_files": [],
+            "evidence_refs": [
+                "cmd:bd-search-guardrail",
+                "cmd:bd-search-standard",
+                "cmd:bd-show-clc-ad4",
+                "cmd:bd-update-ak6-note"
+            ]
+        }
+    ],
+    "changed_files": [
+        ".beads/runs/58dbbace-9647-4e5a-b5bd-64622d936879/evidence_ledger.json",
+        ".beads/runs/58dbbace-9647-4e5a-b5bd-64622d936879/implementation_manifest.json",
+        "docs/schema/dry-run-contract.md",
+        "scripts/lib/output.py",
+        "scripts/lib/installers/skill.py",
+        "scripts/lib/installers/standard.py",
+        "scripts/lib/installers/agent.py",
+        "scripts/lib/installers/simple_file.py",
+        "scripts/lib/installers/mcp_installer.py",
+        "scripts/lib/installers/guardrail_installer.py",
+        "tests/test_library_py_installers.py"
+    ],
+    "commits": [
+        {
+            "sha": "f0f0da5",
+            "message": "test(CL-w5d): red - dry-run contract uniformity"
+        },
+        {
+            "sha": "846b056",
+            "message": "feat(CL-w5d): green - uniform dry-run contract"
+        }
+    ],
+    "tests": [
+        {
+            "command": "uv run pytest tests/test_library_py_installers.py::TestDryRunContractUniformity -q",
+            "result": "14 passed in 0.96s"
+        },
+        {
+            "command": "uv run pytest tests/ -x -q",
+            "result": "585 passed, 23 skipped in 92.72s"
+        }
+    ],
+    "external_resources": [],
+    "scope_changes": [
+        {
+            "description": "Fixed an existing indentation error in scripts/lib/installers/guardrail_installer.py because guardrail dry-run import failed before AC2 and AC3 behavior could execute.",
+            "reason": "Required to verify and satisfy guardrail dry-run contract coverage."
+        }
+    ],
+    "downstream_impacts": [
+        "All dry-run JSON envelopes now include summary, target_paths, harness_routing, conflict_policy, lockfile_changes, and requires_user_confirmation.",
+        "Existing target detection annotates matching dry-run operations with existing_target: true while keeping the current overwrite behavior.",
+        "Project-scoped MCP and guardrail dry-runs now report project-local harness config paths."
+    ],
+    "evidence_refs": [
+        "cmd:red-gate",
+        "cmd:targeted-green",
+        "cmd:full-suite",
+        "cmd:bd-search-guardrail",
+        "cmd:bd-search-standard",
+        "cmd:bd-show-clc-ad4",
+        "cmd:bd-update-ak6-note"
+    ]
+}

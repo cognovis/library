@@ -1,0 +1,84 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-w5d",
+  "commands": [
+    {
+      "id": "cmd:red-gate",
+      "command": "uv run pytest tests/test_library_py_installers.py::TestDryRunContractUniformity -q",
+      "purpose": "RED gate for the new dry-run contract tests before production changes.",
+      "exit_code": 1,
+      "observed_result": "14 failures. Failures showed missing top-level contract fields, missing docs/schema/dry-run-contract.md, missing target_paths/harness_routing, missing conflict detection, and guardrail installer import failure."
+    },
+    {
+      "id": "cmd:targeted-green",
+      "command": "uv run pytest tests/test_library_py_installers.py::TestDryRunContractUniformity -q",
+      "purpose": "GREEN gate for the new contract tests after implementation.",
+      "exit_code": 0,
+      "observed_result": "14 passed in 0.96s."
+    },
+    {
+      "id": "cmd:full-suite",
+      "command": "uv run pytest tests/ -x -q",
+      "purpose": "Regression gate for all tests after shared dry_run_result changes.",
+      "exit_code": 0,
+      "observed_result": "585 passed, 23 skipped in 92.72s."
+    },
+    {
+      "id": "cmd:bd-search-guardrail",
+      "command": "bd search \"guardrail project-scope path\" --json",
+      "purpose": "Search for a subsumed bead related to guardrail project-scope path.",
+      "exit_code": 0,
+      "observed_result": "[]"
+    },
+    {
+      "id": "cmd:bd-search-standard",
+      "command": "bd search \"standard conflict surfacing\" --json",
+      "purpose": "Search for a subsumed bead related to standard conflict surfacing.",
+      "exit_code": 0,
+      "observed_result": "[]"
+    },
+    {
+      "id": "cmd:bd-show-clc-ad4",
+      "command": "bd show clc-ad4.7 --json; bd show clc-ad4.8 --json",
+      "purpose": "Check whether the explicitly named subsumed bead IDs exist.",
+      "exit_code": 1,
+      "observed_result": "Both IDs were not found: no issue found matching clc-ad4.7 or clc-ad4.8."
+    },
+    {
+      "id": "cmd:bd-update-ak6-note",
+      "command": "bd update CL-w5d --append-notes \"AK6: searched for clc-ad4.7 and clc-ad4.8 beads plus terms 'guardrail project-scope path' and 'standard conflict surfacing' via bd search; no matching beads found in current bead list. IDs may have been from a different project or already closed.\"",
+      "purpose": "Record the required AK6 note because no matching subsumed beads were found.",
+      "exit_code": 0,
+      "observed_result": "Updated issue CL-w5d."
+    },
+    {
+      "id": "cmd:red-commit",
+      "command": "git add tests/test_library_py_installers.py && git commit -m \"test(CL-w5d): red - dry-run contract uniformity\"",
+      "purpose": "Commit red tests after the RED gate.",
+      "exit_code": 0,
+      "observed_result": "Created commit f0f0da5."
+    },
+    {
+      "id": "cmd:green-commit",
+      "command": "git add scripts/lib/output.py scripts/lib/installers/skill.py scripts/lib/installers/standard.py scripts/lib/installers/agent.py scripts/lib/installers/simple_file.py scripts/lib/installers/mcp_installer.py scripts/lib/installers/guardrail_installer.py docs/schema/dry-run-contract.md && git commit -m \"feat(CL-w5d): green - uniform dry-run contract\"",
+      "purpose": "Commit production code and documentation after the GREEN and regression gates.",
+      "exit_code": 0,
+      "observed_result": "Created commit 846b056."
+    }
+  ],
+  "skipped_checks": [],
+  "artifacts": [
+    {
+      "path": ".beads/runs/58dbbace-9647-4e5a-b5bd-64622d936879/implementation_manifest.json",
+      "description": "Implementation manifest for CL-w5d."
+    },
+    {
+      "path": ".beads/runs/58dbbace-9647-4e5a-b5bd-64622d936879/evidence_ledger.json",
+      "description": "Evidence ledger for CL-w5d."
+    },
+    {
+      "path": "docs/schema/dry-run-contract.md",
+      "description": "Dry-run JSON contract documentation."
+    }
+  ]
+}
