@@ -29,7 +29,7 @@ Verified against agentskills.io specification + Anthropic Claude API docs.
 | `name` | required, 1-64 chars, `[a-z-]+`, MUST match parent directory name, no leading/trailing/consecutive hyphens | We don't currently enforce |
 | `description` | required, max 1024 chars, describes what AND when | We align |
 | `license` | optional, recommended-short | Often empty in our lockfile |
-| `compatibility` | optional, 1-500 chars, intended product / system packages / network access | **We don't use** |
+| `compatibility` | optional, 1-500 chars, intended product / system packages / network access | **Enforced** — `library use` checks this field before installing; exits 4 (`EXIT_DEPENDENCY_MISSING`) when the harness version is unsatisfied. Format: `<harness><op><version>` (e.g. `claude_code>=4.0`). |
 | `metadata` | optional, string->string map | **We don't use** |
 | `allowed-tools` | optional, space-delimited, experimental — note the hyphen | We use `tools:` (Claude extension); different field |
 

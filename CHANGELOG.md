@@ -1,18 +1,27 @@
 ## [unreleased]
 
+### 📚 Documentation
+
+- *(CL-99c)* Add project harness baseline checklist for collaboration projects
+  - `docs/harness-baseline.md` defines what each harness directory (`.claude/`, `.agents/`, `.codex/`, `.cursor/`) must and must not commit
+  - Separates project-local committed content from user-global credentials, MCP config, and personal overrides
+  - `.gitignore` patterns for secret-bearing files (`settings.local.json`, `worktrees/`, `anatomy.json`, `buglog.json`) and generated runtime artifacts
+  - Baseline generalizes beyond `.claude/` to `.agents/`, `.codex/`, and `.cursor/`
+  - Reference implementation verified against mira on 2026-05-24 — all baseline requirements pass
+  - `templates/project-gitignore-harness.txt` provides a copy-paste `.gitignore` snippet
+
 ### 🚀 Features
 
 - *(schema)* Add `harness_support` and `runtime_requirements` as optional fields on all catalog entry shapes
 - *(schema)* Require `metadata.library.plane` on `tier:domain` and `tier:project` entries (enforced by schema conditional and `validate-library.py`)
 - *(installer)* Refuse `--harness <h>` installs when an entry declares `harness_support.<h>: not-supported` — check runs before any dependency installs to avoid partial mutations
 - *(forges)* All five forges (agent, hook, script, skill, standard) now ask harness-support and runtime-requirements questions during creation flow
+- **CL-iye.2**: Add `cursor-impl.py` — Cursor Agent/Composer implementer adapter for bead workflow leaves. Headless dispatch via `cursor-agent --print --force --trust`, preflight checks (binary, auth, model availability), timeout+cleanup, CompletionReport JSON, and metrics recording. Implementer leaf only — not an orchestrator. Source in `cognovis-core/skills/beads/scripts/cursor-impl.py`.
+- *(CL-d7e)* Compatibility pre-install gate in `library.py` — catalog entries can declare a `compatibility` field (e.g. `claude_code>=4.0`); `library use` exits with code 4 and a clear error message when the current harness version does not satisfy the constraint. Entries without a `compatibility` field are unaffected. Version detection is best-effort: if the harness binary is absent or non-versioned, a warning is emitted and installation proceeds.
 
 ### 🐛 Bug Fixes
 
 - *(installer)* Move `lookup_entry` import to module level to avoid repeated local imports in `_resolve_default_scope`
-
-### Original Features
-
 - *(fhir-sync-versions)* Register skill in library catalog
 
 ### 🐛 Bug Fixes
