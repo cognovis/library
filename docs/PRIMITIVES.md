@@ -151,11 +151,19 @@ metadata:
     harness_support:
       claude_code: supported      # or not-supported, planned
       codex: not-supported
+      cursor: planned
 ```
 
-Keys are `claude_code` and `codex`. Omitting a key means "no explicit claim"
-(install proceeds). Use `planned` for harnesses where support is in progress.
-The install gate fires before dependency installs to prevent partial mutations.
+Harness IDs are a closed enum maintained by the Library schema, not an open
+catalog-derived registry. Accepted IDs are `claude_code`, `codex`, `cursor`,
+`opencode`, and `gemini`. Omitting a key means "no explicit claim" (install
+proceeds). Use `planned` for harnesses where support is in progress. The install
+gate fires before dependency installs to prevent partial mutations.
+
+`metadata.library.harness_support` belongs to primitive entry metadata. MCP
+server entries use `install.mcp` as the source of truth for harness-specific MCP
+configuration, and project tooling entries use their `target_kind` and
+conditions. Those planes intentionally do not carry `harness_support`.
 
 **`runtime_requirements`** — binary prerequisites for the primitive to function.
 Declare when the primitive requires CLI tools that may not be present on every

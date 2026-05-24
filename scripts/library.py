@@ -16,7 +16,7 @@ Options:
   --scope       project (default) or global
   --target-project
                 Project root for project-scoped writes
-  --harness     claude_code, codex, opencode, or all (where applicable)
+  --harness     claude_code, codex, cursor, opencode, or all (where applicable)
 
 Exit codes:
   0  success
@@ -159,7 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         use_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "opencode", "all"],
+            choices=["claude_code", "codex", "cursor", "opencode", "all"],
             default="all",
             help="Target harness (default: all)",
         )
@@ -210,7 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         sync_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "opencode", "all"],
+            choices=["claude_code", "codex", "cursor", "opencode", "all"],
             default="all",
         )
 
@@ -367,7 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     top_sync_parser.add_argument(
         "--harness",
-        choices=["claude_code", "codex", "opencode", "all"],
+        choices=["claude_code", "codex", "cursor", "opencode", "all"],
         default="all",
     )
 
@@ -472,6 +472,9 @@ def _check_harness_support(entry: dict, harness: str) -> str | None:
         "claude": "claude_code",
         "claude_code": "claude_code",
         "codex": "codex",
+        "cursor": "cursor",
+        "opencode": "opencode",
+        "gemini": "gemini",
     }
     normalized = harness_map.get(harness)
     if normalized is None:

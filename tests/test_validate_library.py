@@ -308,6 +308,17 @@ def test_schema_rejects_invalid_harness_support_status():
 
 def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
     """MCP and tooling planes do not carry metadata.library.harness_support."""
+    valid_mcp_entry = {
+        "name": "plain-mcp",
+        "description": "Plain MCP server.",
+    }
+    valid_tooling_entry = {
+        "name": "plain-tooling",
+        "description": "Plain tooling entry.",
+        "target_kind": "file",
+        "target_path": ".example/config",
+        "source": "tooling/example",
+    }
     mcp_entry = {
         "name": "example-mcp",
         "description": "Example MCP server.",
@@ -334,11 +345,39 @@ def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
         },
     }
 
-    mcp_result = _run_validator(_make_library_yaml_with_entries({"mcp_servers": [mcp_entry]}))
-    tooling_result = _run_validator(
-        _make_library_yaml_with_entries({"project_tooling": [tooling_entry]})
+    valid_mcp_result = _run_validator(
+        _make_library_yaml_with_entries({"mcp_servers": [valid_mcp_entry]})
     )
+    valid_tooling_result = _run_validator(
+        yaml.dump(
+            {
+                "default_dirs": {
+                    "skills": [{"claude": "~/.claude/skills"}],
+                },
+                "library": {},
+                "project_tooling": [valid_tooling_entry],
+            },
+            default_flow_style=False,
+        )
+    )
+    tooling_result = _run_validator(
+        yaml.dump(
+            {
+                "default_dirs": {
+                    "skills": [{"claude": "~/.claude/skills"}],
+                },
+                "library": {},
+                "project_tooling": [tooling_entry],
+            },
+            default_flow_style=False,
+        )
+    )
+    mcp_result = _run_validator(_make_library_yaml_with_entries({"mcp_servers": [mcp_entry]}))
 
+    assert valid_mcp_result.returncode == 0, valid_mcp_result.stdout + valid_mcp_result.stderr
+    assert valid_tooling_result.returncode == 0, (
+        valid_tooling_result.stdout + valid_tooling_result.stderr
+    )
     assert mcp_result.returncode == 1
     assert tooling_result.returncode == 1
     assert "metadata" in mcp_result.stdout + mcp_result.stderr
