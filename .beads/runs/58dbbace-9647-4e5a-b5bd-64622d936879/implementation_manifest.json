@@ -105,7 +105,7 @@
             "message": "feat(CL-w5d): green - uniform dry-run contract"
         },
         {
-            "sha": "<filled-after-commit>",
+            "sha": "f76c974",
             "message": "fix(CL-w5d): address cold review advisory findings F1 and F2"
         }
     ],
