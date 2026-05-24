@@ -12,6 +12,7 @@
 
 ### 🚀 Features
 
+- *(CL-w5d)* Uniform dry-run JSON contract for all primitive installers — `library.py <primitive> use --dry-run --json` now emits a versioned envelope with `status`, `operations`, `target_paths`, `harness_routing`, `conflict_policy`, `lockfile_changes`, and `requires_user_confirmation` fields; project scope and conflict detection are consistently reflected across skill, standard, agent, prompt, script, model-standard, agent-base, MCP, and guardrail installers; contract schema documented in `docs/schema/dry-run-contract.md`
 - *(schema)* Add `harness_support` and `runtime_requirements` as optional fields on all catalog entry shapes
 - *(schema)* Require `metadata.library.plane` on `tier:domain` and `tier:project` entries (enforced by schema conditional and `validate-library.py`)
 - *(installer)* Refuse `--harness <h>` installs when an entry declares `harness_support.<h>: not-supported` — check runs before any dependency installs to avoid partial mutations

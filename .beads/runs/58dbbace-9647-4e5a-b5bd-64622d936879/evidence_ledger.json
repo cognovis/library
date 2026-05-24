@@ -1,0 +1,133 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-w5d",
+  "commands": [
+    {
+      "id": "cmd:red-gate",
+      "command": "uv run pytest tests/test_library_py_installers.py::TestDryRunContractUniformity -q",
+      "purpose": "RED gate for the new dry-run contract tests before production changes.",
+      "exit_code": 1,
+      "observed_result": "14 failures. Failures showed missing top-level contract fields, missing docs/schema/dry-run-contract.md, missing target_paths/harness_routing, missing conflict detection, and guardrail installer import failure."
+    },
+    {
+      "id": "cmd:targeted-green",
+      "command": "uv run pytest tests/test_library_py_installers.py::TestDryRunContractUniformity -q",
+      "purpose": "GREEN gate for the new contract tests after implementation.",
+      "exit_code": 0,
+      "observed_result": "14 passed in 0.96s."
+    },
+    {
+      "id": "cmd:full-suite",
+      "command": "uv run pytest tests/ -x -q",
+      "purpose": "Regression gate for all tests after shared dry_run_result changes.",
+      "exit_code": 0,
+      "observed_result": "585 passed, 23 skipped in 92.72s."
+    },
+    {
+      "id": "cmd:bd-search-guardrail",
+      "command": "bd search \"guardrail project-scope path\" --json",
+      "purpose": "Search for a subsumed bead related to guardrail project-scope path.",
+      "exit_code": 0,
+      "observed_result": "[]"
+    },
+    {
+      "id": "cmd:bd-search-standard",
+      "command": "bd search \"standard conflict surfacing\" --json",
+      "purpose": "Search for a subsumed bead related to standard conflict surfacing.",
+      "exit_code": 0,
+      "observed_result": "[]"
+    },
+    {
+      "id": "cmd:bd-show-clc-ad4",
+      "command": "bd show clc-ad4.7 --json; bd show clc-ad4.8 --json",
+      "purpose": "Check whether the explicitly named subsumed bead IDs exist.",
+      "exit_code": 1,
+      "observed_result": "Both IDs were not found: no issue found matching clc-ad4.7 or clc-ad4.8."
+    },
+    {
+      "id": "cmd:bd-update-ak6-note",
+      "command": "bd update CL-w5d --append-notes \"AK6: searched for clc-ad4.7 and clc-ad4.8 beads plus terms 'guardrail project-scope path' and 'standard conflict surfacing' via bd search; no matching beads found in current bead list. IDs may have been from a different project or already closed.\"",
+      "purpose": "Record the required AK6 note because no matching subsumed beads were found.",
+      "exit_code": 0,
+      "observed_result": "Updated issue CL-w5d."
+    },
+    {
+      "id": "cmd:red-commit",
+      "command": "git add tests/test_library_py_installers.py && git commit -m \"test(CL-w5d): red - dry-run contract uniformity\"",
+      "purpose": "Commit red tests after the RED gate.",
+      "exit_code": 0,
+      "observed_result": "Created commit f0f0da5."
+    },
+    {
+      "id": "cmd:green-commit",
+      "command": "git add scripts/lib/output.py scripts/lib/installers/skill.py scripts/lib/installers/standard.py scripts/lib/installers/agent.py scripts/lib/installers/simple_file.py scripts/lib/installers/mcp_installer.py scripts/lib/installers/guardrail_installer.py docs/schema/dry-run-contract.md && git commit -m \"feat(CL-w5d): green - uniform dry-run contract\"",
+      "purpose": "Commit production code and documentation after the GREEN and regression gates.",
+      "exit_code": 0,
+      "observed_result": "Created commit 846b056."
+    },
+    {
+      "id": "cmd:advisory-fix-targeted",
+      "command": "uv run pytest tests/test_library_py_installers.py -x -q",
+      "purpose": "Verify advisory fixes F1 (dynamic conflict_policy suffix) and F2 (harness_routing enum) do not break installer tests.",
+      "exit_code": 0,
+      "observed_result": "91 passed in 3.60s."
+    },
+    {
+      "id": "cmd:advisory-fix-full-suite",
+      "command": "uv run pytest tests/ -q --deselect tests/test_personal_migration.py::TestMigrationCommit::test_migration_commit_exists",
+      "purpose": "Regression gate for advisory fixes; deselected pre-existing failure unrelated to this bead (gh api lookup of external commit feat(CL-4mt): in sussdorff/library-core).",
+      "exit_code": 1,
+      "observed_result": "583 passed, 23 skipped, 1 deselected, 1 failed. The single failure is test_migration_commit_sha_format, which is pre-existing on HEAD before this fix (confirmed by stashing the diff and re-running). No new regressions introduced by F1/F2."
+    },
+    {
+      "id": "cmd:codex-adversarial-targeted",
+      "command": "uv run pytest tests/test_library_py_installers.py -x -q",
+      "purpose": "Targeted gate for Codex adversarial REGRESSION fixes (1: mcp path; 2: guardrail path; 3: mcp harness enumeration; 4: simple_file harness_routing).",
+      "exit_code": 0,
+      "observed_result": "91 passed in 3.43s."
+    },
+    {
+      "id": "cmd:codex-adversarial-full-suite",
+      "command": "uv run pytest tests/ -q --deselect tests/test_personal_migration.py::TestMigrationCommit",
+      "purpose": "Full regression gate for Codex adversarial fixes; deselected pre-existing TestMigrationCommit failures (gh api lookup of feat(CL-4mt) in sussdorff/library-core, unrelated to dry-run contract). Confirmed with git stash that both TestMigrationCommit tests fail on HEAD without the fix diff applied.",
+      "exit_code": 0,
+      "observed_result": "583 passed, 23 skipped, 2 deselected in 92.16s."
+    },
+    {
+      "id": "cmd:codex-adversarial-smoke-mcp",
+      "command": "uv run python scripts/library.py mcp use test-mcp --dry-run --json (with fixture declaring claude_code + claude_ios harnesses, in a tempdir catalog)",
+      "purpose": "Smoke-test that REGRESSION 1 and 3 fixes produce the expected JSON shape: global ~/.claude/settings.json path for claude_code, path=null operation for claude_ios, target_paths excludes URL-only harness.",
+      "exit_code": 0,
+      "observed_result": "operations contains {path: '/Users/malte/.claude/settings.json', harness=claude_code} and {path: null, 'no file write', harness=claude_ios}; target_paths == ['/Users/malte/.claude/settings.json']; harness_routing=all."
+    },
+    {
+      "id": "cmd:codex-adversarial-smoke-guardrail",
+      "command": "uv run python scripts/library.py guardrail use test-gr --dry-run --json (tempdir catalog)",
+      "purpose": "Smoke-test REGRESSION 2: guardrail dry-run reports global ~/.claude/settings.json and ~/.codex/hooks.json paths.",
+      "exit_code": 0,
+      "observed_result": "target_paths == ['/Users/malte/.claude/settings.json', '/Users/malte/.codex/hooks.json']."
+    },
+    {
+      "id": "cmd:codex-adversarial-smoke-prompt",
+      "command": "uv run python scripts/library.py prompt use test-prompt --harness codex --dry-run --json (tempdir catalog)",
+      "purpose": "Smoke-test REGRESSION 4: simple-file primitive emits harness_routing=null despite --harness codex on the command line.",
+      "exit_code": 0,
+      "observed_result": "harness_routing=null; target_paths contains a single .claude/commands/test-prompt.md path; install target does not depend on harness."
+    }
+  ],
+  "skipped_checks": [],
+  "artifacts": [
+    {
+      "path": ".beads/runs/58dbbace-9647-4e5a-b5bd-64622d936879/implementation_manifest.json",
+      "description": "Implementation manifest for CL-w5d."
+    },
+    {
+      "path": ".beads/runs/58dbbace-9647-4e5a-b5bd-64622d936879/evidence_ledger.json",
+      "description": "Evidence ledger for CL-w5d."
+    },
+    {
+      "path": "docs/schema/dry-run-contract.md",
+      "description": "Dry-run JSON contract documentation."
+    }
+  ]
+}

@@ -164,6 +164,17 @@ def install_standard(
         return dry_run_result(
             ops,
             summary=f"Would install standard '{standard_name}' to {canonical_dir}",
+            target_paths=[str(canonical_dir)],
+            harness_routing=None,
+            conflict_policy="overwrite",
+            lockfile_changes=[
+                {
+                    "path": str(lockfile_path),
+                    "operation": "upsert",
+                    "entry": standard_name,
+                }
+            ],
+            requires_user_confirmation=False,
         )
 
     # 5. Fetch source

@@ -53,6 +53,88 @@ model_standards: []
 """
 
 
+DRY_RUN_CONTRACT_LIBRARY_YAML = """
+default_dirs:
+  skills:
+    - default: .agents/skills/
+    - claude_bridge: .claude/skills/
+  standards:
+    - default: .agents/standards/
+  agents:
+    - default: .claude/agents/
+    - default_codex: .codex/agents/
+  prompts:
+    - default: .claude/commands/
+  scripts:
+    - default: .agents/scripts/
+  model_standards:
+    - default: .agents/model-standards/
+  agent_bases:
+    - default: .agents/agent-bases/
+  guardrails:
+    - default: .claude/hooks/
+
+library:
+  skills:
+    - name: contract-skill
+      description: Dry-run contract skill fixture
+      source: {skill_source}
+  standards:
+    - name: contract-standard
+      description: Dry-run contract standard fixture
+      source: {standard_source}
+  agents:
+    - name: contract-agent
+      description: Dry-run contract agent fixture
+      sources:
+        claude: {agent_source}
+        codex: {codex_agent_source}
+  prompts:
+    - name: contract-prompt
+      description: Dry-run contract prompt fixture
+      source: {prompt_source}
+  scripts:
+    - name: contract-script
+      description: Dry-run contract script fixture
+      source: {script_source}
+      language: python
+  model_standards:
+    - name: contract-model-standard
+      description: Dry-run contract model standard fixture
+      source: {model_standard_source}
+  agent_bases:
+    - name: contract-agent-base
+      description: Dry-run contract agent base fixture
+      source: {agent_base_source}
+  guardrails:
+    - name: contract-guardrail
+      description: Dry-run contract guardrail fixture
+      kind: single-hook
+      sources:
+        claude_code: hooks/contract.py
+        codex_cli: hooks/contract.py
+      capability:
+        claude_code:
+          events: [PreToolUse]
+        codex_cli:
+          events: [PreToolUse]
+  mcp_servers:
+    - name: contract-mcp
+      description: Dry-run contract MCP fixture
+      install:
+        mcp:
+          claude_code:
+            snippet:
+              type: stdio
+              command: node
+              args: ["server.js"]
+          codex:
+            snippet:
+              command: node
+              args: ["server.js"]
+"""
+
+
 @pytest.fixture
 def fixture_skill_dir(tmp_path: Path) -> Path:
     """Create a minimal skill directory fixture."""
@@ -86,6 +168,50 @@ def project_dir(tmp_path: Path, fixture_skill_dir: Path, fixture_standard_file: 
     )
     (proj / "library.yaml").write_text(yaml_content)
     return proj
+
+
+@pytest.fixture
+def dry_run_contract_project(tmp_path: Path) -> Path:
+    """Create a project with one local-source fixture for every installable primitive."""
+    project = tmp_path / "dry-run-contract-project"
+    project.mkdir()
+    hooks_dir = project / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "contract.py").write_text("print('contract hook')\n")
+
+    sources = tmp_path / "dry-run-sources"
+    sources.mkdir()
+    skill_dir = sources / "skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("# Contract Skill\n")
+    standard_file = sources / "contract-standard.md"
+    standard_file.write_text("# Contract Standard\n")
+    agent_file = sources / "contract-agent.md"
+    agent_file.write_text("---\nname: contract-agent\n---\n# Contract Agent\n")
+    codex_agent_file = sources / "contract-agent.toml"
+    codex_agent_file.write_text('[agent]\nname = "contract-agent"\n')
+    prompt_file = sources / "contract-prompt.md"
+    prompt_file.write_text("# Contract Prompt\n")
+    script_file = sources / "contract-script.py"
+    script_file.write_text("print('contract script')\n")
+    model_standard_file = sources / "contract-model-standard.md"
+    model_standard_file.write_text("# Contract Model Standard\n")
+    agent_base_file = sources / "contract-agent-base.md"
+    agent_base_file.write_text("# Contract Agent Base\n")
+
+    (project / "library.yaml").write_text(
+        DRY_RUN_CONTRACT_LIBRARY_YAML.format(
+            skill_source=skill_dir / "SKILL.md",
+            standard_source=standard_file,
+            agent_source=agent_file,
+            codex_agent_source=codex_agent_file,
+            prompt_source=prompt_file,
+            script_source=script_file,
+            model_standard_source=model_standard_file,
+            agent_base_source=agent_base_file,
+        )
+    )
+    return project
 
 
 @pytest.fixture
@@ -152,6 +278,170 @@ model_standards: []
 """
     (proj / "library.yaml").write_text(yaml_content)
     return proj
+
+
+def run_library_json(project: Path, *args: str) -> dict:
+    """Run library.py in a project and return parsed JSON output."""
+    result = subprocess.run(
+        [sys.executable, str(LIBRARY_PY), *args, "--dry-run", "--json"],
+        capture_output=True,
+        text=True,
+        cwd=str(project),
+    )
+    assert result.returncode == 0, (
+        f"library.py {' '.join(args)} returned {result.returncode}\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+    return json.loads(result.stdout)
+
+
+class TestDryRunContractUniformity:
+    """CL-w5d: dry-run JSON has one contract shape across primitive installers."""
+
+    CONTRACT_KEYS = {
+        "status",
+        "operations",
+        "summary",
+        "target_paths",
+        "harness_routing",
+        "conflict_policy",
+        "lockfile_changes",
+        "requires_user_confirmation",
+    }
+
+    @pytest.mark.parametrize(
+        ("primitive", "name"),
+        [
+            ("skill", "contract-skill"),
+            ("standard", "contract-standard"),
+            ("agent", "contract-agent"),
+            ("prompt", "contract-prompt"),
+            ("script", "contract-script"),
+            ("model-standard", "contract-model-standard"),
+            ("agent-base", "contract-agent-base"),
+            ("mcp", "contract-mcp"),
+            ("guardrail", "contract-guardrail"),
+        ],
+    )
+    def test_all_primitive_dry_runs_emit_uniform_contract(
+        self,
+        dry_run_contract_project: Path,
+        primitive: str,
+        name: str,
+    ):
+        data = run_library_json(dry_run_contract_project, primitive, "use", name)
+
+        assert self.CONTRACT_KEYS <= data.keys()
+        assert data["status"] == "dry-run"
+        assert isinstance(data["operations"], list) and data["operations"]
+        assert isinstance(data["summary"], str) and data["summary"]
+        assert isinstance(data["target_paths"], list) and data["target_paths"]
+        assert data["conflict_policy"] == "overwrite"
+        assert isinstance(data["lockfile_changes"], list) and data["lockfile_changes"]
+        assert data["requires_user_confirmation"] is False
+
+    def test_contract_document_exists(self):
+        doc = REPO_ROOT / "docs" / "schema" / "dry-run-contract.md"
+        assert doc.is_file()
+        content = doc.read_text()
+        assert 'contract_version: "1"' in content
+        assert "target_paths" in content
+        assert "conflict_policy" in content
+
+    def test_target_project_scope_routes_targets_to_explicit_project(
+        self,
+        dry_run_contract_project: Path,
+        tmp_path: Path,
+    ):
+        """--target-project routes targets to the explicit project for primitives
+        that honor project scope (skill, standard, agent, prompt, script,
+        model-standard, agent-base).
+
+        MCP and guardrail are excluded: their actual installers always write
+        to global harness config files (~/.claude/settings.json,
+        ~/.codex/config.toml, ~/.codex/hooks.json, etc.) regardless of
+        --target-project. Their dry-run reports the same global paths to
+        match real install behavior (see CL-w5d Codex review regressions 1
+        and 2).
+        """
+        target_project = tmp_path / "explicit-target-project"
+        target_project.mkdir()
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "contract-skill",
+                "--scope",
+                "project",
+                "--target-project",
+                str(target_project),
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+
+        assert data["target_paths"]
+        assert all(str(path).startswith(str(target_project)) for path in data["target_paths"])
+
+    @pytest.mark.parametrize(
+        ("harness", "expected_fragment", "unexpected_fragment"),
+        [
+            ("claude_code", ".claude/agents/contract-agent.md", ".codex/agents"),
+            ("codex", ".codex/agents/contract-agent.toml", ".claude/agents"),
+        ],
+    )
+    def test_agent_harness_routing_emits_requested_target_paths(
+        self,
+        dry_run_contract_project: Path,
+        harness: str,
+        expected_fragment: str,
+        unexpected_fragment: str,
+    ):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "contract-agent",
+                "--harness",
+                harness,
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        targets = "\n".join(data["target_paths"])
+
+        assert data["harness_routing"] == harness
+        assert expected_fragment in targets
+        assert unexpected_fragment not in targets
+
+    def test_existing_target_reports_conflict_policy_and_detection(
+        self,
+        dry_run_contract_project: Path,
+    ):
+        existing_target = dry_run_contract_project / ".claude" / "commands" / "contract-prompt.md"
+        existing_target.parent.mkdir(parents=True)
+        existing_target.write_text("# Existing Prompt\n")
+
+        data = run_library_json(dry_run_contract_project, "prompt", "use", "contract-prompt")
+
+        assert data["conflict_policy"] == "overwrite"
+        assert str(existing_target) in data["target_paths"]
+        assert any(op.get("existing_target") is True for op in data["operations"])
 
 
 @pytest.mark.parametrize(
