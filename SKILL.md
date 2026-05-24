@@ -90,6 +90,30 @@ silently-skipped-entry reporting.
 - `operations`: (dry-run only) list of planned write operations
 - `message`: human-readable summary
 
+## Consumer Project Updates
+
+Use `scripts/update-consumers.py` when a Library primitive change may affect
+project checkouts listed in `consumer-projects.yml`. This covers installed
+standards and repo-local runtime helper files that consumer projects need after
+a catalog publish.
+
+Run a dry-run first:
+
+```bash
+python3 <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --json
+python3 <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer polaris --consumer mira --json
+```
+
+If the dry-run reports planned changes and the user asked to propagate them,
+apply the selected consumers:
+
+```bash
+python3 <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer <name> --apply --json
+```
+
+After `--apply`, inspect each target repo, run its smoke checks, then commit and
+push in that repo. The updater intentionally does not commit, push, or open PRs.
+
 ## Commands
 
 | Command                                  | Purpose                                  |

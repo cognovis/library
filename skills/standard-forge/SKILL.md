@@ -377,6 +377,30 @@ Or alongside existing standards:
   requires_standards: [existing-standard, <id>]
 ```
 
+## Consumer Update Gate
+
+Run this gate before closeout when creating, changing, promoting, or demoting a
+standard that may be installed in downstream project repos.
+
+- Check `consumer-projects.yml` for consumers of the standard or its workflow
+  bundle.
+- If the standard is listed, run a consumer updater dry-run:
+
+```bash
+python3 scripts/update-consumers.py --json
+python3 scripts/update-consumers.py --consumer <name> --json
+```
+
+- If the dry-run reports planned changes, either run
+  `python3 scripts/update-consumers.py --consumer <name> --apply --json` and
+  finish the target repo commit, or file/follow a consumer propagation bead.
+- If the standard is not listed in `consumer-projects.yml`, state that no
+  managed consumer update is required.
+
+The updater is a release propagation check, not standard authoring logic. Do
+not copy project-local `.agents/standards/**` files by hand when the consumer is
+configured for updater-managed sync.
+
 ## Promotion / Demotion
 
 The maturity arc is a lifecycle, not a frontmatter field. Apply these mechanics
