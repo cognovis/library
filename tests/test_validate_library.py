@@ -75,6 +75,17 @@ def _make_library_yaml_with_standard(standard_entry: dict) -> str:
     return yaml.dump(data, default_flow_style=False)
 
 
+def _make_library_yaml_with_entries(entries_by_section: dict[str, list[dict]]) -> str:
+    """Wrap primitive section entries into a minimal valid library.yaml string."""
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": entries_by_section,
+    }
+    return yaml.dump(data, default_flow_style=False)
+
+
 def _base_skill_entry() -> dict:
     """Return a minimal valid skill entry."""
     return {
@@ -216,6 +227,53 @@ def test_m2_standard_entry_with_globs_and_always_apply():
         f"Expected exit 0 for standard entry with globs and always_apply, got {result.returncode}.\n"
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
+
+
+def test_schema_accepts_harness_support_and_runtime_requirements():
+    """Common entry metadata accepts harness and runtime requirement blocks."""
+    entry = _base_skill_entry()
+    entry["metadata"] = {
+        "library": {
+            "harness_support": {
+                "claude_code": "supported",
+                "codex": "not-supported",
+            }
+        }
+    }
+    entry["runtime_requirements"] = {
+        "binaries": ["rg", "shellcheck"],
+    }
+
+    result = _run_validator(_make_library_yaml(entry))
+
+    assert result.returncode == 0, (
+        f"Expected exit 0 for harness/runtime metadata, got {result.returncode}.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
+@pytest.mark.parametrize("tier_tag", ["tier:domain", "tier:project"])
+def test_tier_domain_and_project_entries_require_library_plane(tier_tag: str):
+    """Domain and project tier entries must declare metadata.library.plane."""
+    entry = _base_skill_entry()
+    entry["tags"] = [tier_tag]
+
+    result = _run_validator(_make_library_yaml(entry))
+
+    assert result.returncode == 1
+    output = result.stdout + result.stderr
+    assert "tier=domain|project entries must declare metadata.library.plane" in output
+
+
+def test_tier_domain_entry_with_library_plane_passes():
+    """Domain tier entries pass when metadata.library.plane is present."""
+    entry = _base_skill_entry()
+    entry["tags"] = ["tier:domain"]
+    entry["metadata"] = {"library": {"plane": "dev"}}
+
+    result = _run_validator(_make_library_yaml(entry))
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_legacy_primitive_alias_warning_when_canonical_present():

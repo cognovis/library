@@ -51,7 +51,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 TOOL_ROOT = SCRIPT_DIR.parent
 
-from lib.catalog import find_repo_root, get_entries, load_catalog, search_all
+from lib.catalog import find_repo_root, get_entries, load_catalog, lookup_entry, search_all
 from lib.errors import (
     EXIT_AMBIGUOUS,
     EXIT_DEPENDENCY_MISSING,
@@ -455,7 +455,6 @@ def _resolve_default_scope(catalog: dict, primitive: str, name: str) -> str:
     Uses the same lookup semantics (fuzzy=True) as the installer so that keyword
     queries and exact names both resolve to the same entry and scope.
     """
-    from lib.catalog import lookup_entry
     try:
         entry = lookup_entry(catalog, primitive, name, fuzzy=True)
         default_scope = entry.get("default_scope", "project")
@@ -465,6 +464,31 @@ def _resolve_default_scope(catalog: dict, primitive: str, name: str) -> str:
         return "project"
     except Exception:
         return "project"
+
+
+def _check_harness_support(entry: dict, harness: str) -> str | None:
+    """Return an error message when the entry rejects the target harness."""
+    harness_map = {
+        "claude": "claude_code",
+        "claude_code": "claude_code",
+        "codex": "codex",
+    }
+    normalized = harness_map.get(harness)
+    if normalized is None:
+        return None
+
+    support = (
+        entry.get("metadata", {})
+        .get("library", {})
+        .get("harness_support", {})
+        .get(normalized)
+    )
+    if support == "not-supported":
+        return (
+            f"This primitive is marked harness_support.{normalized}: "
+            f"not-supported and cannot be installed for the {harness} harness."
+        )
+    return None
 
 
 def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
@@ -690,6 +714,15 @@ def _dispatch_use(
     install_mode: str = "vendor",
 ) -> int:
     """Dispatch to the correct primitive installer."""
+    entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+    harness_error = _check_harness_support(entry, harness)
+    if harness_error:
+        if use_json:
+            print_json(error_result(harness_error, EXIT_FAILURE))
+        else:
+            print(f"Error: {harness_error}", file=sys.stderr)
+        return EXIT_FAILURE
+
     if primitive == "skill":
         return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
     elif primitive == "standard":

@@ -74,6 +74,8 @@ After C1-C7 justify an agent, classify source ownership and plane using
 | Dev-plane or product-plane? | Product runtime agents are product features, not Library agents. Refuse Library scaffolding and redirect to a product repo bead. |
 | Product counterpart? | If a dev-plane agent supports Mira, Polaris, or another runtime artifact, record `repo`, `path`, `name`, `primitive_type`, and `notes` in catalog metadata. Put bead or ADR references in `notes`. |
 | Repo-local escape hatch? | Keep agents local when prompts name product paths, private ADRs, local credentials, or one repo's topology. |
+| Harness support? | Ask whether the agent works in all harnesses or is harness-specific. For one-harness agents, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
+| Runtime requirements? | Ask whether the agent requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
 | Deterministic script route? | Move collection, parsing, polling, export, or validation logic into Python scripts; use `script-forge` if reusable or pack-exported. |
 | Gas City projection? | `polecat`/`crew` is metadata after agent justification and placement; it never justifies creating an agent by itself. |
 
@@ -119,6 +121,7 @@ Define before writing any code:
 - Appropriate model for complexity level
 - Standalone or part of a pipeline?
 - Steward marketplace, plane, repo-local escape decision, and product counterpart
+- Harness support and runtime binary requirements for the catalog entry
 - Gas City session class if packable: `polecat` for one-shot work, `crew` for
   persistent coordination/interactive sessions, or `none` if not exported as an agent
 - Provider-neutral core prompt? Keep Claude/Codex-specific details in harness adapters
