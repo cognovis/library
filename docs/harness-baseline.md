@@ -53,7 +53,7 @@ state stay outside git.
 | File/Dir | Purpose |
 |---|---|
 | .agents/standards/ | Domain-specific standards shared across harnesses |
-| .agents/skills/ | Installed skills, committed per ADR-0002 Decision 3 |
+| .agents/skills/ | Installed skills committed at project level; see mira for reference implementation |
 | .agents/orchestrator-config.yml | Orchestrator routing configuration |
 
 **MUST NOT be committed:**
@@ -123,7 +123,7 @@ The same principles apply to all harnesses:
 | Harness | Config dir | Rules file | Secret-bearing local file |
 |---|---|---|---|
 | Claude Code | `.claude/` | `CLAUDE.md` + `settings.json` | `settings.local.json` |
-| Codex CLI | `.codex/` | `AGENTS.md` / `codex.md` | `codex.local.toml` (if any) |
+| Codex CLI | `.codex/` | `AGENTS.md` (symlink to `~/.agents/AGENTS.md`) | no documented project-local secret file; credentials in `~/.codex/auth.json` |
 | Cursor | `.cursor/` | `.cursorrules` / `CURSOR.md` | `.cursor/settings.local.json` |
 | Cross-harness | `.agents/` | `AGENTS.md` (shared) | - |
 
