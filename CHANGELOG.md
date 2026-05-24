@@ -1,5 +1,15 @@
 ## [unreleased]
 
+### 📚 Documentation
+
+- *(CL-99c)* Add project harness baseline checklist for collaboration projects
+  - `docs/harness-baseline.md` defines what each harness directory (`.claude/`, `.agents/`, `.codex/`, `.cursor/`) must and must not commit
+  - Separates project-local committed content from user-global credentials, MCP config, and personal overrides
+  - `.gitignore` patterns for secret-bearing files (`settings.local.json`, `worktrees/`, `anatomy.json`, `buglog.json`) and generated runtime artifacts
+  - Baseline generalizes beyond `.claude/` to `.agents/`, `.codex/`, and `.cursor/`
+  - Reference implementation verified against mira on 2026-05-24 — all baseline requirements pass
+  - `templates/project-gitignore-harness.txt` provides a copy-paste `.gitignore` snippet
+
 ### 🚀 Features
 
 - *(fhir-sync-versions)* Register skill in library catalog
