@@ -1,0 +1,160 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-iye.8",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "description": "Schema accepts harness_support.cursor and at least one future non-Cursor harness fixture, while rejecting invalid values/statuses.",
+      "status": "met",
+      "changed_files": [
+        "docs/schema/library.schema.json",
+        "tests/test_validate_library.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-validate",
+        "cmd:green-validate",
+        "cmd:combined-suite"
+      ]
+    },
+    {
+      "id": "AC2",
+      "description": "library.py --harness accepts cursor after the policy decision.",
+      "status": "met",
+      "changed_files": [
+        "scripts/library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-installers",
+        "cmd:green-installers",
+        "cmd:combined-suite"
+      ]
+    },
+    {
+      "id": "AC3",
+      "description": "_check_harness_support enforces not-supported for every accepted harness ID, not only claude_code/codex.",
+      "status": "met",
+      "changed_files": [
+        "scripts/library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-installers",
+        "cmd:combined-suite"
+      ]
+    },
+    {
+      "id": "AC4",
+      "description": "Tests cover codex, claude_code, cursor, opencode, and one future harness fixture.",
+      "status": "met",
+      "changed_files": [
+        "tests/test_validate_library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-validate",
+        "cmd:green-installers",
+        "cmd:combined-suite"
+      ]
+    },
+    {
+      "id": "AC5",
+      "description": "MCP uses install.mcp as the source of truth; mcp_server_entry intentionally does not carry metadata.library.harness_support.",
+      "status": "met",
+      "changed_files": [
+        "docs/schema/library.schema.json",
+        "docs/PRIMITIVES.md",
+        "tests/test_validate_library.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-validate",
+        "cmd:combined-suite"
+      ]
+    },
+    {
+      "id": "AC6",
+      "description": "Validator plane behavior for mcp_server_entry and project_tooling_entry is intentionally excluded from harness_support and covered by tests/docs.",
+      "status": "met",
+      "changed_files": [
+        "docs/schema/library.schema.json",
+        "docs/PRIMITIVES.md",
+        "tests/test_validate_library.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-validate",
+        "cmd:combined-suite"
+      ]
+    },
+    {
+      "id": "AC7",
+      "description": "Docs describe the harness IDs as a closed enum.",
+      "status": "met",
+      "changed_files": [
+        "docs/PRIMITIVES.md"
+      ],
+      "evidence_refs": [
+        "cmd:combined-suite"
+      ]
+    },
+    {
+      "id": "AC8",
+      "description": "CL-iye.3 can implement Cursor projection on top of this policy without changing the core gate again.",
+      "status": "met",
+      "changed_files": [
+        "docs/schema/library.schema.json",
+        "scripts/library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-installers",
+        "cmd:combined-suite"
+      ]
+    }
+  ],
+  "changed_files": [
+    ".beads/runs/72ee29bf-ad6a-465e-b78b-8a592d6d8a96/evidence_ledger.json",
+    ".beads/runs/72ee29bf-ad6a-465e-b78b-8a592d6d8a96/implementation_manifest.json",
+    "docs/PRIMITIVES.md",
+    "docs/schema/library.schema.json",
+    "scripts/library.py",
+    "tests/test_library_py_installers.py",
+    "tests/test_validate_library.py"
+  ],
+  "commits": [
+    {
+      "sha": "c157c55",
+      "message": "test(CL-iye.8): red - generalized harness policy"
+    },
+    {
+      "sha": "5f3ac37",
+      "message": "feat(CL-iye.8): green - generalize harness support policy"
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 XDG_DATA_HOME=/private/tmp/library-data-bead-CL-iye.8 uv run pytest tests/test_validate_library.py -x -q 2>&1 | tail -15",
+      "result": "21 passed in 2.33s"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 XDG_DATA_HOME=/private/tmp/library-data-bead-CL-iye.8 uv run pytest tests/test_library_py_installers.py -x -q 2>&1 | tail -15",
+      "result": "102 passed in 4.01s"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 XDG_DATA_HOME=/private/tmp/library-data-bead-CL-iye.8 uv run pytest tests/test_validate_library.py tests/test_library_py_installers.py -q 2>&1 | tail -10",
+      "result": "123 passed in 6.95s"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "Cursor projection can now use the shared --harness cursor CLI value and harness_support.cursor gate.",
+    "OpenCode and Gemini harness support declarations are schema-valid and enforced by the shared gate when invoked through the normalized harness ID."
+  ],
+  "evidence_refs": [
+    "cmd:red-validate",
+    "cmd:red-installers",
+    "cmd:green-validate",
+    "cmd:green-installers",
+    "cmd:combined-suite"
+  ]
+}

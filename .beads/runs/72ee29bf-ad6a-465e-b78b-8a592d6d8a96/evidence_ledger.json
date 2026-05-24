@@ -1,0 +1,103 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-iye.8",
+  "commands": [
+    {
+      "id": "cmd:prime",
+      "command": "sed -n '1,220p' /Users/malte/.agents/skills/beads/SKILL.md && bd prime",
+      "purpose": "Load beads workflow context.",
+      "exit_code": 0,
+      "observed_result": "Beads skill and bd prime workflow context loaded."
+    },
+    {
+      "id": "cmd:inspect",
+      "command": "rg -n \"harness_support|--harness|_check_harness_support|mcp_server_entry|project_tooling_entry\" docs/schema/library.schema.json scripts/library.py tests/test_validate_library.py tests/test_library_py_installers.py docs/PRIMITIVES.md",
+      "purpose": "Locate schema, CLI, installer, tests, and docs surfaces.",
+      "exit_code": 0,
+      "observed_result": "Found expected harness_support schema definition, CLI choices, _check_harness_support, and existing tests/docs."
+    },
+    {
+      "id": "cmd:red-validate-initial-cache",
+      "command": "uv run pytest tests/test_validate_library.py -x -q 2>&1 | tail -15",
+      "purpose": "Run requested red validator test command.",
+      "exit_code": 0,
+      "observed_result": "uv could not initialize the home cache under sandbox permissions."
+    },
+    {
+      "id": "cmd:red-installers-initial-cache",
+      "command": "uv run pytest tests/test_library_py_installers.py -x -q 2>&1 | tail -15",
+      "purpose": "Run requested red installer test command.",
+      "exit_code": 0,
+      "observed_result": "uv could not initialize the home cache under sandbox permissions."
+    },
+    {
+      "id": "cmd:red-validate",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 uv run pytest tests/test_validate_library.py -x -q 2>&1 | tail -15",
+      "purpose": "Verify schema red test fails for the right reason.",
+      "exit_code": 0,
+      "observed_result": "Failed at test_schema_accepts_closed_harness_support_registry because cursor, gemini, and opencode were additional properties."
+    },
+    {
+      "id": "cmd:red-installers",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 uv run pytest tests/test_library_py_installers.py -x -q 2>&1 | tail -15",
+      "purpose": "Verify installer red test fails for the right reason.",
+      "exit_code": 0,
+      "observed_result": "Failed at cursor CLI test because argparse rejected --harness cursor as an invalid choice."
+    },
+    {
+      "id": "cmd:red-commit",
+      "command": "git add tests/test_validate_library.py tests/test_library_py_installers.py && git commit -m \"test(CL-iye.8): red - generalized harness policy\"",
+      "purpose": "Commit red tests.",
+      "exit_code": 0,
+      "observed_result": "Created commit c157c55."
+    },
+    {
+      "id": "cmd:green-validate",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 XDG_DATA_HOME=/private/tmp/library-data-bead-CL-iye.8 uv run pytest tests/test_validate_library.py -x -q 2>&1 | tail -15",
+      "purpose": "Verify validator tests pass after schema/docs/test updates.",
+      "exit_code": 0,
+      "observed_result": "21 passed in 2.33s."
+    },
+    {
+      "id": "cmd:green-installers",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 XDG_DATA_HOME=/private/tmp/library-data-bead-CL-iye.8 uv run pytest tests/test_library_py_installers.py -x -q 2>&1 | tail -15",
+      "purpose": "Verify installer tests pass after CLI/gate updates.",
+      "exit_code": 0,
+      "observed_result": "102 passed in 4.01s."
+    },
+    {
+      "id": "cmd:combined-suite",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8 XDG_DATA_HOME=/private/tmp/library-data-bead-CL-iye.8 uv run pytest tests/test_validate_library.py tests/test_library_py_installers.py -q 2>&1 | tail -10",
+      "purpose": "Run requested combined suite for changed test files.",
+      "exit_code": 0,
+      "observed_result": "123 passed in 6.95s."
+    },
+    {
+      "id": "cmd:green-commit",
+      "command": "git add docs/schema/library.schema.json scripts/library.py docs/PRIMITIVES.md tests/test_validate_library.py tests/test_library_py_installers.py && git commit -m \"feat(CL-iye.8): green - generalize harness support policy\"",
+      "purpose": "Commit production/docs/schema/test green changes.",
+      "exit_code": 0,
+      "observed_result": "Created commit 5f3ac37."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Default uv cache location",
+      "reason": "Sandbox blocked access to /Users/malte/.cache/uv, so verification commands were rerun with UV_CACHE_DIR=/private/tmp/uv-cache-bead-CL-iye.8."
+    },
+    {
+      "check": "Real user Library data home",
+      "reason": "Installer tests were run with XDG_DATA_HOME=/private/tmp/library-data-bead-CL-iye.8 to avoid mutating or cleaning /Users/malte/.local/share/library under sandboxed execution."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/72ee29bf-ad6a-465e-b78b-8a592d6d8a96/implementation_manifest.json",
+      "description": "Implementation manifest for CL-iye.8."
+    },
+    {
+      "path": ".beads/runs/72ee29bf-ad6a-465e-b78b-8a592d6d8a96/evidence_ledger.json",
+      "description": "Evidence ledger for CL-iye.8."
+    }
+  ]
+}
