@@ -2,6 +2,8 @@
 
 ### 🚀 Features
 
+- **CL-iye.2**: Add `cursor-impl.py` — Cursor Agent/Composer implementer adapter for bead workflow leaves. Headless dispatch via `cursor-agent --print --force --trust`, preflight checks (binary, auth, model availability), timeout+cleanup, CompletionReport JSON, and metrics recording. Implementer leaf only — not an orchestrator. Source in `cognovis-core/skills/beads/scripts/cursor-impl.py`.
+
 - *(fhir-sync-versions)* Register skill in library catalog
 
 ### 🐛 Bug Fixes
