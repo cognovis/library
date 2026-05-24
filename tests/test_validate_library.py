@@ -252,6 +252,99 @@ def test_schema_accepts_harness_support_and_runtime_requirements():
     )
 
 
+def test_schema_accepts_closed_harness_support_registry():
+    """Harness support accepts the closed set of known harness identifiers."""
+    entry = _base_skill_entry()
+    entry["metadata"] = {
+        "library": {
+            "harness_support": {
+                "claude_code": "supported",
+                "codex": "not-supported",
+                "cursor": "planned",
+                "opencode": "supported",
+                "gemini": "planned",
+            }
+        }
+    }
+
+    result = _run_validator(_make_library_yaml(entry))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_schema_rejects_unknown_harness_support_id():
+    """Harness support is a closed enum of known harness identifiers."""
+    entry = _base_skill_entry()
+    entry["metadata"] = {
+        "library": {
+            "harness_support": {
+                "pi": "planned",
+            }
+        }
+    }
+
+    result = _run_validator(_make_library_yaml(entry))
+
+    assert result.returncode == 1
+    assert "pi" in result.stdout + result.stderr
+
+
+def test_schema_rejects_invalid_harness_support_status():
+    """Harness support values are limited to supported, not-supported, and planned."""
+    entry = _base_skill_entry()
+    entry["metadata"] = {
+        "library": {
+            "harness_support": {
+                "cursor": "experimental",
+            }
+        }
+    }
+
+    result = _run_validator(_make_library_yaml(entry))
+
+    assert result.returncode == 1
+    assert "experimental" in result.stdout + result.stderr
+
+
+def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
+    """MCP and tooling planes do not carry metadata.library.harness_support."""
+    mcp_entry = {
+        "name": "example-mcp",
+        "description": "Example MCP server.",
+        "metadata": {
+            "library": {
+                "harness_support": {
+                    "cursor": "planned",
+                }
+            }
+        },
+    }
+    tooling_entry = {
+        "name": "example-tooling",
+        "description": "Example tooling entry.",
+        "target_kind": "file",
+        "target_path": ".example/config",
+        "source": "tooling/example",
+        "metadata": {
+            "library": {
+                "harness_support": {
+                    "cursor": "planned",
+                }
+            }
+        },
+    }
+
+    mcp_result = _run_validator(_make_library_yaml_with_entries({"mcp_servers": [mcp_entry]}))
+    tooling_result = _run_validator(
+        _make_library_yaml_with_entries({"project_tooling": [tooling_entry]})
+    )
+
+    assert mcp_result.returncode == 1
+    assert tooling_result.returncode == 1
+    assert "metadata" in mcp_result.stdout + mcp_result.stderr
+    assert "metadata" in tooling_result.stdout + tooling_result.stderr
+
+
 @pytest.mark.parametrize("tier_tag", ["tier:domain", "tier:project"])
 def test_tier_domain_and_project_entries_require_library_plane(tier_tag: str):
     """Domain and project tier entries must declare metadata.library.plane."""

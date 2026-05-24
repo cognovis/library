@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 LIBRARY_PY = SCRIPTS_DIR / "library.py"
+LIBRARY_SPEC = importlib.util.spec_from_file_location("library_cli", LIBRARY_PY)
+assert LIBRARY_SPEC is not None and LIBRARY_SPEC.loader is not None
+LIBRARY_MODULE = importlib.util.module_from_spec(LIBRARY_SPEC)
+LIBRARY_SPEC.loader.exec_module(LIBRARY_MODULE)
 
 # Minimal fixture library.yaml for tempdir tests
 FIXTURE_LIBRARY_YAML = """
@@ -245,6 +250,8 @@ library:
         library:
           harness_support:
             codex: not-supported
+            cursor: not-supported
+            opencode: not-supported
   standards:
     - name: unsupported-standard
       description: A standard unsupported in Codex
@@ -480,6 +487,55 @@ def test_use_refuses_unsupported_harness_across_primitive_types(
     data = json.loads(result.stdout)
     assert data["status"] == "error"
     assert "harness_support.codex: not-supported" in data["message"]
+
+
+@pytest.mark.parametrize("harness", ["cursor", "opencode"])
+def test_use_refuses_unsupported_harness_for_extended_cli_harnesses(
+    harness_support_project: Path,
+    harness: str,
+):
+    """use --harness refuses every accepted CLI harness marked not-supported."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            "skill",
+            "use",
+            "unsupported-skill",
+            "--harness",
+            harness,
+            "--dry-run",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(harness_support_project),
+    )
+
+    assert result.returncode != 0
+    assert result.stdout, result.stderr
+    data = json.loads(result.stdout)
+    assert data["status"] == "error"
+    assert f"harness_support.{harness}: not-supported" in data["message"]
+
+
+@pytest.mark.parametrize("harness", ["claude_code", "codex", "cursor", "opencode", "gemini"])
+def test_check_harness_support_enforces_closed_registry(harness: str):
+    """The harness support gate enforces not-supported for every known harness ID."""
+    entry = {
+        "metadata": {
+            "library": {
+                "harness_support": {
+                    harness: "not-supported",
+                }
+            }
+        }
+    }
+
+    message = LIBRARY_MODULE._check_harness_support(entry, harness)
+
+    assert message is not None
+    assert f"harness_support.{harness}: not-supported" in message
 
 
 # ---------------------------------------------------------------------------
