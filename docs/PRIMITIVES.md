@@ -136,6 +136,42 @@ Details: [Action Boundary Metadata](primitives/action-boundary.md).
 
 Details: [Plane And Projection Vocabulary](primitives/plane-vocabulary.md).
 
+### Catalog Entry Fields: Harness Support and Runtime Requirements
+
+Two optional fields apply to every catalog entry shape (`base_entry` and all
+primitive entry types):
+
+**`harness_support`** — per-harness install eligibility. Declare when a
+primitive works in some harnesses but not others. The installer refuses
+`--harness <h>` installs if the entry marks that harness `not-supported`.
+
+```yaml
+metadata:
+  library:
+    harness_support:
+      claude_code: supported      # or not-supported, planned
+      codex: not-supported
+```
+
+Keys are `claude_code` and `codex`. Omitting a key means "no explicit claim"
+(install proceeds). Use `planned` for harnesses where support is in progress.
+The install gate fires before dependency installs to prevent partial mutations.
+
+**`runtime_requirements`** — binary prerequisites for the primitive to function.
+Declare when the primitive requires CLI tools that may not be present on every
+machine. The doctor check enforces these at install time.
+
+```yaml
+runtime_requirements:
+  binaries:
+    - bun
+    - rg
+```
+
+**Plane enforcement.** Entries tagged `tier:domain` or `tier:project` must
+declare `metadata.library.plane`. `validate-library.py` fails validation if
+the field is absent. `tier:core` entries are exempt.
+
 ### 1. Skill
 
 Details: [Skill](primitives/skill.md).

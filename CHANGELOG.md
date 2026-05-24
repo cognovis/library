@@ -2,6 +2,17 @@
 
 ### 🚀 Features
 
+- *(schema)* Add `harness_support` and `runtime_requirements` as optional fields on all catalog entry shapes
+- *(schema)* Require `metadata.library.plane` on `tier:domain` and `tier:project` entries (enforced by schema conditional and `validate-library.py`)
+- *(installer)* Refuse `--harness <h>` installs when an entry declares `harness_support.<h>: not-supported` — check runs before any dependency installs to avoid partial mutations
+- *(forges)* All five forges (agent, hook, script, skill, standard) now ask harness-support and runtime-requirements questions during creation flow
+
+### 🐛 Bug Fixes
+
+- *(installer)* Move `lookup_entry` import to module level to avoid repeated local imports in `_resolve_default_scope`
+
+### Original Features
+
 - *(fhir-sync-versions)* Register skill in library catalog
 
 ### 🐛 Bug Fixes
