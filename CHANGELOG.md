@@ -2,6 +2,7 @@
 
 ### 🚀 Features
 
+- **CL-iye.2**: Add `cursor-impl.py` — Cursor Agent/Composer implementer adapter for bead workflow leaves. Headless dispatch via `cursor-agent --print --force --trust`, preflight checks (binary, auth, model availability), timeout+cleanup, CompletionReport JSON, and metrics recording. Implementer leaf only — not an orchestrator. Source in `cognovis-core/skills/beads/scripts/cursor-impl.py`.
 - *(CL-d7e)* Compatibility pre-install gate in `library.py` — catalog entries can declare a `compatibility` field (e.g. `claude_code>=4.0`); `library use` exits with code 4 and a clear error message when the current harness version does not satisfy the constraint. Entries without a `compatibility` field are unaffected. Version detection is best-effort: if the harness binary is absent or non-versioned, a warning is emitted and installation proceeds.
 - *(fhir-sync-versions)* Register skill in library catalog
 
