@@ -134,7 +134,21 @@ def install_simple_file(
             "path": str(lockfile_path),
             "details": f"upsert entry '{item_name}'",
         })
-        return dry_run_result(ops, summary=f"Would install {primitive_name} '{item_name}' to {install_target}")
+        return dry_run_result(
+            ops,
+            summary=f"Would install {primitive_name} '{item_name}' to {install_target}",
+            target_paths=[str(install_target)],
+            harness_routing=harness,
+            conflict_policy="overwrite",
+            lockfile_changes=[
+                {
+                    "path": str(lockfile_path),
+                    "operation": "upsert",
+                    "entry": item_name,
+                }
+            ],
+            requires_user_confirmation=False,
+        )
 
     # 5. Fetch source
     source_file, source_commit, temp_root = _fetch_file_source(parsed, item_name)

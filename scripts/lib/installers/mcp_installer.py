@@ -78,12 +78,15 @@ def install_mcp(
 
     # 2. Dry-run
     if dry_run:
+        harnesses = _selected_mcp_harnesses(entry, harness)
+        target_paths = [_mcp_config_path(repo_root, scope, selected) for selected in harnesses]
         ops = [
             {
                 "operation": "install_mcp_server",
-                "path": "~/.claude/settings.json",
-                "details": f"add '{mcp_name}' to mcpServers (harness={harness})",
+                "path": str(path),
+                "details": f"add '{mcp_name}' to MCP config (harness={selected})",
             }
+            for selected, path in zip(harnesses, target_paths)
         ]
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append({
@@ -91,7 +94,21 @@ def install_mcp(
             "path": str(lockfile_path),
             "details": f"upsert entry '{mcp_name}'",
         })
-        return dry_run_result(ops, summary=f"Would install MCP server '{mcp_name}' (harness={harness})")
+        return dry_run_result(
+            ops,
+            summary=f"Would install MCP server '{mcp_name}' (harness={harness})",
+            target_paths=[str(path) for path in target_paths],
+            harness_routing=harness,
+            conflict_policy="overwrite",
+            lockfile_changes=[
+                {
+                    "path": str(lockfile_path),
+                    "operation": "upsert",
+                    "entry": mcp_name,
+                }
+            ],
+            requires_user_confirmation=False,
+        )
 
     # 3. Load install-mcp.py module for its write helpers
     try:
@@ -200,6 +217,36 @@ def _resolve_source_commit(name: str, source: str | None) -> str:
         return "local"
 
     return remote_sha
+
+
+def _selected_mcp_harnesses(entry: dict, harness: str) -> list[str]:
+    """Return concrete MCP harnesses targeted by a dry-run request."""
+    if harness != "all":
+        return [harness]
+
+    mcp_block = ((entry.get("install") or {}).get("mcp") or {})
+    selected = [
+        candidate
+        for candidate in ["claude_code", "codex", "opencode"]
+        if mcp_block.get(candidate)
+    ]
+    return selected or ["claude_code"]
+
+
+def _mcp_config_path(repo_root: Path, scope: str, harness: str) -> Path:
+    """Return the harness config path a dry-run will report."""
+    if scope == "project":
+        if harness == "codex":
+            return repo_root / ".codex" / "config.toml"
+        if harness == "opencode":
+            return repo_root / ".config" / "opencode" / "opencode.json"
+        return repo_root / ".claude" / "settings.json"
+
+    if harness == "codex":
+        return Path.home() / ".codex" / "config.toml"
+    if harness == "opencode":
+        return Path.home() / ".config" / "opencode" / "opencode.json"
+    return Path.home() / ".claude" / "settings.json"
 
 
 def remove_mcp(

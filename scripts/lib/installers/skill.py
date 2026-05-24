@@ -152,6 +152,20 @@ def install_skill(
                 f"Would install skill '{skill_name}' to {canonical_dir}"
                 + (f" with bridge {bridge_dir}" if bridge_dir else "")
             ),
+            target_paths=[
+                str(canonical_dir),
+                *([str(bridge_dir)] if bridge_dir else []),
+            ],
+            harness_routing=None,
+            conflict_policy="overwrite",
+            lockfile_changes=[
+                {
+                    "path": str(lockfile_path),
+                    "operation": "upsert",
+                    "entry": skill_name,
+                }
+            ],
+            requires_user_confirmation=False,
         )
         result["data"] = {
             "name": skill_name,

@@ -8,6 +8,7 @@ table formatting.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Optional
 
 
@@ -35,15 +36,47 @@ def error_result(message: str, exit_code: int = 1) -> dict[str, Any]:
     }
 
 
-def dry_run_result(operations: list[dict[str, Any]], summary: str = "") -> dict[str, Any]:
+def dry_run_result(
+    operations: list[dict[str, Any]],
+    summary: str = "",
+    *,
+    target_paths: list[str | Path] | None = None,
+    harness_routing: str | None = None,
+    conflict_policy: str = "overwrite",
+    lockfile_changes: list[dict[str, Any]] | None = None,
+    requires_user_confirmation: bool = False,
+) -> dict[str, Any]:
     """Build a dry-run result envelope."""
+    normalized_targets = [str(path) for path in (target_paths or [])]
+    _annotate_existing_targets(operations, normalized_targets)
     result: dict[str, Any] = {
         "status": "dry-run",
         "operations": operations,
+        "summary": summary,
+        "target_paths": normalized_targets,
+        "harness_routing": harness_routing,
+        "conflict_policy": conflict_policy,
+        "lockfile_changes": lockfile_changes or [],
+        "requires_user_confirmation": requires_user_confirmation,
     }
-    if summary:
-        result["summary"] = summary
     return result
+
+
+def _annotate_existing_targets(
+    operations: list[dict[str, Any]],
+    target_paths: list[str],
+) -> None:
+    """Mark dry-run operations whose planned target already exists."""
+    target_set = set(target_paths)
+    for operation in operations:
+        path = operation.get("path")
+        if not isinstance(path, str) or path not in target_set:
+            continue
+        if Path(path).expanduser().exists():
+            operation["existing_target"] = True
+            details = operation.get("details", "")
+            suffix = "existing target detected; conflict_policy=overwrite"
+            operation["details"] = f"{details}; {suffix}" if details else suffix
 
 
 def blocked_result(reason: str, suggestion: str = "") -> dict[str, Any]:

@@ -69,19 +69,41 @@ def install_guardrail(
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
 
     if dry_run:
+        harnesses = _selected_guardrail_harnesses(harness)
+        target_paths = [
+            _guardrail_config_path(repo_root, scope, selected)
+            for selected in harnesses
+        ]
         ops = [
             {
                 "operation": "install_guardrail",
-                "path": "~/.claude/settings.json",
-                "details": f"install guardrail '{guardrail_name}' hooks (harness={harness})",
-            },
+                "path": str(path),
+                "details": f"install guardrail '{guardrail_name}' hooks (harness={selected})",
+            }
+            for selected, path in zip(harnesses, target_paths)
+        ]
+        ops.append(
             {
                 "operation": "write_lockfile",
                 "path": str(lockfile_path),
                 "details": f"upsert entry '{guardrail_name}'",
-            },
-        ]
-        return dry_run_result(ops, summary=f"Would install guardrail '{guardrail_name}'")
+            }
+        )
+        return dry_run_result(
+            ops,
+            summary=f"Would install guardrail '{guardrail_name}'",
+            target_paths=[str(path) for path in target_paths],
+            harness_routing=harness,
+            conflict_policy="overwrite",
+            lockfile_changes=[
+                {
+                    "path": str(lockfile_path),
+                    "operation": "upsert",
+                    "entry": guardrail_name,
+                }
+            ],
+            requires_user_confirmation=False,
+        )
 
     # 2. Import and invoke install-hook.py
     try:
@@ -171,10 +193,29 @@ def remove_guardrail(
         pass
 
     lock_data = load_lockfile(lockfile_path)
-        remove_entry(lock_data, guardrail_name, primitive_type="guardrail")
+    remove_entry(lock_data, guardrail_name, primitive_type="guardrail")
     save_lockfile(lockfile_path, lock_data)
 
     return success(
         data={"name": guardrail_name},
         message=f"Guardrail '{guardrail_name}' removed.",
     )
+
+
+def _selected_guardrail_harnesses(harness: str) -> list[str]:
+    """Return concrete guardrail harnesses targeted by a dry-run request."""
+    if harness == "all":
+        return ["claude_code", "codex"]
+    return [harness]
+
+
+def _guardrail_config_path(repo_root: Path, scope: str, harness: str) -> Path:
+    """Return the harness config path a guardrail dry-run will report."""
+    if scope == "project":
+        if harness == "codex":
+            return repo_root / ".codex" / "hooks.json"
+        return repo_root / ".claude" / "settings.json"
+
+    if harness == "codex":
+        return Path.home() / ".codex" / "hooks.json"
+    return Path.home() / ".claude" / "settings.json"

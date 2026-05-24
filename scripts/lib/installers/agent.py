@@ -142,6 +142,17 @@ def install_agent(
             ops,
             summary=f"Would install agent '{agent_name}' to "
                     + ", ".join(str(t["install_target"]) for t in targets),
+            target_paths=[str(t["install_target"]) for t in targets],
+            harness_routing=harness,
+            conflict_policy="overwrite",
+            lockfile_changes=[
+                {
+                    "path": str(lockfile_path),
+                    "operation": "upsert",
+                    "entry": agent_name,
+                }
+            ],
+            requires_user_confirmation=False,
         )
         if harness_missing:
             result["harness_missing"] = harness_missing
