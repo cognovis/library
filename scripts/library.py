@@ -540,6 +540,23 @@ def _install_with_deps(
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
 
+    # Pre-flight compatibility check for the requested entry (not its deps).
+    # Run before any dep installation begins so the gate fires before side effects.
+    try:
+        from lib.catalog import lookup_entry
+        from lib.compat import check_compatibility_gate, CompatibilityError
+        try:
+            _main_entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+        except LibraryError:
+            _main_entry = {}
+        check_compatibility_gate(_main_entry, harness)
+    except CompatibilityError as _compat_exc:
+        if use_json:
+            print_json(error_result(str(_compat_exc), _compat_exc.exit_code))
+        else:
+            print(f"Error: {_compat_exc}", file=sys.stderr)
+        return _compat_exc.exit_code
+
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
         # Already-installed handling. is_already_installed() only checks
