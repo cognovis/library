@@ -3,7 +3,7 @@
 test_personal_migration.py — Tests for CL-4mt: personal artefacts in sussdorff/library-core
 
 Tests:
-  1. All 12 personal skills exist at correct skeleton paths in sussdorff/library-core
+  1. All current cataloged personal skills exist at their source paths in sussdorff/library-core
   2. Each SKILL.md has frontmatter with description: field
   3. mm-cli smoke: SKILL.md accessible and has correct frontmatter (installable)
   4. home-infra smoke: SKILL.md accessible and has correct frontmatter (installable)
@@ -17,28 +17,32 @@ import base64
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+import yaml
 
 REPO = "sussdorff/library-core"
-
-# All current personal skills: (path_in_repo, display_name)
-EXPECTED_SKILL_FILES = [
-    ("skills/business/ai-readiness/SKILL.md", "ai-readiness"),
-    ("skills/business/amazon/SKILL.md", "amazon"),
-    ("skills/business/career-check/SKILL.md", "career-check"),
-    ("skills/business/google-invoice/SKILL.md", "google-invoice"),
-    ("skills/business/mm-cli/SKILL.md", "mm-cli"),
-    ("skills/content/linkedin/SKILL.md", "linkedin"),
-    ("skills/content/transcribe/SKILL.md", "transcribe"),
-    ("skills/infra/hetzner-cloud/SKILL.md", "hetzner-cloud"),
-    ("skills/infra/home-infra/SKILL.md", "home-infra"),
-    ("skills/infra/local-vm/SKILL.md", "local-vm"),
-    ("skills/infra/paperless-cli/SKILL.md", "paperless-cli"),
-    ("skills/infra/piler-cli/SKILL.md", "piler-cli"),
-]
+REPO_ROOT = Path(__file__).resolve().parent.parent
+LIBRARY_YAML = REPO_ROOT / "library.yaml"
 
 MIGRATION_COMMIT_PREFIX = "feat(CL-4mt):"
+SOURCE_PREFIX = f"https://github.com/{REPO}/blob/main/"
+
+
+def expected_skill_files() -> list[tuple[str, str]]:
+    """Return current sussdorff/library-core skill paths from library.yaml."""
+    catalog = yaml.safe_load(LIBRARY_YAML.read_text(encoding="utf-8")) or {}
+    skills = catalog.get("library", {}).get("skills", [])
+    expected: list[tuple[str, str]] = []
+    for entry in skills:
+        source = entry.get("source", "")
+        if not source.startswith(SOURCE_PREFIX):
+            continue
+        path = source.removeprefix(SOURCE_PREFIX)
+        if path.startswith("skills/") and path.endswith("/SKILL.md"):
+            expected.append((path, entry["name"]))
+    return sorted(expected)
 
 
 def gh_api(path: str) -> dict:
@@ -76,9 +80,9 @@ def get_frontmatter(content: str) -> str:
 
 
 class TestAllArtefactsExist:
-    """Test 1: All PERSONAL skills exist at correct skeleton paths."""
+    """Test 1: All PERSONAL skills exist at current catalog source paths."""
 
-    @pytest.mark.parametrize("path,name", EXPECTED_SKILL_FILES)
+    @pytest.mark.parametrize("path,name", expected_skill_files())
     def test_skill_file_exists(self, path, name):
         """Each SKILL.md must be accessible via gh api."""
         data = gh_api(path)
@@ -89,7 +93,7 @@ class TestAllArtefactsExist:
 class TestFrontmatterPreserved:
     """Test 2: Each SKILL.md has frontmatter with description: field."""
 
-    @pytest.mark.parametrize("path,name", EXPECTED_SKILL_FILES)
+    @pytest.mark.parametrize("path,name", expected_skill_files())
     def test_skill_has_description(self, path, name):
         """Each skill file must have description: in its YAML frontmatter block."""
         data = gh_api(path)
@@ -111,7 +115,7 @@ class TestSmokeInstallable:
 
     def test_mm_cli_smoke(self):
         """mm-cli SKILL.md must be accessible and have name: + description: in frontmatter."""
-        path = "skills/business/mm-cli/SKILL.md"
+        path = "skills/mm-cli/SKILL.md"
         data = gh_api(path)
         content = decode_content(data)
         frontmatter = get_frontmatter(content)
@@ -123,7 +127,7 @@ class TestSmokeInstallable:
 
     def test_home_infra_smoke(self):
         """home-infra SKILL.md must be accessible and have name: + description: in frontmatter."""
-        path = "skills/infra/home-infra/SKILL.md"
+        path = "skills/home-infra/SKILL.md"
         data = gh_api(path)
         content = decode_content(data)
         frontmatter = get_frontmatter(content)
@@ -147,7 +151,7 @@ class TestSmokeInstallable:
             f"gh repo clone failed: {result.stderr.strip()}"
         )
         # Simulate install: copy skill directory to target (mirrors what /library use does)
-        skill_src = src_dir / "skills" / "business" / "mm-cli"
+        skill_src = src_dir / "skills" / "mm-cli"
         skill_dst = tmp_path / "installed-skills" / "mm-cli"
         assert skill_src.exists(), f"mm-cli skill not found at {skill_src}"
         shutil.copytree(str(skill_src), str(skill_dst))
@@ -176,7 +180,7 @@ class TestSmokeInstallable:
             f"gh repo clone failed: {result.stderr.strip()}"
         )
         # Simulate install: copy skill directory to target (mirrors what /library use does)
-        skill_src = src_dir / "skills" / "infra" / "home-infra"
+        skill_src = src_dir / "skills" / "home-infra"
         skill_dst = tmp_path / "installed-skills" / "home-infra"
         assert skill_src.exists(), f"home-infra skill not found at {skill_src}"
         shutil.copytree(str(skill_src), str(skill_dst))
