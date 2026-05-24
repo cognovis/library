@@ -73,6 +73,12 @@ state stay outside git.
 | .codex/standards/ | Domain standards for Codex sessions |
 | .codex/hooks/ | Project-specific Codex hooks |
 
+**MUST NOT be committed:**
+
+Codex stores credentials user-global in `~/.codex/auth.json`. There is no documented
+project-local secret file for Codex today — no gitignore entries required for credentials.
+
+
 ### .cursor/ (Cursor, future)
 
 Reserved. As Cursor becomes a first-class harness, apply the same pattern:
