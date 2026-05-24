@@ -109,7 +109,7 @@
             "message": "fix(CL-w5d): address cold review advisory findings F1 and F2"
         },
         {
-            "sha": "<pending>",
+            "sha": "dc7b82a",
             "message": "fix(CL-w5d): address codex adversarial findings"
         }
     ],
