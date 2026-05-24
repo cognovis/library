@@ -125,5 +125,7 @@ Agent with Codex routing:
 Simple-file primitives (`prompt`, `script`, `model-standard`, `agent-base`) use the same envelope with
 their resolved single target file in `target_paths`.
 
-MCP and guardrail installers use harness config files as targets. For project scope they report project-local
-config paths such as `/repo/.claude/settings.json`, `/repo/.codex/config.toml`, or `/repo/.codex/hooks.json`.
+MCP and guardrail installers use global harness config files as targets. They always report the global
+paths regardless of `--scope project` or `--target-project`, because the underlying install helpers
+(`install-mcp.py`, `install-hook.py`) write to global harness config only. Env-var overrides are honored:
+`CLAUDE_SETTINGS_FILE`, `CODEX_CONFIG_FILE`, `CODEX_HOOKS_FILE`, `OPENCODE_CONFIG_FILE`.
