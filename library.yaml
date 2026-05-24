@@ -2341,6 +2341,25 @@ library:
         - tier:domain
         - category:standard
         - workflow:triage
+    - name: seed-data-parity
+      description: >-
+        Seed / demo data parity rule and taxonomy. Defines the three Trigger Indicators
+        (live-system dependency, integration-test change, adapter/seed touch) and scoping
+        rules for checking whether a bead's changes require seed data updates.
+        Projects extend via project overlay at $REPO_ROOT/.agents/standards/seed-data-parity.md
+        and machine-readable config at seed-data-parity.yml.
+      source: https://github.com/cognovis/library-core/blob/main/standards/workflow/seed-data-parity.md
+      tier: domain
+      default_scope: project
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - workflow:beads
     - name: no-emoji
       description: >-
         Do not add emojis to source code files, configuration files, or technical documentation.
