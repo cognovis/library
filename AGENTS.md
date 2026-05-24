@@ -38,6 +38,7 @@ separate from the target catalog or project where content is installed.
 | How does `library.yaml` / lockfile work? | `docs/lockfile-format.md` | — |
 | Tooling (chezmoi, install scripts, etc.) | `docs/project-tooling.md`, `docs/chezmoi-externals.md` | — |
 | How standards dependencies work | `docs/PRIMITIVES.md` | `### 7. Standard` |
+| What to commit in `.claude/` / `.agents/` / `.codex/` for a collaboration project | `docs/harness-baseline.md` | Baseline Checklist |
 | Beads workflow (issue tracking, session-close protocol) | `bd prime` | run the command — single source of truth |
 
 **Rule of thumb:** if a question is about a *primitive's behavior or portability*,
