@@ -38,6 +38,8 @@ a script is first-class, bundled, repo-local, or product-owned.
 | Dev-plane or product-plane? | A script that ships as product runtime code is a product-plane artifact, not a Library script. Refuse Library cataloging and redirect to a product repo bead. |
 | Product counterpart? | A dev-plane validator/exporter that supports Mira, Polaris, FHIR, or another product artifact should record `repo`, `path`, `name`, `primitive_type`, and `notes`. Put bead or ADR references in `notes`. |
 | Repo-local escape hatch? | Keep scripts local when they bake in one repo's filesystem, ADR IDs, credentials, generated paths, or deployment topology. |
+| Harness support? | Ask whether the script works in all harnesses or is harness-specific. For one-harness scripts, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
+| Runtime requirements? | Ask whether the script requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
 | Deterministic route? | Scripts are the destination for deterministic parsing, scanning, validation, export, and transformation logic; wrap them with skills, hooks, agents, standards, or Gas City surfaces only when a caller needs them. |
 | Gas City projection? | PackV2 command, doctor, formula, or asset metadata is catalog metadata; the Python source remains a Library or repo-local script. |
 

@@ -214,6 +214,72 @@ def dry_run_contract_project(tmp_path: Path) -> Path:
     return project
 
 
+@pytest.fixture
+def harness_support_project(tmp_path: Path, fixture_skill_dir: Path, fixture_standard_file: Path) -> Path:
+    """Create a project with unsupported Codex entries across primitive types."""
+    proj = tmp_path / "harness-support-project"
+    proj.mkdir()
+    prompt_file = tmp_path / "unsupported-prompt.md"
+    prompt_file.write_text("# Unsupported Prompt\n")
+    script_file = tmp_path / "unsupported-script.py"
+    script_file.write_text("print('unsupported script')\n")
+
+    yaml_content = f"""
+default_dirs:
+  skills:
+    - default: .agents/skills/
+    - claude_bridge: .claude/skills/
+  standards:
+    - default: .agents/standards/
+  prompts:
+    - default: .claude/commands/
+  scripts:
+    - default: .agents/scripts/
+
+library:
+  skills:
+    - name: unsupported-skill
+      description: A skill unsupported in Codex
+      source: {fixture_skill_dir / "SKILL.md"}
+      metadata:
+        library:
+          harness_support:
+            codex: not-supported
+  standards:
+    - name: unsupported-standard
+      description: A standard unsupported in Codex
+      source: {fixture_standard_file}
+      metadata:
+        library:
+          harness_support:
+            codex: not-supported
+  prompts:
+    - name: unsupported-prompt
+      description: A prompt unsupported in Codex
+      source: {prompt_file}
+      metadata:
+        library:
+          harness_support:
+            codex: not-supported
+  scripts:
+    - name: unsupported-script
+      description: A script unsupported in Codex
+      source: {script_file}
+      metadata:
+        library:
+          harness_support:
+            codex: not-supported
+  agents: []
+
+marketplaces: []
+guardrails: []
+mcp_servers: []
+model_standards: []
+"""
+    (proj / "library.yaml").write_text(yaml_content)
+    return proj
+
+
 def run_library_json(project: Path, *args: str) -> dict:
     """Run library.py in a project and return parsed JSON output."""
     result = subprocess.run(
@@ -376,6 +442,44 @@ class TestDryRunContractUniformity:
         assert data["conflict_policy"] == "overwrite"
         assert str(existing_target) in data["target_paths"]
         assert any(op.get("existing_target") is True for op in data["operations"])
+
+
+@pytest.mark.parametrize(
+    ("primitive", "name"),
+    [
+        ("skill", "unsupported-skill"),
+        ("standard", "unsupported-standard"),
+        ("prompt", "unsupported-prompt"),
+        ("script", "unsupported-script"),
+    ],
+)
+def test_use_refuses_unsupported_harness_across_primitive_types(
+    harness_support_project: Path,
+    primitive: str,
+    name: str,
+):
+    """use --harness codex refuses entries marked harness_support.codex: not-supported."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            primitive,
+            "use",
+            name,
+            "--harness",
+            "codex",
+            "--dry-run",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(harness_support_project),
+    )
+
+    assert result.returncode != 0
+    data = json.loads(result.stdout)
+    assert data["status"] == "error"
+    assert "harness_support.codex: not-supported" in data["message"]
 
 
 # ---------------------------------------------------------------------------

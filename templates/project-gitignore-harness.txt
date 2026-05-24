@@ -1,0 +1,11 @@
+# Claude Code harness - runtime and secret-bearing files
+.claude/settings.local.json
+.claude/worktrees/
+.claude/anatomy.json
+.claude/buglog.json
+
+# Beads workflow - generated runtime artifacts
+.beads/runs/
+
+# Cross-harness skills cache
+.agents/skills/*/cache/

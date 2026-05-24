@@ -50,6 +50,8 @@ gate and before installation or catalog snippets.
 | Dev-plane or product-plane? | Hooks that control Claude/Codex developer harness behavior are dev-plane. Runtime product interceptors, background jobs, or app middleware are product-plane and must stay in the product repo. |
 | Product counterpart? | A dev hook that protects or validates a product workflow can reference `repo`, `path`, `name`, `primitive_type`, and `notes` as `metadata.library.product_counterpart`. Put bead or ADR references in `notes`. |
 | Repo-local escape hatch? | Keep hooks local when matchers, paths, settings, or environment assumptions are repo-specific. Promote only reusable detection logic or generic lifecycle wiring. |
+| Harness support? | Ask whether the hook works in all harnesses or is harness-specific. For one-harness hooks, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
+| Runtime requirements? | Ask whether the hook requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
 | Deterministic script route? | Reusable detection or validation logic belongs in a Python script; the hook should be the lifecycle binding around it. Use `script-forge` for shared or pack-exported logic. |
 | Gas City projection? | A hook may project to provider hook wiring, command, or doctor surfaces; projection metadata belongs in `library.yaml`, not hook code. |
 
