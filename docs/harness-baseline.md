@@ -66,11 +66,16 @@ state stay outside git.
 
 **MUST be committed:**
 
+| File/Dir | Purpose | Notes |
+|---|---|---|
+| .codex/agents/ | Project-specific Codex agent definitions | Required for project-level agent access |
+
+**OPTIONAL but useful:**
+
 | File/Dir | Purpose |
 |---|---|
-| .codex/agents/ | Project-specific Codex agent definitions |
 | .codex/commands/ | Project-specific Codex slash commands |
-| .codex/standards/ | Domain standards for Codex sessions |
+| .codex/standards/ | Codex-specific domain standards (if different from .agents/standards/) |
 | .codex/hooks/ | Project-specific Codex hooks |
 
 **MUST NOT be committed:**
@@ -157,6 +162,7 @@ Audit result, verified on 2026-05-24:
 | .claude/worktrees/ gitignored | PASS | `.claude/worktrees/` in `.gitignore` |
 | .agents/ | PASS | `orchestrator-config.yml`, scripts, standards, and skills tracked |
 | .codex/agents/ | PASS | Codex agents tracked |
+| .codex/commands/, .codex/standards/, .codex/hooks/ | N/A | Optional directories; mira does not require them — project cross-harness standards live in `.agents/standards/` |
 | anatomy.json gitignored | PASS | `.claude/anatomy.json` in `.gitignore` |
 | buglog.json gitignored | PASS | `.claude/buglog.json` in `.gitignore` |
 
