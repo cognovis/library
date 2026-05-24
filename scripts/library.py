@@ -515,6 +515,22 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     else:
         scope = _resolve_default_scope(catalog, primitive, name)
 
+    # Guard: check harness_support on the main entry BEFORE installing any dependencies.
+    # This prevents partial mutations (dep installs) when the requested entry itself
+    # does not support the target harness.
+    if harness not in ("all", None):
+        try:
+            _main_entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+            _harness_error = _check_harness_support(_main_entry, harness)
+            if _harness_error:
+                if use_json:
+                    print_json(error_result(_harness_error))
+                else:
+                    print(f"Error: {_harness_error}", file=sys.stderr)
+                return EXIT_FAILURE
+        except Exception:
+            pass  # lookup failures are handled downstream
+
     # Resolve transitive dependencies before installing
     if not dry_run:
         exit_code = _install_with_deps(
