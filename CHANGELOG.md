@@ -2,6 +2,7 @@
 
 ### 🚀 Features
 
+- *(CL-d7e)* Compatibility pre-install gate in `library.py` — catalog entries can declare a `compatibility` field (e.g. `claude_code>=4.0`); `library use` exits with code 4 and a clear error message when the current harness version does not satisfy the constraint. Entries without a `compatibility` field are unaffected. Version detection is best-effort: if the harness binary is absent or non-versioned, a warning is emitted and installation proceeds.
 - *(fhir-sync-versions)* Register skill in library catalog
 
 ### 🐛 Bug Fixes
