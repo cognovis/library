@@ -14,7 +14,6 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-import warnings
 from typing import Tuple, Optional
 
 from .errors import EXIT_DEPENDENCY_MISSING, LibraryError
