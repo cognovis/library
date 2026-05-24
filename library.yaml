@@ -1838,17 +1838,6 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
-    - name: chrome-devtools-tester
-      description: >-
-        Execute browser tests using agent-browser CLI - UI testing, form interaction, visual verification. Use after writing browser test code or when troubleshooting browser-based tests.
-      source: https://github.com/cognovis/library-core/blob/main/agents/chrome-devtools-tester.md
-      tags:
-        - origin:original
-        - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
     - name: ci-monitor
       description: >-
         Watches GitHub Actions CI pipeline for a specific pushed commit. Spawned by session-close after git push. Blocks silently until pipeline completes. Handles parallel session-closes by filtering on commit SHA. Returns a single structured verdict line — no polling noise visible in the caller.

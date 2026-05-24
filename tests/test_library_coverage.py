@@ -85,7 +85,7 @@ EXPECTED_SUSSDORFF_SKILLS = {
 
 # Expected cognovis agents
 EXPECTED_COGNOVIS_AGENTS = {
-    "bead-orchestrator", "chrome-devtools-tester", "ci-monitor", "constraint-checker",
+    "bead-orchestrator", "ci-monitor", "constraint-checker",
     "doc-changelog-updater", "feature-doc-updater", "holdout-validator", "implementer",
     "integration-test-runner", "learning-extractor", "pester-test-engineer",
     "plan-reviewer", "playwright-tester", "prd-generator", "quick-fix", "researcher",

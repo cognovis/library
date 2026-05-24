@@ -187,8 +187,8 @@ def test_catalog_sync_uses_agent_file_stem_over_frontmatter_name(tmp_path: Path)
     source_root = tmp_path / "source"
     agent_dir = source_root / "agents"
     agent_dir.mkdir(parents=True)
-    (agent_dir / "chrome-devtools-tester.md").write_text(
-        "---\nname: browser-tester\ndescription: Browser testing agent.\n---\n# Browser Tester\n"
+    (agent_dir / "playwright-tester.md").write_text(
+        "---\nname: frontmatter-agent\ndescription: Playwright testing agent.\n---\n# Playwright Tester\n"
     )
     catalog = minimal_library(source_root).replace(
         "        - standards\n        - skills\n",
@@ -207,7 +207,7 @@ def test_catalog_sync_uses_agent_file_stem_over_frontmatter_name(tmp_path: Path)
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
 
-    assert data["entries"][0]["name"] == "chrome-devtools-tester"
+    assert data["entries"][0]["name"] == "playwright-tester"
 
 
 def test_catalog_sync_scans_legacy_agent_base_source_directory(tmp_path: Path) -> None:
