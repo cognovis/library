@@ -1,0 +1,31 @@
+version: 1
+consumers:
+  - name: polaris
+    root: ~/code/polaris
+    library_entries:
+      - primitive: standard
+        name: seed-data-parity
+        scope: project
+        harness: all
+    managed_files:
+      - source: ~/code/library/cognovis-core/scripts/refinement/check-seed-data-parity.py
+        target: scripts/refinement/check-seed-data-parity.py
+        mode: "0755"
+      - source: ~/code/library/cognovis-core/scripts/refinement/bead_status.py
+        target: scripts/refinement/bead_status.py
+        mode: "0644"
+
+  - name: mira
+    root: ~/code/mira
+    library_entries:
+      - primitive: standard
+        name: seed-data-parity
+        scope: project
+        harness: all
+    managed_files:
+      - source: ~/code/library/cognovis-core/scripts/refinement/check-seed-data-parity.py
+        target: scripts/refinement/check-seed-data-parity.py
+        mode: "0755"
+      - source: ~/code/library/cognovis-core/scripts/refinement/bead_status.py
+        target: scripts/refinement/bead_status.py
+        mode: "0644"
