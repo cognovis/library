@@ -1,7 +1,7 @@
 # Agentic Primitives Glossary
 
 > v0 — source of truth for primitive definitions used across the cognovis-library multi-harness stack.
-> Last updated: 2026-05-14
+> Last updated: 2026-05-24
 >
 > **Claim labeling convention**: Every per-harness behavioral claim is labeled
 > **NORMATIVE** (verified against vendor docs / confirmed behavior) or
@@ -14,10 +14,15 @@
 Use this tree to decide which primitive a new capability belongs in.
 
 ```
-Is the capability purely deterministic logic (>50 lines)?
+Is the capability purely deterministic logic (>50 lines) that runs NO model?
  └─ YES → SCRIPT (Python-only deterministic helper). Wrap the script in a Skill,
            Command, Hook, Agent, or Gas City pack surface if the model/runtime
            needs to call it.
+ └─ NO  → Continue below.
+
+Is it a fixed-shape orchestration of multiple subagents — deterministic control
+flow that spawns fresh-context agents, the same shape every run, worth resuming?
+ └─ YES → WORKFLOW (deterministic spine + model leaves — see primitives/workflow.md)
  └─ NO  → Continue below.
 
 Should the model auto-pick this up from context?
@@ -107,6 +112,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 10 | [Model-Standard](primitives/model-standard.md) | partial — concept portable, mechanism per-harness | yes | yes | partial | unverified | unverified | details |
 | 11 | [Agent Base (Agent Base Prompt)](primitives/agent-base.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition into agent system prompt | install-time composition into agent system prompt | partial | unverified | unverified | details |
 | 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
+| 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | n/a | details |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
@@ -182,6 +188,14 @@ Details: [System-Prompt](primitives/system-prompt.md). The **orchestrator**-leve
 system prompt + built-in tool set that `cld` / `cdx` loads at top-level session
 start. Distinct from the agent system prompt (see #3, #10, #11). Subagents do
 not inherit it.
+
+### 13. Workflow
+
+Details: [Workflow](primitives/workflow.md). A deterministic orchestration spec
+(Anthropic Workflow JS API) whose control flow runs as code and whose leaves
+spawn fresh-context model subagents. Distinct from **script** (#9 — runs no
+model) and **agent** (#3 — a single context window, not control flow over many).
+Established by [ADR-0006](adr/workflow-primitive.md).
 
 
 ## Precedence and Name Collision Policy

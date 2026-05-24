@@ -4,8 +4,8 @@ This repo (`cognovis/library`) is a fork of [`disler/the-library`](https://githu
 
 ## Goal
 
-One **catalog** (this repo) that distributes skills/agents/prompts/hooks across
-**multiple harnesses** (Claude Code, OpenAI Codex CLI, future: Pi) via a
+One **catalog** (this repo) that distributes skills/agents/prompts/hooks/workflows
+across **multiple harnesses** (Claude Code, OpenAI Codex CLI, future: Pi) via a
 **per-repo on-demand pull** model — not deploy-all.
 
 ## The 4-layer Agentic Stack

@@ -28,11 +28,22 @@ Library-managed dependencies (`Standard`, `MCP-Server`, `Model-Standard`,
 `Plugin`, and `Marketplace`) are not invocation primitives. They configure or
 distribute the four invocation primitives above.
 
+`Workflow` is a distinct **orchestration** primitive: a deterministic spec whose
+control flow runs as code and whose leaves spawn fresh-context agents. It is
+neither an invocation primitive (the model does not auto-pick it, the user does
+not `/`-invoke it) nor a dependency — it orchestrates agents. See
+`docs/PRIMITIVES.md` #13 and ADR-0006.
+
 ## Quick Decision Tree
 
 ```text
-Is the work more than 50 lines of deterministic logic?
+Is the work more than 50 lines of deterministic logic that runs no model?
   YES -> script (in scripts/), wrapped in a skill if the model must call it
+  NO  -> continue
+
+Is it a fixed-shape orchestration of multiple subagents (deterministic control
+flow that spawns fresh-context agents, same shape every run, resumable)?
+  YES -> WORKFLOW (deterministic spine + model leaves; see PRIMITIVES.md #13)
   NO  -> continue
 
 Should the model auto-pick it from context?
@@ -79,6 +90,13 @@ Boundary call: a single tool call, grep, or lookup is never C2. Context budget
 alone does not justify a fresh window for one read. Combine C2 with at least one
 of C1, C3, C4, C5, C6, or C7 for a defensible agent.
 
+Workflow boundary on C6: multi-phase orchestration routes to an **agent** only
+when the orchestration itself needs model reasoning to pick the next step. When
+the multi-phase shape is **fixed, deterministic, and worth resuming**, it belongs
+in a **workflow** (PRIMITIVES.md #13) whose spine runs as code — not an agent
+holding the procedure in prose. C3 (parallel fan-out) is likewise a workflow
+signal when the fan-out shape is fixed.
+
 ## Judge Specialization
 
 A judge is an agent specialization that evaluates a structured Action Proposal
@@ -118,6 +136,22 @@ when:
 Standards are not imperative workflows. If the draft starts with "Step 1, then
 Step 2", it is a skill, not a standard.
 
+## Workflow Justification
+
+Workflows are deterministic orchestration, not model-chosen procedure. Choose a
+workflow when all of these hold:
+
+- the work is parallel or multi-stage in a **fixed shape**, the same every run;
+- you want the orchestration **deterministic and resumable** (it cannot skip a
+  gate, and a crashed run resumes from where it died);
+- isolating each step in its own **fresh context window** is an advantage.
+
+If the model must decide the next step at run time, that reasoning belongs in an
+agent or skill — a workflow's spine runs as code and cannot reason. If there is
+no fan-out and no multi-stage shape, a single agent is lighter. See ADR-0006 and
+`docs/primitives/workflow.md` for the spec format and the inert-spine /
+scoped-leaves security model.
+
 ## Counter-Examples
 
 | Anti-pattern | Why wrong | Right primitive |
@@ -130,6 +164,7 @@ Step 2", it is a skill, not a standard.
 | Use a skill for security enforcement | Model can choose to ignore a skill | Hook |
 | Use a hook for `/install-playwright` | Hooks are non-interactive; installs are explicit acts | Command |
 | Spawn an agent just to use a stronger model for one prompt | C5 alone is rarely enough | Inline call, or a skill that documents when to switch |
+| Encode a fixed multi-phase pipeline as a long prose agent | The shape is deterministic; prose drifts under context pressure and cannot resume | Workflow (deterministic spine + scoped leaves) |
 
 ## Forge Self-Correction Pattern
 
