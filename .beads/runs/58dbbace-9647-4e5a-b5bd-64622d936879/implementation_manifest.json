@@ -103,6 +103,10 @@
         {
             "sha": "846b056",
             "message": "feat(CL-w5d): green - uniform dry-run contract"
+        },
+        {
+            "sha": "<filled-after-commit>",
+            "message": "fix(CL-w5d): address cold review advisory findings F1 and F2"
         }
     ],
     "tests": [
@@ -120,6 +124,14 @@
         {
             "description": "Fixed an existing indentation error in scripts/lib/installers/guardrail_installer.py because guardrail dry-run import failed before AC2 and AC3 behavior could execute.",
             "reason": "Required to verify and satisfy guardrail dry-run contract coverage."
+        },
+        {
+            "description": "Cold review advisory F1: threaded conflict_policy parameter into _annotate_existing_targets in scripts/lib/output.py so the dry-run operation suffix renders the actual policy instead of a hardcoded 'overwrite' literal.",
+            "reason": "Addresses cold review advisory finding F1 — prevents misleading suffix when an installer adopts a non-overwrite policy."
+        },
+        {
+            "description": "Cold review advisory F2: extended the harness_routing JSON Schema enum in docs/schema/dry-run-contract.md to include 'opencode' alongside claude_code, codex, all, and null.",
+            "reason": "Addresses cold review advisory finding F2 — schema now matches the harness values supported by agent.py and mcp_installer.py."
         }
     ],
     "downstream_impacts": [

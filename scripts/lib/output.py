@@ -48,7 +48,7 @@ def dry_run_result(
 ) -> dict[str, Any]:
     """Build a dry-run result envelope."""
     normalized_targets = [str(path) for path in (target_paths or [])]
-    _annotate_existing_targets(operations, normalized_targets)
+    _annotate_existing_targets(operations, normalized_targets, conflict_policy)
     result: dict[str, Any] = {
         "status": "dry-run",
         "operations": operations,
@@ -65,6 +65,7 @@ def dry_run_result(
 def _annotate_existing_targets(
     operations: list[dict[str, Any]],
     target_paths: list[str],
+    conflict_policy: str,
 ) -> None:
     """Mark dry-run operations whose planned target already exists."""
     target_set = set(target_paths)
@@ -75,7 +76,7 @@ def _annotate_existing_targets(
         if Path(path).expanduser().exists():
             operation["existing_target"] = True
             details = operation.get("details", "")
-            suffix = "existing target detected; conflict_policy=overwrite"
+            suffix = f"existing target detected; conflict_policy={conflict_policy}"
             operation["details"] = f"{details}; {suffix}" if details else suffix
 
 

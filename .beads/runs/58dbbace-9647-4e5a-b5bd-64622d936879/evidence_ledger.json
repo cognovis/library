@@ -64,6 +64,20 @@
       "purpose": "Commit production code and documentation after the GREEN and regression gates.",
       "exit_code": 0,
       "observed_result": "Created commit 846b056."
+    },
+    {
+      "id": "cmd:advisory-fix-targeted",
+      "command": "uv run pytest tests/test_library_py_installers.py -x -q",
+      "purpose": "Verify advisory fixes F1 (dynamic conflict_policy suffix) and F2 (harness_routing enum) do not break installer tests.",
+      "exit_code": 0,
+      "observed_result": "91 passed in 3.60s."
+    },
+    {
+      "id": "cmd:advisory-fix-full-suite",
+      "command": "uv run pytest tests/ -q --deselect tests/test_personal_migration.py::TestMigrationCommit::test_migration_commit_exists",
+      "purpose": "Regression gate for advisory fixes; deselected pre-existing failure unrelated to this bead (gh api lookup of external commit feat(CL-4mt): in sussdorff/library-core).",
+      "exit_code": 1,
+      "observed_result": "583 passed, 23 skipped, 1 deselected, 1 failed. The single failure is test_migration_commit_sha_format, which is pre-existing on HEAD before this fix (confirmed by stashing the diff and re-running). No new regressions introduced by F1/F2."
     }
   ],
   "skipped_checks": [],

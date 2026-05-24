@@ -45,7 +45,7 @@ guardrail installers.
     },
     "harness_routing": {
       "type": ["string", "null"],
-      "enum": ["claude_code", "codex", "all", null]
+      "enum": ["claude_code", "codex", "opencode", "all", null]
     },
     "conflict_policy": {
       "type": "string",
