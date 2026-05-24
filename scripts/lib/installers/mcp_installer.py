@@ -79,15 +79,33 @@ def install_mcp(
     # 2. Dry-run
     if dry_run:
         harnesses = _selected_mcp_harnesses(entry, harness)
-        target_paths = [_mcp_config_path(repo_root, scope, selected) for selected in harnesses]
-        ops = [
-            {
-                "operation": "install_mcp_server",
-                "path": str(path),
-                "details": f"add '{mcp_name}' to MCP config (harness={selected})",
-            }
-            for selected, path in zip(harnesses, target_paths)
-        ]
+        ops: list[dict[str, Any]] = []
+        target_paths: list[Path] = []
+        for selected in harnesses:
+            path = _mcp_config_path(selected)
+            if path is None:
+                # URL-only harnesses (claude_ai, claude_ios) write no file —
+                # the user must complete a manual install via a URL. Surface
+                # the operation but do not include a path in target_paths.
+                ops.append(
+                    {
+                        "operation": "install_mcp_server",
+                        "path": None,
+                        "details": (
+                            f"emit manual install URL for '{mcp_name}' "
+                            f"(harness={selected}; no file write)"
+                        ),
+                    }
+                )
+                continue
+            target_paths.append(path)
+            ops.append(
+                {
+                    "operation": "install_mcp_server",
+                    "path": str(path),
+                    "details": f"add '{mcp_name}' to MCP config (harness={selected})",
+                }
+            )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append({
             "operation": "write_lockfile",
@@ -220,33 +238,60 @@ def _resolve_source_commit(name: str, source: str | None) -> str:
 
 
 def _selected_mcp_harnesses(entry: dict, harness: str) -> list[str]:
-    """Return concrete MCP harnesses targeted by a dry-run request."""
+    """Return concrete MCP harnesses targeted by a dry-run request.
+
+    Mirrors install-mcp.py's real install behavior: for `--harness all`,
+    iterate over every harness declared in the entry's install.mcp block,
+    including url-only harnesses (claude_ai, claude_ios). Real install
+    falls back to claude_code only when no harnesses are declared.
+    """
     if harness != "all":
         return [harness]
 
     mcp_block = ((entry.get("install") or {}).get("mcp") or {})
-    selected = [
+    declared = [
         candidate
-        for candidate in ["claude_code", "codex", "opencode"]
+        for candidate in ["claude_code", "codex", "opencode", "claude_ai", "claude_ios"]
         if mcp_block.get(candidate)
     ]
-    return selected or ["claude_code"]
+    return declared or ["claude_code"]
 
 
-def _mcp_config_path(repo_root: Path, scope: str, harness: str) -> Path:
-    """Return the harness config path a dry-run will report."""
-    if scope == "project":
-        if harness == "codex":
-            return repo_root / ".codex" / "config.toml"
-        if harness == "opencode":
-            return repo_root / ".config" / "opencode" / "opencode.json"
-        return repo_root / ".claude" / "settings.json"
+def _mcp_config_path(harness: str) -> Path | None:
+    """Return the harness config path the real install will write.
 
+    install-mcp.py always writes to global paths (no project-scope variant);
+    project-local config files are not consulted by the actual install. The
+    paths honor the same environment variable overrides install-mcp.py uses
+    so dry-run output matches what the real install will touch under test
+    fixtures.
+
+    Returns None for URL-only harnesses (claude_ai, claude_ios) which never
+    write a file — the real install emits a manual install URL instead.
+    """
+    if harness in ("claude_ai", "claude_ios"):
+        return None
     if harness == "codex":
-        return Path.home() / ".codex" / "config.toml"
+        return Path(
+            os.environ.get(
+                "CODEX_CONFIG_FILE",
+                str(Path.home() / ".codex" / "config.toml"),
+            )
+        )
     if harness == "opencode":
-        return Path.home() / ".config" / "opencode" / "opencode.json"
-    return Path.home() / ".claude" / "settings.json"
+        return Path(
+            os.environ.get(
+                "OPENCODE_CONFIG_FILE",
+                str(Path.home() / ".config" / "opencode" / "opencode.json"),
+            )
+        )
+    # claude_code (default)
+    return Path(
+        os.environ.get(
+            "CLAUDE_SETTINGS_FILE",
+            str(Path.home() / ".claude" / "settings.json"),
+        )
+    )
 
 
 def remove_mcp(

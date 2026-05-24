@@ -138,7 +138,11 @@ def install_simple_file(
             ops,
             summary=f"Would install {primitive_name} '{item_name}' to {install_target}",
             target_paths=[str(install_target)],
-            harness_routing=harness,
+            # Simple-file primitives (prompt, script, model-standard, agent-base)
+            # share one install target across harnesses — resolve_install_paths
+            # does not consult `harness`. Surface that by emitting None instead
+            # of echoing the caller's --harness argument.
+            harness_routing=None,
             conflict_policy="overwrite",
             lockfile_changes=[
                 {

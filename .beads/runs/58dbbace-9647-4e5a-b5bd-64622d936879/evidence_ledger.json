@@ -78,6 +78,41 @@
       "purpose": "Regression gate for advisory fixes; deselected pre-existing failure unrelated to this bead (gh api lookup of external commit feat(CL-4mt): in sussdorff/library-core).",
       "exit_code": 1,
       "observed_result": "583 passed, 23 skipped, 1 deselected, 1 failed. The single failure is test_migration_commit_sha_format, which is pre-existing on HEAD before this fix (confirmed by stashing the diff and re-running). No new regressions introduced by F1/F2."
+    },
+    {
+      "id": "cmd:codex-adversarial-targeted",
+      "command": "uv run pytest tests/test_library_py_installers.py -x -q",
+      "purpose": "Targeted gate for Codex adversarial REGRESSION fixes (1: mcp path; 2: guardrail path; 3: mcp harness enumeration; 4: simple_file harness_routing).",
+      "exit_code": 0,
+      "observed_result": "91 passed in 3.43s."
+    },
+    {
+      "id": "cmd:codex-adversarial-full-suite",
+      "command": "uv run pytest tests/ -q --deselect tests/test_personal_migration.py::TestMigrationCommit",
+      "purpose": "Full regression gate for Codex adversarial fixes; deselected pre-existing TestMigrationCommit failures (gh api lookup of feat(CL-4mt) in sussdorff/library-core, unrelated to dry-run contract). Confirmed with git stash that both TestMigrationCommit tests fail on HEAD without the fix diff applied.",
+      "exit_code": 0,
+      "observed_result": "583 passed, 23 skipped, 2 deselected in 92.16s."
+    },
+    {
+      "id": "cmd:codex-adversarial-smoke-mcp",
+      "command": "uv run python scripts/library.py mcp use test-mcp --dry-run --json (with fixture declaring claude_code + claude_ios harnesses, in a tempdir catalog)",
+      "purpose": "Smoke-test that REGRESSION 1 and 3 fixes produce the expected JSON shape: global ~/.claude/settings.json path for claude_code, path=null operation for claude_ios, target_paths excludes URL-only harness.",
+      "exit_code": 0,
+      "observed_result": "operations contains {path: '/Users/malte/.claude/settings.json', harness=claude_code} and {path: null, 'no file write', harness=claude_ios}; target_paths == ['/Users/malte/.claude/settings.json']; harness_routing=all."
+    },
+    {
+      "id": "cmd:codex-adversarial-smoke-guardrail",
+      "command": "uv run python scripts/library.py guardrail use test-gr --dry-run --json (tempdir catalog)",
+      "purpose": "Smoke-test REGRESSION 2: guardrail dry-run reports global ~/.claude/settings.json and ~/.codex/hooks.json paths.",
+      "exit_code": 0,
+      "observed_result": "target_paths == ['/Users/malte/.claude/settings.json', '/Users/malte/.codex/hooks.json']."
+    },
+    {
+      "id": "cmd:codex-adversarial-smoke-prompt",
+      "command": "uv run python scripts/library.py prompt use test-prompt --harness codex --dry-run --json (tempdir catalog)",
+      "purpose": "Smoke-test REGRESSION 4: simple-file primitive emits harness_routing=null despite --harness codex on the command line.",
+      "exit_code": 0,
+      "observed_result": "harness_routing=null; target_paths contains a single .claude/commands/test-prompt.md path; install target does not depend on harness."
     }
   ],
   "skipped_checks": [],

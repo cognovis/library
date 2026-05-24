@@ -287,6 +287,17 @@ class TestDryRunContractUniformity:
         dry_run_contract_project: Path,
         tmp_path: Path,
     ):
+        """--target-project routes targets to the explicit project for primitives
+        that honor project scope (skill, standard, agent, prompt, script,
+        model-standard, agent-base).
+
+        MCP and guardrail are excluded: their actual installers always write
+        to global harness config files (~/.claude/settings.json,
+        ~/.codex/config.toml, ~/.codex/hooks.json, etc.) regardless of
+        --target-project. Their dry-run reports the same global paths to
+        match real install behavior (see CL-w5d Codex review regressions 1
+        and 2).
+        """
         target_project = tmp_path / "explicit-target-project"
         target_project.mkdir()
 
@@ -294,9 +305,9 @@ class TestDryRunContractUniformity:
             [
                 sys.executable,
                 str(LIBRARY_PY),
-                "guardrail",
+                "skill",
                 "use",
-                "contract-guardrail",
+                "contract-skill",
                 "--scope",
                 "project",
                 "--target-project",

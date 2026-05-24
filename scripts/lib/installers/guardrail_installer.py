@@ -7,6 +7,7 @@ Delegates to install-hook.py internals (no subprocess shell-out).
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 from typing import Any
 
@@ -71,7 +72,7 @@ def install_guardrail(
     if dry_run:
         harnesses = _selected_guardrail_harnesses(harness)
         target_paths = [
-            _guardrail_config_path(repo_root, scope, selected)
+            _guardrail_config_path(selected)
             for selected in harnesses
         ]
         ops = [
@@ -209,13 +210,26 @@ def _selected_guardrail_harnesses(harness: str) -> list[str]:
     return [harness]
 
 
-def _guardrail_config_path(repo_root: Path, scope: str, harness: str) -> Path:
-    """Return the harness config path a guardrail dry-run will report."""
-    if scope == "project":
-        if harness == "codex":
-            return repo_root / ".codex" / "hooks.json"
-        return repo_root / ".claude" / "settings.json"
+def _guardrail_config_path(harness: str) -> Path:
+    """Return the harness config path the real guardrail install will write.
 
+    install-hook.py always writes to global paths (no project-scope variant);
+    project-local config files are not consulted by the actual install. The
+    paths honor the same environment variable overrides install-hook.py uses
+    so dry-run output matches what the real install will touch under test
+    fixtures.
+    """
     if harness == "codex":
-        return Path.home() / ".codex" / "hooks.json"
-    return Path.home() / ".claude" / "settings.json"
+        return Path(
+            os.environ.get(
+                "CODEX_HOOKS_FILE",
+                str(Path.home() / ".codex" / "hooks.json"),
+            )
+        )
+    # claude_code (default)
+    return Path(
+        os.environ.get(
+            "CLAUDE_SETTINGS_FILE",
+            str(Path.home() / ".claude" / "settings.json"),
+        )
+    )
