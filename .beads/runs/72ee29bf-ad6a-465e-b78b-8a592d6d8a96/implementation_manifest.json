@@ -5,7 +5,7 @@
     {
       "id": "AC1",
       "description": "Schema accepts harness_support.cursor and at least one future non-Cursor harness fixture, while rejecting invalid values/statuses.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "docs/schema/library.schema.json",
         "tests/test_validate_library.py"
@@ -19,7 +19,7 @@
     {
       "id": "AC2",
       "description": "library.py --harness accepts cursor after the policy decision.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "scripts/library.py",
         "tests/test_library_py_installers.py"
@@ -33,7 +33,7 @@
     {
       "id": "AC3",
       "description": "_check_harness_support enforces not-supported for every accepted harness ID, not only claude_code/codex.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "scripts/library.py",
         "tests/test_library_py_installers.py"
@@ -46,7 +46,7 @@
     {
       "id": "AC4",
       "description": "Tests cover codex, claude_code, cursor, opencode, and one future harness fixture.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "tests/test_validate_library.py",
         "tests/test_library_py_installers.py"
@@ -60,7 +60,7 @@
     {
       "id": "AC5",
       "description": "MCP uses install.mcp as the source of truth; mcp_server_entry intentionally does not carry metadata.library.harness_support.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "docs/schema/library.schema.json",
         "docs/PRIMITIVES.md",
@@ -74,7 +74,7 @@
     {
       "id": "AC6",
       "description": "Validator plane behavior for mcp_server_entry and project_tooling_entry is intentionally excluded from harness_support and covered by tests/docs.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "docs/schema/library.schema.json",
         "docs/PRIMITIVES.md",
@@ -88,7 +88,7 @@
     {
       "id": "AC7",
       "description": "Docs describe the harness IDs as a closed enum.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "docs/PRIMITIVES.md"
       ],
@@ -99,7 +99,7 @@
     {
       "id": "AC8",
       "description": "CL-iye.3 can implement Cursor projection on top of this policy without changing the core gate again.",
-      "status": "met",
+      "status": "done",
       "changed_files": [
         "docs/schema/library.schema.json",
         "scripts/library.py",
