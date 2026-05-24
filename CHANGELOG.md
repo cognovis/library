@@ -2,6 +2,7 @@
 
 ### 🚀 Features
 
+- *(CL-w5d)* Uniform dry-run JSON contract for all primitive installers — `library.py <primitive> use --dry-run --json` now emits a versioned envelope with `status`, `operations`, `target_paths`, `harness_routing`, `conflict_policy`, `lockfile_changes`, and `requires_user_confirmation` fields; project scope and conflict detection are consistently reflected across skill, standard, agent, prompt, script, model-standard, agent-base, MCP, and guardrail installers; contract schema documented in `docs/schema/dry-run-contract.md`
 - *(fhir-sync-versions)* Register skill in library catalog
 
 ### 🐛 Bug Fixes
