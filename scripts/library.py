@@ -690,6 +690,23 @@ def _dispatch_use(
     install_mode: str = "vendor",
 ) -> int:
     """Dispatch to the correct primitive installer."""
+    # Compatibility pre-install gate (CL-d7e): check compatibility field before
+    # dispatching to any primitive installer.
+    try:
+        from lib.catalog import lookup_entry
+        from lib.compat import check_compatibility_gate, CompatibilityError
+        from lib.errors import LibraryError
+        try:
+            entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+        except LibraryError:
+            entry = {}
+        check_compatibility_gate(entry, harness)
+    except CompatibilityError as _compat_exc:
+        if use_json:
+            print_json(error_result(str(_compat_exc), _compat_exc.exit_code))
+        else:
+            print(f"Error: {_compat_exc}", file=sys.stderr)
+        return _compat_exc.exit_code
     if primitive == "skill":
         return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
     elif primitive == "standard":

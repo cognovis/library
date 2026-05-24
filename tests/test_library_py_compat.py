@@ -199,7 +199,7 @@ class TestCompatModuleImportable:
 
     def test_module_importable(self):
         result = subprocess.run(
-            [sys.executable, "-c", "import sys; sys.path.insert(0, 'scripts/lib'); import compat; print('ok')"],
+            [sys.executable, "-c", "import sys; sys.path.insert(0, 'scripts'); from lib import compat; print('ok')"],
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
@@ -212,9 +212,9 @@ class TestParseCompatibility:
     """Tests for parse_compatibility() — parses harness version constraint strings."""
 
     def _import_parse(self):
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
+        sys.path.insert(0, str(SCRIPTS_DIR))
         import importlib
-        import compat as m
+        from lib import compat as m
         importlib.reload(m)
         return m.parse_compatibility
 
@@ -279,9 +279,9 @@ class TestDetectHarnessVersion:
     """Tests for detect_harness_version() — best-effort, returns None on failure."""
 
     def _import_detect(self):
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
+        sys.path.insert(0, str(SCRIPTS_DIR))
         import importlib
-        import compat as m
+        from lib import compat as m
         importlib.reload(m)
         return m.detect_harness_version
 
@@ -305,9 +305,9 @@ class TestCheckCompatibilityGate:
     """Tests for check_compatibility_gate() — raises CompatibilityError when unsatisfied."""
 
     def _import_check(self):
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
+        sys.path.insert(0, str(SCRIPTS_DIR))
         import importlib
-        import compat as m
+        from lib import compat as m
         importlib.reload(m)
         return m.check_compatibility_gate, m.CompatibilityError
 
@@ -319,8 +319,8 @@ class TestCheckCompatibilityGate:
 
     def test_impossible_version_raises_compatibility_error(self):
         import importlib
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
-        import compat as m
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import compat as m
         importlib.reload(m)
         check = m.check_compatibility_gate
         CompatibilityError = m.CompatibilityError
@@ -333,8 +333,8 @@ class TestCheckCompatibilityGate:
 
     def test_satisfied_version_passes(self):
         import importlib
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
-        import compat as m
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import compat as m
         importlib.reload(m)
 
         entry = {"name": "test-skill", "description": "desc", "compatibility": "claude_code>=0.1"}
@@ -343,8 +343,8 @@ class TestCheckCompatibilityGate:
 
     def test_unknown_version_emits_warning_and_proceeds(self, capsys):
         import importlib
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
-        import compat as m
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import compat as m
         importlib.reload(m)
 
         entry = {"name": "test-skill", "description": "desc", "compatibility": "claude_code>=4.0"}
@@ -354,8 +354,8 @@ class TestCheckCompatibilityGate:
     def test_different_harness_skips_check(self):
         """Compatibility string for 'claude_code' should not block 'codex' installs."""
         import importlib
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
-        import compat as m
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import compat as m
         importlib.reload(m)
 
         entry = {"name": "test-skill", "description": "desc", "compatibility": "claude_code>=99.0"}
@@ -366,8 +366,8 @@ class TestCheckCompatibilityGate:
     def test_error_includes_requirement_name(self):
         """Error message must name the compatibility requirement."""
         import importlib
-        sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
-        import compat as m
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib import compat as m
         importlib.reload(m)
         CompatibilityError = m.CompatibilityError
 
