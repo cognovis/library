@@ -170,6 +170,36 @@ def _validate_legacy_aliases(
     return errors, warnings
 
 
+def _validate_plane_required(data: dict) -> list[str]:
+    """Require metadata.library.plane on domain and project tier entries."""
+    errors: list[str] = []
+    required_tiers = {"tier:domain", "tier:project"}
+
+    for primitive_name in all_primitive_names():
+        primitive = get_primitive(primitive_name)
+        if primitive is None:
+            continue
+
+        for i, entry in enumerate(resolve_yaml_section(data, primitive)):
+            tags = entry.get("tags", [])
+            if not isinstance(tags, list) or not required_tiers.intersection(tags):
+                continue
+
+            name = entry.get("name", f"<entry {i}>")
+            plane = (
+                entry.get("metadata", {})
+                .get("library", {})
+                .get("plane")
+            )
+            if plane is None:
+                errors.append(
+                    f"  [{primitive.yaml_section}[{i}] '{name}'] "
+                    "tier=domain|project entries must declare metadata.library.plane"
+                )
+
+    return errors
+
+
 def _print_error_group(
     yaml_path: Path,
     errors: list[str],
@@ -250,14 +280,22 @@ def main() -> int:
         print(f"FAIL: Schema itself is invalid: {e.message}", file=sys.stderr)
         return 1
 
+    plane_errors = _validate_plane_required(data)
+
     if errors:
         if not args.quiet:
             print(f"FAIL: {yaml_path} has {len(errors)} validation error(s):\n")
             for err in errors:
                 path = " -> ".join(str(p) for p in err.absolute_path) or "(root)"
                 print(f"  [{path}] {err.message}")
+            _print_error_group(
+                yaml_path,
+                plane_errors,
+                "primitive placement violation(s)",
+            )
         else:
-            print(f"FAIL: {len(errors)} validation error(s) in {yaml_path}")
+            total_errors = len(errors) + len(plane_errors)
+            print(f"FAIL: {total_errors} validation error(s) in {yaml_path}")
         return 1
 
     alias_errors, alias_warnings = _validate_legacy_aliases(
@@ -294,10 +332,15 @@ def main() -> int:
                     )
 
     agentskills_errors = _validate_agentskills_rules(data)
-    if alias_errors or semantic_errors or agentskills_errors:
+    if alias_errors or semantic_errors or plane_errors or agentskills_errors:
         if not args.quiet:
             _print_error_group(yaml_path, alias_errors, "legacy alias error(s)")
             _print_error_group(yaml_path, semantic_errors, "semantic error(s)")
+            _print_error_group(
+                yaml_path,
+                plane_errors,
+                "primitive placement violation(s)",
+            )
             _print_error_group(
                 yaml_path,
                 agentskills_errors,
@@ -305,7 +348,10 @@ def main() -> int:
             )
         else:
             total_errors = (
-                len(alias_errors) + len(semantic_errors) + len(agentskills_errors)
+                len(alias_errors)
+                + len(semantic_errors)
+                + len(plane_errors)
+                + len(agentskills_errors)
             )
             print(f"FAIL: {total_errors} semantic validation issue(s) in {yaml_path}")
         return 1

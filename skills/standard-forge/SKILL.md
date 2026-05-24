@@ -91,6 +91,8 @@ the standard belongs.
 | Dev-plane or product-plane? | Library standards are dev-plane context. Product documentation, runtime behavior, or end-user feature specifications are product-plane artifacts and must stay in the product repo. |
 | Product counterpart? | A dev-plane standard may reference paired product work with `metadata.library.product_counterpart`, but the product artifact is not copied into Library. |
 | Repo-local escape hatch? | Keep the standard repo-local when it depends on private ADRs, concrete product paths, local credentials, tenant details, or one repo's topology. |
+| Harness support? | Ask whether the standard works in all harnesses or is harness-specific. For one-harness standards, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
+| Runtime requirements? | Ask whether the standard requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
 | Deterministic script route? | Parsing, validation, export, or transformation logic belongs in `script-forge`; standards may state the factual rules the script checks. |
 | Gas City projection? | Gas City projection metadata describes generated PackV2 output only; it does not make Gas City the source owner. Use `metadata.library.gascity.projections[]` when exporting. |
 

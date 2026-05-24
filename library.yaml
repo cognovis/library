@@ -458,6 +458,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: amazon
       description: >-
         Amazon.de automation via playwright-cli with local purchases database. Use for downloading
@@ -469,6 +472,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: career-check
       description: >-
         Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment.
@@ -480,6 +486,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: google-invoice
       description: >-
         Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML,
@@ -490,6 +499,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: customer-invoice
       description: >-
         Create outgoing Cognovis customer invoices with collmex-cli, Timing.app,
@@ -502,6 +514,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: mm-cli
       description: >-
         CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts,
@@ -513,6 +528,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: linkedin
       description: >-
         LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles,
@@ -524,6 +542,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: transcribe
       description: >-
         Transcribe audio files with speaker diarization via AssemblyAI. Supports local files
@@ -534,6 +555,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: hetzner-cloud
       description: >-
         Manage Hetzner Cloud infrastructure via hcloud CLI and Robot. Use when creating/modifying
@@ -545,6 +569,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: home-infra
       description: >-
         Home infrastructure overview: hardware, network, services, and CLI tools. Use when finding
@@ -556,6 +583,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: local-vm
       description: >-
         Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when
@@ -567,6 +597,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: paperless-cli
       description: >-
         Interact with Paperless-ngx document management via REST API. Use when searching
@@ -578,6 +611,9 @@ library:
       tags:
         - origin:personal
         - tier:project
+      metadata:
+        library:
+          plane: dev
     - name: piler-cli
       description: >-
         CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when
@@ -590,6 +626,9 @@ library:
         - origin:personal
         - tier:project
     # ─── beads-workflow skills (registered 2026-05-12 per ADR-0004 Phase 3) ───
+      metadata:
+        library:
+          plane: dev
     - name: ingest-content
       description: >-
         Save any URL to open-brain memory as curated_content. Detects content type
@@ -627,6 +666,9 @@ library:
         - origin:personal
         - tier:domain
         - workflow:memory
+      metadata:
+        library:
+          plane: dev
     - name: ob-search
       description: >-
         Search open-brain memory for past observations, session summaries, learnings.
@@ -782,6 +824,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: angebotserstellung
       description: >-
         Professionelle Angebote fuer IT-Projekte und Beratungsleistungen erstellen. Use when writing proposals, revising offers, or calculating project pricing. Triggers on Angebot, proposal, Preiskalkulation, Angebotserstellung, offer, Beratungsangebot.
@@ -795,6 +838,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: audit-citations
       description: Detect + verify legal/regulatory citations (BFH, BMF, EuGH, BVerfG, GDPR, MDR, German statutes) in source files. Built to defend against LLM-fabricated case numbers — every "verified" verdict requires a deterministic verbatim-quote match against a fetched authoritative source, no LLM judgment in the loop. Use when reviewing whitelists, research docs, ADRs, or policy code that cites legal sources. Triggers on "audit citations", "verify citations", "check legal sources", "BFH Zitate prüfen", "Rechtsquellen prüfen".
       source: https://github.com/cognovis/library-core/blob/main/skills/audit-citations/SKILL.md
@@ -802,6 +846,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -872,6 +917,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: binary-explorer
       description: >-
         Reverse-engineer desktop apps to understand how they work under the hood — APIs called, internal flow, models/providers, feature flags, config constants, embedded prompts, IPC. Covers Electron apps (Slack, Discord, VS Code, Cursor, Notion, Linear, Wispr Flow…), macOS .app bundles, single-executable bundles (Bun/Node/Deno/Go SEA), and raw Mach-O / ELF / PE binaries. Triggers when the user points at a desktop app path (.app, .exe, binary) or asks "how does X work under the hood", "what API does it call", "what endpoints does it hit", "what model does it use", "reverse engineer this app", "does it run locally or in the cloud", or wants to audit network behavior / extract embedded strings/prompts/secrets. Do NOT use for the user's own source code (just read it), web apps without a desktop client, or the Claude Code binary (use claude-binary-explorer for that — it knows Claude Code's mangled variable conventions).
@@ -887,6 +933,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: brand-forge
       description: >-
         Create, review, and manage voice/brand profiles for Claude Code skills. Use when creating brands, reviewing quality, or applying voice profiles. Triggers on create brand, voice profile, review brand, change tone. Not for skill creation.
@@ -900,6 +947,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: bug-triage
       description: >-
         Structured 4-phase bug investigation: Reproduce → Root Cause → Fix → Regression Test. Use when a bug is reported, something is broken, "geht nicht", Fehler, regression detected, or kaputt. Guides through systematic investigation instead of guessing.
@@ -915,6 +963,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: claude-md-pruner
       description: >-
         Review CLAUDE.md files for instructions that newer models handle natively and suggest removals. Use after model updates to prune outdated instructions. Triggers on "prune claude-md", "post-update review", "prune instructions", "model update cleanup".
@@ -928,6 +977,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: cmux
       description: >-
         End-user control of cmux topology and routing (windows, workspaces, panes/surfaces, focus, moves, reorder, identify, trigger flash). Use when automation needs deterministic placement and navigation in a multi-pane cmux layout.
@@ -941,6 +991,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: cmux-browser
       description: >-
         End-user browser automation with cmux. Use when you need to open sites, interact with pages, wait for state changes, and extract data from cmux browser surfaces.
@@ -954,6 +1005,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: cmux-markdown
       description: >-
         Open markdown files in a formatted viewer panel with live reload. Use when you need to display plans, documentation, or notes alongside the terminal with rich rendering (headings, code blocks, tables, lists).
@@ -967,6 +1019,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: code-navigator
       description: >-
         use when: navigating source code by symbol — find where a function/class is defined (smart_search), see the structural skeleton of a file (smart_outline), or extract one specific function/class AST-bounded (smart_unfold). Works on Python with the built-in AST and uses lightweight structural fallbacks for TS/JS/Go/Rust. NOT for: full-text search inside function bodies (use Grep); files under ~100 lines where plain Read is cheaper than outline. boundary: code-navigator is for symbol-level navigation; Grep is for text; Read is for whole files. Especially useful in polaris and mira (TS).
@@ -981,6 +1034,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       version: 0.1.0
     - name: codex
       description: >-
@@ -997,6 +1051,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: codex-guide
       description: >-
         Answer documentation questions about OpenAI Codex CLI — subcommands, flags, config.toml, sandbox modes, profiles, subagents (TOML in ~/.codex/agents/, built-ins default/worker/explorer, spawn_agents_on_csv, max_threads/max_depth), skills, and MCP integration. Triggers on "Does Codex...", "Can I configure Codex...", "How do I... in Codex". Does NOT run Codex — refer to codex-rescue for execution.
@@ -1008,6 +1063,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: collmex-cli
       description: >-
         CLI wrapper for Collmex Buchhaltung Pro API. Use when managing vendors, invoices, open items, bookings, or generating ZUGFeRD XML. Triggers on Collmex, accounting, invoices, payables, vendors, Buchhaltung, Lieferanten, offene Posten.
@@ -1021,6 +1077,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: compliance-reviewer
       description: >-
         Healthcare regulatory & security compliance reviewer (EU/Germany). Audits code changes against GDPR, EU AI Act, NIS2, and 11 healthcare control areas. Produces structured findings report. Supports standalone (full audit) and scoped (file-list) modes. Triggers on "compliance review", "GDPR audit", "AI Act check", "healthcare compliance", "regulatory review".
@@ -1032,6 +1089,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: compound
       description: >-
         Structured 4-stage retrospective for completed beads: Requirements vs Strategy, Strategy vs Execution, Iteration Review, Workflow Audit. Creates Trap/Pattern/Decision artifacts. Use when debriefing a bead, capturing session learnings, or running a compound retrospective.
@@ -1060,6 +1118,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: daily-brief
       description: >-
         Generate and manage daily project briefs. Reads from and writes to open-brain as the system of record (type=daily_brief). Disk write is opt-in via --persist-disk. Use for daily summaries of git activity, bead progress, and open-brain entries across tracked projects.
@@ -1073,6 +1132,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: dolt
       description: >-
         Troubleshoot beads Dolt failures: `bd dolt` push/pull errors, merge conflicts, embedded/shared-server mode problems, remote auth issues, local DB recovery, re-clone, reflog restore, broken `.beads` Dolt config, and brew-services Dolt lifecycle. Use whenever beads sync or Dolt infrastructure is failing — symptoms like "beads do not sync", "cannot push issues", "no common ancestor", "not supported in embedded mode", "Dolt server unreachable", or "lost local database". Read the beads changelog first. Do not use for normal beads tracking (`bd create/ready/close`), standalone Dolt databases, or regular git push/pull.
@@ -1086,6 +1146,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: entropy-scan
       description: >-
         Scan the agent harness (skills, hooks, agents, standards) for invariant violations and entropy. Produces a violation report with actionable fix instructions. Triggers on: entropy scan, harness check, harness validate, invariants check.
@@ -1099,6 +1160,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: event-log
       description: >-
         Query the structured event log for any project. Shows tool use history, session starts, permission decisions, and errors from the centralized harness events database. Use when investigating session activity, debugging tool usage patterns, reviewing what happened in a session, or querying across projects.
@@ -1112,6 +1174,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: fhir-sync-versions
       description: >-
         Reconcile fhir-* version pins across all locally-checked-out repos. Use when bumping a FHIR package version, after a publish, or when sushi-config.yaml or bundle package.json pins are out of sync. Triggers: /fhir-sync-versions, fhir version sync, reconcile fhir pins, sync fhir versions. NOT for SemVer bump decisions or running publish.sh.
@@ -1149,6 +1212,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: git-ops
       description: >-
         Deterministic git operations — branch sync (fetch+rebase with smart conflict resolution for version_manifest.json and SCRIPT_VERSION/ModuleVersion bumps) plus commit/push/force-push/tag/glab-merge wrappers. JSON-output contracts for orchestrators. Triggers on "sync branch", "rebase onto main", "commit and push", "force push", "merge MR via glab", "tag release".
@@ -1174,6 +1238,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: human-factors-reviewer
       description: >-
         Healthcare clinical UX and human-factors reviewer. Audits UI components against NIST, FDA, IEC 62366, ISO 9241, WCAG 2.1, and clinical safety standards (20 review categories). Read-only — produces structured findings report. Supports standalone (full audit) and scoped (file-list) modes. Triggers on "human factors review", "clinical UX audit", "WCAG check", "patient safety review", "UI accessibility audit".
@@ -1185,6 +1250,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: impl
       description: >-
         Implement plan autonomously with DoD verification
@@ -1214,6 +1280,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: inject-standards
       description: >-
         Load and merge global and project-specific coding standards into current context. Use when applying standards, patterns, or compliance requirements. Triggers on inject standards, load standards, standards, check patterns, apply patterns.
@@ -1248,6 +1315,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -1264,6 +1332,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: mira-aidbox
       description: >-
         Mira-specific Aidbox configuration, infrastructure, billing catalogs, flat tables, IG testing, and accumulated learnings. Supplements the samurai-skills plugin with mira-project-specific content. MUST USE whenever: (1) connecting to mira's Aidbox instance (URLs, auth, infrastructure), (2) working with mira's billing catalogs (EBM/GOA/HZV), (3) working with mira's flat tables or AidboxTriggers, (4) testing mira's FHIR IGs (fhir-praxis-de, fhir-dental-de), (5) working with mira's ETL pipelines or seed data, (6) querying mira's ViewDefinitions or $materialize setup. Also triggers on generic aidbox usage to supplement the upstream samurai-skills plugin with mira-specific context.
@@ -1301,6 +1370,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: ob-cli
       description: >-
         ob CLI skill wrapper for open-brain memory operations in coding harnesses. Provides dual-mode routing guidance: use `ob` CLI for coding sessions (search, save, context, timeline), use MCP for mobile (claude.ai/iOS) and admin operations. Triggers on memory, open-brain, ob CLI, recall, past work, save observation.
@@ -1326,6 +1396,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: pencil
       description: >-
         Design UI screens and components in Pencil .pen files via MCP tools. Use when creating designs, editing .pen files, or working with design systems. Triggers on pencil, pen file, design system, design screen, components.pen.
@@ -1339,6 +1410,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: people-query
       description: >-
         Query open-brain people-aware MCP tools to find discussions, stale contacts, and mentions for a named person.
@@ -1350,6 +1422,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: plan
       description: >-
         Generate implementation plan with context, review, decisions, and test strategy
@@ -1380,6 +1453,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: plugin-management
       description: >-
         Create, test, and distribute Claude Code plugins. Use when building plugins, converting skills to packages, or managing marketplace distribution. Triggers on create plugin, plugin, marketplace, distribute plugin, test plugin, plugin.json.
@@ -1393,6 +1467,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: portless
       description: >-
         Set up named local dev server URLs (e.g. myapp.localhost) via portless proxy. Use when configuring dev server names, resolving port conflicts, or setting up .localhost domains. Triggers on portless, EADDRINUSE, dev server URL, localhost, dev proxy.
@@ -1406,6 +1481,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: project-context
       description: >-
         Generate docs/project-context.md (Constitution Pattern) from an existing codebase. Analyzes CLAUDE.md, architecture docs, and directory structure to produce a readable, editable, git-versioned context document covering Tech Stack, Architecture Principles, Module Map, Established Patterns, and Critical Invariants. Triggers on: project context, generate project context, project-context, create project-context, constitution document, codebase context.
@@ -1421,6 +1497,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: project-health
       description: >-
         Run a quick quality assessment on a project and produce a traffic-light scorecard. Triggers on: project health, projekt check, health check, project quality, wie gesund ist das projekt, code health check.
@@ -1436,6 +1513,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: project-setup
       description: >-
         Set up new projects and upgrade existing ones to current standards. Handles scaffolding, beads init, Dolt remote, CLAUDE.md generation, .gitignore, and standards injection for all project types (Python CLI, TypeScript/Bun web, infrastructure, docs). Use when: creating a new project, onboarding an existing repo, upgrading project setup to current conventions, auditing setup drift across the fleet, or when user says "neues Projekt", "Projekt aufsetzen", "project setup", "setup upgraden", "fleet audit". Replaces the old project-init skill. Also triggers on: project init, setup CLAUDE.md, project setup, create CLAUDE.md.
@@ -1451,6 +1529,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: prompt-refiner
       description: >-
         Refine raw, unstructured, or dictated user input into a structured prompt via HeyPresto MCP, then EXECUTE the refined prompt immediately. Use when the user provides messy dictated text, vague task descriptions, or says "expand prompt", "refine prompt", "use heypresto", "prompt verbessern". Also triggers on "Expand Prompt." at the start of a message followed by stream-of-consciousness text. Do NOT use for simple direct questions or already-clear prompts.
@@ -1464,6 +1543,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: python-dev
       description: >-
         Develop Python CLI tools — project scaffold, CLI entry points, packaging, PyPI release, config resolution. Use when writing Python, creating a CLI tool, setting up pyproject.toml, working with argparse or click, structuring a new Python project, adding uv tool support, or any Python development context that is not test-focused. Triggers on write python, python tool, python cli, build cli, argparse, click, pyproject.toml, uv tool, src layout, hatchling, pypi, calver.
@@ -1479,6 +1559,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: python-test
       description: >-
         Test Python CLI tools — pytest layout, click.testing.CliRunner, argparse invocation, fixtures, coverage. Use when writing Python tests, running pytest, mocking subprocess for key_command, testing a CLI entry point, or any Python test context. Triggers on pytest, uv run pytest, test python, test cli, CliRunner, conftest, test fixture python, click testing, capsys, monkeypatch.
@@ -1494,6 +1575,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: refactor-note
       description: >-
         Refactor Note
@@ -1549,6 +1631,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: session-close
       description: >-
         Handler scripts and helper assets for the session-close agent. Bundles bash + python implementations of the double-merge close workflow: changelog, CalVer versioning, doc-gap detection, beads close, phase-B prepare/ship/close, pipeline-watch, CI monitor, lockfile management, render-summary, turn-log upload, and plugin-cache sync. Consumed by the `session-close` agent (Claude `.md` + Codex `.toml`).
@@ -1578,6 +1661,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: spellcheck-test-engineer
       description: >-
         Run spellcheck via typos CLI, analyze errors, update .typos.toml configuration with legitimate German and technical terms, debug false positives systematically. Triggers on "run spellcheck", "fix spelling errors", "update typos config", "add words to dictionary", "analyze typos output", or "spellcheck ignore patterns".
@@ -1589,6 +1673,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: standards
       description: >-
         Manage coding standards lifecycle - list, inject, create, sync, review. Use when loading standards, checking compliance, creating new standards, or syncing standards to projects. Triggers on standards, inject standards, load standards, check compliance, create standard, sync standards, review conventions, check patterns, apply patterns.
@@ -1603,6 +1688,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: stream-review
       description: >-
         Run a cross-bead retrospective review on a closed cohort. Spawns the stream-reviewer agent, walks findings via AskUserQuestion, executes approved actions, and stamps reviewed beads. Use when a stream closes, after a wave completes, or to audit a closed epic.
@@ -1629,6 +1715,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -1645,6 +1732,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: sync-standards
       description: >-
         Synchronize global standards and commands into the current project for team sharing. Use when sharing standards with a team or copying conventions to a project. Triggers on sync standards, share standards, team standards, sync conventions.
@@ -1658,6 +1746,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: system-prompt-audit
       description: >-
         Audit Anthropic system prompt changes against the local baseline and review custom prompts for compatibility. Use when checking for new Claude versions, "run system prompt audit", "audit system prompts", or "check for prompt updates".
@@ -1671,6 +1760,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: token-cost
       description: >-
         Measure static context token overhead for agent sessions. Use when auditing context window usage, checking skill/agent/conventions token costs, or generating a ranked report of heaviest context contributors.
@@ -1684,6 +1774,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: ui-cli
       description: >-
         CLI for querying UniFi network infrastructure. Use when finding devices, looking up client MAC/IP, checking network config, or listing WLANs. Triggers on UniFi, network clients, WiFi, AP, switch, gateway, device IP, device MAC.
@@ -1697,6 +1788,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: vision
       description: >-
         Unconstrained creative brainstorming and lateral thinking mode. No quality gates, no feasibility checks, no task tracking — pure idea generation. Use when the user says "vision", "brainstorm", "Kreativmodus", "was wäre wenn", "what if", or wants to explore possibilities without constraints.
@@ -1710,6 +1802,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: vision-author
       description: >-
         Guided PO-grade 7-question dialogue producing a structured, present-tense-enforced vision.md with locked sections and 4-column boundary table. Use when starting a new project or formalizing a vision. Triggers on "vision author", "author vision", "create vision", "vision document".
@@ -1725,6 +1818,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: vision-review
       description: 'Vision health check: review each principle Y/N with evidence, compute a health score, generate draft ADRs for contested principles. Triggers on: vision review, review vision, vision health, vision health check, re-evaluate vision.'
       source: https://github.com/cognovis/library-core/blob/main/skills/vision-review/SKILL.md
@@ -1732,6 +1826,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -1772,6 +1867,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       requires:
         - skill:council
       tags:
@@ -1789,6 +1885,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: bead-author
       description: Drafts factory-ready bead payloads from raw briefs or pre-extracted specs, validates them with bead-author-check, and then creates the bead.
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-author.md
@@ -1796,6 +1893,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -1806,6 +1904,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       requires:
         - standard:english-only
       tags:
@@ -1851,6 +1950,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: constraint-checker
       description: >-
         Verifies SLOs, security defaults, and performance constraints against a built artifact. Use proactively after holdout validation to check non-functional requirements. Read-only and execute-only: never modifies code. Information barrier: sees only artifact and constraint definitions.
@@ -1862,6 +1962,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: doc-changelog-updater
       description: >-
         Analyzes branch changes and updates documentation and changelog files. Use PROACTIVELY after implementing features or when user requests documentation updates or changelog entries. Detects changes in current branch via git diff, identifies which documentation files need updates, and adds properly formatted changelog entries. MUST BE USED when user asks to "update documentation", "add changelog entry", "document changes", or after feature implementation is complete.
@@ -1876,6 +1977,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: effort-classifier
       description: Derive routed effort from bead scope. Emit JSON only.
       source: https://github.com/cognovis/library-core/blob/main/agents/effort-classifier.md
@@ -1883,6 +1985,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -1897,6 +2000,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: fix-agent
       description: >-
         Targeted code-fix worker for bead workflows. Use when bead-orchestrator needs an independent reviewer's findings resolved — Codex adversarial regressions (Phase 8) and auto-fixable verification disputes (Phase 10). Fixes ONLY the listed findings, runs affected tests, commits, and reports. Premium (Opus) tier by design — it resolves defects the standard-tier implementer missed.
@@ -1919,6 +2023,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: implementer
       description: >-
         Develops production code to make existing failing unit tests pass (Green phase of TDD). Use proactively after test-author completes the Red phase. Reads test files only; information barrier: must NOT access tests/holdout/ or bead description.
@@ -1930,6 +2035,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: integration-test-runner
       description: >-
         Autonomous agent that analyzes code changes, determines appropriate test targets, and executes integration tests to validate user-facing behavior.
@@ -1943,6 +2049,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: judge-default
       description: >-
         Use when a side-effecting actor submits an Action Proposal and needs a pre-action authorization decision before returning ALLOW, BLOCK, REVISE, or ESCALATE.
@@ -1968,6 +2075,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: pester-test-engineer
       description: >-
         Expert Pester test engineer for Charly Server PowerShell unit testing. Writes AND reviews Pester test cases with proper mocking, executes test runs on Windows servers using run-pester-tests.zsh, debugs test failures systematically, identifies test quality issues, and applies PowerShell best practices. Use PROACTIVELY when user requests: write unit tests, review test code, identify redundant tests, create test cases, run Pester tests, fix test failures, analyze test results, debug mocking issues, or needs guidance on unit vs integration testing. MUST BE USED for all PowerShell unit testing tasks on this project.
@@ -1979,6 +2087,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: plan-reviewer
       description: >-
         Independent reviewer for implementation plans. Provides a second perspective on plans, identifying missing requirements, edge cases, and technical concerns. Appends structured review to plan files. Read-only for codebase — can only edit plan documents.
@@ -1990,6 +2099,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: playwright-tester
       description: >-
         Executes a single bounded Playwright browser test scenario using playwright-cli. Receives a specific test scenario from the orchestrator, runs it step-by-step, and returns a structured pass/fail report with screenshot evidence. Use for e2e and demo MoC verification. One scenario per agent invocation.
@@ -2001,6 +2111,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: prd-generator
       description: >-
         Generates type-specific PRDs (Product Requirements Documents) from scout analysis
@@ -2012,6 +2123,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: quick-fix
       description: >-
         Lightweight orchestrator for XS/micro beads (bugs, chores, tasks). Claims bead, spawns Sonnet implementer, triggers Codex review, handles fix loop (max 2 iterations), then hands off to session-close. Skips plan gates, break analysis, UAT, docs, and verification phases.
@@ -2039,6 +2151,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: review-agent
       description: >-
         Post-implementation code reviewer for bead workflows. Reads git diff, checks code quality, verifies MoC coverage (structural check), and validates each acceptance criterion against committed changes using semantic analysis. Returns structured CLEAN or FINDINGS report (BLOCKING vs ADVISORY) for the bead-orchestrator review loop.
@@ -2053,6 +2166,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: session-close
       description: >-
         Orchestrates a full session close with double-merge strategy for parallel safety. Commits, generates changelog, version tags (auto-detects SemVer vs CalVer), extracts learnings, saves session summary, and pushes. Use when ending a session, releasing, or creating a versioned checkpoint. Triggers on: session-close, session close, release, rc, session beenden.
@@ -2082,6 +2196,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2097,6 +2212,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: test-engineer
       description: >-
         Framework-agnostic test engineer that writes, reviews, and executes unit tests. Detects the project's test framework automatically and applies appropriate patterns. Use PROACTIVELY when user requests: write unit tests, review test code, identify redundant tests, run tests, fix test failures, or analyze test results. MUST BE USED for all unit testing tasks.
@@ -2110,6 +2226,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: uat-validator
       description: >-
         Runs user acceptance tests against a deployed artifact from an external-user perspective. Use after implementer completes a feature (PAUL mode only). Read-only from source; Write for evidence/screenshots only. Information barrier: must NOT access source code, unit tests, or implementation history.
@@ -2121,6 +2238,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: verification-agent
       description: >-
         Independent verification of implementation claims. Spawned after implementation to verify that completion reports are accurate, tests actually pass, and acceptance criteria are genuinely met. Read-only except for running tests. Returns structured VERIFIED or DISPUTED report.
@@ -2135,6 +2253,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: wave-monitor
       description: >-
         Long-lived Haiku subagent that polls wave completion status on behalf of the wave-orchestrator. Runs wave-completion.py every 60 seconds using bash sleep, keeping the parent Agent() call blocked (parked) for the entire monitoring window. Returns a structured JSON verdict when the wave reaches a terminal state. Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.
@@ -2148,6 +2267,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: wave-orchestrator
       description: >-
         Orchestrate dependency-aware implementation of multiple beads in waves. Use when implementing a whole feature area (eUeberweisung, eArztbrief, Medistar adapter), dispatching multiple beads at once, or running parallel cld -b sessions. MUST USE when user says "wave", "parallel beads", "implement all beads for X", "start the beads", or references implementing more than 2 beads at once. Also triggers on "cmux dispatch", "multi-bead", "wave orchestrator".
@@ -2165,6 +2285,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
   prompts:
     - name: compact-reference
       description: >-
@@ -2178,6 +2299,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: install-playwright
       description: >-
         Install and verify Playwright MCP with Microsoft Edge browser automation. Handles extension installation, token extraction, Claude Code configuration, and comprehensive verification. Use when setting up Playwright MCP for the first time or troubleshooting installation issues.
@@ -2190,6 +2312,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: install-plugin
       description: >-
         prompt from cognovis-library-core: install-plugin
@@ -2202,6 +2325,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
   standards:
     - name: agentic-primitives
       description: >-
@@ -2309,6 +2433,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2325,6 +2450,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2344,6 +2470,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2379,6 +2506,9 @@ library:
         - tier:domain
         - category:standard
 
+      metadata:
+        library:
+          plane: dev
     - name: action-proposal
       description: Action Proposal
       source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/action-proposal.md
@@ -2386,6 +2516,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2404,6 +2535,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: agents
       description: >-
         Subagent Debrief Return Contract
@@ -2418,6 +2550,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: ai-provenance
       description: >-
         Provenance metadata requirements for AI-generated and rules-generated system outputs.
@@ -2453,6 +2586,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2464,6 +2598,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2482,6 +2617,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: distribution-packaging
       description: Distribution and Packaging
       source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/distribution-packaging.md
@@ -2489,6 +2625,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2507,6 +2644,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: fhir-query-naming
       description: >-
         Naming conventions for query helpers that return FHIR resource types and resource-scoped properties.
@@ -2576,6 +2714,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: frontend
       description: >-
         Standard: Frontend Dev Feedback Loop
@@ -2590,6 +2729,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: git
       description: >-
         Git Commit Convention
@@ -2604,6 +2744,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: healthcare
       description: >-
         Healthcare Clinical UX Style Guide
@@ -2635,6 +2776,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2646,6 +2788,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2665,6 +2808,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: judge-outcomes
       description: Judge Outcomes
       source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/judge-outcomes.md
@@ -2672,6 +2816,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2683,6 +2828,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2730,6 +2876,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: orchestrator-config
       description: Orchestrator Config Standard
       source: https://github.com/cognovis/library-core/blob/main/standards/orchestrator/orchestrator-config.md
@@ -2737,6 +2884,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2755,6 +2903,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: project
       description: >-
         Standard: Centralized Configuration
@@ -2769,6 +2918,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: project-scaffold
       description: Project Scaffold
       source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/project-scaffold.md
@@ -2776,6 +2926,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2787,6 +2938,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2805,6 +2957,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: python-cli-patterns
       description: >-
         Python CLI tool conventions — project structure, versioning, PyPI distribution, config resolution, update hints, packaging.
@@ -2819,6 +2972,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: python-default-bash-exception
       description: >-
         Python Default — Bash by Exception
@@ -2833,6 +2987,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: release
       description: >-
         Release & Changelog Standard
@@ -2847,6 +3002,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: review-quality-signals
       description: Review Quality Signals Provider Contract
       source: https://github.com/cognovis/library-core/blob/main/standards/orchestrator/review-quality-signals.md
@@ -2854,6 +3010,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2865,6 +3022,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -2883,6 +3041,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: security
       description: >-
         Content Isolation Pattern
@@ -2897,6 +3056,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: skills
       description: >-
         Skill Development Patterns
@@ -2911,6 +3071,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: sql-safety
       description: >-
         SQL query construction rules for safe filtering, casting, aggregation, and generated query maintenance.
@@ -2974,6 +3135,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -3041,6 +3203,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -3052,6 +3215,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
       tags:
         - origin:original
         - tier:domain
@@ -3070,6 +3234,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
     - name: writing
       description: >-
         Brand Usage Standard
@@ -3084,6 +3249,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+          plane: dev
   guardrails:
     - name: block-destructive-bash
       description: >-

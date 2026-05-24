@@ -103,9 +103,16 @@ Record the placement decision in the generated catalog snippet or handoff text:
 4. **Repo-local escape hatch:** if the skill is path-heavy, ADR-heavy, credential-
    heavy, or only meaningful in one repo, stop global marketplace scaffolding and
    keep it as a repo-local overlay.
-5. **Gas City projection:** if exportable, name the PackV2 target and operational
+5. **Harness support:** ask whether the skill works in all harnesses or is
+   harness-specific. For one-harness skills, set
+   `metadata.library.harness_support.<harness>: supported` and mark the others
+   `not-supported`.
+6. **Runtime requirements:** ask whether the skill needs external binaries such
+   as `bun`, `rg`, `sushi`, or `shellcheck`; if yes, declare them under
+   `runtime_requirements.binaries`.
+7. **Gas City projection:** if exportable, name the PackV2 target and operational
    city scope; projection metadata belongs in `library.yaml`.
-6. **Deterministic script routing:** if the value is repeatable parsing, scanning,
+8. **Deterministic script routing:** if the value is repeatable parsing, scanning,
    validation, export, or transformation, dispatch to `script-forge` or bundle a
    Python script before adding prompt prose.
 

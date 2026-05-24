@@ -648,6 +648,83 @@
         }
       }
     },
+    "harness_support": {
+      "description": "Per-harness support status for this primitive.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claude_code": {
+          "description": "Support status in Claude Code harness.",
+          "type": "string",
+          "enum": [
+            "supported",
+            "not-supported",
+            "planned"
+          ]
+        },
+        "codex": {
+          "description": "Support status in Codex CLI harness.",
+          "type": "string",
+          "enum": [
+            "supported",
+            "not-supported",
+            "planned"
+          ]
+        }
+      }
+    },
+    "runtime_requirements": {
+      "description": "Runtime binaries this primitive needs. Install-time doctor check enforces.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "binaries": {
+          "description": "List of binary names that must exist on PATH.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "plane_required_for_non_core_tier": {
+      "description": "Entries tagged tier:domain or tier:project must declare metadata.library.plane.",
+      "if": {
+        "properties": {
+          "tags": {
+            "contains": {
+              "enum": [
+                "tier:domain",
+                "tier:project"
+              ]
+            }
+          }
+        },
+        "required": [
+          "tags"
+        ]
+      },
+      "then": {
+        "required": [
+          "metadata"
+        ],
+        "properties": {
+          "metadata": {
+            "required": [
+              "library"
+            ],
+            "properties": {
+              "library": {
+                "required": [
+                  "plane"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "entry_metadata": {
       "description": "Open metadata bag. Library-owned metadata lives under metadata.library.*; agentskills-compatible string fields may coexist at the top level.",
       "type": "object",
@@ -668,6 +745,9 @@
             "product_counterpart": {
               "$ref": "#/$defs/product_counterpart"
             },
+            "harness_support": {
+              "$ref": "#/$defs/harness_support"
+            },
             "gascity": {
               "$ref": "#/$defs/gascity_export"
             }
@@ -678,6 +758,11 @@
     "base_entry": {
       "description": "Common fields shared by all catalog entry types. Either `source` or `from_marketplace + repo + path` is required.",
       "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/plane_required_for_non_core_tier"
+        }
+      ],
       "required": [
         "name"
       ],
@@ -710,6 +795,9 @@
             "$ref": "#/$defs/script_asset"
           },
           "default": []
+        },
+        "runtime_requirements": {
+          "$ref": "#/$defs/runtime_requirements"
         },
         "metadata": {
           "$ref": "#/$defs/entry_metadata"
@@ -1265,6 +1353,9 @@
       ],
       "allOf": [
         {
+          "$ref": "#/$defs/plane_required_for_non_core_tier"
+        },
+        {
           "if": {
             "properties": {
               "kind": {
@@ -1312,6 +1403,12 @@
             "$ref": "#/$defs/typed_dependency"
           },
           "default": []
+        },
+        "runtime_requirements": {
+          "$ref": "#/$defs/runtime_requirements"
+        },
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
         },
         "harness": {
           "description": "Which harnesses this guardrail targets (claude, codex, both, all).",
@@ -1597,6 +1694,11 @@
     "model_standard_entry": {
       "description": "A Layer 3 model-standard catalog entry. Describes behavioral guidelines for a specific model. Installed to .agents/model-standards/<name>.md (project) or ~/.agents/model-standards/<name>.md (global).",
       "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/plane_required_for_non_core_tier"
+        }
+      ],
       "required": [
         "name",
         "description"
@@ -1615,6 +1717,9 @@
         "source": {
           "description": "GitHub URL or local path to the model-standard file.",
           "type": "string"
+        },
+        "runtime_requirements": {
+          "$ref": "#/$defs/runtime_requirements"
         },
         "metadata": {
           "$ref": "#/$defs/entry_metadata"
@@ -1637,6 +1742,11 @@
     "agent_base_entry": {
       "description": "A Layer 1 agent base prompt catalog entry. Describes the base behavioral document prepended to every composed agent. Installed to .agents/agent-bases/<name>.md (project) or ~/.agents/agent-bases/<name>.md (global).",
       "type": "object",
+      "allOf": [
+        {
+          "$ref": "#/$defs/plane_required_for_non_core_tier"
+        }
+      ],
       "required": [
         "name",
         "description"
@@ -1663,6 +1773,9 @@
             "$ref": "#/$defs/typed_dependency"
           },
           "default": []
+        },
+        "runtime_requirements": {
+          "$ref": "#/$defs/runtime_requirements"
         },
         "metadata": {
           "$ref": "#/$defs/entry_metadata"
