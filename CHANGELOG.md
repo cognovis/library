@@ -23,6 +23,7 @@
 
 ### 🐛 Bug Fixes
 
+- *(CL-iye.7)* Enforce `runtime_requirements.binaries` gate before any install or dependency mutation — `library use` now exits with code 3 and a structured error when a declared binary is absent from PATH; the check runs for all supported primitive types (skills, agents, prompts, scripts, standards, model-standards, agent-bases, guardrails, MCP, and workflow entries); the gate fires on both the main entry and each dependency before any filesystem change occurs, preventing partial installs when a fuzzy query resolves to an incompatible entry; `--dry-run --json` and non-dry-run `--json` both return a stable `error_result` payload that includes the list of missing binary names
 - *(installer)* Move `lookup_entry` import to module level to avoid repeated local imports in `_resolve_default_scope`
 - *(fhir-sync-versions)* Register skill in library catalog
 
