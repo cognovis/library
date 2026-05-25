@@ -13,7 +13,7 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from lib.workflow_runtime import SpineConstraintChecker, WorkflowRuntime  # noqa: E402
+from lib.workflow_runtime import AgentExecutor, SpineConstraintChecker, WorkflowRuntime  # noqa: E402
 
 
 def test_agent_extraction_ignores_commented_calls() -> None:
@@ -115,3 +115,104 @@ def test_workflow_runtime_cli_runs_spec(tmp_path: Path) -> None:
     output = json.loads(result.stdout)
     assert output["status"] == "ok"
     assert output["meta"]["name"] == "test"
+
+
+def test_route_profile_slot_dispatch_uses_slot_target_adapter(tmp_path: Path) -> None:
+    """AC4: slot target adapter is resolved from route profile without model-prefix inference."""
+    route_profiles = {
+        "cld-default": {
+            "slots": {
+                "full": {
+                    "implementation": {
+                        "adapter": "codex-exec",
+                        "harness": "cld",
+                        "model": "gpt-5.5",
+                    }
+                }
+            }
+        }
+    }
+
+    class CapturingExecutor(AgentExecutor):
+        adapter_name = "codex-exec"
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, object]]] = []
+
+        def run(self, prompt: str, opts: dict[str, object]) -> dict[str, object]:
+            self.calls.append((prompt, opts))
+            return {"adapter": self.adapter_name, "output": "captured"}
+
+    exec_registry = {"codex-exec": CapturingExecutor()}
+    runtime = WorkflowRuntime(
+        executor_registry=exec_registry,
+        constraint_checker=SpineConstraintChecker(),
+    )
+    spec_path = tmp_path / "dispatch.js"
+    spec_path.write_text(
+        'export const meta = {"name": "t"};\n'
+        'await agent("dispatch test", {"readOnly": true, "slot": "implementation"});\n',
+        encoding="utf-8",
+    )
+    args = {
+        "route_profile": "cld-default",
+        "route_profiles": route_profiles,
+        "workflow": "full",
+        "readOnly": True,
+    }
+
+    result = runtime.run(spec_path, args)
+
+    assert result["status"] == "ok"
+    leaf = result["leaf_results"][0]
+    assert leaf["opts"]["slot_target"]["adapter"] == "codex-exec"
+    capturing = exec_registry["codex-exec"]
+    assert len(capturing.calls) == 1
+
+
+def test_route_profile_dispatch_does_not_infer_adapter_from_model_prefix(tmp_path: Path) -> None:
+    """AC4: model name prefix must not be used to infer adapter."""
+    route_profiles = {
+        "cld-default": {
+            "slots": {
+                "full": {
+                    "implementation": {
+                        "adapter": "claude-agent",
+                        "harness": "cld",
+                        "model": "gpt-5.5",
+                    }
+                }
+            }
+        }
+    }
+
+    class TrackingExecutor(AgentExecutor):
+        adapter_name = "claude-agent"
+
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def run(self, prompt: str, opts: dict[str, object]) -> dict[str, object]:
+            self.calls.append(prompt)
+            return {"adapter": self.adapter_name, "output": "tracked"}
+
+    exec_registry = {"claude-agent": TrackingExecutor()}
+    runtime = WorkflowRuntime(executor_registry=exec_registry)
+    spec_path = tmp_path / "prefix.js"
+    spec_path.write_text(
+        'export const meta = {"name": "t"};\n'
+        'await agent("prefix test", {"readOnly": true, "slot": "implementation"});\n',
+        encoding="utf-8",
+    )
+    args = {
+        "route_profile": "cld-default",
+        "route_profiles": route_profiles,
+        "workflow": "full",
+        "readOnly": True,
+    }
+
+    runtime.run(spec_path, args)
+
+    tracker = exec_registry["claude-agent"]
+    assert len(tracker.calls) == 1
+    assert tracker.calls[0] == "prefix test"
