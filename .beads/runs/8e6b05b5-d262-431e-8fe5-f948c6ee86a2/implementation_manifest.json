@@ -1,0 +1,132 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-mr2q",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "criterion": "library.yaml declares opencode-native agent default dirs using the existing default_dirs convention",
+      "status": "done",
+      "changed_files": [
+        "library.yaml",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd-validate-library",
+        "cmd-green-subset",
+        "cmd-full-touched-file"
+      ]
+    },
+    {
+      "id": 2,
+      "criterion": "Agent path resolution for --harness opencode targets .opencode/agents/ for project scope and ~/.opencode/agents/ for global scope",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd-red-subset",
+        "cmd-green-subset"
+      ]
+    },
+    {
+      "id": 3,
+      "criterion": "library use --harness opencode dry-run JSON reports opencode agent target_paths and does not report .claude/agents/",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd-red-subset",
+        "cmd-green-subset"
+      ]
+    },
+    {
+      "id": 4,
+      "criterion": "Non-dry-run agent install/remove avoids dangling Claude-path artifacts for opencode harness installs",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "scripts/library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd-red-subset",
+        "cmd-green-subset",
+        "cmd-full-touched-file"
+      ]
+    },
+    {
+      "id": 5,
+      "criterion": "Existing claude_code, codex, and cursor agent behavior remains unchanged",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "scripts/library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "cmd-green-subset",
+        "cmd-full-touched-file"
+      ]
+    }
+  ],
+  "changed_files": [
+    "library.yaml",
+    "scripts/lib/installers/agent.py",
+    "scripts/library.py",
+    "tests/test_library_py_installers.py",
+    ".beads/runs/8e6b05b5-d262-431e-8fe5-f948c6ee86a2/implementation_manifest.json",
+    ".beads/runs/8e6b05b5-d262-431e-8fe5-f948c6ee86a2/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "7731d07",
+      "message": "test(CL-mr2q): red \u2014 opencode agent routing"
+    },
+    {
+      "sha": "fbc3189",
+      "message": "feat(CL-mr2q): green \u2014 route opencode agents"
+    }
+  ],
+  "tests": [
+    {
+      "id": "cmd-red-subset",
+      "command": "UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run pytest tests/test_library_py_installers.py -q -k 'opencode_agent or agent_harness_routing or library_yaml_declares_opencode'",
+      "result": "failed before implementation with 5 expected failures covering missing opencode dirs and Claude-path routing"
+    },
+    {
+      "id": "cmd-green-subset",
+      "command": "UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run pytest tests/test_library_py_installers.py -q -k 'opencode_agent or agent_harness_routing or library_yaml_declares_opencode'",
+      "result": "7 passed, 119 deselected"
+    },
+    {
+      "id": "cmd-full-touched-file",
+      "command": "XDG_DATA_HOME=/private/tmp/codex-library-test-data UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run pytest tests/test_library_py_installers.py -q",
+      "result": "126 passed"
+    },
+    {
+      "id": "cmd-validate-library",
+      "command": "XDG_DATA_HOME=/private/tmp/codex-library-test-data UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run scripts/validate-library.py",
+      "result": "PASS"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [
+    "Added only opencode agent default directory metadata and opencode agent install/remove path routing.",
+    "Did not add opencode to harness=all behavior.",
+    "Did not change paths.py or cursor agent support."
+  ],
+  "downstream_impacts": [
+    "Project-scoped opencode agent installs now write .opencode/agents/<name>.md.",
+    "Global opencode agent resolution now uses ~/.opencode/agents/.",
+    "Agent remove accepts --harness so opencode cleanup targets the opencode artifact instead of the Claude artifact."
+  ],
+  "evidence_refs": [
+    "cmd-red-subset",
+    "cmd-green-subset",
+    "cmd-full-touched-file",
+    "cmd-validate-library"
+  ]
+}
