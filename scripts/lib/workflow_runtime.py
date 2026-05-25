@@ -16,12 +16,17 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, ClassVar, Optional
 
 
 class SpineConstraintError(ValueError):
     """Raised when the workflow spine uses a banned operation."""
+
+
+class JournalSchemaError(ValueError):
+    """Raised when a journal file has an incompatible schema."""
 
 
 class SpineConstraintChecker:
@@ -197,44 +202,162 @@ def _hash_prompt_opts(prompt: str, opts: dict[str, Any]) -> str:
 class JournalStore:
     """Dict-backed journal with optional JSON persistence."""
 
+    SCHEMA_VERSION: ClassVar[str] = "1"
+
     entries: dict[str, Any] = field(default_factory=dict)
     path: Optional[Path] = None
+    spec_hash: Optional[str] = None
+    route_profile: Optional[str] = None
+    workflow: Optional[str] = None
 
     def key_for(self, prompt: str, opts: dict[str, Any]) -> str:
         return _hash_prompt_opts(prompt, opts)
 
     def get(self, prompt: str, opts: dict[str, Any]) -> Any:
-        return self.entries.get(self.key_for(prompt, opts))
+        entry = self.entries.get(self.key_for(prompt, opts))
+        if self._is_rich_entry(entry):
+            return entry["result"]
+        return entry
 
     def put(self, prompt: str, opts: dict[str, Any], value: Any) -> str:
+        return self.put_leaf(
+            prompt,
+            opts,
+            value,
+            slot=self._slot_from_opts(opts),
+            adapter=self._adapter_from_opts(opts),
+        )
+
+    def put_leaf(
+        self,
+        prompt: str,
+        opts: dict[str, Any],
+        value: Any,
+        *,
+        slot: Optional[str] = None,
+        adapter: Optional[str] = None,
+    ) -> str:
         key = self.key_for(prompt, opts)
-        self.entries[key] = value
+        self.entries[key] = {
+            "slot": slot,
+            "adapter": adapter,
+            "prompt_opts_hash": key,
+            "result": value,
+            "metadata": {},
+        }
         return key
 
+    def bind_identity(
+        self,
+        spec_hash: Optional[str],
+        route_profile: Optional[str],
+        workflow: Optional[str],
+    ) -> bool:
+        """Bind the journal to the current workflow identity.
+
+        Returns True when existing entries were invalidated.
+        """
+        identity_changed = (
+            self.spec_hash != spec_hash
+            or self.route_profile != route_profile
+            or self.workflow != workflow
+        )
+        if identity_changed and self.entries:
+            self.entries.clear()
+
+        self.spec_hash = spec_hash
+        self.route_profile = route_profile
+        self.workflow = workflow
+        return identity_changed
+
     def to_dict(self) -> dict[str, Any]:
-        return {"entries": dict(self.entries)}
+        return {
+            "version": self.SCHEMA_VERSION,
+            "spec_hash": self.spec_hash,
+            "route_profile": self.route_profile,
+            "workflow": self.workflow,
+            "entries": dict(self.entries),
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], path: Optional[Path] = None) -> "JournalStore":
         entries = data.get("entries", {})
         if not isinstance(entries, dict):
             entries = {}
-        return cls(entries=dict(entries), path=path)
+        return cls(
+            entries=dict(entries),
+            path=path,
+            spec_hash=cls._optional_string(data.get("spec_hash")),
+            route_profile=cls._optional_string(data.get("route_profile")),
+            workflow=cls._optional_string(data.get("workflow")),
+        )
 
     @classmethod
     def from_path(cls, path: Path) -> "JournalStore":
         if not path.exists():
             return cls(path=path)
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raw = {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError("Journal root must be a JSON object")
+        except (json.JSONDecodeError, ValueError, TypeError, OSError):
+            cls._quarantine_corrupt(path)
+            return cls(path=path)
+        if raw.get("version") != cls.SCHEMA_VERSION:
+            found = raw.get("version")
+            raise JournalSchemaError(
+                f"Journal version {found!r} is incompatible with {cls.SCHEMA_VERSION!r}; "
+                f"delete {path} to reset"
+            )
         return cls.from_dict(raw, path=path)
 
     def save(self) -> None:
         if self.path is None:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+        tmp_path.rename(self.path)
+
+    @staticmethod
+    def _is_rich_entry(entry: Any) -> bool:
+        return (
+            isinstance(entry, dict)
+            and {"slot", "adapter", "prompt_opts_hash", "result", "metadata"}.issubset(entry)
+        )
+
+    @staticmethod
+    def _slot_from_opts(opts: dict[str, Any]) -> Optional[str]:
+        slot = opts.get("slot")
+        return slot if isinstance(slot, str) else None
+
+    @staticmethod
+    def _adapter_from_opts(opts: dict[str, Any]) -> Optional[str]:
+        slot_target = opts.get("slot_target")
+        if isinstance(slot_target, dict):
+            adapter = slot_target.get("adapter")
+            if isinstance(adapter, str):
+                return adapter
+        adapter = opts.get("adapter")
+        return adapter if isinstance(adapter, str) else None
+
+    @staticmethod
+    def _optional_string(value: Any) -> Optional[str]:
+        return value if isinstance(value, str) else None
+
+    @staticmethod
+    def _quarantine_corrupt(path: Path) -> None:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        corrupt_base = path.with_suffix(".corrupt")
+        corrupt_path = corrupt_base.with_name(f"{corrupt_base.name}.{timestamp}")
+        counter = 1
+        while corrupt_path.exists():
+            corrupt_path = corrupt_base.with_name(f"{corrupt_base.name}.{timestamp}.{counter}")
+            counter += 1
+        try:
+            path.rename(corrupt_path)
+        except OSError:
+            pass
 
 
 class ResumeContext:
@@ -279,8 +402,20 @@ class WorkflowRuntime:
     def run(self, spec_path: str | Path, args: dict[str, Any]) -> dict[str, Any]:
         """Load a workflow spec, validate the spine, and execute its agent leaves."""
         path = Path(spec_path)
-        source = path.read_text(encoding="utf-8")
+        spec_bytes = path.read_bytes()
+        spec_hash = hashlib.sha256(spec_bytes).hexdigest()
+        source = spec_bytes.decode("utf-8")
         self.constraint_checker.validate(source)
+
+        if self.resume_context is not None:
+            self.journal = self.resume_context.load()
+        self.journal.bind_identity(
+            spec_hash,
+            self._optional_arg_string(args.get("route_profile")),
+            self._optional_arg_string(args.get("workflow")),
+        )
+        if self.resume_context is not None:
+            self.resume_context.journal = self.journal
 
         meta = self._extract_meta(source)
         agent_calls = self._extract_agent_calls(source)
@@ -324,7 +459,13 @@ class WorkflowRuntime:
             raise ValueError(f"No executor registered for adapter {adapter_name!r}")
 
         result = executor.run(prompt, opts)
-        journal_key = self.journal.put(prompt, opts, result)
+        journal_key = self.journal.put_leaf(
+            prompt,
+            opts,
+            result,
+            slot=self._slot_from_opts(opts),
+            adapter=adapter_name,
+        )
         return {
             "cached": False,
             "journal_key": journal_key,
@@ -344,6 +485,15 @@ class WorkflowRuntime:
         if isinstance(adapter, str) and adapter:
             return adapter
         return "claude-agent"
+
+    @staticmethod
+    def _slot_from_opts(opts: dict[str, Any]) -> Optional[str]:
+        slot = opts.get("slot")
+        return slot if isinstance(slot, str) else None
+
+    @staticmethod
+    def _optional_arg_string(value: Any) -> Optional[str]:
+        return value if isinstance(value, str) else None
 
     @staticmethod
     def _resolve_slot_target(args: dict[str, Any], opts: dict[str, Any]) -> dict[str, Any] | None:
