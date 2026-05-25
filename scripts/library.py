@@ -497,15 +497,11 @@ def _check_harness_support(entry: dict, harness: str) -> str | None:
 
 def _check_runtime_requirements(entry: dict) -> str | None:
     """Return an error message when declared runtime binaries are absent from PATH."""
+    # The schema declares runtime_requirements at the top level of an entry
+    # (#/$defs/runtime_requirements via $ref), distinct from harness_support which
+    # lives under metadata.library. Read the schema-canonical top-level location only.
     runtime_requirements = entry.get("runtime_requirements", {})
-    metadata_runtime_requirements = (
-        entry.get("metadata", {})
-        .get("library", {})
-        .get("runtime_requirements", {})
-    )
-    binaries = runtime_requirements.get("binaries") or metadata_runtime_requirements.get(
-        "binaries", []
-    )
+    binaries = runtime_requirements.get("binaries", [])
     missing = [binary for binary in binaries if shutil.which(binary) is None]
     if missing:
         return (

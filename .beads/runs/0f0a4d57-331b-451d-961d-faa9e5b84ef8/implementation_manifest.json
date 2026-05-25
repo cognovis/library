@@ -42,7 +42,7 @@
       "id": 7,
       "status": "done",
       "changed_files": ["docs/PRIMITIVES.md", "docs/schema/library.schema.json"],
-      "evidence_refs": ["cmd:targeted-suite"]
+      "evidence_refs": ["cmd:targeted-suite", "cmd:pairloop1-schema-json-valid", "cmd:pairloop1-targeted-suite"]
     },
     {
       "id": 8,
@@ -63,7 +63,8 @@
   "commits": [
     "9708849 test(CL-iye.7): red \u2014 runtime gate ordering",
     "6f69211 test(CL-iye.7): red \u2014 runtime schema coverage",
-    "c4d3744 feat(CL-iye.7): green \u2014 enforce runtime requirements"
+    "c4d3744 feat(CL-iye.7): green \u2014 enforce runtime requirements",
+    "fix(CL-iye.7): address pair-loop findings iteration 1"
   ],
   "tests": [
     {
@@ -88,7 +89,8 @@
   "downstream_impacts": [
     "MCP catalog entries can now declare runtime_requirements.binaries in schema.",
     "Installer real installs now fuzzy-resolve the requested main entry before dependency resolution and use the resolved canonical name for dependency traversal.",
-    "Runtime requirement checks use PATH lookup only and do not execute declared binaries."
+    "Runtime requirement checks use PATH lookup only and do not execute declared binaries.",
+    "Pair-loop iteration 1: schema runtime_requirements description now describes the installer PATH gate semantics; _check_runtime_requirements reads only the schema-canonical top-level runtime_requirements location (removed the untested metadata.library fallback)."
   ],
   "evidence_refs": [
     "cmd:red-installer-tests",

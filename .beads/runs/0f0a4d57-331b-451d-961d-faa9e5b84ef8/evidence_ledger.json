@@ -57,6 +57,20 @@
       "purpose": "Check worktree state after the green implementation commit.",
       "exit_code": 0,
       "observed_result": "No tracked changes were pending before writing run artifacts."
+    },
+    {
+      "id": "cmd:pairloop1-schema-json-valid",
+      "command": "uv run python -c \"import json; json.load(open('docs/schema/library.schema.json'))\"",
+      "purpose": "Pair-loop iteration 1: confirm the schema still parses as valid JSON after the AC7 description wording fix.",
+      "exit_code": 0,
+      "observed_result": "Schema parsed as valid JSON."
+    },
+    {
+      "id": "cmd:pairloop1-targeted-suite",
+      "command": "uv run pytest tests/test_library_py_installers.py tests/test_validate_library.py -x -q --tb=short",
+      "purpose": "Pair-loop iteration 1: re-run targeted suite after the AC7 schema wording fix and the runtime gate location alignment.",
+      "exit_code": 0,
+      "observed_result": "Passed: 131 passed in 6.07s."
     }
   ],
   "skipped_checks": [],
