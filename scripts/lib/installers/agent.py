@@ -331,6 +331,9 @@ def _resolve_agent_targets(
     if harness == "codex" and sources_map.get("codex"):
         return [target("codex", sources_map["codex"], ".toml", "-codex")], harness_missing
 
+    if harness == "opencode" and sources_map.get("opencode"):
+        return [target("opencode", sources_map["opencode"], ".md", "-opencode")], harness_missing
+
     if not sources_map and entry.get("source"):
         source = entry["source"]
         if harness == "all":
@@ -340,6 +343,8 @@ def _resolve_agent_targets(
             ], harness_missing
         if harness == "codex":
             return [target("codex", source, ".toml", "-codex", build_from_unified=True)], harness_missing
+        if harness == "opencode":
+            return [target("opencode", source, ".md", "-opencode", build_from_unified=True)], harness_missing
         return [target("claude_code", source, ".md", build_from_unified=True)], harness_missing
 
     try:
@@ -356,6 +361,9 @@ def _resolve_agent_targets(
     if harness != "all":
         harness_missing = _harness_missing_sources(entry, harness)
 
+    if harness == "opencode":
+        return [target("opencode", source, ".md", "-opencode")], harness_missing
+
     return [target("claude_code", source, ".md")], harness_missing
 
 
@@ -366,12 +374,17 @@ def _resolve_agent_base(
     repo_root: Path,
     harness: str,
 ) -> Path:
-    """Resolve the base install directory for a Claude or Codex agent."""
+    """Resolve the base install directory for a harness-native agent."""
     if harness == "codex":
         codex_path = _resolve_codex_agent_base(catalog, scope, repo_root)
         if codex_path is not None:
             return codex_path
         return (Path.home() / ".codex" / "agents") if scope == "global" else (repo_root / ".codex" / "agents")
+    if harness == "opencode":
+        opencode_path = _resolve_opencode_agent_base(catalog, scope, repo_root)
+        if opencode_path is not None:
+            return opencode_path
+        return (Path.home() / ".opencode" / "agents") if scope == "global" else (repo_root / ".opencode" / "agents")
 
     install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
     canonical_base = install_paths["canonical"]
@@ -403,6 +416,26 @@ def _resolve_codex_agent_base(
     return None
 
 
+def _resolve_opencode_agent_base(
+    catalog: dict,
+    scope: str,
+    repo_root: Path,
+) -> Path | None:
+    """Resolve default_dirs.agents default_opencode/global_opencode, if configured."""
+    default_dirs = catalog.get("default_dirs", {}) or {}
+    dirs_for_type = default_dirs.get("agents", []) or []
+    home = Path.home()
+    for entry in dirs_for_type:
+        if not isinstance(entry, dict):
+            continue
+        for key, value in entry.items():
+            if scope == "project" and key == "default_opencode":
+                return _expand_agent_path(value, home, repo_root)
+            if scope == "global" and key == "global_opencode":
+                return _expand_agent_path(value, home, repo_root)
+    return None
+
+
 def _expand_agent_path(raw: str, home: Path, root: Path) -> Path:
     """Expand a configured agent path."""
     if raw.startswith("~/"):
@@ -418,6 +451,7 @@ def remove_agent(
     repo_root: Path,
     scope: str = "project",
     dry_run: bool = False,
+    harness: str = "claude_code",
 ) -> dict[str, Any]:
     """Remove an installed agent.
 
@@ -432,13 +466,10 @@ def remove_agent(
         Operation result dict.
     """
     prim = get_primitive("agent")
-    install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
-    canonical_base = install_paths["canonical"]
+    canonical_base = _resolve_agent_base(catalog, prim, scope, repo_root, harness)
 
-    if canonical_base is None:
-        raise InstallError(f"Cannot determine install path for agent '{name}' (scope={scope}).")
-
-    install_target = canonical_base / f"{name}.md"
+    extension = ".toml" if harness == "codex" else ".md"
+    install_target = canonical_base / f"{name}{extension}"
 
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
 

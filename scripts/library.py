@@ -184,6 +184,12 @@ def build_parser() -> argparse.ArgumentParser:
                 "(default: current git root or cwd)"
             ),
         )
+        remove_p.add_argument(
+            "--harness",
+            choices=["claude_code", "codex", "cursor", "opencode", "all"],
+            default="claude_code",
+            help="Target harness for harness-specific removals (default: claude_code)",
+        )
 
         # search
         search_p = verb_sub.add_parser("search", help="Search within this primitive")
@@ -1148,6 +1154,7 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     dry_run = getattr(args, "dry_run", False)
     name = getattr(args, "name", None)
     scope = getattr(args, "scope", "project")
+    harness = getattr(args, "harness", "claude_code")
     primitive = args.primitive
 
     if name is None:
@@ -1159,7 +1166,7 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         return EXIT_FAILURE
 
     try:
-        result = _dispatch_remove(primitive, catalog, name, repo_root, scope, dry_run)
+        result = _dispatch_remove(primitive, catalog, name, repo_root, scope, dry_run, harness)
         if use_json:
             print_json(result)
         else:
@@ -1180,6 +1187,7 @@ def _dispatch_remove(
     repo_root: Path,
     scope: str,
     dry_run: bool,
+    harness: str = "claude_code",
 ) -> dict:
     """Dispatch remove to the correct primitive handler."""
     if primitive == "skill":
@@ -1197,7 +1205,14 @@ def _dispatch_remove(
         )
     elif primitive == "agent":
         from lib.installers.agent import remove_agent
-        return remove_agent(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
+        return remove_agent(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+        )
     elif primitive == "prompt":
         from lib.installers.simple_file import remove_simple_file
         return remove_simple_file(catalog=catalog, primitive_name="prompt", name=name,
