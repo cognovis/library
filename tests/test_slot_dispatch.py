@@ -286,14 +286,25 @@ class TestPhaseProgressMarkerFormat:
         assert "phase: 0 | name: route_decision | status: complete | route:" in content
 
     def test_no_new_phase_progress_marker_formats_introduced(self) -> None:
+        """Marker format must stay: 'phase: N | name: X | status: Y'.
+
+        Template lines (containing angle brackets like '<N>') are skipped since
+        they are documentation examples, not live emitted markers.
+        """
         if not _BEAD_ORCH_PATH.exists():
             pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
         content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
+        # Check lines immediately after ### Phase Progress markers.
+        # Skip template lines (those containing angle brackets — they are examples).
         lines = content.splitlines()
+        checked = 0
         for i, line in enumerate(lines):
             if line.strip() == "### Phase Progress" and i + 1 < len(lines):
                 next_line = lines[i + 1].strip()
-                if next_line:
+                if next_line and "<" not in next_line and ">" not in next_line:
                     assert re.match(r"^phase: \d+ \|", next_line), (
                         f"Phase Progress line at {i + 2} has non-canonical format: {next_line!r}"
                     )
+                    checked += 1
+        # Ensure we actually checked at least some real markers (not all were templates)
+        assert checked > 0, "No non-template Phase Progress markers found"
