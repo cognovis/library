@@ -109,6 +109,14 @@
             "$ref": "#/$defs/agent_base_entry"
           },
           "default": []
+        },
+        "workflows": {
+          "description": "Catalog of deterministic workflow orchestration specs. Stored as Claude workflow JavaScript; Codex and Cursor have no native workflow executor.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workflow_entry"
+          },
+          "default": []
         }
       },
       "additionalProperties": false
@@ -303,6 +311,7 @@
               "mcp_servers",
               "model_standards",
               "agent_bases",
+              "workflows",
               "project_tooling",
               "plugins"
             ]
@@ -937,6 +946,7 @@
               "mcp_servers",
               "model_standards",
               "agent_bases",
+              "workflows",
               "project_tooling",
               "plugins"
             ]
@@ -1824,6 +1834,33 @@
         }
       },
       "additionalProperties": false
+    },
+    "workflow_entry": {
+      "description": "A deterministic workflow orchestration spec. Installed to .claude/workflows/<name>.js (project) or ~/.claude/workflows/<name>.js (global).",
+      "allOf": [
+        {
+          "$ref": "#/$defs/base_entry"
+        },
+        {
+          "$ref": "#/$defs/marketplace_ref"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "install_path": {
+              "description": "Override the default install directory for this workflow.",
+              "type": "string"
+            },
+            "format": {
+              "description": "Workflow file format metadata. The installer treats workflows as regular files.",
+              "type": "string",
+              "enum": [
+                "claude-workflow-js"
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

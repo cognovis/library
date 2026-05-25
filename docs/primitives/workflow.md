@@ -83,10 +83,9 @@ argless `new Date()` throw — they would break resume. Pass timestamps via `arg
 and stamp results after the workflow returns; vary by loop index instead of
 randomness.
 
-**Catalog format (proposed — pending catalog support).** First-class workflows
-live under `library.workflows` in `library.yaml`. The installer's awareness of
-this shape, plus its tests, are deferred to the catalog/installer bead noted in
-ADR-0006:
+**Catalog format.** First-class workflows live under `library.workflows` in
+`library.yaml`. `format: claude-workflow-js` is metadata; the installer treats
+the workflow as a regular JavaScript file copy:
 
 ```yaml
 - name: bead-context-pack
@@ -106,7 +105,7 @@ ADR-0006:
 | Claude project-local | `.claude/workflows/<name>.js` |
 | Claude global | `~/.claude/workflows/<name>.js` |
 | Plugin-shipped | a plugin's `workflowsPath` (the binary's `loadPluginWorkflows`) |
-| Codex install target | TBD — settled by the catalog/installer bead |
+| Codex / Cursor install target | `.claude/workflows/<name>.js` storage only; Codex and Cursor have no native workflow executor, so this does not claim runtime support |
 
 **When to choose it.** Create a workflow when **all** hold:
 

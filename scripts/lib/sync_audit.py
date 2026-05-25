@@ -205,6 +205,10 @@ def reinstall_entry(
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="agent-base", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
+    elif entry_type == "workflow":
+        from .installers.simple_file import install_simple_file
+        install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
+                           repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "mcp":
         from .installers.mcp_installer import install_mcp
         install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
