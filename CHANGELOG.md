@@ -48,6 +48,18 @@
   - Reference implementation verified against mira on 2026-05-24 — all baseline requirements pass
   - `templates/project-gitignore-harness.txt` provides a copy-paste `.gitignore` snippet
 
+### ⚙️ Miscellaneous Tasks
+
+- *(CL-37yu)* Workflow journal/resume hardening in `scripts/lib/workflow_runtime.py`
+  - Journal format is versioned (`SCHEMA_VERSION = "1"`); each entry records `slot`, `adapter`, `prompt_opts_hash`, and `result` metadata alongside workflow identity fields (`spec_hash`, `route_profile`, `workflow`)
+  - `bind_identity()` compares current run identity against the stored journal on every `run()` call; mismatched entries are cleared before execution resumes
+  - Journal writes are atomic via a `.tmp` rename, preventing partial-write corruption
+  - Parent directories are created safely (`mkdir(parents=True, exist_ok=True)`) before any write
+  - Corrupt or unreadable journals are quarantined to a timestamped `.corrupt` sidecar; execution continues with a fresh journal
+  - Incompatible schema versions raise `JournalSchemaError` with an actionable message including the journal file path
+  - `from_dict` rejects malformed `entries` fields with a descriptive error instead of silently substituting an empty dict
+  - Existing read-only workflow runtime spike behavior is unchanged
+
 ### 🚀 Features
 
 - *(CL-w5d)* Uniform dry-run JSON contract for all primitive installers — `library.py <primitive> use --dry-run --json` now emits a versioned envelope with `status`, `operations`, `target_paths`, `harness_routing`, `conflict_policy`, `lockfile_changes`, and `requires_user_confirmation` fields; project scope and conflict detection are consistently reflected across skill, standard, agent, prompt, script, model-standard, agent-base, MCP, and guardrail installers; contract schema documented in `docs/schema/dry-run-contract.md`
