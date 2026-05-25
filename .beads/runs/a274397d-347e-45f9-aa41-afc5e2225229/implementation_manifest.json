@@ -6,71 +6,130 @@
       "id": 1,
       "status": "done",
       "summary": "library.yaml and schema support library.workflows and workflow default directories.",
-      "changed_files": ["library.yaml", "docs/schema/library.schema.json"],
-      "evidence_refs": ["cmd:red-focused", "cmd:focused-green", "cmd:validate-library"]
+      "changed_files": [
+        "library.yaml",
+        "docs/schema/library.schema.json"
+      ],
+      "evidence_refs": [
+        "cmd:red-focused",
+        "cmd:focused-green",
+        "cmd:validate-library"
+      ]
     },
     {
       "id": 2,
       "status": "done",
       "summary": "Primitive registry recognizes workflow with library.workflows metadata and workflows install subdir.",
-      "changed_files": ["scripts/lib/primitives.py", "tests/test_library_py_core.py"],
-      "evidence_refs": ["cmd:red-focused", "cmd:focused-green"]
+      "changed_files": [
+        "scripts/lib/primitives.py",
+        "tests/test_library_py_core.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-focused",
+        "cmd:focused-green"
+      ]
     },
     {
       "id": 3,
       "status": "done",
       "summary": "Catalog inventory classifies workflow/workflows content types and scans .claude/workflows/*.js.",
-      "changed_files": ["scripts/lib/catalog_inventory.py", "tests/test_library_py_core.py"],
-      "evidence_refs": ["cmd:catalog-match", "cmd:combined-relevant"]
+      "changed_files": [
+        "scripts/lib/catalog_inventory.py",
+        "tests/test_library_py_core.py"
+      ],
+      "evidence_refs": [
+        "cmd:catalog-match",
+        "cmd:combined-relevant"
+      ]
     },
     {
       "id": 4,
       "status": "done",
       "summary": "library.py use/remove/list/sync flows handle workflow entries through the simple-file installer and sync dispatcher.",
-      "changed_files": ["scripts/library.py", "scripts/lib/sync_audit.py", "tests/test_library_py_new_features.py"],
-      "evidence_refs": ["cmd:focused-green", "cmd:combined-relevant"]
+      "changed_files": [
+        "scripts/library.py",
+        "scripts/lib/sync_audit.py",
+        "tests/test_library_py_new_features.py"
+      ],
+      "evidence_refs": [
+        "cmd:focused-green",
+        "cmd:combined-relevant"
+      ]
     },
     {
       "id": 5,
       "status": "done",
       "summary": "Project/global workflow install targets resolve to .claude/workflows/<name>.js and ~/.claude/workflows/<name>.js.",
-      "changed_files": ["library.yaml", "scripts/lib/installers/simple_file.py", "tests/test_library_py_new_features.py"],
-      "evidence_refs": ["cmd:focused-green", "cmd:combined-relevant"]
+      "changed_files": [
+        "library.yaml",
+        "scripts/lib/installers/simple_file.py",
+        "tests/test_library_py_new_features.py"
+      ],
+      "evidence_refs": [
+        "cmd:focused-green",
+        "cmd:combined-relevant"
+      ]
     },
     {
       "id": 6,
       "status": "done",
       "summary": "Codex/Cursor behavior is documented as storage at the Claude workflow location without native runtime support claims.",
-      "changed_files": ["docs/primitives/workflow.md", "SKILL.md"],
-      "evidence_refs": ["cmd:validate-library"]
+      "changed_files": [
+        "docs/primitives/workflow.md",
+        "SKILL.md"
+      ],
+      "evidence_refs": [
+        "cmd:validate-library"
+      ]
     },
     {
       "id": 7,
       "status": "done",
       "summary": "/library SKILL.md documents workflow as a valid installable primitive type.",
-      "changed_files": ["SKILL.md"],
-      "evidence_refs": ["cmd:validate-library"]
+      "changed_files": [
+        "SKILL.md"
+      ],
+      "evidence_refs": [
+        "cmd:validate-library"
+      ]
     },
     {
       "id": 8,
       "status": "done",
       "summary": "tests/test_library_py_*.py cover workflow catalog parse, install/uninstall, sync/list, dry-run target reporting, and supported primitive listing.",
-      "changed_files": ["tests/test_library_py_core.py", "tests/test_library_py_new_features.py"],
-      "evidence_refs": ["cmd:red-focused", "cmd:focused-green", "cmd:combined-relevant"]
+      "changed_files": [
+        "tests/test_library_py_core.py",
+        "tests/test_library_py_new_features.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-focused",
+        "cmd:focused-green",
+        "cmd:combined-relevant"
+      ]
     },
     {
       "id": 9,
       "status": "done",
       "summary": "docs/primitives/workflow.md catalog section is implemented wording and no longer proposed.",
-      "changed_files": ["docs/primitives/workflow.md"],
-      "evidence_refs": ["cmd:validate-library"]
+      "changed_files": [
+        "docs/primitives/workflow.md"
+      ],
+      "evidence_refs": [
+        "cmd:validate-library"
+      ]
     },
     {
       "id": 10,
       "status": "done",
       "summary": "Local workflow fixture installs end-to-end through /library use semantics via scripts/library.py workflow use.",
-      "changed_files": ["tests/test_library_py_new_features.py", "scripts/lib/installers/simple_file.py"],
-      "evidence_refs": ["cmd:focused-green", "cmd:combined-relevant"]
+      "changed_files": [
+        "tests/test_library_py_new_features.py",
+        "scripts/lib/installers/simple_file.py"
+      ],
+      "evidence_refs": [
+        "cmd:focused-green",
+        "cmd:combined-relevant"
+      ]
     }
   ],
   "changed_files": [
@@ -90,7 +149,8 @@
     "scripts/validate-gascity-export.py",
     "tests/test_library_py_core.py",
     "tests/test_library_py_new_features.py",
-    "tests/test_lockfile_schema.py"
+    "tests/test_lockfile_schema.py",
+    "tests/test_sync_audit.py"
   ],
   "commits": [
     "ae0db73 test(CL-rk2): red - cover workflow primitive support",
