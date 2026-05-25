@@ -235,3 +235,22 @@ def test_runtime_journal_state_serializes_to_json(tmp_path: Path) -> None:
     payload = json.loads(journal_path.read_text(encoding="utf-8"))
     assert "entries" in payload
     assert len(payload["entries"]) == 1
+
+def test_runtime_blocks_unknown_adapter_with_absent_readonly(tmp_path: Path) -> None:
+    """Fail-closed default: absent readOnly key + unknown adapter must be blocked."""
+    spec_path = _write_single_leaf_spec(
+        tmp_path,
+        {"adapter": "unknown-future-adapter"},
+    )
+    # Register the executor so the test is not skipped due to a missing executor
+    class UnknownExecutor(DummyExecutor):
+        adapter_name = "unknown-future-adapter"
+
+    runtime = WorkflowRuntime(
+        executor_registry={"unknown-future-adapter": UnknownExecutor()},
+    )
+
+    with pytest.raises(ValueError, match="Mutating workflow execution") as exc_info:
+        runtime.run(spec_path, {})
+
+    assert exc_info.type.__name__ == "MutatingExecutionBlockedError"
