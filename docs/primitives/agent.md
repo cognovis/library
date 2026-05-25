@@ -34,6 +34,11 @@ lookups.
 for global). NORMATIVE — Codex has first-class subagents (default/worker/explorer
 built-ins plus custom TOML).
 
+**Format (OpenCode).** Markdown in `.opencode/agents/<name>.md` (project) or
+`~/.opencode/agents/<name>.md` (global). Uses the same Markdown format as Claude Code.
+Install via `library agent use --harness opencode <name>`; remove via
+`library agent remove --harness opencode <name>`.
+
 **`action_boundary` metadata for side-effecting agents.** NORMATIVE.
 Agents that may execute or authorize side effects declare the same boundary fields
 as side-effecting skills. Claude agent sources use YAML frontmatter:

@@ -101,7 +101,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 |---|-----------|------------------|-------------|-----------|-------------|----|----|---------|
 | 1 | [Skill](primitives/skill.md) | **YES** — shared SKILL.md (Open Agent Skills Standard) | full text at session start | name+desc at startup, full on-demand | n/a | n/a | n/a | details |
 | 2 | [Command](primitives/command.md) | partial — same intent, different formats | `.claude/commands/*.md` (slash) | TBD (CL-qzw) | n/a | n/a | n/a | details |
-| 3 | [Agent](primitives/agent.md) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | n/a | details |
+| 3 | [Agent](primitives/agent.md) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | `.opencode/agents/*.md` (Markdown, same format as Claude Code) | details |
 | 3a | [Action Boundary](primitives/action-boundary.md) | partial — shared keys, primitive-native serialization | YAML frontmatter on skills/agents | YAML for skills, TOML for agents | n/a | unverified | unverified | metadata |
 | 4 | [Guardrail/Hook](primitives/guardrail-hook.md) | **NO** — event coverage diverges | 15 events | 8 events (PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | details |
 | 5 | [Plugin](primitives/plugin.md) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | details |
@@ -167,8 +167,9 @@ Cursor bridge symlink at `.cursor/skills/<name>/`; global installs use
 rules generated from `always_apply` or `globs` are materialized as
 `.cursor/rules/<name>.mdc`. Agent, MCP, and guardrail installs for Cursor are
 not currently implemented and are rejected with compatibility errors before
-target writes. OpenCode MCP and guardrail installs are likewise rejected by the
-library installer.
+target writes. OpenCode agent installs are supported — `--harness opencode`
+targets `.opencode/agents/<name>.md` (project) or `~/.opencode/agents/<name>.md`
+(global). OpenCode MCP and guardrail installs are rejected by the library installer.
 
 `metadata.library.harness_support` belongs to primitive entry metadata. MCP
 server entries use `install.mcp` as the source of truth for harness-specific MCP
