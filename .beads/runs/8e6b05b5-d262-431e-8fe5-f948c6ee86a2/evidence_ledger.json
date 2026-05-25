@@ -1,0 +1,103 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-mr2q",
+  "commands": [
+    {
+      "id": "cmd-bd-prime",
+      "command": "bd prime",
+      "purpose": "Load beads workflow context for the repo.",
+      "exit_code": 0,
+      "observed_result": "Workflow context loaded."
+    },
+    {
+      "id": "cmd-bd-show",
+      "command": "bd show CL-mr2q --json",
+      "purpose": "Read bead details through the bd CLI.",
+      "exit_code": 0,
+      "observed_result": "Bead CL-mr2q was already in_progress and claimed for run 8e6b05b5-d262-431e-8fe5-f948c6ee86a2."
+    },
+    {
+      "id": "cmd-bd-claim",
+      "command": "bd update CL-mr2q --claim",
+      "purpose": "Attempt to claim the bead before edits.",
+      "exit_code": 1,
+      "observed_result": "Claim rejected because the issue was already claimed by session-Solaris.local-72333."
+    },
+    {
+      "id": "cmd-uv-with-pytest",
+      "command": "UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run --with pytest pytest tests/test_library_py_installers.py -q -k 'opencode_agent or agent_harness_routing or library_yaml_declares_opencode'",
+      "purpose": "Attempt transient pytest execution via uv after redirecting uv cache to a writable path.",
+      "exit_code": 2,
+      "observed_result": "Network-restricted sandbox could not resolve pypi.org for transient pytest installation."
+    },
+    {
+      "id": "cmd-red-subset",
+      "command": "UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run pytest tests/test_library_py_installers.py -q -k 'opencode_agent or agent_harness_routing or library_yaml_declares_opencode'",
+      "purpose": "RED: verify new opencode agent routing tests fail before implementation.",
+      "exit_code": 1,
+      "observed_result": "5 failed, 2 passed, 119 deselected. Failures showed opencode target_paths resolving to .claude/agents, missing default_opencode/global_opencode in library.yaml, global opencode base unresolved, and real install creating no .opencode artifact."
+    },
+    {
+      "id": "cmd-red-commit",
+      "command": "git add tests/test_library_py_installers.py && git commit -m \"test(CL-mr2q): red \u2014 opencode agent routing\"",
+      "purpose": "Commit failing tests before production changes.",
+      "exit_code": 0,
+      "observed_result": "Created commit 7731d07."
+    },
+    {
+      "id": "cmd-green-subset",
+      "command": "UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run pytest tests/test_library_py_installers.py -q -k 'opencode_agent or agent_harness_routing or library_yaml_declares_opencode'",
+      "purpose": "GREEN: verify opencode agent routing tests pass after implementation.",
+      "exit_code": 0,
+      "observed_result": "7 passed, 119 deselected."
+    },
+    {
+      "id": "cmd-full-touched-file-no-xdg",
+      "command": "UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run pytest tests/test_library_py_installers.py -q",
+      "purpose": "Run the changed test file.",
+      "exit_code": 1,
+      "observed_result": "113 passed and 13 failed due sandbox denial writing old real-install tests to /Users/malte/.local/share/library; not caused by the opencode change."
+    },
+    {
+      "id": "cmd-full-touched-file",
+      "command": "XDG_DATA_HOME=/private/tmp/codex-library-test-data UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run pytest tests/test_library_py_installers.py -q",
+      "purpose": "Run the changed test file with writable XDG data cache for subprocess real installs.",
+      "exit_code": 0,
+      "observed_result": "126 passed."
+    },
+    {
+      "id": "cmd-validate-library",
+      "command": "XDG_DATA_HOME=/private/tmp/codex-library-test-data UV_CACHE_DIR=/private/tmp/codex-uv-cache uv run scripts/validate-library.py",
+      "purpose": "Validate library.yaml after adding opencode agent default dirs.",
+      "exit_code": 0,
+      "observed_result": "PASS: library.yaml is valid against docs/schema/library.schema.json."
+    },
+    {
+      "id": "cmd-green-commit",
+      "command": "git add library.yaml scripts/lib/installers/agent.py scripts/library.py && git commit -m \"feat(CL-mr2q): green \u2014 route opencode agents\"",
+      "purpose": "Commit production implementation after green tests.",
+      "exit_code": 0,
+      "observed_result": "Created commit fbc3189."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Full repository test suite",
+      "reason": "User requested conciseness: run only tests for files changed. The changed installer test file and catalog validator were run."
+    },
+    {
+      "check": "uv transient dependency install with --with pytest",
+      "reason": "Network is restricted in this sandbox, so pypi.org could not be resolved. Retried with project-local uv environment using already available pytest."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/8e6b05b5-d262-431e-8fe5-f948c6ee86a2/implementation_manifest.json",
+      "description": "Implementation manifest for CL-mr2q."
+    },
+    {
+      "path": ".beads/runs/8e6b05b5-d262-431e-8fe5-f948c6ee86a2/evidence_ledger.json",
+      "description": "Evidence ledger for CL-mr2q."
+    }
+  ]
+}

@@ -2,6 +2,16 @@
 
 ### 🚀 Features
 
+- *(CL-mr2q)* OpenCode harness support for agent install and remove
+  - `library.yaml` declares `default_opencode: .opencode/agents/` and `global_opencode: ~/.opencode/agents/` under `default_dirs.agents`
+  - `library agent use --harness opencode` installs agents to `.opencode/agents/` (project) or `~/.opencode/agents/` (global), using `.md` format (mirroring Claude Code)
+  - `library agent remove --harness opencode` removes from the correct opencode directory without leaving dangling Claude-path artifacts
+  - `--harness all` on `agent remove` now covers `claude_code`, `codex`, and `opencode` in one pass
+  - `--harness` flag added to `library agent remove` CLI (choices: `claude_code`, `codex`, `cursor`, `opencode`, `all`; default: `claude_code`)
+  - Cursor agent remove is blocked with a clear error (consistent with install behavior)
+  - `default_dirs` resolution follows the same `_resolve_opencode_agent_base` pattern as the existing Codex resolver
+  - Existing `claude_code`, `codex`, and `cursor` agent behavior is unchanged
+
 - *(CL-iye.4)* Slot-based adapter dispatch in bead-orchestrator and quick-fix
   - `bead-orchestrator` reads `execution_plan` slots for all six phases: `full.implementation`, `full.regression_fix`, `full.verification_fix`, `adversarial_review`, `verification`, and `session_close`
   - `quick-fix` reads `execution_plan` slots for `quick.implementation`, `quick.fix_loop`, `review`, and `session_close`

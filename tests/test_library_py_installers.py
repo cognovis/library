@@ -68,6 +68,8 @@ default_dirs:
   agents:
     - default: .claude/agents/
     - default_codex: .codex/agents/
+    - default_opencode: .opencode/agents/
+    - global_opencode: ~/.opencode/agents/
   prompts:
     - default: .claude/commands/
   scripts:
@@ -530,6 +532,7 @@ class TestDryRunContractUniformity:
         [
             ("claude_code", ".claude/agents/contract-agent.md", ".codex/agents"),
             ("codex", ".codex/agents/contract-agent.toml", ".claude/agents"),
+            ("opencode", ".opencode/agents/contract-agent.md", ".claude/agents"),
         ],
     )
     def test_agent_harness_routing_emits_requested_target_paths(
@@ -562,6 +565,147 @@ class TestDryRunContractUniformity:
         assert data["harness_routing"] == harness
         assert expected_fragment in targets
         assert unexpected_fragment not in targets
+
+    def test_library_yaml_declares_opencode_agent_default_dirs(self):
+        catalog = LIBRARY_MODULE.load_catalog(REPO_ROOT)
+        agent_dirs = {
+            key: value
+            for item in catalog["default_dirs"]["agents"]
+            for key, value in item.items()
+        }
+
+        assert agent_dirs["default_opencode"] == ".opencode/agents/"
+        assert agent_dirs["global_opencode"] == "~/.opencode/agents/"
+
+    @pytest.mark.parametrize(
+        ("scope", "expected"),
+        [
+            ("project", ".opencode/agents"),
+            ("global", str(Path.home() / ".opencode" / "agents")),
+        ],
+    )
+    def test_opencode_agent_base_uses_opencode_default_dirs(
+        self,
+        dry_run_contract_project: Path,
+        scope: str,
+        expected: str,
+    ):
+        from lib.installers.agent import _resolve_agent_base
+
+        catalog = LIBRARY_MODULE.load_catalog(dry_run_contract_project)
+        prim = LIBRARY_MODULE.get_primitive("agent")
+
+        base = _resolve_agent_base(
+            catalog,
+            prim,
+            scope=scope,
+            repo_root=dry_run_contract_project,
+            harness="opencode",
+        )
+
+        if scope == "project":
+            assert base == dry_run_contract_project / expected
+        else:
+            assert base == Path(expected)
+
+    def test_opencode_agent_real_install_and_remove_avoid_claude_artifacts(
+        self,
+        dry_run_contract_project: Path,
+        tmp_path: Path,
+    ):
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+        install_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "contract-agent",
+                "--harness",
+                "opencode",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+            env=env,
+        )
+        assert install_result.returncode == 0, install_result.stderr
+
+        opencode_target = dry_run_contract_project / ".opencode" / "agents" / "contract-agent.md"
+        claude_target = dry_run_contract_project / ".claude" / "agents" / "contract-agent.md"
+        assert opencode_target.exists()
+        assert not claude_target.exists()
+
+        remove_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "contract-agent",
+                "--harness",
+                "opencode",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+            env=env,
+        )
+        assert remove_result.returncode == 0, remove_result.stderr
+        assert not opencode_target.exists()
+        assert not claude_target.exists()
+
+    def test_agent_remove_cursor_harness_rejected(self, dry_run_contract_project: Path):
+        """AC4/AC5: agent remove --harness cursor returns error (mirrors install rejection)."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "contract-agent",
+                "--harness", "cursor",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        # error_result envelope exits non-zero, mirroring the install rejection path.
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "not supported" in data["message"].lower()
+
+    def test_agent_remove_all_harness_includes_opencode_target(self, dry_run_contract_project: Path):
+        """AC4: agent remove --harness all dry-run lists delete ops for all harnesses including opencode."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "contract-agent",
+                "--harness", "all",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        delete_paths = " ".join(
+            op.get("path", "") for op in data.get("operations", [])
+            if op.get("operation") == "delete"
+        )
+        assert ".opencode/agents" in delete_paths
+        assert ".claude/agents" in delete_paths
+        assert ".codex/agents" in delete_paths
 
     def test_cursor_skill_install_creates_cursor_bridge(self, cursor_project: Path):
         """AC2: --harness cursor installs skill with .cursor/skills/<name>/ bridge."""

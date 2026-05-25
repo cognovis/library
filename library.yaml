@@ -23,6 +23,8 @@ default_dirs:
     - global: ~/.claude/agents/
     - default_codex: .codex/agents/
     - global_codex: ~/.codex/agents/
+    - default_opencode: .opencode/agents/
+    - global_opencode: ~/.opencode/agents/
   prompts:
     - default: .claude/commands/
     - global: ~/.claude/commands/
