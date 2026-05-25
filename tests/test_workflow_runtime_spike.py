@@ -255,3 +255,24 @@ def test_runtime_blocks_unknown_adapter_with_absent_readonly(tmp_path: Path) -> 
         runtime.run(spec_path, {})
 
     assert exc_info.type.__name__ == "MutatingExecutionBlockedError"
+
+
+def test_adapter_preservation_status_codex_adapters_are_blocked() -> None:
+    """Codex adapters must report 'blocked' status.
+
+    Evidence: codex-impl.py and codex-exec.py both use --ignore-user-config,
+    which skips ~/.codex/config.toml. That file contains [hooks.state....]
+    entries with trusted_hash values that are required for ~/.codex/hooks.json
+    to fire. Without these trust grants, the Codex PreToolUse / Stop /
+    SessionStart hook chain is silently suppressed at runtime.
+
+    Bead: CL-pabj (hook preservation smoke audit).
+    """
+    from lib.workflow_runtime import ADAPTER_PRESERVATION_STATUS
+
+    assert ADAPTER_PRESERVATION_STATUS["codex-impl"] == "blocked", (
+        "codex-impl must be blocked: --ignore-user-config suppresses hook trust state"
+    )
+    assert ADAPTER_PRESERVATION_STATUS["codex-exec"] == "blocked", (
+        "codex-exec must be blocked: --ignore-user-config suppresses hook trust state"
+    )
