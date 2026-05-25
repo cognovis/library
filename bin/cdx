@@ -136,6 +136,10 @@ if [[ -n "$bead_id" ]]; then
 
 ${bead_context}"
 
+    if [[ -n "$route_profile" ]]; then
+        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
+    fi
+
     exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
 fi
 
