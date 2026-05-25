@@ -95,7 +95,8 @@
   "commits": [
     "ae0db73 test(CL-rk2): red - cover workflow primitive support",
     "57023cb feat(CL-rk2): green \u2014 workflow primitive catalog and installer support",
-    "HEAD feat(CL-rk2): record workflow schema evidence"
+    "31be0c1 feat(CL-rk2): record workflow schema evidence",
+    "HEAD test(CL-rk2): red \u2014 workflow audit must detect missing .js install target as drift"
   ],
   "tests": [
     {
@@ -122,6 +123,11 @@
       "command": "uv run pytest tests/test_lockfile_schema.py tests/test_library_py_core.py tests/test_library_py_new_features.py tests/test_catalog_match.py -q",
       "status": "done",
       "result": "171 passed in 17.08s"
+    },
+    {
+      "command": "uv run pytest tests/test_sync_audit.py::TestWorkflowAuditMissingFile::test_workflow_audit_detects_missing_js_install_target -q",
+      "status": "done",
+      "result": "1 passed in 0.09s"
     },
     {
       "command": "uv run pytest tests/ -x -q --ignore=tests/smoke",

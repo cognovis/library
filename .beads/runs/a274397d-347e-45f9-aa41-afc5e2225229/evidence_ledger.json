@@ -85,6 +85,13 @@
       "purpose": "Combined relevant regression suite before final commit.",
       "exit_code": 0,
       "observed_result": "171 passed in 17.08s."
+    },
+    {
+      "id": "cmd:workflow-audit-missing-file",
+      "command": "uv run pytest tests/test_sync_audit.py::TestWorkflowAuditMissingFile::test_workflow_audit_detects_missing_js_install_target -q",
+      "purpose": "Verify workflow audit detects a deleted .js install target as drift.",
+      "exit_code": 0,
+      "observed_result": "1 passed in 0.09s."
     }
   ],
   "skipped_checks": [
