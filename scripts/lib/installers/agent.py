@@ -461,32 +461,61 @@ def remove_agent(
         repo_root: Project root.
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
+        harness: Target harness for removal ('claude_code', 'codex', 'opencode', 'all').
+            Use 'all' to remove from every supported harness.
 
     Returns:
         Operation result dict.
     """
+    # Mirror install_agent: cursor agent install is not supported, so remove is not either.
+    if harness == "cursor":
+        return error_result(
+            f"Agent remove for harness 'cursor' is not supported. "
+            "Cursor agents (.cursor/agents/) are not implemented by the library installer."
+        )
+
     prim = get_primitive("agent")
-    canonical_base = _resolve_agent_base(catalog, prim, scope, repo_root, harness)
-
-    extension = ".toml" if harness == "codex" else ".md"
-    install_target = canonical_base / f"{name}{extension}"
-
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
 
+    # Build the list of install targets to remove.
+    if harness == "all":
+        harness_targets = []
+        for h in ("claude_code", "codex", "opencode"):
+            base = _resolve_agent_base(catalog, prim, scope, repo_root, h)
+            ext = ".toml" if h == "codex" else ".md"
+            harness_targets.append(base / f"{name}{ext}")
+    else:
+        extension = ".toml" if harness == "codex" else ".md"
+        canonical_base = _resolve_agent_base(catalog, prim, scope, repo_root, harness)
+        harness_targets = [canonical_base / f"{name}{extension}"]
+
     if dry_run:
+        # Preview every harness target this remove would attempt to delete,
+        # regardless of current existence. This mirrors install_agent's dry-run
+        # (which lists all planned writes) so '--harness all' visibly routes to
+        # every supported harness directory even when nothing is installed yet.
         ops = []
-        if install_target.exists() or install_target.is_symlink():
-            ops.append({"operation": "delete", "path": str(install_target), "details": f"remove {install_target}"})
-        ops.append({"operation": "remove_lockfile_entry", "path": str(lockfile_path), "details": f"remove '{name}'"})
+        for install_target in harness_targets:
+            ops.append({
+                "operation": "delete",
+                "path": str(install_target),
+                "details": f"remove {install_target}",
+            })
+        ops.append({
+            "operation": "remove_lockfile_entry",
+            "path": str(lockfile_path),
+            "details": f"remove '{name}'",
+        })
         return dry_run_result(ops, summary=f"Would remove agent '{name}'")
 
     removed_files = []
-    if install_target.is_symlink():
-        install_target.unlink()
-        removed_files.append(str(install_target))
-    elif install_target.exists():
-        install_target.unlink()
-        removed_files.append(str(install_target))
+    for install_target in harness_targets:
+        if install_target.is_symlink():
+            install_target.unlink()
+            removed_files.append(str(install_target))
+        elif install_target.exists():
+            install_target.unlink()
+            removed_files.append(str(install_target))
 
     lock_data = load_lockfile(lockfile_path)
     remove_entry(lock_data, name, primitive_type="agent")

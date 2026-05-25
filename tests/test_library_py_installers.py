@@ -657,6 +657,56 @@ class TestDryRunContractUniformity:
         assert not opencode_target.exists()
         assert not claude_target.exists()
 
+    def test_agent_remove_cursor_harness_rejected(self, dry_run_contract_project: Path):
+        """AC4/AC5: agent remove --harness cursor returns error (mirrors install rejection)."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "contract-agent",
+                "--harness", "cursor",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        # error_result envelope exits non-zero, mirroring the install rejection path.
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "not supported" in data["message"].lower()
+
+    def test_agent_remove_all_harness_includes_opencode_target(self, dry_run_contract_project: Path):
+        """AC4: agent remove --harness all dry-run lists delete ops for all harnesses including opencode."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "contract-agent",
+                "--harness", "all",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        delete_paths = " ".join(
+            op.get("path", "") for op in data.get("operations", [])
+            if op.get("operation") == "delete"
+        )
+        assert ".opencode/agents" in delete_paths
+        assert ".claude/agents" in delete_paths
+        assert ".codex/agents" in delete_paths
+
     def test_cursor_skill_install_creates_cursor_bridge(self, cursor_project: Path):
         """AC2: --harness cursor installs skill with .cursor/skills/<name>/ bridge."""
         result = subprocess.run(
