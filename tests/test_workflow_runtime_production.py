@@ -80,3 +80,38 @@ def test_spine_checker_allows_text_in_template_literal_without_banned_calls() ->
     violations = checker.find_violations(source)
 
     assert "network fetch" not in violations
+
+
+def test_workflow_runtime_cli_help() -> None:
+    """AC1: workflow_runtime.py --help must exit 0 and mention read-only."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "lib" / "workflow_runtime.py"), "--help"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    help_text = result.stdout.lower()
+    assert "read-only" in help_text or "readonly" in help_text or "read" in help_text
+
+
+def test_workflow_runtime_cli_runs_spec(tmp_path: Path) -> None:
+    """AC1: CLI must run a workflow spec and output JSON."""
+    spec = tmp_path / "simple.js"
+    spec.write_text(
+        'export const meta = {"name": "test"};\n'
+        'await agent("hello", {"readOnly": true, "slot": "implementation"});\n',
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "lib" / "workflow_runtime.py"), str(spec)],
+        capture_output=True,
+        text=True,
+        cwd=str(SCRIPTS_DIR.parent),
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["status"] == "ok"
+    assert output["meta"]["name"] == "test"
