@@ -47,3 +47,36 @@ def test_agent_extraction_ignores_string_literals() -> None:
 
     assert len(calls) == 1
     assert calls[0]["prompt"] == "real"
+
+
+def test_spine_checker_detects_banned_op_in_template_literal_interpolation() -> None:
+    """AC3: banned ops inside ${...} template interpolation must be detected."""
+    checker = SpineConstraintChecker()
+    source = (
+        'export const meta = {"name": "t"};\n'
+        'const url = `prefix-${fetch("https://evil.invalid")}-suffix`;'
+    )
+
+    violations = checker.find_violations(source)
+
+    assert "network fetch" in violations
+
+
+def test_spine_checker_detects_date_now_in_template_literal() -> None:
+    """AC3: Date.now() inside template literal interpolation must be detected."""
+    checker = SpineConstraintChecker()
+    source = 'export const meta = {"name": "t"};\nconst ts = `time-${Date.now()}`;'
+
+    violations = checker.find_violations(source)
+
+    assert "Date.now" in violations
+
+
+def test_spine_checker_allows_text_in_template_literal_without_banned_calls() -> None:
+    """AC3: template literal text like 'fetch' as a word must not trigger."""
+    checker = SpineConstraintChecker()
+    source = 'export const meta = {"name": "t"};\nconst msg = `data fetch complete`;'
+
+    violations = checker.find_violations(source)
+
+    assert "network fetch" not in violations
