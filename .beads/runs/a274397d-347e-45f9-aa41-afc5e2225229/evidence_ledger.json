@@ -1,0 +1,104 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-rk2",
+  "commands": [
+    {
+      "id": "cmd:bd-prime",
+      "command": "bd prime",
+      "purpose": "Load beads workflow context.",
+      "exit_code": 0,
+      "observed_result": "Printed beads workflow context."
+    },
+    {
+      "id": "cmd:claim",
+      "command": "bd update CL-rk2 --claim",
+      "purpose": "Attempt to claim bead before implementation.",
+      "exit_code": 1,
+      "observed_result": "Issue already claimed by session-Solaris.local-67646."
+    },
+    {
+      "id": "cmd:red-focused",
+      "command": "uv run pytest tests/test_library_py_core.py tests/test_library_py_new_features.py -x -q",
+      "purpose": "RED gate for workflow primitive tests before production changes.",
+      "exit_code": 1,
+      "observed_result": "Failed for the expected reason: get_primitive('workflow') returned None."
+    },
+    {
+      "id": "cmd:focused-green",
+      "command": "uv run pytest tests/test_library_py_core.py tests/test_library_py_new_features.py -x -q",
+      "purpose": "Focused GREEN gate for workflow library.py support.",
+      "exit_code": 0,
+      "observed_result": "145 passed in 15.96s."
+    },
+    {
+      "id": "cmd:full-suite-first",
+      "command": "uv run pytest tests/ -x -q --ignore=tests/smoke",
+      "purpose": "Requested full non-smoke suite after green implementation.",
+      "exit_code": 1,
+      "observed_result": "Failed in validate-gascity-export because the hard-coded primitive label map did not include workflow."
+    },
+    {
+      "id": "cmd:validate-library",
+      "command": "UV_CACHE_DIR=.uv-cache uv run python scripts/validate-library.py",
+      "purpose": "Validate library.yaml against the schema after adding workflows.",
+      "exit_code": 0,
+      "observed_result": "PASS."
+    },
+    {
+      "id": "cmd:gascity-regression",
+      "command": "uv run pytest tests/test_gascity_export_metadata.py::test_export_validator_rejects_product_plane_catalog_entry -q",
+      "purpose": "Verify the workflow label-map fix for Gas City export validation.",
+      "exit_code": 0,
+      "observed_result": "1 passed in 0.05s."
+    },
+    {
+      "id": "cmd:full-suite-second",
+      "command": "uv run pytest tests/ -x -q --ignore=tests/smoke",
+      "purpose": "Requested full non-smoke suite after validator fix.",
+      "exit_code": 1,
+      "observed_result": "Stopped at unrelated GitHub-dependent tests/test_personal_migration.py::TestMigrationCommit::test_migration_commit_exists after 543 passed, 23 skipped, 1 failed."
+    },
+    {
+      "id": "cmd:lockfile-red",
+      "command": "uv run pytest tests/test_lockfile_schema.py::test_workflow_type_is_valid -q",
+      "purpose": "RED gate for workflow lockfile schema enum.",
+      "exit_code": 1,
+      "observed_result": "Failed because 'workflow' was not one of the allowed lockfile types."
+    },
+    {
+      "id": "cmd:lockfile-green",
+      "command": "uv run pytest tests/test_lockfile_schema.py::test_workflow_type_is_valid -q",
+      "purpose": "GREEN gate for workflow lockfile schema enum.",
+      "exit_code": 0,
+      "observed_result": "1 passed in 0.03s."
+    },
+    {
+      "id": "cmd:catalog-match",
+      "command": "uv run pytest tests/test_catalog_match.py -q",
+      "purpose": "Verify catalog inventory/matching behavior after workflow content type support.",
+      "exit_code": 0,
+      "observed_result": "12 passed in 0.90s."
+    },
+    {
+      "id": "cmd:combined-relevant",
+      "command": "uv run pytest tests/test_lockfile_schema.py tests/test_library_py_core.py tests/test_library_py_new_features.py tests/test_catalog_match.py -q",
+      "purpose": "Combined relevant regression suite before final commit.",
+      "exit_code": 0,
+      "observed_result": "171 passed in 17.08s."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Full non-smoke pytest suite clean pass",
+      "reason": "The suite is blocked by tests/test_personal_migration.py::TestMigrationCommit::test_migration_commit_exists, which queries GitHub for a historical sussdorff/library-core commit prefix and returns count 0. This is unrelated to workflow primitive support."
+    },
+    {
+      "check": "Network probing of the example cognovis-core workflow URL",
+      "reason": "The bead explicitly forbids probing or using the example external URL; local fixture paths were used instead."
+    }
+  ],
+  "artifacts": [
+    ".beads/runs/a274397d-347e-45f9-aa41-afc5e2225229/implementation_manifest.json",
+    ".beads/runs/a274397d-347e-45f9-aa41-afc5e2225229/evidence_ledger.json"
+  ]
+}
