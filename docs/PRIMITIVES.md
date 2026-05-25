@@ -167,7 +167,9 @@ conditions. Those planes intentionally do not carry `harness_support`.
 
 **`runtime_requirements`** — binary prerequisites for the primitive to function.
 Declare when the primitive requires CLI tools that may not be present on every
-machine. The doctor check enforces these at install time.
+machine. The installer checks `runtime_requirements.binaries` with PATH lookup
+before dependency installs or target writes, and refuses the install when any
+declared binary is missing. It does not execute the binaries.
 
 ```yaml
 runtime_requirements:

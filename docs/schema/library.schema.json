@@ -1361,6 +1361,9 @@
             }
           }
         },
+        "runtime_requirements": {
+          "$ref": "#/$defs/runtime_requirements"
+        },
         "tags": {
           "description": "Optional tags for search and filtering.",
           "type": "array",
