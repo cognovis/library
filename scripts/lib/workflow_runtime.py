@@ -65,9 +65,73 @@ class SpineConstraintChecker:
 
     @staticmethod
     def _strip_comments(source: str) -> str:
-        """Remove line and block comments while leaving strings untouched."""
-        without_block_comments = re.sub(r"/\*.*?\*/", " ", source, flags=re.S)
-        return re.sub(r"//.*?$", " ", without_block_comments, flags=re.M)
+        """Remove line and block comments while leaving strings untouched.
+
+        Uses char-by-char state tracking to detect whether // or /* are inside
+        string literals ('...', "...", or `...`). Only treats // and /* as
+        comment starts when NOT inside a string.
+        """
+        result = []
+        i = 0
+        in_string = False
+        string_delim = ""
+        escape = False
+
+        while i < len(source):
+            char = source[i]
+
+            # Handle escape sequences inside strings
+            if in_string:
+                result.append(char)
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == string_delim:
+                    in_string = False
+                i += 1
+                continue
+
+            # Handle string starts (not in a string yet)
+            if char in ('"', "'", "`"):
+                in_string = True
+                string_delim = char
+                result.append(char)
+                i += 1
+                continue
+
+            # Handle block comments (/* ... */)
+            if i + 1 < len(source) and char == "/" and source[i + 1] == "*":
+                # Skip until we find */
+                i += 2
+                while i + 1 < len(source):
+                    if source[i] == "*" and source[i + 1] == "/":
+                        i += 2
+                        break
+                    i += 1
+                # Replace comment with space
+                result.append(" ")
+                continue
+
+            # Handle line comments (// ...)
+            if i + 1 < len(source) and char == "/" and source[i + 1] == "/":
+                # Skip until end of line
+                i += 2
+                while i < len(source) and source[i] != "\n":
+                    i += 1
+                # Replace comment with space
+                result.append(" ")
+                # Keep the newline
+                if i < len(source) and source[i] == "\n":
+                    result.append("\n")
+                    i += 1
+                continue
+
+            # Regular character
+            result.append(char)
+            i += 1
+
+        return "".join(result)
 
 
 class AgentExecutor(abc.ABC):

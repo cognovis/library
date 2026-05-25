@@ -88,6 +88,13 @@ def test_spine_constraint_checker_allows_control_flow_and_agent_calls() -> None:
     assert checker.find_violations(source) == []
 
 
+def test_url_in_string_does_not_mask_banned_op() -> None:
+    checker = SpineConstraintChecker()
+    source = 'await agent("see https://x.com", {}); const r = Math.random();'
+    violations = checker.find_violations(source)
+    assert any("Math.random" in v for v in violations), "Math.random() after URL // must be detected"
+
+
 def test_journal_store_caches_by_hash() -> None:
     store = JournalStore()
     prompt = "hello"
