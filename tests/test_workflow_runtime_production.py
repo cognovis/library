@@ -294,3 +294,50 @@ def test_runtime_resumes_from_hardened_journal(tmp_path: Path) -> None:
     runtime2.run(spec_path, {"readOnly": True})
 
     assert call_count == 1
+
+
+def test_cli_read_only_flag_propagates_to_leaf_opts(tmp_path: Path) -> None:
+    """Regression: --read-only CLI flag must apply to leaves that omit readOnly in their opts.
+
+    Codex adversarial (Phase 7) found that --read-only only set args['readOnly'] but
+    _run_leaf checked opts.get('readOnly'), so a leaf without explicit readOnly in its
+    opts would not be protected. Fixed by propagating args['readOnly'] to per-leaf opts.
+    """
+    spec = tmp_path / "noreadonly.js"
+    spec.write_text(
+        'export const meta = {"name": "test"};\n'
+        # Note: opts do NOT include readOnly: true — the CLI --read-only flag must cover this
+        'await agent("leaf without readOnly in opts", {"slot": "implementation"});\n',
+        encoding="utf-8",
+    )
+
+    # Run without --read-only flag — expects MutatingExecutionBlockedError via runtime
+    # (via CLI, readOnly=False by default and adapter is unverified)
+    result_no_flag = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "lib" / "workflow_runtime.py"), str(spec)],
+        capture_output=True,
+        text=True,
+        cwd=str(SCRIPTS_DIR.parent),
+    )
+    # Without --read-only, the unverified adapter should block mutating execution
+    assert result_no_flag.returncode != 0, (
+        "Expected non-zero exit when no --read-only and adapter is unverified"
+    )
+
+    # Run WITH --read-only flag — must succeed
+    result_with_flag = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPTS_DIR / "lib" / "workflow_runtime.py"),
+            str(spec),
+            "--read-only",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(SCRIPTS_DIR.parent),
+    )
+    assert result_with_flag.returncode == 0, (
+        f"Expected exit 0 with --read-only. stderr: {result_with_flag.stderr}"
+    )
+    output = json.loads(result_with_flag.stdout)
+    assert output["status"] == "ok"

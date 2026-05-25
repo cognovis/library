@@ -447,6 +447,11 @@ class WorkflowRuntime:
             opts = dict(call["opts"])
             slot_target = self._resolve_slot_target(args, opts)
             opts.setdefault("slot_target", slot_target)
+            # Propagate top-level readOnly from args to per-leaf opts so that
+            # --read-only CLI flag and args["readOnly"]=True protect all leaves
+            # even when individual agent() calls omit the readOnly field.
+            if args.get("readOnly") is True:
+                opts.setdefault("readOnly", True)
             leaf_results.append(self._run_leaf(prompt, opts))
 
         result = {
