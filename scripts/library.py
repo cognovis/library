@@ -40,6 +40,7 @@ Usage examples:
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -494,6 +495,22 @@ def _check_harness_support(entry: dict, harness: str) -> str | None:
     return None
 
 
+def _check_runtime_requirements(entry: dict) -> str | None:
+    """Return an error message when declared runtime binaries are absent from PATH."""
+    # The schema declares runtime_requirements at the top level of an entry
+    # (#/$defs/runtime_requirements via $ref), distinct from harness_support which
+    # lives under metadata.library. Read the schema-canonical top-level location only.
+    runtime_requirements = entry.get("runtime_requirements", {})
+    binaries = runtime_requirements.get("binaries", [])
+    missing = [binary for binary in binaries if shutil.which(binary) is None]
+    if missing:
+        return (
+            f"Missing required runtime binaries: {', '.join(missing)}. "
+            "Install them before using this primitive."
+        )
+    return None
+
+
 def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     """Handle: <primitive> use [name] [--dry-run] [--json]"""
     use_json = getattr(args, "json", False)
@@ -560,7 +577,48 @@ def _install_with_deps(
     from lib.errors import DependencyMissingError
 
     try:
-        install_order = resolve_requires(catalog, primitive, name, repo_root, scope)
+        main_entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+    except LibraryError as exc:
+        result = error_result(str(exc), exc.exit_code)
+        if use_json:
+            print_json(result)
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    harness_error = _check_harness_support(main_entry, harness)
+    if harness_error:
+        if use_json:
+            print_json(error_result(harness_error, EXIT_FAILURE))
+        else:
+            print(f"Error: {harness_error}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    # Pre-flight compatibility and runtime checks for the requested entry (not
+    # its deps). Run before dependency resolution/installation so fuzzy queries
+    # cannot mutate dependencies before a main-entry gate fails.
+    try:
+        from lib.compat import check_compatibility_gate, CompatibilityError
+        check_compatibility_gate(main_entry, harness)
+    except CompatibilityError as _compat_exc:
+        if use_json:
+            print_json(error_result(str(_compat_exc), _compat_exc.exit_code))
+        else:
+            print(f"Error: {_compat_exc}", file=sys.stderr)
+        return _compat_exc.exit_code
+
+    runtime_error = _check_runtime_requirements(main_entry)
+    if runtime_error:
+        if use_json:
+            print_json(error_result(runtime_error, EXIT_FAILURE))
+        else:
+            print(f"Error: {runtime_error}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    resolved_name = main_entry.get("name", name)
+
+    try:
+        install_order = resolve_requires(catalog, primitive, resolved_name, repo_root, scope)
     except CycleError as exc:
         result = error_result(str(exc), exc.exit_code)
         if use_json:
@@ -583,22 +641,23 @@ def _install_with_deps(
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
 
-    # Pre-flight compatibility check for the requested entry (not its deps).
-    # Run before any dep installation begins so the gate fires before side effects.
-    try:
-        from lib.catalog import lookup_entry
-        from lib.compat import check_compatibility_gate, CompatibilityError
+    # Pre-flight runtime gate for the FULL resolved install order. Runtime
+    # requirements must fail before any install/dependency mutation occurs;
+    # otherwise a missing binary on a later dependency would only surface after
+    # earlier dependencies in install_order have already been installed. Check
+    # every entry up front so the dependency graph install is all-or-nothing.
+    for dep_prim, dep_name in install_order:
         try:
-            _main_entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+            dep_entry = lookup_entry(catalog, dep_prim, dep_name, fuzzy=False)
         except LibraryError:
-            _main_entry = {}
-        check_compatibility_gate(_main_entry, harness)
-    except CompatibilityError as _compat_exc:
-        if use_json:
-            print_json(error_result(str(_compat_exc), _compat_exc.exit_code))
-        else:
-            print(f"Error: {_compat_exc}", file=sys.stderr)
-        return _compat_exc.exit_code
+            dep_entry = {}
+        dep_runtime_error = _check_runtime_requirements(dep_entry)
+        if dep_runtime_error:
+            if use_json:
+                print_json(error_result(dep_runtime_error, EXIT_FAILURE))
+            else:
+                print(f"Error: {dep_runtime_error}", file=sys.stderr)
+            return EXIT_FAILURE
 
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
@@ -757,6 +816,14 @@ def _dispatch_use(
             print_json(error_result(harness_error, EXIT_FAILURE))
         else:
             print(f"Error: {harness_error}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    runtime_error = _check_runtime_requirements(entry)
+    if runtime_error:
+        if use_json:
+            print_json(error_result(runtime_error, EXIT_FAILURE))
+        else:
+            print(f"Error: {runtime_error}", file=sys.stderr)
         return EXIT_FAILURE
 
     # Compatibility pre-install gate (CL-d7e): check compatibility field before

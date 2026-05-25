@@ -701,7 +701,7 @@
       }
     },
     "runtime_requirements": {
-      "description": "Runtime binaries this primitive needs. Install-time doctor check enforces.",
+      "description": "Runtime binaries this primitive needs. Installer checks these binaries are on PATH before any install or dependency mutation; does not execute them.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -1360,6 +1360,9 @@
               "additionalProperties": false
             }
           }
+        },
+        "runtime_requirements": {
+          "$ref": "#/$defs/runtime_requirements"
         },
         "tags": {
           "description": "Optional tags for search and filtering.",

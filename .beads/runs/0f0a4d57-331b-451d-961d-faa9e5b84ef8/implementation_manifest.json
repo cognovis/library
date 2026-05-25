@@ -1,0 +1,111 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-iye.7",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite", "cmd:codex-regression-red", "cmd:codex-regression-green"]
+    },
+    {
+      "id": 2,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 3,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 4,
+      "status": "done",
+      "changed_files": ["docs/schema/library.schema.json", "tests/test_validate_library.py"],
+      "evidence_refs": ["cmd:red-schema-test", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 5,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 6,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 7,
+      "status": "done",
+      "changed_files": ["docs/PRIMITIVES.md", "docs/schema/library.schema.json"],
+      "evidence_refs": ["cmd:targeted-suite", "cmd:pairloop1-schema-json-valid", "cmd:pairloop1-targeted-suite"]
+    },
+    {
+      "id": 8,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:focused-green-tests", "cmd:targeted-suite"]
+    }
+  ],
+  "changed_files": [
+    "scripts/library.py",
+    "docs/schema/library.schema.json",
+    "docs/PRIMITIVES.md",
+    "tests/test_library_py_installers.py",
+    "tests/test_validate_library.py",
+    ".beads/runs/0f0a4d57-331b-451d-961d-faa9e5b84ef8/implementation_manifest.json",
+    ".beads/runs/0f0a4d57-331b-451d-961d-faa9e5b84ef8/evidence_ledger.json"
+  ],
+  "commits": [
+    "9708849 test(CL-iye.7): red \u2014 runtime gate ordering",
+    "6f69211 test(CL-iye.7): red \u2014 runtime schema coverage",
+    "c4d3744 feat(CL-iye.7): green \u2014 enforce runtime requirements",
+    "fix(CL-iye.7): address pair-loop findings iteration 1",
+    "fix(CL-iye.7): address codex adversarial findings"
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py -q -k 'runtime_requirement or compatibility_fuzzy_main_gate'",
+      "result": "red gate failed before implementation: 6 failed, 1 passed, 102 deselected"
+    },
+    {
+      "command": "uv run pytest tests/test_validate_library.py -q -k runtime_requirements_on_installable_primitive_shapes",
+      "result": "red gate failed before schema change: MCP runtime_requirements rejected"
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py -q -k 'runtime_requirement or compatibility_fuzzy_main_gate' && uv run pytest tests/test_validate_library.py -q -k runtime_requirements_on_installable_primitive_shapes",
+      "result": "green gate passed: 7 passed, 102 deselected; 1 passed, 21 deselected"
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py tests/test_validate_library.py -q",
+      "result": "passed: 131 passed in 6.16s"
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py -q -k 'test_runtime_requirement_dependency_gate_precedes_any_install' (against pre-fix scripts/library.py)",
+      "result": "red gate: 1 failed — pre-fix installer installed the clean dependency before the broken dependency's per-entry gate fired (partial install / multi-JSON output)"
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py tests/test_validate_library.py -q (post codex fix)",
+      "result": "passed: 132 passed in 5.93s"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "MCP catalog entries can now declare runtime_requirements.binaries in schema.",
+    "Installer real installs now fuzzy-resolve the requested main entry before dependency resolution and use the resolved canonical name for dependency traversal.",
+    "Runtime requirement checks use PATH lookup only and do not execute declared binaries.",
+    "Pair-loop iteration 1: schema runtime_requirements description now describes the installer PATH gate semantics; _check_runtime_requirements reads only the schema-canonical top-level runtime_requirements location (removed the untested metadata.library fallback).",
+    "Codex adversarial fix: _install_with_deps now preflights runtime_requirements over the FULL resolved install_order before installing any entry, so a missing binary on any dependency (not just the main entry) fails before any install/dependency mutation occurs (all-or-nothing dependency graph install)."
+  ],
+  "evidence_refs": [
+    "cmd:red-installer-tests",
+    "cmd:red-schema-test",
+    "cmd:focused-green-tests",
+    "cmd:targeted-suite"
+  ]
+}

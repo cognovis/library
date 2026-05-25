@@ -287,6 +287,95 @@ model_standards: []
     return proj
 
 
+@pytest.fixture
+def runtime_requirements_project(tmp_path: Path) -> Path:
+    """Create a project with runtime requirement fixtures and dependency edges."""
+    project = tmp_path / "runtime-requirements-project"
+    project.mkdir()
+    sources = tmp_path / "runtime-sources"
+    sources.mkdir()
+
+    skill_sources = {}
+    for name in (
+        "missing-runtime-skill",
+        "present-runtime-skill",
+        "runtime-dependency",
+        "missing-runtime-main",
+        "incompatible-main",
+        "cursor-runtime-skill",
+        "missing-runtime-dependency",
+        "clean-main-with-bad-dependency",
+    ):
+        skill_dir = sources / name
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(f"# {name}\n")
+        skill_sources[name] = skill_dir / "SKILL.md"
+
+    yaml_content = f"""
+default_dirs:
+  skills:
+    - default: .agents/skills/
+    - claude_bridge: .claude/skills/
+
+library:
+  skills:
+    - name: missing-runtime-skill
+      description: A skill with a missing runtime binary
+      source: {skill_sources["missing-runtime-skill"]}
+      runtime_requirements:
+        binaries: ["__nonexistent_binary_xyz__"]
+    - name: present-runtime-skill
+      description: A skill with a present runtime binary
+      source: {skill_sources["present-runtime-skill"]}
+      runtime_requirements:
+        binaries: ["python3"]
+    - name: runtime-dependency
+      description: A dependency that must not be installed before main gates
+      source: {skill_sources["runtime-dependency"]}
+    - name: missing-runtime-main
+      description: A main skill with a missing runtime and a dependency
+      source: {skill_sources["missing-runtime-main"]}
+      requires:
+        - skill:runtime-dependency
+      runtime_requirements:
+        binaries: ["__nonexistent_binary_xyz__"]
+    - name: incompatible-main
+      description: A main skill with impossible compatibility and a dependency
+      source: {skill_sources["incompatible-main"]}
+      requires:
+        - skill:runtime-dependency
+      compatibility: "claude_code>=99.0"
+    - name: cursor-runtime-skill
+      description: Cursor projection fixture requiring cursor-agent
+      source: {skill_sources["cursor-runtime-skill"]}
+      runtime_requirements:
+        binaries: ["cursor-agent"]
+    - name: missing-runtime-dependency
+      description: A dependency that itself declares a missing runtime binary
+      source: {skill_sources["missing-runtime-dependency"]}
+      runtime_requirements:
+        binaries: ["__nonexistent_binary_xyz__"]
+    - name: clean-main-with-bad-dependency
+      description: A main skill with no runtime requirements whose dependency has a missing binary
+      source: {skill_sources["clean-main-with-bad-dependency"]}
+      requires:
+        - skill:runtime-dependency
+        - skill:missing-runtime-dependency
+  standards: []
+  agents: []
+  prompts: []
+  scripts: []
+  model_standards: []
+  agent_bases: []
+  guardrails: []
+  mcp_servers: []
+
+marketplaces: []
+"""
+    (project / "library.yaml").write_text(yaml_content)
+    return project
+
+
 def run_library_json(project: Path, *args: str) -> dict:
     """Run library.py in a project and return parsed JSON output."""
     result = subprocess.run(
@@ -536,6 +625,201 @@ def test_check_harness_support_enforces_closed_registry(harness: str):
 
     assert message is not None
     assert f"harness_support.{harness}: not-supported" in message
+
+
+def test_runtime_requirement_missing_binary_fails_before_install_mutation(
+    runtime_requirements_project: Path,
+):
+    """CL-iye.7 AK1: missing runtime binaries fail before install side effects."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            "skill",
+            "use",
+            "missing-runtime-skill",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(runtime_requirements_project),
+    )
+
+    assert result.returncode != 0
+    data = json.loads(result.stdout)
+    assert data["status"] == "error"
+    assert "__nonexistent_binary_xyz__" in data["message"]
+    assert not (runtime_requirements_project / ".agents").exists()
+    assert not (runtime_requirements_project / ".library.lock").exists()
+
+
+def test_runtime_requirement_present_binary_installs_normally(
+    runtime_requirements_project: Path,
+):
+    """CL-iye.7 AK2: present runtime binaries do not block normal install."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            "skill",
+            "use",
+            "present-runtime-skill",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(runtime_requirements_project),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (runtime_requirements_project / ".agents" / "skills" / "present-runtime-skill").exists()
+    assert (runtime_requirements_project / ".library.lock").exists()
+
+
+@pytest.mark.parametrize("dry_run_flag", [True, False])
+def test_runtime_requirement_json_errors_include_missing_binary(
+    runtime_requirements_project: Path,
+    dry_run_flag: bool,
+):
+    """CL-iye.7 AK3: dry-run and real JSON errors use stable error_result payloads."""
+    cmd = [
+        sys.executable,
+        str(LIBRARY_PY),
+        "skill",
+        "use",
+        "missing-runtime-skill",
+        "--json",
+    ]
+    if dry_run_flag:
+        cmd.insert(-1, "--dry-run")
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=str(runtime_requirements_project),
+    )
+
+    assert result.returncode != 0
+    data = json.loads(result.stdout)
+    assert data["status"] == "error"
+    assert data["exit_code"] == result.returncode
+    assert "__nonexistent_binary_xyz__" in data["message"]
+
+
+def test_runtime_requirement_fuzzy_main_gate_precedes_dependency_install(
+    runtime_requirements_project: Path,
+):
+    """CL-iye.7 AK5: fuzzy main lookup gates before dependency side effects."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            "skill",
+            "use",
+            "main skill with a missing runtime",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(runtime_requirements_project),
+    )
+
+    assert result.returncode != 0
+    data = json.loads(result.stdout)
+    assert "__nonexistent_binary_xyz__" in data["message"]
+    assert not (runtime_requirements_project / ".agents" / "skills" / "runtime-dependency").exists()
+    assert not (runtime_requirements_project / ".library.lock").exists()
+
+
+def test_compatibility_fuzzy_main_gate_precedes_dependency_install(
+    runtime_requirements_project: Path,
+):
+    """CL-iye.7 AK6: fuzzy incompatible main entry fails before dependency install."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            "skill",
+            "use",
+            "impossible compatibility",
+            "--harness",
+            "claude_code",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(runtime_requirements_project),
+    )
+
+    assert result.returncode != 0
+    data = json.loads(result.stdout)
+    assert "claude_code>=99.0" in data["message"]
+    assert not (runtime_requirements_project / ".agents" / "skills" / "runtime-dependency").exists()
+    assert not (runtime_requirements_project / ".library.lock").exists()
+
+
+def test_runtime_requirement_dependency_gate_precedes_any_install(
+    runtime_requirements_project: Path,
+):
+    """CL-iye.7 regression: a missing runtime binary on a DEPENDENCY fails before
+    ANY entry in the resolved install order is installed.
+
+    The main entry here has no runtime_requirements of its own. It requires a
+    CLEAN dependency (runtime-dependency) declared before a BROKEN dependency
+    (missing-runtime-dependency). The resolved install order is therefore
+    [runtime-dependency, missing-runtime-dependency, clean-main-with-bad-dependency].
+
+    Without a preflight runtime gate over the FULL install order, the clean
+    dependency would be installed first and only the broken dependency's own
+    per-entry gate would fail — leaving runtime-dependency partially installed.
+    The fix preflights every entry so nothing is installed when any entry has a
+    missing binary.
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            "skill",
+            "use",
+            "clean-main-with-bad-dependency",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(runtime_requirements_project),
+    )
+
+    assert result.returncode != 0
+    data = json.loads(result.stdout)
+    assert data["status"] == "error"
+    assert "__nonexistent_binary_xyz__" in data["message"]
+    # The clean dependency (ordered first) must NOT have been installed — this is
+    # the discriminating assertion for the preflight gate regression.
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "runtime-dependency"
+    ).exists()
+    # The broken dependency and the main skill must also be absent.
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "missing-runtime-dependency"
+    ).exists()
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "clean-main-with-bad-dependency"
+    ).exists()
+    assert not (runtime_requirements_project / ".library.lock").exists()
+
+
+def test_cursor_agent_can_be_declared_as_runtime_requirement():
+    """CL-iye.7 AK8: cursor-agent declarations use the generic runtime gate."""
+    entry = {"runtime_requirements": {"binaries": ["cursor-agent"]}}
+
+    message = LIBRARY_MODULE._check_runtime_requirements(entry)
+
+    if shutil.which("cursor-agent") is None:
+        assert message is not None
+        assert "cursor-agent" in message
+    else:
+        assert message is None
 
 
 # ---------------------------------------------------------------------------

@@ -252,6 +252,93 @@ def test_schema_accepts_harness_support_and_runtime_requirements():
     )
 
 
+def test_schema_accepts_runtime_requirements_on_installable_primitive_shapes():
+    """CL-iye.7 AK4: supported installable primitive shapes accept runtime requirements."""
+    runtime_requirements = {"binaries": ["__nonexistent_binary_xyz__"]}
+    data = {
+        "default_dirs": {
+            "skills": [{"claude": "~/.claude/skills"}],
+        },
+        "library": {
+            "skills": [
+                {
+                    **_base_skill_entry(),
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "agents": [
+                {
+                    "name": "runtime-agent",
+                    "description": "Agent with runtime requirements.",
+                    "source": "https://github.com/example/repo/blob/main/agents/runtime-agent.md",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "prompts": [
+                {
+                    "name": "runtime-prompt",
+                    "description": "Prompt with runtime requirements.",
+                    "source": "https://github.com/example/repo/blob/main/prompts/runtime-prompt.md",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "scripts": [
+                {
+                    "name": "runtime-script",
+                    "description": "Script with runtime requirements.",
+                    "source": "https://github.com/example/repo/blob/main/scripts/runtime-script.py",
+                    "language": "python",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "standards": [
+                {
+                    "name": "runtime-standard",
+                    "description": "Standard with runtime requirements.",
+                    "source": "https://github.com/example/repo/blob/main/standards/runtime-standard.md",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "model_standards": [
+                {
+                    "name": "runtime-model-standard",
+                    "description": "Model standard with runtime requirements.",
+                    "source": "https://github.com/example/repo/blob/main/model-standards/runtime-model-standard.md",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "agent_bases": [
+                {
+                    "name": "runtime-agent-base",
+                    "description": "Agent base with runtime requirements.",
+                    "source": "https://github.com/example/repo/blob/main/agent-bases/runtime-agent-base.md",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "guardrails": [
+                {
+                    "name": "runtime-guardrail",
+                    "description": "Guardrail with runtime requirements.",
+                    "kind": "hooks-manifest",
+                    "source": "https://github.com/example/repo/blob/main/hooks/runtime.json",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+            "mcp_servers": [
+                {
+                    "name": "runtime-mcp",
+                    "description": "MCP server with runtime requirements.",
+                    "runtime_requirements": runtime_requirements,
+                }
+            ],
+        },
+    }
+
+    result = _run_validator(yaml.dump(data, default_flow_style=False))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_schema_accepts_closed_harness_support_registry():
     """Harness support accepts the closed set of known harness identifiers."""
     entry = _base_skill_entry()
