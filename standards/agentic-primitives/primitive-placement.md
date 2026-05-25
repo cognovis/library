@@ -96,7 +96,7 @@ Promotion to a stewarded source requires at least one of these signals:
 ## Naming
 
 Skills should read like verbs or reusable developer capabilities:
-`audit-citations`, `mira-aidbox`, `skill-forge`, `sync-standards`. Product
+`audit-citations`, `skill-forge`, `sync-standards`. Product
 features should read like product nouns or services: eligibility workflow, sync
 service, billing assistant, patient intake agent. A noun-like runtime feature
 name is a product-plane signal unless the artifact is only a developer harness
@@ -115,7 +115,7 @@ the sole realistic consumer.
 | Candidate | Placement | Rationale |
 |-----------|-----------|-----------|
 | `skill-forge` in library-platform | Dev-plane skill, steward `library-platform` | It authors developer primitives and carries no product runtime state. |
-| `skills/mira-aidbox` in `cognovis-core` | Dev-plane skill, steward `cognovis-core`, possible `product_counterpart=mira` | Developers use Aidbox/FHIR knowledge while working on Mira; it is not a runtime Mira agent. |
+| Mira `.agents/skills/mira-aidbox` | Repo-local dev-plane overlay | Depends on Mira paths, Polaris-owned Aidbox setup, and local deployment assumptions. Keep generalized FHIR/Aidbox facts in the Samurai marketplace skills. |
 | Mira `.claude/agents/aidbox-fhir` | Repo-local dev-plane overlay | Depends on Mira paths, Aidbox setup, and local workflow assumptions. Promote only generalized FHIR guidance. |
 | Mira runtime billing or patient agent | Product-plane feature | Create a Mira bead and implementation artifact; Library may host reviewer skills or standards that support it. |
 | FHIR terminology package validator | First-class Python script plus healthcare/FHIR standard | Deterministic checks can project to Gas City `doctor`; factual FHIR rules stay in standards. |

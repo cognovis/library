@@ -64,7 +64,7 @@ EXPECTED_COGNOVIS_SKILLS = {
     "angebotserstellung", "beads", "billing-reviewer", "binary-explorer",
     "brand-forge", "bug-triage", "claude-md-pruner", "cmux", "cmux-browser", "cmux-markdown",
     "codex", "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
-    "infra-principles", "inject-standards", "mail-send", "mira-aidbox",
+    "infra-principles", "inject-standards", "mail-send",
     "nbj-audit", "op-credentials", "pencil", "people-query", "playwright-cli",
     "plugin-management", "portless", "project-context", "project-health", "project-setup",
     "prompt-refiner", "spec-developer", "standards", "summarize",
