@@ -36,6 +36,7 @@ def remove_skill(
     Removes:
     - Canonical symlink (.agents/skills/<name>/ or ~/.agents/skills/<name>/)
     - Claude bridge symlink (.claude/skills/<name>/ or ~/.claude/skills/<name>/)
+    - Cursor bridge symlink (.cursor/skills/<name>/ or ~/.cursor/skills/<name>/)
     - Lockfile entry
 
     Args:
@@ -52,12 +53,17 @@ def remove_skill(
     install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
     canonical_base = install_paths["canonical"]
     bridge_base = install_paths["bridge"]
+    if scope == "global":
+        cursor_bridge_base = install_paths["global_cursor_bridge"]
+    else:
+        cursor_bridge_base = install_paths["cursor_bridge"]
 
     if canonical_base is None:
         raise InstallError(f"Cannot determine install path for skill '{name}' (scope={scope}).")
 
     canonical_dir = canonical_base / name
     bridge_dir = (bridge_base / name) if bridge_base else None
+    cursor_bridge_dir = (cursor_bridge_base / name) if cursor_bridge_base else None
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
 
     if dry_run:
@@ -66,6 +72,8 @@ def remove_skill(
             ops.append({"operation": "delete", "path": str(canonical_dir), "details": "remove canonical install"})
         if bridge_dir and (bridge_dir.exists() or bridge_dir.is_symlink()):
             ops.append({"operation": "delete", "path": str(bridge_dir), "details": f"remove Claude bridge symlink"})
+        if cursor_bridge_dir and (cursor_bridge_dir.exists() or cursor_bridge_dir.is_symlink()):
+            ops.append({"operation": "delete", "path": str(cursor_bridge_dir), "details": "remove Cursor bridge symlink"})
         ops.append({"operation": "remove_lockfile_entry", "path": str(lockfile_path), "details": f"remove '{name}'"})
         return dry_run_result(ops, summary=f"Would remove skill '{name}'")
 
@@ -85,6 +93,8 @@ def remove_skill(
     _remove_path(canonical_dir)
     if bridge_dir:
         _remove_path(bridge_dir)
+    if cursor_bridge_dir:
+        _remove_path(cursor_bridge_dir)
 
     lock_data = load_lockfile(lockfile_path)
     remove_entry(lock_data, name, primitive_type="skill")

@@ -551,6 +551,24 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         except Exception:
             pass  # lookup failures are handled downstream
 
+    # Reject cursor/opencode for primitives that are not supported BEFORE any
+    # dependency install or dry-run dispatch. This enforces AC8 ("fail before
+    # dry-run/real-install side effects"): otherwise the per-installer checks
+    # (agent.py, mcp_installer.py, guardrail_installer.py) only fire after
+    # _install_with_deps has already materialized dependencies.
+    CURSOR_OPENCODE_UNSUPPORTED_PRIMITIVES = {"agent", "mcp", "guardrail"}
+    if harness in ("cursor", "opencode") and primitive in CURSOR_OPENCODE_UNSUPPORTED_PRIMITIVES:
+        msg = (
+            f"{primitive.capitalize()} install for harness '{harness}' is not supported. "
+            f"{primitive.capitalize()} configuration for Cursor and OpenCode is not managed by this installer. "
+            "Use harness 'claude_code' or 'codex' instead."
+        )
+        if use_json:
+            print_json(error_result(msg, EXIT_FAILURE))
+        else:
+            print(f"Error: {msg}", file=sys.stderr)
+        return EXIT_FAILURE
+
     # Resolve transitive dependencies before installing
     if not dry_run:
         exit_code = _install_with_deps(

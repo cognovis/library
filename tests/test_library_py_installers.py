@@ -803,6 +803,47 @@ model_standards: []
                 f"Cursor bridge path not created at {cursor_path}"
             )
 
+    def test_cursor_skill_remove_cleans_up_cursor_bridge(self, cursor_project: Path):
+        """Cursor bridge is removed when skill is uninstalled."""
+        # Install first
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "skill", "use", "cursor-test-skill",
+             "--harness", "cursor"],
+            capture_output=True, text=True, cwd=str(cursor_project),
+        )
+        assert result.returncode == 0, result.stderr
+        cursor_bridge = cursor_project / ".cursor" / "skills" / "cursor-test-skill"
+        assert cursor_bridge.exists() or cursor_bridge.is_symlink()
+
+        # Now remove
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "skill", "remove", "cursor-test-skill"],
+            capture_output=True, text=True, cwd=str(cursor_project),
+        )
+        assert result.returncode == 0, result.stderr
+        # Bridge must be gone — no dangling symlink
+        assert not cursor_bridge.exists()
+        assert not cursor_bridge.is_symlink()
+
+    def test_cursor_agent_rejected_before_dependency_install(self, dry_run_contract_project: Path):
+        """AC8: cursor agent install is rejected before any dependency side effects on real install."""
+        # Verify that even a real install (no --dry-run) returns error without creating files
+        agents_dir = dry_run_contract_project / ".claude" / "agents"
+        agents_dir_exists_before = agents_dir.exists()
+
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "agent", "use", "contract-agent",
+             "--harness", "cursor", "--json"],
+            capture_output=True, text=True, cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "cursor" in data["message"].lower()
+        # Agents dir should not be modified by a cursor install attempt
+        if not agents_dir_exists_before:
+            assert not agents_dir.exists(), "cursor agent install should not create agents directory"
+
     def test_existing_target_reports_conflict_policy_and_detection(
         self,
         dry_run_contract_project: Path,
