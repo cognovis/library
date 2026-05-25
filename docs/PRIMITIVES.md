@@ -151,7 +151,7 @@ metadata:
     harness_support:
       claude_code: supported      # or not-supported, planned
       codex: not-supported
-      cursor: planned
+      cursor: supported
 ```
 
 Harness IDs are a closed enum maintained by the Library schema, not an open
@@ -159,6 +159,16 @@ catalog-derived registry. Accepted IDs are `claude_code`, `codex`, `cursor`,
 `opencode`, and `gemini`. Omitting a key means "no explicit claim" (install
 proceeds). Use `planned` for harnesses where support is in progress. The install
 gate fires before dependency installs to prevent partial mutations.
+
+Cursor projection is supported for skills and rules. Project-scope skill
+installs write the canonical files to `.agents/skills/<name>/` and create a
+Cursor bridge symlink at `.cursor/skills/<name>/`; global installs use
+`~/.agents/skills/<name>/` with a `~/.cursor/skills/<name>/` bridge. Cursor
+rules generated from `always_apply` or `globs` are materialized as
+`.cursor/rules/<name>.mdc`. Agent, MCP, and guardrail installs for Cursor are
+not currently implemented and are rejected with compatibility errors before
+target writes. OpenCode MCP and guardrail installs are likewise rejected by the
+library installer.
 
 `metadata.library.harness_support` belongs to primitive entry metadata. MCP
 server entries use `install.mcp` as the source of truth for harness-specific MCP

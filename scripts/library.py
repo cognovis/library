@@ -838,7 +838,7 @@ def _dispatch_use(
             print(f"Error: {_compat_exc}", file=sys.stderr)
         return _compat_exc.exit_code
     if primitive == "skill":
-        return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
+        return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "standard":
         return _use_standard(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
     elif primitive == "agent":
@@ -872,6 +872,7 @@ def _use_skill(
     scope: str,
     dry_run: bool,
     use_json: bool,
+    harness: str,
     install_mode: str,
 ) -> int:
     """Install a skill (three-layer cache + vendored copy + bridge + lockfile)."""
@@ -885,6 +886,7 @@ def _use_skill(
             scope=scope,
             dry_run=dry_run,
             install_mode=install_mode,
+            harness=harness,
         )
         if use_json:
             print_json(result)

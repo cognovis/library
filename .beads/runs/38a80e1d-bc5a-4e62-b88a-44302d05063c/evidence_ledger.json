@@ -1,0 +1,65 @@
+{
+  "run_id": "38a80e1d-bc5a-4e62-b88a-44302d05063c",
+  "bead_id": "CL-iye.3",
+  "evidence": [
+    {
+      "acceptance_criteria": ["AC2", "AC6"],
+      "type": "unit",
+      "description": "Cursor skill dry-run reports .cursor/skills target paths, harness_routing, conflict_policy, and confirmation fields.",
+      "tests": [
+        "test_cursor_skill_install_creates_cursor_bridge",
+        "test_cursor_skill_dry_run_reports_cursor_target_paths"
+      ]
+    },
+    {
+      "acceptance_criteria": ["AC2"],
+      "type": "unit",
+      "description": "Cursor skill real install creates .cursor/skills/<name> symlink to .agents/skills/<name>.",
+      "tests": [
+        "test_cursor_skill_real_install_creates_bridge_symlink"
+      ]
+    },
+    {
+      "acceptance_criteria": ["AC3"],
+      "type": "unit",
+      "description": "Agent installs for cursor and opencode return compatibility errors.",
+      "tests": [
+        "test_cursor_agent_install_rejected_with_compatibility_message",
+        "test_opencode_agent_install_rejected_with_compatibility_message"
+      ]
+    },
+    {
+      "acceptance_criteria": ["AC7"],
+      "type": "smoke",
+      "description": "Cursor smoke structurally verifies installed .cursor/skills path when cursor or cursor-agent is on PATH, otherwise records SMOKE_BLOCKED via pytest skip.",
+      "tests": [
+        "test_cursor_skill_smoke_or_blocking_finding"
+      ]
+    },
+    {
+      "acceptance_criteria": ["AC8"],
+      "type": "unit",
+      "description": "MCP and guardrail installs for cursor/opencode reject before side effects with structured compatibility errors.",
+      "tests": [
+        "test_mcp_install_cursor_opencode_rejected_before_side_effects",
+        "test_guardrail_install_cursor_opencode_rejected_before_side_effects"
+      ]
+    },
+    {
+      "acceptance_criteria": ["AC1", "AC4"],
+      "type": "doc",
+      "description": "Cursor harness target behavior, rules projection, standards policy, and unsupported primitives are documented.",
+      "files": [
+        "docs/PRIMITIVES.md",
+        "docs/primitives/skill.md",
+        "docs/harness-baseline.md"
+      ]
+    },
+    {
+      "acceptance_criteria": ["AC2", "AC3", "AC6", "AC7", "AC8"],
+      "type": "verification",
+      "command": "uv run pytest tests/test_library_py_installers.py -x -q",
+      "result": "120 passed in 5.04s"
+    }
+  ]
+}

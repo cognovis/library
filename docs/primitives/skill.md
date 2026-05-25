@@ -19,6 +19,9 @@ harness — see Cost table below:
   present; no fresh read occurs.
 - **Codex CLI**: only the skill name and description are loaded at startup. When
   the model infers relevance, the harness fetches the full SKILL.md on first use.
+- **Cursor**: skills are projected through `.cursor/skills/<name>/` as a symlink
+  to the canonical `.agents/skills/<name>/` project install. Global installs use
+  `~/.cursor/skills/<name>/` pointing to `~/.agents/skills/<name>/`.
 
 In both harnesses, the `description` field is what the model matches against to
 decide relevance — only the timing of the full-text load differs.
@@ -32,8 +35,17 @@ decide relevance — only the timing of the full-text load differs.
 
 **Format.** SKILL.md — shared format (Open Agent Skills Standard). Install paths
 differ: `.agents/skills/<name>/SKILL.md` (canonical, read by Codex natively and by
-Claude Code through the `.claude/skills/<name>` bridge symlink)
-(Codex). NORMATIVE for both tools.
+Claude Code through the `.claude/skills/<name>` bridge symlink and by Cursor
+through the `.cursor/skills/<name>` bridge symlink). NORMATIVE for these tools.
+
+**Cursor projection.** Project-scope Cursor installs use
+`.cursor/skills/<name>/` as a symlink to `.agents/skills/<name>/`. Global-scope
+Cursor installs use `~/.cursor/skills/<name>/` as a symlink to
+`~/.agents/skills/<name>/`. Cursor rules generated from `always_apply` or
+`globs` are written to `.cursor/rules/<name>.mdc` by the harness materializer.
+Agent, MCP, and guardrail installs are not supported for Cursor by the library
+installer; those primitive requests fail with a compatibility message instead
+of writing `.cursor/agents/`, MCP config, or guardrail hooks.
 
 **When to choose it.** Use a skill when:
 - The capability should be available without the user remembering a command.

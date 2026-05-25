@@ -100,6 +100,13 @@ def install_agent(
     Returns:
         Operation result dict.
     """
+    if harness in ("cursor", "opencode"):
+        return error_result(
+            f"Agent install for harness '{harness}' is not supported. "
+            "Cursor agents (.cursor/agents/) are not currently implemented by the library installer. "
+            "Use harness 'claude_code' or 'codex' instead."
+        )
+
     prim = get_primitive("agent")
 
     # 1. Catalog lookup

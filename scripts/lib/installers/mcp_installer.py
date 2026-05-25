@@ -24,7 +24,7 @@ from ..lockfile import (
     save_lockfile,
     upsert_entry,
 )
-from ..output import dry_run_result, success
+from ..output import dry_run_result, error_result, success
 from ..source import resolve_marketplace
 from ..source import parse_source
 from ..status import get_remote_sha
@@ -71,6 +71,12 @@ def install_mcp(
     Returns:
         Operation result dict.
     """
+    if harness in ("cursor", "opencode"):
+        return error_result(
+            f"MCP server install for harness '{harness}' is not supported. "
+            "MCP configuration for Cursor and OpenCode is not managed by this installer."
+        )
+
     # 1. Catalog lookup — use catalog passed in (not re-reading disk)
     entry = lookup_entry(catalog, "mcp", name)
     mcp_name = entry.get("name", name)

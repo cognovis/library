@@ -84,11 +84,24 @@ Codex stores credentials user-global in `~/.codex/auth.json`. There is no docume
 project-local secret file for Codex today — no gitignore entries required for credentials.
 
 
-### .cursor/ (Cursor, future)
+### .cursor/ (Cursor)
 
-Reserved. As Cursor becomes a first-class harness, apply the same pattern:
-committed project rules and credentials-free settings, with personal or secret
-configs gitignored.
+**MUST be committed when used:**
+
+| File/Dir | Purpose | Notes |
+|---|---|---|
+| .cursor/skills/ | Cursor skill bridge symlinks | `/library skill use --harness cursor` creates `.cursor/skills/<name>/` pointing at `.agents/skills/<name>/` |
+| .cursor/rules/ | Cursor rules generated from skill `always_apply` or `globs` | Materialized as `.cursor/rules/<name>.mdc` |
+
+**MUST NOT be committed:**
+
+| File/Dir | Reason | .gitignore pattern |
+|---|---|---|
+| .cursor/settings.local.json | May contain credentials or machine-local overrides | `.cursor/settings.local.json` |
+
+Cursor agent, MCP, and guardrail projection are not managed by the library
+installer today. Requests for those primitives with `--harness cursor` fail with
+a compatibility message before target writes.
 
 ## Project-Local vs User-Global Separation
 
@@ -125,6 +138,9 @@ Add these harness-specific patterns to your project's `.gitignore`:
 
 # Cross-harness skills cache
 .agents/skills/*/cache/
+
+# Cursor harness - secret-bearing local settings
+.cursor/settings.local.json
 ```
 
 ## Generalizing Beyond .claude/

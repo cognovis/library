@@ -1,0 +1,40 @@
+{
+  "run_id": "38a80e1d-bc5a-4e62-b88a-44302d05063c",
+  "bead_id": "CL-iye.3",
+  "status": "implemented",
+  "scope": [
+    "Cursor skill bridge paths for project and global installs",
+    "Cursor dry-run routing metadata for skill installs",
+    "Explicit unsupported-harness errors for agent, MCP, and guardrail installs",
+    "Cursor rules and standards projection documentation",
+    "Cursor smoke coverage with environment skip when Cursor binaries are absent"
+  ],
+  "changed_files": [
+    "library.yaml",
+    "scripts/lib/paths.py",
+    "scripts/lib/installers/skill.py",
+    "scripts/library.py",
+    "scripts/lib/installers/agent.py",
+    "scripts/lib/installers/mcp_installer.py",
+    "scripts/lib/installers/guardrail_installer.py",
+    "tests/test_library_py_installers.py",
+    "docs/PRIMITIVES.md",
+    "docs/primitives/skill.md",
+    "docs/harness-baseline.md"
+  ],
+  "acceptance_criteria": {
+    "AC1": "documented",
+    "AC2": "implemented_and_tested",
+    "AC3": "implemented_and_tested",
+    "AC4": "documented",
+    "AC5": "unchanged_existing_coverage",
+    "AC6": "implemented_and_tested",
+    "AC7": "smoke_or_blocking_skip_tested",
+    "AC8": "implemented_and_tested"
+  },
+  "notes": [
+    "Cursor agent projection to .cursor/agents/<name>.md is explicitly rejected rather than implemented.",
+    "Cursor skill bridges are symlinks to the canonical .agents/skills or ~/.agents/skills install target.",
+    "MCP and guardrail installs for cursor/opencode return structured error results before target writes."
+  ]
+}

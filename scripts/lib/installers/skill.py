@@ -6,7 +6,7 @@ Implements the three-layer cache model (ADR-0003):
   Layer B: Cache (~/.local/share/library/skills/<marketplace>/<name>@<14hex>/)
   Layer C: Harness (.agents/skills/<name>/ vendored copy by default)
 
-For Claude Code: adds a bridge symlink at .claude/skills/<name>/ -> Layer C.
+For Claude Code and Cursor: adds bridge symlinks to Layer C.
 """
 
 from __future__ import annotations
@@ -56,6 +56,7 @@ def install_skill(
     scope: str = "project",
     dry_run: bool = False,
     install_mode: str = "vendor",
+    harness: str = "all",
 ) -> dict[str, Any]:
     """Install a skill from the catalog.
 
@@ -76,6 +77,7 @@ def install_skill(
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
         install_mode: 'vendor' (default) or 'symlink'.
+        harness: Target harness ('claude_code', 'cursor', 'all').
 
     Returns:
         Operation result dict.
@@ -98,6 +100,11 @@ def install_skill(
     install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
     canonical_base = install_paths["canonical"]
     bridge_base = install_paths["bridge"]
+    cursor_bridge_base = (
+        install_paths["global_cursor_bridge"]
+        if scope == "global"
+        else install_paths["cursor_bridge"]
+    )
 
     if canonical_base is None:
         raise InstallError(
@@ -106,7 +113,12 @@ def install_skill(
         )
 
     canonical_dir = canonical_base / skill_name
-    bridge_dir = (bridge_base / skill_name) if bridge_base else None
+    bridge_dir = (bridge_base / skill_name) if bridge_base and harness in ("all", "claude_code") else None
+    cursor_bridge_dir = (
+        cursor_bridge_base / skill_name
+        if cursor_bridge_base and harness in ("all", "cursor")
+        else None
+    )
 
     # 4. Dry-run mode
     if dry_run:
@@ -131,6 +143,15 @@ def install_skill(
                 if op.get("operation") == "create_bridge_symlink":
                     op["target"] = str(canonical_dir)
                     op["details"] = f"Claude bridge symlink {bridge_dir} -> {canonical_dir}"
+        if cursor_bridge_dir:
+            ops.append(
+                {
+                    "operation": "create_bridge_symlink",
+                    "path": str(cursor_bridge_dir),
+                    "target": str(canonical_dir),
+                    "details": f"Cursor bridge symlink {cursor_bridge_dir} -> {canonical_dir}",
+                }
+            )
         # Add lockfile write op
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append(
@@ -141,9 +162,15 @@ def install_skill(
             }
         )
         # Add harness materialization ops (always_apply / globs)
-        harness = materialize_harness_fields(entry, skill_name, "skill", repo_root, dry_run=True)
-        ops.extend(harness["operations"])
-        for w in harness.get("warnings", []):
+        harness_materialization = materialize_harness_fields(
+            entry,
+            skill_name,
+            "skill",
+            repo_root,
+            dry_run=True,
+        )
+        ops.extend(harness_materialization["operations"])
+        for w in harness_materialization.get("warnings", []):
             import sys as _sys
             print(f"WARNING: {w}", file=_sys.stderr)
         result = dry_run_result(
@@ -151,12 +178,14 @@ def install_skill(
             summary=(
                 f"Would install skill '{skill_name}' to {canonical_dir}"
                 + (f" with bridge {bridge_dir}" if bridge_dir else "")
+                + (f" with cursor bridge {cursor_bridge_dir}" if cursor_bridge_dir else "")
             ),
             target_paths=[
                 str(canonical_dir),
                 *([str(bridge_dir)] if bridge_dir else []),
+                *([str(cursor_bridge_dir)] if cursor_bridge_dir else []),
             ],
-            harness_routing=None,
+            harness_routing=harness,
             conflict_policy="overwrite",
             lockfile_changes=[
                 {
@@ -180,6 +209,7 @@ def install_skill(
             "canonical": str(canonical_dir),
             "install_target": str(canonical_dir),
             "bridge": str(bridge_dir) if bridge_dir else None,
+            "cursor_bridge": str(cursor_bridge_dir) if cursor_bridge_dir else None,
             "install_mode": install_mode,
         }
         return result
@@ -197,12 +227,15 @@ def install_skill(
         # 6. Create canonical install (Layer C)
         materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
 
-        # 7. Create Claude bridge symlink
+        # 7. Create harness bridge symlinks
         bridge_symlink_strs: list[str] = []
         if bridge_dir:
             bridge_target = canonical_dir if install_mode == "vendor" else cache_path
             create_harness_symlink(bridge_dir, bridge_target)
             bridge_symlink_strs.append(f"{bridge_dir} -> {bridge_target}")
+        if cursor_bridge_dir:
+            create_harness_symlink(cursor_bridge_dir, canonical_dir)
+            bridge_symlink_strs.append(f"{cursor_bridge_dir} -> {canonical_dir}")
 
         # 8. Write lockfile — hash local installed content (all files matter)
         try:
@@ -233,8 +266,8 @@ def install_skill(
         save_lockfile(lockfile_path, lock_data)
 
         # 9. Harness materialization (always_apply / globs)
-        harness = materialize_harness_fields(entry, skill_name, "skill", repo_root)
-        for w in harness.get("warnings", []):
+        harness_materialization = materialize_harness_fields(entry, skill_name, "skill", repo_root)
+        for w in harness_materialization.get("warnings", []):
             print(f"WARNING: {w}", file=sys.stderr)
 
         return success(
@@ -242,14 +275,16 @@ def install_skill(
                 "name": skill_name,
                 "canonical": str(canonical_dir),
                 "bridge": str(bridge_dir) if bridge_dir else None,
+                "cursor_bridge": str(cursor_bridge_dir) if cursor_bridge_dir else None,
                 "cache": str(cache_path),
                 "source_commit": source_commit,
                 "install_mode": install_mode,
-                "harness_ops": harness.get("operations", []),
+                "harness_ops": harness_materialization.get("operations", []),
             },
             message=(
                 f"Skill '{skill_name}' installed at {canonical_dir}"
                 + (f" with bridge {bridge_dir}" if bridge_dir else "")
+                + (f" with cursor bridge {cursor_bridge_dir}" if cursor_bridge_dir else "")
             ),
         )
     finally:
