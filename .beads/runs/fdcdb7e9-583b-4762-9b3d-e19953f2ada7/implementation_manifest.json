@@ -1,0 +1,114 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-uqug",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "status": "partial",
+      "changed_files": [
+        "docs/audit/hook-permission-preservation.md"
+      ],
+      "evidence_refs": [
+        "docs/audit/hook-permission-preservation.md#claude-leaf-smoke",
+        "evidence_ledger.commands.claude_leaf_smoke"
+      ]
+    },
+    {
+      "id": 2,
+      "status": "done",
+      "changed_files": [
+        "docs/audit/hook-permission-preservation.md"
+      ],
+      "evidence_refs": [
+        "docs/audit/hook-permission-preservation.md#capability-matrix",
+        "evidence_ledger.commands.review_claude_settings",
+        "evidence_ledger.commands.review_codex_hooks"
+      ]
+    },
+    {
+      "id": 3,
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_runtime_spike.py"
+      ],
+      "evidence_refs": [
+        "evidence_ledger.commands.red_guardrail_tests",
+        "evidence_ledger.commands.green_guardrail_tests",
+        "evidence_ledger.commands.full_workflow_runtime_tests"
+      ]
+    },
+    {
+      "id": 4,
+      "status": "done",
+      "changed_files": [
+        "docs/audit/hook-permission-preservation.md"
+      ],
+      "evidence_refs": [
+        "docs/audit/hook-permission-preservation.md",
+        "evidence_ledger.commands.green_commit"
+      ]
+    },
+    {
+      "id": 5,
+      "status": "done",
+      "changed_files": [
+        "docs/audit/hook-permission-preservation.md"
+      ],
+      "evidence_refs": [
+        "bd:CL-pabj",
+        "evidence_ledger.commands.create_codex_followup",
+        "evidence_ledger.commands.review_codex_followup"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/lib/workflow_runtime.py",
+    "tests/test_workflow_runtime_spike.py",
+    "docs/audit/hook-permission-preservation.md",
+    ".beads/runs/fdcdb7e9-583b-4762-9b3d-e19953f2ada7/implementation_manifest.json",
+    ".beads/runs/fdcdb7e9-583b-4762-9b3d-e19953f2ada7/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "status": "skipped_after_failed_attempt",
+      "message": "test(CL-uqug): red - guardrail tests for mutating execution blocked",
+      "reason": "The red-only commit attempt failed before production changes. The red test failure is recorded in the evidence ledger."
+    },
+    {
+      "status": "committed",
+      "message": "feat(CL-uqug): green - hook preservation verification and guardrail"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py -k 'mutating_execution_for_unverified_adapter or readonly_for_any_adapter'",
+      "status": "red_then_green",
+      "evidence_ref": "evidence_ledger.commands.red_guardrail_tests and evidence_ledger.commands.green_guardrail_tests"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py",
+      "status": "passed",
+      "evidence_ref": "evidence_ledger.commands.full_workflow_runtime_tests"
+    }
+  ],
+  "external_resources": [
+    "~/.claude/settings.json",
+    "~/.codex/hooks.json",
+    "claude CLI local subprocess"
+  ],
+  "scope_changes": [
+    "The requested AC1 smoke could not verify Claude hook participation because the local Claude CLI was not authenticated in this environment.",
+    "ADAPTER_PRESERVATION_STATUS uses claude-agent=blocked rather than verified to match the actual smoke evidence."
+  ],
+  "downstream_impacts": [
+    "Mutating workflow execution now fails closed for every adapter without preservation status verified.",
+    "Read-only workflow leaves remain allowed for unverified, separate-harness, not-applicable, and unknown adapters.",
+    "Filed follow-up bead CL-pabj for Codex-specific leaf hook preservation verification."
+  ],
+  "evidence_refs": [
+    "docs/audit/hook-permission-preservation.md",
+    ".beads/runs/fdcdb7e9-583b-4762-9b3d-e19953f2ada7/evidence_ledger.json",
+    "bd:CL-pabj"
+  ]
+}

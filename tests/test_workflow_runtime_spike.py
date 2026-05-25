@@ -42,6 +42,24 @@ class DummyExecutor(AgentExecutor):
         }
 
 
+class DummyCodexExecutor(DummyExecutor):
+    adapter_name = "codex-exec"
+
+
+def _write_single_leaf_spec(tmp_path: Path, opts: dict[str, object]) -> Path:
+    spec_path = tmp_path / "single-leaf.js"
+    spec_path.write_text(
+        "\n".join(
+            [
+                'export const meta = {"name": "single-leaf"};',
+                f'await agent("context pack", {json.dumps(opts, sort_keys=True)});',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return spec_path
+
+
 def _load_route_profiles() -> dict[str, object]:
     if not ROUTE_PROFILE_CONFIG.exists():
         pytest.skip(f"Route profile config not found: {ROUTE_PROFILE_CONFIG}")
@@ -176,6 +194,38 @@ def test_workflow_runtime_runs_read_only_spec_and_journals(tmp_path: Path) -> No
     assert len(executor.calls) == 1
 
 
+def test_runtime_blocks_mutating_execution_for_unverified_adapter(tmp_path: Path) -> None:
+    spec_path = _write_single_leaf_spec(
+        tmp_path,
+        {"adapter": "codex-exec", "readOnly": False},
+    )
+    runtime = WorkflowRuntime(
+        executor_registry={"codex-exec": DummyCodexExecutor()},
+    )
+
+    with pytest.raises(ValueError, match="Mutating workflow execution") as exc_info:
+        runtime.run(spec_path, {})
+
+    assert exc_info.type.__name__ == "MutatingExecutionBlockedError"
+
+
+def test_runtime_allows_readonly_for_any_adapter(tmp_path: Path) -> None:
+    spec_path = _write_single_leaf_spec(
+        tmp_path,
+        {"adapter": "codex-exec", "readOnly": True},
+    )
+    executor = DummyCodexExecutor()
+    runtime = WorkflowRuntime(
+        executor_registry={"codex-exec": executor},
+    )
+
+    result = runtime.run(spec_path, {})
+
+    assert result["status"] == "ok"
+    assert result["leaf_results"][0]["result"]["adapter"] == "codex-exec"
+    assert len(executor.calls) == 1
+
+
 def test_runtime_journal_state_serializes_to_json(tmp_path: Path) -> None:
     journal_path = tmp_path / "journal.json"
     store = JournalStore(path=journal_path)
@@ -185,3 +235,23 @@ def test_runtime_journal_state_serializes_to_json(tmp_path: Path) -> None:
     payload = json.loads(journal_path.read_text(encoding="utf-8"))
     assert "entries" in payload
     assert len(payload["entries"]) == 1
+
+
+def test_runtime_blocks_unknown_adapter_with_absent_readonly(tmp_path: Path) -> None:
+    """Fail-closed default: absent readOnly key + unknown adapter must be blocked."""
+    spec_path = _write_single_leaf_spec(
+        tmp_path,
+        {"adapter": "unknown-future-adapter"},
+    )
+    # Register the executor so the test is not skipped due to a missing executor
+    class UnknownExecutor(DummyExecutor):
+        adapter_name = "unknown-future-adapter"
+
+    runtime = WorkflowRuntime(
+        executor_registry={"unknown-future-adapter": UnknownExecutor()},
+    )
+
+    with pytest.raises(ValueError, match="Mutating workflow execution") as exc_info:
+        runtime.run(spec_path, {})
+
+    assert exc_info.type.__name__ == "MutatingExecutionBlockedError"
