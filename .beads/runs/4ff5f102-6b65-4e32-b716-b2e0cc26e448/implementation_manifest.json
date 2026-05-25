@@ -1,0 +1,113 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-37yu",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "done",
+      "summary": "Journal schema is versioned and records spec hash, route profile, workflow, slot, adapter, prompt/options hash, result, and metadata.",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_journal_hardening.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-hardening-tests",
+        "cmd:green-hardening-tests",
+        "cmd:spike-regression"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "done",
+      "summary": "Journal save creates parent directories, writes through journal.json.tmp, and renames the temp file into place.",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_journal_hardening.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-hardening-tests"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "done",
+      "summary": "Corrupt journals are quarantined and incompatible schema versions raise JournalSchemaError with a reset message.",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_journal_hardening.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-hardening-tests"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "done",
+      "summary": "Workflow runtime binds journals to spec hash, route profile, and workflow, clears stale entries on identity change, and journals rich leaf entries.",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_journal_hardening.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-hardening-tests"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "done",
+      "summary": "Existing read-only workflow runtime spike tests remain green.",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_journal_hardening.py"
+      ],
+      "evidence_refs": [
+        "cmd:spike-regression"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/lib/workflow_runtime.py",
+    "tests/test_workflow_journal_hardening.py",
+    ".beads/runs/4ff5f102-6b65-4e32-b716-b2e0cc26e448/implementation_manifest.json",
+    ".beads/runs/4ff5f102-6b65-4e32-b716-b2e0cc26e448/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "873948b49c7a23d6de51a0aa13710c77503d3727",
+      "message": "test(CL-37yu): red - journal hardening tests for AC1-AC4"
+    },
+    {
+      "sha": "f57b6a972d1234d960a2838b20b308e6599cda11",
+      "message": "feat(CL-37yu): green - journal hardening"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_workflow_journal_hardening.py",
+      "status": "passed",
+      "result": "9 passed"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py",
+      "status": "passed",
+      "result": "9 passed"
+    },
+    {
+      "command": "uv run pytest",
+      "status": "failed_out_of_scope",
+      "result": "3 failed, 772 passed, 23 skipped; failures were missing op-credentials registration and external GitHub migration commit checks, not workflow journal/runtime behavior."
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "Workflow journals written by the spike runtime now use schema version 1 and reject incompatible on-disk versions.",
+    "Resume cache reuse is bound to workflow identity and no longer reuses entries across spec, route profile, or workflow changes."
+  ],
+  "evidence_refs": [
+    "cmd:red-hardening-tests",
+    "cmd:green-hardening-tests",
+    "cmd:spike-regression",
+    "cmd:full-suite"
+  ]
+}

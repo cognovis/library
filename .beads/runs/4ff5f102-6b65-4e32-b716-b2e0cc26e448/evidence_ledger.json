@@ -1,0 +1,78 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-37yu",
+  "commands": [
+    {
+      "id": "cmd:bd-prime",
+      "command": "bd prime",
+      "purpose": "Load repository beads workflow instructions.",
+      "exit_code": 0,
+      "observed_result": "Printed beads workflow context."
+    },
+    {
+      "id": "cmd:bead-show",
+      "command": "bd show CL-37yu --json",
+      "purpose": "Confirm bead status, acceptance criteria, and run metadata.",
+      "exit_code": 0,
+      "observed_result": "Bead CL-37yu was in_progress and claimed for run 4ff5f102-6b65-4e32-b716-b2e0cc26e448."
+    },
+    {
+      "id": "cmd:red-hardening-tests",
+      "command": "uv run pytest tests/test_workflow_journal_hardening.py",
+      "purpose": "RED gate after adding journal hardening tests.",
+      "exit_code": 2,
+      "observed_result": "Collection failed because JournalSchemaError was not yet implemented."
+    },
+    {
+      "id": "cmd:green-hardening-tests",
+      "command": "uv run pytest tests/test_workflow_journal_hardening.py",
+      "purpose": "GREEN gate for AC1 through AC4.",
+      "exit_code": 0,
+      "observed_result": "9 passed."
+    },
+    {
+      "id": "cmd:spike-regression",
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py",
+      "purpose": "Regression gate for existing read-only workflow runtime spike behavior.",
+      "exit_code": 0,
+      "observed_result": "9 passed."
+    },
+    {
+      "id": "cmd:full-suite",
+      "command": "uv run pytest",
+      "purpose": "Repository-wide regression check.",
+      "exit_code": 1,
+      "observed_result": "3 failed, 772 passed, 23 skipped. Failures: tests/test_library_coverage.py::test_cognovis_skills_registered missing op-credentials; tests/test_personal_migration.py GitHub migration commit existence and SHA checks returned no matching remote commit."
+    },
+    {
+      "id": "cmd:red-commit",
+      "command": "git add tests/test_workflow_journal_hardening.py && git commit -m \"test(CL-37yu): red - journal hardening tests for AC1-AC4\"",
+      "purpose": "Commit the requested red test state.",
+      "exit_code": 0,
+      "observed_result": "Created commit 873948b49c7a23d6de51a0aa13710c77503d3727."
+    },
+    {
+      "id": "cmd:green-commit",
+      "command": "git add scripts/lib/workflow_runtime.py tests/test_workflow_journal_hardening.py && git commit -m \"feat(CL-37yu): green - journal hardening\"",
+      "purpose": "Commit the green implementation.",
+      "exit_code": 0,
+      "observed_result": "Created commit f57b6a972d1234d960a2838b20b308e6599cda11."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Full repository suite passing end-to-end",
+      "reason": "The command was run and failed on checks outside this bead's source/test scope: library coverage expects op-credentials registration despite the session hard ban, and personal migration tests query GitHub for a migration commit not found in the remote response. Targeted AC and regression suites passed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/4ff5f102-6b65-4e32-b716-b2e0cc26e448/implementation_manifest.json",
+      "description": "Implementation manifest for bead CL-37yu."
+    },
+    {
+      "path": ".beads/runs/4ff5f102-6b65-4e32-b716-b2e0cc26e448/evidence_ledger.json",
+      "description": "Evidence ledger for bead CL-37yu."
+    }
+  ]
+}
