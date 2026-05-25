@@ -572,14 +572,15 @@ class WorkflowRuntime:
         calls: list[dict[str, Any]] = []
         cursor = 0
         marker = "await agent("
+        stripped = SpineConstraintChecker._strip_comments(source)
         while True:
-            idx = source.find(marker, cursor)
+            idx = WorkflowRuntime._find_marker_outside_strings(stripped, marker, cursor)
             if idx == -1:
                 break
-            paren_start = source.find("(", idx)
+            paren_start = stripped.find("(", idx)
             if paren_start == -1:
                 break
-            call_block, call_end = WorkflowRuntime._extract_balanced(source, paren_start, "(", ")")
+            call_block, call_end = WorkflowRuntime._extract_balanced(stripped, paren_start, "(", ")")
             args_text = call_block[1:-1].strip()
             prompt_text, opts_text = WorkflowRuntime._split_agent_args(args_text)
             calls.append(
@@ -590,6 +591,39 @@ class WorkflowRuntime:
             )
             cursor = call_end
         return calls
+
+    @staticmethod
+    def _find_marker_outside_strings(source: str, marker: str, start: int) -> int:
+        in_string = False
+        string_delim = ""
+        escape = False
+        index = start
+
+        while index < len(source):
+            char = source[index]
+
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == string_delim:
+                    in_string = False
+                index += 1
+                continue
+
+            if char in ('"', "'", "`"):
+                in_string = True
+                string_delim = char
+                index += 1
+                continue
+
+            if source.startswith(marker, index):
+                return index
+
+            index += 1
+
+        return -1
 
     @staticmethod
     def _split_agent_args(args_text: str) -> tuple[str, str]:
