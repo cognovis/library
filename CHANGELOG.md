@@ -2,6 +2,12 @@
 
 ### 🛡️ Security / Safety
 
+- *(CL-182u)* Workflow runtime production-readiness hardening
+  - `MutatingExecutionBlockedError` is raised unless the caller passes `readOnly=True`; top-level `readOnly` from CLI `--read-only` flag or `args["readOnly"]=True` propagates to every leaf via `opts.setdefault("readOnly", True)`, closing the per-leaf bypass gap
+  - Inert-spine checks now scan template literal interpolation blocks (`${…}`) for banned operations — not just top-level source — so `fs.${method}` style obfuscation is caught
+  - `agent()` extraction is fully comment-and-string-safe: `_strip_comments` (char-by-char) removes `//` and `/* */` only outside string literals; `_find_marker_outside_strings` skips `await agent(` occurrences inside string literals before extraction
+  - `ADAPTER_PRESERVATION_STATUS` update criteria anchored in ADR-0006 Consequences (criteria 1–6, including fail-closed default for unknown adapters)
+
 - *(CL-uqug)* Fail-closed guardrail for mutating workflow execution in `WorkflowRuntime`
   - `MutatingExecutionBlockedError` is raised for any adapter whose hook-preservation status is not `verified`
   - `ADAPTER_PRESERVATION_STATUS` map records current statuses: `claude-agent` → `blocked` (leaf smoke returned unauthenticated), `codex-impl`/`codex-exec` → `separate-harness`, `cursor-composer` → `not-applicable`
@@ -10,6 +16,13 @@
   - Follow-up bead CL-pabj filed for Codex-specific hook preservation smoke evidence
 
 ### 🚀 Features
+
+- *(CL-182u)* CLI entrypoint for read-only workflow execution (`scripts/lib/workflow_runtime.py`)
+  - `uv run python scripts/lib/workflow_runtime.py <spec.js> [--read-only] [--route-profile NAME] [--args JSON] [--journal PATH]`
+  - `--read-only` sets `readOnly=True` for all leaves; combined with `--journal` provides safe dry-run with full resume support
+  - `--route-profile NAME` merges the named profile into `args["route_profile"]` for slot dispatch without model-prefix inference
+  - Route-profile slot dispatch resolves `args.route_profiles[route_profile].slots[workflow][slot]` to an adapter target; no model-name prefix heuristics involved
+  - Journal identity (`spec_hash`, `route_profile`, `workflow`, schema `version`) tracked per run; mismatched journal is cleared automatically on spec or profile change
 
 - *(CL-mr2q)* OpenCode harness support for agent install and remove
   - `library.yaml` declares `default_opencode: .opencode/agents/` and `global_opencode: ~/.opencode/agents/` under `default_dirs.agents`
@@ -48,6 +61,13 @@
   - `docs/primitives/workflow.md` catalog format section drops "proposed" status — installer support is live
 
 ### 📚 Documentation
+
+- *(CL-182u)* `docs/primitives/workflow.md` — runtime section added
+  - CLI usage examples (read-only, route-profile, journal resume)
+  - Supported workflow subset: `meta` literal, `await agent()` leaves with JSON-literal args, route-profile slot dispatch, journal/resume by `(spec_hash, route_profile, workflow)`, inert-spine checks, fail-closed mutating-execution guard
+  - Adapter support table with current statuses (`blocked`, `separate-harness`, `not-applicable`)
+  - Unsupported cases: template literal args, dynamic `opts` spread, `pipeline`/`parallel`/`phase`/`budget`/`workflow()` globals, nested execution, mutating execution without verified adapter, native `CLAUDE_CODE_WORKFLOWS` tool
+- *(CL-182u)* `docs/adr/workflow-primitive.md` — ADAPTER_PRESERVATION_STATUS update criteria (6 rules) added to Consequences section; fail-closed default and `readOnly` bypass documented
 
 - *(CL-99c)* Add project harness baseline checklist for collaboration projects
   - `docs/harness-baseline.md` defines what each harness directory (`.claude/`, `.agents/`, `.codex/`, `.cursor/`) must and must not commit

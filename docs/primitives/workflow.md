@@ -55,11 +55,12 @@ harness-neutral JavaScript and never changes between them.
 | Backend | `agent()` provided by | Availability |
 |---------|------------------------|--------------|
 | Native Workflow tool | the Claude Code binary, in-process (gated by `CLAUDE_CODE_WORKFLOWS`) | when Anthropic ships it |
-| Library runtime | our runner, shelling each leaf to `claude -p --output-format json` | open implementation (ADR-0006 D5) |
-| Codex | the same runner, shelling each leaf to `codex exec` | open implementation (ADR-0006 D5) |
+| Library runtime | our runner (`scripts/lib/workflow_runtime.py`), shelling each leaf to `claude -p --output-format json` | available — read-only path; mutating blocked until adapter is `verified` |
+| Codex | the same runner, shelling each leaf to `codex exec` | runtime exists; Codex hook-preservation smoke pending (CL-pabj) |
 
-This pluggable executor is what makes a workflow cross-harness. INFERRED for the
-Library-runtime and Codex backends — pending the runtime spike.
+This pluggable executor is what makes a workflow cross-harness. The Library runtime
+read-only execution path is implemented and tested; mutating execution requires adapter
+verification (see Adapter Support table below and ADR-0006 Consequences).
 
 ## Runtime: Library Workflow Runtime
 

@@ -172,11 +172,12 @@
     "agent() extraction now ignores comments and string literals while preserving existing JSON-literal leaf parsing.",
     "Runtime docs explicitly state unsupported Workflow JS constructs and fail-closed mutating adapter policy."
   ],
-  "evidence_refs": {
-    "cmd:ac2-red": "uv run pytest tests/test_workflow_runtime_production.py -v -> 2 failed before fix",
-    "cmd:workflow-production-pass": "uv run pytest tests/test_workflow_runtime_production.py -v -> 9 passed after AC4; production tests included 11 passed after AC5",
-    "cmd:journal-production-pass": "uv run pytest tests/test_workflow_runtime_production.py tests/test_workflow_journal_hardening.py -v -> 21 passed",
-    "cmd:focused-runtime-route-pass": "uv run pytest tests/test_workflow_runtime_production.py tests/test_workflow_runtime_spike.py tests/test_workflow_journal_hardening.py tests/test_route_profiles_schema.py -v -> 73 passed",
-    "cmd:full-suite-final": "uv run pytest tests/ -v -> 787 passed, 23 skipped, 3 failed out of scope"
-  }
+  "evidence_refs": [
+    "tests/test_workflow_runtime_production.py",
+    "tests/test_workflow_runtime_spike.py",
+    "tests/test_workflow_journal_hardening.py",
+    "scripts/lib/workflow_runtime.py",
+    "docs/adr/workflow-primitive.md",
+    "docs/primitives/workflow.md"
+  ]
 }
