@@ -29,6 +29,20 @@ class JournalSchemaError(ValueError):
     """Raised when a journal file has an incompatible schema."""
 
 
+ADAPTER_PRESERVATION_STATUS: dict[str, str] = {
+    "claude-agent": "blocked",
+    "codex-impl": "separate-harness",
+    "codex-exec": "separate-harness",
+    "cursor-composer": "not-applicable",
+}
+
+_MUTATING_ALLOWED_STATUSES = frozenset({"verified"})
+
+
+class MutatingExecutionBlockedError(ValueError):
+    """Raised when mutating workflow execution is attempted for an unverified adapter."""
+
+
 class SpineConstraintChecker:
     """Heuristic static analysis for inert-spine rules."""
 
@@ -450,6 +464,9 @@ class WorkflowRuntime:
         return result
 
     def _run_leaf(self, prompt: str, opts: dict[str, Any]) -> dict[str, Any]:
+        adapter_name = self._resolve_adapter_name(opts)
+        self.check_mutating_allowed(adapter_name, opts.get("readOnly") is True)
+
         cached = self.journal.get(prompt, opts)
         if cached is not None:
             return {
@@ -460,7 +477,6 @@ class WorkflowRuntime:
                 "opts": dict(opts),
             }
 
-        adapter_name = self._resolve_adapter_name(opts)
         executor = self.executor_registry.get(adapter_name)
         if executor is None:
             raise ValueError(f"No executor registered for adapter {adapter_name!r}")
@@ -480,6 +496,18 @@ class WorkflowRuntime:
             "prompt": prompt,
             "opts": dict(opts),
         }
+
+    def check_mutating_allowed(self, adapter_name: str, read_only: bool) -> None:
+        """Block mutating execution unless adapter preservation is verified."""
+        if read_only:
+            return
+
+        status = ADAPTER_PRESERVATION_STATUS.get(adapter_name, "unknown")
+        if status not in _MUTATING_ALLOWED_STATUSES:
+            raise MutatingExecutionBlockedError(
+                "Mutating workflow execution is blocked for adapter "
+                f"{adapter_name!r}: preservation status is {status!r}"
+            )
 
     @staticmethod
     def _resolve_adapter_name(opts: dict[str, Any]) -> str:

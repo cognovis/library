@@ -1,0 +1,113 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-uqug",
+  "commands": [
+    {
+      "id": "red_guardrail_tests",
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py -k 'mutating_execution_for_unverified_adapter or readonly_for_any_adapter'",
+      "purpose": "Verify the newly added AC3 tests fail before production guardrail code is added.",
+      "exit_code": 1,
+      "observed_result": "One selected test failed for the intended reason: Failed: DID NOT RAISE <class 'ValueError'>. The read-only test passed."
+    },
+    {
+      "id": "red_commit_attempt",
+      "command": "git diff -- tests/test_workflow_runtime_spike.py && git add tests/test_workflow_runtime_spike.py && git commit -m \"test(CL-uqug): red - guardrail tests for mutating execution blocked\"",
+      "purpose": "Commit the TDD red test state as required by the bead.",
+      "exit_code": 128,
+      "observed_result": "Blocked by sandbox: fatal: Unable to create '/Users/malte/code/library/meta/.git/worktrees/bead-CL-uqug/index.lock': Operation not permitted."
+    },
+    {
+      "id": "review_claude_settings",
+      "command": "sed -n '1,220p' ~/.claude/settings.json",
+      "purpose": "Review configured Claude lifecycle hooks for the capability matrix.",
+      "exit_code": 0,
+      "observed_result": "Claude settings include PreToolUse matcher Bash running /Users/malte/.local/bin/dcg and PostToolUse matcher Bash running bd-cache-invalidator.py."
+    },
+    {
+      "id": "review_codex_hooks",
+      "command": "sed -n '1,220p' ~/.codex/hooks.json",
+      "purpose": "Review configured Codex lifecycle hooks for the capability matrix.",
+      "exit_code": 0,
+      "observed_result": "Codex hooks include a separate PreToolUse matcher Bash running /Users/malte/.local/bin/dcg plus Codex-specific SessionStart and Stop hooks."
+    },
+    {
+      "id": "claude_leaf_smoke",
+      "command": "timeout 45 claude -p --output-format json \"Return the string HOOK_TEST_COMPLETE with no other output\"",
+      "purpose": "Attempt read-only spawned Claude leaf smoke for hook preservation evidence.",
+      "exit_code": 1,
+      "observed_result": "Claude returned JSON with is_error=true and result 'Not logged in - Please run /login'. Hook participation could not be verified."
+    },
+    {
+      "id": "green_guardrail_tests",
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py -k 'mutating_execution_for_unverified_adapter or readonly_for_any_adapter'",
+      "purpose": "Verify the AC3 guardrail tests pass after implementing the preservation registry and fail-closed check.",
+      "exit_code": 0,
+      "observed_result": "2 passed, 9 deselected."
+    },
+    {
+      "id": "create_codex_followup",
+      "command": "bd create --title=\"[FOLLOW-UP] Verify codex leaf hook preservation for workflow runtime\" -t task -p 3 --deps \"discovered-from:CL-uqug\" --description=\"Verify that codex workflow leaf execution preserves the Codex hook and permission chain when invoked by the workflow runtime. Acceptance: smoke evidence or explicit blocker for codex-impl and codex-exec leaf paths.\" --acceptance=\"codex-impl and codex-exec hook preservation is proven with smoke evidence or blocked with reproduction steps; evidence is committed in docs/audit or docs/research\"",
+      "purpose": "File the required follow-up for Codex-specific hook preservation gaps.",
+      "exit_code": 0,
+      "observed_result": "Created issue CL-pabj."
+    },
+    {
+      "id": "update_codex_followup",
+      "command": "bd update CL-pabj --body-file /private/tmp/cl-pabj-body.md --acceptance=\"codex-impl and codex-exec hook preservation is proven with smoke evidence or blocked with exact reproduction steps; Evidence is committed in docs/audit or docs/research; Runtime adapter preservation status recommendation is explicit\" --metadata='{\"routing\":{\"routed_effort\":\"small\",\"routed_reason\":\"Codex-only smoke verification and documentation update for existing workflow runtime adapter statuses.\",\"classifier\":\"manual\",\"version\":\"CL-uqug\"}}'",
+      "purpose": "Make the direct-created follow-up bead handoff-ready with Intent, Context Pointers, MoC, AC, and routed effort.",
+      "exit_code": 0,
+      "observed_result": "Updated issue CL-pabj."
+    },
+    {
+      "id": "review_codex_followup",
+      "command": "bd lint CL-pabj",
+      "purpose": "Run the available bead validation gate for the direct-created follow-up bead.",
+      "exit_code": 0,
+      "observed_result": "No template warnings found."
+    },
+    {
+      "id": "full_workflow_runtime_tests",
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py",
+      "purpose": "Verify the full workflow runtime spike test file after implementation.",
+      "exit_code": 0,
+      "observed_result": "12 passed."
+    },
+    {
+      "id": "green_commit",
+      "command": "git add scripts/lib/workflow_runtime.py tests/test_workflow_runtime_spike.py docs/audit/hook-permission-preservation.md && git add -f .beads/runs/fdcdb7e9-583b-4762-9b3d-e19953f2ada7/implementation_manifest.json .beads/runs/fdcdb7e9-583b-4762-9b3d-e19953f2ada7/evidence_ledger.json && git commit -m \"feat(CL-uqug): green - hook preservation verification and guardrail\"",
+      "purpose": "Commit the implementation, audit document, tests, and required run artifacts.",
+      "exit_code": 0,
+      "observed_result": "Created the green implementation commit with 5 changed files; the commit was amended afterward to correct the manifest and ledger."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "id": "claude_hook_verified_log",
+      "reason": "The local Claude CLI was not authenticated, so the leaf smoke ended before a successful model/tool turn and produced no direct hook log evidence.",
+      "reproduction": "Run claude /login, then run: timeout 45 claude -p --output-format json \"Use Bash to run: printf HOOK_TEST_COMPLETE\". Confirm a matching leaf-session PreToolUse and PostToolUse hook log/audit entry."
+    },
+    {
+      "id": "separate_red_commit",
+      "reason": "The initial red-only commit attempt failed with an index.lock permission error before production code was added. The final implementation commit succeeded after the run artifacts were force-added.",
+      "reproduction": "The failed command is recorded as red_commit_attempt."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/audit/hook-permission-preservation.md",
+      "purpose": "Capability matrix, Claude smoke blocker, config review, and mutating execution decision."
+    },
+    {
+      "path": ".beads/runs/fdcdb7e9-583b-4762-9b3d-e19953f2ada7/implementation_manifest.json",
+      "purpose": "Required implementation manifest."
+    },
+    {
+      "path": ".beads/runs/fdcdb7e9-583b-4762-9b3d-e19953f2ada7/evidence_ledger.json",
+      "purpose": "Required evidence ledger."
+    },
+    {
+      "path": "bd:CL-pabj",
+      "purpose": "Follow-up bead for Codex leaf hook preservation verification."
+    }
+  ]
+}
