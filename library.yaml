@@ -1450,20 +1450,6 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
-    - name: op-credentials
-      description: >-
-        Read, list, and create service credentials in 1Password. Use when needing API keys, service passwords, or creating credentials. Triggers on 1password, 1Password, op credentials, api key, service credentials, op read, op://, op item, vault, password speichern. Not for personal logins or SSH keys.
-      source: https://github.com/cognovis/library-core/blob/main/skills/op-credentials/SKILL.md
-      requires:
-        - "standard:english-only"
-      tags:
-        - origin:original
-        - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: pencil
       description: >-
         Design UI screens and components in Pencil .pen files via MCP tools. Use when creating designs, editing .pen files, or working with design systems. Triggers on pencil, pen file, design system, design screen, components.pen.
