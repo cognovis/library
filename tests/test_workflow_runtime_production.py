@@ -13,7 +13,13 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from lib.workflow_runtime import AgentExecutor, SpineConstraintChecker, WorkflowRuntime  # noqa: E402
+from lib.workflow_runtime import (  # noqa: E402
+    AgentExecutor,
+    JournalStore,
+    ResumeContext,
+    SpineConstraintChecker,
+    WorkflowRuntime,
+)
 
 
 def test_agent_extraction_ignores_commented_calls() -> None:
@@ -216,3 +222,75 @@ def test_route_profile_dispatch_does_not_infer_adapter_from_model_prefix(tmp_pat
     tracker = exec_registry["claude-agent"]
     assert len(tracker.calls) == 1
     assert tracker.calls[0] == "prefix test"
+
+
+def test_runtime_uses_hardened_journal_with_version_and_identity(tmp_path: Path) -> None:
+    """AC5: runtime must use hardened journal identity fields."""
+    journal_path = tmp_path / "journal.json"
+    spec_path = tmp_path / "spec.js"
+    spec_path.write_text(
+        'export const meta = {"name": "hardened"};\n'
+        'await agent("leaf", {"readOnly": true, "slot": "impl"});\n',
+        encoding="utf-8",
+    )
+
+    class StubExecutor(AgentExecutor):
+        adapter_name = "claude-agent"
+
+        def run(self, prompt: str, opts: dict[str, object]) -> dict[str, object]:
+            return {"adapter": self.adapter_name, "output": "stub"}
+
+    resume_ctx = ResumeContext(path=journal_path)
+    runtime = WorkflowRuntime(
+        resume_context=resume_ctx,
+        executor_registry={"claude-agent": StubExecutor()},
+    )
+
+    result = runtime.run(
+        spec_path,
+        {"readOnly": True, "route_profile": "cld-default", "workflow": "full"},
+    )
+
+    assert result["status"] == "ok"
+    assert journal_path.exists()
+    raw = json.loads(journal_path.read_text(encoding="utf-8"))
+    assert raw.get("version") == JournalStore.SCHEMA_VERSION
+    assert raw.get("spec_hash") is not None
+    assert raw.get("route_profile") == "cld-default"
+    assert raw.get("workflow") == "full"
+    assert isinstance(raw.get("entries"), dict)
+
+
+def test_runtime_resumes_from_hardened_journal(tmp_path: Path) -> None:
+    """AC5: runtime must resume from hardened journal, replaying cached entries."""
+    journal_path = tmp_path / "journal.json"
+    spec_path = tmp_path / "spec.js"
+    spec_path.write_text(
+        'export const meta = {"name": "resume"};\n'
+        'await agent("resume-leaf", {"readOnly": true, "slot": "impl"});\n',
+        encoding="utf-8",
+    )
+    call_count = 0
+
+    class CountingExecutor(AgentExecutor):
+        adapter_name = "claude-agent"
+
+        def run(self, prompt: str, opts: dict[str, object]) -> dict[str, object]:
+            nonlocal call_count
+            call_count += 1
+            return {"adapter": self.adapter_name, "output": f"call-{call_count}"}
+
+    runtime = WorkflowRuntime(
+        resume_context=ResumeContext(path=journal_path),
+        executor_registry={"claude-agent": CountingExecutor()},
+    )
+    runtime.run(spec_path, {"readOnly": True})
+    assert call_count == 1
+
+    runtime2 = WorkflowRuntime(
+        resume_context=ResumeContext(path=journal_path),
+        executor_registry={"claude-agent": CountingExecutor()},
+    )
+    runtime2.run(spec_path, {"readOnly": True})
+
+    assert call_count == 1
