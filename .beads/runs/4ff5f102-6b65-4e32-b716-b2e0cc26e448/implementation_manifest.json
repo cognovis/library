@@ -31,13 +31,14 @@
     {
       "id": "AC3",
       "status": "done",
-      "summary": "Corrupt journals are quarantined and incompatible schema versions raise JournalSchemaError with a reset message.",
+      "summary": "Corrupt journals are quarantined and incompatible schema versions raise JournalSchemaError with a reset message. Malformed entries (non-dict) now raise JournalSchemaError and quarantine the file instead of being silently coerced to an empty journal.",
       "changed_files": [
         "scripts/lib/workflow_runtime.py",
         "tests/test_workflow_journal_hardening.py"
       ],
       "evidence_refs": [
-        "cmd:green-hardening-tests"
+        "cmd:green-hardening-tests",
+        "cmd:regression-fix-tests"
       ]
     },
     {
@@ -79,6 +80,10 @@
     {
       "sha": "f57b6a972d1234d960a2838b20b308e6599cda11",
       "message": "feat(CL-37yu): green - journal hardening"
+    },
+    {
+      "sha": "PENDING_FIX_COMMIT",
+      "message": "fix(CL-37yu): address codex adversarial findings — from_dict malformed entries"
     }
   ],
   "tests": [
@@ -96,6 +101,11 @@
       "command": "uv run pytest",
       "status": "failed_out_of_scope",
       "result": "3 failed, 772 passed, 23 skipped; failures were missing op-credentials registration and external GitHub migration commit checks, not workflow journal/runtime behavior."
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py tests/test_workflow_journal_hardening.py -v",
+      "status": "passed",
+      "result": "19 passed (includes new test_corrupt_journal_nondict_entries_raises_schema_error for the codex REGRESSION fix)."
     }
   ],
   "external_resources": [],

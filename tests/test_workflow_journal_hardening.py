@@ -177,6 +177,22 @@ def test_incompatible_journal_version_raises_schema_error(tmp_path: Path) -> Non
         JournalStore.from_path(journal_path)
 
 
+def test_corrupt_journal_nondict_entries_raises_schema_error(tmp_path: Path) -> None:
+    journal_path = tmp_path / "journal.json"
+    # Write a journal where entries is a list instead of an object (malformed).
+    journal_path.write_text(
+        json.dumps({"version": "1", "entries": ["bad"]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(JournalSchemaError, match="malformed"):
+        JournalStore.from_path(journal_path)
+
+    # The corrupt file must be quarantined rather than silently reused.
+    assert not journal_path.exists()
+    assert list(tmp_path.glob("journal.corrupt*"))
+
+
 def test_stale_entries_invalidated_on_spec_hash_change(tmp_path: Path) -> None:
     store = JournalStore(spec_hash="old", route_profile="cdx-default", workflow="full")
     store.put("prompt", {}, {"result": "cached"})

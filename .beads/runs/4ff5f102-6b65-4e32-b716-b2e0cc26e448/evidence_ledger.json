@@ -57,6 +57,13 @@
       "purpose": "Commit the green implementation.",
       "exit_code": 0,
       "observed_result": "Created commit f57b6a972d1234d960a2838b20b308e6599cda11."
+    },
+    {
+      "id": "cmd:regression-fix-tests",
+      "command": "uv run pytest tests/test_workflow_runtime_spike.py tests/test_workflow_journal_hardening.py -v",
+      "purpose": "Verify the codex REGRESSION fix: from_dict raises JournalSchemaError on non-dict entries, from_path quarantines and re-raises, plus the existing journal/runtime suites stay green.",
+      "exit_code": 0,
+      "observed_result": "19 passed, including new test_corrupt_journal_nondict_entries_raises_schema_error."
     }
   ],
   "skipped_checks": [

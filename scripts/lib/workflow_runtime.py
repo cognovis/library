@@ -283,7 +283,10 @@ class JournalStore:
     def from_dict(cls, data: dict[str, Any], path: Optional[Path] = None) -> "JournalStore":
         entries = data.get("entries", {})
         if not isinstance(entries, dict):
-            entries = {}
+            raise JournalSchemaError(
+                f"Journal 'entries' field is malformed (got {type(entries).__name__!r}); "
+                f"delete the journal file to reset"
+            )
         return cls(
             entries=dict(entries),
             path=path,
@@ -309,7 +312,11 @@ class JournalStore:
                 f"Journal version {found!r} is incompatible with {cls.SCHEMA_VERSION!r}; "
                 f"delete {path} to reset"
             )
-        return cls.from_dict(raw, path=path)
+        try:
+            return cls.from_dict(raw, path=path)
+        except JournalSchemaError:
+            cls._quarantine_corrupt(path)
+            raise
 
     def save(self) -> None:
         if self.path is None:
