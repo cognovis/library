@@ -56,7 +56,7 @@ harness-neutral JavaScript and never changes between them.
 |---------|------------------------|--------------|
 | Native Workflow tool | the Claude Code binary, in-process (gated by `CLAUDE_CODE_WORKFLOWS`) | when Anthropic ships it |
 | Library runtime | our runner (`scripts/lib/workflow_runtime.py`), shelling each leaf to `claude -p --output-format json` | available — read-only path; mutating blocked until adapter is `verified` |
-| Codex | the same runner, shelling each leaf to `codex exec` | runtime exists; Codex hook-preservation smoke pending (CL-pabj) |
+| Codex | the same runner, shelling each leaf to `codex exec` | runtime exists; read-only path only; mutating blocked (hook chain suppressed via `--ignore-user-config`, see CL-pabj) |
 
 This pluggable executor is what makes a workflow cross-harness. The Library runtime
 read-only execution path is implemented and tested; mutating execution requires adapter
@@ -101,13 +101,13 @@ The runtime supports:
 | Adapter | Status | Notes |
 |---------|--------|-------|
 | `claude-agent` | `blocked` | Leaf smoke returned unauthenticated; hook preservation unverified |
-| `codex-impl` | `separate-harness` | Hook preservation must be verified at harness boundary |
-| `codex-exec` | `separate-harness` | Hook preservation must be verified at harness boundary |
+| `codex-impl` | `blocked` | Hook chain suppressed: `--ignore-user-config` skips config.toml trust hashes (CL-pabj) |
+| `codex-exec` | `blocked` | Hook chain suppressed: `--ignore-user-config` skips config.toml trust hashes (CL-pabj) |
 | `cursor-composer` | `not-applicable` | IDE composer; not a Library runtime leaf executor |
 
 No adapter is currently `verified` for mutating execution. All workflow runs
-must use `readOnly=True` until adapter hook-preservation smoke tests pass. The
-Codex follow-up is tracked in bead CL-pabj.
+must use `readOnly=True` until adapter hook-preservation smoke tests pass.
+Codex hook-preservation smoke completed in CL-pabj (2026-05-25): adapters are `blocked`.
 
 `ADAPTER_PRESERVATION_STATUS` update criteria and the fail-closed default are
 anchored in [ADR-0006](../adr/workflow-primitive.md).

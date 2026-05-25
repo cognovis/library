@@ -207,7 +207,7 @@ and resume wins available today.
   is raised for any adapter whose preservation status is not `verified`. Currently no
   listed adapter is approved for mutating execution. Capability matrix and Claude leaf
   smoke evidence are in `docs/audit/hook-permission-preservation.md`. Codex-specific
-  hook preservation smoke is tracked in follow-up bead CL-pabj.
+  hook preservation smoke completed in CL-pabj (2026-05-25): both adapters are now `blocked` (see docs/audit/hook-permission-preservation.md).
 - **ADAPTER_PRESERVATION_STATUS update criteria (CL-182u, 2026-05-25):** The
   `ADAPTER_PRESERVATION_STATUS` dict in `scripts/lib/workflow_runtime.py` is the
   machine-checked registry that controls whether mutating workflow execution is

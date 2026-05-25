@@ -15,6 +15,11 @@
   - Capability matrix and Claude leaf smoke reproduction steps committed to `docs/audit/hook-permission-preservation.md`
   - Follow-up bead CL-pabj filed for Codex-specific hook preservation smoke evidence
 
+- *(CL-pabj)* Codex adapter hook-preservation status corrected to `blocked`
+  - `codex-impl` and `codex-exec` reclassified from `separate-harness` to `blocked`: Codex `--ignore-user-config` flag suppresses `config.toml` hook trust hashes, so hook preservation cannot be verified
+  - Audit document (`docs/audit/hook-permission-preservation.md`) updated with Codex leaf smoke evidence and corrected capability matrix
+  - Test added asserting `blocked` status for both Codex adapters; previously-passing `separate-harness` assertion now fails fast on regression
+
 ### 🚀 Features
 
 - *(CL-182u)* CLI entrypoint for read-only workflow execution (`scripts/lib/workflow_runtime.py`)

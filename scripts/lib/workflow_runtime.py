@@ -29,10 +29,19 @@ class JournalSchemaError(ValueError):
     """Raised when a journal file has an incompatible schema."""
 
 
+# Adapter preservation status for workflow leaf execution.
+#
+# codex-impl and codex-exec: blocked
+#   Both codex-impl.py and codex-exec.py use --ignore-user-config, which skips
+#   ~/.codex/config.toml. That file contains [hooks.state.<hook-id>] entries
+#   with trusted_hash values that are required for hooks in ~/.codex/hooks.json
+#   to fire. Without these trust grants the PreToolUse / Stop / SessionStart
+#   hook chain is silently suppressed at runtime.
+#   Bead: CL-pabj (hook preservation smoke audit, 2026-05-25).
 ADAPTER_PRESERVATION_STATUS: dict[str, str] = {
     "claude-agent": "blocked",
-    "codex-impl": "separate-harness",
-    "codex-exec": "separate-harness",
+    "codex-impl": "blocked",
+    "codex-exec": "blocked",
     "cursor-composer": "not-applicable",
 }
 
