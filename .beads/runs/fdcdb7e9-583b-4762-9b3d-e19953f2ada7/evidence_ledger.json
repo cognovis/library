@@ -70,7 +70,7 @@
       "command": "uv run pytest tests/test_workflow_runtime_spike.py",
       "purpose": "Verify the full workflow runtime spike test file after implementation.",
       "exit_code": 0,
-      "observed_result": "11 passed."
+      "observed_result": "12 passed."
     },
     {
       "id": "green_commit",

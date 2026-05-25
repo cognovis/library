@@ -236,6 +236,7 @@ def test_runtime_journal_state_serializes_to_json(tmp_path: Path) -> None:
     assert "entries" in payload
     assert len(payload["entries"]) == 1
 
+
 def test_runtime_blocks_unknown_adapter_with_absent_readonly(tmp_path: Path) -> None:
     """Fail-closed default: absent readOnly key + unknown adapter must be blocked."""
     spec_path = _write_single_leaf_spec(
