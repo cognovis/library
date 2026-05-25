@@ -3,8 +3,8 @@
 contract_version: "1"
 
 This document defines the JSON envelope emitted by `scripts/library.py <primitive> use --dry-run --json`.
-The contract applies to skill, standard, agent, prompt, script, model-standard, agent-base, MCP, and
-guardrail installers.
+The contract applies to skill, standard, agent, prompt, script, model-standard, agent-base, workflow,
+MCP, and guardrail installers.
 
 ## Schema
 
@@ -122,7 +122,7 @@ Agent with Codex routing:
 }
 ```
 
-Simple-file primitives (`prompt`, `script`, `model-standard`, `agent-base`) use the same envelope with
+Simple-file primitives (`prompt`, `script`, `model-standard`, `agent-base`, `workflow`) use the same envelope with
 their resolved single target file in `target_paths`.
 
 MCP and guardrail installers use global harness config files as targets. They always report the global

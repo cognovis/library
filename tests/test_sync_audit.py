@@ -1071,3 +1071,62 @@ class TestMakeEntryChecksumType:
             checksum_type="directory",
         )
         assert entry.get("checksum_type") == "directory"
+
+
+# ---------------------------------------------------------------------------
+# CL-rk2: workflow audit detects missing .js install target
+# ---------------------------------------------------------------------------
+
+class TestWorkflowAuditMissingFile:
+    """AC3/AC4: workflow audit must detect missing install target as drift."""
+
+    def test_workflow_audit_detects_missing_js_install_target(self, tmp_path: Path):
+        """When a workflow .js file is deleted after install, audit must report drift."""
+        import yaml
+        from lib.sync_audit import cmd_audit_impl
+
+        # Set up a minimal project with a workflow lockfile entry
+        workflow_dir = tmp_path / "fixture-workflow"
+        workflow_dir.mkdir()
+        js_file = workflow_dir / "test-workflow.js"
+        js_file.write_text("export const meta = { name: 'test-workflow' };\n")
+
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "library.yaml").write_text(
+            "default_dirs:\n  workflows:\n    - default: .claude/workflows/\n\n"
+            "library:\n  workflows:\n    - name: test-workflow\n"
+            "      description: Test\n      source: " + str(js_file) + "\n"
+            "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
+        )
+
+        # Install workflow
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "workflow", "use", "test-workflow", "--json"],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+        )
+        assert result.returncode == 0, f"install failed: {result.stderr}"
+
+        installed_path = project / ".claude" / "workflows" / "test-workflow.js"
+        assert installed_path.exists(), "install target should exist after use"
+
+        # Delete the installed file to simulate drift
+        installed_path.unlink()
+        assert not installed_path.exists(), "installed file should be gone"
+
+        # Now audit should detect missing file as drift, not report clean
+        catalog = yaml.safe_load((project / "library.yaml").read_text())
+        audit_result = cmd_audit_impl(catalog, "workflow", project, scope="project")
+        entries = audit_result.get("entries", [])
+        assert entries, "audit should return entries for installed workflow"
+
+        wf_entry = next(
+            (e for e in entries if e.get("name") == "test-workflow"),
+            None,
+        )
+        assert wf_entry is not None, "audit should have entry for test-workflow"
+        assert wf_entry.get("status") in ("missing", "drift"), (
+            f"Expected status='missing' or 'drift' when .js file deleted, got {wf_entry.get('status')!r}"
+        )

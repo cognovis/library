@@ -230,6 +230,14 @@ def test_agent_base_type_is_valid():
     print("PASS test_agent_base_type_is_valid")
 
 
+def test_workflow_type_is_valid():
+    """`workflow` is the canonical workflow primitive type."""
+    schema = load_lockfile_schema()
+    entry = minimal_valid_entry(type="workflow", name="bead-context-pack")
+    assert_valid(lockfile_with(entry), schema, "type=workflow")
+    print("PASS test_workflow_type_is_valid")
+
+
 def test_golden_prompt_type_is_removed():
     """`golden-prompt` is rejected by the lockfile schema after migration."""
     schema = load_lockfile_schema()

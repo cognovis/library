@@ -1,12 +1,12 @@
 ---
 name: library
-description: Private skill distribution system. Use when the user wants to install, use, add, push, remove, sync, list, or search for skills, agents, or prompts from their private library catalog. Triggers on /library commands or mentions of library, skill distribution, or agentic management.
+description: Private skill distribution system. Use when the user wants to install, use, add, push, remove, sync, list, or search for skills, agents, prompts, or workflows from their private library catalog. Triggers on /library commands or mentions of library, skill distribution, or agentic management.
 argument-hint: "[command or prompt] [name or details]"
 ---
 
 # The Library
 
-A meta-skill for private-first distribution of agentics (skills, agents, and prompts) across agents, devices, and teams.
+A meta-skill for private-first distribution of agentics (skills, agents, prompts, and workflows) across agents, devices, and teams.
 
 ## Variables
 
@@ -31,7 +31,8 @@ Primitive-scoped commands use the primitive name before the verb:
 ```
 
 Valid primitive names are singular: `skill`, `agent`, `prompt`, `script`,
-`standard`, `guardrail`, `mcp`, `model-standard`, and `agent-base`.
+`standard`, `guardrail`, `mcp`, `model-standard`, `agent-base`, and
+`workflow`.
 
 The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
 filtering, dependency resolution, and install/update behavior live in
@@ -74,7 +75,7 @@ python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync
 
 **The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
 all primitive types (skill, agent, prompt, script, standard, guardrail, mcp, model-standard,
-agent-base). Dependency resolution, lockfile writes, and harness selection are all
+agent-base, workflow). Dependency resolution, lockfile writes, and harness selection are all
 handled by the CLI — do NOT implement these manually.
 
 **Developing the CLI** (modifying `scripts/library.py` or `scripts/lib/*.py`):
@@ -260,6 +261,9 @@ default_dirs:
     standards:
         - default: .agents/standards/
         - global: ~/.agents/standards/
+    workflows:
+        - default: .claude/workflows/
+        - global: ~/.claude/workflows/
 ```
 
 - If the user says "global" or "globally", use the `global` directory for the primitive.
@@ -269,6 +273,10 @@ default_dirs:
 Skills are cross-harness by default: `.agents/skills/<name>` is canonical and
 Claude Code reaches it through `.claude/skills/<name>`. Codex reads
 `.agents/skills/` directly.
+
+Workflows are stored at the Claude workflow location for both project and global
+scope. Codex and Cursor have no native workflow executor; `.claude/workflows/`
+is the conservative cross-harness storage location for future use.
 
 ## Validating library.yaml
 
@@ -305,6 +313,7 @@ The schema (`docs/schema/library.schema.json`) covers:
 | `library.mcp_servers` | Defined | Canonical MCP server model |
 | `library.model_standards` | Defined | Layer 3 model-standard catalog entries |
 | `library.agent_bases` | Defined | Layer 1 agent base prompt catalog entries |
+| `library.workflows` | Defined | Deterministic workflow orchestration specs |
 | `sources.catalogs` | Defined | First-party source repositories |
 | `sources.marketplaces` | Defined | Third-party source providers |
 | `project_tooling` | Defined | Fleet-wide project file/hook distribution policy |

@@ -111,6 +111,13 @@ PRIMITIVES: list[PrimitiveInfo] = [
         aliases=["agent_base"],
         install_subdir="agent-bases",
     ),
+    PrimitiveInfo(
+        name="workflow",
+        yaml_section="library.workflows",
+        yaml_key="library/workflows",
+        description="Deterministic orchestration specs stored as Claude workflow JavaScript",
+        install_subdir="workflows",
+    ),
 ]
 
 # Lookup tables
