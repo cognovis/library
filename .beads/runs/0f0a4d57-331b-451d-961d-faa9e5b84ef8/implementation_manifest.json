@@ -1,0 +1,99 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-iye.7",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 2,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 3,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 4,
+      "status": "done",
+      "changed_files": ["docs/schema/library.schema.json", "tests/test_validate_library.py"],
+      "evidence_refs": ["cmd:red-schema-test", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 5,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 6,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:red-installer-tests", "cmd:focused-green-tests", "cmd:targeted-suite"]
+    },
+    {
+      "id": 7,
+      "status": "done",
+      "changed_files": ["docs/PRIMITIVES.md", "docs/schema/library.schema.json"],
+      "evidence_refs": ["cmd:targeted-suite"]
+    },
+    {
+      "id": 8,
+      "status": "done",
+      "changed_files": ["scripts/library.py", "tests/test_library_py_installers.py"],
+      "evidence_refs": ["cmd:focused-green-tests", "cmd:targeted-suite"]
+    }
+  ],
+  "changed_files": [
+    "scripts/library.py",
+    "docs/schema/library.schema.json",
+    "docs/PRIMITIVES.md",
+    "tests/test_library_py_installers.py",
+    "tests/test_validate_library.py",
+    ".beads/runs/0f0a4d57-331b-451d-961d-faa9e5b84ef8/implementation_manifest.json",
+    ".beads/runs/0f0a4d57-331b-451d-961d-faa9e5b84ef8/evidence_ledger.json"
+  ],
+  "commits": [
+    "9708849 test(CL-iye.7): red \u2014 runtime gate ordering",
+    "6f69211 test(CL-iye.7): red \u2014 runtime schema coverage",
+    "c4d3744 feat(CL-iye.7): green \u2014 enforce runtime requirements"
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py -q -k 'runtime_requirement or compatibility_fuzzy_main_gate'",
+      "result": "red gate failed before implementation: 6 failed, 1 passed, 102 deselected"
+    },
+    {
+      "command": "uv run pytest tests/test_validate_library.py -q -k runtime_requirements_on_installable_primitive_shapes",
+      "result": "red gate failed before schema change: MCP runtime_requirements rejected"
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py -q -k 'runtime_requirement or compatibility_fuzzy_main_gate' && uv run pytest tests/test_validate_library.py -q -k runtime_requirements_on_installable_primitive_shapes",
+      "result": "green gate passed: 7 passed, 102 deselected; 1 passed, 21 deselected"
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py tests/test_validate_library.py -q",
+      "result": "passed: 131 passed in 6.16s"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "MCP catalog entries can now declare runtime_requirements.binaries in schema.",
+    "Installer real installs now fuzzy-resolve the requested main entry before dependency resolution and use the resolved canonical name for dependency traversal.",
+    "Runtime requirement checks use PATH lookup only and do not execute declared binaries."
+  ],
+  "evidence_refs": [
+    "cmd:red-installer-tests",
+    "cmd:red-schema-test",
+    "cmd:focused-green-tests",
+    "cmd:targeted-suite"
+  ]
+}

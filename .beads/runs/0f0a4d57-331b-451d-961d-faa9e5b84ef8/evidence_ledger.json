@@ -1,0 +1,67 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-iye.7",
+  "commands": [
+    {
+      "id": "cmd:bd-prime",
+      "command": "bd prime",
+      "purpose": "Load bead workflow instructions for this repository.",
+      "exit_code": 0,
+      "observed_result": "Printed the bead workflow context."
+    },
+    {
+      "id": "cmd:bead-show",
+      "command": "bd show CL-iye.7 --json",
+      "purpose": "Inspect bead state, acceptance criteria, dependencies, and scope.",
+      "exit_code": 0,
+      "observed_result": "Bead CL-iye.7 was in_progress with run_id 0f0a4d57-331b-451d-961d-faa9e5b84ef8."
+    },
+    {
+      "id": "cmd:red-installer-tests",
+      "command": "uv run pytest tests/test_library_py_installers.py -q -k 'runtime_requirement or compatibility_fuzzy_main_gate'",
+      "purpose": "Red gate for runtime requirement enforcement and fuzzy pre-dependency ordering.",
+      "exit_code": 1,
+      "observed_result": "Failed before implementation: missing binaries were ignored, fuzzy queries returned dependency/not-found errors before main gates, and _check_runtime_requirements was absent."
+    },
+    {
+      "id": "cmd:red-schema-test",
+      "command": "uv run pytest tests/test_validate_library.py -q -k runtime_requirements_on_installable_primitive_shapes",
+      "purpose": "Red gate for runtime_requirements schema coverage on supported installable primitive shapes.",
+      "exit_code": 1,
+      "observed_result": "Failed before schema change because library.mcp_servers[0].runtime_requirements was rejected as an additional property."
+    },
+    {
+      "id": "cmd:focused-green-tests",
+      "command": "uv run pytest tests/test_library_py_installers.py -q -k 'runtime_requirement or compatibility_fuzzy_main_gate' && uv run pytest tests/test_validate_library.py -q -k runtime_requirements_on_installable_primitive_shapes",
+      "purpose": "Green gate for the newly added tests after implementation.",
+      "exit_code": 0,
+      "observed_result": "Passed: 7 installer tests passed with 102 deselected; 1 schema test passed with 21 deselected."
+    },
+    {
+      "id": "cmd:targeted-suite",
+      "command": "uv run pytest tests/test_library_py_installers.py tests/test_validate_library.py -q",
+      "purpose": "Requested targeted regression suite for installer and validator coverage.",
+      "exit_code": 0,
+      "observed_result": "Passed: 131 passed in 6.16s."
+    },
+    {
+      "id": "cmd:git-log",
+      "command": "git log --oneline -5",
+      "purpose": "Capture implementation commit hashes.",
+      "exit_code": 0,
+      "observed_result": "Top commits: c4d3744 green implementation, 6f69211 schema red test, 9708849 installer red test."
+    },
+    {
+      "id": "cmd:git-status-clean-after-green",
+      "command": "git status --short",
+      "purpose": "Check worktree state after the green implementation commit.",
+      "exit_code": 0,
+      "observed_result": "No tracked changes were pending before writing run artifacts."
+    }
+  ],
+  "skipped_checks": [],
+  "artifacts": [
+    ".beads/runs/0f0a4d57-331b-451d-961d-faa9e5b84ef8/implementation_manifest.json",
+    ".beads/runs/0f0a4d57-331b-451d-961d-faa9e5b84ef8/evidence_ledger.json"
+  ]
+}
