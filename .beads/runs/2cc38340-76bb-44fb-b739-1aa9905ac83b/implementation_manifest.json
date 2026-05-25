@@ -1,0 +1,183 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-182u",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "title": "Runtime exposes a documented CLI or stable library entrypoint for read-only workflow execution",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_runtime_production.py",
+        "docs/primitives/workflow.md"
+      ],
+      "evidence_refs": [
+        "cmd:workflow-production-pass",
+        "commit:229e13b",
+        "commit:536a51c"
+      ]
+    },
+    {
+      "id": "AC2",
+      "title": "agent() extraction ignores comments and string literals",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py",
+        "tests/test_workflow_runtime_production.py"
+      ],
+      "evidence_refs": [
+        "cmd:ac2-red",
+        "cmd:workflow-production-pass",
+        "commit:4078da7",
+        "commit:f392d02"
+      ]
+    },
+    {
+      "id": "AC3",
+      "title": "Inert-spine checks detect banned operations in executable template literal interpolation",
+      "status": "done",
+      "changed_files": [
+        "tests/test_workflow_runtime_production.py"
+      ],
+      "evidence_refs": [
+        "cmd:workflow-production-pass",
+        "commit:d75b30c"
+      ]
+    },
+    {
+      "id": "AC4",
+      "title": "Supported leaf adapters dispatch through route-profile slot targets without model-prefix inference",
+      "status": "done",
+      "changed_files": [
+        "tests/test_workflow_runtime_production.py"
+      ],
+      "evidence_refs": [
+        "cmd:workflow-production-pass",
+        "cmd:focused-runtime-route-pass",
+        "commit:911ea92"
+      ]
+    },
+    {
+      "id": "AC5",
+      "title": "Runtime uses hardened journal/resume contract",
+      "status": "done",
+      "changed_files": [
+        "tests/test_workflow_runtime_production.py"
+      ],
+      "evidence_refs": [
+        "cmd:journal-production-pass",
+        "cmd:focused-runtime-route-pass",
+        "commit:363de1a"
+      ]
+    },
+    {
+      "id": "AC6",
+      "title": "Mutating workflow execution remains blocked unless adapter preservation status is verified",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/workflow_runtime.py"
+      ],
+      "evidence_refs": [
+        "cmd:focused-runtime-route-pass",
+        "cmd:full-suite-final",
+        "existing-test:tests/test_workflow_runtime_spike.py::test_runtime_blocks_mutating_execution_for_unverified_adapter",
+        "existing-test:tests/test_workflow_runtime_spike.py::test_runtime_blocks_unknown_adapter_with_absent_readonly"
+      ]
+    },
+    {
+      "id": "AC7",
+      "title": "ADAPTER_PRESERVATION_STATUS update criteria and fail-closed default are anchored in ADR-0006",
+      "status": "done",
+      "changed_files": [
+        "docs/adr/workflow-primitive.md"
+      ],
+      "evidence_refs": [
+        "commit:357a222"
+      ]
+    },
+    {
+      "id": "AC8",
+      "title": "Documentation states supported workflow subset, adapter support, and explicit unsupported cases",
+      "status": "done",
+      "changed_files": [
+        "docs/primitives/workflow.md"
+      ],
+      "evidence_refs": [
+        "commit:536a51c"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/lib/workflow_runtime.py",
+    "tests/test_workflow_runtime_production.py",
+    "docs/adr/workflow-primitive.md",
+    "docs/primitives/workflow.md",
+    ".beads/runs/2cc38340-76bb-44fb-b739-1aa9905ac83b/implementation_manifest.json",
+    ".beads/runs/2cc38340-76bb-44fb-b739-1aa9905ac83b/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "4078da7",
+      "message": "test(CL-182u): red - AC2 comment/string-safe agent extraction"
+    },
+    {
+      "sha": "f392d02",
+      "message": "feat(CL-182u): green - AC2 comment/string-safe agent extraction"
+    },
+    {
+      "sha": "d75b30c",
+      "message": "test(CL-182u): red/green - AC3 template literal interpolation detection"
+    },
+    {
+      "sha": "a4f73ed",
+      "message": "test(CL-182u): red - AC1 CLI entrypoint"
+    },
+    {
+      "sha": "229e13b",
+      "message": "feat(CL-182u): green - AC1 CLI entrypoint for read-only workflow execution"
+    },
+    {
+      "sha": "911ea92",
+      "message": "test(CL-182u): green - AC4 route-profile slot dispatch without model-prefix inference"
+    },
+    {
+      "sha": "363de1a",
+      "message": "test(CL-182u): green - AC5 hardened journal integration"
+    },
+    {
+      "sha": "357a222",
+      "message": "docs(CL-182u): AC7 anchor ADAPTER_PRESERVATION_STATUS update criteria in ADR-0006"
+    },
+    {
+      "sha": "536a51c",
+      "message": "docs(CL-182u): AC8 document supported workflow subset, adapters, and unsupported cases"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py tests/test_workflow_runtime_spike.py tests/test_workflow_journal_hardening.py tests/test_route_profiles_schema.py -v",
+      "status": "passed",
+      "result": "73 passed"
+    },
+    {
+      "command": "uv run pytest tests/ -v",
+      "status": "failed_out_of_scope",
+      "result": "787 passed, 23 skipped, 3 failed: missing op-credentials catalog entry and remote CL-4mt migration commit checks"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "The workflow runtime now has a stable read-only CLI surface.",
+    "agent() extraction now ignores comments and string literals while preserving existing JSON-literal leaf parsing.",
+    "Runtime docs explicitly state unsupported Workflow JS constructs and fail-closed mutating adapter policy."
+  ],
+  "evidence_refs": [
+    "tests/test_workflow_runtime_production.py",
+    "tests/test_workflow_runtime_spike.py",
+    "tests/test_workflow_journal_hardening.py",
+    "scripts/lib/workflow_runtime.py",
+    "docs/adr/workflow-primitive.md",
+    "docs/primitives/workflow.md"
+  ]
+}

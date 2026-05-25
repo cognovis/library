@@ -55,11 +55,78 @@ harness-neutral JavaScript and never changes between them.
 | Backend | `agent()` provided by | Availability |
 |---------|------------------------|--------------|
 | Native Workflow tool | the Claude Code binary, in-process (gated by `CLAUDE_CODE_WORKFLOWS`) | when Anthropic ships it |
-| Library runtime | our runner, shelling each leaf to `claude -p --output-format json` | open implementation (ADR-0006 D5) |
-| Codex | the same runner, shelling each leaf to `codex exec` | open implementation (ADR-0006 D5) |
+| Library runtime | our runner (`scripts/lib/workflow_runtime.py`), shelling each leaf to `claude -p --output-format json` | available — read-only path; mutating blocked until adapter is `verified` |
+| Codex | the same runner, shelling each leaf to `codex exec` | runtime exists; Codex hook-preservation smoke pending (CL-pabj) |
 
-This pluggable executor is what makes a workflow cross-harness. INFERRED for the
-Library-runtime and Codex backends — pending the runtime spike.
+This pluggable executor is what makes a workflow cross-harness. The Library runtime
+read-only execution path is implemented and tested; mutating execution requires adapter
+verification (see Adapter Support table below and ADR-0006 Consequences).
+
+## Runtime: Library Workflow Runtime
+
+The Library cross-harness runtime (`scripts/lib/workflow_runtime.py`) implements
+the read-only execution path described in ADR-0006 Decision 5.
+
+### CLI Usage
+
+```bash
+# Run a workflow spec in read-only mode
+uv run python scripts/lib/workflow_runtime.py path/to/spec.js --read-only
+
+# With route-profile slot dispatch
+uv run python scripts/lib/workflow_runtime.py path/to/spec.js --read-only \
+  --route-profile cld-default \
+  --args '{"route_profiles": {...}}'
+
+# With journal for resume support
+uv run python scripts/lib/workflow_runtime.py path/to/spec.js --read-only \
+  --journal /tmp/workflow-journal.json
+```
+
+### Supported Workflow Subset
+
+The runtime supports:
+
+- specs with an `export const meta = {...}` pure literal header (JSON-parseable);
+- `await agent(prompt, opts)` leaves with JSON-literal string and object arguments;
+- route-profile slot dispatch via `route_profiles`, `route_profile`, and
+  `workflow` args;
+- journal/resume: specs are journaled by `(spec_hash, route_profile, workflow)`
+  identity;
+- inert-spine constraint checks before execution (see `SpineConstraintChecker`);
+- fail-closed mutating-execution guard (see `ADAPTER_PRESERVATION_STATUS`).
+
+### Adapter Support
+
+| Adapter | Status | Notes |
+|---------|--------|-------|
+| `claude-agent` | `blocked` | Leaf smoke returned unauthenticated; hook preservation unverified |
+| `codex-impl` | `separate-harness` | Hook preservation must be verified at harness boundary |
+| `codex-exec` | `separate-harness` | Hook preservation must be verified at harness boundary |
+| `cursor-composer` | `not-applicable` | IDE composer; not a Library runtime leaf executor |
+
+No adapter is currently `verified` for mutating execution. All workflow runs
+must use `readOnly=True` until adapter hook-preservation smoke tests pass. The
+Codex follow-up is tracked in bead CL-pabj.
+
+`ADAPTER_PRESERVATION_STATUS` update criteria and the fail-closed default are
+anchored in [ADR-0006](../adr/workflow-primitive.md).
+
+### Unsupported Cases
+
+The following are not supported by the runtime:
+
+- template literal argument expressions in `agent()` calls, such as
+  `` `${variable}` ``; only JSON-literal string arguments are parseable;
+- dynamic `opts` objects, such as `{...baseOpts, slot: s}`; only plain JSON
+  object literals are parseable;
+- `pipeline()`, `parallel()`, `phase()`, `budget`, and `workflow()` globals; the
+  runtime executes `await agent()` leaves only;
+- mutating execution for any adapter not listed as `verified` in
+  `ADAPTER_PRESERVATION_STATUS`;
+- nested workflow execution;
+- the native Claude Code Workflow tool (`CLAUDE_CODE_WORKFLOWS`); this runtime
+  is a cross-harness alternative, not a replacement for the native tool.
 
 **Security posture (NORMATIVE).** Two properties are requirements, not benefits
 (ADR-0006 Decision 4):

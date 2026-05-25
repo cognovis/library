@@ -208,6 +208,28 @@ and resume wins available today.
   listed adapter is approved for mutating execution. Capability matrix and Claude leaf
   smoke evidence are in `docs/audit/hook-permission-preservation.md`. Codex-specific
   hook preservation smoke is tracked in follow-up bead CL-pabj.
+- **ADAPTER_PRESERVATION_STATUS update criteria (CL-182u, 2026-05-25):** The
+  `ADAPTER_PRESERVATION_STATUS` dict in `scripts/lib/workflow_runtime.py` is the
+  machine-checked registry that controls whether mutating workflow execution is
+  permitted for an adapter. Update criteria:
+  1. **Status -> `verified`:** The adapter's PreToolUse hooks (destructive-command
+     guard, `bead-author-check`, `permissions.yml`) are confirmed to fire inside
+     workflow leaves. Evidence: a positive smoke test in `docs/audit/` plus a
+     passing test in `tests/test_workflow_runtime_spike.py` or a successor file.
+  2. **Status -> `blocked`:** The adapter's leaf smoke returned an unauthenticated
+     or permission-bypassed result, or the hook fire could not be confirmed.
+  3. **Status -> `separate-harness`:** The adapter runs in a separate harness
+     process where the Claude Code hook layer does not apply. Hook preservation
+     must be verified at the harness boundary separately.
+  4. **Status -> `not-applicable`:** The adapter is not a leaf executor, such as
+     an IDE composer that does not route through the Library runtime hooks.
+  5. **Fail-closed default:** Any adapter whose name is absent from the dict, or
+     whose status is not in `_MUTATING_ALLOWED_STATUSES` (currently `{"verified"}`),
+     is treated as blocked. `MutatingExecutionBlockedError` is raised. `readOnly=True`
+     bypasses this check and is required for safe read-only execution.
+  6. **To add a new verified adapter:** open a bead, run the hook-preservation
+     smoke for that adapter (see `docs/audit/hook-permission-preservation.md`),
+     update the dict in `workflow_runtime.py`, and add or update test coverage.
 - Before the runtime is trusted on any mutating workflow, it MUST be verified that
   PreToolUse hooks (the destructive-command guard, `bead-author-check`,
   `permissions.yml`) still fire inside spawned leaves. Losing those rails is a

@@ -447,6 +447,11 @@ class WorkflowRuntime:
             opts = dict(call["opts"])
             slot_target = self._resolve_slot_target(args, opts)
             opts.setdefault("slot_target", slot_target)
+            # Propagate top-level readOnly from args to per-leaf opts so that
+            # --read-only CLI flag and args["readOnly"]=True protect all leaves
+            # even when individual agent() calls omit the readOnly field.
+            if args.get("readOnly") is True:
+                opts.setdefault("readOnly", True)
             leaf_results.append(self._run_leaf(prompt, opts))
 
         result = {
@@ -572,14 +577,15 @@ class WorkflowRuntime:
         calls: list[dict[str, Any]] = []
         cursor = 0
         marker = "await agent("
+        stripped = SpineConstraintChecker._strip_comments(source)
         while True:
-            idx = source.find(marker, cursor)
+            idx = WorkflowRuntime._find_marker_outside_strings(stripped, marker, cursor)
             if idx == -1:
                 break
-            paren_start = source.find("(", idx)
+            paren_start = stripped.find("(", idx)
             if paren_start == -1:
                 break
-            call_block, call_end = WorkflowRuntime._extract_balanced(source, paren_start, "(", ")")
+            call_block, call_end = WorkflowRuntime._extract_balanced(stripped, paren_start, "(", ")")
             args_text = call_block[1:-1].strip()
             prompt_text, opts_text = WorkflowRuntime._split_agent_args(args_text)
             calls.append(
@@ -590,6 +596,39 @@ class WorkflowRuntime:
             )
             cursor = call_end
         return calls
+
+    @staticmethod
+    def _find_marker_outside_strings(source: str, marker: str, start: int) -> int:
+        in_string = False
+        string_delim = ""
+        escape = False
+        index = start
+
+        while index < len(source):
+            char = source[index]
+
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == string_delim:
+                    in_string = False
+                index += 1
+                continue
+
+            if char in ('"', "'", "`"):
+                in_string = True
+                string_delim = char
+                index += 1
+                continue
+
+            if source.startswith(marker, index):
+                return index
+
+            index += 1
+
+        return -1
 
     @staticmethod
     def _split_agent_args(args_text: str) -> tuple[str, str]:
@@ -657,3 +696,70 @@ class WorkflowRuntime:
                 if depth == 0:
                     return source[start_index : index + 1], index + 1
         raise ValueError(f"Unbalanced {open_char}{close_char} block in workflow source")
+
+
+def _cli_main() -> None:
+    """CLI entrypoint for read-only workflow execution."""
+    import argparse
+    import json as _json
+
+    parser = argparse.ArgumentParser(
+        prog="workflow_runtime",
+        description=(
+            "Read-only workflow runtime for ADR-0006 workflow specs. "
+            "Executes spine constraints, extracts agent() leaves, and dispatches "
+            "through configured route-profile slots."
+        ),
+    )
+    parser.add_argument("spec", help="Path to the workflow spec (.js file)")
+    parser.add_argument(
+        "--args",
+        default="{}",
+        metavar="JSON",
+        help="JSON-encoded args dict passed to the workflow (default: {})",
+    )
+    parser.add_argument(
+        "--journal",
+        default=None,
+        metavar="PATH",
+        help="Path to journal file for resume support",
+    )
+    parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Force readOnly=true for workflow args",
+    )
+    parser.add_argument(
+        "--route-profile",
+        default=None,
+        metavar="NAME",
+        help="Route profile name, merged into args['route_profile']",
+    )
+    parsed = parser.parse_args()
+
+    try:
+        workflow_args: dict[str, Any] = _json.loads(parsed.args)
+    except _json.JSONDecodeError as exc:
+        parser.error(f"--args is not valid JSON: {exc}")
+        return
+
+    if not isinstance(workflow_args, dict):
+        parser.error("--args must decode to a JSON object")
+        return
+
+    if parsed.route_profile is not None:
+        workflow_args.setdefault("route_profile", parsed.route_profile)
+    if parsed.read_only:
+        workflow_args.setdefault("readOnly", True)
+
+    resume_context: Optional[ResumeContext] = None
+    if parsed.journal is not None:
+        resume_context = ResumeContext(Path(parsed.journal))
+
+    runtime = WorkflowRuntime(resume_context=resume_context)
+    result = runtime.run(parsed.spec, workflow_args)
+    print(_json.dumps(result, indent=2, default=str))
+
+
+if __name__ == "__main__":
+    _cli_main()
