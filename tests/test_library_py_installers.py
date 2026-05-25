@@ -303,6 +303,8 @@ def runtime_requirements_project(tmp_path: Path) -> Path:
         "missing-runtime-main",
         "incompatible-main",
         "cursor-runtime-skill",
+        "missing-runtime-dependency",
+        "clean-main-with-bad-dependency",
     ):
         skill_dir = sources / name
         skill_dir.mkdir()
@@ -348,6 +350,17 @@ library:
       source: {skill_sources["cursor-runtime-skill"]}
       runtime_requirements:
         binaries: ["cursor-agent"]
+    - name: missing-runtime-dependency
+      description: A dependency that itself declares a missing runtime binary
+      source: {skill_sources["missing-runtime-dependency"]}
+      runtime_requirements:
+        binaries: ["__nonexistent_binary_xyz__"]
+    - name: clean-main-with-bad-dependency
+      description: A main skill with no runtime requirements whose dependency has a missing binary
+      source: {skill_sources["clean-main-with-bad-dependency"]}
+      requires:
+        - skill:runtime-dependency
+        - skill:missing-runtime-dependency
   standards: []
   agents: []
   prompts: []
@@ -743,6 +756,56 @@ def test_compatibility_fuzzy_main_gate_precedes_dependency_install(
     data = json.loads(result.stdout)
     assert "claude_code>=99.0" in data["message"]
     assert not (runtime_requirements_project / ".agents" / "skills" / "runtime-dependency").exists()
+    assert not (runtime_requirements_project / ".library.lock").exists()
+
+
+def test_runtime_requirement_dependency_gate_precedes_any_install(
+    runtime_requirements_project: Path,
+):
+    """CL-iye.7 regression: a missing runtime binary on a DEPENDENCY fails before
+    ANY entry in the resolved install order is installed.
+
+    The main entry here has no runtime_requirements of its own. It requires a
+    CLEAN dependency (runtime-dependency) declared before a BROKEN dependency
+    (missing-runtime-dependency). The resolved install order is therefore
+    [runtime-dependency, missing-runtime-dependency, clean-main-with-bad-dependency].
+
+    Without a preflight runtime gate over the FULL install order, the clean
+    dependency would be installed first and only the broken dependency's own
+    per-entry gate would fail — leaving runtime-dependency partially installed.
+    The fix preflights every entry so nothing is installed when any entry has a
+    missing binary.
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY_PY),
+            "skill",
+            "use",
+            "clean-main-with-bad-dependency",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(runtime_requirements_project),
+    )
+
+    assert result.returncode != 0
+    data = json.loads(result.stdout)
+    assert data["status"] == "error"
+    assert "__nonexistent_binary_xyz__" in data["message"]
+    # The clean dependency (ordered first) must NOT have been installed — this is
+    # the discriminating assertion for the preflight gate regression.
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "runtime-dependency"
+    ).exists()
+    # The broken dependency and the main skill must also be absent.
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "missing-runtime-dependency"
+    ).exists()
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "clean-main-with-bad-dependency"
+    ).exists()
     assert not (runtime_requirements_project / ".library.lock").exists()
 
 

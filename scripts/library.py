@@ -641,6 +641,24 @@ def _install_with_deps(
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
 
+    # Pre-flight runtime gate for the FULL resolved install order. Runtime
+    # requirements must fail before any install/dependency mutation occurs;
+    # otherwise a missing binary on a later dependency would only surface after
+    # earlier dependencies in install_order have already been installed. Check
+    # every entry up front so the dependency graph install is all-or-nothing.
+    for dep_prim, dep_name in install_order:
+        try:
+            dep_entry = lookup_entry(catalog, dep_prim, dep_name, fuzzy=False)
+        except LibraryError:
+            dep_entry = {}
+        dep_runtime_error = _check_runtime_requirements(dep_entry)
+        if dep_runtime_error:
+            if use_json:
+                print_json(error_result(dep_runtime_error, EXIT_FAILURE))
+            else:
+                print(f"Error: {dep_runtime_error}", file=sys.stderr)
+            return EXIT_FAILURE
+
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
         # Already-installed handling. is_already_installed() only checks

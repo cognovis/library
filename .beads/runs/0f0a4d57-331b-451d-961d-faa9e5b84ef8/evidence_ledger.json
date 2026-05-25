@@ -71,6 +71,27 @@
       "purpose": "Pair-loop iteration 1: re-run targeted suite after the AC7 schema wording fix and the runtime gate location alignment.",
       "exit_code": 0,
       "observed_result": "Passed: 131 passed in 6.07s."
+    },
+    {
+      "id": "cmd:codex-regression-red",
+      "command": "git stash -- scripts/library.py && uv run pytest tests/test_library_py_installers.py -q -k 'test_runtime_requirement_dependency_gate_precedes_any_install'; git stash pop",
+      "purpose": "Codex adversarial fix: confirm the new regression test fails against the pre-fix installer (no full-order preflight gate).",
+      "exit_code": 1,
+      "observed_result": "1 failed — pre-fix code installed the clean dependency (runtime-dependency, ordered first) before the broken dependency's per-entry gate fired, producing a partial install and multi-object stdout (JSONDecodeError)."
+    },
+    {
+      "id": "cmd:codex-regression-green",
+      "command": "uv run pytest tests/test_library_py_installers.py -x -q --tb=short -k runtime",
+      "purpose": "Codex adversarial fix: confirm the full-order preflight runtime gate makes the dependency-graph install all-or-nothing.",
+      "exit_code": 0,
+      "observed_result": "7 passed, 103 deselected — including the new test_runtime_requirement_dependency_gate_precedes_any_install."
+    },
+    {
+      "id": "cmd:codex-targeted-suite",
+      "command": "uv run pytest tests/test_library_py_installers.py tests/test_validate_library.py -q --tb=short",
+      "purpose": "Codex adversarial fix: re-run the full targeted suite after adding the preflight gate and regression test.",
+      "exit_code": 0,
+      "observed_result": "132 passed in 5.93s."
     }
   ],
   "skipped_checks": [],
