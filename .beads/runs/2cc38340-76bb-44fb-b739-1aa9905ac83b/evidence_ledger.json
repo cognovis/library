@@ -1,0 +1,82 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-182u",
+  "commands": [
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py -v",
+      "purpose": "AC2 RED verification for comment/string-safe agent extraction",
+      "exit_code": 1,
+      "observed_result": "2 failed; commented and string-literal agent() text was extracted before the fix"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py tests/test_workflow_runtime_spike.py tests/test_workflow_journal_hardening.py -v",
+      "purpose": "AC2 GREEN focused regression verification",
+      "exit_code": 0,
+      "observed_result": "24 passed"
+    },
+    {
+      "command": "uv run pytest tests/ -v",
+      "purpose": "AC2 full-suite regression gate",
+      "exit_code": 1,
+      "observed_result": "778 passed, 23 skipped, 3 failed out of scope: op-credentials catalog registration and CL-4mt remote migration commit checks"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py -v",
+      "purpose": "AC3 template literal interpolation tests",
+      "exit_code": 0,
+      "observed_result": "5 passed"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py::test_workflow_runtime_cli_help tests/test_workflow_runtime_production.py::test_workflow_runtime_cli_runs_spec -v",
+      "purpose": "AC1 RED verification for missing CLI entrypoint",
+      "exit_code": 1,
+      "observed_result": "2 failed; script emitted no help text and no JSON output before CLI implementation"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py tests/test_workflow_runtime_spike.py tests/test_workflow_journal_hardening.py -v",
+      "purpose": "AC1 GREEN focused runtime verification",
+      "exit_code": 0,
+      "observed_result": "29 passed"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py -v",
+      "purpose": "AC4 route-profile slot dispatch verification",
+      "exit_code": 0,
+      "observed_result": "9 passed"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py tests/test_workflow_journal_hardening.py -v",
+      "purpose": "AC5 hardened journal integration verification",
+      "exit_code": 0,
+      "observed_result": "21 passed"
+    },
+    {
+      "command": "uv run pytest tests/test_workflow_runtime_production.py tests/test_workflow_runtime_spike.py tests/test_workflow_journal_hardening.py tests/test_route_profiles_schema.py -v",
+      "purpose": "Final focused workflow, journal, mutation guardrail, and route-profile verification",
+      "exit_code": 0,
+      "observed_result": "73 passed"
+    },
+    {
+      "command": "uv run pytest tests/ -v",
+      "purpose": "Final full-suite regression gate",
+      "exit_code": 1,
+      "observed_result": "787 passed, 23 skipped, 3 failed out of scope: tests/test_library_coverage.py::test_cognovis_skills_registered, tests/test_personal_migration.py::TestMigrationCommit::test_migration_commit_exists, tests/test_personal_migration.py::TestMigrationCommit::test_migration_commit_sha_format"
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Fix full-suite unrelated catalog and remote-history failures",
+      "reason": "Out of scope for CL-182u and explicitly outside the allowed changed files; failures pre-existed this bead during the AC2 full-suite gate and repeated unchanged at the final full-suite gate."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/2cc38340-76bb-44fb-b739-1aa9905ac83b/implementation_manifest.json",
+      "description": "Acceptance criteria mapping, changed files, commits, tests, and evidence references"
+    },
+    {
+      "path": ".beads/runs/2cc38340-76bb-44fb-b739-1aa9905ac83b/evidence_ledger.json",
+      "description": "Command ledger with exact commands, purposes, exit codes, and observed results"
+    }
+  ]
+}
