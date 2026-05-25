@@ -2,6 +2,18 @@
 
 ### 🚀 Features
 
+- *(CL-iye.4)* Slot-based adapter dispatch in bead-orchestrator and quick-fix
+  - `bead-orchestrator` reads `execution_plan` slots for all six phases: `full.implementation`, `full.regression_fix`, `full.verification_fix`, `adversarial_review`, `verification`, and `session_close`
+  - `quick-fix` reads `execution_plan` slots for `quick.implementation`, `quick.fix_loop`, `review`, and `session_close`
+  - Dispatch is determined by `slot.adapter`, replacing the previous model-name prefix matching heuristic
+  - Backward-compatible: falls back to `route_decision.impl_model` when `execution_plan` is absent
+  - `cdx-composer` route profile wires Phase 5 and repair/fix slots to `cursor-composer` (cursor-impl.py adapter)
+  - `cld-default` and `cdx-default` profiles preserve existing behavior unchanged
+  - `resolve_slot_dispatch.py` adapter utility extracted to `skills/beads/scripts/` for reuse across orchestrators
+  - Phase Progress marker format remains compatible with wave-monitor
+  - `standards/orchestrator/orchestrator-config.md` documents the `route_profiles` schema including slot keys, adapter field, and fallback behavior
+  - 65 integration and unit tests cover slot resolution, fallback, and profile fixture correctness
+
 - *(CL-rk2)* Workflow as a first-class catalog and installer primitive
   - `library.yaml` supports a `library.workflows` catalog shape with `format: claude-workflow-js`
   - `scripts/lib/primitives.py` registers `workflow` as a recognized primitive type (yaml section `library.workflows`)
