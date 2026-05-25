@@ -6,6 +6,7 @@ default_dirs:
     #
     # Canonical (real files)  -> .agents/skills/
     # Claude bridge (symlink) -> .claude/skills/
+    # Cursor bridge (symlink) -> .cursor/skills/
     # Codex                   -> reads .agents/skills/ directly, no bridge
     #
     # The canonical path is a vendored copy by default. Use `--symlink`
@@ -15,6 +16,8 @@ default_dirs:
     - global: ~/.agents/skills/                   # canonical, user-global
     - claude_bridge: .claude/skills/              # Claude harness bridge, project-local
     - global_claude_bridge: ~/.claude/skills/     # Claude harness bridge, user-global
+    - cursor_bridge: .cursor/skills/              # Cursor harness bridge, project-local
+    - global_cursor_bridge: ~/.cursor/skills/     # Cursor harness bridge, user-global
   agents:
     - default: .claude/agents/
     - global: ~/.claude/agents/

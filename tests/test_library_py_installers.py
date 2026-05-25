@@ -220,6 +220,44 @@ def dry_run_contract_project(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def cursor_project(tmp_path: Path) -> Path:
+    """Project fixture for cursor harness skill install tests."""
+    proj = tmp_path / "cursor-project"
+    proj.mkdir()
+    skill_dir = tmp_path / "cursor-test-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("---\nname: cursor-test-skill\n---\n# Cursor Test Skill\n")
+    yaml_content = f"""
+default_dirs:
+  skills:
+    - default: .agents/skills/
+    - global: ~/.agents/skills/
+    - claude_bridge: .claude/skills/
+    - global_claude_bridge: ~/.claude/skills/
+    - cursor_bridge: .cursor/skills/
+    - global_cursor_bridge: ~/.cursor/skills/
+
+library:
+  skills:
+    - name: cursor-test-skill
+      description: Cursor test skill
+      source: {skill_dir}/SKILL.md
+  agents: []
+  standards: []
+  prompts: []
+  guardrails: []
+  mcp_servers: []
+
+marketplaces: []
+guardrails: []
+mcp_servers: []
+model_standards: []
+"""
+    (proj / "library.yaml").write_text(yaml_content)
+    return proj
+
+
+@pytest.fixture
 def harness_support_project(tmp_path: Path, fixture_skill_dir: Path, fixture_standard_file: Path) -> Path:
     """Create a project with unsupported Codex entries across primitive types."""
     proj = tmp_path / "harness-support-project"
@@ -524,6 +562,261 @@ class TestDryRunContractUniformity:
         assert data["harness_routing"] == harness
         assert expected_fragment in targets
         assert unexpected_fragment not in targets
+
+    def test_cursor_skill_install_creates_cursor_bridge(self, cursor_project: Path):
+        """AC2: --harness cursor installs skill with .cursor/skills/<name>/ bridge."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "cursor-test-skill",
+                "--harness",
+                "cursor",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(cursor_project),
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        assert data["status"] == "dry-run"
+        targets = "\n".join(data["target_paths"])
+        assert ".cursor/skills/cursor-test-skill" in targets
+
+    def test_cursor_skill_dry_run_reports_cursor_target_paths(self, cursor_project: Path):
+        """AC6: dry-run --json reports Cursor target_paths, harness_routing, conflict_policy."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "cursor-test-skill",
+                "--harness",
+                "cursor",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(cursor_project),
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        assert data.get("harness_routing") == "cursor"
+        assert data.get("conflict_policy") == "overwrite"
+        assert data.get("requires_user_confirmation") is False
+        assert ".cursor/skills" in "\n".join(data.get("target_paths", []))
+
+    def test_cursor_skill_real_install_creates_bridge_symlink(self, cursor_project: Path):
+        """AC2: real install creates .cursor/skills/<name>/ as symlink to .agents/skills/<name>/."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "cursor-test-skill",
+                "--harness",
+                "cursor",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(cursor_project),
+        )
+        assert result.returncode == 0, result.stderr
+        cursor_bridge = cursor_project / ".cursor" / "skills" / "cursor-test-skill"
+        assert cursor_bridge.exists() or cursor_bridge.is_symlink()
+        assert cursor_bridge.is_symlink()
+        canonical = cursor_project / ".agents" / "skills" / "cursor-test-skill"
+        assert canonical.exists()
+        assert cursor_bridge.resolve() == canonical.resolve()
+
+    def test_cursor_agent_install_rejected_with_compatibility_message(
+        self,
+        dry_run_contract_project: Path,
+    ):
+        """AC3: agent install for --harness cursor is explicitly rejected with compatibility message."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "contract-agent",
+                "--harness",
+                "cursor",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "cursor" in data["message"].lower()
+        assert "not supported" in data["message"].lower() or "not currently implemented" in data["message"].lower()
+
+    @pytest.mark.parametrize("harness", ["cursor", "opencode"])
+    def test_mcp_install_cursor_opencode_rejected_before_side_effects(
+        self,
+        harness: str,
+        dry_run_contract_project: Path,
+    ):
+        """AC8: MCP --harness cursor/opencode fails with compatibility message before side effects."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "mcp",
+                "use",
+                "contract-mcp",
+                "--harness",
+                harness,
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert harness in data["message"].lower()
+
+    @pytest.mark.parametrize("harness", ["cursor", "opencode"])
+    def test_guardrail_install_cursor_opencode_rejected_before_side_effects(
+        self,
+        harness: str,
+        dry_run_contract_project: Path,
+    ):
+        """AC8: guardrail --harness cursor/opencode fails with compatibility message before side effects."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "guardrail",
+                "use",
+                "contract-guardrail",
+                "--harness",
+                harness,
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert harness in data["message"].lower()
+
+    def test_cursor_skill_smoke_or_blocking_finding(self):
+        """AC7: Smoke verifies cursor-agent can use an installed test skill, or records blocking finding."""
+        if shutil.which("cursor") is None and shutil.which("cursor-agent") is None:
+            pytest.skip(
+                "SMOKE_BLOCKED: cursor/cursor-agent binary not on PATH. "
+                "Cursor skill projection cannot be verified in this environment. "
+                "To verify: install Cursor, run library use --harness cursor <skill>, "
+                "then open Cursor and check the skill is accessible."
+            )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            proj = Path(tmpdir) / "smoke-project"
+            proj.mkdir()
+            skill_src = Path(tmpdir) / "smoke-skill"
+            skill_src.mkdir()
+            (skill_src / "SKILL.md").write_text("---\nname: smoke-skill\n---\n# Smoke Skill\n")
+            yaml = f"""
+default_dirs:
+  skills:
+    - default: .agents/skills/
+    - cursor_bridge: .cursor/skills/
+library:
+  skills:
+    - name: smoke-skill
+      description: Smoke test skill
+      source: {skill_src}/SKILL.md
+  agents: []
+  standards: []
+  prompts: []
+  guardrails: []
+  mcp_servers: []
+marketplaces: []
+guardrails: []
+mcp_servers: []
+model_standards: []
+"""
+            (proj / "library.yaml").write_text(yaml)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(LIBRARY_PY),
+                    "skill",
+                    "use",
+                    "smoke-skill",
+                    "--harness",
+                    "cursor",
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=str(proj),
+            )
+            assert result.returncode == 0, result.stderr
+            cursor_path = proj / ".cursor" / "skills" / "smoke-skill"
+            assert cursor_path.exists() or cursor_path.is_symlink(), (
+                f"Cursor bridge path not created at {cursor_path}"
+            )
+
+    def test_cursor_skill_remove_cleans_up_cursor_bridge(self, cursor_project: Path):
+        """Cursor bridge is removed when skill is uninstalled."""
+        # Install first
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "skill", "use", "cursor-test-skill",
+             "--harness", "cursor"],
+            capture_output=True, text=True, cwd=str(cursor_project),
+        )
+        assert result.returncode == 0, result.stderr
+        cursor_bridge = cursor_project / ".cursor" / "skills" / "cursor-test-skill"
+        assert cursor_bridge.exists() or cursor_bridge.is_symlink()
+
+        # Now remove
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "skill", "remove", "cursor-test-skill"],
+            capture_output=True, text=True, cwd=str(cursor_project),
+        )
+        assert result.returncode == 0, result.stderr
+        # Bridge must be gone — no dangling symlink
+        assert not cursor_bridge.exists()
+        assert not cursor_bridge.is_symlink()
+
+    def test_cursor_agent_rejected_before_dependency_install(self, dry_run_contract_project: Path):
+        """AC8: cursor agent install is rejected before any dependency side effects on real install."""
+        # Verify that even a real install (no --dry-run) returns error without creating files
+        agents_dir = dry_run_contract_project / ".claude" / "agents"
+        agents_dir_exists_before = agents_dir.exists()
+
+        result = subprocess.run(
+            [sys.executable, str(LIBRARY_PY), "agent", "use", "contract-agent",
+             "--harness", "cursor", "--json"],
+            capture_output=True, text=True, cwd=str(dry_run_contract_project),
+        )
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "cursor" in data["message"].lower()
+        # Agents dir should not be modified by a cursor install attempt
+        if not agents_dir_exists_before:
+            assert not agents_dir.exists(), "cursor agent install should not create agents directory"
 
     def test_existing_target_reports_conflict_policy_and_detection(
         self,

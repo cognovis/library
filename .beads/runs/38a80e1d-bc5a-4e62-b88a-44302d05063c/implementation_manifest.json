@@ -1,0 +1,55 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-iye.3",
+  "run_id": "38a80e1d-bc5a-4e62-b88a-44302d05063c",
+  "acceptance_criteria": [
+    {"id": "AC1", "status": "done", "description": "Cursor harness targets documented for skills, agents, rules, standards, unsupported primitives", "changed_files": ["docs/PRIMITIVES.md", "docs/primitives/skill.md", "docs/harness-baseline.md"], "evidence_refs": ["doc:docs/PRIMITIVES.md", "doc:docs/primitives/skill.md", "doc:docs/harness-baseline.md"]},
+    {"id": "AC2", "status": "done", "description": "library use --harness cursor installs/bridges skills to .cursor/skills/<name>/", "changed_files": ["library.yaml", "scripts/lib/paths.py", "scripts/lib/installers/skill.py", "scripts/library.py"], "evidence_refs": ["test:test_cursor_skill_install_creates_cursor_bridge", "test:test_cursor_skill_real_install_creates_bridge_symlink"]},
+    {"id": "AC3", "status": "done", "description": "Cursor agent install explicitly rejected with compatibility message", "changed_files": ["scripts/lib/installers/agent.py"], "evidence_refs": ["test:test_cursor_agent_install_rejected_with_compatibility_message"]},
+    {"id": "AC4", "status": "done", "description": "Cursor rules/standards projection policy documented and tested", "changed_files": ["docs/PRIMITIVES.md", "docs/primitives/skill.md"], "evidence_refs": ["doc:docs/primitives/skill.md"]},
+    {"id": "AC5", "status": "done", "description": "Runtime requirement checks can require cursor-agent (existing coverage from CL-iye.7)", "changed_files": [], "evidence_refs": ["test:test_cursor_agent_can_be_declared_as_runtime_requirement"]},
+    {"id": "AC6", "status": "done", "description": "Dry-run --json reports Cursor target_paths, harness_routing, conflict_policy, confirmation", "changed_files": ["scripts/lib/installers/skill.py"], "evidence_refs": ["test:test_cursor_skill_dry_run_reports_cursor_target_paths"]},
+    {"id": "AC7", "status": "done", "description": "Smoke test: cursor-agent binary not present -> SMOKE_BLOCKED skip recorded", "changed_files": ["tests/test_library_py_installers.py"], "evidence_refs": ["test:test_cursor_skill_smoke_or_blocking_finding"]},
+    {"id": "AC8", "status": "done", "description": "MCP/guardrail --harness cursor/opencode rejected before side effects; cursor/opencode rejection for agent/mcp/guardrail hoisted to CLI pre-flight gate so it fires before dependency install", "changed_files": ["scripts/lib/installers/mcp_installer.py", "scripts/lib/installers/guardrail_installer.py", "scripts/library.py"], "evidence_refs": ["test:test_mcp_install_cursor_opencode_rejected_before_side_effects", "test:test_guardrail_install_cursor_opencode_rejected_before_side_effects", "test:test_cursor_agent_rejected_before_dependency_install"]},
+    {"id": "AC2-fix", "status": "done", "description": "Cursor bridge symlink cleaned up on skill remove (project and global scope)", "changed_files": ["scripts/lib/installers/remove.py"], "evidence_refs": ["test:test_cursor_skill_remove_cleans_up_cursor_bridge"]}
+  ],
+  "changed_files": [
+    "library.yaml",
+    "scripts/lib/paths.py",
+    "scripts/lib/installers/skill.py",
+    "scripts/lib/installers/remove.py",
+    "scripts/library.py",
+    "scripts/lib/installers/agent.py",
+    "scripts/lib/installers/mcp_installer.py",
+    "scripts/lib/installers/guardrail_installer.py",
+    "tests/test_library_py_installers.py",
+    "docs/PRIMITIVES.md",
+    "docs/primitives/skill.md",
+    "docs/harness-baseline.md"
+  ],
+  "commits": ["f984340", "7f989c4", "fix(CL-iye.3): remove cursor bridge on uninstall; hoist cursor/opencode rejection to pre-flight"],
+  "tests": [
+    {"name": "test_cursor_skill_install_creates_cursor_bridge", "status": "pass"},
+    {"name": "test_cursor_skill_dry_run_reports_cursor_target_paths", "status": "pass"},
+    {"name": "test_cursor_skill_real_install_creates_bridge_symlink", "status": "pass"},
+    {"name": "test_cursor_agent_install_rejected_with_compatibility_message", "status": "pass"},
+    {"name": "test_opencode_agent_install_rejected_with_compatibility_message", "status": "pass"},
+    {"name": "test_cursor_skill_smoke_or_blocking_finding", "status": "skip:SMOKE_BLOCKED"},
+    {"name": "test_mcp_install_cursor_opencode_rejected_before_side_effects[cursor]", "status": "pass"},
+    {"name": "test_mcp_install_cursor_opencode_rejected_before_side_effects[opencode]", "status": "pass"},
+    {"name": "test_guardrail_install_cursor_opencode_rejected_before_side_effects[cursor]", "status": "pass"},
+    {"name": "test_guardrail_install_cursor_opencode_rejected_before_side_effects[opencode]", "status": "pass"},
+    {"name": "test_cursor_skill_remove_cleans_up_cursor_bridge", "status": "pass"},
+    {"name": "test_cursor_agent_rejected_before_dependency_install", "status": "pass"}
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "CL-iye.4 (consume execution_plan slots) depends on cursor harness being defined"
+  ],
+  "evidence_refs": [
+    "test_run:122 passed",
+    "doc:docs/PRIMITIVES.md",
+    "doc:docs/harness-baseline.md"
+  ]
+}

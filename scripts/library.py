@@ -551,6 +551,32 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         except Exception:
             pass  # lookup failures are handled downstream
 
+    # Reject unsupported harness/primitive combinations BEFORE any dependency
+    # install or dry-run dispatch. This enforces AC8 ("fail before
+    # dry-run/real-install side effects"): otherwise the per-installer checks
+    # (agent.py, mcp_installer.py, guardrail_installer.py) only fire after
+    # _install_with_deps has already materialized dependencies.
+    #
+    # cursor: no agent/mcp/guardrail support. opencode: no mcp/guardrail
+    # support, but opencode agents ARE supported via the agent installer's
+    # sources_map (see agent.py _resolve_agent_source), so they must not be
+    # rejected here.
+    CURSOR_UNSUPPORTED_PRIMITIVES = {"agent", "mcp", "guardrail"}
+    OPENCODE_UNSUPPORTED_PRIMITIVES = {"mcp", "guardrail"}
+    cursor_rejected = harness == "cursor" and primitive in CURSOR_UNSUPPORTED_PRIMITIVES
+    opencode_rejected = harness == "opencode" and primitive in OPENCODE_UNSUPPORTED_PRIMITIVES
+    if cursor_rejected or opencode_rejected:
+        msg = (
+            f"{primitive.capitalize()} install for harness '{harness}' is not supported. "
+            f"{primitive.capitalize()} configuration for Cursor and OpenCode is not managed by this installer. "
+            "Use harness 'claude_code' or 'codex' instead."
+        )
+        if use_json:
+            print_json(error_result(msg, EXIT_FAILURE))
+        else:
+            print(f"Error: {msg}", file=sys.stderr)
+        return EXIT_FAILURE
+
     # Resolve transitive dependencies before installing
     if not dry_run:
         exit_code = _install_with_deps(
@@ -838,7 +864,7 @@ def _dispatch_use(
             print(f"Error: {_compat_exc}", file=sys.stderr)
         return _compat_exc.exit_code
     if primitive == "skill":
-        return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
+        return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "standard":
         return _use_standard(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
     elif primitive == "agent":
@@ -874,6 +900,7 @@ def _use_skill(
     scope: str,
     dry_run: bool,
     use_json: bool,
+    harness: str,
     install_mode: str,
 ) -> int:
     """Install a skill (three-layer cache + vendored copy + bridge + lockfile)."""
@@ -887,6 +914,7 @@ def _use_skill(
             scope=scope,
             dry_run=dry_run,
             install_mode=install_mode,
+            harness=harness,
         )
         if use_json:
             print_json(result)

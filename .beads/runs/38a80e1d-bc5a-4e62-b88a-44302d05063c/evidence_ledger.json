@@ -1,0 +1,20 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-iye.3",
+  "run_id": "38a80e1d-bc5a-4e62-b88a-44302d05063c",
+  "commands": [
+    {"command": "uv run pytest tests/test_library_py_installers.py -x -q", "purpose": "verify all tests pass after implementation", "exit_code": 0, "result": "120 passed in 5.11s"},
+    {"command": "git log --oneline a9e093aa..HEAD", "purpose": "verify commits produced", "exit_code": 0, "result": "7f989c4 feat(CL-iye.3): green -- cursor harness projection; f984340 test(CL-iye.3): red -- cursor harness projection"},
+    {"command": "uv run pytest tests/test_library_py_installers.py -x -q", "purpose": "verify all tests pass after cold-review fixes (F1 cursor bridge removal, F2 pre-flight cursor/opencode rejection)", "exit_code": 0, "result": "122 passed in 6.50s"},
+    {"command": "uv run pytest tests/test_library_py_installers.py -q -k 'cursor_skill_remove or cursor_agent_rejected_before'", "purpose": "verify the two new cold-review fix tests pass", "exit_code": 0, "result": "2 passed, 120 deselected in 0.26s"}
+  ],
+  "skipped_checks": [
+    {"check": "cursor-agent smoke test (AC7)", "reason": "cursor and cursor-agent binaries not on PATH in this environment; test uses pytest.skip with SMOKE_BLOCKED message as required by AC7"}
+  ],
+  "artifacts": [
+    {"path": ".beads/runs/38a80e1d-bc5a-4e62-b88a-44302d05063c/implementation_manifest.json", "type": "manifest"},
+    {"path": "tests/test_library_py_installers.py", "type": "test_file", "note": "122 tests, 12 new cursor-related tests added (10 implementation + 2 cold-review fix)"},
+    {"path": "scripts/lib/installers/remove.py", "type": "source", "note": "F1: remove_skill now cleans up cursor bridge symlink (project + global scope)"},
+    {"path": "scripts/library.py", "type": "source", "note": "F2: cmd_use rejects cursor/opencode for agent/mcp/guardrail in pre-flight gate before _install_with_deps"}
+  ]
+}
