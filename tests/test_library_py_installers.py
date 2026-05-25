@@ -664,32 +664,6 @@ class TestDryRunContractUniformity:
         assert "cursor" in data["message"].lower()
         assert "not supported" in data["message"].lower() or "not currently implemented" in data["message"].lower()
 
-    def test_opencode_agent_install_rejected_with_compatibility_message(
-        self,
-        dry_run_contract_project: Path,
-    ):
-        """AC3 extension: agent install for --harness opencode is explicitly rejected."""
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(LIBRARY_PY),
-                "agent",
-                "use",
-                "contract-agent",
-                "--harness",
-                "opencode",
-                "--dry-run",
-                "--json",
-            ],
-            capture_output=True,
-            text=True,
-            cwd=str(dry_run_contract_project),
-        )
-        assert result.returncode != 0
-        data = json.loads(result.stdout)
-        assert data["status"] == "error"
-        assert "opencode" in data["message"].lower()
-
     @pytest.mark.parametrize("harness", ["cursor", "opencode"])
     def test_mcp_install_cursor_opencode_rejected_before_side_effects(
         self,

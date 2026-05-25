@@ -551,13 +551,21 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         except Exception:
             pass  # lookup failures are handled downstream
 
-    # Reject cursor/opencode for primitives that are not supported BEFORE any
-    # dependency install or dry-run dispatch. This enforces AC8 ("fail before
+    # Reject unsupported harness/primitive combinations BEFORE any dependency
+    # install or dry-run dispatch. This enforces AC8 ("fail before
     # dry-run/real-install side effects"): otherwise the per-installer checks
     # (agent.py, mcp_installer.py, guardrail_installer.py) only fire after
     # _install_with_deps has already materialized dependencies.
-    CURSOR_OPENCODE_UNSUPPORTED_PRIMITIVES = {"agent", "mcp", "guardrail"}
-    if harness in ("cursor", "opencode") and primitive in CURSOR_OPENCODE_UNSUPPORTED_PRIMITIVES:
+    #
+    # cursor: no agent/mcp/guardrail support. opencode: no mcp/guardrail
+    # support, but opencode agents ARE supported via the agent installer's
+    # sources_map (see agent.py _resolve_agent_source), so they must not be
+    # rejected here.
+    CURSOR_UNSUPPORTED_PRIMITIVES = {"agent", "mcp", "guardrail"}
+    OPENCODE_UNSUPPORTED_PRIMITIVES = {"mcp", "guardrail"}
+    cursor_rejected = harness == "cursor" and primitive in CURSOR_UNSUPPORTED_PRIMITIVES
+    opencode_rejected = harness == "opencode" and primitive in OPENCODE_UNSUPPORTED_PRIMITIVES
+    if cursor_rejected or opencode_rejected:
         msg = (
             f"{primitive.capitalize()} install for harness '{harness}' is not supported. "
             f"{primitive.capitalize()} configuration for Cursor and OpenCode is not managed by this installer. "
