@@ -205,6 +205,10 @@ def reinstall_entry(
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="agent-base", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
+    elif entry_type == "workflow":
+        from .installers.simple_file import install_simple_file
+        install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
+                           repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "mcp":
         from .installers.mcp_installer import install_mcp
         install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
@@ -323,36 +327,50 @@ def cmd_audit_impl(
         if checksum_type is None:
             entry_status = "unknown"
         elif checksum_type == "file":
-            # For file-type: check single file
-            for path_str in [install_target_str, cache_path_str]:
-                if not path_str:
-                    continue
-                p = _entry_path(path_str, repo_root)
-                if p.is_symlink():
-                    p = p.resolve()
-                if p.is_file():
-                    try:
-                        actual_sha = compute_checksum(p)
-                    except OSError:
-                        actual_sha = ""
-                    break
-                elif p.is_dir():
-                    primary = _find_primary_artifact(p, entry_name)
-                    if primary and primary.exists():
-                        try:
-                            actual_sha = compute_checksum(primary)
-                        except OSError:
-                            actual_sha = ""
-                    break
-
-            if expected_sha and actual_sha and expected_sha != actual_sha:
+            # For file-type: check single file.
+            # Detect missing install target first: a lockfile path that ends with
+            # a known single-file extension (*.js, *.md, *.py, *.toml) that does
+            # not exist is explicitly drift, not "unknown".
+            _install_p = _entry_path(install_target_str, repo_root) if install_target_str else None
+            if (
+                _install_p is not None
+                and _install_p.suffix in (".js", ".md", ".py", ".toml")
+                and not _install_p.exists()
+                and not _install_p.is_symlink()
+            ):
                 drift = True
                 any_drift = True
-                entry_status = "drift"
-            elif actual_sha:
-                entry_status = "clean"
+                entry_status = "missing"
             else:
-                entry_status = "unknown"
+                for path_str in [install_target_str, cache_path_str]:
+                    if not path_str:
+                        continue
+                    p = _entry_path(path_str, repo_root)
+                    if p.is_symlink():
+                        p = p.resolve()
+                    if p.is_file():
+                        try:
+                            actual_sha = compute_checksum(p)
+                        except OSError:
+                            actual_sha = ""
+                        break
+                    elif p.is_dir():
+                        primary = _find_primary_artifact(p, entry_name)
+                        if primary and primary.exists():
+                            try:
+                                actual_sha = compute_checksum(primary)
+                            except OSError:
+                                actual_sha = ""
+                        break
+
+                if expected_sha and actual_sha and expected_sha != actual_sha:
+                    drift = True
+                    any_drift = True
+                    entry_status = "drift"
+                elif actual_sha:
+                    entry_status = "clean"
+                else:
+                    entry_status = "unknown"
 
         elif checksum_type == "directory":
             # Directory-based checksum: hash the local installed directory first.
@@ -460,6 +478,8 @@ def _find_primary_artifact(cache_dir: Path, name: str) -> Path | None:
     """Find the primary artifact in a cache directory."""
     candidates = [
         cache_dir / f"{name}.md",
+        cache_dir / f"{name}.js",
+        cache_dir / f"{name}.py",
         cache_dir / "SKILL.md",
         cache_dir / "STANDARD.md",
         cache_dir / "agent.md",
@@ -467,8 +487,14 @@ def _find_primary_artifact(cache_dir: Path, name: str) -> Path | None:
     for c in candidates:
         if c.exists():
             return c
-    md_files = list(cache_dir.rglob("*.md"))
-    return md_files[0] if md_files else None
+    # Prefer .md files; fall back to .js/.py when only a workflow or script is cached
+    md_files = sorted(cache_dir.rglob("*.md"))
+    if md_files:
+        return md_files[0]
+    js_files = sorted(cache_dir.rglob("*.js"))
+    if js_files:
+        return js_files[0]
+    return None
 
 
 def _audit_claude_agent_frontmatter(

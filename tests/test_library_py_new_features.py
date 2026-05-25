@@ -30,6 +30,7 @@ TARGETED_SYNC_PRIMITIVES = [
     "mcp",
     "model-standard",
     "agent-base",
+    "workflow",
 ]
 
 
@@ -194,6 +195,13 @@ description: A test agent base prompt
 # Test Agent Base Prompt Content
 """
 
+FIXTURE_WORKFLOW_JS = """export default {
+  name: "test-workflow",
+  description: "A test workflow",
+  steps: [],
+};
+"""
+
 MULTI_HARNESS_AGENT_MD = """---
 name: multi-harness-agent
 description: Agent with multiple harness sources
@@ -229,6 +237,9 @@ default_dirs:
   agent_bases:
     - default: .agents/agent-bases/
     - global: ~/.agents/agent-bases/
+  workflows:
+    - default: .claude/workflows/
+    - global: ~/.claude/workflows/
 
 library:
   skills:
@@ -296,6 +307,15 @@ library:
     - name: test-agent-base
       description: A test agent base prompt
       source: {agent_base_source}
+  workflows:
+    - name: test-workflow
+      description: A test workflow
+      source: {workflow_source}
+      format: claude-workflow-js
+      metadata:
+        library:
+          plane: dev
+          executors: [native, library-runtime, codex]
   standards: []
 
 marketplaces: []
@@ -374,6 +394,10 @@ def project_dir(tmp_path):
     agent_base_dir.mkdir()
     (agent_base_dir / "test-agent-base.md").write_text(FIXTURE_AGENT_BASE_MD)
 
+    workflow_dir = tmp_path / "fixture-workflow"
+    workflow_dir.mkdir()
+    (workflow_dir / "test-workflow.js").write_text(FIXTURE_WORKFLOW_JS)
+
     multi_harness_claude_dir = tmp_path / "fixture-multi-harness"
     multi_harness_claude_dir.mkdir()
     (multi_harness_claude_dir / "multi-harness-agent.md").write_text(MULTI_HARNESS_AGENT_MD)
@@ -399,6 +423,7 @@ def project_dir(tmp_path):
         prompt_source=str(prompt_dir / "test-prompt.md"),
         model_standard_source=str(model_std_dir / "test-model-standard.md"),
         agent_base_source=str(agent_base_dir / "test-agent-base.md"),
+        workflow_source=str(workflow_dir / "test-workflow.js"),
         multi_harness_claude_source=str(multi_harness_claude_dir / "multi-harness-agent.md"),
         multi_harness_codex_source=str(multi_harness_codex_dir / "multi-harness-agent.toml"),
     )
@@ -639,6 +664,95 @@ class TestAgentBaseRemove:
         data = yaml.safe_load(lockfile.read_text())
         names = [e["name"] for e in data.get("installed", [])]
         assert "test-agent-base" not in names
+
+
+# ---------------------------------------------------------------------------
+# AK10a: workflow use
+# ---------------------------------------------------------------------------
+
+class TestWorkflowUse:
+    def test_workflow_use_exits_zero(self, project_dir):
+        result = run_library("workflow", "use", "test-workflow", "--json", cwd=project_dir)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+
+    def test_workflow_use_creates_claude_workflow_file(self, project_dir):
+        run_library("workflow", "use", "test-workflow", "--json", cwd=project_dir)
+        workflow_path = project_dir / ".claude" / "workflows" / "test-workflow.js"
+        assert workflow_path.exists() or workflow_path.is_symlink()
+
+    def test_workflow_use_updates_lockfile(self, project_dir):
+        run_library("workflow", "use", "test-workflow", "--json", cwd=project_dir)
+        lockfile = project_dir / ".library.lock"
+        import yaml
+        data = yaml.safe_load(lockfile.read_text())
+        entry = next(
+            e
+            for e in data.get("installed", [])
+            if e["type"] == "workflow" and e["name"] == "test-workflow"
+        )
+        assert entry["install_target"].endswith(".claude/workflows/test-workflow.js")
+
+
+# ---------------------------------------------------------------------------
+# AK10b: workflow remove
+# ---------------------------------------------------------------------------
+
+class TestWorkflowRemove:
+    def test_workflow_remove_exits_zero(self, project_dir):
+        run_library("workflow", "use", "test-workflow", "--json", cwd=project_dir)
+        result = run_library("workflow", "remove", "test-workflow", "--json", cwd=project_dir)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+
+    def test_workflow_remove_deletes_file_and_updates_lockfile(self, project_dir):
+        run_library("workflow", "use", "test-workflow", "--json", cwd=project_dir)
+        run_library("workflow", "remove", "test-workflow", "--json", cwd=project_dir)
+        workflow_path = project_dir / ".claude" / "workflows" / "test-workflow.js"
+        assert not workflow_path.exists() and not workflow_path.is_symlink()
+        data = yaml.safe_load((project_dir / ".library.lock").read_text())
+        names = [
+            e["name"]
+            for e in data.get("installed", [])
+            if e["type"] == "workflow"
+        ]
+        assert "test-workflow" not in names
+
+
+# ---------------------------------------------------------------------------
+# AK10c: workflow dry-run
+# ---------------------------------------------------------------------------
+
+class TestWorkflowDryRun:
+    def test_workflow_dry_run_reports_js_target_without_mutation(self, project_dir):
+        result = run_library("workflow", "use", "test-workflow", "--dry-run", "--json", cwd=project_dir)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+
+        data = json.loads(result.stdout)
+        workflow_path = project_dir / ".claude" / "workflows" / "test-workflow.js"
+        assert data["status"] == "dry-run"
+        assert str(workflow_path) in data["target_paths"]
+        assert not workflow_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# AK10d: workflow list and sync
+# ---------------------------------------------------------------------------
+
+class TestWorkflowListAndSync:
+    def test_workflow_list_includes_fixture_entry(self, project_dir):
+        result = run_library("workflow", "list", "--json", cwd=project_dir)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        names = [entry["name"] for entry in data]
+        assert "test-workflow" in names
+
+    def test_workflow_targeted_sync_restores_missing_file(self, project_dir):
+        run_library("workflow", "use", "test-workflow", "--json", cwd=project_dir)
+        workflow_path = project_dir / ".claude" / "workflows" / "test-workflow.js"
+        workflow_path.unlink()
+
+        result = run_library("workflow", "sync", "test-workflow", "--json", cwd=project_dir)
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert workflow_path.exists() or workflow_path.is_symlink()
 
 
 # ---------------------------------------------------------------------------

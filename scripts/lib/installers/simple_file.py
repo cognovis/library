@@ -1,6 +1,6 @@
 """
 installers/simple_file.py — Generic single-file installer for prompt, script,
-model-standard, and agent-base primitives.
+model-standard, agent-base, and workflow primitives.
 
 All four follow the same pattern:
   1. Fetch source file
@@ -47,11 +47,11 @@ def install_simple_file(
     harness: str = "all",
     install_mode: str = "vendor",
 ) -> dict[str, Any]:
-    """Generic install for prompt, script, model-standard, agent-base.
+    """Generic install for prompt, script, model-standard, agent-base, workflow.
 
     Args:
         catalog: Parsed library.yaml dict.
-        primitive_name: One of 'prompt', 'script', 'model-standard', 'agent-base'.
+        primitive_name: One of 'prompt', 'script', 'model-standard', 'agent-base', 'workflow'.
         name: Entry name.
         repo_root: Project root.
         scope: 'project' or 'global'.
@@ -109,6 +109,8 @@ def install_simple_file(
         install_filename = f"{item_name}.md"
     elif primitive_name == "agent-base":
         install_filename = f"{item_name}.md"
+    elif primitive_name == "workflow":
+        install_filename = f"{item_name}.js"
     else:
         install_filename = f"{item_name}.md"
 
@@ -138,7 +140,7 @@ def install_simple_file(
             ops,
             summary=f"Would install {primitive_name} '{item_name}' to {install_target}",
             target_paths=[str(install_target)],
-            # Simple-file primitives (prompt, script, model-standard, agent-base)
+            # Simple-file primitives (prompt, script, model-standard, agent-base, workflow)
             # share one install target across harnesses — resolve_install_paths
             # does not consult `harness`. Surface that by emitting None instead
             # of echoing the caller's --harness argument.
@@ -244,7 +246,7 @@ def remove_simple_file(
     scope: str = "project",
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Generic remove for prompt, script, model-standard, agent-base."""
+    """Generic remove for prompt, script, model-standard, agent-base, workflow."""
     prim = get_primitive(primitive_name)
     if prim is None:
         raise InstallError(f"Unknown primitive: {primitive_name}")
@@ -255,7 +257,12 @@ def remove_simple_file(
     if canonical_base is None:
         raise InstallError(f"Cannot determine install path for {primitive_name} '{name}'.")
 
-    extension = ".py" if primitive_name == "script" else ".md"
+    if primitive_name == "script":
+        extension = ".py"
+    elif primitive_name == "workflow":
+        extension = ".js"
+    else:
+        extension = ".md"
     install_target = canonical_base / f"{name}{extension}"
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
 

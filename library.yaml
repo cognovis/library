@@ -44,6 +44,9 @@ default_dirs:
   agent_bases:
     - default: .agents/agent-bases/
     - global: ~/.agents/agent-bases/
+  workflows:
+    - default: .claude/workflows/
+    - global: ~/.claude/workflows/
 
 tag_vocabulary:
   - tag: judge-layer
@@ -144,6 +147,7 @@ sources:
         - prompts
         - model_standards
         - agent_bases
+        - workflows
       scope:
         topics:
           - team
@@ -3631,6 +3635,7 @@ library:
       version: 2026.05.15
       tags:
         - origin:original
+  workflows: []
 project_tooling:
   - name: beads-prime
     description: >-

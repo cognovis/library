@@ -36,6 +36,7 @@ SUPPORTED_PRIMITIVES = [
     "mcp",
     "model-standard",
     "agent-base",
+    "workflow",
 ]
 
 
@@ -91,6 +92,21 @@ def test_library_py_primitive_first_grammar_skill_list():
     )
     data = json.loads(result.stdout)
     assert isinstance(data, (list, dict)), f"Expected JSON list or dict, got {type(data)}"
+
+
+def test_workflow_primitive_metadata_and_inventory_aliases():
+    """workflow is a first-class primitive and catalog inventory content type."""
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from lib.catalog_inventory import source_accepts_primitive
+    from lib.primitives import get_primitive
+
+    primitive = get_primitive("workflow")
+
+    assert primitive is not None
+    assert primitive.yaml_section == "library.workflows"
+    assert primitive.yaml_key == "library/workflows"
+    assert primitive.install_subdir == "workflows"
+    assert source_accepts_primitive({"content_types": ["workflows"]}, "workflow")
 
 
 # ---------------------------------------------------------------------------

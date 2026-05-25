@@ -1,5 +1,21 @@
 ## [unreleased]
 
+### 🚀 Features
+
+- *(CL-rk2)* Workflow as a first-class catalog and installer primitive
+  - `library.yaml` supports a `library.workflows` catalog shape with `format: claude-workflow-js`
+  - `scripts/lib/primitives.py` registers `workflow` as a recognized primitive type (yaml section `library.workflows`)
+  - `scripts/lib/catalog_inventory.py` counts workflow entries and scans `.claude/workflows/**/*.js` for audit
+  - `scripts/library.py` dispatches `add`, `use`, `remove`, `list`, `sync`, and `search` for workflows via the existing simple-file installer
+  - Install targets: `.claude/workflows/<name>.js` (project-local) and `~/.claude/workflows/<name>.js` (global); Codex and Cursor use the same storage path but have no native workflow executor
+  - `scripts/lib/installers/simple_file.py` extended to emit `.js` filenames for workflow installs and removals
+  - `scripts/lib/sync_audit.py` handles workflow reinstall during sync and detects missing `.js` install targets as drift (Codex adversarial finding addressed)
+  - Lockfile schema adds `workflow` to the `type` enum
+  - Library schema adds `workflow_entry` definition and `library.workflows` array under the `library` section
+  - Dry-run contract (`docs/schema/dry-run-contract.md`) extended to cover workflow entries
+  - `SKILL.md` updated: workflow listed as a valid primitive name, default directories documented, harness routing notes added
+  - `docs/primitives/workflow.md` catalog format section drops "proposed" status — installer support is live
+
 ### 📚 Documentation
 
 - *(CL-99c)* Add project harness baseline checklist for collaboration projects

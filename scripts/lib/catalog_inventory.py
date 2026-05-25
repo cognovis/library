@@ -35,6 +35,7 @@ PRIMITIVE_CONTENT_TYPES: dict[str, set[str]] = {
         "agent-bases",
         "agent_bases",
     },
+    "workflow": {"workflow", "workflows"},
 }
 
 CONTENT_TYPE_PRIMITIVES: dict[str, str] = {
@@ -50,6 +51,7 @@ SCAN_PRIMITIVES = {
     "standard",
     "model-standard",
     "agent-base",
+    "workflow",
 }
 
 IGNORED_PATH_PARTS = {
@@ -536,6 +538,8 @@ def scan_primitive(
         files = sorted((root / "agent-bases").glob("**/*.md"))
         if not files:
             files = sorted((root / "golden-prompts").glob("**/*.md"))
+    elif primitive_name == "workflow":
+        files = sorted((root / ".claude" / "workflows").glob("**/*.js"))
     else:
         files = []
 
