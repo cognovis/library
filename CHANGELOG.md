@@ -1,5 +1,14 @@
 ## [unreleased]
 
+### 🛡️ Security / Safety
+
+- *(CL-uqug)* Fail-closed guardrail for mutating workflow execution in `WorkflowRuntime`
+  - `MutatingExecutionBlockedError` is raised for any adapter whose hook-preservation status is not `verified`
+  - `ADAPTER_PRESERVATION_STATUS` map records current statuses: `claude-agent` → `blocked` (leaf smoke returned unauthenticated), `codex-impl`/`codex-exec` → `separate-harness`, `cursor-composer` → `not-applicable`
+  - Read-only leaves (`readOnly: true`) bypass the guardrail and remain allowed for all adapters
+  - Capability matrix and Claude leaf smoke reproduction steps committed to `docs/audit/hook-permission-preservation.md`
+  - Follow-up bead CL-pabj filed for Codex-specific hook preservation smoke evidence
+
 ### 🚀 Features
 
 - *(CL-mr2q)* OpenCode harness support for agent install and remove

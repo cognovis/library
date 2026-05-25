@@ -202,10 +202,18 @@ and resume wins available today.
   against the read-only `bead-context-pack.js` workflow, proving determinism,
   journal/resume, and the Claude/Codex executor swap without touching anything
   that mutates state. This is distinct from CL-rk2 (catalog/installer).
+- **CL-uqug (2026-05-25):** Hook and permission preservation audit completed.
+  `WorkflowRuntime` now enforces a fail-closed guardrail: `MutatingExecutionBlockedError`
+  is raised for any adapter whose preservation status is not `verified`. Currently no
+  listed adapter is approved for mutating execution. Capability matrix and Claude leaf
+  smoke evidence are in `docs/audit/hook-permission-preservation.md`. Codex-specific
+  hook preservation smoke is tracked in follow-up bead CL-pabj.
 - Before the runtime is trusted on any mutating workflow, it MUST be verified that
   PreToolUse hooks (the destructive-command guard, `bead-author-check`,
   `permissions.yml`) still fire inside spawned leaves. Losing those rails is a
-  blocker, not a nuance.
+  blocker, not a nuance. The `WorkflowRuntime.check_mutating_allowed` guardrail
+  (see `scripts/lib/workflow_runtime.py`) enforces this at runtime until verification
+  is complete.
 - The determinism sandbox bans shell in the spine, so existing shell-heavy phases
   (bead claim, git, session-close) become leaves or pre/post steps. This informs,
   but is out of scope for, a future bead-orchestrator rearchitecture, which is
