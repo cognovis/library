@@ -4,7 +4,7 @@
   "acceptance_criteria": [
     {
       "id": 1,
-      "status": "blocked_with_reproduction",
+      "status": "partial",
       "changed_files": [
         "docs/audit/hook-permission-preservation.md"
       ],
@@ -15,7 +15,7 @@
     },
     {
       "id": 2,
-      "status": "complete",
+      "status": "done",
       "changed_files": [
         "docs/audit/hook-permission-preservation.md"
       ],
@@ -27,7 +27,7 @@
     },
     {
       "id": 3,
-      "status": "complete",
+      "status": "done",
       "changed_files": [
         "scripts/lib/workflow_runtime.py",
         "tests/test_workflow_runtime_spike.py"
@@ -40,7 +40,7 @@
     },
     {
       "id": 4,
-      "status": "complete",
+      "status": "done",
       "changed_files": [
         "docs/audit/hook-permission-preservation.md"
       ],
@@ -51,7 +51,7 @@
     },
     {
       "id": 5,
-      "status": "complete",
+      "status": "done",
       "changed_files": [
         "docs/audit/hook-permission-preservation.md"
       ],
