@@ -135,6 +135,37 @@ class TestRouteProfilesSchema:
     def test_cdx_composer_orchestrator_is_cdx(self, config: dict) -> None:
         assert config["route_profiles"]["cdx-composer"]["orchestrator"] == "cdx"
 
+    # ── AC4: built-in profiles bind the expected adapter/model values ─────
+
+    def test_cld_default_full_implementation_values(self, config: dict) -> None:
+        impl = config["route_profiles"]["cld-default"]["slots"]["full"]["implementation"]
+        assert impl["adapter"] == "codex-impl"
+        assert impl["model"] == "gpt-5.5"
+        assert impl["harness"] == "codex"
+
+    def test_cld_default_quick_implementation_values(self, config: dict) -> None:
+        impl = config["route_profiles"]["cld-default"]["slots"]["quick"]["implementation"]
+        assert impl["adapter"] == "codex-impl"
+        assert impl["model"] == "gpt-5.4-mini"
+        assert impl["harness"] == "codex"
+
+    def test_cdx_default_full_implementation_values(self, config: dict) -> None:
+        impl = config["route_profiles"]["cdx-default"]["slots"]["full"]["implementation"]
+        assert impl["adapter"] == "claude-agent"
+        assert impl["model"] == "claude-opus-4-7"
+        assert impl["harness"] == "claude"
+
+    def test_cdx_default_quick_implementation_values(self, config: dict) -> None:
+        impl = config["route_profiles"]["cdx-default"]["slots"]["quick"]["implementation"]
+        assert impl["adapter"] == "claude-agent"
+        assert impl["model"] == "claude-haiku-4-5"
+        assert impl["harness"] == "claude"
+
+    def test_cdx_composer_quick_implementation_values(self, config: dict) -> None:
+        impl = config["route_profiles"]["cdx-composer"]["slots"]["quick"]["implementation"]
+        assert impl["adapter"] == "cursor-composer"
+        assert impl["harness"] == "cursor"
+
 
 # ── AC2: bin/cld and bin/cdx accept --route-profile flag ─────────────────
 
