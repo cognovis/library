@@ -15,6 +15,8 @@
 #   -bw, --bead-wave ID → dispatch wave-orchestrator for a parent bead's children
 #   -bl, --bead-label LABELS → dispatch wave-orchestrator for beads with LABELS (comma-separated, AND)
 #   -bi, --bead-ids IDS → dispatch wave-orchestrator for explicit bead IDs (comma-separated)
+#   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
+#                          profiles: cld-default, cdx-default, cdx-composer
 
 set -uo pipefail
 
@@ -35,6 +37,7 @@ bead_quick_id=""
 bead_wave_id=""
 bead_labels=""
 bead_ids=""
+route_profile=""
 plan_label=""
 show_help=false
 claude_args=()
@@ -81,6 +84,10 @@ while (( $# > 0 )); do
             bead_ids="$2"
             shift 2
             ;;
+        --route-profile)
+            route_profile="$2"
+            shift 2
+            ;;
         *)
             claude_args+=("$1")
             shift
@@ -107,6 +114,8 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 (comma-separated, AND semantics)
     -bi, --bead-ids IDS         Dispatch wave-orchestrator for explicit bead IDs
                                 (comma-separated, e.g. fpde-11j,fpde-95b)
+         --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
+                                Profiles: cld-default, cdx-default, cdx-composer
 
   Session:
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
@@ -265,6 +274,12 @@ if [[ -n "$bead_id" ]]; then
     # export for the cdx-line entry points.
     export CLD_BEAD_LINE=cld
 
+    # Export CLD_ROUTE_PROFILE so phase0-claim.py can resolve execution_plan
+    # from the named route profile (CL-iye.1).
+    if [[ -n "$route_profile" ]]; then
+        export CLD_ROUTE_PROFILE="$route_profile"
+    fi
+
     # ── Epic guard: refuse parent beads (has children) ────────────
     local _child_count
     _child_count=$(_bead_child_count "$bead_id")
@@ -320,6 +335,10 @@ if [[ -n "$bead_id" ]]; then
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
+    fi
+
+    if [[ -n "$route_profile" ]]; then
+        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
     fi
 
     claude_args+=("$prompt")

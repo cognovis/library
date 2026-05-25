@@ -78,6 +78,13 @@ Per **ADR-0002 Decision 2**, the canonical source for all CLI launchers is `cogn
 **Deployment:** `bash scripts/install-bin.sh` creates symlinks from `~/.local/bin/{cld,cdx}` into `bin/`.
 The installer is idempotent and uses `ln -sfn` so updates to this repo are immediately reflected.
 
+**Route profiles** (`--route-profile NAME`): Both launchers accept an optional `--route-profile` flag
+that selects a named profile from `orchestrator-config.yml`. The name is exported as `CLD_ROUTE_PROFILE`
+and injected into the bead execution prompt so `phase0-claim.py` can resolve the matching `execution_plan`
+(slots, adapter, model, reasoning_effort, timeout). Built-in profiles: `cld-default`, `cdx-default`,
+`cdx-composer`. When omitted, `perspective_policy` in `orchestrator-config.yml` is the backward-compatible
+fallback.
+
 `~/.local/bin/` must be in `$PATH`. The `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
 (only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).
 Note: the PATH change takes effect in **new shells only** — existing terminals that were launched before the edit still

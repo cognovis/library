@@ -10,6 +10,7 @@
 #                     (injects full bead context via prompt, no --bead flag in Codex)
 #   -bq, --bead-quick ID → launch with quick-fix prompt for XS/S beads (bug, chore, task)
 #   -br, --bead-review ID → cmux-review mode (warns if Codex equivalent missing)
+#   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #
 # Note: Codex has no --bead flag equivalent. cdx synthesizes bead context via
 #       prompt injection using 'codex exec'. The prompt starts with a
@@ -37,6 +38,7 @@ show_help=false
 bead_id=""
 bead_quick_id=""
 bead_review_id=""
+route_profile=""
 codex_args=()
 
 while (( $# > 0 )); do
@@ -61,6 +63,10 @@ while (( $# > 0 )); do
             bead_review_id="$2"
             shift 2
             ;;
+        --route-profile)
+            route_profile="$2"
+            shift 2
+            ;;
         *)
             codex_args+=("$1")
             shift
@@ -83,6 +89,8 @@ Wrapper flags (consumed by cdx, not passed to codex):
                                 (injects full bead context via prompt injection)
     -bq, --bead-quick ID        Launch quick-fix prompt for XS/S beads
     -br, --bead-review ID       Review mode (warns: Codex has no cmux-review equivalent)
+         --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
+                                Profiles: cld-default, cdx-default, cdx-composer
 
   Session:
          --no-full-auto          Launch codex without the default --full-auto wrapper
@@ -117,11 +125,20 @@ if [[ -n "$bead_id" ]]; then
     # perspective_policy.cdx in .agents/orchestrator-config.yml.
     export CLD_BEAD_LINE=cdx
 
+    # Export CLD_ROUTE_PROFILE when --route-profile is set (CL-iye.1).
+    if [[ -n "$route_profile" ]]; then
+        export CLD_ROUTE_PROFILE="$route_profile"
+    fi
+
     prompt="implement bead ${bead_id}. Execute the full bead-orchestrator workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase. Do not spawn another agent; this invocation is the bead-orchestrator agent entrypoint. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context below and the agent's developer_instructions are sufficient.
 
 ## Bead Context
 
 ${bead_context}"
+
+    if [[ -n "$route_profile" ]]; then
+        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
+    fi
 
     exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
 fi
