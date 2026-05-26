@@ -37,15 +37,23 @@ fetch_bead_context() {
     local bead_id="$1"
     local bead_json=""
 
+    bead_json=$("${BD_BIN}" show "${bead_id}" --json 2>/dev/null) || return 1
+
     if [[ -f "$COMPACT_CONTEXT_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
-        if bead_json=$("${BD_BIN}" show "${bead_id}" --json 2>/dev/null); then
-            if printf '%s' "$bead_json" | uv run python "$COMPACT_CONTEXT_SCRIPT" 2>/dev/null; then
-                return 0
-            fi
+        if printf '%s' "$bead_json" | uv run python "$COMPACT_CONTEXT_SCRIPT" 2>/dev/null; then
+            return 0
         fi
     fi
 
     "${BD_BIN}" show "${bead_id}" 2>/dev/null
+}
+
+abort_missing_bead() {
+    local bead_id="$1"
+
+    echo "ERROR: Bead ${bead_id} was not found in this repository (${PWD})." >&2
+    echo "Aborting before launching Codex. Run cdx from the project that owns the bead." >&2
+    exit 2
 }
 
 # ── Parse wrapper flags ──────────────────────────────────────────
@@ -136,8 +144,7 @@ if [[ -n "$bead_id" ]]; then
     fi
 
     bead_context=$(fetch_bead_context "${bead_id}") || {
-        echo "ERROR: Could not fetch bead context for ${bead_id}. Is the bead ID correct?"
-        exit 1
+        abort_missing_bead "${bead_id}"
     }
 
     # Export CLD_BEAD_LINE=cdx so any downstream tooling spawned from this
@@ -178,8 +185,7 @@ if [[ -n "$bead_quick_id" ]]; then
     fi
 
     bead_context=$(fetch_bead_context "${bead_quick_id}") || {
-        echo "ERROR: Could not fetch bead context for ${bead_quick_id}. Is the bead ID correct?"
-        exit 1
+        abort_missing_bead "${bead_quick_id}"
     }
 
     # Export CLD_BEAD_LINE=cdx so downstream tools (codex-impl.py, any nested

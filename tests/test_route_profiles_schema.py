@@ -310,3 +310,91 @@ class TestLauncherRouteProfileFlag:
         assert "Route profile: cdx-composer" in result.stdout
         assert "## Compact Output Contract" in result.stdout
         assert "Do not paste full diffs" in result.stdout
+
+
+class TestLauncherMissingBeadGuard:
+    """Regression: bead launchers must not start agents for non-local beads."""
+
+    @staticmethod
+    def _write_executable(path: Path, content: str) -> Path:
+        path.write_text(content, encoding="utf-8")
+        path.chmod(0o755)
+        return path
+
+    @pytest.mark.parametrize("flag", ["-b", "-bq"])
+    def test_cld_bead_modes_abort_when_bead_is_missing(self, tmp_path: Path, flag: str) -> None:
+        called = tmp_path / "claude-called"
+        claude_mock = self._write_executable(
+            tmp_path / "claude-mock",
+            "#!/bin/sh\n"
+            "touch \"$CALLED_FILE\"\n"
+            "printf 'CLAUDE_CALLED\\n'\n",
+        )
+        bd_mock = self._write_executable(
+            tmp_path / "bd-mock",
+            "#!/bin/sh\n"
+            "if [ \"$1\" = config ] && [ \"$2\" = get ] && [ \"$3\" = issue_prefix ]; then\n"
+            "  printf 'mira\\n'\n"
+            "  exit 0\n"
+            "fi\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'Error fetching %s: no issue found\\n' \"$2\" >&2\n"
+            "  exit 1\n"
+            "fi\n"
+            "exit 1\n",
+        )
+
+        env = dict(os.environ)
+        env["CLAUDE_BIN"] = str(claude_mock)
+        env["BD_BIN"] = str(bd_mock)
+        env["CALLED_FILE"] = str(called)
+
+        result = subprocess.run(
+            [str(_CLD_BIN), flag, "polaris-nxcc"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 2
+        assert not called.exists()
+        assert "polaris-nxcc was not found in this repository" in result.stderr
+        assert "Aborting before launching Claude" in result.stderr
+
+    @pytest.mark.parametrize("flag", ["-b", "-bq"])
+    def test_cdx_bead_modes_abort_when_bead_is_missing(self, tmp_path: Path, flag: str) -> None:
+        called = tmp_path / "codex-called"
+        codex_mock = self._write_executable(
+            tmp_path / "codex-mock",
+            "#!/bin/sh\n"
+            "touch \"$CALLED_FILE\"\n"
+            "printf 'CODEX_CALLED\\n'\n",
+        )
+        bd_mock = self._write_executable(
+            tmp_path / "bd-mock",
+            "#!/bin/sh\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'Error fetching %s: no issue found\\n' \"$2\" >&2\n"
+            "  exit 1\n"
+            "fi\n"
+            "exit 1\n",
+        )
+
+        env = dict(os.environ)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["BD_BIN"] = str(bd_mock)
+        env["CALLED_FILE"] = str(called)
+
+        result = subprocess.run(
+            [str(_CDX_BIN), flag, "polaris-nxcc"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 2
+        assert not called.exists()
+        assert "Bead polaris-nxcc was not found in this repository" in result.stderr
+        assert "Aborting before launching Codex" in result.stderr

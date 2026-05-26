@@ -27,6 +27,8 @@ if [[ -z "${CLAUDE_BIN}" ]]; then
     exit 1
 fi
 
+BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
+
 # ── Parse wrapper flags ──────────────────────────────────────────
 
 caveman=false
@@ -194,8 +196,15 @@ fi
 
 # ── Auto-expand short bead IDs ──────────────────────────────────
 # e.g. "oms3" → "mira-oms3" when issue_prefix is "mira"
-local bead_prefix
-bead_prefix=$(bd config get issue_prefix 2>/dev/null)
+if [[ -n "$bead_id$bead_quick_id$bead_wave_id$bead_labels$bead_ids" && -z "${BD_BIN}" ]]; then
+    echo "ERROR: bd not found in PATH. Install the beads CLI first."
+    exit 1
+fi
+
+local bead_prefix=""
+if [[ -n "${BD_BIN}" ]]; then
+    bead_prefix=$("${BD_BIN}" config get issue_prefix 2>/dev/null || true)
+fi
 
 _expand_bead_id() {
     local id="$1"
@@ -222,6 +231,10 @@ _bead_short() {
 # Count children of a bead (0 if none / bead not found). Requires jq.
 _bead_child_count() {
     local id="$1"
+    if [[ -z "${BD_BIN}" ]]; then
+        echo "0"
+        return
+    fi
     if ! command -v jq &>/dev/null; then
         echo "0"
         return
@@ -230,9 +243,56 @@ _bead_child_count() {
     # still emits {"schema_version": 1} on stdout — picking by key (rather
     # than to_entries[0]) avoids the false-positive "1 child" caused by
     # jq's `length` on a number returning |n|.
-    bd show "$id" --children --json 2>/dev/null \
+    "${BD_BIN}" show "$id" --children --json 2>/dev/null \
         | jq -r --arg id "$id" '(.[$id] // []) | length' 2>/dev/null \
         || echo "0"
+}
+
+_bead_exists() {
+    local id="$1"
+    local bead_json
+
+    if [[ -z "${BD_BIN}" ]]; then
+        return 1
+    fi
+
+    bead_json=$("${BD_BIN}" show "$id" --json 2>/dev/null) || return 1
+
+    if command -v jq &>/dev/null; then
+        printf '%s' "$bead_json" \
+            | jq -e --arg id "$id" '
+                if type == "array" then any(.[]; .id == $id)
+                elif type == "object" then .id == $id
+                else false
+                end
+            ' >/dev/null 2>&1
+    else
+        [[ -n "$bead_json" ]]
+    fi
+}
+
+_bead_status() {
+    local id="$1"
+    local bead_json
+
+    bead_json=$("${BD_BIN}" show "$id" --json 2>/dev/null) || return 1
+    if command -v jq &>/dev/null; then
+        printf '%s' "$bead_json" \
+            | jq -r 'if type == "array" then (.[0].status // "") else (.status // "") end' 2>/dev/null
+    else
+        echo ""
+    fi
+}
+
+_abort_missing_bead() {
+    local id="$1"
+    local launcher="$2"
+
+    echo -e "\033[0;31m✗ ${id} was not found in this repository.\033[0m" >&2
+    echo "  Aborting before launching ${launcher}; run this command from the project that owns the bead." >&2
+    echo "  Current directory: ${PWD}" >&2
+    echo "  Check with: bd show ${id}" >&2
+    exit 2
 }
 
 # List IDs of beads matching labels (comma-separated, AND semantics) with status=open
@@ -243,7 +303,7 @@ _beads_by_labels() {
     for l in ${=labels_csv}; do
         [[ -n "$l" ]] && label_args+=("-l" "$l")
     done
-    bd list "${label_args[@]}" --status=open --json 2>/dev/null \
+    "${BD_BIN}" list "${label_args[@]}" --status=open --json 2>/dev/null \
         | jq -r '.[].id' 2>/dev/null
 }
 
@@ -280,6 +340,10 @@ if [[ -n "$bead_id" ]]; then
         export CLD_ROUTE_PROFILE="$route_profile"
     fi
 
+    if ! _bead_exists "$bead_id"; then
+        _abort_missing_bead "$bead_id" "Claude"
+    fi
+
     # ── Epic guard: refuse parent beads (has children) ────────────
     local _child_count
     _child_count=$(_bead_child_count "$bead_id")
@@ -293,7 +357,7 @@ if [[ -n "$bead_id" ]]; then
 
     # ── Claim gate: refuse if bead is already in_progress or closed ──
     local _STATUS
-    _STATUS=$(bd show "$bead_id" --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('status',''))" 2>/dev/null || echo "")
+    _STATUS=$(_bead_status "$bead_id" || echo "")
     if [[ "$_STATUS" == "in_progress" || "$_STATUS" == "closed" ]]; then
         echo -e "\033[0;31m✗ ${bead_id} is ${_STATUS}.\033[0m" >&2
         echo "  Cannot launch: bead is already ${_STATUS}." >&2
@@ -306,7 +370,7 @@ if [[ -n "$bead_id" ]]; then
     # ── Sync: pull latest git + dolt state before worktree creation ──
     echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
     git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
-    bd dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
+    "${BD_BIN}" dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
 
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_id}"
@@ -354,9 +418,13 @@ if [[ -n "$bead_quick_id" ]]; then
     # cdx -bq's CLD_BEAD_LINE=cdx export.
     export CLD_BEAD_LINE=cld
 
+    if ! _bead_exists "$bead_quick_id"; then
+        _abort_missing_bead "$bead_quick_id" "Claude"
+    fi
+
     # ── Claim gate: refuse if bead is already in_progress or closed ──
     local _QF_STATUS
-    _QF_STATUS=$(bd show "$bead_quick_id" --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('status',''))" 2>/dev/null || echo "")
+    _QF_STATUS=$(_bead_status "$bead_quick_id" || echo "")
     if [[ "$_QF_STATUS" == "in_progress" || "$_QF_STATUS" == "closed" ]]; then
         echo -e "\033[0;31m✗ ${bead_quick_id} is ${_QF_STATUS}.\033[0m" >&2
         echo "  Cannot launch: bead is already ${_QF_STATUS}." >&2
@@ -369,7 +437,7 @@ if [[ -n "$bead_quick_id" ]]; then
     # ── Sync: pull latest git + dolt state before worktree creation ──
     echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
     git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
-    bd dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
+    "${BD_BIN}" dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
 
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_quick_id}"
