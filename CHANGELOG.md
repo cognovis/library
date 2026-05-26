@@ -2,6 +2,12 @@
 
 ### Fixed
 
+- *(CL-snca)* Deterministic `cdx -b` now executes Phase 2/3 prep before
+  implementation: Phase 2 performs a Python pre-mortem/module-impact pass and
+  appends a concise bead note; Phase 3 skips cleanly when no architecture
+  signals exist and otherwise runs a bounded `review-agent` architecture review
+  with metrics before dispatching the implementation leaf.
+
 - *(CL-oacf)* Deterministic `cdx -b` now runs Phase 1 context gathering before
   implementation, injects the context-provider bundle and standards preamble
   into leaf prompts, emits timestamped `WORKFLOW_EVENT` lines with durations,

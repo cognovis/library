@@ -11,6 +11,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,19 +26,6 @@ SUPPORTED_SCRIPT_ADAPTERS = {
 }
 
 PHASE0_PYTHON_DEPS = ("pyyaml",)
-
-PREP_GAP_PHASES: tuple[dict[str, str], ...] = (
-    {
-        "phase": "2",
-        "phase_name": "scope_check",
-        "reason": "deterministic_cdx_phase_not_implemented",
-    },
-    {
-        "phase": "3",
-        "phase_name": "architecture_review",
-        "reason": "deterministic_cdx_phase_not_implemented",
-    },
-)
 
 FULL_WORKFLOW_SLOTS: tuple[dict[str, str], ...] = (
     {
@@ -444,6 +432,349 @@ def _enrich_bead_context(bead_context: str, phase1: dict[str, Any]) -> str:
 ### Standards Enforcement Preamble
 
 {standards_preamble}
+"""
+
+
+def _extract_compact_field(bead_context: str, field_name: str) -> str:
+    prefix = f"- {field_name}:"
+    for line in bead_context.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith(prefix.lower()):
+            return stripped.split(":", 1)[1].strip()
+    return ""
+
+
+def _risk_color(condition: bool) -> str:
+    return "YELLOW" if condition else "GREEN"
+
+
+def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
+    lower = text.lower()
+    return any(
+        re.search(rf"(?<![a-z0-9_]){re.escape(keyword)}(?![a-z0-9_])", lower)
+        for keyword in keywords
+    )
+
+
+def _hardest_acceptance_criterion(bead_context: str) -> str:
+    lines = [line.strip("- |0123456789.[] \t") for line in bead_context.splitlines()]
+    candidates = [line for line in lines if len(line) > 24]
+    hard_keywords = (
+        "integration",
+        "e2e",
+        "publish",
+        "migration",
+        "auth",
+        "permission",
+        "real",
+        "generated",
+        "all",
+        "schema",
+        "workflow",
+    )
+    for line in candidates:
+        if _contains_any(line, hard_keywords):
+            return line[:240]
+    return candidates[0][:240] if candidates else "not identified"
+
+
+def _phase2_note(phase2: dict[str, Any]) -> str:
+    risks = phase2["risks"]
+    modules = ", ".join(phase2["modules"]) or "none"
+    mitigations = "; ".join(phase2["mitigations"]) or "none"
+    return (
+        f"Pre-mortem: level={phase2['overall']}; "
+        f"technical={risks['technical']}; blast_radius={risks['blast_radius']}; "
+        f"reversibility={risks['reversibility']}; data_integrity={risks['data_integrity']}; "
+        f"security={risks['security']}; mitigations={mitigations}; "
+        f"hardest_ak={phase2['hardest_ak']}; module_impact={modules}"
+    )
+
+
+def _append_bead_note(repo_root: Path, bead_id: str, note: str) -> None:
+    bd_bin = os.environ.get("BD_BIN", "bd")
+    if not bd_bin:
+        return
+    try:
+        result = _run_capture(
+            [bd_bin, "update", bead_id, "--append-notes", note],
+            cwd=repo_root,
+        )
+    except OSError as exc:
+        print(f"cdx-bead-workflow.py: WARNING: bd note skipped: {exc}", file=sys.stderr)
+        return
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()
+        suffix = f": {detail[0]}" if detail else ""
+        print(
+            f"cdx-bead-workflow.py: WARNING: bd note append failed{suffix}",
+            file=sys.stderr,
+        )
+
+
+def _run_phase2_scope(
+    *,
+    repo_root: Path,
+    bead_id: str,
+    bead_context: str,
+    phase1: dict[str, Any],
+) -> dict[str, Any]:
+    primary_files = [str(item) for item in phase1.get("primary_files") or []]
+    text = "\n".join([bead_context, "\n".join(primary_files)])
+    effort = _extract_compact_field(bead_context, "effort").lower()
+    issue_type = _extract_compact_field(bead_context, "type").lower()
+    file_count = len(primary_files)
+
+    technical = _risk_color(
+        file_count >= 5
+        or effort in {"medium", "large", "xl"}
+        or _contains_any(text, ("migration", "schema", "workflow", "adapter", "harness", "api"))
+    )
+    blast_radius = _risk_color(
+        file_count >= 3
+        or _contains_any(text, ("all", "multiple", "cross-repo", "workflow", "harness"))
+    )
+    reversibility = _risk_color(
+        _contains_any(text, ("migration", "delete", "remove", "publish", "version", "lockfile", "generated"))
+    )
+    data_integrity = _risk_color(
+        _contains_any(text, ("database", "dolt", "lockfile", "migration", "publish", "generated", "package"))
+    )
+    security = _risk_color(
+        _contains_any(text, ("auth", "token", "credential", "permission", "hook", "guardrail", "sandbox"))
+    )
+
+    risks = {
+        "technical": technical,
+        "blast_radius": blast_radius,
+        "reversibility": reversibility,
+        "data_integrity": data_integrity,
+        "security": security,
+    }
+    overall = "YELLOW" if "YELLOW" in risks.values() else "GREEN"
+    if issue_type == "bug" and _contains_any(text, ("production", "publish", "data loss")):
+        overall = "YELLOW"
+
+    modules = []
+    for path in primary_files:
+        parts = Path(path).parts
+        modules.append("/".join(parts[:2]) if len(parts) > 1 else path)
+    modules = sorted(set(modules))[:12]
+    if not modules:
+        modules = ["unknown"]
+
+    mitigations = []
+    if technical == "YELLOW":
+        mitigations.append("inspect local patterns before editing")
+    if blast_radius == "YELLOW":
+        mitigations.append("keep implementation scoped to listed files/modules")
+    if data_integrity == "YELLOW":
+        mitigations.append("run artifact/lockfile validation after changes")
+    if security == "YELLOW":
+        mitigations.append("preserve existing permission and hook behavior")
+
+    phase2 = {
+        "overall": overall,
+        "risks": risks,
+        "modules": modules,
+        "mitigations": mitigations,
+        "hardest_ak": _hardest_acceptance_criterion(bead_context),
+    }
+    _append_bead_note(repo_root, bead_id, _phase2_note(phase2))
+    return phase2
+
+
+def _append_phase2_context(bead_context: str, phase2: dict[str, Any]) -> str:
+    risks = phase2["risks"]
+    modules = "\n".join(f"- {module}" for module in phase2["modules"])
+    mitigations = "\n".join(f"- {item}" for item in phase2["mitigations"]) or "- none"
+    return f"""{bead_context.rstrip()}
+
+## Deterministic Phase 2 Scope Check
+
+- overall: {phase2['overall']}
+- technical: {risks['technical']}
+- blast_radius: {risks['blast_radius']}
+- reversibility: {risks['reversibility']}
+- data_integrity: {risks['data_integrity']}
+- security: {risks['security']}
+- hardest_acceptance_criterion: {phase2['hardest_ak']}
+
+### Module Impact
+
+{modules}
+
+### Mitigations
+
+{mitigations}
+"""
+
+
+def _phase3_signals(bead_context: str, phase1: dict[str, Any], phase2: dict[str, Any]) -> list[str]:
+    primary_files = [str(item) for item in phase1.get("primary_files") or []]
+    text = "\n".join([bead_context, "\n".join(primary_files)])
+    effort = _extract_compact_field(bead_context, "effort").lower()
+    signals: list[str] = []
+    if effort in {"medium", "large", "xl"}:
+        signals.append(f"effort={effort}")
+    if len(primary_files) >= 3:
+        signals.append("primary_files>=3")
+    if _contains_any(text, ("architecture", "boundary", "refactor", "redesign", "migration")):
+        signals.append("architecture_keyword")
+    if _contains_any(text, ("api", "schema", "workflow", "adapter", "harness")):
+        signals.append("interface_surface")
+    if phase2.get("overall") == "YELLOW" and any(
+        phase2["risks"].get(key) == "YELLOW" for key in ("technical", "blast_radius")
+    ):
+        signals.append("phase2_structural_risk")
+    return sorted(set(signals))
+
+
+def _build_architecture_review_prompt(bead_id: str, bead_context: str, signals: list[str]) -> str:
+    return f"""Review bead {bead_id} before implementation for architecture risks.
+
+You are the bounded Phase 3 architecture review leaf selected by the deterministic
+cdx full workflow. Review only coupling, duplicated abstractions, interface
+boundaries, and whether the implementation plan should be narrowed before Phase 5.
+
+Architecture signals: {", ".join(signals)}
+
+Return one of:
+- CLEAN: <one sentence>
+- WARNING: <specific risk and mitigation>
+- CRITICAL: <showstopper that must block implementation>
+
+## Bead Context
+
+{bead_context}
+"""
+
+
+def _run_phase3_review_agent(
+    *,
+    scripts_dir: Path,
+    repo_root: Path,
+    bead_id: str,
+    bead_context: str,
+    payload: dict[str, Any],
+    signals: list[str],
+) -> tuple[str, int]:
+    route_decision = payload.get("route_decision") or {}
+    model = str(route_decision.get("reviewer_model") or "claude-opus-4-7")
+    dispatch = {
+        "ADAPTER": "claude-agent",
+        "HARNESS": "claude",
+        "MODEL": model,
+        "SOURCE": "phase3",
+        "TIMEOUT_SEC": "900",
+    }
+    _emit_leaf_dispatch("architecture_review", dispatch)
+    claude_bin = os.environ.get("CLAUDE_BIN", "claude")
+    cmd = [
+        claude_bin,
+        "--print",
+        "--dangerously-skip-permissions",
+        "--setting-sources",
+        os.environ.get("CLAUDE_SETTING_SOURCES", "user,project,local"),
+        "--agent",
+        "review-agent",
+        "--model",
+        model,
+    ]
+    adapter_env = _adapter_env(
+        repo_root,
+        bead_id,
+        payload,
+        dispatch,
+        "architecture_review",
+        "architecture-review",
+    )
+    prompt = _build_architecture_review_prompt(bead_id, bead_context, signals)
+    started_at = time.monotonic()
+    try:
+        completed = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(repo_root),
+            env=adapter_env,
+            timeout=900,
+        )
+        output = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+        exit_code = completed.returncode
+    except subprocess.TimeoutExpired as exc:
+        output = str(exc)
+        exit_code = 124
+
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    _record_runner_agent_call(
+        scripts_dir=scripts_dir,
+        env=adapter_env,
+        bead_id=bead_id,
+        phase_label="architecture-review",
+        agent_label="claude-agent-full-architecture_review",
+        model=model,
+        duration_ms=duration_ms,
+        exit_code=exit_code,
+    )
+    return output.strip(), exit_code
+
+
+def _run_phase3_architecture_review(
+    *,
+    scripts_dir: Path,
+    repo_root: Path,
+    bead_id: str,
+    bead_context: str,
+    payload: dict[str, Any],
+    phase1: dict[str, Any],
+    phase2: dict[str, Any],
+) -> tuple[dict[str, Any], int]:
+    signals = _phase3_signals(bead_context, phase1, phase2)
+    if not signals:
+        return {"status": "skipped", "signals": [], "summary": "no architecture signals"}, 0
+
+    output, rc = _run_phase3_review_agent(
+        scripts_dir=scripts_dir,
+        repo_root=repo_root,
+        bead_id=bead_id,
+        bead_context=bead_context,
+        payload=payload,
+        signals=signals,
+    )
+    normalized = output.upper()
+    if "CRITICAL" in normalized:
+        status = "critical"
+        rc = rc or 2
+    elif "WARNING" in normalized:
+        status = "warning"
+    elif rc == 0:
+        status = "clean"
+    else:
+        status = "failed"
+
+    summary = output.splitlines()[0][:300] if output else status
+    _append_bead_note(
+        repo_root,
+        bead_id,
+        f"Architecture review: status={status}; signals={','.join(signals)}; summary={summary}",
+    )
+    if output and status in {"critical", "warning", "failed"}:
+        print(f"## PHASE3_ARCH_REVIEW status={status} summary={_event_value(summary)}", file=sys.stderr)
+    return {"status": status, "signals": signals, "summary": summary}, rc
+
+
+def _append_phase3_context(bead_context: str, phase3: dict[str, Any]) -> str:
+    signals = ", ".join(phase3.get("signals") or []) or "none"
+    return f"""{bead_context.rstrip()}
+
+## Deterministic Phase 3 Architecture Review
+
+- status: {phase3.get('status', '')}
+- signals: {signals}
+- summary: {phase3.get('summary', '')}
 """
 
 
@@ -892,21 +1223,73 @@ def main(argv: list[str] | None = None) -> int:
 
     bead_context = _enrich_bead_context(bead_context, phase1)
 
-    missing_phases = ",".join(item["phase"] for item in PREP_GAP_PHASES)
     print(
-        "## WORKFLOW_DEGRADED "
-        f"missing_phases={missing_phases} "
-        "reason=deterministic_cdx_phase_not_implemented",
+        "### Phase Progress\n"
+        "phase: 2 | name: scope_check | status: in_progress",
         file=sys.stderr,
     )
-    for gap in PREP_GAP_PHASES:
-        _workflow_event(
-            workflow_started_at,
-            phase=gap["phase"],
-            name=gap["phase_name"],
-            status="skipped",
-            reason=gap["reason"],
-        )
+    phase2_started_at = time.monotonic()
+    _workflow_event(workflow_started_at, phase="2", name="scope_check", status="in_progress")
+    phase2 = _run_phase2_scope(
+        repo_root=repo_root,
+        bead_id=args.bead_id,
+        bead_context=bead_context,
+        phase1=phase1,
+    )
+    phase2_duration_ms = int((time.monotonic() - phase2_started_at) * 1000)
+    print(
+        "### Phase Progress\n"
+        f"phase: 2 | name: scope_check | status: complete | risk: {phase2['overall']}",
+        file=sys.stderr,
+    )
+    _workflow_event(
+        workflow_started_at,
+        phase="2",
+        name="scope_check",
+        status="complete",
+        duration_ms=phase2_duration_ms,
+        risk=phase2["overall"],
+        modules=len(phase2["modules"]),
+    )
+    bead_context = _append_phase2_context(bead_context, phase2)
+
+    print(
+        "### Phase Progress\n"
+        "phase: 3 | name: architecture_review | status: in_progress",
+        file=sys.stderr,
+    )
+    phase3_started_at = time.monotonic()
+    _workflow_event(workflow_started_at, phase="3", name="architecture_review", status="in_progress")
+    phase3, phase3_rc = _run_phase3_architecture_review(
+        scripts_dir=scripts_dir,
+        repo_root=repo_root,
+        bead_id=args.bead_id,
+        bead_context=bead_context,
+        payload=payload,
+        phase1=phase1,
+        phase2=phase2,
+    )
+    phase3_duration_ms = int((time.monotonic() - phase3_started_at) * 1000)
+    phase3_marker_status = "complete" if phase3_rc == 0 else "failed"
+    print(
+        "### Phase Progress\n"
+        f"phase: 3 | name: architecture_review | status: {phase3_marker_status} | "
+        f"result: {phase3['status']}",
+        file=sys.stderr,
+    )
+    _workflow_event(
+        workflow_started_at,
+        phase="3",
+        name="architecture_review",
+        status=phase3_marker_status,
+        duration_ms=phase3_duration_ms,
+        result=phase3["status"],
+        signals=len(phase3["signals"]),
+        exit_code=phase3_rc,
+    )
+    if phase3_rc != 0:
+        return phase3_rc
+    bead_context = _append_phase3_context(bead_context, phase3)
 
     print(
         "### Phase Progress\n"

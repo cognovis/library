@@ -84,6 +84,8 @@ def _write_runtime(
             "    'model': os.environ.get('IMPL_MODEL'),\n"
             "    'prompt_has_context': 'compact context' in prompt,\n"
             "    'prompt_has_phase1_context': 'phase1 context bundle' in prompt,\n"
+            "    'prompt_has_phase2_context': 'Deterministic Phase 2 Scope Check' in prompt,\n"
+            "    'prompt_has_phase3_context': 'Deterministic Phase 3 Architecture Review' in prompt,\n"
             "    'prompt_has_standards': 'standard full content' in prompt,\n"
             "}\n"
             "with path.open('a', encoding='utf-8') as f:\n"
@@ -179,6 +181,8 @@ def _write_claude_mock(tmp_path: Path, *, fail_phase: str = "") -> Path:
         "    'argv': sys.argv[1:],\n"
         "    'prompt_has_context': 'compact context' in prompt,\n"
         "    'prompt_has_phase1_context': 'phase1 context bundle' in prompt,\n"
+        "    'prompt_has_phase2_context': 'Deterministic Phase 2 Scope Check' in prompt,\n"
+        "    'prompt_has_phase3_context': 'Deterministic Phase 3 Architecture Review' in prompt,\n"
         "    'prompt_has_standards': 'standard full content' in prompt,\n"
         "}\n"
         "with path.open('a', encoding='utf-8') as f:\n"
@@ -190,6 +194,21 @@ def _write_claude_mock(tmp_path: Path, *, fail_phase: str = "") -> Path:
     )
     claude_mock.chmod(0o755)
     return claude_mock
+
+
+def _write_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
+    bd_mock = tmp_path / "bd-mock"
+    bd_log = tmp_path / "bd-argv.jsonl"
+    bd_mock.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, sys\n"
+        "path = pathlib.Path(os.environ['BD_ARGV_LOG'])\n"
+        "with path.open('a', encoding='utf-8') as f:\n"
+        "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n",
+        encoding="utf-8",
+    )
+    bd_mock.chmod(0o755)
+    return bd_mock, bd_log
 
 
 def _write_uv_mock(tmp_path: Path) -> Path:
@@ -220,10 +239,12 @@ def _run_workflow(
     tmp_path: Path,
     slots: dict[str, dict[str, str]] | None = None,
     *,
+    bead_context: str = "compact context",
     fail_phase: str = "",
-) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path, Path]:
     runtime, phase0_args, slot_calls = _write_runtime(tmp_path, slots=slots)
     claude_mock = _write_claude_mock(tmp_path, fail_phase=fail_phase)
+    bd_mock, bd_log = _write_bd_mock(tmp_path)
     inject_runner = _write_inject_runner(tmp_path)
     metrics_dir, metrics_calls = _write_metrics_module(tmp_path)
     uv_mock = _write_uv_mock(tmp_path)
@@ -258,20 +279,22 @@ def _run_workflow(
     })
     env["SLOT_CALLS_FILE"] = str(slot_calls)
     env["CLAUDE_BIN"] = str(claude_mock)
+    env["BD_BIN"] = str(bd_mock)
+    env["BD_ARGV_LOG"] = str(bd_log)
     env["FAIL_PHASE"] = fail_phase
     env["UV_ARGV_LOG"] = str(uv_argv_log)
     env["PATH"] = f"{uv_mock.parent}{os.pathsep}{env['PATH']}"
 
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), "CL-smoke", "--route-profile", "cdx-composer"],
-        input="compact context",
+        input=bead_context,
         capture_output=True,
         text=True,
         check=False,
         cwd=tmp_path,
         env=env,
     )
-    return result, phase0_args, slot_calls, uv_argv_log, metrics_calls
+    return result, phase0_args, slot_calls, uv_argv_log, metrics_calls, bd_log
 
 
 def _read_slot_calls(path: Path) -> list[dict[str, object]]:
@@ -286,8 +309,12 @@ def _read_metrics_calls(path: Path) -> list[dict[str, object]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _read_bd_calls(path: Path) -> list[list[str]]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
 def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
-    result, phase0_args, slot_calls, uv_argv_log, metrics_calls = _run_workflow(tmp_path)
+    result, phase0_args, slot_calls, uv_argv_log, metrics_calls, bd_log = _run_workflow(tmp_path)
 
     assert result.returncode == 0, result.stderr
     uv_calls = _read_uv_calls(uv_argv_log)
@@ -307,11 +334,16 @@ def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
     assert "## WORKFLOW_PLAN profile=cdx-composer workflow=full" in result.stderr
     assert "phase: 1 | name: context | status: in_progress" in result.stderr
     assert "phase: 1 | name: context | status: complete" in result.stderr
+    assert "phase: 2 | name: scope_check | status: in_progress" in result.stderr
+    assert "phase: 2 | name: scope_check | status: complete" in result.stderr
+    assert "phase: 3 | name: architecture_review | status: in_progress" in result.stderr
+    assert "phase: 3 | name: architecture_review | status: complete | result: skipped" in result.stderr
     assert "phase: 4 | name: standards_preamble | status: complete" in result.stderr
-    assert "## WORKFLOW_DEGRADED missing_phases=2,3 reason=deterministic_cdx_phase_not_implemented" in result.stderr
+    assert "WORKFLOW_DEGRADED" not in result.stderr
     assert "## WORKFLOW_EVENT " in result.stderr
     assert "phase=1 name=context status=complete" in result.stderr
-    assert "phase=2 name=scope_check status=skipped" in result.stderr
+    assert "phase=2 name=scope_check status=complete" in result.stderr
+    assert "phase=3 name=architecture_review status=complete" in result.stderr
     assert "duration_ms=" in result.stderr
     for phase_name in ("p5_impl", "codex_adversarial", "verification", "session_close"):
         assert f"name: {phase_name} | status: in_progress" in result.stderr
@@ -332,6 +364,8 @@ def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
     assert calls[0]["kind"] == "cursor-impl.py"
     assert calls[0]["prompt_has_context"] is True
     assert calls[0]["prompt_has_phase1_context"] is True
+    assert calls[0]["prompt_has_phase2_context"] is True
+    assert calls[0]["prompt_has_phase3_context"] is True
     assert calls[0]["prompt_has_standards"] is True
     assert calls[1]["kind"] == "claude"
     assert "--agent" in calls[1]["argv"]
@@ -350,6 +384,10 @@ def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
     assert metrics[0]["agent_label"] == "claude-agent-full-adversarial_review"
     assert metrics[0]["model"] == "claude-opus-4-7"
     assert metrics[0]["exit_code"] == 0
+
+    bd_calls = _read_bd_calls(bd_log)
+    assert any(call[:3] == ["update", "CL-smoke", "--append-notes"] for call in bd_calls)
+    assert any("Pre-mortem: level=" in call[-1] for call in bd_calls)
 
 
 def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> None:
@@ -375,7 +413,7 @@ def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> N
             "model": "claude-sonnet-4-6",
         },
     }
-    result, _phase0_args, slot_calls, _uv_argv_log, _metrics_calls = _run_workflow(tmp_path, slots)
+    result, _phase0_args, slot_calls, _uv_argv_log, _metrics_calls, _bd_log = _run_workflow(tmp_path, slots)
 
     assert result.returncode == 0, result.stderr
     calls = _read_slot_calls(slot_calls)
@@ -387,8 +425,75 @@ def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> N
     assert "## LEAF_DISPATCH workflow=full slot=adversarial_review adapter=codex-exec" in result.stderr
 
 
+def test_architecture_signal_runs_phase3_review_before_implementation(tmp_path: Path) -> None:
+    bead_context = (
+        "compact context\n"
+        "- effort: large\n"
+        "## Description\n"
+        "Refactor the workflow adapter boundary across API modules.\n"
+    )
+    result, _phase0_args, slot_calls, _uv_argv_log, metrics_calls, bd_log = _run_workflow(
+        tmp_path,
+        bead_context=bead_context,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "phase: 3 | name: architecture_review | status: in_progress" in result.stderr
+    assert "phase: 3 | name: architecture_review | status: complete | result: clean" in result.stderr
+    assert "## LEAF_DISPATCH workflow=full slot=architecture_review adapter=claude-agent" in result.stderr
+
+    calls = _read_slot_calls(slot_calls)
+    assert [call["phase_label"] for call in calls] == [
+        "architecture-review",
+        "implementation",
+        "codex-adversarial",
+        "verification",
+        "session-close",
+    ]
+    assert calls[0]["kind"] == "claude"
+    assert "review-agent" in calls[0]["argv"]
+    assert calls[1]["prompt_has_phase3_context"] is True
+
+    metrics = _read_metrics_calls(metrics_calls)
+    assert [call["phase_label"] for call in metrics] == [
+        "architecture-review",
+        "codex-adversarial",
+        "verification",
+        "session-close",
+    ]
+    assert metrics[0]["agent_label"] == "claude-agent-full-architecture_review"
+
+    bd_calls = _read_bd_calls(bd_log)
+    assert any("Architecture review: status=clean" in call[-1] for call in bd_calls)
+
+
+def test_architecture_review_failure_stops_before_implementation(tmp_path: Path) -> None:
+    bead_context = (
+        "compact context\n"
+        "- effort: large\n"
+        "## Description\n"
+        "Refactor the workflow adapter boundary across API modules.\n"
+    )
+    result, _phase0_args, slot_calls, _uv_argv_log, metrics_calls, _bd_log = _run_workflow(
+        tmp_path,
+        bead_context=bead_context,
+        fail_phase="architecture-review",
+    )
+
+    assert result.returncode == 7
+    calls = _read_slot_calls(slot_calls)
+    assert [call["phase_label"] for call in calls] == ["architecture-review"]
+    assert "phase: 5 | name: p5_impl" not in result.stderr
+    metrics = _read_metrics_calls(metrics_calls)
+    assert [call["phase_label"] for call in metrics] == ["architecture-review"]
+    assert metrics[0]["exit_code"] == 7
+
+
 def test_slot_failure_stops_before_later_slots(tmp_path: Path) -> None:
-    result, _phase0_args, slot_calls, _uv_argv_log, metrics_calls = _run_workflow(tmp_path, fail_phase="verification")
+    result, _phase0_args, slot_calls, _uv_argv_log, metrics_calls, _bd_log = _run_workflow(
+        tmp_path,
+        fail_phase="verification",
+    )
 
     assert result.returncode == 7
     calls = _read_slot_calls(slot_calls)
@@ -429,7 +534,7 @@ def test_full_cdx_workflow_fails_closed_for_unsupported_adapter(tmp_path: Path) 
             "model": "claude-sonnet-4-6",
         },
     }
-    result, _phase0_args, slot_calls, _uv_argv_log, _metrics_calls = _run_workflow(tmp_path, slots)
+    result, _phase0_args, slot_calls, _uv_argv_log, _metrics_calls, _bd_log = _run_workflow(tmp_path, slots)
 
     assert result.returncode == 1
     assert not slot_calls.exists()
