@@ -6,15 +6,15 @@
 #
 # Wrapper flags (not passed to codex):
 #   --no-full-auto  → Launch codex without the default --full-auto wrapper
-#   -b, --bead ID   → launch deterministic cdx bead workflow for the given bead ID
-#                     (Phase 0 + full.implementation slot dispatch)
+#   -b, --bead ID   → launch Codex bead-orchestrator for the given bead ID
+#                     (Codex remains top-level; helpers run inside the workflow)
 #   -bq, --bead-quick ID → launch with quick-fix prompt for XS/S beads (bug, chore, task)
 #   -br, --bead-review ID → cmux-review mode (warns if Codex equivalent missing)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #
 # Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
-#       context and pass it to deterministic helper scripts. Set
-#       CDX_BEAD_WORKFLOW=0 to use the legacy Codex prompt path for cdx -b.
+#       context and pass it to codex exec. Set CDX_BEAD_WORKFLOW=python to
+#       run the deterministic helper directly for smoke tests or CI.
 
 set -euo pipefail
 
@@ -134,8 +134,8 @@ Usage: cdx [wrapper-flags] [codex-args...]
 Wrapper flags (consumed by cdx, not passed to codex):
 
   Bead workflows:
-    -b,  --bead ID              Launch deterministic cdx bead workflow
-                                (Phase 0 + full.implementation slot dispatch)
+    -b,  --bead ID              Launch Codex bead-orchestrator for single bead
+                                (Codex top-level, deterministic helpers inside)
     -bq, --bead-quick ID        Launch quick-fix prompt for XS/S beads
     -br, --bead-review ID       Review mode (warns: Codex has no cmux-review equivalent)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
@@ -147,8 +147,8 @@ Wrapper flags (consumed by cdx, not passed to codex):
 
 ────────────────────────────────────────────────────────────
 Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
-context and pass it to deterministic helper scripts. Set CDX_BEAD_WORKFLOW=0
-to use the legacy Codex prompt path for cdx -b.
+context and pass it to codex exec. Set CDX_BEAD_WORKFLOW=python to run the
+deterministic helper directly for smoke tests or CI.
 ────────────────────────────────────────────────────────────
 Forwarding to 'codex --help':
 HELP
@@ -180,7 +180,8 @@ if [[ -n "$bead_id" ]]; then
     fi
     export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
-    if [[ "${CDX_BEAD_WORKFLOW:-1}" == "1" ]]; then
+    workflow_mode="${CDX_BEAD_WORKFLOW:-codex}"
+    if [[ "$workflow_mode" == "1" || "$workflow_mode" == "python" || "$workflow_mode" == "deterministic" ]]; then
         if [[ ! -f "$FULL_BEAD_WORKFLOW_SCRIPT" ]]; then
             echo "ERROR: cdx bead workflow helper not found: $FULL_BEAD_WORKFLOW_SCRIPT" >&2
             exit 1
@@ -192,8 +193,16 @@ if [[ -n "$bead_id" ]]; then
             "$bead_id" --route-profile "$route_profile"
         exit $?
     fi
+    if [[ "$workflow_mode" != "0" && "$workflow_mode" != "codex" && "$workflow_mode" != "agent" ]]; then
+        echo "ERROR: unsupported CDX_BEAD_WORKFLOW=$workflow_mode (use codex or python)" >&2
+        exit 2
+    fi
 
-    prompt="implement bead ${bead_id}. Execute the full bead-orchestrator workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase. Do not spawn another agent; this invocation is the bead-orchestrator agent entrypoint. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context below and the agent's developer_instructions are sufficient.
+    prompt="implement bead ${bead_id} with the bead-orchestrator agent/workflow. This Codex invocation is the top-level orchestrator. Execute the full bead workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase.
+
+Use deterministic helpers under the beads runtime for claim/routing, context, scope checks, slot dispatch, metrics, and workflow events. If Phase 0 reports BEAD_REVIEWER_REFRESH_REQUIRED, run the bead-reviewer as a bounded subagent/skill refresh, then retry Phase 0 once. You may invoke bounded subagents/skills for workflow leaves such as architecture review, adversarial review, verification, and session-close when the workflow calls for them. Do not implement inline until the workflow reaches the full.implementation slot; route-profile slots may dispatch another implementer harness such as Cursor/Composer.
+
+Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context below and the agent's developer_instructions are sufficient.
 
 ## Compact Output Contract
 

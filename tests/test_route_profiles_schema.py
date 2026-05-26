@@ -276,8 +276,8 @@ class TestLauncherRouteProfileFlag:
         assert "cdx-composer" in result.stdout
         assert "DISPATCH_STDIN_HAS_CONTEXT=True" in result.stdout
 
-    def test_cdx_b_route_profile_uses_deterministic_workflow(self, tmp_path: Path) -> None:
-        """Full cdx -b routes through the deterministic workflow helper."""
+    def test_cdx_b_route_profile_can_use_python_workflow_mode(self, tmp_path: Path) -> None:
+        """Full cdx -b can route through the deterministic helper when explicitly requested."""
         codex_mock = tmp_path / "codex-mock"
         codex_mock.write_text(
             "#!/bin/sh\n"
@@ -319,6 +319,7 @@ class TestLauncherRouteProfileFlag:
         env["CODEX_CALLED_FILE"] = str(codex_called)
         env["BD_BIN"] = str(bd_mock)
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
+        env["CDX_BEAD_WORKFLOW"] = "python"
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke", "--route-profile", "cdx-composer"],
@@ -337,16 +338,17 @@ class TestLauncherRouteProfileFlag:
         assert "--route-profile cdx-composer" in result.stdout
         assert "WORKFLOW_STDIN_HAS_CONTEXT=True" in result.stdout
 
-    def test_cdx_b_defaults_to_cdx_composer_workflow_profile(self, tmp_path: Path) -> None:
-        """Default full cdx -b uses the Composer workflow profile."""
+    def test_cdx_b_defaults_to_codex_orchestrator_with_composer_profile(self, tmp_path: Path) -> None:
+        """Default full cdx -b starts Codex as the top-level bead orchestrator."""
         workflow_mock = tmp_path / "workflow-mock"
         workflow_mock.write_text(
-            "import os, sys\n"
-            "print(f\"WORKFLOW_CLD_ROUTE_PROFILE={os.environ.get('CLD_ROUTE_PROFILE', '')}\")\n"
-            "print('WORKFLOW_ARGS=' + ' '.join(sys.argv[1:]))\n",
+            "#!/bin/sh\n"
+            "touch \"$WORKFLOW_CALLED_FILE\"\n"
+            "printf 'WORKFLOW_SHOULD_NOT_RUN\\n'\n",
             encoding="utf-8",
         )
         workflow_mock.chmod(0o755)
+        workflow_called = tmp_path / "workflow-called.txt"
 
         bd_mock = tmp_path / "bd-mock"
         bd_mock.write_text(
@@ -361,13 +363,31 @@ class TestLauncherRouteProfileFlag:
         bd_mock.chmod(0o755)
 
         codex_mock = tmp_path / "codex-mock"
-        codex_mock.write_text("#!/bin/sh\nprintf 'CODEX_SHOULD_NOT_RUN\\n'\n", encoding="utf-8")
+        codex_args = tmp_path / "codex-args.txt"
+        codex_prompt = tmp_path / "codex-prompt.txt"
+        codex_mock.write_text(
+            "#!/bin/sh\n"
+            "touch \"$CODEX_CALLED_FILE\"\n"
+            "printf 'CODEX_CLD_ROUTE_PROFILE=%s\\n' \"$CLD_ROUTE_PROFILE\"\n"
+            "printf 'CODEX_CLD_COMPACT_OUTPUT=%s\\n' \"$CLD_COMPACT_OUTPUT\"\n"
+            "printf '%s\\n' \"$*\" > \"$CODEX_ARGS_FILE\"\n"
+            "last=''\n"
+            "for arg in \"$@\"; do last=\"$arg\"; done\n"
+            "printf '%s' \"$last\" > \"$CODEX_PROMPT_FILE\"\n",
+            encoding="utf-8",
+        )
         codex_mock.chmod(0o755)
+        codex_called = tmp_path / "codex-called.txt"
 
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
         env["CODEX_BIN"] = str(codex_mock)
+        env["CODEX_ARGS_FILE"] = str(codex_args)
+        env["CODEX_CALLED_FILE"] = str(codex_called)
+        env["CODEX_PROMPT_FILE"] = str(codex_prompt)
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
+        env["WORKFLOW_CALLED_FILE"] = str(workflow_called)
+        env["CLD_COMPACT_OUTPUT"] = "0"
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke"],
@@ -378,8 +398,19 @@ class TestLauncherRouteProfileFlag:
         )
 
         assert result.returncode == 0
-        assert "WORKFLOW_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
-        assert "--route-profile cdx-composer" in result.stdout
+        assert codex_called.exists()
+        assert not workflow_called.exists()
+        assert "CODEX_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "CODEX_CLD_COMPACT_OUTPUT=0" in result.stdout
+        assert "exec --dangerously-bypass-approvals-and-sandbox" in codex_args.read_text(
+            encoding="utf-8"
+        )
+        prompt = codex_prompt.read_text(encoding="utf-8")
+        assert "implement bead CL-smoke with the bead-orchestrator agent/workflow" in prompt
+        assert "mock bead context for CL-smoke" in prompt
+        assert "Route profile: cdx-composer" in prompt
+        assert "BEAD_REVIEWER_REFRESH_REQUIRED" in prompt
+        assert "Cursor/Composer" in prompt
 
     def test_cld_b_still_uses_agent_orchestrator_path(self) -> None:
         """cld -b remains on the existing Claude agent path."""

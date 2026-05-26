@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-ue5f)* `cdx -b` now starts Codex as the top-level
+  bead-orchestrator by default, keeping deterministic workflow helpers inside
+  the orchestrator path. The direct Python full-workflow runner remains
+  available behind `CDX_BEAD_WORKFLOW=python` for smoke tests and CI.
+
 - *(CL-emu5)* Deterministic `cdx -b` Phase 3 architecture review now resolves
   a Claude-compatible model from `full.adversarial_review`/`full.verification`
   slots before falling back, so `cdx` route metadata with
