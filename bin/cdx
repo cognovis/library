@@ -6,15 +6,18 @@
 #
 # Wrapper flags (not passed to codex):
 #   --no-full-auto  → Launch codex without the default --full-auto wrapper
-#   -b, --bead ID   → launch Codex bead-orchestrator for the given bead ID
+#   --tui           → For cdx -b, force interactive Codex TUI mode
+#   --exec          → For cdx -b, force non-interactive codex exec mode
+#   -b, --bead ID   → launch Codex workflow orchestrator for the given bead ID
 #                     (Codex remains top-level; helpers run inside the workflow)
 #   -bq, --bead-quick ID → launch with quick-fix prompt for XS/S beads (bug, chore, task)
 #   -br, --bead-review ID → cmux-review mode (warns if Codex equivalent missing)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #
 # Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
-#       context and pass it to codex exec. Set CDX_BEAD_WORKFLOW=python to
-#       run the deterministic helper directly for smoke tests or CI.
+#       context and pass it to Codex (TUI when interactive, exec for
+#       automation). Set CDX_BEAD_WORKFLOW=python to run the deterministic
+#       helper directly for smoke tests or CI.
 
 set -euo pipefail
 
@@ -23,6 +26,7 @@ if [[ -z "${CODEX_BIN}" ]]; then
     echo "ERROR: codex not found in PATH. Install Codex first: https://github.com/openai/codex"
     exit 1
 fi
+GIT_BIN="${GIT_BIN:-$(command -v git 2>/dev/null)}"
 CDX_SCRIPT_DIR="${0:A:h}"
 COMPACT_CONTEXT_SCRIPT="${CDX_COMPACT_CONTEXT_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/compact-bead-context.py}"
 QUICK_CURSOR_DISPATCH_SCRIPT="${CDX_QUICK_CURSOR_DISPATCH_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/cdx-quick-cursor-dispatch.py}"
@@ -66,6 +70,7 @@ bead_id=""
 bead_quick_id=""
 bead_review_id=""
 route_profile=""
+codex_bead_mode="${CDX_BEAD_CODEX_MODE:-auto}"
 codex_args=()
 compact_output_contract="Default output mode is compact. Emit stable lifecycle markers and concise summaries only.
 - Do not paste full diffs, full file bodies, full search hits, or long command output unless needed to diagnose a blocking failure.
@@ -74,10 +79,11 @@ compact_output_contract="Default output mode is compact. Emit stable lifecycle m
 
 run_codex_exec() {
     local prompt="$1"
+    local worktree_dir="$2"
 
     if [[ "${CLD_COMPACT_OUTPUT:-1}" == "1" && -f "$CODEX_JSONL_FILTER_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
         set +e
-        "${CODEX_BIN}" exec --json --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}" \
+        "${CODEX_BIN}" exec --json --dangerously-bypass-approvals-and-sandbox -C "$worktree_dir" "${codex_args[@]}" "${prompt}" \
             | uv run python "$CODEX_JSONL_FILTER_SCRIPT"
         local -a pipe_status=("${pipestatus[@]}")
         set -e
@@ -87,7 +93,93 @@ run_codex_exec() {
         return "${pipe_status[2]}"
     fi
 
-    exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
+    exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
+}
+
+run_codex_tui() {
+    local prompt="$1"
+    local worktree_dir="$2"
+
+    exec "${CODEX_BIN}" --dangerously-bypass-approvals-and-sandbox -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
+}
+
+sanitize_name() {
+    echo "$1" | tr -cs 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//'
+}
+
+ensure_worktree_excluded() {
+    local repo_root="$1"
+    local exclude_file="$repo_root/.git/info/exclude"
+
+    if [[ ! -d "$repo_root/.git" ]]; then
+        return 0
+    fi
+    mkdir -p "$repo_root/.git/info"
+    if [[ ! -f "$exclude_file" ]] || ! grep -qxF ".claude/worktrees/" "$exclude_file"; then
+        printf "\n# cdx/cld bead worktrees\n.claude/worktrees/\n" >> "$exclude_file"
+    fi
+}
+
+ensure_bead_worktree() {
+    local bead="$1"
+
+    if [[ -z "${GIT_BIN}" ]]; then
+        echo "ERROR: git not found in PATH. Cannot create bead worktree." >&2
+        return 1
+    fi
+
+    local repo_root
+    repo_root=$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null) || {
+        echo "ERROR: cdx -b must run inside a git repository." >&2
+        return 1
+    }
+
+    local safe_bead
+    safe_bead="$(sanitize_name "$bead")"
+    local worktree_root="${CDX_WORKTREE_ROOT:-${repo_root}/.claude/worktrees}"
+    local worktree_dir="${worktree_root}/bead-${safe_bead}"
+    local branch_name="${CDX_WORKTREE_BRANCH_PREFIX:-worktree-bead-}${safe_bead}"
+
+    if "${GIT_BIN}" worktree list --porcelain 2>/dev/null | grep -Fxq "worktree ${worktree_dir}"; then
+        printf '%s\n' "$worktree_dir"
+        return 0
+    fi
+
+    if [[ -e "$worktree_dir" ]]; then
+        echo "ERROR: worktree path exists but is not registered: $worktree_dir" >&2
+        return 1
+    fi
+
+    mkdir -p "$worktree_root"
+    ensure_worktree_excluded "$repo_root"
+
+    if "${GIT_BIN}" show-ref --verify --quiet "refs/heads/${branch_name}"; then
+        "${GIT_BIN}" worktree add "$worktree_dir" "$branch_name" >/dev/null
+    else
+        "${GIT_BIN}" worktree add -b "$branch_name" "$worktree_dir" HEAD >/dev/null
+    fi
+    printf '%s\n' "$worktree_dir"
+}
+
+resolve_codex_bead_mode() {
+    local mode="$1"
+
+    case "$mode" in
+        auto|"")
+            if [[ -t 0 && -t 1 ]]; then
+                printf '%s\n' "tui"
+            else
+                printf '%s\n' "exec"
+            fi
+            ;;
+        tui|exec)
+            printf '%s\n' "$mode"
+            ;;
+        *)
+            echo "ERROR: unsupported cdx bead mode '$mode' (use auto, tui, or exec)" >&2
+            return 2
+            ;;
+    esac
 }
 
 while (( $# > 0 )); do
@@ -98,6 +190,14 @@ while (( $# > 0 )); do
             ;;
         --no-full-auto)
             use_full_auto=false
+            shift
+            ;;
+        --tui)
+            codex_bead_mode="tui"
+            shift
+            ;;
+        --exec)
+            codex_bead_mode="exec"
             shift
             ;;
         -b|--bead)
@@ -134,7 +234,7 @@ Usage: cdx [wrapper-flags] [codex-args...]
 Wrapper flags (consumed by cdx, not passed to codex):
 
   Bead workflows:
-    -b,  --bead ID              Launch Codex bead-orchestrator for single bead
+    -b,  --bead ID              Launch Codex workflow orchestrator for single bead
                                 (Codex top-level, deterministic helpers inside)
     -bq, --bead-quick ID        Launch quick-fix prompt for XS/S beads
     -br, --bead-review ID       Review mode (warns: Codex has no cmux-review equivalent)
@@ -143,12 +243,15 @@ Wrapper flags (consumed by cdx, not passed to codex):
 
   Session:
          --no-full-auto          Launch codex without the default --full-auto wrapper
+         --tui                   For cdx -b, force interactive Codex TUI mode
+         --exec                  For cdx -b, force non-interactive codex exec mode
     -h,  --help                  Show this help, then codex --help
 
 ────────────────────────────────────────────────────────────
 Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
-context and pass it to codex exec. Set CDX_BEAD_WORKFLOW=python to run the
-deterministic helper directly for smoke tests or CI.
+context and pass it to Codex (TUI when interactive, exec for automation).
+Set CDX_BEAD_WORKFLOW=python to run the deterministic helper directly for
+smoke tests or CI.
 ────────────────────────────────────────────────────────────
 Forwarding to 'codex --help':
 HELP
@@ -198,11 +301,18 @@ if [[ -n "$bead_id" ]]; then
         exit 2
     fi
 
-    prompt="implement bead ${bead_id} with the bead-orchestrator agent/workflow. This Codex invocation is the top-level orchestrator. Execute the full bead workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase.
+    worktree_dir="$(ensure_bead_worktree "$bead_id")" || exit $?
+    resolved_codex_bead_mode="$(resolve_codex_bead_mode "$codex_bead_mode")" || exit $?
 
-Use deterministic helpers under the beads runtime for claim/routing, context, scope checks, slot dispatch, metrics, and workflow events. If Phase 0 reports BEAD_REVIEWER_REFRESH_REQUIRED, run the bead-reviewer as a bounded subagent/skill refresh, then retry Phase 0 once. You may invoke bounded subagents/skills for workflow leaves such as architecture review, adversarial review, verification, and session-close when the workflow calls for them. Do not implement inline until the workflow reaches the full.implementation slot; route-profile slots may dispatch another implementer harness such as Cursor/Composer.
+    prompt="You are the active Codex workflow orchestrator for bead ${bead_id}. Run the full bead workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase.
 
-Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context below and the agent's developer_instructions are sufficient.
+Own orchestration in this current Codex session. Do not invoke the high-level beads dispatcher, and do not spawn or dispatch a nested top-level orchestrator for this bead. Only use subagents/skills for bounded workflow leaves that are not the top-level orchestrator, such as bead-reviewer refresh, architecture review, adversarial review, verification, or session-close.
+
+Use deterministic helpers under the beads runtime for claim/routing, context, scope checks, slot dispatch, metrics, and workflow events. If Phase 0 reports BEAD_REVIEWER_REFRESH_REQUIRED, run the bead-reviewer as a bounded subagent/skill refresh, then retry Phase 0 once. Do not implement inline until the workflow reaches the full.implementation slot; route-profile slots may dispatch another implementer harness such as Cursor/Composer.
+
+Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context and workflow contract above are sufficient.
+
+Worktree: ${worktree_dir}
 
 ## Compact Output Contract
 
@@ -216,7 +326,14 @@ ${bead_context}"
         prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
     fi
 
-    run_codex_exec "${prompt}"
+    case "$resolved_codex_bead_mode" in
+        tui)
+            run_codex_tui "${prompt}" "$worktree_dir"
+            ;;
+        exec)
+            run_codex_exec "${prompt}" "$worktree_dir"
+            ;;
+    esac
     exit $?
 fi
 

@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-5zag)* `cdx -b` now avoids spawning a nested top-level bead
+  orchestrator, supports explicit `--tui`/`--exec` modes with auto TUI
+  selection for terminals, and starts full-bead Codex sessions in a
+  bead-specific git worktree via `-C`.
+
 - *(CL-ue5f)* `cdx -b` now starts Codex as the top-level
   bead-orchestrator by default, keeping deterministic workflow helpers inside
   the orchestrator path. The direct Python full-workflow runner remains

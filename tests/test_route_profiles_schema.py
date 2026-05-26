@@ -185,6 +185,39 @@ class TestRouteProfilesSchema:
 class TestLauncherRouteProfileFlag:
     """AC2: Launcher flag --route-profile is declared and handled."""
 
+    @staticmethod
+    def _write_git_mock(tmp_path: Path) -> tuple[Path, Path, Path]:
+        repo_root = tmp_path / "repo-root"
+        (repo_root / ".git" / "info").mkdir(parents=True)
+        git_log = tmp_path / "git-argv.txt"
+        git_mock = tmp_path / "git-mock"
+        git_mock.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' \"$*\" >> \"$GIT_ARGV_LOG\"\n"
+            "if [ \"$1\" = rev-parse ] && [ \"$2\" = --show-toplevel ]; then\n"
+            "  printf '%s\\n' \"$GIT_REPO_ROOT\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "if [ \"$1\" = worktree ] && [ \"$2\" = list ]; then\n"
+            "  exit 0\n"
+            "fi\n"
+            "if [ \"$1\" = show-ref ]; then\n"
+            "  exit 1\n"
+            "fi\n"
+            "if [ \"$1\" = worktree ] && [ \"$2\" = add ]; then\n"
+            "  if [ \"$3\" = -b ]; then\n"
+            "    mkdir -p \"$5\"\n"
+            "  else\n"
+            "    mkdir -p \"$3\"\n"
+            "  fi\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 64\n",
+            encoding="utf-8",
+        )
+        git_mock.chmod(0o755)
+        return git_mock, git_log, repo_root
+
     def test_cld_help_mentions_route_profile(self) -> None:
         assert _CLD_BIN.exists(), f"bin/cld not found at {_CLD_BIN}"
         content = _CLD_BIN.read_text(encoding="utf-8")
@@ -378,6 +411,8 @@ class TestLauncherRouteProfileFlag:
         )
         codex_mock.chmod(0o755)
         codex_called = tmp_path / "codex-called.txt"
+        git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        worktree_root = tmp_path / "worktrees"
 
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
@@ -386,6 +421,10 @@ class TestLauncherRouteProfileFlag:
         env["CODEX_CALLED_FILE"] = str(codex_called)
         env["CODEX_PROMPT_FILE"] = str(codex_prompt)
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
+        env["CDX_WORKTREE_ROOT"] = str(worktree_root)
+        env["GIT_ARGV_LOG"] = str(git_log)
+        env["GIT_BIN"] = str(git_mock)
+        env["GIT_REPO_ROOT"] = str(repo_root)
         env["WORKFLOW_CALLED_FILE"] = str(workflow_called)
         env["CLD_COMPACT_OUTPUT"] = "0"
 
@@ -402,15 +441,88 @@ class TestLauncherRouteProfileFlag:
         assert not workflow_called.exists()
         assert "CODEX_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
         assert "CODEX_CLD_COMPACT_OUTPUT=0" in result.stdout
-        assert "exec --dangerously-bypass-approvals-and-sandbox" in codex_args.read_text(
+        args_text = codex_args.read_text(encoding="utf-8")
+        worktree_dir = worktree_root / "bead-CL-smoke"
+        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
+        assert f"-C {worktree_dir}" in args_text
+        assert worktree_dir.exists()
+        git_calls = git_log.read_text(encoding="utf-8")
+        assert f"worktree add -b worktree-bead-CL-smoke {worktree_dir} HEAD" in git_calls
+        assert (repo_root / ".git" / "info" / "exclude").read_text(
             encoding="utf-8"
-        )
+        ).count(".claude/worktrees/") == 1
         prompt = codex_prompt.read_text(encoding="utf-8")
-        assert "implement bead CL-smoke with the bead-orchestrator agent/workflow" in prompt
+        assert "You are the active Codex workflow orchestrator for bead CL-smoke" in prompt
+        assert "Do not invoke the high-level beads dispatcher" in prompt
+        assert "do not spawn or dispatch a nested top-level orchestrator" in prompt
+        assert "bead-orchestrator agent/workflow" not in prompt
+        assert "implement bead CL-smoke" not in prompt
         assert "mock bead context for CL-smoke" in prompt
         assert "Route profile: cdx-composer" in prompt
         assert "BEAD_REVIEWER_REFRESH_REQUIRED" in prompt
         assert "Cursor/Composer" in prompt
+
+    def test_cdx_b_tui_mode_uses_interactive_codex_with_worktree(self, tmp_path: Path) -> None:
+        """Explicit --tui starts Codex without the exec subcommand and with -C worktree."""
+        workflow_mock = tmp_path / "workflow-mock"
+        workflow_mock.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+        workflow_mock.chmod(0o755)
+
+        bd_mock = tmp_path / "bd-mock"
+        bd_mock.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'mock bead context for %s\\n' \"$2\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        bd_mock.chmod(0o755)
+
+        codex_mock = tmp_path / "codex-mock"
+        codex_args = tmp_path / "codex-args.txt"
+        codex_prompt = tmp_path / "codex-prompt.txt"
+        codex_mock.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' \"$*\" > \"$CODEX_ARGS_FILE\"\n"
+            "last=''\n"
+            "for arg in \"$@\"; do last=\"$arg\"; done\n"
+            "printf '%s' \"$last\" > \"$CODEX_PROMPT_FILE\"\n",
+            encoding="utf-8",
+        )
+        codex_mock.chmod(0o755)
+        git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        worktree_root = tmp_path / "worktrees"
+
+        env = dict(os.environ)
+        env["BD_BIN"] = str(bd_mock)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["CODEX_ARGS_FILE"] = str(codex_args)
+        env["CODEX_PROMPT_FILE"] = str(codex_prompt)
+        env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
+        env["CDX_WORKTREE_ROOT"] = str(worktree_root)
+        env["GIT_ARGV_LOG"] = str(git_log)
+        env["GIT_BIN"] = str(git_mock)
+        env["GIT_REPO_ROOT"] = str(repo_root)
+
+        result = subprocess.run(
+            [str(_CDX_BIN), "-b", "CL-smoke", "--tui"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        args_text = codex_args.read_text(encoding="utf-8")
+        worktree_dir = worktree_root / "bead-CL-smoke"
+        assert args_text.startswith("--dangerously-bypass-approvals-and-sandbox")
+        assert not args_text.startswith("exec ")
+        assert f"-C {worktree_dir}" in args_text
+        assert "You are the active Codex workflow orchestrator" in codex_prompt.read_text(
+            encoding="utf-8"
+        )
 
     def test_cld_b_still_uses_agent_orchestrator_path(self) -> None:
         """cld -b remains on the existing Claude agent path."""
