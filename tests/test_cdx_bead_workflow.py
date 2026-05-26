@@ -76,24 +76,92 @@ def _write_runtime(
         (scripts / script_name).write_text(
             "import json, os, pathlib, sys\n"
             "path = pathlib.Path(os.environ['SLOT_CALLS_FILE'])\n"
-            "row = {'kind': pathlib.Path(sys.argv[0]).name, 'phase_label': os.environ.get('PHASE_LABEL'), 'bead': os.environ.get('BEAD_ID'), 'model': os.environ.get('IMPL_MODEL'), 'prompt_has_context': 'compact context' in sys.argv[1]}\n"
+            "prompt = sys.argv[1]\n"
+            "row = {\n"
+            "    'kind': pathlib.Path(sys.argv[0]).name,\n"
+            "    'phase_label': os.environ.get('PHASE_LABEL'),\n"
+            "    'bead': os.environ.get('BEAD_ID'),\n"
+            "    'model': os.environ.get('IMPL_MODEL'),\n"
+            "    'prompt_has_context': 'compact context' in prompt,\n"
+            "    'prompt_has_phase1_context': 'phase1 context bundle' in prompt,\n"
+            "    'prompt_has_standards': 'standard full content' in prompt,\n"
+            "}\n"
             "with path.open('a', encoding='utf-8') as f:\n"
             "    f.write(json.dumps(row) + '\\n')\n"
-            "print(f'## CURSOR_AGENT_START adapter=cursor-impl model={os.environ.get(\"IMPL_MODEL\", \"\")}', file=sys.stderr)\n"
+            "print(\n"
+            "    f'## CURSOR_AGENT_START adapter=cursor-impl model={os.environ.get(\"IMPL_MODEL\", \"\")}',\n"
+            "    file=sys.stderr,\n"
+            ")\n"
             "print(f'SCRIPT_SLOT={os.environ.get(\"PHASE_LABEL\", \"\")}')\n"
             "print('## CURSOR_AGENT_EXIT adapter=cursor-impl exit=0', file=sys.stderr)\n",
             encoding="utf-8",
         )
+    (scripts / "context_provider.py").write_text(
+        "import json, sys\n"
+        "payload = {\n"
+        "  'provider': 'fallback',\n"
+        "  'provider_status': 'ok',\n"
+        "  'confidence': 'high',\n"
+        "  'primary_files': ['src/app.py'],\n"
+        "  'test_files': ['tests/test_app.py'],\n"
+        "  'summary': 'phase1 context bundle',\n"
+        "}\n"
+        "print(json.dumps(payload))\n",
+        encoding="utf-8",
+    )
     (scripts / "codex-exec.py").write_text(
         "import json, os, pathlib, sys\n"
         "path = pathlib.Path(os.environ['SLOT_CALLS_FILE'])\n"
-        "row = {'kind': 'codex-exec.py', 'phase_label': os.environ.get('PHASE_LABEL'), 'bead': os.environ.get('BEAD_ID'), 'argv': sys.argv[1:]}\n"
+        "row = {\n"
+        "    'kind': 'codex-exec.py',\n"
+        "    'phase_label': os.environ.get('PHASE_LABEL'),\n"
+        "    'bead': os.environ.get('BEAD_ID'),\n"
+        "    'argv': sys.argv[1:],\n"
+        "}\n"
         "with path.open('a', encoding='utf-8') as f:\n"
         "    f.write(json.dumps(row) + '\\n')\n"
         "print('LGTM')\n",
         encoding="utf-8",
     )
     return runtime, phase0_args, slot_calls
+
+
+def _write_inject_runner(tmp_path: Path) -> Path:
+    runner = tmp_path / "inject-standards-runner.py"
+    runner.write_text(
+        f"#!{sys.executable}\n"
+        "import pathlib, sys\n"
+        "full_out = ''\n"
+        "paths_out = ''\n"
+        "for arg in sys.argv[1:]:\n"
+        "    if arg.startswith('--full-out='):\n"
+        "        full_out = arg.split('=', 1)[1]\n"
+        "    if arg.startswith('--paths-out='):\n"
+        "        paths_out = arg.split('=', 1)[1]\n"
+        "pathlib.Path(full_out).write_text('standard full content\\n', encoding='utf-8')\n"
+        "pathlib.Path(paths_out).write_text('/standards/example.md\\n', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    runner.chmod(0o755)
+    return runner
+
+
+def _write_metrics_module(tmp_path: Path) -> tuple[Path, Path]:
+    metrics_dir = tmp_path / "metrics-lib"
+    metrics_dir.mkdir()
+    calls_path = tmp_path / "metrics-calls.jsonl"
+    (metrics_dir / "metrics.py").write_text(
+        "import json, os\n"
+        "from pathlib import Path\n"
+        "DB_PATH = Path(os.environ.get('METRICS_DB_PATH', 'metrics.db'))\n"
+        "def insert_agent_call(**kwargs):\n"
+        "    path = Path(os.environ['METRICS_CALLS_FILE'])\n"
+        "    with path.open('a', encoding='utf-8') as f:\n"
+        "        f.write(json.dumps(kwargs, sort_keys=True, default=str) + '\\n')\n"
+        "    return 1\n",
+        encoding="utf-8",
+    )
+    return metrics_dir, calls_path
 
 
 def _write_claude_mock(tmp_path: Path, *, fail_phase: str = "") -> Path:
@@ -104,7 +172,15 @@ def _write_claude_mock(tmp_path: Path, *, fail_phase: str = "") -> Path:
         "prompt = sys.stdin.read()\n"
         "phase = os.environ.get('PHASE_LABEL', '')\n"
         "path = pathlib.Path(os.environ['SLOT_CALLS_FILE'])\n"
-        "row = {'kind': 'claude', 'phase_label': phase, 'bead': os.environ.get('BEAD_ID'), 'argv': sys.argv[1:], 'prompt_has_context': 'compact context' in prompt}\n"
+        "row = {\n"
+        "    'kind': 'claude',\n"
+        "    'phase_label': phase,\n"
+        "    'bead': os.environ.get('BEAD_ID'),\n"
+        "    'argv': sys.argv[1:],\n"
+        "    'prompt_has_context': 'compact context' in prompt,\n"
+        "    'prompt_has_phase1_context': 'phase1 context bundle' in prompt,\n"
+        "    'prompt_has_standards': 'standard full content' in prompt,\n"
+        "}\n"
         "with path.open('a', encoding='utf-8') as f:\n"
         "    f.write(json.dumps(row) + '\\n')\n"
         "print(f'CLAUDE_SLOT={phase}')\n"
@@ -145,13 +221,18 @@ def _run_workflow(
     slots: dict[str, dict[str, str]] | None = None,
     *,
     fail_phase: str = "",
-) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
     runtime, phase0_args, slot_calls = _write_runtime(tmp_path, slots=slots)
     claude_mock = _write_claude_mock(tmp_path, fail_phase=fail_phase)
+    inject_runner = _write_inject_runner(tmp_path)
+    metrics_dir, metrics_calls = _write_metrics_module(tmp_path)
     uv_mock = _write_uv_mock(tmp_path)
     uv_argv_log = tmp_path / "uv-argv.jsonl"
     env = dict(os.environ)
     env["BEADS_RUNTIME_DIR"] = str(runtime)
+    env["INJECT_STANDARDS_RUNNER"] = str(inject_runner)
+    env["METRICS_DIR_OVERRIDE"] = str(metrics_dir)
+    env["METRICS_CALLS_FILE"] = str(metrics_calls)
     env["PHASE0_ARGS_FILE"] = str(phase0_args)
     env["PHASE0_SLOTS"] = json.dumps(slots or {
         "implementation": {
@@ -190,7 +271,7 @@ def _run_workflow(
         cwd=tmp_path,
         env=env,
     )
-    return result, phase0_args, slot_calls, uv_argv_log
+    return result, phase0_args, slot_calls, uv_argv_log, metrics_calls
 
 
 def _read_slot_calls(path: Path) -> list[dict[str, object]]:
@@ -201,8 +282,12 @@ def _read_uv_calls(path: Path) -> list[list[str]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _read_metrics_calls(path: Path) -> list[dict[str, object]]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
 def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
-    result, phase0_args, slot_calls, uv_argv_log = _run_workflow(tmp_path)
+    result, phase0_args, slot_calls, uv_argv_log, metrics_calls = _run_workflow(tmp_path)
 
     assert result.returncode == 0, result.stderr
     uv_calls = _read_uv_calls(uv_argv_log)
@@ -220,6 +305,14 @@ def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
     assert "--route-profile=cdx-composer" in phase0_text
     assert "phase: 0 | name: route_decision | status: complete | route: PAUL" in result.stderr
     assert "## WORKFLOW_PLAN profile=cdx-composer workflow=full" in result.stderr
+    assert "phase: 1 | name: context | status: in_progress" in result.stderr
+    assert "phase: 1 | name: context | status: complete" in result.stderr
+    assert "phase: 4 | name: standards_preamble | status: complete" in result.stderr
+    assert "## WORKFLOW_DEGRADED missing_phases=2,3 reason=deterministic_cdx_phase_not_implemented" in result.stderr
+    assert "## WORKFLOW_EVENT " in result.stderr
+    assert "phase=1 name=context status=complete" in result.stderr
+    assert "phase=2 name=scope_check status=skipped" in result.stderr
+    assert "duration_ms=" in result.stderr
     for phase_name in ("p5_impl", "codex_adversarial", "verification", "session_close"):
         assert f"name: {phase_name} | status: in_progress" in result.stderr
     for slot_name in ("implementation", "adversarial_review", "verification", "session_close"):
@@ -238,11 +331,25 @@ def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
     ]
     assert calls[0]["kind"] == "cursor-impl.py"
     assert calls[0]["prompt_has_context"] is True
+    assert calls[0]["prompt_has_phase1_context"] is True
+    assert calls[0]["prompt_has_standards"] is True
     assert calls[1]["kind"] == "claude"
     assert "--agent" in calls[1]["argv"]
     assert "review-agent" in calls[1]["argv"]
     assert "verification-agent" in calls[2]["argv"]
     assert "session-close" in calls[3]["argv"]
+
+    metrics = _read_metrics_calls(metrics_calls)
+    assert [call["phase_label"] for call in metrics] == [
+        "codex-adversarial",
+        "verification",
+        "session-close",
+    ]
+    assert metrics[0]["run_id"] == "run-full-123"
+    assert metrics[0]["bead_id"] == "CL-smoke"
+    assert metrics[0]["agent_label"] == "claude-agent-full-adversarial_review"
+    assert metrics[0]["model"] == "claude-opus-4-7"
+    assert metrics[0]["exit_code"] == 0
 
 
 def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> None:
@@ -268,7 +375,7 @@ def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> N
             "model": "claude-sonnet-4-6",
         },
     }
-    result, _phase0_args, slot_calls, _uv_argv_log = _run_workflow(tmp_path, slots)
+    result, _phase0_args, slot_calls, _uv_argv_log, _metrics_calls = _run_workflow(tmp_path, slots)
 
     assert result.returncode == 0, result.stderr
     calls = _read_slot_calls(slot_calls)
@@ -281,7 +388,7 @@ def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> N
 
 
 def test_slot_failure_stops_before_later_slots(tmp_path: Path) -> None:
-    result, _phase0_args, slot_calls, _uv_argv_log = _run_workflow(tmp_path, fail_phase="verification")
+    result, _phase0_args, slot_calls, _uv_argv_log, metrics_calls = _run_workflow(tmp_path, fail_phase="verification")
 
     assert result.returncode == 7
     calls = _read_slot_calls(slot_calls)
@@ -291,6 +398,12 @@ def test_slot_failure_stops_before_later_slots(tmp_path: Path) -> None:
         "verification",
     ]
     assert "session_close" not in result.stderr
+    metrics = _read_metrics_calls(metrics_calls)
+    assert [call["phase_label"] for call in metrics] == [
+        "codex-adversarial",
+        "verification",
+    ]
+    assert metrics[-1]["exit_code"] == 7
 
 
 def test_full_cdx_workflow_fails_closed_for_unsupported_adapter(tmp_path: Path) -> None:
@@ -316,7 +429,7 @@ def test_full_cdx_workflow_fails_closed_for_unsupported_adapter(tmp_path: Path) 
             "model": "claude-sonnet-4-6",
         },
     }
-    result, _phase0_args, slot_calls, _uv_argv_log = _run_workflow(tmp_path, slots)
+    result, _phase0_args, slot_calls, _uv_argv_log, _metrics_calls = _run_workflow(tmp_path, slots)
 
     assert result.returncode == 1
     assert not slot_calls.exists()

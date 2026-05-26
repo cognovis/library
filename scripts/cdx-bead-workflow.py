@@ -8,10 +8,13 @@ prompt and drives full-workflow leaves directly from the Phase 0 execution_plan.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,19 @@ SUPPORTED_SCRIPT_ADAPTERS = {
 }
 
 PHASE0_PYTHON_DEPS = ("pyyaml",)
+
+PREP_GAP_PHASES: tuple[dict[str, str], ...] = (
+    {
+        "phase": "2",
+        "phase_name": "scope_check",
+        "reason": "deterministic_cdx_phase_not_implemented",
+    },
+    {
+        "phase": "3",
+        "phase_name": "architecture_review",
+        "reason": "deterministic_cdx_phase_not_implemented",
+    },
+)
 
 FULL_WORKFLOW_SLOTS: tuple[dict[str, str], ...] = (
     {
@@ -58,6 +74,38 @@ CLAUDE_AGENT_FOR_SLOT = {
 }
 
 
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _event_value(value: object) -> str:
+    text = str(value)
+    return "_".join(text.split()) if text else ""
+
+
+def _workflow_event(
+    workflow_started_at: float,
+    *,
+    phase: str,
+    name: str,
+    status: str,
+    **fields: object,
+) -> None:
+    elapsed_ms = int((time.monotonic() - workflow_started_at) * 1000)
+    parts = [
+        f"ts={_utc_timestamp()}",
+        f"elapsed_ms={elapsed_ms}",
+        f"phase={_event_value(phase)}",
+        f"name={_event_value(name)}",
+        f"status={_event_value(status)}",
+    ]
+    for key, value in fields.items():
+        if value is None:
+            continue
+        parts.append(f"{key}={_event_value(value)}")
+    print("## WORKFLOW_EVENT " + " ".join(parts), file=sys.stderr)
+
+
 def _repo_root() -> Path:
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -88,12 +136,18 @@ def _resolve_beads_runtime(repo_root: Path) -> Path:
     raise RuntimeError("skill:beads runtime not found; install via /library use beads")
 
 
-def _run_capture(args: list[str], *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_capture(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
         capture_output=True,
         text=True,
         check=False,
+        cwd=str(cwd) if cwd else None,
         env=env,
     )
 
@@ -250,6 +304,149 @@ def _run_phase0(
         return {}, 1
 
 
+def _resolve_inject_standards_runner(beads_runtime: Path, repo_root: Path) -> Path:
+    candidates = [
+        os.environ.get("INJECT_STANDARDS_RUNNER", ""),
+        str(beads_runtime.parent / "inject-standards" / "runner.py"),
+        str(repo_root / "skills" / "inject-standards" / "runner.py"),
+        str(Path.home() / ".agents" / "skills" / "inject-standards" / "runner.py"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate).expanduser().resolve()
+        if path.is_file():
+            return path
+    raise RuntimeError("inject-standards runner not found")
+
+
+def _phase1_context_keywords(bead_id: str, bead_context: str) -> str:
+    compact = "\n".join(line.strip() for line in bead_context.splitlines() if line.strip())
+    if len(compact) > 8000:
+        compact = compact[:8000]
+    return f"{bead_id}\n{compact}".strip()
+
+
+def _run_phase1_context(
+    *,
+    beads_runtime: Path,
+    scripts_dir: Path,
+    repo_root: Path,
+    bead_id: str,
+    bead_context: str,
+) -> tuple[dict[str, Any], int]:
+    context_provider = Path(os.environ.get("CONTEXT_PROVIDER_SCRIPT", "") or scripts_dir / "context_provider.py")
+    if not context_provider.is_file():
+        print(f"ERROR: context provider runner not found at {context_provider}", file=sys.stderr)
+        return {}, 1
+
+    try:
+        inject_runner = _resolve_inject_standards_runner(beads_runtime, repo_root)
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return {}, 1
+
+    with tempfile.TemporaryDirectory(prefix="cdx-phase1-") as tmp_dir_text:
+        tmp_dir = Path(tmp_dir_text)
+        standards_full_path = tmp_dir / "standards_full"
+        standard_paths_path = tmp_dir / "standard_paths"
+
+        inject = _run_capture(
+            [
+                "uv",
+                "run",
+                "python",
+                str(inject_runner),
+                f"--full-out={standards_full_path}",
+                f"--paths-out={standard_paths_path}",
+                f"--context={_phase1_context_keywords(bead_id, bead_context)}",
+            ],
+            cwd=repo_root,
+        )
+        if inject.stderr:
+            print(inject.stderr, end="", file=sys.stderr)
+        if inject.returncode != 0:
+            print(f"ERROR: inject-standards exited {inject.returncode}", file=sys.stderr)
+            if inject.stdout:
+                print(inject.stdout, end="")
+            return {}, inject.returncode
+
+        provider_env = os.environ.copy()
+        provider_env.setdefault("BEAD_CONTEXT_PROVIDER", "auto")
+        provider = _run_capture(
+            [
+                "uv",
+                "run",
+                "python",
+                str(context_provider),
+                bead_id,
+                "--repo-root",
+                str(repo_root),
+                "--provider",
+                provider_env["BEAD_CONTEXT_PROVIDER"],
+            ],
+            cwd=repo_root,
+            env=provider_env,
+        )
+        if provider.stderr:
+            print(provider.stderr, end="", file=sys.stderr)
+        if provider.returncode != 0:
+            print(f"ERROR: context provider exited {provider.returncode}", file=sys.stderr)
+            if provider.stdout:
+                print(provider.stdout, end="")
+            return {}, provider.returncode
+
+        context_bundle_text = provider.stdout.strip()
+        try:
+            context_bundle = json.loads(context_bundle_text) if context_bundle_text else {}
+        except json.JSONDecodeError:
+            context_bundle = {"provider_status": "invalid-json", "raw": context_bundle_text}
+
+        standards_full = standards_full_path.read_text(encoding="utf-8") if standards_full_path.exists() else ""
+        standard_paths = standard_paths_path.read_text(encoding="utf-8") if standard_paths_path.exists() else ""
+        primary_files = context_bundle.get("primary_files", []) if isinstance(context_bundle, dict) else []
+        test_files = context_bundle.get("test_files", []) if isinstance(context_bundle, dict) else []
+
+        return {
+            "context_bundle_text": context_bundle_text,
+            "context_bundle": context_bundle,
+            "standards_full": standards_full,
+            "standard_paths": standard_paths,
+            "primary_files": primary_files if isinstance(primary_files, list) else [],
+            "test_files": test_files if isinstance(test_files, list) else [],
+        }, 0
+
+
+def _enrich_bead_context(bead_context: str, phase1: dict[str, Any]) -> str:
+    context_bundle_text = str(phase1.get("context_bundle_text") or "{}")
+    standard_paths = str(phase1.get("standard_paths") or "").strip()
+    standards_full = str(phase1.get("standards_full") or "").strip()
+    standards_preamble = (
+        "The following standards were injected by deterministic Phase 1 and must be followed.\n\n"
+        + standards_full
+        if standards_full
+        else "No project-specific standards loaded. Follow general code quality conventions."
+    )
+    return f"""{bead_context.rstrip()}
+
+## Deterministic Phase 1 Context
+
+### Context Provider Bundle
+
+```json
+{context_bundle_text}
+```
+
+### Standard Paths
+
+{standard_paths or "none"}
+
+### Standards Enforcement Preamble
+
+{standards_preamble}
+"""
+
+
 def _resolve_full_slot(
     scripts_dir: Path,
     payload: dict[str, Any],
@@ -312,6 +509,63 @@ def _adapter_env(
         env.setdefault("CODEX_EXEC_TIMEOUT", timeout_sec)
         env.setdefault("CLAUDE_IMPL_TIMEOUT", timeout_sec)
     return env
+
+
+def _metrics_dir_for(beads_runtime_scripts: Path) -> Path:
+    override = os.environ.get("METRICS_DIR_OVERRIDE", "")
+    if override:
+        return Path(override).expanduser().resolve()
+    return beads_runtime_scripts.parent / "lib" / "orchestrator"
+
+
+def _record_runner_agent_call(
+    *,
+    scripts_dir: Path,
+    env: dict[str, str],
+    bead_id: str,
+    phase_label: str,
+    agent_label: str,
+    model: str,
+    duration_ms: int,
+    exit_code: int,
+) -> None:
+    run_id = env.get("RUN_ID", "")
+    if not run_id:
+        return
+
+    metrics_dir = _metrics_dir_for(scripts_dir)
+    sys.path.insert(0, str(metrics_dir))
+    try:
+        from metrics import DB_PATH, insert_agent_call  # type: ignore[import]
+    except ImportError as exc:
+        print(
+            "cdx-bead-workflow.py: WARNING: Cannot import metrics module from "
+            f"{metrics_dir} - runner metrics skipped ({exc})",
+            file=sys.stderr,
+        )
+        return
+
+    db_path = Path(env["METRICS_DB_PATH"]) if env.get("METRICS_DB_PATH") else DB_PATH
+    try:
+        insert_agent_call(
+            run_id=run_id,
+            bead_id=bead_id,
+            phase_label=phase_label,
+            agent_label=agent_label,
+            model=model,
+            iteration=int(env.get("ITERATION", "1") or "1"),
+            input_tokens=0,
+            cached_input_tokens=0,
+            output_tokens=0,
+            reasoning_output_tokens=0,
+            total_tokens=0,
+            duration_ms=duration_ms,
+            exit_code=exit_code,
+            wave_id=env.get("WAVE_ID", ""),
+            db_path=db_path,
+        )
+    except Exception as exc:
+        print(f"cdx-bead-workflow.py: WARNING: runner metrics skipped: {exc}", file=sys.stderr)
 
 
 def _emit_leaf_dispatch(slot_name: str, dispatch: dict[str, str]) -> None:
@@ -399,6 +653,7 @@ def _run_codex_exec_adapter(
 
 
 def _run_claude_agent_adapter(
+    scripts_dir: Path,
     repo_root: Path,
     bead_id: str,
     bead_context: str,
@@ -425,6 +680,7 @@ def _run_claude_agent_adapter(
     _emit_leaf_dispatch(slot_name, dispatch)
     adapter_env = _adapter_env(repo_root, bead_id, payload, dispatch, slot_name, phase_label)
     prompt = _build_prompt(bead_id, bead_context, "claude-agent", slot_name, payload)
+    started_at = time.monotonic()
     try:
         completed = subprocess.run(
             cmd,
@@ -435,12 +691,34 @@ def _run_claude_agent_adapter(
             env=adapter_env,
             timeout=int(dispatch.get("TIMEOUT_SEC") or 1800),
         )
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        _record_runner_agent_call(
+            scripts_dir=scripts_dir,
+            env=adapter_env,
+            bead_id=bead_id,
+            phase_label=phase_label,
+            agent_label=f"claude-agent-full-{slot_name}",
+            model=model or "claude",
+            duration_ms=duration_ms,
+            exit_code=completed.returncode,
+        )
         return completed.returncode
     except subprocess.TimeoutExpired:
+        duration_ms = int((time.monotonic() - started_at) * 1000)
         print(
             f"ERROR: claude-agent slot full.{slot_name} timed out after "
             f"{dispatch.get('TIMEOUT_SEC') or 1800}s",
             file=sys.stderr,
+        )
+        _record_runner_agent_call(
+            scripts_dir=scripts_dir,
+            env=adapter_env,
+            bead_id=bead_id,
+            phase_label=phase_label,
+            agent_label=f"claude-agent-full-{slot_name}",
+            model=model or "claude",
+            duration_ms=duration_ms,
+            exit_code=124,
         )
         return 124
 
@@ -480,6 +758,7 @@ def _run_slot_adapter(
         )
     if adapter == "claude-agent":
         return _run_claude_agent_adapter(
+            scripts_dir,
             repo_root,
             bead_id,
             bead_context,
@@ -512,6 +791,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     bead_context = sys.stdin.read()
+    workflow_started_at = time.monotonic()
     repo_root = _repo_root()
 
     try:
@@ -523,7 +803,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
+    phase0_started_at = time.monotonic()
+    _workflow_event(workflow_started_at, phase="0", name="phase0_claim", status="in_progress")
     payload, phase0_rc = _run_phase0(scripts_dir, args.bead_id, args.route_profile)
+    phase0_duration_ms = int((time.monotonic() - phase0_started_at) * 1000)
+    _workflow_event(
+        workflow_started_at,
+        phase="0",
+        name="phase0_claim",
+        status="complete" if phase0_rc == 0 else "failed",
+        duration_ms=phase0_duration_ms,
+        exit_code=phase0_rc,
+    )
     if phase0_rc != 0:
         return phase0_rc
 
@@ -535,6 +826,13 @@ def main(argv: list[str] | None = None) -> int:
         f"route: {str(route_decision.get('tier') or '').upper()}",
         file=sys.stderr,
     )
+    _workflow_event(
+        workflow_started_at,
+        phase="0",
+        name="route_decision",
+        status="complete",
+        route=str(route_decision.get("tier") or "").upper(),
+    )
     if execution_plan:
         print(
             "## WORKFLOW_PLAN "
@@ -542,6 +840,86 @@ def main(argv: list[str] | None = None) -> int:
             f"workflow={execution_plan.get('workflow', 'full')}",
             file=sys.stderr,
         )
+        _workflow_event(
+            workflow_started_at,
+            phase="0",
+            name="workflow_plan",
+            status="complete",
+            profile=execution_plan.get("profile", args.route_profile) or args.route_profile,
+            workflow=execution_plan.get("workflow", "full"),
+            run_id=payload.get("run_id") or "",
+        )
+
+    print(
+        "### Phase Progress\n"
+        "phase: 1 | name: context | status: in_progress",
+        file=sys.stderr,
+    )
+    phase1_started_at = time.monotonic()
+    _workflow_event(workflow_started_at, phase="1", name="context", status="in_progress")
+    phase1, phase1_rc = _run_phase1_context(
+        beads_runtime=beads_runtime,
+        scripts_dir=scripts_dir,
+        repo_root=repo_root,
+        bead_id=args.bead_id,
+        bead_context=bead_context,
+    )
+    phase1_duration_ms = int((time.monotonic() - phase1_started_at) * 1000)
+    if phase1_rc != 0:
+        _workflow_event(
+            workflow_started_at,
+            phase="1",
+            name="context",
+            status="failed",
+            duration_ms=phase1_duration_ms,
+            exit_code=phase1_rc,
+        )
+        return phase1_rc
+    print(
+        "### Phase Progress\n"
+        "phase: 1 | name: context | status: complete",
+        file=sys.stderr,
+    )
+    _workflow_event(
+        workflow_started_at,
+        phase="1",
+        name="context",
+        status="complete",
+        duration_ms=phase1_duration_ms,
+        primary_files=len(phase1.get("primary_files") or []),
+        test_files=len(phase1.get("test_files") or []),
+    )
+
+    bead_context = _enrich_bead_context(bead_context, phase1)
+
+    missing_phases = ",".join(item["phase"] for item in PREP_GAP_PHASES)
+    print(
+        "## WORKFLOW_DEGRADED "
+        f"missing_phases={missing_phases} "
+        "reason=deterministic_cdx_phase_not_implemented",
+        file=sys.stderr,
+    )
+    for gap in PREP_GAP_PHASES:
+        _workflow_event(
+            workflow_started_at,
+            phase=gap["phase"],
+            name=gap["phase_name"],
+            status="skipped",
+            reason=gap["reason"],
+        )
+
+    print(
+        "### Phase Progress\n"
+        "phase: 4 | name: standards_preamble | status: complete",
+        file=sys.stderr,
+    )
+    _workflow_event(
+        workflow_started_at,
+        phase="4",
+        name="standards_preamble",
+        status="complete",
+        standards_paths=len(str(phase1.get("standard_paths") or "").splitlines()),
+    )
 
     for slot in FULL_WORKFLOW_SLOTS:
         slot_name = slot["slot"]
@@ -556,6 +934,14 @@ def main(argv: list[str] | None = None) -> int:
             f"status: in_progress{iteration}",
             file=sys.stderr,
         )
+        _workflow_event(
+            workflow_started_at,
+            phase=slot["phase"],
+            name=slot["phase_name"],
+            status="in_progress",
+            slot=slot_name,
+        )
+        slot_started_at = time.monotonic()
         slot_rc = _run_slot_adapter(
             scripts_dir,
             repo_root,
@@ -565,6 +951,16 @@ def main(argv: list[str] | None = None) -> int:
             dispatch,
             slot_name,
             slot["phase_label"],
+        )
+        slot_duration_ms = int((time.monotonic() - slot_started_at) * 1000)
+        _workflow_event(
+            workflow_started_at,
+            phase=slot["phase"],
+            name=slot["phase_name"],
+            status="complete" if slot_rc == 0 else "failed",
+            slot=slot_name,
+            duration_ms=slot_duration_ms,
+            exit_code=slot_rc,
         )
         if slot_rc != 0:
             return slot_rc

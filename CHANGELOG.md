@@ -2,6 +2,13 @@
 
 ### Fixed
 
+- *(CL-oacf)* Deterministic `cdx -b` now runs Phase 1 context gathering before
+  implementation, injects the context-provider bundle and standards preamble
+  into leaf prompts, emits timestamped `WORKFLOW_EVENT` lines with durations,
+  records runner metrics for direct `claude-agent` slots, and marks missing
+  Phase 2/3 Python implementations with `WORKFLOW_DEGRADED` instead of
+  silently jumping from Phase 0 to Phase 5.
+
 - *(CL-l5f3)* `cdx -b` and `cdx -bq --route-profile cdx-composer` now invoke
   the installed beads `phase0-claim.py` helper with `uv run --with pyyaml`, so
   Phase 0 no longer depends on the target repository declaring PyYAML.
