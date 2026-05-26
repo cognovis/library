@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-cchg)* `cdx -b` now pre-resolves and exports `BEADS_RUNTIME_DIR`
+  before launching Codex, tells the orchestrator to avoid helper discovery
+  searches before Phase 0/1, and restores a timestamped `WORKFLOW_EVENT`
+  output contract for deterministic phase/helper calls.
+
 - *(CL-5zag)* `cdx -b` now avoids spawning a nested top-level bead
   orchestrator, supports explicit `--tui`/`--exec` modes with auto TUI
   selection for terminals, and starts full-bead Codex sessions in a

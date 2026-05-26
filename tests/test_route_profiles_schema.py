@@ -218,6 +218,12 @@ class TestLauncherRouteProfileFlag:
         git_mock.chmod(0o755)
         return git_mock, git_log, repo_root
 
+    @staticmethod
+    def _write_beads_runtime(tmp_path: Path) -> Path:
+        runtime = tmp_path / "beads-runtime"
+        (runtime / "scripts").mkdir(parents=True)
+        return runtime
+
     def test_cld_help_mentions_route_profile(self) -> None:
         assert _CLD_BIN.exists(), f"bin/cld not found at {_CLD_BIN}"
         content = _CLD_BIN.read_text(encoding="utf-8")
@@ -403,6 +409,8 @@ class TestLauncherRouteProfileFlag:
             "touch \"$CODEX_CALLED_FILE\"\n"
             "printf 'CODEX_CLD_ROUTE_PROFILE=%s\\n' \"$CLD_ROUTE_PROFILE\"\n"
             "printf 'CODEX_CLD_COMPACT_OUTPUT=%s\\n' \"$CLD_COMPACT_OUTPUT\"\n"
+            "printf 'CODEX_BEADS_RUNTIME_DIR=%s\\n' \"$BEADS_RUNTIME_DIR\"\n"
+            "printf 'CODEX_WORKFLOW_STARTED_AT_EPOCH=%s\\n' \"$WORKFLOW_STARTED_AT_EPOCH\"\n"
             "printf '%s\\n' \"$*\" > \"$CODEX_ARGS_FILE\"\n"
             "last=''\n"
             "for arg in \"$@\"; do last=\"$arg\"; done\n"
@@ -412,6 +420,7 @@ class TestLauncherRouteProfileFlag:
         codex_mock.chmod(0o755)
         codex_called = tmp_path / "codex-called.txt"
         git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        beads_runtime = self._write_beads_runtime(tmp_path)
         worktree_root = tmp_path / "worktrees"
 
         env = dict(os.environ)
@@ -425,6 +434,8 @@ class TestLauncherRouteProfileFlag:
         env["GIT_ARGV_LOG"] = str(git_log)
         env["GIT_BIN"] = str(git_mock)
         env["GIT_REPO_ROOT"] = str(repo_root)
+        env["BEADS_RUNTIME_DIR"] = str(beads_runtime)
+        env["WORKFLOW_STARTED_AT_EPOCH"] = "1800000000"
         env["WORKFLOW_CALLED_FILE"] = str(workflow_called)
         env["CLD_COMPACT_OUTPUT"] = "0"
 
@@ -441,6 +452,8 @@ class TestLauncherRouteProfileFlag:
         assert not workflow_called.exists()
         assert "CODEX_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
         assert "CODEX_CLD_COMPACT_OUTPUT=0" in result.stdout
+        assert f"CODEX_BEADS_RUNTIME_DIR={beads_runtime}" in result.stdout
+        assert "CODEX_WORKFLOW_STARTED_AT_EPOCH=1800000000" in result.stdout
         args_text = codex_args.read_text(encoding="utf-8")
         worktree_dir = worktree_root / "bead-CL-smoke"
         assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
@@ -455,6 +468,10 @@ class TestLauncherRouteProfileFlag:
         assert "You are the active Codex workflow orchestrator for bead CL-smoke" in prompt
         assert "Do not invoke the high-level beads dispatcher" in prompt
         assert "do not spawn or dispatch a nested top-level orchestrator" in prompt
+        assert "Do not run helper discovery searches before Phase 0/1" in prompt
+        assert f"BEADS_RUNTIME_DIR={beads_runtime}" in prompt
+        assert "## WORKFLOW_EVENT ts=<UTC_ISO8601>" in prompt
+        assert "WORKFLOW_STARTED_AT_EPOCH=1800000000" in prompt
         assert "bead-orchestrator agent/workflow" not in prompt
         assert "implement bead CL-smoke" not in prompt
         assert "mock bead context for CL-smoke" in prompt
@@ -493,6 +510,7 @@ class TestLauncherRouteProfileFlag:
         )
         codex_mock.chmod(0o755)
         git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        beads_runtime = self._write_beads_runtime(tmp_path)
         worktree_root = tmp_path / "worktrees"
 
         env = dict(os.environ)
@@ -505,6 +523,7 @@ class TestLauncherRouteProfileFlag:
         env["GIT_ARGV_LOG"] = str(git_log)
         env["GIT_BIN"] = str(git_mock)
         env["GIT_REPO_ROOT"] = str(repo_root)
+        env["BEADS_RUNTIME_DIR"] = str(beads_runtime)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke", "--tui"],

@@ -161,6 +161,31 @@ ensure_bead_worktree() {
     printf '%s\n' "$worktree_dir"
 }
 
+resolve_beads_runtime() {
+    local repo_root="$1"
+    local -a candidates=(
+        "${BEADS_RUNTIME_DIR:-}"
+        "$repo_root/.agents/skills/beads"
+        "$repo_root/.claude/skills/beads"
+        "$repo_root/skills/beads"
+        "$HOME/.agents/skills/beads"
+        "$HOME/.claude/skills/beads"
+    )
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        [[ -z "$candidate" ]] && continue
+        candidate="${candidate:A}"
+        if [[ -d "$candidate/scripts" ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    echo "ERROR: skill:beads runtime not found; install the beads skill before cdx -b." >&2
+    return 1
+}
+
 resolve_codex_bead_mode() {
     local mode="$1"
 
@@ -301,6 +326,14 @@ if [[ -n "$bead_id" ]]; then
         exit 2
     fi
 
+    repo_root="$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "ERROR: cdx -b must run inside a git repository." >&2
+        exit 1
+    }
+    beads_runtime="$(resolve_beads_runtime "$repo_root")" || exit $?
+    export BEADS_RUNTIME_DIR="$beads_runtime"
+    export WORKFLOW_STARTED_AT_EPOCH="${WORKFLOW_STARTED_AT_EPOCH:-$(date +%s)}"
+
     worktree_dir="$(ensure_bead_worktree "$bead_id")" || exit $?
     resolved_codex_bead_mode="$(resolve_codex_bead_mode "$codex_bead_mode")" || exit $?
 
@@ -308,7 +341,17 @@ if [[ -n "$bead_id" ]]; then
 
 Own orchestration in this current Codex session. Do not invoke the high-level beads dispatcher, and do not spawn or dispatch a nested top-level orchestrator for this bead. Only use subagents/skills for bounded workflow leaves that are not the top-level orchestrator, such as bead-reviewer refresh, architecture review, adversarial review, verification, or session-close.
 
-Use deterministic helpers under the beads runtime for claim/routing, context, scope checks, slot dispatch, metrics, and workflow events. If Phase 0 reports BEAD_REVIEWER_REFRESH_REQUIRED, run the bead-reviewer as a bounded subagent/skill refresh, then retry Phase 0 once. Do not implement inline until the workflow reaches the full.implementation slot; route-profile slots may dispatch another implementer harness such as Cursor/Composer.
+Use deterministic helpers under the pre-resolved beads runtime for claim/routing, context, scope checks, slot dispatch, metrics, and workflow events. Do not run helper discovery searches before Phase 0/1; use this exact runtime:
+
+BEADS_RUNTIME_DIR=${beads_runtime}
+
+If Phase 0 reports BEAD_REVIEWER_REFRESH_REQUIRED, run the bead-reviewer as a bounded subagent/skill refresh, then retry Phase 0 once. Do not implement inline until the workflow reaches the full.implementation slot; route-profile slots may dispatch another implementer harness such as Cursor/Composer.
+
+Emit timestamped workflow events before and after every deterministic phase/helper call using this stable line shape:
+
+## WORKFLOW_EVENT ts=<UTC_ISO8601> elapsed_ms=<milliseconds_since_WORKFLOW_STARTED_AT_EPOCH> phase=<N> name=<event_name> status=<in_progress|complete|failed> [key=value...]
+
+Use date -u +%Y-%m-%dT%H:%M:%SZ for ts. Compute elapsed from WORKFLOW_STARTED_AT_EPOCH=${WORKFLOW_STARTED_AT_EPOCH}. Keep the existing `### Phase Progress` markers as well.
 
 Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context and workflow contract above are sufficient.
 
