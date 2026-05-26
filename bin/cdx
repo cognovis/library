@@ -27,6 +27,7 @@ fi
 CDX_SCRIPT_DIR="${0:A:h}"
 COMPACT_CONTEXT_SCRIPT="${CDX_COMPACT_CONTEXT_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/compact-bead-context.py}"
 QUICK_CURSOR_DISPATCH_SCRIPT="${CDX_QUICK_CURSOR_DISPATCH_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/cdx-quick-cursor-dispatch.py}"
+CODEX_JSONL_FILTER_SCRIPT="${CDX_JSONL_FILTER_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/filter-codex-jsonl.py}"
 
 # Resolve bd lazily to avoid set -e exit when bd is not installed (only needed for bead modes)
 BD_BIN="${BD_BIN:-}"
@@ -70,6 +71,24 @@ compact_output_contract="Default output mode is compact. Emit stable lifecycle m
 - Do not paste full diffs, full file bodies, full search hits, or long command output unless needed to diagnose a blocking failure.
 - Use targeted searches with bounded output and summarize results; write large evidence to files and report the path plus a short tail.
 - Surface leaf dispatch with grepable markers such as LEAF_DISPATCH, CURSOR_AGENT_START, and CURSOR_AGENT_EXIT."
+
+run_codex_exec() {
+    local prompt="$1"
+
+    if [[ "${CLD_COMPACT_OUTPUT:-1}" == "1" && -f "$CODEX_JSONL_FILTER_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
+        set +e
+        "${CODEX_BIN}" exec --json --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}" \
+            | uv run python "$CODEX_JSONL_FILTER_SCRIPT"
+        local -a pipe_status=("${pipestatus[@]}")
+        set -e
+        if (( pipe_status[1] != 0 )); then
+            return "${pipe_status[1]}"
+        fi
+        return "${pipe_status[2]}"
+    fi
+
+    exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
+}
 
 while (( $# > 0 )); do
     case "$1" in
@@ -174,7 +193,8 @@ ${bead_context}"
         prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
     fi
 
-    exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
+    run_codex_exec "${prompt}"
+    exit $?
 fi
 
 # ── Quick-fix mode: cdx -bq <id> ────────────────────────────────
@@ -228,7 +248,8 @@ ${bead_context}"
         prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
     fi
 
-    exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
+    run_codex_exec "${prompt}"
+    exit $?
 fi
 
 # ── Review mode: cdx -br <id> ───────────────────────────────────

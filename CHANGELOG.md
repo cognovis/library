@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-uhac)* `cdx -b` and non-inline `cdx -bq` compact modes now run
+  `codex exec --json` through a JSONL filter, suppressing hook/tool-event
+  command noise while preserving phase, leaf-dispatch, and Cursor lifecycle
+  markers.
+
 - *(CL-vaiw)* `cdx -b` and `cdx -bq` now default to a compact output
   contract that discourages full diffs, full file bodies, and broad command
   dumps while preserving route-profile propagation and leaf-dispatch markers;

@@ -277,17 +277,20 @@ class TestLauncherRouteProfileFlag:
         assert "DISPATCH_STDIN_HAS_CONTEXT=True" in result.stdout
 
     def test_cdx_b_route_profile_reaches_compact_bead_prompt(self, tmp_path: Path) -> None:
-        """Full cdx -b launches also default to compact output."""
+        """Full cdx -b launches default to compact JSONL-filtered output."""
         codex_mock = tmp_path / "codex-mock"
         codex_mock.write_text(
             "#!/bin/sh\n"
-            "printf 'CLD_ROUTE_PROFILE=%s\\n' \"${CLD_ROUTE_PROFILE-}\"\n"
-            "printf 'CLD_COMPACT_OUTPUT=%s\\n' \"${CLD_COMPACT_OUTPUT-}\"\n"
-            "i=0\n"
+            "has_json=0\n"
+            "has_route=0\n"
+            "has_contract=0\n"
             "for arg in \"$@\"; do\n"
-            "  i=$((i+1))\n"
-            "  printf 'ARG_%s=%s\\n' \"$i\" \"$arg\"\n"
-            "done\n",
+            "  [ \"$arg\" = \"--json\" ] && has_json=1\n"
+            "  case \"$arg\" in *'Route profile: cdx-composer'*) has_route=1 ;; esac\n"
+            "  case \"$arg\" in *'## Compact Output Contract'*) has_contract=1 ;; esac\n"
+            "done\n"
+            "printf '{\"type\":\"item.completed\",\"item\":{\"type\":\"command_execution\",\"aggregated_output\":\"NOISY_COMMAND_OUTPUT\\\\n## LEAF_DISPATCH workflow=full slot=implementation adapter=cursor-composer\\\\n\"}}\\n'\n"
+            "printf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"CLD_ROUTE_PROFILE=%s\\\\nCLD_COMPACT_OUTPUT=%s\\\\nHAS_JSON_ARG=%s\\\\nHAS_ROUTE=%s\\\\nHAS_CONTRACT=%s\"}}\\n' \"${CLD_ROUTE_PROFILE-}\" \"${CLD_COMPACT_OUTPUT-}\" \"$has_json\" \"$has_route\" \"$has_contract\"\n",
             encoding="utf-8",
         )
         codex_mock.chmod(0o755)
@@ -319,9 +322,11 @@ class TestLauncherRouteProfileFlag:
         assert result.returncode == 0
         assert "CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
         assert "CLD_COMPACT_OUTPUT=1" in result.stdout
-        assert "Route profile: cdx-composer" in result.stdout
-        assert "## Compact Output Contract" in result.stdout
-        assert "Do not paste full diffs" in result.stdout
+        assert "HAS_JSON_ARG=1" in result.stdout
+        assert "HAS_ROUTE=1" in result.stdout
+        assert "HAS_CONTRACT=1" in result.stdout
+        assert "## LEAF_DISPATCH workflow=full" in result.stdout
+        assert "NOISY_COMMAND_OUTPUT" not in result.stdout
 
 
 class TestLauncherMissingBeadGuard:
