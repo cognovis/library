@@ -53,7 +53,11 @@ def _write_runtime(
         "  'bead_id': sys.argv[1],\n"
         "  'run_id': 'run-full-123',\n"
         "  'pre_impl_sha': 'abc123',\n"
-        "  'route_decision': {'tier': 'paul', 'impl_model': 'composer-2.5', 'reviewer_model': 'claude-opus-4-7'},\n"
+        "  'route_decision': {\n"
+        "    'tier': 'paul',\n"
+        "    'impl_model': 'composer-2.5',\n"
+        "    'reviewer_model': os.environ.get('PHASE0_REVIEWER_MODEL', 'claude-opus-4-7'),\n"
+        "  },\n"
         "  'execution_plan': {'profile': 'cdx-composer', 'workflow': 'full', 'slots': {'full': slots}},\n"
         "  'claim_status': 'CLAIMED',\n"
         "}\n"
@@ -241,6 +245,7 @@ def _run_workflow(
     *,
     bead_context: str = "compact context",
     fail_phase: str = "",
+    route_reviewer_model: str = "claude-opus-4-7",
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path, Path]:
     runtime, phase0_args, slot_calls = _write_runtime(tmp_path, slots=slots)
     claude_mock = _write_claude_mock(tmp_path, fail_phase=fail_phase)
@@ -255,6 +260,7 @@ def _run_workflow(
     env["METRICS_DIR_OVERRIDE"] = str(metrics_dir)
     env["METRICS_CALLS_FILE"] = str(metrics_calls)
     env["PHASE0_ARGS_FILE"] = str(phase0_args)
+    env["PHASE0_REVIEWER_MODEL"] = route_reviewer_model
     env["PHASE0_SLOTS"] = json.dumps(slots or {
         "implementation": {
             "adapter": "cursor-composer",
@@ -465,6 +471,39 @@ def test_architecture_signal_runs_phase3_review_before_implementation(tmp_path: 
 
     bd_calls = _read_bd_calls(bd_log)
     assert any("Architecture review: status=clean" in call[-1] for call in bd_calls)
+
+
+def test_architecture_review_uses_claude_model_when_route_reviewer_is_codex(tmp_path: Path) -> None:
+    """Regression: cdx route reviewer can be codex, but Phase 3 uses claude-agent."""
+    bead_context = (
+        "compact context\n"
+        "- effort: large\n"
+        "## Description\n"
+        "Refactor the workflow adapter boundary across API modules.\n"
+    )
+    result, _phase0_args, slot_calls, _uv_argv_log, metrics_calls, _bd_log = _run_workflow(
+        tmp_path,
+        bead_context=bead_context,
+        route_reviewer_model="codex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "## LEAF_DISPATCH workflow=full slot=architecture_review "
+        "adapter=claude-agent harness=claude model=claude-opus-4-7 source=phase3"
+    ) in result.stderr
+    assert "slot=architecture_review adapter=claude-agent harness=claude model=codex" not in result.stderr
+
+    calls = _read_slot_calls(slot_calls)
+    architecture_call = calls[0]
+    assert architecture_call["phase_label"] == "architecture-review"
+    argv = architecture_call["argv"]
+    model_index = argv.index("--model") + 1
+    assert argv[model_index] == "claude-opus-4-7"
+
+    metrics = _read_metrics_calls(metrics_calls)
+    assert metrics[0]["phase_label"] == "architecture-review"
+    assert metrics[0]["model"] == "claude-opus-4-7"
 
 
 def test_architecture_review_failure_stops_before_implementation(tmp_path: Path) -> None:

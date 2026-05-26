@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-emu5)* Deterministic `cdx -b` Phase 3 architecture review now resolves
+  a Claude-compatible model from `full.adversarial_review`/`full.verification`
+  slots before falling back, so `cdx` route metadata with
+  `reviewer_model=codex` no longer dispatches `claude --model codex`.
+
 - *(CL-snca)* Deterministic `cdx -b` now executes Phase 2/3 prep before
   implementation: Phase 2 performs a Python pre-mortem/module-impact pass and
   appends a concise bead note; Phase 3 skips cleanly when no architecture

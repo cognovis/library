@@ -650,6 +650,31 @@ Return one of:
 """
 
 
+def _execution_plan_slots(payload: dict[str, Any]) -> dict[str, Any]:
+    execution_plan = payload.get("execution_plan") or {}
+    slots = execution_plan.get("slots") or {}
+    if isinstance(slots.get("full"), dict):
+        return slots["full"]
+    return slots
+
+
+def _phase3_claude_model(payload: dict[str, Any]) -> str:
+    slots = _execution_plan_slots(payload)
+    for slot_name in ("adversarial_review", "verification"):
+        slot = slots.get(slot_name) or {}
+        model = str(slot.get("model") or "")
+        adapter = str(slot.get("adapter") or "")
+        harness = str(slot.get("harness") or "")
+        if adapter == "claude-agent" and harness == "claude" and model.startswith("claude-"):
+            return model
+
+    route_decision = payload.get("route_decision") or {}
+    reviewer_model = str(route_decision.get("reviewer_model") or "")
+    if reviewer_model.startswith("claude-"):
+        return reviewer_model
+    return "claude-opus-4-7"
+
+
 def _run_phase3_review_agent(
     *,
     scripts_dir: Path,
@@ -659,8 +684,7 @@ def _run_phase3_review_agent(
     payload: dict[str, Any],
     signals: list[str],
 ) -> tuple[str, int]:
-    route_decision = payload.get("route_decision") or {}
-    model = str(route_decision.get("reviewer_model") or "claude-opus-4-7")
+    model = _phase3_claude_model(payload)
     dispatch = {
         "ADAPTER": "claude-agent",
         "HARNESS": "claude",
