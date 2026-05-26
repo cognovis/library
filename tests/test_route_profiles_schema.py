@@ -217,21 +217,28 @@ class TestLauncherRouteProfileFlag:
         assert "compact-bead-context.py" in content
         assert '"${BD_BIN}" show "${bead_id}" --json' in content
 
-    def test_cdx_bq_route_profile_reaches_quick_fix_prompt(self, tmp_path: Path) -> None:
-        """Regression: cdx -bq must propagate --route-profile to quick-fix."""
+    def test_cdx_bq_cdx_composer_uses_inline_cursor_dispatch(self, tmp_path: Path) -> None:
+        """Regression: cdx-composer quick path must not fall back to generic Codex prompt dispatch."""
+        called = tmp_path / "codex-called"
         codex_mock = tmp_path / "codex-mock"
         codex_mock.write_text(
             "#!/bin/sh\n"
-            "printf 'CLD_ROUTE_PROFILE=%s\\n' \"${CLD_ROUTE_PROFILE-}\"\n"
-            "printf 'CLD_COMPACT_OUTPUT=%s\\n' \"${CLD_COMPACT_OUTPUT-}\"\n"
-            "i=0\n"
-            "for arg in \"$@\"; do\n"
-            "  i=$((i+1))\n"
-            "  printf 'ARG_%s=%s\\n' \"$i\" \"$arg\"\n"
-            "done\n",
+            "touch \"$CODEX_CALLED_FILE\"\n"
+            "printf 'CODEX_CALLED\\n'\n",
             encoding="utf-8",
         )
         codex_mock.chmod(0o755)
+        dispatch_mock = tmp_path / "dispatch-mock.py"
+        dispatch_mock.write_text(
+            "import os, sys\n"
+            "stdin = sys.stdin.read()\n"
+            "print('DISPATCH_CALLED=1')\n"
+            "print(f'DISPATCH_ARGV={sys.argv[1:]}')\n"
+            "print(f'DISPATCH_CLD_ROUTE_PROFILE={os.environ.get(\"CLD_ROUTE_PROFILE\", \"\")}')\n"
+            "print(f'DISPATCH_CLD_COMPACT_OUTPUT={os.environ.get(\"CLD_COMPACT_OUTPUT\", \"\")}')\n"
+            "print(f'DISPATCH_STDIN_HAS_CONTEXT={\"mock bead context\" in stdin}')\n",
+            encoding="utf-8",
+        )
 
         bd_mock = tmp_path / "bd-mock"
         bd_mock.write_text(
@@ -247,7 +254,9 @@ class TestLauncherRouteProfileFlag:
 
         env = dict(os.environ)
         env["CODEX_BIN"] = str(codex_mock)
+        env["CODEX_CALLED_FILE"] = str(called)
         env["BD_BIN"] = str(bd_mock)
+        env["CDX_QUICK_CURSOR_DISPATCH_SCRIPT"] = str(dispatch_mock)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-bq", "CL-smoke", "--route-profile", "cdx-composer"],
@@ -258,11 +267,14 @@ class TestLauncherRouteProfileFlag:
         )
 
         assert result.returncode == 0
-        assert "CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
-        assert "CLD_COMPACT_OUTPUT=1" in result.stdout
-        assert "Route profile: cdx-composer" in result.stdout
-        assert "## Compact Output Contract" in result.stdout
-        assert "LEAF_DISPATCH, CURSOR_AGENT_START, and CURSOR_AGENT_EXIT" in result.stdout
+        assert not called.exists()
+        assert "DISPATCH_CALLED=1" in result.stdout
+        assert "DISPATCH_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "DISPATCH_CLD_COMPACT_OUTPUT=1" in result.stdout
+        assert "CL-smoke" in result.stdout
+        assert "--route-profile" in result.stdout
+        assert "cdx-composer" in result.stdout
+        assert "DISPATCH_STDIN_HAS_CONTEXT=True" in result.stdout
 
     def test_cdx_b_route_profile_reaches_compact_bead_prompt(self, tmp_path: Path) -> None:
         """Full cdx -b launches also default to compact output."""
