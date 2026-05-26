@@ -325,6 +325,8 @@ def _resolve_agent_targets(
             targets.append(target("claude_code", sources_map["claude"], ".md"))
         if sources_map.get("codex"):
             targets.append(target("codex", sources_map["codex"], ".toml", "-codex"))
+        if sources_map.get("opencode"):
+            targets.append(target("opencode", sources_map["opencode"], ".md", "-opencode"))
         if targets:
             return targets, harness_missing
 

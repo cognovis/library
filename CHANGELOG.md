@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-h3a8)* `library agent use --harness all` now includes OpenCode
+  agent sources in `.opencode/agents/`, so a subsequent
+  `library agent remove --harness all` removes Claude, Codex, and OpenCode
+  agent files in one pass.
+
 - *(CL-kpt1)* `cdx -bq --route-profile <name>` now exports `CLD_ROUTE_PROFILE`
   and carries the selected route profile into the quick-fix prompt, matching
   full `cdx -b` behavior.

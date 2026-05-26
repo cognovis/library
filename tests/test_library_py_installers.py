@@ -96,6 +96,7 @@ library:
       sources:
         claude: {agent_source}
         codex: {codex_agent_source}
+        opencode: {opencode_agent_source}
   prompts:
     - name: contract-prompt
       description: Dry-run contract prompt fixture
@@ -212,6 +213,7 @@ def dry_run_contract_project(tmp_path: Path) -> Path:
             standard_source=standard_file,
             agent_source=agent_file,
             codex_agent_source=codex_agent_file,
+            opencode_agent_source=agent_file,
             prompt_source=prompt_file,
             script_source=script_file,
             model_standard_source=model_standard_file,
@@ -680,9 +682,38 @@ class TestDryRunContractUniformity:
         assert data["status"] == "error"
         assert "not supported" in data["message"].lower()
 
-    def test_agent_remove_all_harness_includes_opencode_target(self, dry_run_contract_project: Path):
-        """AC4: agent remove --harness all dry-run lists delete ops for all harnesses including opencode."""
-        result = subprocess.run(
+    def test_agent_remove_all_harness_includes_opencode_target(
+        self,
+        dry_run_contract_project: Path,
+        tmp_path: Path,
+    ):
+        """agent remove --harness all deletes Claude, Codex, and OpenCode files."""
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+        install_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "contract-agent",
+                "--harness", "all",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
+            env=env,
+        )
+        assert install_result.returncode == 0, install_result.stderr
+
+        claude_target = dry_run_contract_project / ".claude" / "agents" / "contract-agent.md"
+        codex_target = dry_run_contract_project / ".codex" / "agents" / "contract-agent.toml"
+        opencode_target = dry_run_contract_project / ".opencode" / "agents" / "contract-agent.md"
+        assert claude_target.exists()
+        assert codex_target.exists()
+        assert opencode_target.exists()
+
+        remove_result = subprocess.run(
             [
                 sys.executable,
                 str(LIBRARY_PY),
@@ -690,22 +721,21 @@ class TestDryRunContractUniformity:
                 "remove",
                 "contract-agent",
                 "--harness", "all",
-                "--dry-run",
                 "--json",
             ],
             capture_output=True,
             text=True,
             cwd=str(dry_run_contract_project),
+            env=env,
         )
-        assert result.returncode == 0, result.stderr
-        data = json.loads(result.stdout)
-        delete_paths = " ".join(
-            op.get("path", "") for op in data.get("operations", [])
-            if op.get("operation") == "delete"
-        )
-        assert ".opencode/agents" in delete_paths
-        assert ".claude/agents" in delete_paths
-        assert ".codex/agents" in delete_paths
+        assert remove_result.returncode == 0, remove_result.stderr
+        data = json.loads(remove_result.stdout)
+        assert str(claude_target) in data["data"]["removed_files"]
+        assert str(codex_target) in data["data"]["removed_files"]
+        assert str(opencode_target) in data["data"]["removed_files"]
+        assert not claude_target.exists()
+        assert not codex_target.exists()
+        assert not opencode_target.exists()
 
     def test_cursor_skill_install_creates_cursor_bridge(self, cursor_project: Path):
         """AC2: --harness cursor installs skill with .cursor/skills/<name>/ bridge."""
