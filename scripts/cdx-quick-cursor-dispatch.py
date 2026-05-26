@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import Any
 
 
+PHASE0_PYTHON_DEPS = ("pyyaml",)
+
+
 def _repo_root() -> Path:
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -58,6 +61,14 @@ def _run_capture(args: list[str], *, env: dict[str, str] | None = None) -> subpr
         check=False,
         env=env,
     )
+
+
+def _uv_python_with(deps: tuple[str, ...], script: Path, *args: str) -> list[str]:
+    command = ["uv", "run"]
+    for dep in deps:
+        command.extend(["--with", dep])
+    command.extend(["python", str(script), *args])
+    return command
 
 
 def _load_phase0_payload(stdout: str) -> dict[str, Any]:
@@ -124,17 +135,15 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     phase0 = _run_capture(
-        [
-            "uv",
-            "run",
-            "python",
-            str(phase0_script),
+        _uv_python_with(
+            PHASE0_PYTHON_DEPS,
+            phase0_script,
             args.bead_id,
             "--line=cdx",
             "--tier=quick",
             "--bq",
             f"--route-profile={args.route_profile}",
-        ]
+        )
     )
     if phase0.stderr:
         print(phase0.stderr, end="", file=sys.stderr)

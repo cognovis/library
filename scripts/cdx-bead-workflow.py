@@ -21,6 +21,8 @@ SUPPORTED_SCRIPT_ADAPTERS = {
     "cursor-composer": "cursor-impl.py",
 }
 
+PHASE0_PYTHON_DEPS = ("pyyaml",)
+
 FULL_WORKFLOW_SLOTS: tuple[dict[str, str], ...] = (
     {
         "slot": "implementation",
@@ -94,6 +96,14 @@ def _run_capture(args: list[str], *, env: dict[str, str] | None = None) -> subpr
         check=False,
         env=env,
     )
+
+
+def _uv_python_with(deps: tuple[str, ...], script: Path, *args: str) -> list[str]:
+    command = ["uv", "run"]
+    for dep in deps:
+        command.extend(["--with", dep])
+    command.extend(["python", str(script), *args])
+    return command
 
 
 def _load_phase0_payload(stdout: str) -> dict[str, Any]:
@@ -215,15 +225,13 @@ def _run_phase0(
     bead_id: str,
     route_profile: str,
 ) -> tuple[dict[str, Any], int]:
-    phase0_args = [
-        "uv",
-        "run",
-        "python",
-        str(scripts_dir / "phase0-claim.py"),
+    phase0_args = _uv_python_with(
+        PHASE0_PYTHON_DEPS,
+        scripts_dir / "phase0-claim.py",
         bead_id,
         "--line=cdx",
         "--tier=auto",
-    ]
+    )
     if route_profile:
         phase0_args.append(f"--route-profile={route_profile}")
 

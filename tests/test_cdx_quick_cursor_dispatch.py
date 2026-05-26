@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -55,13 +56,45 @@ def _write_runtime(tmp_path: Path, *, adapter: str = "cursor-composer") -> tuple
     return runtime, phase0_args, cursor_called
 
 
+def _write_uv_mock(tmp_path: Path) -> Path:
+    uv_mock = tmp_path / "uv"
+    uv_mock.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, subprocess, sys\n"
+        "log = os.environ.get('UV_ARGV_LOG')\n"
+        "if log:\n"
+        "    with open(log, 'a', encoding='utf-8') as f:\n"
+        "        f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "args = sys.argv[1:]\n"
+        "if not args or args[0] != 'run':\n"
+        "    raise SystemExit(64)\n"
+        "args = args[1:]\n"
+        "while len(args) >= 2 and args[0] == '--with':\n"
+        "    args = args[2:]\n"
+        "if not args or args[0] != 'python':\n"
+        "    raise SystemExit(65)\n"
+        "raise SystemExit(subprocess.call([sys.executable, *args[1:]]))\n",
+        encoding="utf-8",
+    )
+    uv_mock.chmod(0o755)
+    return uv_mock
+
+
+def _read_uv_calls(path: Path) -> list[list[str]]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
 def test_fix_cl_8832_dispatches_cdx_composer_quick_to_cursor_impl(tmp_path: Path) -> None:
     """CL-8832: cdx-composer quick dispatch must reach cursor-impl, not Codex/GPT fallback."""
     runtime, phase0_args, cursor_called = _write_runtime(tmp_path)
+    uv_mock = _write_uv_mock(tmp_path)
+    uv_argv_log = tmp_path / "uv-argv.jsonl"
     env = dict(os.environ)
     env["BEADS_RUNTIME_DIR"] = str(runtime)
     env["PHASE0_ARGS_FILE"] = str(phase0_args)
     env["CURSOR_CALLED_FILE"] = str(cursor_called)
+    env["UV_ARGV_LOG"] = str(uv_argv_log)
+    env["PATH"] = f"{uv_mock.parent}{os.pathsep}{env['PATH']}"
 
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), "CL-smoke", "--route-profile", "cdx-composer"],
@@ -75,6 +108,14 @@ def test_fix_cl_8832_dispatches_cdx_composer_quick_to_cursor_impl(tmp_path: Path
 
     assert result.returncode == 0, result.stderr
     assert cursor_called.exists()
+    uv_calls = _read_uv_calls(uv_argv_log)
+    assert uv_calls[0][:5] == [
+        "run",
+        "--with",
+        "pyyaml",
+        "python",
+        str(runtime / "scripts" / "phase0-claim.py"),
+    ]
     assert "--line=cdx" in phase0_args.read_text(encoding="utf-8")
     assert "--tier=quick" in phase0_args.read_text(encoding="utf-8")
     assert "--bq" in phase0_args.read_text(encoding="utf-8")
@@ -94,10 +135,12 @@ def test_fix_cl_8832_dispatches_cdx_composer_quick_to_cursor_impl(tmp_path: Path
 def test_refuses_non_cursor_slot_without_fallback(tmp_path: Path) -> None:
     """A bad cdx-composer slot must fail closed instead of silently using Codex/GPT."""
     runtime, _phase0_args, cursor_called = _write_runtime(tmp_path, adapter="codex-impl")
+    uv_mock = _write_uv_mock(tmp_path)
     env = dict(os.environ)
     env["BEADS_RUNTIME_DIR"] = str(runtime)
     env["PHASE0_ARGS_FILE"] = str(tmp_path / "phase0-args.txt")
     env["CURSOR_CALLED_FILE"] = str(cursor_called)
+    env["PATH"] = f"{uv_mock.parent}{os.pathsep}{env['PATH']}"
 
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), "CL-smoke", "--route-profile", "cdx-composer"],

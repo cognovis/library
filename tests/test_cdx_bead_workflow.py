@@ -116,14 +116,40 @@ def _write_claude_mock(tmp_path: Path, *, fail_phase: str = "") -> Path:
     return claude_mock
 
 
+def _write_uv_mock(tmp_path: Path) -> Path:
+    uv_mock = tmp_path / "uv"
+    uv_mock.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, subprocess, sys\n"
+        "log = os.environ.get('UV_ARGV_LOG')\n"
+        "if log:\n"
+        "    with open(log, 'a', encoding='utf-8') as f:\n"
+        "        f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "args = sys.argv[1:]\n"
+        "if not args or args[0] != 'run':\n"
+        "    raise SystemExit(64)\n"
+        "args = args[1:]\n"
+        "while len(args) >= 2 and args[0] == '--with':\n"
+        "    args = args[2:]\n"
+        "if not args or args[0] != 'python':\n"
+        "    raise SystemExit(65)\n"
+        "raise SystemExit(subprocess.call([sys.executable, *args[1:]]))\n",
+        encoding="utf-8",
+    )
+    uv_mock.chmod(0o755)
+    return uv_mock
+
+
 def _run_workflow(
     tmp_path: Path,
     slots: dict[str, dict[str, str]] | None = None,
     *,
     fail_phase: str = "",
-) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
     runtime, phase0_args, slot_calls = _write_runtime(tmp_path, slots=slots)
     claude_mock = _write_claude_mock(tmp_path, fail_phase=fail_phase)
+    uv_mock = _write_uv_mock(tmp_path)
+    uv_argv_log = tmp_path / "uv-argv.jsonl"
     env = dict(os.environ)
     env["BEADS_RUNTIME_DIR"] = str(runtime)
     env["PHASE0_ARGS_FILE"] = str(phase0_args)
@@ -152,6 +178,8 @@ def _run_workflow(
     env["SLOT_CALLS_FILE"] = str(slot_calls)
     env["CLAUDE_BIN"] = str(claude_mock)
     env["FAIL_PHASE"] = fail_phase
+    env["UV_ARGV_LOG"] = str(uv_argv_log)
+    env["PATH"] = f"{uv_mock.parent}{os.pathsep}{env['PATH']}"
 
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), "CL-smoke", "--route-profile", "cdx-composer"],
@@ -162,17 +190,29 @@ def _run_workflow(
         cwd=tmp_path,
         env=env,
     )
-    return result, phase0_args, slot_calls
+    return result, phase0_args, slot_calls, uv_argv_log
 
 
 def _read_slot_calls(path: Path) -> list[dict[str, object]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _read_uv_calls(path: Path) -> list[list[str]]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
 def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
-    result, phase0_args, slot_calls = _run_workflow(tmp_path)
+    result, phase0_args, slot_calls, uv_argv_log = _run_workflow(tmp_path)
 
     assert result.returncode == 0, result.stderr
+    uv_calls = _read_uv_calls(uv_argv_log)
+    assert uv_calls[0][:5] == [
+        "run",
+        "--with",
+        "pyyaml",
+        "python",
+        str(tmp_path / "beads-runtime" / "scripts" / "phase0-claim.py"),
+    ]
     phase0_text = phase0_args.read_text(encoding="utf-8")
     assert "--line=cdx" in phase0_text
     assert "--tier=auto" in phase0_text
@@ -228,7 +268,7 @@ def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> N
             "model": "claude-sonnet-4-6",
         },
     }
-    result, _phase0_args, slot_calls = _run_workflow(tmp_path, slots)
+    result, _phase0_args, slot_calls, _uv_argv_log = _run_workflow(tmp_path, slots)
 
     assert result.returncode == 0, result.stderr
     calls = _read_slot_calls(slot_calls)
@@ -241,7 +281,7 @@ def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> N
 
 
 def test_slot_failure_stops_before_later_slots(tmp_path: Path) -> None:
-    result, _phase0_args, slot_calls = _run_workflow(tmp_path, fail_phase="verification")
+    result, _phase0_args, slot_calls, _uv_argv_log = _run_workflow(tmp_path, fail_phase="verification")
 
     assert result.returncode == 7
     calls = _read_slot_calls(slot_calls)
@@ -276,7 +316,7 @@ def test_full_cdx_workflow_fails_closed_for_unsupported_adapter(tmp_path: Path) 
             "model": "claude-sonnet-4-6",
         },
     }
-    result, _phase0_args, slot_calls = _run_workflow(tmp_path, slots)
+    result, _phase0_args, slot_calls, _uv_argv_log = _run_workflow(tmp_path, slots)
 
     assert result.returncode == 1
     assert not slot_calls.exists()

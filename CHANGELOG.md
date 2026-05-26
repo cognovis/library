@@ -2,6 +2,10 @@
 
 ### Fixed
 
+- *(CL-l5f3)* `cdx -b` and `cdx -bq --route-profile cdx-composer` now invoke
+  the installed beads `phase0-claim.py` helper with `uv run --with pyyaml`, so
+  Phase 0 no longer depends on the target repository declaring PyYAML.
+
 - *(CL-uhac)* `cdx -b` and non-inline `cdx -bq` compact modes now run
   `codex exec --json` through a JSONL filter, suppressing hook/tool-event
   command noise while preserving phase, leaf-dispatch, and Cursor lifecycle
