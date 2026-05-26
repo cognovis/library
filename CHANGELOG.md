@@ -2,6 +2,10 @@
 
 ### Fixed
 
+- *(CL-r3rt)* `cdx -bq` default quick-fix launches now default the Codex
+  working directory to the current project instead of failing under nounset
+  with `run_codex_exec:2: 2: parameter not set`.
+
 - *(CL-6zkk)* `cdx -b` now tells the top-level Codex orchestrator to keep
   repository edits inside configured workflow leaf slots and fail closed when a
   required adapter is unavailable, instead of making inline implementation or

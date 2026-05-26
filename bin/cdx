@@ -79,7 +79,7 @@ compact_output_contract="Default output mode is compact. Emit stable lifecycle m
 
 run_codex_exec() {
     local prompt="$1"
-    local worktree_dir="$2"
+    local worktree_dir="${2:-$PWD}"
 
     if [[ "${CLD_COMPACT_OUTPUT:-1}" == "1" && -f "$CODEX_JSONL_FILTER_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
         set +e

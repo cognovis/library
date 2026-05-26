@@ -315,6 +315,64 @@ class TestLauncherRouteProfileFlag:
         assert "cdx-composer" in result.stdout
         assert "DISPATCH_STDIN_HAS_CONTEXT=True" in result.stdout
 
+    def test_fix_cl_r3rt_cdx_bq_default_exec_uses_current_directory(self, tmp_path: Path) -> None:
+        """CL-r3rt: default quick -bq passes no worktree arg, so run_codex_exec must default to cwd."""
+        project = tmp_path / "project"
+        project.mkdir()
+        called = tmp_path / "codex-called"
+        codex_args = tmp_path / "codex-args.txt"
+        codex_prompt = tmp_path / "codex-prompt.txt"
+        codex_mock = tmp_path / "codex-mock"
+        codex_mock.write_text(
+            "#!/bin/sh\n"
+            "touch \"$CODEX_CALLED_FILE\"\n"
+            "printf '%s\\n' \"$*\" > \"$CODEX_ARGS_FILE\"\n"
+            "last=''\n"
+            "for arg in \"$@\"; do last=\"$arg\"; done\n"
+            "printf '%s' \"$last\" > \"$CODEX_PROMPT_FILE\"\n",
+            encoding="utf-8",
+        )
+        codex_mock.chmod(0o755)
+
+        bd_mock = tmp_path / "bd-mock"
+        bd_mock.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'mock bead context for %s\\n' \"$2\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        bd_mock.chmod(0o755)
+
+        env = dict(os.environ)
+        env["BD_BIN"] = str(bd_mock)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["CODEX_ARGS_FILE"] = str(codex_args)
+        env["CODEX_CALLED_FILE"] = str(called)
+        env["CODEX_PROMPT_FILE"] = str(codex_prompt)
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CLD_COMPACT_OUTPUT"] = "0"
+
+        result = subprocess.run(
+            [str(_CDX_BIN), "-bq", "CL-smoke"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=project,
+            env=env,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert called.exists()
+        args_text = codex_args.read_text(encoding="utf-8")
+        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
+        assert f"-C {project}" in args_text
+        assert "Execute quick-fix workflow end-to-end" in codex_prompt.read_text(
+            encoding="utf-8"
+        )
+
     def test_cdx_b_route_profile_can_use_python_workflow_mode(self, tmp_path: Path) -> None:
         """Full cdx -b can route through the deterministic helper when explicitly requested."""
         codex_mock = tmp_path / "codex-mock"
