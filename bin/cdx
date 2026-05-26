@@ -347,6 +347,8 @@ BEADS_RUNTIME_DIR=${beads_runtime}
 
 If Phase 0 reports BEAD_REVIEWER_REFRESH_REQUIRED, run the bead-reviewer as a bounded subagent/skill refresh, then retry Phase 0 once. Do not implement inline until the workflow reaches the full.implementation slot; route-profile slots may dispatch another implementer harness such as Cursor/Composer.
 
+Do not edit, remove, or commit source, test, fixture, generated, or documentation files directly from this top-level orchestrator session. All repository changes must be made by the configured workflow leaf for the relevant slot: full.implementation for initial work, full.regression_fix for adversarial-review regressions, or full.verification_fix for verification failures. If a required adapter or harness is unavailable, fail closed with BLOCKED_ADAPTER_UNAVAILABLE and report the missing adapter instead of making an inline fix.
+
 Emit timestamped workflow events before and after every deterministic phase/helper call using this stable line shape:
 
 ## WORKFLOW_EVENT ts=<UTC_ISO8601> elapsed_ms=<milliseconds_since_WORKFLOW_STARTED_AT_EPOCH> phase=<N> name=<event_name> status=<in_progress|complete|failed> [key=value...]

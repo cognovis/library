@@ -472,6 +472,11 @@ class TestLauncherRouteProfileFlag:
         assert f"BEADS_RUNTIME_DIR={beads_runtime}" in prompt
         assert "## WORKFLOW_EVENT ts=<UTC_ISO8601>" in prompt
         assert "WORKFLOW_STARTED_AT_EPOCH=1800000000" in prompt
+        assert "Do not edit, remove, or commit source, test, fixture" in prompt
+        assert "full.implementation for initial work" in prompt
+        assert "full.regression_fix for adversarial-review regressions" in prompt
+        assert "full.verification_fix for verification failures" in prompt
+        assert "BLOCKED_ADAPTER_UNAVAILABLE" in prompt
         assert "bead-orchestrator agent/workflow" not in prompt
         assert "implement bead CL-smoke" not in prompt
         assert "mock bead context for CL-smoke" in prompt

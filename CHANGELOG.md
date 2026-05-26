@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-6zkk)* `cdx -b` now tells the top-level Codex orchestrator to keep
+  repository edits inside configured workflow leaf slots and fail closed when a
+  required adapter is unavailable, instead of making inline implementation or
+  verification fixes.
+
 - *(CL-cchg)* `cdx -b` now pre-resolves and exports `BEADS_RUNTIME_DIR`
   before launching Codex, tells the orchestrator to avoid helper discovery
   searches before Phase 0/1, and restores a timestamped `WORKFLOW_EVENT`
