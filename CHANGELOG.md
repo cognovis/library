@@ -43,6 +43,13 @@
 
 ### 🚀 Features
 
+- *(CL-96nv)* `cdx -b` now enters a deterministic bead-orchestrator workflow
+  runner instead of the large Codex bead-orchestrator prompt. The runner uses
+  `phase0-claim.py`, resolves the `full.implementation` slot from the
+  `execution_plan`, defaults to the `cdx-composer` route profile, and dispatches
+  the selected script adapter directly with `LEAF_DISPATCH` and Cursor lifecycle
+  markers. `cld -b` remains on the existing Claude agent path.
+
 - *(CL-182u)* CLI entrypoint for read-only workflow execution (`scripts/lib/workflow_runtime.py`)
   - `uv run python scripts/lib/workflow_runtime.py <spec.js> [--read-only] [--route-profile NAME] [--args JSON] [--journal PATH]`
   - `--read-only` sets `readOnly=True` for all leaves; combined with `--journal` provides safe dry-run with full resume support

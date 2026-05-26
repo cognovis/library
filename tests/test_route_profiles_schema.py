@@ -276,24 +276,31 @@ class TestLauncherRouteProfileFlag:
         assert "cdx-composer" in result.stdout
         assert "DISPATCH_STDIN_HAS_CONTEXT=True" in result.stdout
 
-    def test_cdx_b_route_profile_reaches_compact_bead_prompt(self, tmp_path: Path) -> None:
-        """Full cdx -b launches default to compact JSONL-filtered output."""
+    def test_cdx_b_route_profile_uses_deterministic_workflow(self, tmp_path: Path) -> None:
+        """Full cdx -b routes through the deterministic workflow helper."""
         codex_mock = tmp_path / "codex-mock"
         codex_mock.write_text(
             "#!/bin/sh\n"
-            "has_json=0\n"
-            "has_route=0\n"
-            "has_contract=0\n"
-            "for arg in \"$@\"; do\n"
-            "  [ \"$arg\" = \"--json\" ] && has_json=1\n"
-            "  case \"$arg\" in *'Route profile: cdx-composer'*) has_route=1 ;; esac\n"
-            "  case \"$arg\" in *'## Compact Output Contract'*) has_contract=1 ;; esac\n"
-            "done\n"
-            "printf '{\"type\":\"item.completed\",\"item\":{\"type\":\"command_execution\",\"aggregated_output\":\"NOISY_COMMAND_OUTPUT\\\\n## LEAF_DISPATCH workflow=full slot=implementation adapter=cursor-composer\\\\n\"}}\\n'\n"
-            "printf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"CLD_ROUTE_PROFILE=%s\\\\nCLD_COMPACT_OUTPUT=%s\\\\nHAS_JSON_ARG=%s\\\\nHAS_ROUTE=%s\\\\nHAS_CONTRACT=%s\"}}\\n' \"${CLD_ROUTE_PROFILE-}\" \"${CLD_COMPACT_OUTPUT-}\" \"$has_json\" \"$has_route\" \"$has_contract\"\n",
+            "touch \"$CODEX_CALLED_FILE\"\n"
+            "printf 'CODEX_CALLED\\n'\n",
             encoding="utf-8",
         )
         codex_mock.chmod(0o755)
+        codex_called = tmp_path / "codex-called.txt"
+
+        workflow_mock = tmp_path / "workflow-mock"
+        workflow_mock.write_text(
+            "import os, sys\n"
+            "stdin = sys.stdin.read()\n"
+            "print('WORKFLOW_CALLED=1')\n"
+            "print(f\"WORKFLOW_CLD_ROUTE_PROFILE={os.environ.get('CLD_ROUTE_PROFILE', '')}\")\n"
+            "print(f\"WORKFLOW_CLD_COMPACT_OUTPUT={os.environ.get('CLD_COMPACT_OUTPUT', '')}\")\n"
+            "print('WORKFLOW_ARGS=' + ' '.join(sys.argv[1:]))\n"
+            "if 'mock bead context' in stdin:\n"
+            "    print('WORKFLOW_STDIN_HAS_CONTEXT=True')\n",
+            encoding="utf-8",
+        )
+        workflow_mock.chmod(0o755)
 
         bd_mock = tmp_path / "bd-mock"
         bd_mock.write_text(
@@ -309,7 +316,9 @@ class TestLauncherRouteProfileFlag:
 
         env = dict(os.environ)
         env["CODEX_BIN"] = str(codex_mock)
+        env["CODEX_CALLED_FILE"] = str(codex_called)
         env["BD_BIN"] = str(bd_mock)
+        env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke", "--route-profile", "cdx-composer"],
@@ -320,13 +329,63 @@ class TestLauncherRouteProfileFlag:
         )
 
         assert result.returncode == 0
-        assert "CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
-        assert "CLD_COMPACT_OUTPUT=1" in result.stdout
-        assert "HAS_JSON_ARG=1" in result.stdout
-        assert "HAS_ROUTE=1" in result.stdout
-        assert "HAS_CONTRACT=1" in result.stdout
-        assert "## LEAF_DISPATCH workflow=full" in result.stdout
-        assert "NOISY_COMMAND_OUTPUT" not in result.stdout
+        assert not codex_called.exists()
+        assert "WORKFLOW_CALLED=1" in result.stdout
+        assert "WORKFLOW_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "WORKFLOW_CLD_COMPACT_OUTPUT=1" in result.stdout
+        assert "CL-smoke" in result.stdout
+        assert "--route-profile cdx-composer" in result.stdout
+        assert "WORKFLOW_STDIN_HAS_CONTEXT=True" in result.stdout
+
+    def test_cdx_b_defaults_to_cdx_composer_workflow_profile(self, tmp_path: Path) -> None:
+        """Default full cdx -b uses the Composer workflow profile."""
+        workflow_mock = tmp_path / "workflow-mock"
+        workflow_mock.write_text(
+            "import os, sys\n"
+            "print(f\"WORKFLOW_CLD_ROUTE_PROFILE={os.environ.get('CLD_ROUTE_PROFILE', '')}\")\n"
+            "print('WORKFLOW_ARGS=' + ' '.join(sys.argv[1:]))\n",
+            encoding="utf-8",
+        )
+        workflow_mock.chmod(0o755)
+
+        bd_mock = tmp_path / "bd-mock"
+        bd_mock.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'mock bead context for %s\\n' \"$2\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        bd_mock.chmod(0o755)
+
+        codex_mock = tmp_path / "codex-mock"
+        codex_mock.write_text("#!/bin/sh\nprintf 'CODEX_SHOULD_NOT_RUN\\n'\n", encoding="utf-8")
+        codex_mock.chmod(0o755)
+
+        env = dict(os.environ)
+        env["BD_BIN"] = str(bd_mock)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
+
+        result = subprocess.run(
+            [str(_CDX_BIN), "-b", "CL-smoke"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        assert "WORKFLOW_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "--route-profile cdx-composer" in result.stdout
+
+    def test_cld_b_still_uses_agent_orchestrator_path(self) -> None:
+        """cld -b remains on the existing Claude agent path."""
+        cld_source = _CLD_BIN.read_text(encoding="utf-8")
+        assert 'claude_args+=("--agent" "bead-orchestrator")' in cld_source
+        assert "cdx-bead-workflow.py" not in cld_source
 
 
 class TestLauncherMissingBeadGuard:
