@@ -43,6 +43,13 @@
 
 ### 🚀 Features
 
+- *(CL-8s73)* The deterministic `cdx -b` workflow now continues after
+  implementation through `full.adversarial_review`, `full.verification`, and
+  `full.session_close`. Each slot is resolved from the Phase 0
+  `execution_plan`, emits a `LEAF_DISPATCH` marker, invokes the selected
+  adapter directly (`claude-agent`, `codex-exec`, `cursor-composer`, or
+  `codex-impl`), and stops before later slots on failure.
+
 - *(CL-96nv)* `cdx -b` now enters a deterministic bead-orchestrator workflow
   runner instead of the large Codex bead-orchestrator prompt. The runner uses
   `phase0-claim.py`, resolves the `full.implementation` slot from the

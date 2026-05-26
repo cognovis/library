@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Deterministic cdx full-bead workflow entrypoint.
 
-This runner is the first production slice of the bead-orchestrator workflow for
-the Codex launcher. It keeps the Codex outer harness out of the large
-bead-orchestrator prompt and drives the implementation leaf directly from the
-Phase 0 execution_plan.
+This runner keeps the Codex outer harness out of the large bead-orchestrator
+prompt and drives full-workflow leaves directly from the Phase 0 execution_plan.
 """
 
 from __future__ import annotations
@@ -21,6 +19,40 @@ from typing import Any
 SUPPORTED_SCRIPT_ADAPTERS = {
     "codex-impl": "codex-impl.py",
     "cursor-composer": "cursor-impl.py",
+}
+
+FULL_WORKFLOW_SLOTS: tuple[dict[str, str], ...] = (
+    {
+        "slot": "implementation",
+        "phase": "5",
+        "phase_name": "p5_impl",
+        "phase_label": "implementation",
+    },
+    {
+        "slot": "adversarial_review",
+        "phase": "7",
+        "phase_name": "codex_adversarial",
+        "phase_label": "codex-adversarial",
+    },
+    {
+        "slot": "verification",
+        "phase": "9",
+        "phase_name": "verification",
+        "phase_label": "verification",
+    },
+    {
+        "slot": "session_close",
+        "phase": "16",
+        "phase_name": "session_close",
+        "phase_label": "session-close",
+    },
+)
+
+CLAUDE_AGENT_FOR_SLOT = {
+    "implementation": "",
+    "adversarial_review": "review-agent",
+    "verification": "verification-agent",
+    "session_close": "session-close",
 }
 
 
@@ -87,13 +119,83 @@ def _parse_dispatch(stdout: str) -> dict[str, str]:
     return dispatch
 
 
-def _build_prompt(bead_id: str, bead_context: str, adapter: str) -> str:
-    return f"""Implement bead {bead_id} as the deterministic cdx full-workflow implementation leaf.
+def _diff_range(payload: dict[str, Any]) -> str:
+    pre_impl_sha = str(payload.get("pre_impl_sha") or "").strip()
+    return f"{pre_impl_sha}...HEAD" if pre_impl_sha else "HEAD"
+
+
+def _build_prompt(bead_id: str, bead_context: str, adapter: str, slot_name: str, payload: dict[str, Any]) -> str:
+    diff_range = _diff_range(payload)
+    if slot_name == "implementation":
+        return f"""Implement bead {bead_id} as the deterministic cdx full-workflow implementation leaf.
 
 You are the implementation leaf selected by the bead-orchestrator workflow
 slot full.implementation. Do not orchestrate review, verification, or
 session-close. Make the smallest change that satisfies the bead acceptance
 criteria, run focused verification, and commit the result.
+
+Adapter: {adapter}
+
+## Bead Context
+
+{bead_context}
+"""
+
+    if slot_name == "adversarial_review":
+        return f"""Review bead {bead_id} implementation diff for regressions and bugs.
+
+You are the adversarial review leaf selected by full.adversarial_review.
+Use the diff range {diff_range} as the primary source of truth. Report only
+actual bugs and regressions. If there are no findings, report exactly LGTM.
+
+Format findings as:
+REGRESSION: <file>:<line> - <description>
+
+Adapter: {adapter}
+
+## Bead Context
+
+{bead_context}
+"""
+
+    if slot_name == "verification":
+        return f"""Verify bead {bead_id} against its acceptance criteria.
+
+You are the verification leaf selected by full.verification. Inspect the
+implementation diff ({diff_range}), run focused verification where needed, and
+return a concise result:
+- VERIFIED when acceptance criteria are satisfied.
+- DISPUTED with concrete file/test evidence when they are not.
+- UNVERIFIABLE when the stated Means of Compliance cannot be run.
+
+Adapter: {adapter}
+
+## Bead Context
+
+{bead_context}
+"""
+
+    if slot_name == "session_close":
+        return f"""Close session for bead {bead_id}.
+
+You are the session-close leaf selected by full.session_close. Run the complete
+session-close pipeline: changelog/version handling where applicable, final
+quality checks, merge/push, Dolt sync, and bead close. Do not stop after a
+partial handoff.
+
+Run metadata:
+- run_id: {payload.get("run_id") or ""}
+- pre_impl_sha: {payload.get("pre_impl_sha") or ""}
+- diff_range: {diff_range}
+
+Adapter: {adapter}
+
+## Bead Context
+
+{bead_context}
+"""
+
+    return f"""Run bead {bead_id} workflow slot full.{slot_name}.
 
 Adapter: {adapter}
 
@@ -140,9 +242,10 @@ def _run_phase0(
         return {}, 1
 
 
-def _resolve_full_implementation(
+def _resolve_full_slot(
     scripts_dir: Path,
     payload: dict[str, Any],
+    slot_name: str,
 ) -> tuple[dict[str, str], int]:
     route_decision = payload.get("route_decision") or {}
     impl_model = str(route_decision.get("impl_model") or "")
@@ -161,7 +264,7 @@ def _resolve_full_implementation(
             "python",
             str(scripts_dir / "resolve_slot_dispatch.py"),
             "full",
-            "implementation",
+            slot_name,
             f"--impl-model={impl_model}",
         ],
         env=dispatch_env,
@@ -175,6 +278,47 @@ def _resolve_full_implementation(
     return _parse_dispatch(dispatch.stdout), 0
 
 
+def _adapter_env(
+    repo_root: Path,
+    bead_id: str,
+    payload: dict[str, Any],
+    dispatch: dict[str, str],
+    slot_name: str,
+    phase_label: str,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    timeout_sec = dispatch.get("TIMEOUT_SEC", "")
+    env.update(
+        {
+            "RUN_ID": str(payload.get("run_id") or ""),
+            "BEAD_ID": bead_id,
+            "PHASE_LABEL": phase_label,
+            "AGENT_LABEL": f"{dispatch.get('ADAPTER', 'unknown')}-full-{slot_name}",
+            "WORKSPACE": str(repo_root),
+            "PRE_IMPL_SHA": str(payload.get("pre_impl_sha") or ""),
+            "IMPL_MODEL": dispatch.get("MODEL", ""),
+            "ITERATION": env.get("ITERATION", "1"),
+        }
+    )
+    if timeout_sec:
+        env.setdefault("CODEX_EXEC_TIMEOUT", timeout_sec)
+        env.setdefault("CLAUDE_IMPL_TIMEOUT", timeout_sec)
+    return env
+
+
+def _emit_leaf_dispatch(slot_name: str, dispatch: dict[str, str]) -> None:
+    adapter = dispatch.get("ADAPTER", "")
+    model = dispatch.get("MODEL", "")
+    harness = dispatch.get("HARNESS", "")
+    source = dispatch.get("SOURCE", "")
+    print(
+        f"## LEAF_DISPATCH workflow=full slot={slot_name} "
+        f"adapter={adapter} harness={harness or 'unknown'} model={model} "
+        f"source={source or 'slot'}",
+        file=sys.stderr,
+    )
+
+
 def _run_script_adapter(
     scripts_dir: Path,
     repo_root: Path,
@@ -182,6 +326,8 @@ def _run_script_adapter(
     bead_context: str,
     payload: dict[str, Any],
     dispatch: dict[str, str],
+    slot_name: str,
+    phase_label: str,
 ) -> int:
     adapter = dispatch.get("ADAPTER", "")
     script_name = SUPPORTED_SCRIPT_ADAPTERS.get(adapter)
@@ -199,35 +345,149 @@ def _run_script_adapter(
         print(f"ERROR: required adapter helper not found: {script_path}", file=sys.stderr)
         return 1
 
-    model = dispatch.get("MODEL", "")
-    harness = dispatch.get("HARNESS", "")
-    source = dispatch.get("SOURCE", "")
-    print(
-        "## LEAF_DISPATCH workflow=full slot=implementation "
-        f"adapter={adapter} harness={harness or 'unknown'} model={model} "
-        f"source={source or 'slot'}",
-        file=sys.stderr,
-    )
-
-    adapter_env = os.environ.copy()
-    adapter_env.update(
-        {
-            "RUN_ID": str(payload.get("run_id") or ""),
-            "BEAD_ID": bead_id,
-            "PHASE_LABEL": "implementation",
-            "AGENT_LABEL": f"{adapter}-full-implementation",
-            "WORKSPACE": str(repo_root),
-            "PRE_IMPL_SHA": str(payload.get("pre_impl_sha") or ""),
-            "IMPL_MODEL": model,
-        }
-    )
-    prompt = _build_prompt(bead_id, bead_context, adapter)
+    _emit_leaf_dispatch(slot_name, dispatch)
+    adapter_env = _adapter_env(repo_root, bead_id, payload, dispatch, slot_name, phase_label)
+    prompt = _build_prompt(bead_id, bead_context, adapter, slot_name, payload)
     completed = subprocess.run(
         ["uv", "run", "python", str(script_path), prompt],
         check=False,
         env=adapter_env,
     )
     return completed.returncode
+
+
+def _run_codex_exec_adapter(
+    scripts_dir: Path,
+    repo_root: Path,
+    bead_id: str,
+    bead_context: str,
+    payload: dict[str, Any],
+    dispatch: dict[str, str],
+    slot_name: str,
+    phase_label: str,
+) -> int:
+    script_path = scripts_dir / "codex-exec.py"
+    if not script_path.is_file():
+        print(f"ERROR: required adapter helper not found: {script_path}", file=sys.stderr)
+        return 1
+
+    _emit_leaf_dispatch(slot_name, dispatch)
+    adapter_env = _adapter_env(repo_root, bead_id, payload, dispatch, slot_name, phase_label)
+    prompt = _build_prompt(bead_id, bead_context, "codex-exec", slot_name, payload)
+    completed = subprocess.run(
+        [
+            "uv",
+            "run",
+            "python",
+            str(script_path),
+            "--diff-range",
+            _diff_range(payload),
+            prompt,
+        ],
+        check=False,
+        env=adapter_env,
+    )
+    return completed.returncode
+
+
+def _run_claude_agent_adapter(
+    repo_root: Path,
+    bead_id: str,
+    bead_context: str,
+    payload: dict[str, Any],
+    dispatch: dict[str, str],
+    slot_name: str,
+    phase_label: str,
+) -> int:
+    claude_bin = os.environ.get("CLAUDE_BIN", "claude")
+    agent_name = CLAUDE_AGENT_FOR_SLOT.get(slot_name, "")
+    model = dispatch.get("MODEL", "")
+    cmd = [
+        claude_bin,
+        "--print",
+        "--dangerously-skip-permissions",
+        "--setting-sources",
+        os.environ.get("CLAUDE_SETTING_SOURCES", "user,project,local"),
+    ]
+    if agent_name:
+        cmd.extend(["--agent", agent_name])
+    if model:
+        cmd.extend(["--model", model])
+
+    _emit_leaf_dispatch(slot_name, dispatch)
+    adapter_env = _adapter_env(repo_root, bead_id, payload, dispatch, slot_name, phase_label)
+    prompt = _build_prompt(bead_id, bead_context, "claude-agent", slot_name, payload)
+    try:
+        completed = subprocess.run(
+            cmd,
+            input=prompt,
+            text=True,
+            check=False,
+            cwd=str(repo_root),
+            env=adapter_env,
+            timeout=int(dispatch.get("TIMEOUT_SEC") or 1800),
+        )
+        return completed.returncode
+    except subprocess.TimeoutExpired:
+        print(
+            f"ERROR: claude-agent slot full.{slot_name} timed out after "
+            f"{dispatch.get('TIMEOUT_SEC') or 1800}s",
+            file=sys.stderr,
+        )
+        return 124
+
+
+def _run_slot_adapter(
+    scripts_dir: Path,
+    repo_root: Path,
+    bead_id: str,
+    bead_context: str,
+    payload: dict[str, Any],
+    dispatch: dict[str, str],
+    slot_name: str,
+    phase_label: str,
+) -> int:
+    adapter = dispatch.get("ADAPTER", "")
+    if adapter in SUPPORTED_SCRIPT_ADAPTERS:
+        return _run_script_adapter(
+            scripts_dir,
+            repo_root,
+            bead_id,
+            bead_context,
+            payload,
+            dispatch,
+            slot_name,
+            phase_label,
+        )
+    if adapter == "codex-exec":
+        return _run_codex_exec_adapter(
+            scripts_dir,
+            repo_root,
+            bead_id,
+            bead_context,
+            payload,
+            dispatch,
+            slot_name,
+            phase_label,
+        )
+    if adapter == "claude-agent":
+        return _run_claude_agent_adapter(
+            repo_root,
+            bead_id,
+            bead_context,
+            payload,
+            dispatch,
+            slot_name,
+            phase_label,
+        )
+
+    supported = sorted([*SUPPORTED_SCRIPT_ADAPTERS, "claude-agent", "codex-exec"])
+    print(
+        "ERROR: deterministic cdx bead workflow cannot execute adapter "
+        f"{adapter or '<missing>'!r}. Supported adapters: {', '.join(supported)}.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -275,23 +535,33 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
-    dispatch, dispatch_rc = _resolve_full_implementation(scripts_dir, payload)
-    if dispatch_rc != 0:
-        return dispatch_rc
+    for slot in FULL_WORKFLOW_SLOTS:
+        slot_name = slot["slot"]
+        dispatch, dispatch_rc = _resolve_full_slot(scripts_dir, payload, slot_name)
+        if dispatch_rc != 0:
+            return dispatch_rc
 
-    print(
-        "### Phase Progress\n"
-        "phase: 5 | name: p5_impl | status: in_progress | iteration: 1",
-        file=sys.stderr,
-    )
-    return _run_script_adapter(
-        scripts_dir,
-        repo_root,
-        args.bead_id,
-        bead_context,
-        payload,
-        dispatch,
-    )
+        iteration = " | iteration: 1" if slot_name == "implementation" else ""
+        print(
+            "### Phase Progress\n"
+            f"phase: {slot['phase']} | name: {slot['phase_name']} | "
+            f"status: in_progress{iteration}",
+            file=sys.stderr,
+        )
+        slot_rc = _run_slot_adapter(
+            scripts_dir,
+            repo_root,
+            args.bead_id,
+            bead_context,
+            payload,
+            dispatch,
+            slot_name,
+            slot["phase_label"],
+        )
+        if slot_rc != 0:
+            return slot_rc
+
+    return 0
 
 
 if __name__ == "__main__":
