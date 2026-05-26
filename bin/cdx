@@ -24,12 +24,29 @@ if [[ -z "${CODEX_BIN}" ]]; then
     echo "ERROR: codex not found in PATH. Install Codex first: https://github.com/openai/codex"
     exit 1
 fi
+CDX_SCRIPT_DIR="${0:A:h}"
+COMPACT_CONTEXT_SCRIPT="${CDX_COMPACT_CONTEXT_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/compact-bead-context.py}"
 
 # Resolve bd lazily to avoid set -e exit when bd is not installed (only needed for bead modes)
 BD_BIN="${BD_BIN:-}"
 if [[ -z "${BD_BIN}" ]]; then
     BD_BIN="$(command -v bd 2>/dev/null || true)"
 fi
+
+fetch_bead_context() {
+    local bead_id="$1"
+    local bead_json=""
+
+    if [[ -f "$COMPACT_CONTEXT_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
+        if bead_json=$("${BD_BIN}" show "${bead_id}" --json 2>/dev/null); then
+            if printf '%s' "$bead_json" | uv run python "$COMPACT_CONTEXT_SCRIPT" 2>/dev/null; then
+                return 0
+            fi
+        fi
+    fi
+
+    "${BD_BIN}" show "${bead_id}" 2>/dev/null
+}
 
 # ── Parse wrapper flags ──────────────────────────────────────────
 
@@ -40,6 +57,10 @@ bead_quick_id=""
 bead_review_id=""
 route_profile=""
 codex_args=()
+compact_output_contract="Default output mode is compact. Emit stable lifecycle markers and concise summaries only.
+- Do not paste full diffs, full file bodies, full search hits, or long command output unless needed to diagnose a blocking failure.
+- Use targeted searches with bounded output and summarize results; write large evidence to files and report the path plus a short tail.
+- Surface leaf dispatch with grepable markers such as LEAF_DISPATCH, CURSOR_AGENT_START, and CURSOR_AGENT_EXIT."
 
 while (( $# > 0 )); do
     case "$1" in
@@ -114,7 +135,7 @@ if [[ -n "$bead_id" ]]; then
         exit 1
     fi
 
-    bead_context=$("${BD_BIN}" show "${bead_id}" 2>/dev/null) || {
+    bead_context=$(fetch_bead_context "${bead_id}") || {
         echo "ERROR: Could not fetch bead context for ${bead_id}. Is the bead ID correct?"
         exit 1
     }
@@ -129,8 +150,13 @@ if [[ -n "$bead_id" ]]; then
     if [[ -n "$route_profile" ]]; then
         export CLD_ROUTE_PROFILE="$route_profile"
     fi
+    export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
     prompt="implement bead ${bead_id}. Execute the full bead-orchestrator workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase. Do not spawn another agent; this invocation is the bead-orchestrator agent entrypoint. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context below and the agent's developer_instructions are sufficient.
+
+## Compact Output Contract
+
+${compact_output_contract}
 
 ## Bead Context
 
@@ -151,7 +177,7 @@ if [[ -n "$bead_quick_id" ]]; then
         exit 1
     fi
 
-    bead_context=$("${BD_BIN}" show "${bead_quick_id}" 2>/dev/null) || {
+    bead_context=$(fetch_bead_context "${bead_quick_id}") || {
         echo "ERROR: Could not fetch bead context for ${bead_quick_id}. Is the bead ID correct?"
         exit 1
     }
@@ -166,8 +192,13 @@ if [[ -n "$bead_quick_id" ]]; then
     if [[ -n "$route_profile" ]]; then
         export CLD_ROUTE_PROFILE="$route_profile"
     fi
+    export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
     prompt="Bead ID: ${bead_quick_id}. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer).
+
+## Compact Output Contract
+
+${compact_output_contract}
 
 ## Bead Context
 

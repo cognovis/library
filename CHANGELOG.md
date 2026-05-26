@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-vaiw)* `cdx -b` and `cdx -bq` now default to a compact output
+  contract that discourages full diffs, full file bodies, and broad command
+  dumps while preserving route-profile propagation and leaf-dispatch markers;
+  bead context is compacted from `bd show --json` before entering the prompt.
+
 - *(CL-h3a8)* `library agent use --harness all` now includes OpenCode
   agent sources in `.opencode/agents/`, so a subsequent
   `library agent remove --harness all` removes Claude, Codex, and OpenCode

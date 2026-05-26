@@ -212,12 +212,18 @@ class TestLauncherRouteProfileFlag:
         content = _CDX_BIN.read_text(encoding="utf-8")
         assert "route_profile=" in content, "bin/cdx must set route_profile variable"
 
+    def test_cdx_uses_compact_bead_context_helper(self) -> None:
+        content = _CDX_BIN.read_text(encoding="utf-8")
+        assert "compact-bead-context.py" in content
+        assert '"${BD_BIN}" show "${bead_id}" --json' in content
+
     def test_cdx_bq_route_profile_reaches_quick_fix_prompt(self, tmp_path: Path) -> None:
         """Regression: cdx -bq must propagate --route-profile to quick-fix."""
         codex_mock = tmp_path / "codex-mock"
         codex_mock.write_text(
             "#!/bin/sh\n"
             "printf 'CLD_ROUTE_PROFILE=%s\\n' \"${CLD_ROUTE_PROFILE-}\"\n"
+            "printf 'CLD_COMPACT_OUTPUT=%s\\n' \"${CLD_COMPACT_OUTPUT-}\"\n"
             "i=0\n"
             "for arg in \"$@\"; do\n"
             "  i=$((i+1))\n"
@@ -253,4 +259,54 @@ class TestLauncherRouteProfileFlag:
 
         assert result.returncode == 0
         assert "CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "CLD_COMPACT_OUTPUT=1" in result.stdout
         assert "Route profile: cdx-composer" in result.stdout
+        assert "## Compact Output Contract" in result.stdout
+        assert "LEAF_DISPATCH, CURSOR_AGENT_START, and CURSOR_AGENT_EXIT" in result.stdout
+
+    def test_cdx_b_route_profile_reaches_compact_bead_prompt(self, tmp_path: Path) -> None:
+        """Full cdx -b launches also default to compact output."""
+        codex_mock = tmp_path / "codex-mock"
+        codex_mock.write_text(
+            "#!/bin/sh\n"
+            "printf 'CLD_ROUTE_PROFILE=%s\\n' \"${CLD_ROUTE_PROFILE-}\"\n"
+            "printf 'CLD_COMPACT_OUTPUT=%s\\n' \"${CLD_COMPACT_OUTPUT-}\"\n"
+            "i=0\n"
+            "for arg in \"$@\"; do\n"
+            "  i=$((i+1))\n"
+            "  printf 'ARG_%s=%s\\n' \"$i\" \"$arg\"\n"
+            "done\n",
+            encoding="utf-8",
+        )
+        codex_mock.chmod(0o755)
+
+        bd_mock = tmp_path / "bd-mock"
+        bd_mock.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'mock bead context for %s\\n' \"$2\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        bd_mock.chmod(0o755)
+
+        env = dict(os.environ)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["BD_BIN"] = str(bd_mock)
+
+        result = subprocess.run(
+            [str(_CDX_BIN), "-b", "CL-smoke", "--route-profile", "cdx-composer"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        assert "CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "CLD_COMPACT_OUTPUT=1" in result.stdout
+        assert "Route profile: cdx-composer" in result.stdout
+        assert "## Compact Output Contract" in result.stdout
+        assert "Do not paste full diffs" in result.stdout
