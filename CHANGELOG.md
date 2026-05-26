@@ -1,5 +1,11 @@
 ## [unreleased]
 
+### Fixed
+
+- *(CL-kpt1)* `cdx -bq --route-profile <name>` now exports `CLD_ROUTE_PROFILE`
+  and carries the selected route profile into the quick-fix prompt, matching
+  full `cdx -b` behavior.
+
 ### 🛡️ Security / Safety
 
 - *(CL-182u)* Workflow runtime production-readiness hardening

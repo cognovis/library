@@ -162,11 +162,20 @@ if [[ -n "$bead_quick_id" ]]; then
     # in the default user-global config).
     export CLD_BEAD_LINE=cdx
 
+    # Export CLD_ROUTE_PROFILE when --route-profile is set (CL-iye.1).
+    if [[ -n "$route_profile" ]]; then
+        export CLD_ROUTE_PROFILE="$route_profile"
+    fi
+
     prompt="Bead ID: ${bead_quick_id}. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer).
 
 ## Bead Context
 
 ${bead_context}"
+
+    if [[ -n "$route_profile" ]]; then
+        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
+    fi
 
     exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
 fi

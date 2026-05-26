@@ -10,6 +10,7 @@ AC coverage:
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -165,6 +166,18 @@ class TestRouteProfilesSchema:
         impl = config["route_profiles"]["cdx-composer"]["slots"]["quick"]["implementation"]
         assert impl["adapter"] == "cursor-composer"
         assert impl["harness"] == "cursor"
+        assert impl["model"] == "composer-2.5"
+
+    def test_cdx_composer_cursor_slots_use_available_cursor_model(self, config: dict) -> None:
+        """Cursor Composer slots must use a cursor-agent model ID, not a placeholder."""
+        cursor_slots = []
+        for workflow_slots in config["route_profiles"]["cdx-composer"]["slots"].values():
+            for slot in workflow_slots.values():
+                if slot["adapter"] == "cursor-composer":
+                    cursor_slots.append(slot)
+
+        assert cursor_slots, "cdx-composer must define at least one cursor-composer slot"
+        assert {slot["model"] for slot in cursor_slots} == {"composer-2.5"}
 
 
 # ── AC2: bin/cld and bin/cdx accept --route-profile flag ─────────────────
@@ -198,3 +211,46 @@ class TestLauncherRouteProfileFlag:
     def test_cdx_route_profile_parsing_pattern_present(self) -> None:
         content = _CDX_BIN.read_text(encoding="utf-8")
         assert "route_profile=" in content, "bin/cdx must set route_profile variable"
+
+    def test_cdx_bq_route_profile_reaches_quick_fix_prompt(self, tmp_path: Path) -> None:
+        """Regression: cdx -bq must propagate --route-profile to quick-fix."""
+        codex_mock = tmp_path / "codex-mock"
+        codex_mock.write_text(
+            "#!/bin/sh\n"
+            "printf 'CLD_ROUTE_PROFILE=%s\\n' \"${CLD_ROUTE_PROFILE-}\"\n"
+            "i=0\n"
+            "for arg in \"$@\"; do\n"
+            "  i=$((i+1))\n"
+            "  printf 'ARG_%s=%s\\n' \"$i\" \"$arg\"\n"
+            "done\n",
+            encoding="utf-8",
+        )
+        codex_mock.chmod(0o755)
+
+        bd_mock = tmp_path / "bd-mock"
+        bd_mock.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'mock bead context for %s\\n' \"$2\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        bd_mock.chmod(0o755)
+
+        env = dict(os.environ)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["BD_BIN"] = str(bd_mock)
+
+        result = subprocess.run(
+            [str(_CDX_BIN), "-bq", "CL-smoke", "--route-profile", "cdx-composer"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        assert "CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "Route profile: cdx-composer" in result.stdout
