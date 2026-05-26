@@ -234,6 +234,14 @@ class TestLauncherRouteProfileFlag:
         content = _CDX_BIN.read_text(encoding="utf-8")
         assert "--route-profile" in content, "bin/cdx must declare --route-profile flag"
 
+    def test_fix_cl_cta8_cdx_b_default_mode_is_tui_and_documented(self) -> None:
+        """CL-cta8: full cdx -b defaults to TUI; --exec is the automation opt-in."""
+        content = _CDX_BIN.read_text(encoding="utf-8")
+        assert 'codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"' in content
+        assert "force interactive Codex TUI mode (default)" in content
+        assert "Full cdx -b defaults to TUI mode" in content
+        assert "pass --exec for non-interactive" in content
+
     def test_cld_exports_cld_route_profile(self) -> None:
         content = _CLD_BIN.read_text(encoding="utf-8")
         assert "CLD_ROUTE_PROFILE" in content, "bin/cld must export CLD_ROUTE_PROFILE"
@@ -498,7 +506,7 @@ class TestLauncherRouteProfileFlag:
         env["CLD_COMPACT_OUTPUT"] = "0"
 
         result = subprocess.run(
-            [str(_CDX_BIN), "-b", "CL-smoke"],
+            [str(_CDX_BIN), "-b", "CL-smoke", "--exec"],
             capture_output=True,
             text=True,
             check=False,
@@ -528,6 +536,27 @@ class TestLauncherRouteProfileFlag:
         assert "do not spawn or dispatch a nested top-level orchestrator" in prompt
         assert "Do not run helper discovery searches before Phase 0/1" in prompt
         assert f"BEADS_RUNTIME_DIR={beads_runtime}" in prompt
+        assert f"PHASE0_SCRIPT={beads_runtime}/scripts/phase0-claim.py" in prompt
+        assert f"CONTEXT_PROVIDER_SCRIPT={beads_runtime}/scripts/context_provider.py" in prompt
+        assert f"SLOT_DISPATCH_SCRIPT={beads_runtime}/scripts/resolve_slot_dispatch.py" in prompt
+        assert f"METRICS_START_SCRIPT={beads_runtime}/scripts/metrics-start.py" in prompt
+        assert f"CODEX_EXEC_SCRIPT={beads_runtime}/scripts/codex-exec.py" in prompt
+        assert f"CURSOR_IMPL_SCRIPT={beads_runtime}/scripts/cursor-impl.py" in prompt
+        assert "do not run bounded runtime probes before Phase 0/1" in prompt
+        assert (
+            f"PHASE0_CLAIM_COMMAND=BEADS_RUNTIME_DIR={beads_runtime} uv run --with pyyaml "
+            f"python {beads_runtime}/scripts/phase0-claim.py CL-smoke --line=cdx "
+            "--tier=auto --route-profile cdx-composer"
+        ) in prompt
+        assert "PHASE0_CONTRACT=bead id is positional; do not pass --bead-id." in prompt
+        assert (
+            f"CONTEXT_PROVIDER_COMMAND=uv run python {beads_runtime}/scripts/context_provider.py "
+            f"CL-smoke --repo-root {worktree_dir} --provider auto"
+        ) in prompt
+        assert "SLOT_DISPATCH_COMMAND=EXECUTION_PLAN=<phase0.execution_plan_json>" in prompt
+        assert "ADAPTER_CONTRACT=Do not run adapter scripts with --help." in prompt
+        assert "cursor-impl.py accepts only a positional prompt" in prompt
+        assert "do not assign to a variable named status" in prompt
         assert "## WORKFLOW_EVENT ts=<UTC_ISO8601>" in prompt
         assert "WORKFLOW_STARTED_AT_EPOCH=1800000000" in prompt
         assert "Do not edit, remove, or commit source, test, fixture" in prompt
@@ -605,6 +634,62 @@ class TestLauncherRouteProfileFlag:
         assert "You are the active Codex workflow orchestrator" in codex_prompt.read_text(
             encoding="utf-8"
         )
+
+    def test_fix_cl_cta8_cdx_b_default_uses_interactive_codex_with_worktree(self, tmp_path: Path) -> None:
+        """CL-cta8: default full cdx -b is the TUI path unless --exec overrides it."""
+        workflow_mock = tmp_path / "workflow-mock"
+        workflow_mock.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+        workflow_mock.chmod(0o755)
+
+        bd_mock = tmp_path / "bd-mock"
+        bd_mock.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$1\" = show ]; then\n"
+            "  printf 'mock bead context for %s\\n' \"$2\"\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        bd_mock.chmod(0o755)
+
+        codex_mock = tmp_path / "codex-mock"
+        codex_args = tmp_path / "codex-args.txt"
+        codex_mock.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' \"$*\" > \"$CODEX_ARGS_FILE\"\n",
+            encoding="utf-8",
+        )
+        codex_mock.chmod(0o755)
+        git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        beads_runtime = self._write_beads_runtime(tmp_path)
+        worktree_root = tmp_path / "worktrees"
+
+        env = dict(os.environ)
+        env["BD_BIN"] = str(bd_mock)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["CODEX_ARGS_FILE"] = str(codex_args)
+        env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
+        env["CDX_WORKTREE_ROOT"] = str(worktree_root)
+        env["GIT_ARGV_LOG"] = str(git_log)
+        env["GIT_BIN"] = str(git_mock)
+        env["GIT_REPO_ROOT"] = str(repo_root)
+        env["BEADS_RUNTIME_DIR"] = str(beads_runtime)
+
+        result = subprocess.run(
+            [str(_CDX_BIN), "-b", "CL-smoke"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 0
+        args_text = codex_args.read_text(encoding="utf-8")
+        worktree_dir = worktree_root / "bead-CL-smoke"
+        assert args_text.startswith("--dangerously-bypass-approvals-and-sandbox")
+        assert not args_text.startswith("exec ")
+        assert f"-C {worktree_dir}" in args_text
 
     def test_cld_b_still_uses_agent_orchestrator_path(self) -> None:
         """cld -b remains on the existing Claude agent path."""

@@ -6,7 +6,7 @@
 #
 # Wrapper flags (not passed to codex):
 #   --no-full-auto  → Launch codex without the default --full-auto wrapper
-#   --tui           → For cdx -b, force interactive Codex TUI mode
+#   --tui           → For cdx -b, force interactive Codex TUI mode (default)
 #   --exec          → For cdx -b, force non-interactive codex exec mode
 #   -b, --bead ID   → launch Codex workflow orchestrator for the given bead ID
 #                     (Codex remains top-level; helpers run inside the workflow)
@@ -15,7 +15,7 @@
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #
 # Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
-#       context and pass it to Codex (TUI when interactive, exec for
+#       context and pass it to Codex (TUI by default; pass --exec for
 #       automation). Set CDX_BEAD_WORKFLOW=python to run the deterministic
 #       helper directly for smoke tests or CI.
 
@@ -70,7 +70,7 @@ bead_id=""
 bead_quick_id=""
 bead_review_id=""
 route_profile=""
-codex_bead_mode="${CDX_BEAD_CODEX_MODE:-auto}"
+codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"
 codex_args=()
 compact_output_contract="Default output mode is compact. Emit stable lifecycle markers and concise summaries only.
 - Do not paste full diffs, full file bodies, full search hits, or long command output unless needed to diagnose a blocking failure.
@@ -269,12 +269,15 @@ Wrapper flags (consumed by cdx, not passed to codex):
   Session:
          --no-full-auto          Launch codex without the default --full-auto wrapper
          --tui                   For cdx -b, force interactive Codex TUI mode
+                                 (default for cdx -b)
          --exec                  For cdx -b, force non-interactive codex exec mode
     -h,  --help                  Show this help, then codex --help
 
 ────────────────────────────────────────────────────────────
 Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
-context and pass it to Codex (TUI when interactive, exec for automation).
+context and pass it to Codex. Full cdx -b defaults to TUI mode so you can ask
+status questions while the workflow runs; pass --exec for non-interactive
+automation. Set CDX_BEAD_CODEX_MODE=auto to use TTY auto-detection instead.
 Set CDX_BEAD_WORKFLOW=python to run the deterministic helper directly for
 smoke tests or CI.
 ────────────────────────────────────────────────────────────
@@ -337,6 +340,18 @@ if [[ -n "$bead_id" ]]; then
     worktree_dir="$(ensure_bead_worktree "$bead_id")" || exit $?
     resolved_codex_bead_mode="$(resolve_codex_bead_mode "$codex_bead_mode")" || exit $?
 
+    phase0_script="${beads_runtime}/scripts/phase0-claim.py"
+    context_provider_script="${beads_runtime}/scripts/context_provider.py"
+    slot_dispatch_script="${beads_runtime}/scripts/resolve_slot_dispatch.py"
+    metrics_start_script="${beads_runtime}/scripts/metrics-start.py"
+    metrics_rollup_script="${beads_runtime}/scripts/metrics-rollup.py"
+    codex_exec_script="${beads_runtime}/scripts/codex-exec.py"
+    claude_impl_script="${beads_runtime}/scripts/claude-impl.py"
+    codex_impl_script="${beads_runtime}/scripts/codex-impl.py"
+    cursor_impl_script="${beads_runtime}/scripts/cursor-impl.py"
+    adr_context_script="${beads_runtime}/scripts/adr-context.py"
+    implementation_artifacts_script="${beads_runtime}/scripts/implementation_artifacts.py"
+
     prompt="You are the active Codex workflow orchestrator for bead ${bead_id}. Run the full bead workflow end-to-end: Phase 0 through Phase 16, including session-close. Do not stop after any intermediate phase.
 
 Own orchestration in this current Codex session. Do not invoke the high-level beads dispatcher, and do not spawn or dispatch a nested top-level orchestrator for this bead. Only use subagents/skills for bounded workflow leaves that are not the top-level orchestrator, such as bead-reviewer refresh, architecture review, adversarial review, verification, or session-close.
@@ -344,6 +359,29 @@ Own orchestration in this current Codex session. Do not invoke the high-level be
 Use deterministic helpers under the pre-resolved beads runtime for claim/routing, context, scope checks, slot dispatch, metrics, and workflow events. Do not run helper discovery searches before Phase 0/1; use this exact runtime:
 
 BEADS_RUNTIME_DIR=${beads_runtime}
+
+Use these exact helper paths. Do not infer alternate paths and do not run bounded runtime probes before Phase 0/1:
+
+PHASE0_SCRIPT=${phase0_script}
+CONTEXT_PROVIDER_SCRIPT=${context_provider_script}
+SLOT_DISPATCH_SCRIPT=${slot_dispatch_script}
+METRICS_START_SCRIPT=${metrics_start_script}
+METRICS_ROLLUP_SCRIPT=${metrics_rollup_script}
+CODEX_EXEC_SCRIPT=${codex_exec_script}
+CLAUDE_IMPL_SCRIPT=${claude_impl_script}
+CODEX_IMPL_SCRIPT=${codex_impl_script}
+CURSOR_IMPL_SCRIPT=${cursor_impl_script}
+ADR_CONTEXT_SCRIPT=${adr_context_script}
+IMPLEMENTATION_ARTIFACTS_SCRIPT=${implementation_artifacts_script}
+
+Use these exact helper CLI contracts. Do not probe these commands with --help during the workflow:
+
+PHASE0_CLAIM_COMMAND=BEADS_RUNTIME_DIR=${beads_runtime} uv run --with pyyaml python ${phase0_script} ${bead_id} --line=cdx --tier=auto --route-profile ${route_profile}
+PHASE0_CONTRACT=bead id is positional; do not pass --bead-id.
+CONTEXT_PROVIDER_COMMAND=uv run python ${context_provider_script} ${bead_id} --repo-root ${worktree_dir} --provider auto
+SLOT_DISPATCH_COMMAND=EXECUTION_PLAN=<phase0.execution_plan_json> uv run python ${slot_dispatch_script} full <slot_name> --impl-model=<route_decision.impl_model>
+SLOT_DISPATCH_SLOTS=implementation, regression_fix, verification_fix, adversarial_review, verification, session_close
+ADAPTER_CONTRACT=Do not run adapter scripts with --help. claude-impl.py and codex-impl.py accept a positional prompt or --prompt-file; cursor-impl.py accepts only a positional prompt and will treat --help as a real prompt.
 
 If Phase 0 reports BEAD_REVIEWER_REFRESH_REQUIRED, run the bead-reviewer as a bounded subagent/skill refresh, then retry Phase 0 once. Do not implement inline until the workflow reaches the full.implementation slot; route-profile slots may dispatch another implementer harness such as Cursor/Composer.
 
@@ -354,6 +392,8 @@ Emit timestamped workflow events before and after every deterministic phase/help
 ## WORKFLOW_EVENT ts=<UTC_ISO8601> elapsed_ms=<milliseconds_since_WORKFLOW_STARTED_AT_EPOCH> phase=<N> name=<event_name> status=<in_progress|complete|failed> [key=value...]
 
 Use date -u +%Y-%m-%dT%H:%M:%SZ for ts. Compute elapsed from WORKFLOW_STARTED_AT_EPOCH=${WORKFLOW_STARTED_AT_EPOCH}. Keep the existing `### Phase Progress` markers as well.
+
+If you write small zsh helper functions for event emission, do not assign to a variable named status; zsh reserves it. Use event_status or workflow_status instead.
 
 Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer) — the bead context and workflow contract above are sufficient.
 

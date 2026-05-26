@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- *(CL-cta8)* `cdx -b` now documents and uses TUI mode as the default, while
+  `--exec` remains the explicit automation path. The generated full-bead prompt
+  also includes exact beads helper script paths, helper CLI contracts, and a
+  warning against zsh's reserved `status` variable in event helpers.
+
 - *(CL-r3rt)* `cdx -bq` default quick-fix launches now default the Codex
   working directory to the current project instead of failing under nounset
   with `run_codex_exec:2: 2: parameter not set`.
