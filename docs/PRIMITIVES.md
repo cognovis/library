@@ -44,7 +44,7 @@ Must it fire regardless of what the model decides?
  └─ NO  → Continue below.
 
 Is it a bundle of multiple primitives above?
- └─ YES → PLUGIN (installable unit containing skills/commands/agents/hooks)
+ └─ YES → PACKAGE (installable unit containing skills/commands/agents/hooks/workflows)
           → Register it in a MARKETPLACE if you want it discoverable
  └─ NO  → Continue below.
 
@@ -104,7 +104,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 3 | [Agent](primitives/agent.md) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | `.opencode/agents/*.md` (Markdown, same format as Claude Code) | details |
 | 3a | [Action Boundary](primitives/action-boundary.md) | partial — shared keys, primitive-native serialization | YAML frontmatter on skills/agents | YAML for skills, TOML for agents | n/a | unverified | unverified | metadata |
 | 4 | [Guardrail/Hook](primitives/guardrail-hook.md) | **NO** — event coverage diverges | 15 events | 8 events (PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | details |
-| 5 | [Plugin](primitives/plugin.md) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | details |
+| 5 | [Package](primitives/package.md) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | details |
 | 6 | [Marketplace](primitives/marketplace.md) | yes — distribution layer | yes | yes | yes | yes | yes | details |
 | 7 | [Standard](primitives/standard.md) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | n/a | details |
 | 8 | [MCP-Server](primitives/mcp-server.md) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | details |
@@ -209,9 +209,16 @@ Details: [Agent](primitives/agent.md). Judge remains a specialization of Agent.
 
 Details: [Guardrail / Hook](primitives/guardrail-hook.md).
 
-### 5. Plugin
+### 5. Package
 
-Details: [Plugin](primitives/plugin.md).
+Details: [Package](primitives/package.md).
+
+> **Vocabulary note (2026-05-27).** This primitive was previously named
+> "Plugin." Renamed to "Package" to align with Pi's terminology
+> (`pi install`, `pi.dev/packages`) and npm/git native distribution
+> semantics. Historical ADRs and `library.yaml` may still use "plugin"
+> in code surfaces and key names; rename of those structural surfaces
+> is tracked separately and not part of this vocabulary change.
 
 ### 6. Marketplace
 

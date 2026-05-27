@@ -157,7 +157,7 @@ the workflow as a regular JavaScript file copy:
 ```yaml
 - name: bead-context-pack
   description: Gather code/standards/architecture/prior-work for a bead, synthesize a pack.
-  source: https://github.com/cognovis/cognovis-core/blob/main/.claude/workflows/bead-context-pack.js
+  source: https://github.com/cognovis/cognovis-core/blob/main/workflows/bead-context-pack.js
   format: claude-workflow-js
   metadata:
     library:
@@ -169,9 +169,11 @@ the workflow as a regular JavaScript file copy:
 
 | Context | Workflow location |
 |---------|-------------------|
-| Claude project-local | `.claude/workflows/<name>.js` |
-| Claude global | `~/.claude/workflows/<name>.js` |
-| Plugin-shipped | a plugin's `workflowsPath` (the binary's `loadPluginWorkflows`) |
+| Marketplace source-of-truth (cognovis-core) | `cognovis-core/workflows/<name>.js` |
+| Project-local cross-harness | `<repo>/.agents/workflows/<name>.js` |
+| Claude Code project-local install | `<repo>/.claude/workflows/<name>.js` |
+| Claude Code global install | `~/.claude/workflows/<name>.js` |
+| Package-shipped | a package's `workflowsPath` (the binary's `loadPluginWorkflows`) |
 | Codex / Cursor install target | `.claude/workflows/<name>.js` storage only; Codex and Cursor have no native workflow executor, so this does not claim runtime support |
 
 **When to choose it.** Create a workflow when **all** hold:
