@@ -542,6 +542,7 @@ class TestLauncherRouteProfileFlag:
         assert f"METRICS_START_SCRIPT={beads_runtime}/scripts/metrics-start.py" in prompt
         assert f"CODEX_EXEC_SCRIPT={beads_runtime}/scripts/codex-exec.py" in prompt
         assert f"CURSOR_IMPL_SCRIPT={beads_runtime}/scripts/cursor-impl.py" in prompt
+        assert f"AGY_IMPL_SCRIPT={beads_runtime}/scripts/agy-impl.py" in prompt
         assert "do not run bounded runtime probes before Phase 0/1" in prompt
         assert (
             f"PHASE0_CLAIM_COMMAND=BEADS_RUNTIME_DIR={beads_runtime} uv run --with pyyaml "
@@ -555,6 +556,7 @@ class TestLauncherRouteProfileFlag:
         ) in prompt
         assert "SLOT_DISPATCH_COMMAND=EXECUTION_PLAN=<phase0.execution_plan_json>" in prompt
         assert "ADAPTER_CONTRACT=Do not run adapter scripts with --help." in prompt
+        assert "agy-impl.py accept a positional prompt" in prompt
         assert "cursor-impl.py accepts only a positional prompt" in prompt
         assert "do not assign to a variable named status" in prompt
         assert "## WORKFLOW_EVENT ts=<UTC_ISO8601>" in prompt

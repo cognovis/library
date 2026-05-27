@@ -76,7 +76,7 @@ def _write_runtime(
         "print('SOURCE=slot')\n",
         encoding="utf-8",
     )
-    for script_name in ("cursor-impl.py", "codex-impl.py"):
+    for script_name in ("cursor-impl.py", "codex-impl.py", "agy-impl.py"):
         (scripts / script_name).write_text(
             "import json, os, pathlib, sys\n"
             "path = pathlib.Path(os.environ['SLOT_CALLS_FILE'])\n"
