@@ -3,7 +3,7 @@ adr: "0007"
 title: "Library tool surface as a second species of MCP server"
 status: proposed
 date: 2026-05-27
-bead: ""
+bead: "CL-ugwe"
 deciders:
   - Malte Sussdorff
 supersedes: []
