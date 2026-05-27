@@ -103,4 +103,15 @@ The preferred general contract is `json-envelope`:
 The model will hallucinate flags, get argument order wrong, and produce non-reproducible
 results. Extract to a Python script and have the skill call it.
 
+**Projection as MCP tools.** A Script can be projected as a typed tool by a
+`library-tool-surface` [MCP server](mcp-server.md#species-2-library-tool-surface)
+(established by [ADR-0007](../adr/library-tool-surface-mcp.md)). The Script
+remains the deterministic backing implementation; the MCP tool wraps it
+with a typed schema, server-side argument validation, and a stable JSON
+envelope visible to the model as a first-class tool. Use this projection
+when the same Script is invoked from many call sites and the agent
+currently re-derives its invocation from skill prose. The mapping between
+typed tool and backing Script lives in the server, not in `library.yaml` —
+MCP's `tools/list` is the runtime source of truth.
+
 ---

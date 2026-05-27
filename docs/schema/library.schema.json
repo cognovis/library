@@ -1220,6 +1220,14 @@
           "type": "string",
           "minLength": 1
         },
+        "species": {
+          "description": "MCP-server species discriminator (ADR-0007). `external-capability` is a third-party provider (open-brain, executive-circle, pencil, heypresto) — `prefer CLI + Skill` decision rule applies when shell access exists. `library-tool-surface` is a first-party Library server that acts as the typed invocation channel over Library CLIs and Scripts (cognovis-tools) — the prefer-CLI rule does NOT apply. Omitting this field is equivalent to `external-capability` for backward compatibility. Per-tool data is NOT a catalog field for either species; the MCP `tools/list` call is the runtime source of truth.",
+          "type": "string",
+          "enum": [
+            "external-capability",
+            "library-tool-surface"
+          ]
+        },
         "coding_strategy": {
           "description": "How coding harnesses (Claude Code, Codex, OpenCode) should consume this server: cli = install the CLI wrapper package, mcp = add to harness MCP config.",
           "type": "string",

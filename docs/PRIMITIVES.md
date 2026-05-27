@@ -52,10 +52,19 @@ Is it project-specific or cross-cutting context supplementing global skills?
  └─ YES → STANDARD (injected into model context, not invokable)
  └─ NO  → Continue below.
 
-Is it an external capability provider accessed via the MCP protocol?
- └─ YES → Does the target harness have shell access?
-           ├─ YES (Claude Code / Codex CLI) → Prefer CLI + SKILL over MCP
-           └─ NO  (claude.ai web / Claude iOS) → MCP-SERVER is the only path
+Is it a capability provider accessed via the MCP protocol?
+ └─ YES → Which species (see [ADR-0007](adr/library-tool-surface-mcp.md))?
+           ├─ First-party LIBRARY-TOOL-SURFACE — typed invocation over Library
+           │   CLIs (bd, git, gh) and Library Scripts. Choose when flag-guessing
+           │   on a high-frequency CLI is a recurring failure mode, or when a
+           │   dangerous agent needs a path to graduate to `Bash` denied.
+           │   The "prefer CLI + Skill" rule does NOT apply — the server IS the
+           │   skill's invocation channel.
+           └─ Third-party EXTERNAL-CAPABILITY — remote data, encrypted formats,
+              vendor APIs. Does the target harness have shell access?
+                ├─ YES (Claude Code / Codex CLI) → If a CLI already covers the
+                │   capability, prefer CLI + SKILL over MCP.
+                └─ NO  (claude.ai web / Claude iOS) → MCP-SERVER is the only path.
 
 Does it provide model-specific behavioral guidance for an agent persona?
  └─ YES → MODEL-STANDARD

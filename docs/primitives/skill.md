@@ -108,6 +108,17 @@ Skills that only provide context, analysis, or read-only commands omit
 - Do NOT use `always_apply: true` for something that must block or intercept tool calls — that requires a guardrail/hook, not a skill.
 - Do NOT use a skill for a one-off user workflow requiring explicit intent — that is
   a command.
+- Do NOT teach CLI flag syntax in skill prose when a typed MCP tool exists
+  for the same intent. When a `library-tool-surface` MCP server
+  ([mcp-server #species-2](mcp-server.md#species-2-library-tool-surface),
+  established by [ADR-0007](../adr/library-tool-surface-mcp.md)) covers an
+  intent (`bead.create`, `git.merge_from_main`, ...), the skill MUST route
+  to the typed tool by name. Embedded `bd create --title=... --type=...`
+  recipes are an anti-pattern: every newly-spawned agent re-derives the
+  invocation from the prose, gets a flag wrong, and fails. The typed tool
+  removes that failure mode by construction. The skill describes WHEN the
+  intent applies and what to do with the result; the MCP tool encodes the
+  exact invocation.
 
 **Worked examples.**
 
