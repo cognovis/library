@@ -1928,7 +1928,6 @@ library:
           role: helper
           entrypoint: true
           language: python
-          output_contract: json-envelope
       tags:
         - origin:original
         - tier:domain
@@ -1937,6 +1936,20 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+          harness_support:
+            claude: supported
+            cursor: supported
+            codex: supported
+          gascity:
+            exportable: false
+          runtime_requirements:
+            binaries:
+              - ffmpeg
+            pip_packages:
+              - yt-dlp
+              - youtube-transcript-api
+              - opencv-python
+              - numpy
   agents:
     - name: architecture-reviewer
       description: Deep architecture-council review of a single bead before implementation. Runs four sequential role reviews on opus, does a canonical-catalog pre-check, writes a design doc, and returns a COUNCIL_BLOCKED verdict. Use PROACTIVELY before implementing a bead with design decisions — boundaries, state machines, API contracts, shared scopes. Spawned per-bead by wave-orchestrator Phase 1.5. Triggers on "architecture review", "design review for a bead", "architecture council".
