@@ -1914,6 +1914,29 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
+    - name: youtube-slide-extractor
+      description: >-
+        use when: extract slide changes, screenshots, or keyframe transitions from a YouTube video or local video file, and align them with transcripts to compile structured presentation notes.
+        NOT for: editing or cropping videos, transcribing audio-only podcasts, or downloading high-resolution media streams.
+        boundary: specialized for visual-change detection in slide presentations and mapping them to spoken timestamps, unlike generic media downloaders or text-only transcription tools.
+      source: https://github.com/cognovis/library-core/blob/main/skills/youtube-slide-extractor/SKILL.md
+      requires:
+        - standard:english-only
+        - standard:no-emoji
+      scripts:
+        - path: skills/youtube-slide-extractor/scripts/youtube_slide_extractor.py
+          role: helper
+          entrypoint: true
+          language: python
+          output_contract: json-envelope
+      tags:
+        - origin:original
+        - tier:domain
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
   agents:
     - name: architecture-reviewer
       description: Deep architecture-council review of a single bead before implementation. Runs four sequential role reviews on opus, does a canonical-catalog pre-check, writes a design doc, and returns a COUNCIL_BLOCKED verdict. Use PROACTIVELY before implementing a bead with design decisions — boundaries, state machines, API contracts, shared scopes. Spawned per-bead by wave-orchestrator Phase 1.5. Triggers on "architecture review", "design review for a bead", "architecture council".
