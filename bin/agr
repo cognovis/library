@@ -1,0 +1,75 @@
+#!/usr/bin/env zsh
+# agr - Antigravity (Cursor Agent) launcher with automatic approvals
+#
+# Usage: agr [wrapper-flags] [agent-args...]
+#        agr -h | --help        Show wrapper flag help, then fall through to agent --help
+#
+# Wrapper flags (not passed to agent):
+#   --no-yolo       → Launch agent without the default --yolo auto-approve wrapper
+#
+# Per AGENTS.md: launchers live in bin/
+
+set -euo pipefail
+
+# Auto-detect agent binary
+AGENT_BIN="${AGENT_BIN:-$(command -v agent 2>/dev/null)}"
+if [[ -z "${AGENT_BIN}" ]]; then
+    # Fallback to ~/.local/bin/agent
+    if [[ -x "${HOME}/.local/bin/agent" ]]; then
+        AGENT_BIN="${HOME}/.local/bin/agent"
+    else
+        echo "ERROR: agent not found in PATH. Install Cursor Agent first."
+        exit 1
+    fi
+fi
+
+# ── Parse wrapper flags ──────────────────────────────────────────
+
+use_yolo=true
+show_help=false
+agent_args=()
+
+while (( $# > 0 )); do
+    case "$1" in
+        -h|--help)
+            show_help=true
+            shift
+            ;;
+        --no-yolo)
+            use_yolo=false
+            shift
+            ;;
+        *)
+            agent_args+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# ── Help ──────────────────────────────────────────────────────────
+
+if ${show_help}; then
+    cat <<'HELP'
+agr - Antigravity (Cursor Agent) launcher with automatic approvals
+
+Usage: agr [wrapper-flags] [agent-args...]
+
+Wrapper flags (consumed by agr, not passed to agent):
+
+  Session:
+         --no-yolo               Launch agent without the default --yolo auto-approve flag
+    -h,  --help                  Show this help, then agent --help
+
+────────────────────────────────────────────────────────────
+Forwarding to 'agent --help':
+HELP
+    exec "${AGENT_BIN}" --help
+fi
+
+# ── Default: plain agent launch with yolo ─────────────────────────
+
+if ${use_yolo}; then
+    exec "${AGENT_BIN}" --yolo "${agent_args[@]}"
+else
+    exec "${AGENT_BIN}" "${agent_args[@]}"
+fi

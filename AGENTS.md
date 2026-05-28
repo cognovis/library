@@ -48,11 +48,12 @@ it is in `bd prime`.
 
 ## Repository-specific Conventions
 
-### Canonical Launchers (`cld` / `cdx`)
+### Canonical Launchers (`cld` / `cdx` / `agr`)
 
 - **Canonical home:** `bin/` (this repo)
   - `bin/cld` — Claude Code launcher (full-featured zsh wrapper)
   - `bin/cdx` — Codex CLI launcher (parallel to `cld`)
+  - `bin/agr` — Antigravity (Cursor Agent) launcher with automatic approvals
 - **Install:** `bash scripts/install-bin.sh` — symlinks into `~/.local/bin/` (must be on `$PATH`). Idempotent.
 - **Per ADR `canonical-library-architecture` Decision 2:** launchers live in `bin/`, not in `~/.claude/scripts/`. The `~/.claude/scripts/` directory is no longer on `$PATH`.
 - **Follow-up:** `CMUX_BUNDLED_CLI_PATH` in `cld` still references `~/.claude/scripts/cmux-shim.sh`. Move target is Phase 2 cleanup per the same ADR.
