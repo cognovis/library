@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # Explicit allow-list — never symlink lib/ or other subdirectories automatically
-LAUNCHERS=(cld cdx agr)
+LAUNCHERS=(cld cdx agr cra)
 
 # Resolve absolute path of bin/ relative to this script
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
