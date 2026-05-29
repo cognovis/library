@@ -5,7 +5,7 @@
     {
       "id": 1,
       "description": "validate-skill.py emits MCP_DEBT_BD, MCP_DEBT_GIT, MCP_DEBT_HANDLER_BASH on known patterns.",
-      "status": "met",
+      "status": "done",
       "evidence_refs": [
         "cmd:red-validator-tests",
         "cmd:green-validator-tests",
@@ -16,7 +16,7 @@
     {
       "id": 2,
       "description": "Fleet audit aggregates debt score per skill.",
-      "status": "met",
+      "status": "done",
       "evidence_refs": [
         "cmd:red-validator-tests",
         "cmd:green-validator-tests",
@@ -26,7 +26,7 @@
     {
       "id": 3,
       "description": "skills/session-close/SKILL.md shows violations before remediation.",
-      "status": "met",
+      "status": "done",
       "evidence_refs": [
         "cmd:session-close-baseline-report",
         "cmd:session-close-baseline-debt-count"

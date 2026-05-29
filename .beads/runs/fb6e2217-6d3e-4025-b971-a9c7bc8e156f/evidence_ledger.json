@@ -8,7 +8,8 @@
       "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
       "exit_code": 1,
       "outcome": "expected_failure",
-      "output_summary": "Before implementation, pytest collected 5 tests; 2 passed and 3 failed because --suggest-mcp, --format=debt-count, and the scanner DEBT column did not exist."
+      "output_summary": "Before implementation, pytest collected 5 tests; 2 passed and 3 failed because --suggest-mcp, --format=debt-count, and the scanner DEBT column did not exist.",
+      "purpose": "Run pytest for TDD red gate \u2014 verify tests fail before implementation"
     },
     {
       "id": "green-validator-tests",
@@ -16,7 +17,8 @@
       "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
       "exit_code": 0,
       "outcome": "passed",
-      "output_summary": "After implementation, pytest collected 5 tests and all 5 passed."
+      "output_summary": "After implementation, pytest collected 5 tests and all 5 passed.",
+      "purpose": "Run pytest for TDD green gate \u2014 verify tests pass after implementation"
     },
     {
       "id": "validate-skill-py-compile",
@@ -24,7 +26,8 @@
       "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
       "exit_code": 0,
       "outcome": "passed",
-      "output_summary": "Python compile check completed without output."
+      "output_summary": "Python compile check completed without output.",
+      "purpose": "Python compile check for validate-skill.py"
     },
     {
       "id": "scan-skills-shell-syntax",
@@ -32,7 +35,8 @@
       "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
       "exit_code": 0,
       "outcome": "passed",
-      "output_summary": "Shell syntax check completed without output."
+      "output_summary": "Shell syntax check completed without output.",
+      "purpose": "Shell syntax check for scan-skills.sh"
     },
     {
       "id": "session-close-baseline-report",
@@ -40,7 +44,8 @@
       "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
       "exit_code": 0,
       "outcome": "passed",
-      "output_summary": "Emitted 2 MCP_DEBT_HANDLER_BASH advisories from fenced text blocks in the external session-close skill."
+      "output_summary": "Emitted 2 MCP_DEBT_HANDLER_BASH advisories from fenced text blocks in the external session-close skill.",
+      "purpose": "Run validator against session-close SKILL.md with --suggest-mcp to document AC3 baseline"
     },
     {
       "id": "session-close-baseline-debt-count",
@@ -48,7 +53,8 @@
       "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
       "exit_code": 0,
       "outcome": "passed",
-      "output_summary": "Printed 2."
+      "output_summary": "Printed 2.",
+      "purpose": "Run validator against session-close SKILL.md with --format=debt-count"
     }
   ],
   "skipped_checks": [
