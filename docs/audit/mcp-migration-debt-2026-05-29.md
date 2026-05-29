@@ -11,12 +11,12 @@
 
 | File | Hits | A+B Hits | Classification | Notes |
 |------|------|----------|----------------|-------|
-| `~/.claude/agents/bead-orchestrator.md` | 97 | 90 | A | Explicit bead read recipe should route to the typed bead.show tool. |
-| `~/.claude/agents/quick-fix.md` | 33 | 30 | A | Explicit bead close recipe should route to the typed bead.close tool. |
-| `~/.claude/agents/wave-orchestrator.md` | 19 | 18 | A | Explicit bead read recipe should route to the typed bead.show tool. |
+| `~/.claude/agents/bead-orchestrator.md` | 97 | 96 | A | Explicit bead read recipe should route to the typed bead.show tool. |
+| `~/.claude/agents/quick-fix.md` | 33 | 31 | A | Explicit bead close recipe should route to the typed bead.close tool. |
+| `~/.claude/agents/wave-orchestrator.md` | 19 | 19 | A | Explicit bead read recipe should route to the typed bead.show tool. |
 | `~/.agents/skills/bead-reviewer/SKILL.md` | 15 | 15 | A | Explicit bead read recipe should route to the typed bead.show tool. |
-| `~/.agents/skills/beads/SKILL.md` | 9 | 8 | A | Explicit bead mutation recipe should route to the typed bead.update tool. |
-| `~/.claude/agents/session-close.md` | 9 | 6 | A | Explicit bead list recipe should route to the typed bead.list tool. |
+| `~/.agents/skills/beads/SKILL.md` | 9 | 7 | A | Explicit bead read recipe should route to the typed bead.show tool. |
+| `~/.claude/agents/session-close.md` | 9 | 7 | A | Explicit bead list recipe should route to the typed bead.list tool. |
 | `~/.agents/skills/session-close/SKILL.md` | 1 | 1 | A | Explicit bead list recipe should route to the typed bead.list tool. |
 | `~/.agents/skills/wave-dispatch/SKILL.md` | 1 | 1 | A | Explicit bead read recipe should route to the typed bead.show tool. |
 
@@ -33,7 +33,7 @@
 
 - Summary classification: **A**
 - Total hits: **97**
-- A+B hits: **90**
+- A+B hits: **96**
 
 - L60 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `> **Anti-precedent rule:** `OPERATIONAL DEVIATION` notes from prior runs visible in `bd show``
 - L256 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `bd show <id>`
@@ -73,7 +73,7 @@
 - L1052 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `[ -n "$BEAD_LOCK_FILE" ] && bd update <id> --append-notes="Resource lock acquired: $_LR at $BEAD_LOCK_FILE"`
 - L1088 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="Pre-mortem: level=<GREEN|YELLOW|RED>; technical=<...>; blast_radius=<...>; reversibility=<...>; data_integrity=<...>; security=<...>; mitigations=<...>; hardest_ak=<...>"`
 - L1367 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `| anything else | ABORT with `bd update <id> --append-notes="ABORT: unknown adapter: <value>."` |`
-- L1375 [D] `bd update` → `mcp__cognovis-tools__bead.update`. Informational or prohibitive mention; not teaching an invocation. Snippet: `| anything else | ABORT with `bd update <id> --append-notes="ABORT: unknown impl_model family: <value>. Fix route_decision before retrying."` | Fail loud, do not improvise |`
+- L1375 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `| anything else | ABORT with `bd update <id> --append-notes="ABORT: unknown impl_model family: <value>. Fix route_decision before retrying."` | Fail loud, do not improvise |`
 - L1385 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="Phase 5 ABORT: codex binary not on PATH. ABORT_REASON: codex_binary_missing"`
 - L1395 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="Phase 5 ABORT: codex exec rejected AK1 flags. Update codex CLI. ABORT_REASON: ak1_flags_rejected"`
 - L1413 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="Phase 5 ABORT: live network preflight failed for $LIVE_TCP_ENDPOINT. ABORT_REASON: live_network_preflight_failed"`
@@ -90,9 +90,9 @@
 - L1586 [A] `bd create` → `mcp__cognovis-tools__bead.create`. Explicit bead creation recipe should route to the typed bead.create tool. Snippet: `- If you discover out-of-scope work, run the fit-first decision routine first. Only create `bd create --title="[DISCOVERED] <title>" -t task -p 3 --deps discovered-from:<BEAD_ID>` after the current bead and existing-bead checks both fail, and include the no-fit rationale plus checked candidate IDs in the new bead body.`
 - L1618 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: codex-impl.py not found at $CODEX_IMPL. Run '/library use beads' to reinstall."`
 - L1672 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="PARTIAL: codex-impl.py exit 4 ($PARTIAL_REASON). commits=$COMMITS, worktree_dirty=$WORKTREE_DIRTY"`
-- L1675 [D] `bd update` → `mcp__cognovis-tools__bead.update`. Informational or prohibitive mention; not teaching an invocation. Snippet: `bd update <bead-id> --append-notes="ABORT: codex-impl.py failed for <bead-id> (exit=$IMPL_EXIT). Surface to user; do NOT substitute Claude."`
+- L1675 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: codex-impl.py failed for <bead-id> (exit=$IMPL_EXIT). Surface to user; do NOT substitute Claude."`
 - L1686 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py not found at $CURSOR_IMPL. Run '/library use beads' to reinstall."`
-- L1708 [D] `bd update` → `mcp__cognovis-tools__bead.update`. Informational or prohibitive mention; not teaching an invocation. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py failed for <bead-id> (exit=$IMPL_EXIT). Surface to user; do NOT substitute Claude/Codex."`
+- L1708 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py failed for <bead-id> (exit=$IMPL_EXIT). Surface to user; do NOT substitute Claude/Codex."`
 - L1731 [B] `git status` → `mcp__cognovis-tools__git.status or mcp__cognovis-tools__library.exec`. Git status probes are a migration candidate for typed git tools or library.exec. Snippet: `1. Check `git status --porcelain``
 - L1734 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="WARNING: impl subagent returned without committing. Orchestrator auto-committed."`
 - L1735 [B] `git add` → `mcp__cognovis-tools__git.stage_paths or mcp__cognovis-tools__library.exec`. Git staging instructions are a migration candidate for typed git tools or library.exec. Snippet: `git add <changed-files>`
@@ -102,7 +102,7 @@
 - L1990 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="P5 state machine: DONE. iterations=<N>, final_verdict=<CLEAN|FINDINGS-FIXED>, verdicts=<json>"`
 - L2157 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="Codex adversarial: SKIPPED (exit=${CODEX_EXIT}, reason=${CODEX_REASON}). Adversarial coverage gap on this bead. Risk: undetected regressions in ${DIFF_SCOPE}."`
 - L2216 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py not found at $CURSOR_IMPL. Run '/library use beads' to reinstall."`
-- L2233 [D] `bd update` → `mcp__cognovis-tools__bead.update`. Informational or prohibitive mention; not teaching an invocation. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py regression fix failed (exit=$FIX_EXIT). Surface to user; do NOT substitute Claude."`
+- L2233 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py regression fix failed (exit=$FIX_EXIT). Surface to user; do NOT substitute Claude."`
 - L2313 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="Codex re-check: SKIPPED (exit=${RECHECK_EXIT}, reason=${RECHECK_REASON}). Cannot confirm fixes. Applying Axis B auto-accept."`
 - L2323 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="DECISION: auto-accept codex at iter 1, still-broken after fix"`
 - L2376 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `<AK list from bd show>`
@@ -112,7 +112,7 @@
 - L2497 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update "$BEAD_ID" --set-metadata "implementation_impact=$IMPACT_METADATA"`
 - L2516 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update "$BEAD_ID" --append-notes "$IMPACT_NOTE"`
 - L2565 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py not found at $CURSOR_IMPL. Run '/library use beads' to reinstall."`
-- L2583 [D] `bd update` → `mcp__cognovis-tools__bead.update`. Informational or prohibitive mention; not teaching an invocation. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py verification fix failed (exit=$VERFIX_EXIT). Surface to user; do NOT substitute Claude."`
+- L2583 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead-id> --append-notes="ABORT: cursor-impl.py verification fix failed (exit=$VERFIX_EXIT). Surface to user; do NOT substitute Claude."`
 - L2628 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `| Still `DISPUTED` | Hard VETO. Log and escalate: `bd update <id> --append-notes="Verification re-run still DISPUTED after auto-fix — hard VETO."` Report to user. |`
 - L2790 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `<full bead description + acceptance criteria from bd show>`
 - L2931 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <id> --append-notes="Run complete: run_id=<run_id> pre_impl_sha=<sha> phase9=<verified|disputed>"`
@@ -125,7 +125,7 @@
 - L3051 [B] `bd dolt` → `mcp__cognovis-tools__library.exec`. Dolt workflow recipes are a migration candidate for library.exec until a typed surface exists. Snippet: `>   git push && bd dolt commit && bd dolt pull && bd dolt push --force`
 - L3052 [A] `bd close` → `mcp__cognovis-tools__bead.close`. Explicit bead close recipe should route to the typed bead.close tool. Snippet: `>   bd close {BEAD_ID}"`
 - L3067 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update <bead_id> --append-notes="[VALIDATION] run_id=<run_id> commits stay on worktree. NO merge/push/tag."`
-- L3098 [D] `bd show` → `mcp__cognovis-tools__bead.show`. Informational or prohibitive mention; not teaching an invocation. Snippet: `- Do NOT run `bd prime` or `bd onboard` yourself. The SessionStart hook (`~/.claude/scripts/beads-session-start.zsh`) already emits `bd prime` output, so PRIME.md content is in the agent's context. The bead context (`bd show <id>`) is also injected into your prompt. Running `bd prime` again only duplicates context. (The `beads` skill that previously did routing has been removed — PRIME.md's Entrypoints table replaces it.)`
+- L3098 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `- Do NOT run `bd prime` or `bd onboard` yourself. The SessionStart hook (`~/.claude/scripts/beads-session-start.zsh`) already emits `bd prime` output, so PRIME.md content is in the agent's context. The bead context (`bd show <id>`) is also injected into your prompt. Running `bd prime` again only duplicates context. (The `beads` skill that previously did routing has been removed — PRIME.md's Entrypoints table replaces it.)`
 - L3103 [A] `bd list` → `mcp__cognovis-tools__bead.list`. Explicit bead list recipe should route to the typed bead.list tool. Snippet: ``bd search <keywords>`, `bd list --status=open --json`, and`
 - L3103 [A] `bd search` → `mcp__cognovis-tools__bead.search`. Explicit bead search recipe should route to the typed bead.search tool. Snippet: ``bd search <keywords>`, `bd list --status=open --json`, and`
 - L3104 [A] `bd list` → `mcp__cognovis-tools__bead.list`. Explicit bead list recipe should route to the typed bead.list tool. Snippet: ``bd list --status=in_progress --json` for an existing home. Create a new`
@@ -137,7 +137,7 @@
 
 - Summary classification: **A**
 - Total hits: **33**
-- A+B hits: **30**
+- A+B hits: **31**
 
 - L66 [A] `bd close` → `mcp__cognovis-tools__bead.close`. Explicit bead close recipe should route to the typed bead.close tool. Snippet: `recover with `bd close` if session-close returned without closing it.`
 - L210 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `LIVE_NETWORK_JSON=$(bd show "<id>" --json | uv run python "$LIVE_NETWORK_SCRIPT")`
@@ -156,7 +156,7 @@
 - L754 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `If `bd update` fails, log a warning and proceed to Phase 5. MoC evidence failure does NOT block close.`
 - L769 [A] `bd close` → `mcp__cognovis-tools__bead.close`. Explicit bead close recipe should route to the typed bead.close tool. Snippet: `>      git/tag/`bd close`/learnings work yourself instead of spawning `session-close`.`
 - L774 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `> - Writing `Close reason: ...` to notes and claiming CLOSED without verifying `bd show --json`.`
-- L808 [D] `bd close` → `mcp__cognovis-tools__bead.close`. Informational or prohibitive mention; not teaching an invocation. Snippet: `- Do NOT ask the parent quick-fix agent to manually run versioning, push, `bd close`, or`
+- L808 [A] `bd close` → `mcp__cognovis-tools__bead.close`. Explicit bead close recipe should route to the typed bead.close tool. Snippet: `- Do NOT ask the parent quick-fix agent to manually run versioning, push, `bd close`, or`
 - L856 [B] `git push` → `mcp__cognovis-tools__git.push or mcp__cognovis-tools__library.exec`. Git push recipes are a migration candidate for typed git tools or library.exec. Snippet: `> In both cases: git push && bd dolt commit && bd dolt pull && bd dolt push --force`
 - L856 [B] `bd dolt` → `mcp__cognovis-tools__library.exec`. Dolt workflow recipes are a migration candidate for library.exec until a typed surface exists. Snippet: `> In both cases: git push && bd dolt commit && bd dolt pull && bd dolt push --force`
 - L857 [A] `bd close` → `mcp__cognovis-tools__bead.close`. Explicit bead close recipe should route to the typed bead.close tool. Snippet: `> Then: bd close {BEAD_ID}`
@@ -177,7 +177,7 @@
 
 - Summary classification: **A**
 - Total hits: **19**
-- A+B hits: **18**
+- A+B hits: **19**
 
 - L164 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `The preflight gate delegates all deterministic checks to `wave-preflight.py`: `bd show`
 - L212 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `**A `bd show` load error is terminal here.** If any bead reports `review: "unknown"` (a`
@@ -189,7 +189,7 @@
 - L244 [A] `bd search` → `mcp__cognovis-tools__bead.search`. Explicit bead search recipe should route to the typed bead.search tool. Snippet: `bd search "<alternate-spelling>"   # e.g. "ueberweisung" AND "Überweisung"`
 - L263 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `Build a dependency graph from `bd show <id>` for each selected bead. Extract `blocked_by``
 - L358 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `bd update "$bead_id" --append-notes="Phase 1.25: cross-bead review skipped (--skip-wave-review)."`
-- L396 [D] `bd update` → `mcp__cognovis-tools__bead.update`. Informational or prohibitive mention; not teaching an invocation. Snippet: `# we do not bd update it.`
+- L396 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `# we do not bd update it.`
 - L434 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: ``bd update <id> --append-notes="Architecture review skipped (--skip-review). ..."`.`
 - L446 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `Agent(model="haiku", prompt="Bead: <bd show output>. Signal score <score> (threshold 6).`
 - L490 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `For each feature bead, run `bd show <id>` and check for the section. For each one missing`
@@ -225,10 +225,10 @@
 
 - Summary classification: **A**
 - Total hits: **9**
-- A+B hits: **8**
+- A+B hits: **7**
 
 - L15 [D] `bd show` → `mcp__cognovis-tools__bead.show`. Informational or prohibitive mention; not teaching an invocation. Snippet: `**Rules:** Never use `bd edit`. Never guess bead ID prefixes — `bd show 9yt` works with the hash only.`
-- L24 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `| `scripts/claim-bead.py` | Claim gate wrapper around `bd update` status/assignee/metadata writes |`
+- L24 [C] `bd update` → `mcp__cognovis-tools__bead.update`. Contextual bead CLI mention; lower-priority migration. Snippet: `| `scripts/claim-bead.py` | Claim gate wrapper around `bd update` status/assignee/metadata writes |`
 - L89 [A] `bd show` → `mcp__cognovis-tools__bead.show`. Explicit bead read recipe should route to the typed bead.show tool. Snippet: `bd show <id> --json | jq -r '.type, .metadata.effort // ""'`
 - L118 [A] `bd list` → `mcp__cognovis-tools__bead.list`. Explicit bead list recipe should route to the typed bead.list tool. Snippet: `2. **Existing bead fit check**: Search `bd search <keywords>`, `bd list --status=open --json`, and `bd list --status=in_progress --json` for same-repo open/in-progress beads with matching intent, release artifact, version bump, publish action, review path, or UAT target. If found, append to or update that bead.`
 - L118 [A] `bd search` → `mcp__cognovis-tools__bead.search`. Explicit bead search recipe should route to the typed bead.search tool. Snippet: `2. **Existing bead fit check**: Search `bd search <keywords>`, `bd list --status=open --json`, and `bd list --status=in_progress --json` for same-repo open/in-progress beads with matching intent, release artifact, version bump, publish action, review path, or UAT target. If found, append to or update that bead.`
@@ -241,7 +241,7 @@
 
 - Summary classification: **A**
 - Total hits: **9**
-- A+B hits: **6**
+- A+B hits: **7**
 
 - L180 [B] `git commit` → `mcp__cognovis-tools__git.commit or mcp__cognovis-tools__library.exec`. Git commit recipes are a migration candidate for typed git tools or library.exec. Snippet: ``phase-b-prepare.sh`, git commit, `phase-b-ship.sh`, or`
 - L204 [A] `bd list` → `mcp__cognovis-tools__bead.list`. Explicit bead list recipe should route to the typed bead.list tool. Snippet: ``bd list --status=in_progress`.`
@@ -249,7 +249,7 @@
 - L574 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `and stamp it into the bead: `bd update <id> --append-notes="Close reason: <reason>"`. Then rerun`
 - L581 [A] `bd update` → `mcp__cognovis-tools__bead.update`. Explicit bead mutation recipe should route to the typed bead.update tool. Snippet: `**If `--non-interactive`:** Auto-compose the close reason from bead title + the Step 6 commit subject (format: `<bead-title>: <commit-subject>`). Stamp via `bd update <id> --append-notes='Close reason: <auto-composed>'` then rerun the handler with the same arguments.`
 - L744 [D] `git merge` → `mcp__cognovis-tools__git.merge_from_main or mcp__cognovis-tools__library.exec`. Informational or prohibitive mention; not teaching an invocation. Snippet: `- Do NOT use `git rebase` — always `git merge``
-- L745 [D] `git push` → `mcp__cognovis-tools__git.push or mcp__cognovis-tools__library.exec`. Informational or prohibitive mention; not teaching an invocation. Snippet: `- Do NOT use `git push --force``
+- L745 [B] `git push` → `mcp__cognovis-tools__git.push or mcp__cognovis-tools__library.exec`. Git push recipes are a migration candidate for typed git tools or library.exec. Snippet: `- Do NOT use `git push --force``
 - L746 [D] `git add` → `mcp__cognovis-tools__git.stage_paths or mcp__cognovis-tools__library.exec`. Informational or prohibitive mention; not teaching an invocation. Snippet: `- Do NOT use `git add -A` or `git add .` — always stage specific files`
 - L747 [B] `bd dolt` → `mcp__cognovis-tools__library.exec`. Dolt workflow recipes are a migration candidate for library.exec until a typed surface exists. Snippet: `- ALWAYS use `bd dolt pull && bd dolt push --force` (Dolt bug dolthub/dolt#10807)`
 
