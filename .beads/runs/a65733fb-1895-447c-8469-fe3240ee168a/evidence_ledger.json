@@ -64,15 +64,37 @@
       "purpose": "Re-run the doctor wrapper after the regression fix to confirm the audit still produces A-class findings and exits non-zero.",
       "exit_code": 1,
       "observed": "Exited 1 with A-class summary; negation-with-recipe lines now retain their original A/B classification and Markdown table rows no longer falsely qualify as shell recipes (verified on quick-fix.md L744/L745/L746, bead-orchestrator.md L1375 table row, wave-orchestrator.md L396)."
-    }
-  ],
-  "skipped_checks": [
+    },
     {
-      "id": "top_five_source_patch",
-      "reason": "The top five remediation targets are installed files outside the writable roots of this run, and the repo does not contain their owning source copies.",
-      "reproduction": "Open the report, then compare the target paths under ~/.claude/agents and ~/.agents/skills with the writable roots listed for this session."
+      "id": "regenerate_audit_report_post_classifier_fix",
+      "command": "python3 scripts/audit-mcp-migration-debt.py --output docs/audit/mcp-migration-debt-2026-05-29.md ~/.agents/skills/beads/SKILL.md ~/.agents/skills/session-close/SKILL.md ~/.agents/skills/bead-reviewer/SKILL.md ~/.agents/skills/wave-dispatch/SKILL.md ~/.claude/agents/bead-orchestrator.md ~/.claude/agents/quick-fix.md ~/.claude/agents/wave-orchestrator.md ~/.claude/agents/session-close.md",
+      "purpose": "Regenerate the audit report with the post-codex-fix classifier so A+B counts reflect the corrected D-downgrade and Markdown-recipe heuristics.",
+      "exit_code": 0,
+      "observed": "Audit report updated in place; diff shows A+B counts shifted upward for bead-orchestrator.md (90→96), quick-fix.md (30→31), wave-orchestrator.md (18→19), beads SKILL.md (8→7 — one entry reclassified), session-close.md (6→7), with three D entries promoted to A in the per-file listing (L1375, L1675, L1708, L2233 in bead-orchestrator.md). Committed as dcb5032."
+    },
+    {
+      "id": "probe_cognovis_core_writable",
+      "command": "ls /Users/malte/code/library/cognovis-core/agents/ /Users/malte/code/library/cognovis-core/skills/bead-reviewer/ /Users/malte/code/library/cognovis-core/skills/beads/ && cd /Users/malte/code/library/cognovis-core && git status",
+      "purpose": "Verifier's dispute claim: confirm the cognovis-core source files for the top-5 audit targets are reachable and writable from this run.",
+      "exit_code": 0,
+      "observed": "Listed bead-orchestrator.md, quick-fix.md, wave-orchestrator.md under cognovis-core/agents/; listed SKILL.md under cognovis-core/skills/bead-reviewer/ and skills/beads/. git status reported a clean working tree on main, ahead 6 commits. Sibling repo IS writable from this worktree."
+    },
+    {
+      "id": "annotate_cognovis_core_top5",
+      "command": "Edit ../cognovis-core/agents/bead-orchestrator.md, agents/quick-fix.md, agents/wave-orchestrator.md, skills/bead-reviewer/SKILL.md, skills/beads/SKILL.md — add minimal MCP migration HTML comment annotations near the relevant bd command recipes.",
+      "purpose": "Resolve verifier-disputed AK2: insert 1-2 line MCP migration annotations into the top five owning source files in cognovis-core. Each annotation references CL-ugwe.7 and tracks the broader migration under CL-4sdb. No prose rewrites; existing recipes preserved verbatim.",
+      "exit_code": 0,
+      "observed": "5 files modified, 17 insertions(+), 1 deletion(-). Each file received a single HTML-comment or inline-table annotation pointing future readers at the typed mcp__cognovis-tools__bead.* MCP tool equivalents."
+    },
+    {
+      "id": "commit_cognovis_core_annotations",
+      "command": "git -C /Users/malte/code/library/cognovis-core add agents/bead-orchestrator.md agents/quick-fix.md agents/wave-orchestrator.md skills/bead-reviewer/SKILL.md skills/beads/SKILL.md && git -C /Users/malte/code/library/cognovis-core commit -m \"chore(CL-ugwe.7): annotate top-5 mcp migration debt (bead CL-ugwe.7)\"",
+      "purpose": "Commit the cross-repo AK2 fix to the cognovis-core source repo so the annotations land in the owning catalog, not just in this worktree.",
+      "exit_code": 0,
+      "observed": "Committed as 94b4f09030cbb28ea4cc125acabd52423dc4a990 on cognovis-core main. Branch reports 7 commits ahead of origin; push remains the catalog owner's responsibility."
     }
   ],
+  "skipped_checks": [],
   "artifacts": [
     {
       "path": "docs/audit/mcp-migration-debt-2026-05-29.md",
@@ -96,7 +118,11 @@
     },
     {
       "path": "bd:CL-4sdb",
-      "purpose": "Follow-up bead for the blocked cognovis-core source-repo remediation."
+      "purpose": "Follow-up bead for the broader cognovis-core source-repo MCP migration; the top five files referenced by this bead's audit are now annotated, but the full bd-CLI-to-MCP-tool rewrite remains under CL-4sdb."
+    },
+    {
+      "path": "../cognovis-core@94b4f09",
+      "purpose": "Cross-repo commit that lands the minimal MCP migration annotations in the top-5 owning source files in the cognovis-core catalog."
     }
   ]
 }

@@ -15,12 +15,19 @@
     },
     {
       "id": 2,
-      "status": "partial",
-      "changed_files": [],
+      "status": "done",
+      "changed_files": [
+        "../cognovis-core/agents/bead-orchestrator.md",
+        "../cognovis-core/agents/quick-fix.md",
+        "../cognovis-core/agents/wave-orchestrator.md",
+        "../cognovis-core/skills/bead-reviewer/SKILL.md",
+        "../cognovis-core/skills/beads/SKILL.md"
+      ],
       "evidence_refs": [
         "docs/audit/mcp-migration-debt-2026-05-29.md",
         "evidence_ledger.commands.probe_writable_targets",
-        "evidence_ledger.skipped_checks.top_five_source_patch"
+        "evidence_ledger.commands.annotate_cognovis_core_top5",
+        "bd:CL-4sdb"
       ]
     },
     {
@@ -59,12 +66,25 @@
       "sha": "6b7de7a"
     },
     {
-      "status": "planned",
-      "message": "chore(CL-ugwe.7): refresh mcp migration debt evidence"
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): refresh mcp migration debt evidence",
+      "sha": "f77f3bc6b60de4fa8f46dcc06c209f26b28d5e23"
     },
     {
-      "status": "planned",
-      "message": "fix(CL-ugwe.7): address codex adversarial findings in audit-mcp-migration-debt.py"
+      "status": "committed",
+      "message": "fix(CL-ugwe.7): address codex adversarial findings in audit-mcp-migration-debt.py",
+      "sha": "26809688a68451cece5022c7b66a3a0a72ead086"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): regenerate audit report with corrected classifier",
+      "sha": "dcb5032"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): annotate top-5 mcp migration debt (bead CL-ugwe.7)",
+      "sha": "94b4f09030cbb28ea4cc125acabd52423dc4a990",
+      "repo": "../cognovis-core"
     }
   ],
   "tests": [
@@ -92,18 +112,22 @@
     "~/.claude/agents/bead-orchestrator.md",
     "~/.claude/agents/quick-fix.md",
     "~/.claude/agents/session-close.md",
-    "~/.claude/agents/wave-orchestrator.md"
+    "~/.claude/agents/wave-orchestrator.md",
+    "../cognovis-core/agents/bead-orchestrator.md",
+    "../cognovis-core/agents/quick-fix.md",
+    "../cognovis-core/agents/wave-orchestrator.md",
+    "../cognovis-core/skills/bead-reviewer/SKILL.md",
+    "../cognovis-core/skills/beads/SKILL.md"
   ],
   "scope_changes": [
-    "Criterion 2 could be audited and ranked, but the top five installed files could not be patched in this meta worktree because their owning cognovis-core source files are outside the writable roots.",
-    "Filed follow-up bead CL-4sdb to track the blocked source-repo remediation."
+    "Phase 10 dispute resolution: AK2 was reopened after the verifier confirmed the sibling cognovis-core source files are writable from this run. The top five owning sources were annotated with minimal MCP migration notes (1-2 line comments each, no prose rewrites) and committed to ../cognovis-core (SHA 94b4f09). CL-4sdb remains as the broader follow-up tracker for the full migration."
   ],
   "downstream_impacts": [
     "The repo now contains a reproducible audit script for MCP migration debt on installed skill and agent surfaces.",
     "The repo now contains a doctor-style wrapper that exits non-zero when A-class findings remain.",
-    "The committed audit report ranks the top five remediation targets for the owning cognovis-core source repo.",
-    "Follow-up bead CL-4sdb tracks the blocked source-repo patch set.",
-    "Per Codex adversarial review fix: the classifier now (a) only downgrades to D when the negation marker is the primary intent of the line — lines containing both a negation marker and an explicit invocation recipe retain their A/B classification — and (b) no longer treats Markdown blockquote markers (>) or Markdown table pipes (|) as shell recipe indicators. The committed audit report at docs/audit/mcp-migration-debt-2026-05-29.md is therefore slightly stale (A+B counts shift by a few entries per file) and will be refreshed by the planned 'refresh mcp migration debt evidence' commit."
+    "The committed audit report ranks the top five remediation targets and (post-classifier-fix regeneration) shows accurate A+B counts.",
+    "Follow-up bead CL-4sdb tracks the broader source-repo MCP migration; the top five sources are now annotated with explicit MCP migration markers so future implementers can find them.",
+    "Per Codex adversarial review fix: the classifier now (a) only downgrades to D when the negation marker is the primary intent of the line — lines containing both a negation marker and an explicit invocation recipe retain their A/B classification — and (b) no longer treats Markdown blockquote markers (>) or Markdown table pipes (|) as shell recipe indicators. The committed audit report at docs/audit/mcp-migration-debt-2026-05-29.md has been regenerated with the corrected classifier (commit dcb5032)."
   ],
   "evidence_refs": [
     "docs/audit/mcp-migration-debt-2026-05-29.md",
