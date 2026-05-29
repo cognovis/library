@@ -1,5 +1,16 @@
 ## [unreleased]
 
+### Added
+
+- *(CL-ugwe)* **skill-forge: MCP migration debt detection** — `validate-skill.py`
+  now emits three new advisory codes for fenced code blocks that contain raw
+  migration-target patterns:
+  - `MCP_DEBT_BD` — raw `bd` invocations that should route through the MCP tool surface
+  - `MCP_DEBT_GIT` — raw `git` invocations that should route through the MCP tool surface
+  - `MCP_DEBT_HANDLER_BASH` — `HANDLERS_DIR` bash expansion patterns pending migration
+  Fleet scanner (`scan-skills.sh`) aggregates a per-skill debt score so a
+  `library audit` run surfaces total migration debt across all installed skills.
+
 ### Architecture
 
 - *(adr-0007)* Introduced `library-tool-surface` as a second species of MCP server — a typed invocation channel over Library CLIs and scripts. External-capability MCP servers are unchanged. Catalog registers servers; `tools/list` at runtime is the canonical tool index. Schema: `mcp_server_entry.species` enum (`external-capability` | `library-tool-surface`). Decision tree in `docs/PRIMITIVES.md` updated. See `docs/adr/library-tool-surface-mcp.md`.
