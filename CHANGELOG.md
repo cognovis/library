@@ -3,6 +3,17 @@
 ### Added
 
 - feat(meta): register cognovis-tools as library-tool-surface with all 4 harness keys (claude_code, codex, antigravity, cursor) per ADR-0007 Phase 3 (CL-ugwe.3)
+- **`mcp-tool-forge` skill**: New authoring skill for `cognovis-tools` MCP tools (library-tool-surface species). Defines the naming contract (`family.verb` / `family_verb`), json-envelope return shape, exit-code map, idempotency rules, `run_id`/`bead_id` context injection, closed-registry requirement, and direct unit-test pattern. Auto-triggers on: "mcp tool", "new tool family", "json envelope", "library-tool-surface".
+  - `skill-forge` and `script-forge` cross-link `mcp-tool-forge` in their See-Also sections.
+  - Reference template committed in `cognovis-core` (separate repo).
+- *(CL-ugwe)* **skill-forge: MCP migration debt detection** — `validate-skill.py`
+  now emits three new advisory codes for fenced code blocks that contain raw
+  migration-target patterns:
+  - `MCP_DEBT_BD` — raw `bd` invocations that should route through the MCP tool surface
+  - `MCP_DEBT_GIT` — raw `git` invocations that should route through the MCP tool surface
+  - `MCP_DEBT_HANDLER_BASH` — `HANDLERS_DIR` bash expansion patterns pending migration
+  Fleet scanner (`scan-skills.sh`) aggregates a per-skill debt score so a
+  `library audit` run surfaces total migration debt across all installed skills.
 
 ### Architecture
 
