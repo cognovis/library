@@ -1,7 +1,7 @@
 ---
 adr: "0008"
 title: "Intentional release lifecycle: beads are release truth, pipelines are evidence"
-status: proposed
+status: accepted
 date: 2026-05-29
 bead: "CL-khyy.1"
 deciders:
@@ -15,7 +15,7 @@ related_adrs: ["0006", "0007"]
 
 ## Status
 
-Proposed. This ADR locks the repo-agnostic release vocabulary, invariants, and
+Accepted. This ADR locks the repo-agnostic release vocabulary, invariants, and
 the `cliff.toml` role. It implements nothing. The factual contract (metadata
 schema, lifecycle states, gate-declaration shape) lives in the companion
 standard `standards/release/release-lifecycle.md`; the typed-tool surface that
