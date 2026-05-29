@@ -196,6 +196,13 @@ python3 scripts/update-consumers.py --consumer <name> --json
 Do not leave ad hoc copy steps in prompts or forge output. Consumer propagation
 belongs in `consumer-projects.yml` plus the updater dry-run/apply workflow.
 
+## Harness-Facing Tools
+
+For tools that will be exposed via the cognovis-tools MCP server
+(`library-tool-surface` species), use `mcp-tool-forge` instead of embedding the
+tool logic in a script. See `skills/mcp-tool-forge/SKILL.md` for the authoring
+contract.
+
 ## Do NOT
 
 - Do NOT create Bash, zsh, sh, Ruby, Node, or mixed-language Library scripts.

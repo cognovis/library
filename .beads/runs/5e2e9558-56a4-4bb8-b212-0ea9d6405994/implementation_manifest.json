@@ -1,0 +1,91 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.9",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "status": "completed",
+      "changed_files": [
+        "skills/mcp-tool-forge/SKILL.md"
+      ],
+      "evidence_refs": [
+        "cmd:validate-skill-strict",
+        "cmd:contract-anchor-review"
+      ]
+    },
+    {
+      "id": 2,
+      "status": "completed",
+      "changed_files": [
+        "skills/script-forge/SKILL.md",
+        "skills/skill-forge/SKILL.md"
+      ],
+      "evidence_refs": [
+        "cmd:contract-anchor-review"
+      ]
+    },
+    {
+      "id": 3,
+      "status": "blocked",
+      "changed_files": [],
+      "evidence_refs": [
+        "cmd:cognovis-core-write-probe"
+      ],
+      "notes": "The cognovis-core template directory is outside this session's writable roots. apply_patch rejected the sibling repo path and mkdir returned Operation not permitted."
+    }
+  ],
+  "changed_files": [
+    "skills/mcp-tool-forge/SKILL.md",
+    "skills/script-forge/SKILL.md",
+    "skills/skill-forge/SKILL.md",
+    ".beads/runs/5e2e9558-56a4-4bb8-b212-0ea9d6405994/implementation_manifest.json",
+    ".beads/runs/5e2e9558-56a4-4bb8-b212-0ea9d6405994/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "repo": "library-meta",
+      "commit": "pending-final-implementation-commit",
+      "message": "feat(mcp-tool-forge): skill authoring contract + cross-links (CL-ugwe.9)",
+      "status": "staged"
+    },
+    {
+      "repo": "cognovis-core",
+      "commit": null,
+      "status": "blocked",
+      "reason": "The required template path is outside writable roots for this session."
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python skills/skill-forge/scripts/validate-skill.py skills/mcp-tool-forge --strict",
+      "status": "passed",
+      "evidence_ref": "cmd:validate-skill-strict"
+    }
+  ],
+  "external_resources": [
+    {
+      "path": "/Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/_template/",
+      "status": "blocked",
+      "reason": "Sibling repository is outside writable roots for this session."
+    }
+  ],
+  "scope_changes": [
+    {
+      "status": "none",
+      "summary": "No out-of-scope implementation was added. AC3 remains unimplemented because the required repository path is not writable."
+    }
+  ],
+  "downstream_impacts": [
+    {
+      "status": "pending",
+      "summary": "mcp-tool-forge now references the cognovis-tools template path, but the template itself still needs to be created in cognovis-core from a session with that repo writable."
+    }
+  ],
+  "evidence_refs": [
+    "cmd:bd-prime",
+    "cmd:bd-show",
+    "cmd:validate-skill-strict",
+    "cmd:contract-anchor-review",
+    "cmd:cognovis-core-write-probe"
+  ]
+}
