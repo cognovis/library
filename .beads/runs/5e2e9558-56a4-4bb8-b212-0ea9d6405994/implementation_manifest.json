@@ -4,7 +4,7 @@
   "acceptance_criteria": [
     {
       "id": 1,
-      "status": "completed",
+      "status": "done",
       "changed_files": [
         "skills/mcp-tool-forge/SKILL.md"
       ],
@@ -15,7 +15,7 @@
     },
     {
       "id": 2,
-      "status": "completed",
+      "status": "done",
       "changed_files": [
         "skills/script-forge/SKILL.md",
         "skills/skill-forge/SKILL.md"
@@ -26,7 +26,7 @@
     },
     {
       "id": 3,
-      "status": "completed",
+      "status": "done",
       "changed_files": [
         "cognovis-core/mcp-servers/cognovis-tools/tools/_template/_template_tool.py",
         "cognovis-core/mcp-servers/cognovis-tools/tools/_template/test_template_tool.py",
@@ -49,6 +49,16 @@
     "cognovis-core/mcp-servers/cognovis-tools/tools/_template/README.md"
   ],
   "commits": [
+    {
+      "repo": "library-meta",
+      "sha": "7e48a3d",
+      "message": "feat(mcp-tool-forge): skill authoring contract + cross-links (CL-ugwe.9)"
+    },
+    {
+      "repo": "library-meta",
+      "sha": "51aa7d7",
+      "message": "feat(mcp-tool-forge): skill authoring contract + cross-links (CL-ugwe.9) [artifact update]"
+    },
     {
       "repo": "cognovis-core",
       "sha": "d5aeda5",
