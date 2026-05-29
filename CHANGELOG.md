@@ -1,5 +1,11 @@
 ## [unreleased]
 
+### Added
+
+- **`mcp-tool-forge` skill**: New authoring skill for `cognovis-tools` MCP tools (library-tool-surface species). Defines the naming contract (`family.verb` / `family_verb`), json-envelope return shape, exit-code map, idempotency rules, `run_id`/`bead_id` context injection, closed-registry requirement, and direct unit-test pattern. Auto-triggers on: "mcp tool", "new tool family", "json envelope", "library-tool-surface".
+  - `skill-forge` and `script-forge` cross-link `mcp-tool-forge` in their See-Also sections.
+  - Reference template committed in `cognovis-core` (separate repo).
+
 ### Architecture
 
 - *(adr-0007)* Introduced `library-tool-surface` as a second species of MCP server — a typed invocation channel over Library CLIs and scripts. External-capability MCP servers are unchanged. Catalog registers servers; `tools/list` at runtime is the canonical tool index. Schema: `mcp_server_entry.species` enum (`external-capability` | `library-tool-surface`). Decision tree in `docs/PRIMITIVES.md` updated. See `docs/adr/library-tool-surface-mcp.md`.
