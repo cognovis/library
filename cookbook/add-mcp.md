@@ -41,7 +41,7 @@ library:
             config_path: ~/.codex/config.toml
             snippet: { ... }
           antigravity:
-            config_path: ~/.gemini/settings.json
+            config_path: ~/.config/gemini/settings.json
             snippet: { ... }
           cursor:
             config_path: ~/.cursor/mcp.json
