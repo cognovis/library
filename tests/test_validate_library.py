@@ -471,6 +471,80 @@ def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
     assert "metadata" in tooling_result.stdout + tooling_result.stderr
 
 
+def test_mcp_server_species_library_tool_surface():
+    """library-tool-surface MCP entries accept the four coding harness registration keys."""
+    entry = {
+        "name": "cognovis-tools",
+        "description": "First-party typed Library tool surface.",
+        "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
+        "species": "library-tool-surface",
+        "coding_strategy": "mcp",
+        "capabilities": {
+            "stateless": True,
+            "streaming": False,
+            "auth": "none",
+        },
+        "install": {
+            "mcp": {
+                "claude_code": {
+                    "config_path": "~/.claude/settings.json",
+                    "snippet": {
+                        "type": "stdio",
+                        "command": "uv",
+                        "args": [
+                            "run",
+                            "--project",
+                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
+                            "cognovis-tools-mcp",
+                        ],
+                    },
+                },
+                "codex": {
+                    "config_path": "~/.codex/config.toml",
+                    "snippet": {
+                        "command": "uv",
+                        "args": [
+                            "run",
+                            "--project",
+                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
+                            "cognovis-tools-mcp",
+                        ],
+                    },
+                },
+                "antigravity": {
+                    "config_path": "~/.config/gemini/settings.json",
+                    "snippet": {
+                        "command": "uv",
+                        "args": [
+                            "run",
+                            "--project",
+                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
+                            "cognovis-tools-mcp",
+                        ],
+                    },
+                },
+                "cursor": {
+                    "config_path": "~/.cursor/mcp.json",
+                    "snippet": {
+                        "type": "stdio",
+                        "command": "uv",
+                        "args": [
+                            "run",
+                            "--project",
+                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
+                            "cognovis-tools-mcp",
+                        ],
+                    },
+                },
+            }
+        },
+    }
+
+    result = _run_validator(_make_library_yaml_with_entries({"mcp_servers": [entry]}))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 @pytest.mark.parametrize("tier_tag", ["tier:domain", "tier:project"])
 def test_tier_domain_and_project_entries_require_library_plane(tier_tag: str):
     """Domain and project tier entries must declare metadata.library.plane."""
