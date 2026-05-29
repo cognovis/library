@@ -2,6 +2,8 @@
 
 ### Added
 
+- *(CL-ugwe.6)* **capabilities.yaml MCP migration**: `manage_beads` entry migrated from `tools:[Bash,Read,Grep,Glob]+skills:[beads]` to `mcpServers:[cognovis-tools]+tools:[]+skills:[beads]` per ADR-0007 Phase 6 (coarse server-level scoping). `inspect_git` additive: `mcpServers:[cognovis-tools]` added alongside existing Bash tools. Rollback doc at `docs/mcp-migration-rollback.md`. `send_email` deferred (no mail tools in cognovis-tools).
+
 - *(CL-ugwe.7)* **MCP migration debt audit**: new audit report `docs/audit/mcp-migration-debt-2026-05-29.md` classifies 184 findings (A/B/C/D) across 8 skill/agent files in cognovis-core with hit counts and top-5 remediation targets. Added `scripts/audit-mcp-migration-debt.py` (scanner) and `scripts/check-mcp-migration-debt.sh` (doctor wrapper, exits 1 when A-class debt is present). Top 5 cognovis-core agent/skill files annotated with inline MCP migration notes.
 - feat(meta): register cognovis-tools as library-tool-surface with all 4 harness keys (claude_code, codex, antigravity, cursor) per ADR-0007 Phase 3 (CL-ugwe.3)
 - **`mcp-tool-forge` skill**: New authoring skill for `cognovis-tools` MCP tools (library-tool-surface species). Defines the naming contract (`family.verb` / `family_verb`), json-envelope return shape, exit-code map, idempotency rules, `run_id`/`bead_id` context injection, closed-registry requirement, and direct unit-test pattern. Auto-triggers on: "mcp tool", "new tool family", "json envelope", "library-tool-surface".
