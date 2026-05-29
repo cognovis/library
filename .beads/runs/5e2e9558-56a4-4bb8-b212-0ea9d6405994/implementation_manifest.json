@@ -26,12 +26,16 @@
     },
     {
       "id": 3,
-      "status": "blocked",
-      "changed_files": [],
-      "evidence_refs": [
-        "cmd:cognovis-core-write-probe"
+      "status": "completed",
+      "changed_files": [
+        "cognovis-core/mcp-servers/cognovis-tools/tools/_template/_template_tool.py",
+        "cognovis-core/mcp-servers/cognovis-tools/tools/_template/test_template_tool.py",
+        "cognovis-core/mcp-servers/cognovis-tools/tools/_template/README.md"
       ],
-      "notes": "The cognovis-core template directory is outside this session's writable roots. apply_patch rejected the sibling repo path and mkdir returned Operation not permitted."
+      "evidence_refs": [
+        "cmd:template-tests-pass",
+        "cmd:cognovis-core-commit"
+      ]
     }
   ],
   "changed_files": [
@@ -39,20 +43,16 @@
     "skills/script-forge/SKILL.md",
     "skills/skill-forge/SKILL.md",
     ".beads/runs/5e2e9558-56a4-4bb8-b212-0ea9d6405994/implementation_manifest.json",
-    ".beads/runs/5e2e9558-56a4-4bb8-b212-0ea9d6405994/evidence_ledger.json"
+    ".beads/runs/5e2e9558-56a4-4bb8-b212-0ea9d6405994/evidence_ledger.json",
+    "cognovis-core/mcp-servers/cognovis-tools/tools/_template/_template_tool.py",
+    "cognovis-core/mcp-servers/cognovis-tools/tools/_template/test_template_tool.py",
+    "cognovis-core/mcp-servers/cognovis-tools/tools/_template/README.md"
   ],
   "commits": [
     {
-      "repo": "library-meta",
-      "commit": "pending-final-implementation-commit",
-      "message": "feat(mcp-tool-forge): skill authoring contract + cross-links (CL-ugwe.9)",
-      "status": "staged"
-    },
-    {
       "repo": "cognovis-core",
-      "commit": null,
-      "status": "blocked",
-      "reason": "The required template path is outside writable roots for this session."
+      "sha": "d5aeda5",
+      "message": "feat(cognovis-tools): add mcp-tool-forge reference template tool (CL-ugwe.9)"
     }
   ],
   "tests": [
@@ -60,13 +60,18 @@
       "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python skills/skill-forge/scripts/validate-skill.py skills/mcp-tool-forge --strict",
       "status": "passed",
       "evidence_ref": "cmd:validate-skill-strict"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --with pytest python -m pytest tools/_template/test_template_tool.py -v",
+      "status": "passed",
+      "evidence_ref": "cmd:template-tests-pass"
     }
   ],
   "external_resources": [
     {
-      "path": "/Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/_template/",
-      "status": "blocked",
-      "reason": "Sibling repository is outside writable roots for this session."
+      "path": "cognovis-core/mcp-servers/cognovis-tools/tools/_template/",
+      "status": "committed",
+      "commit": "d5aeda5"
     }
   ],
   "scope_changes": [

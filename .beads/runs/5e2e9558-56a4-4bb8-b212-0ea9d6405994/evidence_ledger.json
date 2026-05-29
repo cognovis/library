@@ -50,17 +50,23 @@
       "purpose": "Inspect sibling repository state without modifying unrelated user changes.",
       "exit_code": 0,
       "observed_result": "Repository is on main ahead of origin/main with unrelated modified files; no template files were added."
+    },
+    {
+      "id": "cmd:template-tests-pass",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --with pytest python -m pytest tools/_template/test_template_tool.py -v",
+      "purpose": "Verify reference template tests pass (4 tests).",
+      "exit_code": 0,
+      "observed_result": "4 passed: test_ping_happy_path, test_ping_empty_message, test_envelope_shape, test_run_id_passthrough"
+    },
+    {
+      "id": "cmd:cognovis-core-commit",
+      "command": "git -C /Users/malte/code/library/cognovis-core commit -m 'feat(cognovis-tools): add mcp-tool-forge reference template tool (CL-ugwe.9)'",
+      "purpose": "Commit reference template to cognovis-core repo.",
+      "exit_code": 0,
+      "observed_result": "d5aeda5 \u2014 3 files changed: README.md, _template_tool.py, test_template_tool.py"
     }
   ],
   "skipped_checks": [
-    {
-      "check": "cognovis-tools template unit test",
-      "reason": "The required template files could not be written because cognovis-core is outside writable roots."
-    },
-    {
-      "check": "cognovis-core template commit",
-      "reason": "The required template files could not be written or staged in cognovis-core."
-    },
     {
       "check": "bd close and push",
       "reason": "AC3 is blocked; the bead should not be closed as complete."
@@ -95,7 +101,8 @@
     {
       "path": "/Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/_template/",
       "kind": "external-template",
-      "status": "blocked"
+      "status": "committed",
+      "commit": "d5aeda5"
     }
   ]
 }
