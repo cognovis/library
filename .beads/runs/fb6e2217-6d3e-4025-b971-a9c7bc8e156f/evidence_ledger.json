@@ -1,0 +1,74 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.8",
+  "commands": [
+    {
+      "id": "red-validator-tests",
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_skill_forge_validator.py",
+      "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
+      "exit_code": 1,
+      "outcome": "expected_failure",
+      "output_summary": "Before implementation, pytest collected 5 tests; 2 passed and 3 failed because --suggest-mcp, --format=debt-count, and the scanner DEBT column did not exist."
+    },
+    {
+      "id": "green-validator-tests",
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_skill_forge_validator.py",
+      "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
+      "exit_code": 0,
+      "outcome": "passed",
+      "output_summary": "After implementation, pytest collected 5 tests and all 5 passed."
+    },
+    {
+      "id": "validate-skill-py-compile",
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m py_compile skills/skill-forge/scripts/validate-skill.py",
+      "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
+      "exit_code": 0,
+      "outcome": "passed",
+      "output_summary": "Python compile check completed without output."
+    },
+    {
+      "id": "scan-skills-shell-syntax",
+      "command": "bash -n skills/skill-forge/scripts/scan-skills.sh",
+      "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
+      "exit_code": 0,
+      "outcome": "passed",
+      "output_summary": "Shell syntax check completed without output."
+    },
+    {
+      "id": "session-close-baseline-report",
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run python skills/skill-forge/scripts/validate-skill.py /Users/malte/.agents/skills/session-close/SKILL.md --suggest-mcp",
+      "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
+      "exit_code": 0,
+      "outcome": "passed",
+      "output_summary": "Emitted 2 MCP_DEBT_HANDLER_BASH advisories from fenced text blocks in the external session-close skill."
+    },
+    {
+      "id": "session-close-baseline-debt-count",
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run python skills/skill-forge/scripts/validate-skill.py /Users/malte/.agents/skills/session-close/SKILL.md --format=debt-count",
+      "cwd": "/Users/malte/code/library/meta/.claude/worktrees/bead-CL-ugwe.8",
+      "exit_code": 0,
+      "outcome": "passed",
+      "output_summary": "Printed 2."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "full test suite",
+      "reason": "Bead requested only tests for changed files; targeted validator/scanner tests were run instead."
+    },
+    {
+      "check": "network-backed uv dependency fetch",
+      "reason": "Sandbox network is restricted; used the repository environment with uv cache redirected to /private/tmp/uv-cache."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/fb6e2217-6d3e-4025-b971-a9c7bc8e156f/implementation_manifest.json",
+      "kind": "implementation_manifest"
+    },
+    {
+      "path": ".beads/runs/fb6e2217-6d3e-4025-b971-a9c7bc8e156f/evidence_ledger.json",
+      "kind": "evidence_ledger"
+    }
+  ]
+}
