@@ -1,5 +1,9 @@
 ## [unreleased]
 
+### Added
+
+- *(CL-ugwe)* **MCP migration debt audit**: new audit report `docs/audit/mcp-migration-debt-2026-05-29.md` classifies 184 findings (A/B/C/D) across 8 skill/agent files in cognovis-core with hit counts and top-5 remediation targets. Added `scripts/audit-mcp-migration-debt.py` (scanner) and `scripts/check-mcp-migration-debt.sh` (doctor wrapper, exits 1 when A-class debt is present). Top 5 cognovis-core agent/skill files annotated with inline MCP migration notes.
+
 ### Architecture
 
 - *(adr-0007)* Introduced `library-tool-surface` as a second species of MCP server — a typed invocation channel over Library CLIs and scripts. External-capability MCP servers are unchanged. Catalog registers servers; `tools/list` at runtime is the canonical tool index. Schema: `mcp_server_entry.species` enum (`external-capability` | `library-tool-surface`). Decision tree in `docs/PRIMITIVES.md` updated. See `docs/adr/library-tool-surface-mcp.md`.
