@@ -65,6 +65,16 @@
       "repo": "cognovis-core",
       "sha": "d5aeda5",
       "message": "feat(cognovis-tools): add mcp-tool-forge reference template tool (CL-ugwe.9)"
+    },
+    {
+      "repo": "cognovis-core",
+      "sha": "58b572d",
+      "message": "fix(cognovis-tools): template iteration arg + sys.path fix (CL-ugwe.9)"
+    },
+    {
+      "repo": "cognovis-core",
+      "sha": "14cc3a9",
+      "message": "fix(cognovis-tools): fix iteration=1 indentation in template tool (CL-ugwe.9)"
     }
   ],
   "tests": [
