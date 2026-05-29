@@ -40,7 +40,9 @@ capabilities:
     description: Inspect git status, diffs, history, and branch metadata.
     claude:
       tools: [Bash, Read, Grep, Glob]
+      mcpServers: [cognovis-tools]
     codex:
+      mcp_servers: [cognovis-tools]
       sandbox_mode: read-only
   - name: spawn_subagents
     description: Delegate bounded work to harness-native subagents.
@@ -114,11 +116,12 @@ capabilities:
       mcp_servers: [playwright]
       sandbox_mode: workspace-write
   - name: manage_beads
-    description: Read, claim, update, export, and close beads issues.
+    description: Read, claim, update, export, and close beads issues via typed MCP tools (ADR-0007 Phase 6).
     claude:
-      tools: [Bash, Read, Grep, Glob]
+      mcpServers: [cognovis-tools]
       skills: [beads]
     codex:
+      mcp_servers: [cognovis-tools]
       skills: [beads]
       sandbox_mode: workspace-write
   - name: update_docs
