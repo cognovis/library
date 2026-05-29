@@ -50,6 +50,20 @@
       "purpose": "Confirm the required run artifacts satisfy the contract_version 1 schema.",
       "exit_code": 0,
       "observed": "Artifact validator returned status ok with no manifest or evidence errors."
+    },
+    {
+      "id": "fix_codex_regressions_compile_check",
+      "command": "python3 -c \"import py_compile; py_compile.compile('scripts/audit-mcp-migration-debt.py', doraise=True)\" && echo \"compile OK\"",
+      "purpose": "Confirm the fix to is_explicit_recipe() and the negation heuristic still compiles cleanly after addressing the two Codex REGRESSION findings.",
+      "exit_code": 0,
+      "observed": "Printed compile OK; the audit script imports without syntax errors."
+    },
+    {
+      "id": "fix_codex_regressions_doctor_check",
+      "command": "scripts/check-mcp-migration-debt.sh",
+      "purpose": "Re-run the doctor wrapper after the regression fix to confirm the audit still produces A-class findings and exits non-zero.",
+      "exit_code": 1,
+      "observed": "Exited 1 with A-class summary; negation-with-recipe lines now retain their original A/B classification and Markdown table rows no longer falsely qualify as shell recipes (verified on quick-fix.md L744/L745/L746, bead-orchestrator.md L1375 table row, wave-orchestrator.md L396)."
     }
   ],
   "skipped_checks": [

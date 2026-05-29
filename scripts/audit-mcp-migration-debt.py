@@ -212,32 +212,95 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _is_markdown_table_pipe(stripped: str) -> bool:
+    # Markdown table rows typically have 2+ `|` separators surrounded by
+    # whitespace (e.g. "| col1 | col2 |"). A shell pipe is preceded by a
+    # command token and does not appear repeatedly between space-padded cells.
+    table_separator_count = len(re.findall(r"\s\|\s", stripped))
+    starts_with_pipe = stripped.startswith("|")
+    return table_separator_count >= 2 or (starts_with_pipe and table_separator_count >= 1)
+
+
 def is_explicit_recipe(line: str, in_code_block: bool) -> bool:
     stripped = line.strip()
     if in_code_block:
         return True
-    if stripped.startswith(("`bd ", "`git ", "bd ", "git ")):
+    # Strip leading Markdown blockquote markers (one or more `>` with optional
+    # spacing) before inspecting the line for shell-recipe indicators. A line
+    # like "> Do not run `bd close`" is prose inside a quote, not a shell
+    # redirection.
+    recipe_body = re.sub(r"^(?:\s*>\s*)+", "", stripped)
+    if recipe_body.startswith(("`bd ", "`git ", "bd ", "git ")):
         return True
-    if any(token in stripped for token in ("--", "&&", "|", "<", ">", "$(")):
+    # Shell-style markers that are unambiguous when present.
+    if any(token in recipe_body for token in ("--", "&&", "<", "$(")):
         return True
-    if re.match(r"^[0-9]+\.\s", stripped):
+    # `|` only counts as a shell pipe when it is not part of a Markdown table.
+    if "|" in recipe_body and not _is_markdown_table_pipe(recipe_body):
+        return True
+    # `>` only counts as a shell redirection after blockquote markers have been
+    # stripped — i.e. the redirection sign must appear inside the actual
+    # command body.
+    if ">" in recipe_body:
+        return True
+    if re.match(r"^[0-9]+\.\s", recipe_body):
         return True
     return False
+
+
+def _negation_is_primary_intent(rule: Rule, line: str) -> bool:
+    """Return True when the line's primary intent is to prohibit the command.
+
+    A negation marker downgrades a finding to D only when:
+      * the negation marker appears in the line, AND
+      * the negation marker appears before the matched command, AND
+      * the line is not an explicit invocation recipe that explains *how*
+        the command would be used (e.g. "Avoid `bd create --title=...`
+        because ...").
+
+    When the negation appears after the command, or alongside a full
+    invocation recipe, the line is still teaching the invocation and must
+    retain its original classification.
+    """
+    lowered = line.lower()
+    negation_positions = [
+        lowered.find(marker) for marker in NEGATION_MARKERS if marker in lowered
+    ]
+    if not negation_positions:
+        return False
+    first_negation = min(negation_positions)
+    command_match = rule.pattern.search(line)
+    if command_match is None:
+        # No command on the line — treat negation as primary intent so the
+        # finding falls through to D, matching the previous behaviour.
+        return True
+    command_position = command_match.start()
+    if first_negation > command_position:
+        # Negation appears after the command (e.g. "`bd close` should never
+        # be run by hand") — still a recipe-ish mention of the command, so
+        # do not downgrade.
+        return False
+    # Negation appears before the command. Only treat as primary intent when
+    # the line is NOT an explicit recipe; otherwise the negation is part of
+    # an instructional sentence that still teaches the invocation.
+    return True
 
 
 def classify(rule: Rule, line: str, in_code_block: bool) -> tuple[str, str]:
     lowered = line.lower()
     if "mcp__cognovis-tools__" in lowered or "library.exec" in lowered:
         return "D", "Line already references an MCP or library.exec migration target."
-    if any(marker in lowered for marker in NEGATION_MARKERS):
+    explicit_recipe = is_explicit_recipe(line, in_code_block)
+    has_negation = any(marker in lowered for marker in NEGATION_MARKERS)
+    if has_negation and not explicit_recipe and _negation_is_primary_intent(rule, line):
         return "D", "Informational or prohibitive mention; not teaching an invocation."
     if rule.default_classification == "A":
-        if is_explicit_recipe(line, in_code_block):
+        if explicit_recipe:
             return "A", rule.notes
         if any(marker in lowered for marker in CONTEXTUAL_MARKERS):
             return "C", "Contextual bead CLI mention; lower-priority migration."
         return "A", rule.notes
-    if is_explicit_recipe(line, in_code_block):
+    if explicit_recipe:
         return "B", rule.notes
     if any(marker in lowered for marker in CONTEXTUAL_MARKERS):
         return "C", "Contextual git/Dolt mention; migrate during broader refactors."

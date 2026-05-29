@@ -61,6 +61,10 @@
     {
       "status": "planned",
       "message": "chore(CL-ugwe.7): refresh mcp migration debt evidence"
+    },
+    {
+      "status": "planned",
+      "message": "fix(CL-ugwe.7): address codex adversarial findings in audit-mcp-migration-debt.py"
     }
   ],
   "tests": [
@@ -98,7 +102,8 @@
     "The repo now contains a reproducible audit script for MCP migration debt on installed skill and agent surfaces.",
     "The repo now contains a doctor-style wrapper that exits non-zero when A-class findings remain.",
     "The committed audit report ranks the top five remediation targets for the owning cognovis-core source repo.",
-    "Follow-up bead CL-4sdb tracks the blocked source-repo patch set."
+    "Follow-up bead CL-4sdb tracks the blocked source-repo patch set.",
+    "Per Codex adversarial review fix: the classifier now (a) only downgrades to D when the negation marker is the primary intent of the line — lines containing both a negation marker and an explicit invocation recipe retain their A/B classification — and (b) no longer treats Markdown blockquote markers (>) or Markdown table pipes (|) as shell recipe indicators. The committed audit report at docs/audit/mcp-migration-debt-2026-05-29.md is therefore slightly stale (A+B counts shift by a few entries per file) and will be refreshed by the planned 'refresh mcp migration debt evidence' commit."
   ],
   "evidence_refs": [
     "docs/audit/mcp-migration-debt-2026-05-29.md",
