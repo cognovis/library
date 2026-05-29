@@ -2476,6 +2476,27 @@ library:
         - origin:original
         - tier:global
         - category:standard
+    - name: release-lifecycle
+      description: >-
+        Repo-agnostic release lifecycle contract (ADR-0008): bead metadata is release
+        truth, pipelines supply evidence, release.version is write-once. Defines the
+        release_note/release metadata schema, lifecycle states, per-repo gate declaration,
+        and the release.* typed-tool surface (CL-ugwe.11). Single source for the release
+        metadata shape — not duplicated into library.schema.json.
+      source: https://github.com/cognovis/library/blob/main/standards/release/release-lifecycle.md
+      tier: global
+      default_scope: ask
+      metadata:
+        library:
+          plane: dev
+          steward: library-platform
+          source_catalog: library-platform
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:global
+        - category:standard
     - name: healthcare-control-areas
       description: >-
         Healthcare privacy and security control areas adapted from reason-healthcare/health-skills.
