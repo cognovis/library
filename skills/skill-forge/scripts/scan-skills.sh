@@ -7,6 +7,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+VALIDATOR="${SCRIPT_DIR}/validate-skill.py"
+debt_enabled=false
+if [ -f "$VALIDATOR" ] && command -v uv >/dev/null 2>&1; then
+    debt_enabled=true
+fi
+
 # Collect skill directories
 skill_files=()
 
@@ -52,11 +59,17 @@ fi
 # Fleet totals
 total_skills=0
 total_desc_chars=0
+total_mcp_debt=0
 bloated=()
 
 # Print header
-printf "%-25s %6s %8s %5s %7s %5s\n" "SKILL" "LINES" "TOKENS~" "REFS" "SCRIPTS" "DESC"
-printf "%-25s %6s %8s %5s %7s %5s\n" "-------------------------" "------" "--------" "-----" "-------" "-----"
+if [ "$debt_enabled" = true ]; then
+    printf "%-25s %6s %8s %5s %7s %5s %5s\n" "SKILL" "LINES" "TOKENS~" "REFS" "SCRIPTS" "DESC" "DEBT"
+    printf "%-25s %6s %8s %5s %7s %5s %5s\n" "-------------------------" "------" "--------" "-----" "-------" "-----" "-----"
+else
+    printf "%-25s %6s %8s %5s %7s %5s\n" "SKILL" "LINES" "TOKENS~" "REFS" "SCRIPTS" "DESC"
+    printf "%-25s %6s %8s %5s %7s %5s\n" "-------------------------" "------" "--------" "-----" "-------" "-----"
+fi
 
 for skill_file in "${skill_files[@]}"; do
     skill_dir="$(dirname "$skill_file")"
@@ -90,7 +103,18 @@ for skill_file in "${skill_files[@]}"; do
         desc_len=${#desc}
     fi
 
-    printf "%-25s %6d %8d %5s %7s %5d\n" "$skill_name" "$lines" "$tokens" "$has_refs" "$has_scripts" "$desc_len"
+    debt_count=0
+    if [ "$debt_enabled" = true ]; then
+        if debt_output=$(uv run python "$VALIDATOR" "$skill_file" --format=debt-count 2>/dev/null); then
+            if [[ "$debt_output" =~ ^[0-9]+$ ]]; then
+                debt_count="$debt_output"
+            fi
+        fi
+        total_mcp_debt=$((total_mcp_debt + debt_count))
+        printf "%-25s %6d %8d %5s %7s %5d %5d\n" "$skill_name" "$lines" "$tokens" "$has_refs" "$has_scripts" "$desc_len" "$debt_count"
+    else
+        printf "%-25s %6d %8d %5s %7s %5d\n" "$skill_name" "$lines" "$tokens" "$has_refs" "$has_scripts" "$desc_len"
+    fi
 
     # Accumulate fleet totals
     total_skills=$((total_skills + 1))
@@ -105,6 +129,9 @@ echo ""
 echo "=== Fleet System Prompt Cost ==="
 echo "Total skills:            $total_skills"
 echo "Total description chars: $total_desc_chars"
+if [ "$debt_enabled" = true ]; then
+    echo "Total MCP debt findings: $total_mcp_debt"
+fi
 est_tokens=$(awk "BEGIN {printf \"%d\", $total_desc_chars / 4}")
 echo "Est. description tokens: $est_tokens"
 if [ "$total_skills" -gt 0 ]; then

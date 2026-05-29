@@ -19,6 +19,9 @@ Arguments:
 
 Options:
     --strict     Treat ADVISORY findings as BLOCKING (exit 1 if any advisory)
+    --suggest-mcp
+                 Add MCP migration suggestions to MCP_DEBT advisories
+    --format    Output format: report (default) or debt-count
 
 Exit codes:
     0  No findings (or advisory-only in non-strict mode)
@@ -44,6 +47,32 @@ class SkillValidator:
         r"```(?P<lang>bash|sh|zsh|python)\s*\n(?P<body>.*?)```",
         re.IGNORECASE | re.DOTALL,
     )
+    MCP_DEBT_FENCED_CODE_RE = re.compile(
+        r"```(?P<lang>bash|sh|zsh|text)\s*\n(?P<body>.*?)```",
+        re.IGNORECASE | re.DOTALL,
+    )
+    MCP_DEBT_BD_RE = re.compile(
+        r"\bbd\s+(list|show|update|close|create|ready|stats|dep|search|link|"
+        r"prime|types|dolt|export|import|open)\b"
+    )
+    MCP_DEBT_GIT_RE = re.compile(
+        r"\bgit\s+(commit|push|pull|checkout|merge|rebase|log|diff|status|add|"
+        r"reset|fetch|tag|branch|init|clone|stash)\b"
+    )
+    MCP_DEBT_HANDLER_BASH_RE = re.compile(r"\$\{?HANDLERS_DIR\}?")
+    MCP_DEBT_HINTS = {
+        "MCP_DEBT_BD": (
+            "Consider migrating to mcp__cognovis_tools__bd_* equivalents "
+            "when available"
+        ),
+        "MCP_DEBT_GIT": (
+            "Consider migrating to mcp__cognovis_tools__git_* equivalents "
+            "when available"
+        ),
+        "MCP_DEBT_HANDLER_BASH": (
+            "Consider replacing with cognovis-tools MCP server invocation"
+        ),
+    }
 
     # Tool-ish keywords for verbal pipeline heuristic
     VERBAL_PIPELINE_KEYWORDS = {
@@ -82,9 +111,15 @@ class SkillValidator:
         r"proposals/[A-Za-z0-9_.\-]+\.v[0-9]+$"
     )
 
-    def __init__(self, skill_path: Path, strict: bool = False):
+    def __init__(
+        self,
+        skill_path: Path,
+        strict: bool = False,
+        suggest_mcp: bool = False,
+    ):
         self.skill_path = skill_path
         self.strict = strict
+        self.suggest_mcp = suggest_mcp
         self.blocking: list[str] = []
         self.advisory: list[str] = []
         self.body = ""
@@ -106,6 +141,7 @@ class SkillValidator:
 
         self._check_extractable_code()
         self._check_plugin_paths()
+        self._check_mcp_debt()
         self._check_action_boundary()
 
         if self.strict:
@@ -327,6 +363,48 @@ class SkillValidator:
                     f"    → {hint}"
                 )
 
+    def _check_mcp_debt(self) -> None:
+        """Detect migration debt in shell-like fenced code blocks."""
+        for match in self.MCP_DEBT_FENCED_CODE_RE.finditer(self.body):
+            lang = match.group("lang").lower()
+            block = match.group("body")
+
+            for debt_match in self.MCP_DEBT_BD_RE.finditer(block):
+                self._append_mcp_debt(
+                    "MCP_DEBT_BD",
+                    f"raw bd CLI call `{debt_match.group(0)}` in fenced "
+                    f"{lang} block",
+                )
+
+            for debt_match in self.MCP_DEBT_GIT_RE.finditer(block):
+                self._append_mcp_debt(
+                    "MCP_DEBT_GIT",
+                    f"raw git CLI call `{debt_match.group(0)}` in fenced "
+                    f"{lang} block",
+                )
+
+            for debt_match in self.MCP_DEBT_HANDLER_BASH_RE.finditer(block):
+                self._append_mcp_debt(
+                    "MCP_DEBT_HANDLER_BASH",
+                    f"direct `{debt_match.group(0)}` handler reference in fenced "
+                    f"{lang} block",
+                )
+
+    def _append_mcp_debt(self, category: str, message: str) -> None:
+        """Append an MCP migration debt advisory."""
+        finding = f"{category}: {message}"
+        if self.suggest_mcp:
+            finding = f"{finding}\n    → {self.MCP_DEBT_HINTS[category]}"
+        self.advisory.append(finding)
+
+    def mcp_debt_count(self) -> int:
+        """Return the number of MCP_DEBT findings accumulated by validation."""
+        return sum(
+            1
+            for finding in self.advisory
+            if finding.startswith("MCP_DEBT_")
+        )
+
     def _check_action_boundary(self) -> None:
         """Validate judge-layer action_boundary frontmatter shape."""
         boundary = self.frontmatter.get("action_boundary")
@@ -518,14 +596,34 @@ Exit codes:
         action="store_true",
         help="Treat ADVISORY findings as BLOCKING (exit 1 if any advisory)",
     )
+    parser.add_argument(
+        "--suggest-mcp",
+        action="store_true",
+        help="Append MCP migration suggestions to MCP_DEBT advisories",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("report", "debt-count"),
+        default="report",
+        dest="output_format",
+        help="Output format",
+    )
 
     args = parser.parse_args()
 
-    validator = SkillValidator(args.skill_path, strict=args.strict)
+    validator = SkillValidator(
+        args.skill_path,
+        strict=args.strict,
+        suggest_mcp=args.suggest_mcp,
+    )
 
     ok, load_failed = validator.validate()
     if load_failed:
         sys.exit(2)
+
+    if args.output_format == "debt-count":
+        print(validator.mcp_debt_count())
+        sys.exit(0)
 
     validator.print_report()
     sys.exit(0 if ok else 1)

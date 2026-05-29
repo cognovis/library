@@ -396,6 +396,13 @@ Exit 2 = file not found / parse error.
 
 Report findings verbatim. Suggest scripts/ extraction for EXTRACTABLE_CODE violations.
 
+Advisory codes emitted for fenced code blocks containing MCP migration targets:
+- `MCP_DEBT_BD` — raw `bd` invocation (should route via MCP tool surface)
+- `MCP_DEBT_GIT` — raw `git` invocation (should route via MCP tool surface)
+- `MCP_DEBT_HANDLER_BASH` — `HANDLERS_DIR` bash expansion pending migration
+
+Advisory codes do not block on their own; use `--strict` to promote them to failures.
+
 ---
 
 ## Mode 3: audit-fleet
@@ -408,8 +415,9 @@ python3 skills/skill-forge/scripts/scan-codex-compat.py
 ```
 
 Use the output to report skill discovery, description hard-limit checks,
-extractable-code detection, and Codex portability findings. Do not dispatch to a
-separate `skill-auditor` agent; that worker has been retired.
+extractable-code detection, MCP migration debt scores, and Codex portability
+findings. Do not dispatch to a separate `skill-auditor` agent; that worker has
+been retired.
 
 ---
 
@@ -481,8 +489,8 @@ should reference the tool's SKILL.md for the contract.
 | File | Purpose |
 |------|---------|
 | `assets/skill-template.md` | Starter SKILL.md template including optional action_boundary shape |
-| `scripts/validate-skill.py` | Deterministic EXTRACTABLE_CODE validator (single skill) |
-| `scripts/scan-skills.sh` | Discover all skills, measure tokens/lines (fleet) |
+| `scripts/validate-skill.py` | Deterministic validator: EXTRACTABLE_CODE violations + MCP migration debt advisories (single skill) |
+| `scripts/scan-skills.sh` | Discover all skills, measure tokens/lines, aggregate MCP debt score (fleet) |
 | `scripts/scan-codex-compat.py` | Codex portability scanner |
 | `references/action-boundary.md` | Side-effect classification and judge-routing guidance |
 | `references/skill-script-first.md` | Authoring guidance for the script-first rule |

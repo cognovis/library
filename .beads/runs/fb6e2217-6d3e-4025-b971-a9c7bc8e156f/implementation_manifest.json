@@ -1,0 +1,99 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.8",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "description": "validate-skill.py emits MCP_DEBT_BD, MCP_DEBT_GIT, MCP_DEBT_HANDLER_BASH on known patterns.",
+      "status": "done",
+      "evidence_refs": [
+        "cmd:red-validator-tests",
+        "cmd:green-validator-tests",
+        "cmd:session-close-baseline-report",
+        "cmd:session-close-baseline-debt-count"
+      ]
+    },
+    {
+      "id": 2,
+      "description": "Fleet audit aggregates debt score per skill.",
+      "status": "done",
+      "evidence_refs": [
+        "cmd:red-validator-tests",
+        "cmd:green-validator-tests",
+        "cmd:scan-skills-shell-syntax"
+      ]
+    },
+    {
+      "id": 3,
+      "description": "skills/session-close/SKILL.md shows violations before remediation.",
+      "status": "done",
+      "evidence_refs": [
+        "cmd:session-close-baseline-report",
+        "cmd:session-close-baseline-debt-count"
+      ]
+    }
+  ],
+  "changed_files": [
+    "tests/test_skill_forge_validator.py",
+    "skills/skill-forge/scripts/validate-skill.py",
+    "skills/skill-forge/scripts/scan-skills.sh",
+    ".beads/runs/fb6e2217-6d3e-4025-b971-a9c7bc8e156f/implementation_manifest.json",
+    ".beads/runs/fb6e2217-6d3e-4025-b971-a9c7bc8e156f/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "72a91588c799ab582a06211d6d6862e14d7ab953",
+      "message": "test(CL-ugwe.8): red - detect MCP migration debt"
+    },
+    {
+      "sha": "f4457d73565e246ee7c6b51332a042c4a74e1104",
+      "message": "feat(CL-ugwe.8): green - add MCP migration debt checks"
+    }
+  ],
+  "tests": [
+    {
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_skill_forge_validator.py",
+      "result": "red gate failed as expected before implementation: 3 failed, 2 passed"
+    },
+    {
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_skill_forge_validator.py",
+      "result": "green gate passed after implementation: 5 passed"
+    },
+    {
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m py_compile skills/skill-forge/scripts/validate-skill.py",
+      "result": "passed"
+    },
+    {
+      "command": "bash -n skills/skill-forge/scripts/scan-skills.sh",
+      "result": "passed"
+    },
+    {
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run python skills/skill-forge/scripts/validate-skill.py /Users/malte/.agents/skills/session-close/SKILL.md --suggest-mcp",
+      "result": "passed; emitted 2 MCP_DEBT_HANDLER_BASH advisories"
+    },
+    {
+      "command": "env UV_CACHE_DIR=/private/tmp/uv-cache uv run python skills/skill-forge/scripts/validate-skill.py /Users/malte/.agents/skills/session-close/SKILL.md --format=debt-count",
+      "result": "passed; output 2"
+    }
+  ],
+  "external_resources": [
+    {
+      "path": "/Users/malte/.agents/skills/session-close/SKILL.md",
+      "purpose": "Read-only AC3 baseline verification target"
+    }
+  ],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "validate-skill.py now has --suggest-mcp and --format=debt-count CLI modes.",
+    "scan-skills.sh adds a DEBT column and Total MCP debt findings summary when the local validator and uv are available.",
+    "MCP debt detection is advisory-only and scans only bash, sh, zsh, and text fenced code blocks."
+  ],
+  "evidence_refs": [
+    "cmd:red-validator-tests",
+    "cmd:green-validator-tests",
+    "cmd:validate-skill-py-compile",
+    "cmd:scan-skills-shell-syntax",
+    "cmd:session-close-baseline-report",
+    "cmd:session-close-baseline-debt-count"
+  ]
+}
