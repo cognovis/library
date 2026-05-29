@@ -1,0 +1,68 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.7",
+  "commands": [
+    {
+      "id": "probe_writable_targets",
+      "command": "[ -w /Users/malte/.claude/agents ] && echo writable || echo not-writable; [ -w /Users/malte/.agents/skills/beads ] && echo writable || echo not-writable",
+      "purpose": "Verify whether the installed audit targets could be edited from this worktree.",
+      "exit_code": 0,
+      "observed": "Both target directories reported not-writable inside this sandbox."
+    },
+    {
+      "id": "generate_audit_report",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --no-project python scripts/audit-mcp-migration-debt.py --output docs/audit/mcp-migration-debt-2026-05-29.md",
+      "purpose": "Generate the committed MCP migration debt report from the installed skill and agent surfaces.",
+      "exit_code": 0,
+      "observed": "Wrote docs/audit/mcp-migration-debt-2026-05-29.md with ranked A/B/C/D findings and top-five remediation targets."
+    },
+    {
+      "id": "run_doctor_check",
+      "command": "scripts/check-mcp-migration-debt.sh",
+      "purpose": "Verify the doctor wrapper fails when A-class migration debt remains.",
+      "exit_code": 1,
+      "observed": "Exited 1 and printed the audit summary because the installed audit scope still contains A-class findings."
+    },
+    {
+      "id": "create_followup_bead",
+      "command": "bd create --title=\"[FOLLOW-UP] Patch top-5 cognovis-core MCP migration sources\" -t chore -p 3 --deps \"discovered-from:CL-ugwe.7\" --body-file /private/tmp/cl-ugwe7-followup.md",
+      "purpose": "File the blocked source-repo remediation discovered by the audit.",
+      "exit_code": 1,
+      "observed": "Failed with 'Dolt server unreachable at 127.0.0.1:3306: connect: operation not permitted'."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "id": "top_five_source_patch",
+      "reason": "The top five remediation targets are installed files outside the writable roots of this run, and the repo does not contain their owning source copies.",
+      "reproduction": "Open the report, then compare the target paths under ~/.claude/agents and ~/.agents/skills with the writable roots listed for this session."
+    },
+    {
+      "id": "followup_bead_created",
+      "reason": "The follow-up bead could not be filed because the local Dolt-backed bd database was unreachable in this sandbox.",
+      "reproduction": "Re-run the recorded bd create command in an environment where bd can connect to the local Dolt server."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/audit/mcp-migration-debt-2026-05-29.md",
+      "purpose": "Committed report with ranked findings and A/B/C/D classification."
+    },
+    {
+      "path": "scripts/audit-mcp-migration-debt.py",
+      "purpose": "Reusable audit script for installed skill and agent surfaces."
+    },
+    {
+      "path": "scripts/check-mcp-migration-debt.sh",
+      "purpose": "Doctor-style wrapper that fails when A-class findings are present."
+    },
+    {
+      "path": ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/implementation_manifest.json",
+      "purpose": "Required implementation manifest for this bead run."
+    },
+    {
+      "path": ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json",
+      "purpose": "Required evidence ledger for this bead run."
+    }
+  ]
+}

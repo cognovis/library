@@ -1,0 +1,98 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.7",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "status": "done",
+      "changed_files": [
+        "docs/audit/mcp-migration-debt-2026-05-29.md"
+      ],
+      "evidence_refs": [
+        "docs/audit/mcp-migration-debt-2026-05-29.md",
+        "evidence_ledger.commands.generate_audit_report"
+      ]
+    },
+    {
+      "id": 2,
+      "status": "partial",
+      "changed_files": [],
+      "evidence_refs": [
+        "docs/audit/mcp-migration-debt-2026-05-29.md",
+        "evidence_ledger.commands.probe_writable_targets",
+        "evidence_ledger.skipped_checks.top_five_source_patch"
+      ]
+    },
+    {
+      "id": 3,
+      "status": "done",
+      "changed_files": [
+        "scripts/audit-mcp-migration-debt.py",
+        "scripts/check-mcp-migration-debt.sh"
+      ],
+      "evidence_refs": [
+        "evidence_ledger.commands.run_doctor_check"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/audit-mcp-migration-debt.py",
+    "scripts/check-mcp-migration-debt.sh",
+    "docs/audit/mcp-migration-debt-2026-05-29.md",
+    ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/implementation_manifest.json",
+    ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): add docs/audit/mcp-migration-debt-2026-05-29.md",
+      "sha": "0f73b55"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): add mcp migration debt audit scripts",
+      "sha": "e75e4de"
+    },
+    {
+      "status": "planned",
+      "message": "chore(CL-ugwe.7): record mcp migration debt evidence"
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --no-project python scripts/audit-mcp-migration-debt.py --output docs/audit/mcp-migration-debt-2026-05-29.md",
+      "status": "passed",
+      "evidence_ref": "evidence_ledger.commands.generate_audit_report"
+    },
+    {
+      "command": "scripts/check-mcp-migration-debt.sh",
+      "status": "failed_as_expected",
+      "evidence_ref": "evidence_ledger.commands.run_doctor_check"
+    }
+  ],
+  "external_resources": [
+    "~/.agents/skills/beads/SKILL.md",
+    "~/.agents/skills/session-close/SKILL.md",
+    "~/.agents/skills/bead-reviewer/SKILL.md",
+    "~/.agents/skills/wave-dispatch/SKILL.md",
+    "~/.claude/agents/bead-orchestrator.md",
+    "~/.claude/agents/quick-fix.md",
+    "~/.claude/agents/session-close.md",
+    "~/.claude/agents/wave-orchestrator.md"
+  ],
+  "scope_changes": [
+    "Criterion 2 could be audited and ranked, but the top five installed files could not be patched in this worktree because their owning source files are outside the writable roots.",
+    "A follow-up bead for the blocked source-repo remediation could not be created in this session because the local Dolt-backed bd database was unreachable."
+  ],
+  "downstream_impacts": [
+    "The repo now contains a reproducible audit script for MCP migration debt on installed skill and agent surfaces.",
+    "The repo now contains a doctor-style wrapper that exits non-zero when A-class findings remain.",
+    "The committed audit report ranks the top five remediation targets for the owning cognovis-core source repo."
+  ],
+  "evidence_refs": [
+    "docs/audit/mcp-migration-debt-2026-05-29.md",
+    "scripts/audit-mcp-migration-debt.py",
+    "scripts/check-mcp-migration-debt.sh",
+    ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json"
+  ]
+}
