@@ -64,12 +64,23 @@
       "purpose": "Commit reference template to cognovis-core repo.",
       "exit_code": 0,
       "observed_result": "d5aeda5 \u2014 3 files changed: README.md, _template_tool.py, test_template_tool.py"
+    },
+    {
+      "id": "cmd:registry-entry-check",
+      "command": "find /Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools -maxdepth 3 -type f \\( -name '*registry*' -o -name '*template*' -o -name 'README.md' \\) | sort",
+      "purpose": "Check whether the cognovis-core template commit included a registry entry or closed catalog example.",
+      "exit_code": 0,
+      "observed_result": "Found README.md, _template_tool.py, and test_template_tool.py under tools/_template; no registry entry file was found."
     }
   ],
   "skipped_checks": [
     {
-      "check": "bd close and push",
-      "reason": "AC3 is blocked; the bead should not be closed as complete."
+      "check": "registry entry commit",
+      "reason": "No registry entry file was present in cognovis-core commit d5aeda5, and this session cannot write into the sibling repository path."
+    },
+    {
+      "check": "bd close",
+      "reason": "AC3 is still partial; the bead should not be closed as complete."
     }
   ],
   "artifacts": [
@@ -101,8 +112,9 @@
     {
       "path": "/Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/_template/",
       "kind": "external-template",
-      "status": "committed",
-      "commit": "d5aeda5"
+      "status": "partial",
+      "commit": "d5aeda5",
+      "missing": "registry entry"
     }
   ]
 }

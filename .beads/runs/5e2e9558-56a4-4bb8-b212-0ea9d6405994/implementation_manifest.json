@@ -26,7 +26,7 @@
     },
     {
       "id": 3,
-      "status": "done",
+      "status": "partial",
       "changed_files": [
         "cognovis-core/mcp-servers/cognovis-tools/tools/_template/_template_tool.py",
         "cognovis-core/mcp-servers/cognovis-tools/tools/_template/test_template_tool.py",
@@ -34,8 +34,10 @@
       ],
       "evidence_refs": [
         "cmd:template-tests-pass",
-        "cmd:cognovis-core-commit"
-      ]
+        "cmd:cognovis-core-commit",
+        "cmd:registry-entry-check"
+      ],
+      "notes": "Reference tool files exist in cognovis-core commit d5aeda5, but no committed registry entry file or closed-catalog example was found under cognovis-tools."
     }
   ],
   "changed_files": [
@@ -80,20 +82,21 @@
   "external_resources": [
     {
       "path": "cognovis-core/mcp-servers/cognovis-tools/tools/_template/",
-      "status": "committed",
-      "commit": "d5aeda5"
+      "status": "partial",
+      "commit": "d5aeda5",
+      "missing": "registry entry"
     }
   ],
   "scope_changes": [
     {
       "status": "none",
-      "summary": "No out-of-scope implementation was added. AC3 remains unimplemented because the required repository path is not writable."
+      "summary": "No out-of-scope implementation was added. AC3 is partially implemented externally, but the required registry entry remains missing."
     }
   ],
   "downstream_impacts": [
     {
       "status": "pending",
-      "summary": "mcp-tool-forge now references the cognovis-tools template path, but the template itself still needs to be created in cognovis-core from a session with that repo writable."
+      "summary": "mcp-tool-forge now references the cognovis-tools template path. The cognovis-core template still needs a committed registry entry before AC3 is complete."
     }
   ],
   "evidence_refs": [
@@ -101,6 +104,7 @@
     "cmd:bd-show",
     "cmd:validate-skill-strict",
     "cmd:contract-anchor-review",
-    "cmd:cognovis-core-write-probe"
+    "cmd:cognovis-core-write-probe",
+    "cmd:registry-entry-check"
   ]
 }
