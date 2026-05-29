@@ -55,7 +55,7 @@ After registering cognovis-tools in the target harness:
 ```bash
 # Should return bead data via MCP (not via bd CLI):
 # In a Claude Code session with cognovis-tools registered:
-# mcp__cognovis-tools__bead.show(bead_id="CL-ugwe")
+# mcp__cognovis-tools__bead_show(bead_id="CL-ugwe")
 # Expected: Envelope with bead data
 ```
 

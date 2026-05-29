@@ -118,6 +118,7 @@ capabilities:
   - name: manage_beads
     description: Read, claim, update, export, and close beads issues via typed MCP tools (ADR-0007 Phase 6).
     claude:
+      tools: []
       mcpServers: [cognovis-tools]
       skills: [beads]
     codex:
