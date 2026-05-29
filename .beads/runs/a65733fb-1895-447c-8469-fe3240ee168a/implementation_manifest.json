@@ -1,0 +1,139 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.7",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "status": "done",
+      "changed_files": [
+        "docs/audit/mcp-migration-debt-2026-05-29.md"
+      ],
+      "evidence_refs": [
+        "docs/audit/mcp-migration-debt-2026-05-29.md",
+        "evidence_ledger.commands.generate_audit_report"
+      ]
+    },
+    {
+      "id": 2,
+      "status": "done",
+      "changed_files": [
+        "../cognovis-core/agents/bead-orchestrator.md",
+        "../cognovis-core/agents/quick-fix.md",
+        "../cognovis-core/agents/wave-orchestrator.md",
+        "../cognovis-core/skills/bead-reviewer/SKILL.md",
+        "../cognovis-core/skills/beads/SKILL.md"
+      ],
+      "evidence_refs": [
+        "docs/audit/mcp-migration-debt-2026-05-29.md",
+        "evidence_ledger.commands.probe_writable_targets",
+        "evidence_ledger.commands.annotate_cognovis_core_top5",
+        "bd:CL-4sdb"
+      ]
+    },
+    {
+      "id": 3,
+      "status": "done",
+      "changed_files": [
+        "scripts/audit-mcp-migration-debt.py",
+        "scripts/check-mcp-migration-debt.sh"
+      ],
+      "evidence_refs": [
+        "evidence_ledger.commands.run_doctor_check"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/audit-mcp-migration-debt.py",
+    "scripts/check-mcp-migration-debt.sh",
+    "docs/audit/mcp-migration-debt-2026-05-29.md",
+    ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/implementation_manifest.json",
+    ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): add docs/audit/mcp-migration-debt-2026-05-29.md",
+      "sha": "0f73b55"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): add mcp migration debt audit scripts",
+      "sha": "e75e4de"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): record mcp migration debt evidence",
+      "sha": "6b7de7a"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): refresh mcp migration debt evidence",
+      "sha": "f77f3bc6b60de4fa8f46dcc06c209f26b28d5e23"
+    },
+    {
+      "status": "committed",
+      "message": "fix(CL-ugwe.7): address codex adversarial findings in audit-mcp-migration-debt.py",
+      "sha": "26809688a68451cece5022c7b66a3a0a72ead086"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): regenerate audit report with corrected classifier",
+      "sha": "dcb5032"
+    },
+    {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): annotate top-5 mcp migration debt (bead CL-ugwe.7)",
+      "sha": "94b4f09030cbb28ea4cc125acabd52423dc4a990",
+      "repo": "../cognovis-core"
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --no-project python scripts/audit-mcp-migration-debt.py --output docs/audit/mcp-migration-debt-2026-05-29.md",
+      "status": "passed",
+      "evidence_ref": "evidence_ledger.commands.generate_audit_report"
+    },
+    {
+      "command": "scripts/check-mcp-migration-debt.sh",
+      "status": "failed_as_expected",
+      "evidence_ref": "evidence_ledger.commands.run_doctor_check"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --no-project python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/implementation_manifest.json --evidence .beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json --bead-id CL-ugwe.7",
+      "status": "passed",
+      "evidence_ref": "evidence_ledger.commands.validate_artifacts"
+    }
+  ],
+  "external_resources": [
+    "~/.agents/skills/beads/SKILL.md",
+    "~/.agents/skills/session-close/SKILL.md",
+    "~/.agents/skills/bead-reviewer/SKILL.md",
+    "~/.agents/skills/wave-dispatch/SKILL.md",
+    "~/.claude/agents/bead-orchestrator.md",
+    "~/.claude/agents/quick-fix.md",
+    "~/.claude/agents/session-close.md",
+    "~/.claude/agents/wave-orchestrator.md",
+    "../cognovis-core/agents/bead-orchestrator.md",
+    "../cognovis-core/agents/quick-fix.md",
+    "../cognovis-core/agents/wave-orchestrator.md",
+    "../cognovis-core/skills/bead-reviewer/SKILL.md",
+    "../cognovis-core/skills/beads/SKILL.md"
+  ],
+  "scope_changes": [
+    "Phase 10 dispute resolution: AK2 was reopened after the verifier confirmed the sibling cognovis-core source files are writable from this run. The top five owning sources were annotated with minimal MCP migration notes (1-2 line comments each, no prose rewrites) and committed to ../cognovis-core (SHA 94b4f09). CL-4sdb remains as the broader follow-up tracker for the full migration."
+  ],
+  "downstream_impacts": [
+    "The repo now contains a reproducible audit script for MCP migration debt on installed skill and agent surfaces.",
+    "The repo now contains a doctor-style wrapper that exits non-zero when A-class findings remain.",
+    "The committed audit report ranks the top five remediation targets and (post-classifier-fix regeneration) shows accurate A+B counts.",
+    "Follow-up bead CL-4sdb tracks the broader source-repo MCP migration; the top five sources are now annotated with explicit MCP migration markers so future implementers can find them.",
+    "Per Codex adversarial review fix: the classifier now (a) only downgrades to D when the negation marker is the primary intent of the line — lines containing both a negation marker and an explicit invocation recipe retain their A/B classification — and (b) no longer treats Markdown blockquote markers (>) or Markdown table pipes (|) as shell recipe indicators. The committed audit report at docs/audit/mcp-migration-debt-2026-05-29.md has been regenerated with the corrected classifier (commit dcb5032)."
+  ],
+  "evidence_refs": [
+    "docs/audit/mcp-migration-debt-2026-05-29.md",
+    "scripts/audit-mcp-migration-debt.py",
+    "scripts/check-mcp-migration-debt.sh",
+    "bd:CL-4sdb",
+    ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json"
+  ]
+}
