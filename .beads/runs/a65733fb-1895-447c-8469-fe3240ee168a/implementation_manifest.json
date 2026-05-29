@@ -54,8 +54,13 @@
       "sha": "e75e4de"
     },
     {
+      "status": "committed",
+      "message": "chore(CL-ugwe.7): record mcp migration debt evidence",
+      "sha": "6b7de7a"
+    },
+    {
       "status": "planned",
-      "message": "chore(CL-ugwe.7): record mcp migration debt evidence"
+      "message": "chore(CL-ugwe.7): refresh mcp migration debt evidence"
     }
   ],
   "tests": [
@@ -68,6 +73,11 @@
       "command": "scripts/check-mcp-migration-debt.sh",
       "status": "failed_as_expected",
       "evidence_ref": "evidence_ledger.commands.run_doctor_check"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --no-project python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/implementation_manifest.json --evidence .beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json --bead-id CL-ugwe.7",
+      "status": "passed",
+      "evidence_ref": "evidence_ledger.commands.validate_artifacts"
     }
   ],
   "external_resources": [
@@ -81,18 +91,20 @@
     "~/.claude/agents/wave-orchestrator.md"
   ],
   "scope_changes": [
-    "Criterion 2 could be audited and ranked, but the top five installed files could not be patched in this worktree because their owning source files are outside the writable roots.",
-    "A follow-up bead for the blocked source-repo remediation could not be created in this session because the local Dolt-backed bd database was unreachable."
+    "Criterion 2 could be audited and ranked, but the top five installed files could not be patched in this meta worktree because their owning cognovis-core source files are outside the writable roots.",
+    "Filed follow-up bead CL-4sdb to track the blocked source-repo remediation."
   ],
   "downstream_impacts": [
     "The repo now contains a reproducible audit script for MCP migration debt on installed skill and agent surfaces.",
     "The repo now contains a doctor-style wrapper that exits non-zero when A-class findings remain.",
-    "The committed audit report ranks the top five remediation targets for the owning cognovis-core source repo."
+    "The committed audit report ranks the top five remediation targets for the owning cognovis-core source repo.",
+    "Follow-up bead CL-4sdb tracks the blocked source-repo patch set."
   ],
   "evidence_refs": [
     "docs/audit/mcp-migration-debt-2026-05-29.md",
     "scripts/audit-mcp-migration-debt.py",
     "scripts/check-mcp-migration-debt.sh",
+    "bd:CL-4sdb",
     ".beads/runs/a65733fb-1895-447c-8469-fe3240ee168a/evidence_ledger.json"
   ]
 }
