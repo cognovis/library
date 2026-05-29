@@ -1937,7 +1937,7 @@ library:
           inventory: convention-scan
           plane: dev
           harness_support:
-            claude: supported
+            claude_code: supported
             cursor: supported
             codex: supported
           gascity:
@@ -3445,6 +3445,56 @@ library:
         - hooks-manifest
 
   mcp_servers:
+    - name: cognovis-tools
+      description: First-party bead.* typed tools — exposes bd (beads) commands as structured MCP tools for all harness families (ADR-0007 library-tool-surface).
+      source: https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml
+      species: library-tool-surface
+      coding_strategy: mcp
+      capabilities:
+        stateless: true
+        streaming: false
+        auth: none
+      install:
+        mcp:
+          claude_code:
+            config_path: ~/.claude/settings.json
+            snippet:
+              type: stdio
+              command: uv
+              args:
+                - run
+                - --project
+                - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+                - cognovis-tools-mcp
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              command: uv
+              args:
+                - run
+                - --project
+                - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+                - cognovis-tools-mcp
+          antigravity:
+            config_path: ~/.config/gemini/settings.json
+            snippet:
+              command: uv
+              args:
+                - run
+                - --project
+                - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+                - cognovis-tools-mcp
+          cursor:
+            config_path: ~/.cursor/mcp.json
+            snippet:
+              type: stdio
+              command: uv
+              args:
+                - run
+                - --project
+                - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+                - cognovis-tools-mcp
+
     - name: open-brain
       description: Stateless memory store via search/save/get — persists observations across sessions
       source: https://github.com/sussdorff/open-brain/blob/main/mcp.yaml

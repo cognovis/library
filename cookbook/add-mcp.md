@@ -3,8 +3,8 @@
 > **Bead**: CL-mfz | **Epic**: CL-36o | **Last updated**: 2026-04-30
 >
 > **Scope**: This cookbook covers how to add a server to the `library.mcp_servers:` catalog in
-> `library.yaml`. It does NOT cover per-harness config mutation (install/remove), which is a
-> follow-up bead.
+> `library.yaml`, including the canonical per-harness `install.mcp` blocks that the installer or
+> a human operator will later materialize. It does NOT cover the installer implementation itself.
 
 ## Overview
 
@@ -21,6 +21,8 @@ library:
   mcp_servers:
     - name: <kebab-case-identifier>        # required
       description: <human-readable string>  # required
+      source: <source-of-truth URL>         # recommended for catalog provenance
+      species: external-capability | library-tool-surface
       coding_strategy: cli | mcp            # optional — how coding harnesses consume this
       mobile_strategy: cli | mcp            # optional — how mobile/web harnesses consume this
       capabilities:                         # optional
@@ -38,8 +40,11 @@ library:
           codex:
             config_path: ~/.codex/config.toml
             snippet: { ... }
-          opencode:
-            config_path: ~/.config/opencode/opencode.json
+          antigravity:
+            config_path: ~/.gemini/settings.json
+            snippet: { ... }
+          cursor:
+            config_path: ~/.cursor/mcp.json
             snippet: { ... }
           claude_ai:
             install_url: https://...        # URL for manual add
@@ -49,6 +54,48 @@ library:
 ```
 
 Full schema definition: `docs/schema/library.schema.json` — `$defs/mcp_server_entry`.
+
+## Species Field (`species:`)
+
+Use `species: external-capability` for third-party capability providers such as `open-brain`,
+`executive-circle`, or `heypresto`. Use `species: library-tool-surface` for first-party Library
+servers that expose typed tool families over existing Library CLIs or Scripts.
+
+`cognovis-tools` is the reference `library-tool-surface` entry. Its job is to register the typed
+tool surface into all four coding harness families:
+
+- `claude_code` for `cld`
+- `codex` for `cdx`
+- `antigravity` for `agr`
+- `cursor` for `cra`
+
+Registration is not orchestration. Claude Code and Codex remain the bead orchestration runners;
+Antigravity and Cursor are implementation-surface consumers that need the MCP registration so their
+agents call `bead.*`, `git.*`, and `library.exec` directly instead of reconstructing CLI flags.
+
+## Registering for All 4 Harnesses
+
+Use all four coding-harness keys when a first-party `library-tool-surface` must be available in
+every implementation surface:
+
+```yaml
+install:
+  mcp:
+    claude_code:
+      config_path: ~/.claude/settings.json
+      snippet: {command: uv}
+    codex:
+      config_path: ~/.codex/config.toml
+      snippet: {command: uv}
+    antigravity:
+      config_path: ~/.config/gemini/settings.json
+      snippet: {command: uv}
+    cursor:
+      config_path: ~/.cursor/mcp.json
+      snippet:
+        type: stdio
+        command: uv
+```
 
 ## Deciding `coding_strategy` vs `mobile_strategy`
 
@@ -78,6 +125,10 @@ wired into harness MCP config directly: `coding_strategy: mcp`.
 For mobile/web (claude.ai, iOS): these harnesses do not run local packages, so if there is
 an add URL available: `mobile_strategy: mcp` with `install_url`.
 
+For `species: library-tool-surface`, `coding_strategy` should normally be `mcp`, and the
+`install.mcp` block should register every coding harness surface that will consume the typed tools.
+For `cognovis-tools`, that means `claude_code`, `codex`, `antigravity`, and `cursor`.
+
 ### 3. Fill in capabilities
 
 - `stateless`: does each call start fresh, or does the server maintain session state?
@@ -103,8 +154,82 @@ install:
       snippet:
         type: stdio
         command: <command-name>
-    # ... add other harnesses as needed
+    codex:
+      config_path: ~/.codex/config.toml
+      snippet:
+        command: <command-name>
+        args: [<arg>, <arg>]
+    antigravity:
+      config_path: ~/.config/gemini/settings.json
+      snippet:
+        command: <command-name>
+        args: [<arg>, <arg>]
+        env: {}
+    cursor:
+      config_path: ~/.cursor/mcp.json
+      snippet:
+        type: stdio
+        command: <command-name>
+        args: [<arg>, <arg>]
+        env: {}
 ```
+
+Reference example for `cognovis-tools`:
+
+```yaml
+install:
+  mcp:
+    claude_code:
+      config_path: ~/.claude/settings.json
+      snippet:
+        type: stdio
+        command: uv
+        args:
+          - run
+          - --project
+          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+          - cognovis-tools-mcp
+    codex:
+      config_path: ~/.codex/config.toml
+      snippet:
+        command: uv
+        args:
+          - run
+          - --project
+          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+          - cognovis-tools-mcp
+    antigravity:
+      config_path: ~/.config/gemini/settings.json
+      snippet:
+        command: uv
+        args:
+          - run
+          - --project
+          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+          - cognovis-tools-mcp
+    cursor:
+      config_path: ~/.cursor/mcp.json
+      snippet:
+        type: stdio
+        command: uv
+        args:
+          - run
+          - --project
+          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+          - cognovis-tools-mcp
+```
+
+### Registration smoke
+
+After registering a `library-tool-surface` server, perform a harness-local smoke check:
+
+1. Launch the target harness.
+2. Confirm the MCP server appears in the harness config view or `tools/list`.
+3. Verify the typed tool list includes the expected family, for example `bead.*` for
+   `cognovis-tools`.
+
+For this bead, a minimal acceptable manual smoke is Cursor (`~/.cursor/mcp.json`) because `cra` is
+an actively used implementation surface.
 
 ### 5. Add to library.yaml
 
@@ -114,7 +239,7 @@ by `name` for readability.
 ### 6. Validate
 
 ```bash
-python3 scripts/validate-library.py
+uv run python scripts/validate-library.py
 ```
 
 Must exit 0 before committing.
@@ -131,7 +256,8 @@ git commit -m "feat: register <name> in library.mcp_servers catalog"
 The following are NOT part of this bead or cookbook:
 
 - **Per-harness config mutation** — writing the snippet into `~/.claude/settings.json` etc.
-  is the translator bead (successor to CL-mfz).
+  is installer work; this cookbook defines the canonical `install.mcp` blocks but does not
+  implement the writes.
 - **Secrets / auth token storage** — handled by a separate security-model bead.
 - **Mobile install instructions** — the `install_url` fields are stored here, but the UI
   for presenting them to users is a follow-up bead.

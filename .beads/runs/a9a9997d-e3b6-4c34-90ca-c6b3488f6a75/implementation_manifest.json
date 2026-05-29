@@ -1,0 +1,111 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.3",
+  "acceptance_criteria": [
+    {
+      "id": 1,
+      "status": "done",
+      "changed_files": [
+        "library.yaml"
+      ],
+      "evidence_refs": [
+        "cmd:catalog-entry-review",
+        "cmd:validate-library"
+      ]
+    },
+    {
+      "id": 2,
+      "status": "done",
+      "changed_files": [
+        "cookbook/add-mcp.md",
+        "library.yaml"
+      ],
+      "evidence_refs": [
+        "cmd:doc-review",
+        "cmd:registered-tools-smoke"
+      ]
+    },
+    {
+      "id": 3,
+      "status": "done",
+      "changed_files": [
+        "library.yaml",
+        "tests/test_validate_library.py"
+      ],
+      "evidence_refs": [
+        "cmd:validate-library",
+        "cmd:test-validate-library"
+      ]
+    },
+    {
+      "id": 4,
+      "status": "done",
+      "changed_files": [],
+      "evidence_refs": [
+        "cmd:epic-note-update"
+      ]
+    },
+    {
+      "id": 5,
+      "status": "done",
+      "changed_files": [
+        "library.yaml",
+        "cookbook/add-mcp.md",
+        "tests/test_validate_library.py"
+      ],
+      "evidence_refs": [
+        "cmd:catalog-entry-review",
+        "cmd:cursor-registration-review",
+        "cmd:test-validate-library"
+      ]
+    }
+  ],
+  "changed_files": [
+    "library.yaml",
+    "cookbook/add-mcp.md",
+    "tests/test_validate_library.py",
+    ".beads/runs/a9a9997d-e3b6-4c34-90ca-c6b3488f6a75/implementation_manifest.json",
+    ".beads/runs/a9a9997d-e3b6-4c34-90ca-c6b3488f6a75/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "message": "feat(meta): register cognovis-tools as library-tool-surface with 4 harness keys"
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python scripts/validate-library.py",
+      "result": "passed: library.yaml validated successfully against docs/schema/library.schema.json"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_validate_library.py -q",
+      "result": "passed: 23 tests passed"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed: no whitespace errors"
+    }
+  ],
+  "external_resources": [
+    "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml"
+  ],
+  "scope_changes": [
+    "Normalized one pre-existing harness_support key from claude to claude_code so the requested validator gate could pass."
+  ],
+  "downstream_impacts": [
+    "library.mcp_servers now includes a first-party cognovis-tools entry with species library-tool-surface.",
+    "The add-mcp cookbook now documents library-tool-surface and four coding harness registration blocks.",
+    "Validator regression coverage now includes a four-harness library-tool-surface MCP entry.",
+    "Harness registrations use the installed cognovis-core catalog path under ~/.local/share/library/cognovis-library-core/."
+  ],
+  "evidence_refs": [
+    "cmd:catalog-entry-review",
+    "cmd:cursor-registration-review",
+    "cmd:doc-review",
+    "cmd:registered-tools-smoke",
+    "cmd:validate-library",
+    "cmd:test-validate-library",
+    "cmd:git-diff-check",
+    "cmd:epic-note-update"
+  ]
+}

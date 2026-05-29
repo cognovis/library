@@ -1,0 +1,86 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.3",
+  "commands": [
+    {
+      "id": "cmd:bead-show",
+      "command": "bd show CL-ugwe.3 --json",
+      "purpose": "Inspect the bead acceptance criteria, scope, dependencies, and claimed run_id.",
+      "exit_code": 0,
+      "observed_result": "Bead CL-ugwe.3 was in_progress with run_id a9a9997d-e3b6-4c34-90ca-c6b3488f6a75."
+    },
+    {
+      "id": "cmd:catalog-entry-review",
+      "command": "rg -n \"name: cognovis-tools|species: library-tool-surface|claude_code:|codex:|antigravity:|cursor:|config_path: ~/.cursor/mcp.json|cognovis-tools-mcp|~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools\" library.yaml",
+      "purpose": "Review the catalog entry, source species, all four harness keys, Cursor config path, installed catalog path, and cognovis-tools-mcp entry point.",
+      "exit_code": 0,
+      "observed_result": "Matched cognovis-tools, species library-tool-surface, claude_code, codex, antigravity, cursor, ~/.cursor/mcp.json, the installed cognovis-core path, and cognovis-tools-mcp."
+    },
+    {
+      "id": "cmd:doc-review",
+      "command": "rg -n \"Species Field|Registering for All 4 Harnesses|~/.config/gemini/settings.json|~/.cursor/mcp.json|cognovis-tools-mcp\" cookbook/add-mcp.md",
+      "purpose": "Verify cookbook documentation for species, all four harness registration, Antigravity and Cursor config paths, and the cognovis-tools-mcp command.",
+      "exit_code": 0,
+      "observed_result": "Matched the Species Field and Registering for All 4 Harnesses sections plus Antigravity, Cursor, and cognovis-tools-mcp examples."
+    },
+    {
+      "id": "cmd:cursor-registration-review",
+      "command": "rg -n \"cursor:|config_path: ~/.cursor/mcp.json|cognovis-tools-mcp\" library.yaml cookbook/add-mcp.md tests/test_validate_library.py",
+      "purpose": "Smoke-check that Cursor registration is present in catalog, documentation, and validator fixture.",
+      "exit_code": 0,
+      "observed_result": "Cursor registration was present with ~/.cursor/mcp.json and cognovis-tools-mcp in all three files."
+    },
+    {
+      "id": "cmd:registered-tools-smoke",
+      "command": "PYTHONPATH=/Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools UV_CACHE_DIR=/private/tmp/uv-cache uv run --project /Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools --no-sync python -c \"import mcp; import server; print(','.join(server.registered_tool_names()))\"",
+      "purpose": "Smoke-check the cognovis-tools server surface exposes the bead tool family that a harness tools/list would show after registration.",
+      "exit_code": 0,
+      "observed_result": "Printed bead_show, bead_ready, bead_list, bead_search, bead_create, bead_claim, bead_update, bead_update_notes, bead_close, bead_dolt_sync."
+    },
+    {
+      "id": "cmd:validate-library-default-cache",
+      "command": "uv run python scripts/validate-library.py",
+      "purpose": "Run the requested validation command with the default uv cache.",
+      "exit_code": 2,
+      "observed_result": "Sandbox blocked access to /Users/malte/.cache/uv; reran the same validation with UV_CACHE_DIR under /private/tmp."
+    },
+    {
+      "id": "cmd:validate-library",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python scripts/validate-library.py",
+      "purpose": "Validate library.yaml after adding the cognovis-tools catalog entry.",
+      "exit_code": 0,
+      "observed_result": "PASS: library.yaml is valid against docs/schema/library.schema.json."
+    },
+    {
+      "id": "cmd:test-validate-library",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_validate_library.py -q",
+      "purpose": "Run the targeted validator regression suite including test_mcp_server_species_library_tool_surface.",
+      "exit_code": 0,
+      "observed_result": "23 passed in 2.17s."
+    },
+    {
+      "id": "cmd:git-diff-check",
+      "command": "git diff --check",
+      "purpose": "Check the worktree diff for whitespace errors.",
+      "exit_code": 0,
+      "observed_result": "No whitespace errors."
+    },
+    {
+      "id": "cmd:epic-note-update",
+      "command": "bd update CL-ugwe --append-notes=\"ADR-0007 Phase 3 complete: cognovis-tools registered in library.yaml as library-tool-surface with all 4 harness keys. Bead CL-ugwe.3 closed.\"",
+      "purpose": "Mark ADR-0007 Phase 3 complete in the parent epic notes with the exact requested note.",
+      "exit_code": 0,
+      "observed_result": "Updated issue CL-ugwe."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "name": "full-harness-tools-list",
+      "reason": "The installed catalog path ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools does not exist in this sandbox. Verified registration metadata and the source server's registered bead_* tool names instead."
+    }
+  ],
+  "artifacts": [
+    ".beads/runs/a9a9997d-e3b6-4c34-90ca-c6b3488f6a75/implementation_manifest.json",
+    ".beads/runs/a9a9997d-e3b6-4c34-90ca-c6b3488f6a75/evidence_ledger.json"
+  ]
+}
