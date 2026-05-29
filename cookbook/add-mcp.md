@@ -71,7 +71,7 @@ tool surface into all four coding harness families:
 
 Registration is not orchestration. Claude Code and Codex remain the bead orchestration runners;
 Antigravity and Cursor are implementation-surface consumers that need the MCP registration so their
-agents call `bead.*`, `git.*`, and `library.exec` directly instead of reconstructing CLI flags.
+agents call the server's typed tools (e.g. `bead.*` for cognovis-tools) directly instead of reconstructing CLI flags.
 
 ## Registering for All 4 Harnesses
 
@@ -183,40 +183,32 @@ install:
       config_path: ~/.claude/settings.json
       snippet:
         type: stdio
-        command: uv
+        command: sh
         args:
-          - run
-          - --project
-          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-          - cognovis-tools-mcp
+          - -c
+          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
     codex:
       config_path: ~/.codex/config.toml
       snippet:
-        command: uv
+        command: sh
         args:
-          - run
-          - --project
-          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-          - cognovis-tools-mcp
+          - -c
+          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
     antigravity:
       config_path: ~/.config/gemini/settings.json
       snippet:
-        command: uv
+        command: sh
         args:
-          - run
-          - --project
-          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-          - cognovis-tools-mcp
+          - -c
+          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
     cursor:
       config_path: ~/.cursor/mcp.json
       snippet:
         type: stdio
-        command: uv
+        command: sh
         args:
-          - run
-          - --project
-          - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-          - cognovis-tools-mcp
+          - -c
+          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
 ```
 
 ### Registration smoke
