@@ -163,4 +163,4 @@ Every tool must ship unit tests.
 |------|---------|
 | `docs/primitives/mcp-server.md` | Defines the `library-tool-surface` species and closed-catalog invariant. |
 | `docs/adr/library-tool-surface-mcp.md` | ADR-0007 rationale for typed Library tool surfaces. |
-| `/Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/_template/` | Reference tool, registry entry, and direct-call unit test template. |
+| `cognovis-core/mcp-servers/cognovis-tools/tools/_template/` | Reference tool (with documented server.py registration step) and direct-call unit test template. |
