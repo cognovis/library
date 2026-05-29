@@ -458,6 +458,12 @@ If only one primitive still uses a standard, fold it back into that skill's
 
 See `meta/docs/PRIMITIVES.md` §7 for full maturity-arc rationale.
 
+## Related Skills
+
+When a skill's core action is calling a cognovis-tools MCP tool, use
+`mcp-tool-forge` to author the tool first. Skill prose that calls MCP tools
+should reference the tool's SKILL.md for the contract.
+
 ## Do NOT
 
 - Scaffold agents when a skill is sufficient — run the primitive gate first

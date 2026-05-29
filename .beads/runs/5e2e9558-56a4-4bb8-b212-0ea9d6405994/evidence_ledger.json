@@ -1,0 +1,120 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ugwe.9",
+  "commands": [
+    {
+      "id": "cmd:bd-prime",
+      "command": "bd prime",
+      "purpose": "Load the repository bead workflow contract before implementation.",
+      "exit_code": 0,
+      "observed_result": "Printed beads workflow context and confirmed bd is the required task interface."
+    },
+    {
+      "id": "cmd:bd-show",
+      "command": "bd show CL-ugwe.9 --json",
+      "purpose": "Verify the bead details and current status through the bd CLI.",
+      "exit_code": 0,
+      "observed_result": "Returned bead CL-ugwe.9 with status in_progress and the three acceptance criteria."
+    },
+    {
+      "id": "cmd:validate-skill-default-cache",
+      "command": "uv run python skills/skill-forge/scripts/validate-skill.py skills/mcp-tool-forge --strict",
+      "purpose": "Validate the new skill with the repository validator.",
+      "exit_code": 2,
+      "observed_result": "uv could not initialize its default cache at /Users/malte/.cache/uv because the path is outside the sandbox."
+    },
+    {
+      "id": "cmd:validate-skill-strict",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python skills/skill-forge/scripts/validate-skill.py skills/mcp-tool-forge --strict",
+      "purpose": "Validate the new skill using a writable uv cache directory.",
+      "exit_code": 0,
+      "observed_result": "Validator completed with no findings."
+    },
+    {
+      "id": "cmd:contract-anchor-review",
+      "command": "rg -n \"Tool Naming|Input Schema|Envelope Contract|Exit-Code Map|Idempotency|run_id|bead_id|Closed script_id|Tests Required|Harness-Facing Tools|Related Skills|mcp-tool-forge\" skills/mcp-tool-forge/SKILL.md skills/script-forge/SKILL.md skills/skill-forge/SKILL.md",
+      "purpose": "Review presence of AC1 contract sections and AC2 cross-link sections.",
+      "exit_code": 0,
+      "observed_result": "Found all required section anchors in mcp-tool-forge and both cross-link references."
+    },
+    {
+      "id": "cmd:cognovis-core-write-probe",
+      "command": "mkdir -p /Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/_template",
+      "purpose": "Check whether the required cognovis-core template path can be created from this session.",
+      "exit_code": 1,
+      "observed_result": "mkdir failed with: Operation not permitted."
+    },
+    {
+      "id": "cmd:cognovis-core-status",
+      "command": "git -C /Users/malte/code/library/cognovis-core status --short --branch",
+      "purpose": "Inspect sibling repository state without modifying unrelated user changes.",
+      "exit_code": 0,
+      "observed_result": "Repository is on main ahead of origin/main with unrelated modified files; no template files were added."
+    },
+    {
+      "id": "cmd:template-tests-pass",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --with pytest python -m pytest tools/_template/test_template_tool.py -v",
+      "purpose": "Verify reference template tests pass (4 tests).",
+      "exit_code": 0,
+      "observed_result": "4 passed: test_ping_happy_path, test_ping_empty_message, test_envelope_shape, test_run_id_passthrough"
+    },
+    {
+      "id": "cmd:cognovis-core-commit",
+      "command": "git -C /Users/malte/code/library/cognovis-core commit -m 'feat(cognovis-tools): add mcp-tool-forge reference template tool (CL-ugwe.9)'",
+      "purpose": "Commit reference template to cognovis-core repo.",
+      "exit_code": 0,
+      "observed_result": "d5aeda5 \u2014 3 files changed: README.md, _template_tool.py, test_template_tool.py"
+    },
+    {
+      "id": "cmd:registry-entry-check",
+      "command": "find /Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools -maxdepth 3 -type f \\( -name '*registry*' -o -name '*template*' -o -name 'README.md' \\) | sort",
+      "purpose": "Check whether the cognovis-core template commit included a registry entry or closed catalog example.",
+      "exit_code": 0,
+      "observed_result": "Found README.md, _template_tool.py, and test_template_tool.py under tools/_template; no registry entry file was found."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "registry entry commit",
+      "reason": "No registry entry file was present in cognovis-core commit d5aeda5, and this session cannot write into the sibling repository path."
+    },
+    {
+      "check": "bd close",
+      "reason": "AC3 is still partial; the bead should not be closed as complete."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "skills/mcp-tool-forge/SKILL.md",
+      "kind": "skill",
+      "status": "created"
+    },
+    {
+      "path": "skills/script-forge/SKILL.md",
+      "kind": "skill-cross-link",
+      "status": "updated"
+    },
+    {
+      "path": "skills/skill-forge/SKILL.md",
+      "kind": "skill-cross-link",
+      "status": "updated"
+    },
+    {
+      "path": ".beads/runs/5e2e9558-56a4-4bb8-b212-0ea9d6405994/implementation_manifest.json",
+      "kind": "implementation-manifest",
+      "status": "created"
+    },
+    {
+      "path": ".beads/runs/5e2e9558-56a4-4bb8-b212-0ea9d6405994/evidence_ledger.json",
+      "kind": "evidence-ledger",
+      "status": "created"
+    },
+    {
+      "path": "/Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/_template/",
+      "kind": "external-template",
+      "status": "partial",
+      "commit": "d5aeda5",
+      "missing": "registry entry"
+    }
+  ]
+}
