@@ -24,6 +24,8 @@
 
 ### Fixed
 
+- *(CL-4av7)* **fix(library): mcp use deploys source clone before registering** — `library mcp use <name>` now clones/updates the MCP server source repo to the deploy path (`~/.local/share/library/<org>-<repo>/`) and verifies `pyproject.toml` presence before writing any harness registration. Prevents dangling registrations that silently fail to launch. `library sync` also updates the deploy clone via the same path. Scoped to `pyproject.toml`-based (uv) MCP servers; external-capability servers (mcp.yaml, CLI-based) are unaffected. Regression test: `tests/test_mcp_deploy_clone.py` (9 tests).
+
 - *(CL-cta8)* `cdx -b` now documents and uses TUI mode as the default, while
   `--exec` remains the explicit automation path. The generated full-bead prompt
   also includes exact beads helper script paths, helper CLI contracts, and a
