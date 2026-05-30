@@ -303,6 +303,17 @@ class TestInstallMcp(unittest.TestCase):
                 if v is not None:
                     os.environ[k] = v
 
+    def test_antigravity_install_into_empty_config_file(self):
+        """An existing but empty config file (Antigravity default) must not crash."""
+        self.gemini_settings.parent.mkdir(parents=True, exist_ok=True)
+        self.gemini_settings.write_text("")  # 0-byte file, as agy ships it
+        result = run_install_mcp(
+            "cognovis-tools", "--harness", "antigravity", env_overrides=self.env
+        )
+        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+        data = json.loads(self.gemini_settings.read_text())
+        self.assertIn("cognovis-tools", data.get("mcpServers", {}))
+
     # --- bonus: --dry-run on a fresh env shouldn't write files ---
 
     def test_dry_run_does_not_write(self):

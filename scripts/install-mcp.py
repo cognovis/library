@@ -112,8 +112,12 @@ def harness_block(entry: dict, harness: str) -> dict | None:
 def _load_json(path: Path) -> dict:
     if not path.is_file():
         return {}
-    with path.open() as f:
-        return json.load(f)
+    text = path.read_text()
+    if not text.strip():
+        # Empty config file (e.g. Antigravity ships an empty mcp_config.json) —
+        # treat as an empty object rather than crashing on json.load.
+        return {}
+    return json.loads(text)
 
 
 def _write_json(path: Path, data: dict) -> None:
