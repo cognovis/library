@@ -2,6 +2,8 @@
 
 ### Added
 
+- *(CL-qdtc)* **MCP install reaches all four harness families**: `library mcp use <name>` (and `--harness all`) now registers MCP servers into Antigravity/Gemini CLI (`~/.config/gemini/settings.json`) and Cursor (`~/.cursor/mcp.json`) in addition to Claude Code and Codex. Both write the standard `mcpServers` map with an `_origin` tag for idempotent re-install and clean `--remove`. New `install-mcp.py` handlers `install_antigravity` / `install_cursor` (shared `_install_json_mcp_servers` helper); `mcp_installer.py` drops the old cursor/opencode "not supported" guard and routes the two harnesses through install/remove/dry-run via `_WRITABLE_MCP_HARNESSES` / `_ALL_MCP_HARNESSES` constants. Regression tests: 5 new cases in `tests/test_install_mcp.py`. Verified: `library mcp use cognovis-tools --dry-run` lists four harness targets.
+
 - *(CL-ugwe.6)* **capabilities.yaml MCP migration**: `manage_beads` entry migrated from `tools:[Bash,Read,Grep,Glob]+skills:[beads]` to `mcpServers:[cognovis-tools]+tools:[]+skills:[beads]` per ADR-0007 Phase 6 (coarse server-level scoping). `inspect_git` additive: `mcpServers:[cognovis-tools]` added alongside existing Bash tools. Rollback doc at `docs/mcp-migration-rollback.md`. `send_email` deferred (no mail tools in cognovis-tools).
 
 - *(CL-ugwe.7)* **MCP migration debt audit**: new audit report `docs/audit/mcp-migration-debt-2026-05-29.md` classifies 184 findings (A/B/C/D) across 8 skill/agent files in cognovis-core with hit counts and top-5 remediation targets. Added `scripts/audit-mcp-migration-debt.py` (scanner) and `scripts/check-mcp-migration-debt.sh` (doctor wrapper, exits 1 when A-class debt is present). Top 5 cognovis-core agent/skill files annotated with inline MCP migration notes.

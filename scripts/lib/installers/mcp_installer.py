@@ -26,13 +26,18 @@ from ..lockfile import (
     save_lockfile,
     upsert_entry,
 )
-from ..output import dry_run_result, error_result, success
+from ..output import dry_run_result, success
 from ..source import resolve_marketplace
 from ..source import parse_source
 from ..status import get_remote_sha
 
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Harnesses whose config files install-mcp.py can write, in install order.
+_WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "antigravity", "cursor"]
+# Full set for an "all" install: writable configs plus URL-only (manual) harnesses.
+_ALL_MCP_HARNESSES = _WRITABLE_MCP_HARNESSES + ["claude_ai", "claude_ios"]
 
 
 def _import_install_mcp():
@@ -203,7 +208,8 @@ def install_mcp(
         repo_root: Project root.
         scope: 'project' or 'global' (for lockfile).
         dry_run: If True, return planned ops without mutating.
-        harness: Target harness ('claude_code', 'codex', 'opencode', 'all').
+        harness: Target harness ('claude_code', 'codex', 'opencode', 'antigravity',
+            'cursor', 'claude_ai', 'claude_ios', or 'all').
         env_overrides: Optional env var overrides (for testing).
 
     Returns:
@@ -213,12 +219,6 @@ def install_mcp(
         InstallError: When the deploy clone cannot be established (clone fails or
             entry point missing). No registration is written in this case.
     """
-    if harness in ("cursor", "opencode"):
-        return error_result(
-            f"MCP server install for harness '{harness}' is not supported. "
-            "MCP configuration for Cursor and OpenCode is not managed by this installer."
-        )
-
     # 1. Catalog lookup — use catalog passed in (not re-reading disk)
     entry = lookup_entry(catalog, "mcp", name)
     mcp_name = entry.get("name", name)
@@ -317,8 +317,7 @@ def install_mcp(
         mcp_block = install_block.get("mcp", {}) or {}
 
         if mcp_harness == "all":
-            harnesses_to_install = [h for h in ["claude_code", "codex", "opencode", "claude_ai", "claude_ios"]
-                                     if mcp_block.get(h)]
+            harnesses_to_install = [h for h in _ALL_MCP_HARNESSES if mcp_block.get(h)]
             if not harnesses_to_install:
                 harnesses_to_install = ["claude_code"]
         else:
@@ -421,7 +420,7 @@ def _selected_mcp_harnesses(entry: dict, harness: str) -> list[str]:
     mcp_block = ((entry.get("install") or {}).get("mcp") or {})
     declared = [
         candidate
-        for candidate in ["claude_code", "codex", "opencode", "claude_ai", "claude_ios"]
+        for candidate in _ALL_MCP_HARNESSES
         if mcp_block.get(candidate)
     ]
     return declared or ["claude_code"]
@@ -453,6 +452,20 @@ def _mcp_config_path(harness: str) -> Path | None:
             os.environ.get(
                 "OPENCODE_CONFIG_FILE",
                 str(Path.home() / ".config" / "opencode" / "opencode.json"),
+            )
+        )
+    if harness == "antigravity":
+        return Path(
+            os.environ.get(
+                "GEMINI_SETTINGS_FILE",
+                str(Path.home() / ".config" / "gemini" / "settings.json"),
+            )
+        )
+    if harness == "cursor":
+        return Path(
+            os.environ.get(
+                "CURSOR_MCP_FILE",
+                str(Path.home() / ".cursor" / "mcp.json"),
             )
         )
     # claude_code (default)
@@ -500,7 +513,7 @@ def remove_mcp(
 
     try:
         if harness == "all":
-            harnesses = ["claude_code", "codex", "opencode"]
+            harnesses = list(_WRITABLE_MCP_HARNESSES)
         else:
             harnesses = [harness]
 
@@ -542,6 +555,14 @@ def _install_to_harness(mod, name: str, block: dict, harness: str, dry_run: bool
             fn = getattr(mod, "install_opencode", None)
             if fn:
                 return fn(name, block, dry_run=dry_run, remove=False)
+        elif harness == "antigravity":
+            fn = getattr(mod, "install_antigravity", None)
+            if fn:
+                return fn(name, block, dry_run=dry_run, remove=False)
+        elif harness == "cursor":
+            fn = getattr(mod, "install_cursor", None)
+            if fn:
+                return fn(name, block, dry_run=dry_run, remove=False)
         elif harness in ("claude_ai", "claude_ios"):
             fn = getattr(mod, "install_url_only", None)
             if fn:
@@ -566,6 +587,14 @@ def _remove_from_harness(mod, name: str, harness: str) -> int:
                 return fn(name, {}, dry_run=False, remove=True)
         elif harness == "opencode":
             fn = getattr(mod, "install_opencode", None)
+            if fn:
+                return fn(name, {}, dry_run=False, remove=True)
+        elif harness == "antigravity":
+            fn = getattr(mod, "install_antigravity", None)
+            if fn:
+                return fn(name, {}, dry_run=False, remove=True)
+        elif harness == "cursor":
+            fn = getattr(mod, "install_cursor", None)
             if fn:
                 return fn(name, {}, dry_run=False, remove=True)
     except (SystemExit, Exception):

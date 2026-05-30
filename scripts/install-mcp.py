@@ -7,10 +7,12 @@ into the target harness config file under the correct top-level key. Tags
 every entry with `_origin = "library:mcp:<name>"` for idempotent re-install
 and clean `--remove`.
 
-Supported harnesses (CL-l0c Deliverable D):
-  claude_code  -> ~/.claude/settings.json        ("mcpServers" map)
-  codex        -> ~/.codex/config.toml           ("mcp_servers" table)
+Supported harnesses (CL-l0c Deliverable D; antigravity + cursor added in CL-qdtc):
+  claude_code  -> ~/.claude/settings.json          ("mcpServers" map)
+  codex        -> ~/.codex/config.toml             ("mcp_servers" table)
   opencode     -> ~/.config/opencode/opencode.json ("mcp" map)
+  antigravity  -> ~/.config/gemini/settings.json   ("mcpServers" map)
+  cursor       -> ~/.cursor/mcp.json               ("mcpServers" map)
   claude_ai    -> emits install URL (manual: no programmatic install)
   claude_ios   -> emits install URL (manual: no programmatic install)
   all          -> every harness that the entry declares (default)
@@ -51,6 +53,15 @@ OPENCODE_CONFIG = Path(
         "OPENCODE_CONFIG_FILE",
         str(Path.home() / ".config" / "opencode" / "opencode.json"),
     )
+)
+GEMINI_SETTINGS = Path(
+    os.environ.get(
+        "GEMINI_SETTINGS_FILE",
+        str(Path.home() / ".config" / "gemini" / "settings.json"),
+    )
+)
+CURSOR_MCP_CONFIG = Path(
+    os.environ.get("CURSOR_MCP_FILE", str(Path.home() / ".cursor" / "mcp.json"))
 )
 
 ORIGIN_PREFIX = "library:mcp:"
@@ -371,6 +382,73 @@ def install_opencode(name: str, block: dict, dry_run: bool, remove: bool) -> int
     return 0
 
 
+def _install_json_mcp_servers(
+    name: str,
+    block: dict,
+    dry_run: bool,
+    remove: bool,
+    *,
+    harness: str,
+    config_path: Path,
+) -> int:
+    """Install/remove in a JSON config under the standard ``mcpServers`` map.
+
+    Shared by harnesses whose config files use the same ``{"mcpServers": {...}}``
+    shape as Claude Code (Gemini CLI / Antigravity, Cursor). The only per-harness
+    differences are the config path and the log label.
+    """
+    config = _load_json(config_path)
+    origin = f"{ORIGIN_PREFIX}{name}"
+
+    if remove:
+        updated, removed = _remove_json_map(config, "mcpServers", name, origin)
+        if dry_run:
+            print(f"[{harness}] (dry-run) would {'remove' if removed else 'no-op'} mcpServers.{name}")
+            return 0
+        if removed:
+            _write_json(config_path, updated)
+            print(f"[{harness}] removed mcpServers.{name} from {config_path}")
+        else:
+            print(f"[{harness}] no library-managed mcpServers.{name} to remove")
+        return 0
+
+    snippet = block.get("snippet")
+    if not snippet:
+        print(f"[{harness}] entry missing install.mcp.{harness}.snippet — skip", file=sys.stderr)
+        return 0
+    updated, action = _merge_json_map(config, "mcpServers", name, snippet, origin)
+    if dry_run:
+        print(f"[{harness}] (dry-run) action={action}")
+        print(json.dumps(updated.get("mcpServers", {}).get(name, {}), indent=2))
+        return 0
+    if action == "skipped_manual":
+        print(
+            f"[{harness}] mcpServers.{name} exists with non-library _origin; refusing to overwrite",
+            file=sys.stderr,
+        )
+        return 1
+    if action == "no_change":
+        print(f"[{harness}] mcpServers.{name} already up-to-date (no change)")
+        return 0
+    _write_json(config_path, updated)
+    print(f"[{harness}] {action} mcpServers.{name} in {config_path}")
+    return 0
+
+
+def install_antigravity(name: str, block: dict, dry_run: bool, remove: bool) -> int:
+    """Install/remove in ~/.config/gemini/settings.json under mcpServers."""
+    return _install_json_mcp_servers(
+        name, block, dry_run, remove, harness="antigravity", config_path=GEMINI_SETTINGS
+    )
+
+
+def install_cursor(name: str, block: dict, dry_run: bool, remove: bool) -> int:
+    """Install/remove in ~/.cursor/mcp.json under mcpServers."""
+    return _install_json_mcp_servers(
+        name, block, dry_run, remove, harness="cursor", config_path=CURSOR_MCP_CONFIG
+    )
+
+
 def install_url_only(name: str, block: dict, dry_run: bool, remove: bool, harness: str) -> int:
     """For claude_ai / claude_ios: emit the manual install URL."""
     url = block.get("install_url", "(no install_url declared)")
@@ -390,6 +468,8 @@ HANDLERS: dict[str, Callable[..., int]] = {
     "claude_code": install_claude_code,
     "codex": install_codex,
     "opencode": install_opencode,
+    "antigravity": install_antigravity,
+    "cursor": install_cursor,
     "claude_ai": lambda n, b, d, r: install_url_only(n, b, d, r, "claude_ai"),
     "claude_ios": lambda n, b, d, r: install_url_only(n, b, d, r, "claude_ios"),
 }

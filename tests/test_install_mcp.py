@@ -50,10 +50,14 @@ class TestInstallMcp(unittest.TestCase):
         self.claude_settings = Path(self.tmp) / "claude" / "settings.json"
         self.codex_config = Path(self.tmp) / "codex" / "config.toml"
         self.opencode_config = Path(self.tmp) / "opencode" / "opencode.json"
+        self.gemini_settings = Path(self.tmp) / "gemini" / "settings.json"
+        self.cursor_config = Path(self.tmp) / "cursor" / "mcp.json"
         self.env = {
             "CLAUDE_SETTINGS_FILE": str(self.claude_settings),
             "CODEX_CONFIG_FILE": str(self.codex_config),
             "OPENCODE_CONFIG_FILE": str(self.opencode_config),
+            "GEMINI_SETTINGS_FILE": str(self.gemini_settings),
+            "CURSOR_MCP_FILE": str(self.cursor_config),
         }
 
     def tearDown(self) -> None:
@@ -209,6 +213,65 @@ class TestInstallMcp(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0)
         self.assertIn("manual install required", result.stdout)
+
+    # --- CL-qdtc: antigravity (Gemini CLI) + cursor write the mcpServers map ---
+
+    def test_antigravity_install_writes_mcpservers(self):
+        # 'cognovis-tools' declares antigravity per library.yaml
+        result = run_install_mcp(
+            "cognovis-tools", "--harness", "antigravity", env_overrides=self.env
+        )
+        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+        self.assertTrue(self.gemini_settings.is_file())
+        data = json.loads(self.gemini_settings.read_text())
+        self.assertIn("mcpServers", data)
+        self.assertIn("cognovis-tools", data["mcpServers"])
+        entry = data["mcpServers"]["cognovis-tools"]
+        self.assertEqual(entry.get("_origin"), "library:mcp:cognovis-tools")
+        self.assertEqual(entry.get("command"), "sh")
+
+    def test_cursor_install_writes_mcpservers(self):
+        # 'cognovis-tools' declares cursor per library.yaml
+        result = run_install_mcp(
+            "cognovis-tools", "--harness", "cursor", env_overrides=self.env
+        )
+        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+        self.assertTrue(self.cursor_config.is_file())
+        data = json.loads(self.cursor_config.read_text())
+        self.assertIn("mcpServers", data)
+        self.assertIn("cognovis-tools", data["mcpServers"])
+        self.assertEqual(
+            data["mcpServers"]["cognovis-tools"]["_origin"],
+            "library:mcp:cognovis-tools",
+        )
+
+    def test_antigravity_reinstall_is_idempotent(self):
+        r1 = run_install_mcp("cognovis-tools", "--harness", "antigravity", env_overrides=self.env)
+        self.assertEqual(r1.returncode, 0)
+        first = self.gemini_settings.read_text()
+        r2 = run_install_mcp("cognovis-tools", "--harness", "antigravity", env_overrides=self.env)
+        self.assertEqual(r2.returncode, 0)
+        self.assertIn("no change", r2.stdout)
+        self.assertEqual(json.loads(first), json.loads(self.gemini_settings.read_text()))
+
+    def test_cursor_remove_drops_library_managed(self):
+        run_install_mcp("cognovis-tools", "--harness", "cursor", env_overrides=self.env)
+        result = run_install_mcp(
+            "cognovis-tools", "--harness", "cursor", "--remove", env_overrides=self.env
+        )
+        self.assertEqual(result.returncode, 0)
+        data = json.loads(self.cursor_config.read_text())
+        self.assertNotIn("cognovis-tools", data.get("mcpServers", {}))
+
+    def test_all_install_covers_four_harnesses(self):
+        # 'cognovis-tools' declares claude_code, codex, antigravity, cursor.
+        # '--harness all' (default) must write every one of them.
+        result = run_install_mcp("cognovis-tools", env_overrides=self.env)
+        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+        self.assertTrue(self.claude_settings.is_file(), "claude_code not written")
+        self.assertTrue(self.codex_config.is_file(), "codex not written")
+        self.assertTrue(self.gemini_settings.is_file(), "antigravity not written")
+        self.assertTrue(self.cursor_config.is_file(), "cursor not written")
 
     # --- bonus: --dry-run on a fresh env shouldn't write files ---
 

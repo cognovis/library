@@ -99,9 +99,14 @@ project-local secret file for Codex today — no gitignore entries required for 
 |---|---|---|
 | .cursor/settings.local.json | May contain credentials or machine-local overrides | `.cursor/settings.local.json` |
 
-Cursor agent, MCP, and guardrail projection are not managed by the library
-installer today. Requests for those primitives with `--harness cursor` fail with
-a compatibility message before target writes.
+Cursor **MCP servers** are managed by the library installer: `/library mcp use
+<name> --harness cursor` (or the default `--harness all`) writes the server into
+the global `~/.cursor/mcp.json` under the standard `mcpServers` map, tagged with
+`_origin` for idempotent re-install and clean `--remove`. The same applies to
+Antigravity / Gemini CLI via `~/.config/gemini/settings.json` (`--harness
+antigravity`). Cursor **agent and guardrail** projection remain unmanaged today;
+requests for those primitives with `--harness cursor` fail with a compatibility
+message before target writes.
 
 ## Project-Local vs User-Global Separation
 

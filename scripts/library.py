@@ -1063,7 +1063,13 @@ def _use_mcp(
     # Pass any env overrides from the environment (for testing)
     import os
     env_overrides: dict = {}
-    for key in ["CLAUDE_SETTINGS_FILE", "CODEX_CONFIG_FILE", "OPENCODE_CONFIG_FILE"]:
+    for key in [
+        "CLAUDE_SETTINGS_FILE",
+        "CODEX_CONFIG_FILE",
+        "OPENCODE_CONFIG_FILE",
+        "GEMINI_SETTINGS_FILE",
+        "CURSOR_MCP_FILE",
+    ]:
         if key in os.environ:
             env_overrides[key] = os.environ[key]
 
