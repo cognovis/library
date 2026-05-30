@@ -455,10 +455,11 @@ def _mcp_config_path(harness: str) -> Path | None:
             )
         )
     if harness == "antigravity":
+        # Antigravity (Gemini/Codeium CLI) reads MCP from ~/.gemini/config/mcp_config.json.
         return Path(
             os.environ.get(
                 "GEMINI_SETTINGS_FILE",
-                str(Path.home() / ".config" / "gemini" / "settings.json"),
+                str(Path.home() / ".gemini" / "config" / "mcp_config.json"),
             )
         )
     if harness == "cursor":
@@ -468,11 +469,12 @@ def _mcp_config_path(harness: str) -> Path | None:
                 str(Path.home() / ".cursor" / "mcp.json"),
             )
         )
-    # claude_code (default)
+    # claude_code (default): user-scoped MCP lives in ~/.claude.json `mcpServers`,
+    # NOT ~/.claude/settings.json.
     return Path(
         os.environ.get(
             "CLAUDE_SETTINGS_FILE",
-            str(Path.home() / ".claude" / "settings.json"),
+            str(Path.home() / ".claude.json"),
         )
     )
 

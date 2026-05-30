@@ -27,6 +27,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALL_MCP = REPO_ROOT / "scripts" / "install-mcp.py"
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 
 def run_install_mcp(*args: str, env_overrides: dict[str, str] | None = None) -> subprocess.CompletedProcess:
@@ -272,6 +273,35 @@ class TestInstallMcp(unittest.TestCase):
         self.assertTrue(self.codex_config.is_file(), "codex not written")
         self.assertTrue(self.gemini_settings.is_file(), "antigravity not written")
         self.assertTrue(self.cursor_config.is_file(), "cursor not written")
+
+    # --- CL-oo82: corrected default config paths per harness ---
+
+    def test_default_config_paths_are_harness_correct(self):
+        """claude_code -> ~/.claude.json; antigravity -> ~/.gemini/config/mcp_config.json.
+
+        Claude Code reads user-scoped MCP from ~/.claude.json (NOT
+        ~/.claude/settings.json); Antigravity (agy) reads ~/.gemini/config/mcp_config.json
+        (NOT ~/.config/gemini/settings.json).
+        """
+        from lib.installers.mcp_installer import _mcp_config_path
+
+        # Clear any env overrides so we observe the real defaults.
+        saved = {k: os.environ.pop(k, None)
+                 for k in ("CLAUDE_SETTINGS_FILE", "GEMINI_SETTINGS_FILE", "CURSOR_MCP_FILE")}
+        try:
+            self.assertEqual(_mcp_config_path("claude_code"), Path.home() / ".claude.json")
+            self.assertEqual(
+                _mcp_config_path("antigravity"),
+                Path.home() / ".gemini" / "config" / "mcp_config.json",
+            )
+            self.assertEqual(_mcp_config_path("cursor"), Path.home() / ".cursor" / "mcp.json")
+            self.assertEqual(
+                _mcp_config_path("codex"), Path.home() / ".codex" / "config.toml"
+            )
+        finally:
+            for k, v in saved.items():
+                if v is not None:
+                    os.environ[k] = v
 
     # --- bonus: --dry-run on a fresh env shouldn't write files ---
 

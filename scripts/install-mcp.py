@@ -7,15 +7,21 @@ into the target harness config file under the correct top-level key. Tags
 every entry with `_origin = "library:mcp:<name>"` for idempotent re-install
 and clean `--remove`.
 
-Supported harnesses (CL-l0c Deliverable D; antigravity + cursor added in CL-qdtc):
-  claude_code  -> ~/.claude/settings.json          ("mcpServers" map)
-  codex        -> ~/.codex/config.toml             ("mcp_servers" table)
-  opencode     -> ~/.config/opencode/opencode.json ("mcp" map)
-  antigravity  -> ~/.config/gemini/settings.json   ("mcpServers" map)
-  cursor       -> ~/.cursor/mcp.json               ("mcpServers" map)
+Supported harnesses (CL-l0c Deliverable D; antigravity + cursor added in CL-qdtc;
+config paths corrected in CL-oo82):
+  claude_code  -> ~/.claude.json                       ("mcpServers" map)
+  codex        -> ~/.codex/config.toml                 ("mcp_servers" table)
+  opencode     -> ~/.config/opencode/opencode.json     ("mcp" map)
+  antigravity  -> ~/.gemini/config/mcp_config.json     ("mcpServers" map)
+  cursor       -> ~/.cursor/mcp.json                   ("mcpServers" map)
   claude_ai    -> emits install URL (manual: no programmatic install)
   claude_ios   -> emits install URL (manual: no programmatic install)
   all          -> every harness that the entry declares (default)
+
+NOTE: claude_code user-scoped MCP servers live in the top-level `mcpServers` map
+of ~/.claude.json — NOT ~/.claude/settings.json (that file holds permissions,
+hooks, and env; its `mcpServers` key is ignored by Claude Code). Antigravity
+(Gemini/Codeium CLI, `agy`) reads MCP servers from ~/.gemini/config/mcp_config.json.
 
 Usage:
     install-mcp.py <name>                          # install to all declared harnesses
@@ -42,8 +48,10 @@ REPO_ROOT = SCRIPT_DIR.parent
 LIBRARY_YAML = REPO_ROOT / "library.yaml"
 
 # Default config paths (override via env vars for testing).
+# Claude Code reads user-scoped MCP servers from the top-level `mcpServers` map of
+# ~/.claude.json (NOT ~/.claude/settings.json — that file is for permissions/hooks/env).
 CLAUDE_SETTINGS = Path(
-    os.environ.get("CLAUDE_SETTINGS_FILE", str(Path.home() / ".claude" / "settings.json"))
+    os.environ.get("CLAUDE_SETTINGS_FILE", str(Path.home() / ".claude.json"))
 )
 CODEX_CONFIG_TOML = Path(
     os.environ.get("CODEX_CONFIG_FILE", str(Path.home() / ".codex" / "config.toml"))
@@ -54,10 +62,12 @@ OPENCODE_CONFIG = Path(
         str(Path.home() / ".config" / "opencode" / "opencode.json"),
     )
 )
+# Antigravity (Gemini/Codeium CLI, `agy`) reads MCP servers from
+# ~/.gemini/config/mcp_config.json (NOT ~/.config/gemini/settings.json).
 GEMINI_SETTINGS = Path(
     os.environ.get(
         "GEMINI_SETTINGS_FILE",
-        str(Path.home() / ".config" / "gemini" / "settings.json"),
+        str(Path.home() / ".gemini" / "config" / "mcp_config.json"),
     )
 )
 CURSOR_MCP_CONFIG = Path(

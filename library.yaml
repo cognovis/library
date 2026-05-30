@@ -3619,7 +3619,7 @@ library:
     install:
       mcp:
         claude_code:
-          config_path: ~/.claude/settings.json
+          config_path: ~/.claude.json
           snippet:
             type: stdio
             command: sh
@@ -3637,7 +3637,7 @@ library:
             - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
               cognovis-tools-mcp
         antigravity:
-          config_path: ~/.config/gemini/settings.json
+          config_path: ~/.gemini/config/mcp_config.json
           snippet:
             type: stdio
             command: sh
