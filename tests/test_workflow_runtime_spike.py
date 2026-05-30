@@ -11,8 +11,30 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
-WORKFLOW_SPEC = REPO_ROOT / "workflows" / "bead-context-pack.js"
 ROUTE_PROFILE_CONFIG = Path.home() / ".agents" / "orchestrator-config.yml"
+
+
+def _resolve_workflow_spec() -> Path:
+    """Locate the bead-context-pack.js workflow spec.
+
+    The workflow runtime lives in this repo, but workflow *specs* are catalog
+    content and live in the cognovis-core catalog (``workflows/``). Prefer a
+    meta-local copy if one exists, then fall back to the sibling cognovis-core
+    checkout. Skip (rather than fail) when neither is present, mirroring the
+    ``_load_route_profiles`` skip behaviour below — this test depends on catalog
+    content that is not guaranteed in every checkout/CI environment.
+    """
+    candidates = [
+        REPO_ROOT / "workflows" / "bead-context-pack.js",
+        REPO_ROOT.parent / "cognovis-core" / "workflows" / "bead-context-pack.js",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    pytest.skip(
+        "bead-context-pack.js workflow spec not found in meta/workflows or "
+        "../cognovis-core/workflows (catalog content not present in this checkout)"
+    )
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -53,6 +75,28 @@ def _write_single_leaf_spec(tmp_path: Path, opts: dict[str, object]) -> Path:
             [
                 'export const meta = {"name": "single-leaf"};',
                 f'await agent("context pack", {json.dumps(opts, sort_keys=True)});',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return spec_path
+
+
+def _write_spike_spec(tmp_path: Path, name: str, opts: dict[str, object]) -> Path:
+    """Write a spike-runtime-compatible single-leaf spec with a chosen meta.name.
+
+    The spike runtime parses a strict subset of the Workflow spec format
+    (``export const meta = {JSON}`` + ``await agent("JSON", {JSON})``). The rich,
+    real workflow specs (e.g. cognovis-core's multi-agent ``bead-context-pack.js``)
+    are authored for the live Workflow tool and are intentionally not parseable by
+    this Python spike — so the runtime-execution test uses a local single-leaf spec.
+    """
+    spec_path = tmp_path / f"{name}.js"
+    spec_path.write_text(
+        "\n".join(
+            [
+                f"export const meta = {json.dumps({'name': name})};",
+                f'await agent("gather context for the bead", {json.dumps(opts, sort_keys=True)});',
             ]
         ),
         encoding="utf-8",
@@ -141,7 +185,7 @@ def test_resume_context_persists_across_instantiations(tmp_path: Path) -> None:
 
 def test_bead_context_pack_passes_constraint_checker() -> None:
     checker = SpineConstraintChecker()
-    source = WORKFLOW_SPEC.read_text(encoding="utf-8")
+    source = _resolve_workflow_spec().read_text(encoding="utf-8")
     assert checker.find_violations(source) == []
 
 
@@ -157,6 +201,11 @@ def test_claude_agent_executor_maps_to_claude_agent_slot() -> None:
 
 def test_workflow_runtime_runs_read_only_spec_and_journals(tmp_path: Path) -> None:
     route_profiles = _load_route_profiles()
+    workflow_spec = _write_spike_spec(
+        tmp_path,
+        "bead-context-pack",
+        {"slot": "implementation", "readOnly": True},
+    )
     journal_path = tmp_path / "workflow-journal.json"
     resume = ResumeContext(path=journal_path)
     executor = DummyExecutor()
@@ -166,7 +215,7 @@ def test_workflow_runtime_runs_read_only_spec_and_journals(tmp_path: Path) -> No
     )
 
     result = runtime.run(
-        WORKFLOW_SPEC,
+        workflow_spec,
         {
             "route_profile": "cdx-default",
             "workflow": "full",
@@ -183,7 +232,7 @@ def test_workflow_runtime_runs_read_only_spec_and_journals(tmp_path: Path) -> No
     assert executor.calls[0][1]["slot_target"]["adapter"] == "claude-agent"
 
     second = runtime.run(
-        WORKFLOW_SPEC,
+        workflow_spec,
         {
             "route_profile": "cdx-default",
             "workflow": "full",

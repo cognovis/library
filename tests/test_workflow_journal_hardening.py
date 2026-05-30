@@ -11,9 +11,26 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
-WORKFLOW_SPEC = REPO_ROOT / "workflows" / "bead-context-pack.js"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
+
+
+def _write_spike_spec(dir_path: Path) -> Path:
+    """Write a spike-runtime-compatible single-leaf workflow spec.
+
+    The spike runtime parses only a strict subset (``export const meta = {JSON}``
+    + ``await agent("JSON", {JSON})``). The real cognovis-core ``bead-context-pack.js``
+    is rich multi-agent JS authored for the live Workflow tool and is intentionally
+    not parseable by this Python spike, so journal-hardening tests use a local spec.
+    """
+    spec_path = dir_path / "bead-context-pack.js"
+    spec_path.write_text(
+        'export const meta = {"name": "bead-context-pack"}\n'
+        'await agent("gather context for the bead", '
+        '{"readOnly": true, "slot": "implementation"});\n',
+        encoding="utf-8",
+    )
+    return spec_path
 
 from lib.workflow_runtime import (  # noqa: E402
     AgentExecutor,
@@ -72,7 +89,7 @@ def _run_runtime(journal_path: Path, *, route_profile: str = "cdx-default") -> t
         executor_registry={"claude-agent": executor},
     )
     result = runtime.run(
-        WORKFLOW_SPEC,
+        _write_spike_spec(journal_path.parent),
         {
             "route_profile": route_profile,
             "workflow": "full",
@@ -84,7 +101,7 @@ def _run_runtime(journal_path: Path, *, route_profile: str = "cdx-default") -> t
 
 def test_journal_schema_has_version_and_identity_fields(tmp_path: Path) -> None:
     journal_path = tmp_path / "journal.json"
-    spec_hash = hashlib.sha256(WORKFLOW_SPEC.read_bytes()).hexdigest()
+    spec_hash = hashlib.sha256(_write_spike_spec(tmp_path).read_bytes()).hexdigest()
     store = JournalStore(
         path=journal_path,
         spec_hash=spec_hash,
