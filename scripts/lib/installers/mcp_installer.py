@@ -79,16 +79,19 @@ def _derive_deploy_path(entry: dict, mcp_name: str) -> tuple[str | None, str | N
     deploy_dir_name = "-".join(s.rstrip(".git") for s in slug)
     deploy_path = Path.home() / ".local" / "share" / "library" / deploy_dir_name
 
-    # Derive mcp_subdir from file_path: parent dir of pyproject.toml
-    # e.g. mcp-servers/cognovis-tools/pyproject.toml -> mcp-servers/cognovis-tools
-    mcp_subdir: str | None = None
-    if parsed.file_path:
-        fp = parsed.file_path.rstrip("/")
-        if fp.endswith("/pyproject.toml") or fp == "pyproject.toml":
-            mcp_subdir = str(Path(fp).parent) if "/" in fp else ""
-        else:
-            # Treat the whole file_path as the directory
-            mcp_subdir = str(Path(fp).parent) if fp else None
+    # Derive mcp_subdir from file_path: only apply deploy-clone for pyproject.toml sources.
+    # pyproject.toml sources indicate a uv-based library-tool-surface MCP server that needs
+    # to be run with `uv run --project <deploy_path>/<mcp_subdir>`. Other source types
+    # (mcp.yaml, etc.) are launched differently and do not need a local deploy clone.
+    if not parsed.file_path:
+        return None, None, None
+
+    fp = parsed.file_path.rstrip("/")
+    if not (fp.endswith("/pyproject.toml") or fp == "pyproject.toml"):
+        # Not a pyproject.toml source — no deploy clone needed
+        return None, None, None
+
+    mcp_subdir = str(Path(fp).parent) if "/" in fp else ""
 
     return clone_url, mcp_subdir, deploy_path
 

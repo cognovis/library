@@ -196,3 +196,45 @@ class TestInstallMcpDeployCloneIntegration:
         assert "test-mcp" in settings.get("mcpServers", {}), "test-mcp not in mcpServers"
         # Result must indicate success
         assert result.get("status") == "ok"  # success() helper returns status="ok"
+
+
+class TestDeployPathDerivation:
+    """Tests for _derive_deploy_path — ensuring only pyproject.toml sources trigger deploy-clone."""
+
+    def test_pyproject_source_returns_clone_info(self):
+        """pyproject.toml source URL derives clone_url, mcp_subdir, and deploy_path."""
+        from lib.installers.mcp_installer import _derive_deploy_path
+
+        entry = {
+            "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
+        }
+        clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, "cognovis-tools")
+
+        assert clone_url == "https://github.com/cognovis/library-core.git"
+        assert mcp_subdir == "mcp-servers/cognovis-tools"
+        assert deploy_path is not None
+        assert "cognovis-library-core" in str(deploy_path)
+
+    def test_mcp_yaml_source_returns_none(self):
+        """mcp.yaml source URL returns (None, None, None) — no deploy clone needed."""
+        from lib.installers.mcp_installer import _derive_deploy_path
+
+        entry = {
+            "source": "https://github.com/sussdorff/open-brain/blob/main/mcp.yaml",
+        }
+        clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, "open-brain")
+
+        assert clone_url is None
+        assert mcp_subdir is None
+        assert deploy_path is None
+
+    def test_no_source_returns_none(self):
+        """Missing source field returns (None, None, None)."""
+        from lib.installers.mcp_installer import _derive_deploy_path
+
+        entry = {}
+        clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, "test-mcp")
+
+        assert clone_url is None
+        assert mcp_subdir is None
+        assert deploy_path is None
