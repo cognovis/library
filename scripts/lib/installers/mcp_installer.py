@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -75,8 +76,16 @@ def _derive_deploy_path(entry: dict, mcp_name: str) -> tuple[str | None, str | N
     # Derive <org>-<repo> slug from clone URL
     # e.g. https://github.com/cognovis/library-core.git -> cognovis-library-core
     clone_url = parsed.clone_url
-    slug = clone_url.rstrip("/").rstrip(".git").rsplit("/", 2)[-2:]
-    deploy_dir_name = "-".join(s.rstrip(".git") for s in slug)
+    _ssh_m = re.match(r"git@[^:]+:([^/]+)/([^/]+?)(?:\.git)?$", clone_url)
+    _https_m = re.match(r"https://[^/]+/([^/]+)/([^/]+?)(?:\.git)?$", clone_url)
+    if _ssh_m:
+        deploy_dir_name = f"{_ssh_m.group(1)}-{_ssh_m.group(2)}"
+    elif _https_m:
+        deploy_dir_name = f"{_https_m.group(1)}-{_https_m.group(2)}"
+    else:
+        # Fallback: last two path components
+        _parts = clone_url.rstrip("/").rstrip(".git").rsplit("/", 2)
+        deploy_dir_name = "-".join(p.rstrip(".git") for p in _parts[-2:])
     deploy_path = Path.home() / ".local" / "share" / "library" / deploy_dir_name
 
     # Derive mcp_subdir from file_path: only apply deploy-clone for pyproject.toml sources.
