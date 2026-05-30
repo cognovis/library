@@ -195,4 +195,4 @@ class TestInstallMcpDeployCloneIntegration:
         settings = json.loads(settings_file.read_text())
         assert "test-mcp" in settings.get("mcpServers", {}), "test-mcp not in mcpServers"
         # Result must indicate success
-        assert result.get("status") == "success"
+        assert result.get("status") == "ok"  # success() helper returns status="ok"
