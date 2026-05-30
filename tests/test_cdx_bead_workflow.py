@@ -31,12 +31,12 @@ def _write_runtime(
         "adversarial_review": {
             "adapter": "claude-agent",
             "harness": "claude",
-            "model": "claude-opus-4-7",
+            "model": "claude-opus-4-8",
         },
         "verification": {
             "adapter": "claude-agent",
             "harness": "claude",
-            "model": "claude-opus-4-7",
+            "model": "claude-opus-4-8",
         },
         "session_close": {
             "adapter": "claude-agent",
@@ -56,7 +56,7 @@ def _write_runtime(
         "  'route_decision': {\n"
         "    'tier': 'paul',\n"
         "    'impl_model': 'composer-2.5',\n"
-        "    'reviewer_model': os.environ.get('PHASE0_REVIEWER_MODEL', 'claude-opus-4-7'),\n"
+        "    'reviewer_model': os.environ.get('PHASE0_REVIEWER_MODEL', 'claude-opus-4-8'),\n"
         "  },\n"
         "  'execution_plan': {'profile': 'cdx-composer', 'workflow': 'full', 'slots': {'full': slots}},\n"
         "  'claim_status': 'CLAIMED',\n"
@@ -245,7 +245,7 @@ def _run_workflow(
     *,
     bead_context: str = "compact context",
     fail_phase: str = "",
-    route_reviewer_model: str = "claude-opus-4-7",
+    route_reviewer_model: str = "claude-opus-4-8",
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path, Path]:
     runtime, phase0_args, slot_calls = _write_runtime(tmp_path, slots=slots)
     claude_mock = _write_claude_mock(tmp_path, fail_phase=fail_phase)
@@ -270,12 +270,12 @@ def _run_workflow(
         "adversarial_review": {
             "adapter": "claude-agent",
             "harness": "claude",
-            "model": "claude-opus-4-7",
+            "model": "claude-opus-4-8",
         },
         "verification": {
             "adapter": "claude-agent",
             "harness": "claude",
-            "model": "claude-opus-4-7",
+            "model": "claude-opus-4-8",
         },
         "session_close": {
             "adapter": "claude-agent",
@@ -388,7 +388,7 @@ def test_full_cdx_workflow_dispatches_all_core_slots(tmp_path: Path) -> None:
     assert metrics[0]["run_id"] == "run-full-123"
     assert metrics[0]["bead_id"] == "CL-smoke"
     assert metrics[0]["agent_label"] == "claude-agent-full-adversarial_review"
-    assert metrics[0]["model"] == "claude-opus-4-7"
+    assert metrics[0]["model"] == "claude-opus-4-8"
     assert metrics[0]["exit_code"] == 0
 
     bd_calls = _read_bd_calls(bd_log)
@@ -411,7 +411,7 @@ def test_codex_exec_slot_uses_runtime_helper_and_diff_range(tmp_path: Path) -> N
         "verification": {
             "adapter": "claude-agent",
             "harness": "claude",
-            "model": "claude-opus-4-7",
+            "model": "claude-opus-4-8",
         },
         "session_close": {
             "adapter": "claude-agent",
@@ -490,7 +490,7 @@ def test_architecture_review_uses_claude_model_when_route_reviewer_is_codex(tmp_
     assert result.returncode == 0, result.stderr
     assert (
         "## LEAF_DISPATCH workflow=full slot=architecture_review "
-        "adapter=claude-agent harness=claude model=claude-opus-4-7 source=phase3"
+        "adapter=claude-agent harness=claude model=claude-opus-4-8 source=phase3"
     ) in result.stderr
     assert "slot=architecture_review adapter=claude-agent harness=claude model=codex" not in result.stderr
 
@@ -499,11 +499,11 @@ def test_architecture_review_uses_claude_model_when_route_reviewer_is_codex(tmp_
     assert architecture_call["phase_label"] == "architecture-review"
     argv = architecture_call["argv"]
     model_index = argv.index("--model") + 1
-    assert argv[model_index] == "claude-opus-4-7"
+    assert argv[model_index] == "claude-opus-4-8"
 
     metrics = _read_metrics_calls(metrics_calls)
     assert metrics[0]["phase_label"] == "architecture-review"
-    assert metrics[0]["model"] == "claude-opus-4-7"
+    assert metrics[0]["model"] == "claude-opus-4-8"
 
 
 def test_architecture_review_failure_stops_before_implementation(tmp_path: Path) -> None:
@@ -560,12 +560,12 @@ def test_full_cdx_workflow_fails_closed_for_unsupported_adapter(tmp_path: Path) 
         "adversarial_review": {
             "adapter": "claude-agent",
             "harness": "claude",
-            "model": "claude-opus-4-7",
+            "model": "claude-opus-4-8",
         },
         "verification": {
             "adapter": "claude-agent",
             "harness": "claude",
-            "model": "claude-opus-4-7",
+            "model": "claude-opus-4-8",
         },
         "session_close": {
             "adapter": "claude-agent",

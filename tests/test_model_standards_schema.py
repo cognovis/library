@@ -207,9 +207,9 @@ def test_three_model_standards_validate():
                 "source": "https://github.com/cognovis/library-core/blob/main/model-standards/claude-sonnet-4-6.md",
             },
             {
-                "name": "claude-opus-4-7",
+                "name": "claude-opus-4-8",
                 "description": "Layer 3 model-standard for Claude Opus 4.7 — thinking-budget discipline, avoid over-deliberation on trivial steps.",
-                "source": "https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-7.md",
+                "source": "https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-8.md",
             },
             {
                 "name": "claude-haiku-4-5",

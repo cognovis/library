@@ -3799,10 +3799,10 @@ library:
     version: 2026.05.12
     tags:
     - origin:original
-  - name: claude-opus-4-7
+  - name: claude-opus-4-8
     description: 'Model-standard for Claude Opus 4.7 — thinking budget and deep reasoning
-      guidance. Applied to agents that declare model: claude-opus-4-7 or model: opus.'
-    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-7.md
+      guidance. Applied to agents that declare model: claude-opus-4-8 or model: opus.'
+    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-8.md
     metadata:
       library:
         source_catalog: cognovis-library-core

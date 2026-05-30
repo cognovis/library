@@ -167,7 +167,7 @@ Before returning your final result, create a structured debrief documenting what
 **model** (optional)
 - Prefer a requirement block resolved by `models.yaml`
 - Set `tier`, `reasoning`, `context`, and `cost_priority`
-- Per-harness escape hatches are allowed when required, for example `claude-code: claude-opus-4-7`
+- Per-harness escape hatches are allowed when required, for example `claude-code: claude-opus-4-8`
 
 **color** (optional)
 - Visual identifier in CLI output

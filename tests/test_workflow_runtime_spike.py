@@ -147,7 +147,7 @@ def test_bead_context_pack_passes_constraint_checker() -> None:
 
 def test_claude_agent_executor_maps_to_claude_agent_slot() -> None:
     executor = ClaudeAgentExecutor()
-    command = executor.build_command("context pack", {"model": "claude-opus-4-7"})
+    command = executor.build_command("context pack", {"model": "claude-opus-4-8"})
 
     assert executor.adapter_name == "claude-agent"
     assert command[:3] == ["claude", "-p", "--output-format"]

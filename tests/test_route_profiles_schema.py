@@ -153,7 +153,7 @@ class TestRouteProfilesSchema:
     def test_cdx_default_full_implementation_values(self, config: dict) -> None:
         impl = config["route_profiles"]["cdx-default"]["slots"]["full"]["implementation"]
         assert impl["adapter"] == "claude-agent"
-        assert impl["model"] == "claude-opus-4-7"
+        assert impl["model"] == "claude-opus-4-8"
         assert impl["harness"] == "claude"
 
     def test_cdx_default_quick_implementation_values(self, config: dict) -> None:

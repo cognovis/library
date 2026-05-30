@@ -91,7 +91,7 @@ class TestAdapterDispatch:
         config = _load_config(_USER_GLOBAL_CONFIG)
         ep = _make_execution_plan("cdx-default", config)
         dispatch = mod.resolve_impl_dispatch(
-            ep, "full", "implementation", fallback_impl_model="claude-opus-4-7"
+            ep, "full", "implementation", fallback_impl_model="claude-opus-4-8"
         )
         assert dispatch["adapter"] == "claude-agent"
         assert dispatch["source"] == "slot"
@@ -133,7 +133,7 @@ class TestLegacyFallback:
     def test_legacy_claude_maps_to_claude_agent(self) -> None:
         mod = _load_resolve_module()
         dispatch = mod.resolve_impl_dispatch(
-            None, "full", "implementation", fallback_impl_model="claude-opus-4-7"
+            None, "full", "implementation", fallback_impl_model="claude-opus-4-8"
         )
         assert dispatch["adapter"] == "claude-agent"
         assert dispatch["source"] == "legacy"
@@ -237,7 +237,7 @@ class TestCurrentBehaviorPreserved:
         impl = config["route_profiles"]["cdx-default"]["slots"]["full"]["implementation"]
         assert impl["adapter"] == "claude-agent"
         assert impl["harness"] == "claude"
-        assert impl["model"] == "claude-opus-4-7"
+        assert impl["model"] == "claude-opus-4-8"
 
     def test_cdx_default_quick_implementation_is_claude_agent(self, config: dict) -> None:
         impl = config["route_profiles"]["cdx-default"]["slots"]["quick"]["implementation"]

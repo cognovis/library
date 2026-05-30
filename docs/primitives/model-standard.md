@@ -123,7 +123,7 @@ permissions.
   - Cognovis alias fallback: `.agents/agent-bases/cognovis-base.md`
 - Model standards: `.agents/model-standards/<model-name>.md`
   - Sonnet conciseness: `.agents/model-standards/claude-sonnet-4-6.md`
-  - Opus thinking budget: `.agents/model-standards/claude-opus-4-7.md`
+  - Opus thinking budget: `.agents/model-standards/claude-opus-4-8.md`
 
 **When to choose it.** Create a model-standard when:
 - A specific model has known behaviors (verbosity, thinking defaults, tool-call

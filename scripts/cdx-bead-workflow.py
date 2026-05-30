@@ -673,7 +673,7 @@ def _phase3_claude_model(payload: dict[str, Any]) -> str:
     reviewer_model = str(route_decision.get("reviewer_model") or "")
     if reviewer_model.startswith("claude-"):
         return reviewer_model
-    return "claude-opus-4-7"
+    return "claude-opus-4-8"
 
 
 def _run_phase3_review_agent(

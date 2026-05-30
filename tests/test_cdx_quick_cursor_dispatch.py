@@ -27,7 +27,7 @@ def _write_runtime(tmp_path: Path, *, adapter: str = "cursor-composer") -> tuple
         "  'bead_id': sys.argv[1],\n"
         "  'run_id': 'run-123',\n"
         "  'pre_impl_sha': 'abc123',\n"
-        "  'route_decision': {'impl_model': 'composer-2.5', 'reviewer_model': 'claude-opus-4-7'},\n"
+        "  'route_decision': {'impl_model': 'composer-2.5', 'reviewer_model': 'claude-opus-4-8'},\n"
         "  'execution_plan': {'profile': 'cdx-composer', 'workflow': 'quick', 'slots': {'quick': {'implementation': {'adapter': 'cursor-composer', 'harness': 'cursor', 'model': 'composer-2.5'}}}},\n"
         "  'claim_status': 'CLAIMED',\n"
         "}\n"

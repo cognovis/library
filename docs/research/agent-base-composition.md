@@ -278,7 +278,7 @@ model_standards: []
 | File | Model | Guidance |
 |------|-------|----------|
 | `.agents/model-standards/claude-sonnet-4-6.md` | Claude Sonnet 4.6 | Conciseness and directness: no preamble, no recapping, direct tool calls, match response length to complexity |
-| `.agents/model-standards/claude-opus-4-7.md` | Claude Opus 4.7 | Thinking budget: use extended thinking (~5000 tokens) for complex analysis, enumerate alternatives, distinguish NORMATIVE vs INFERRED claims |
+| `.agents/model-standards/claude-opus-4-8.md` | Claude Opus 4.7 | Thinking budget: use extended thinking (~5000 tokens) for complex analysis, enumerate alternatives, distinguish NORMATIVE vs INFERRED claims |
 
 ---
 

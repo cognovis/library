@@ -217,7 +217,7 @@ Malformed, nested, or unclosed directive blocks fail `scripts/build-agent.py`.
 - Prefer requirement blocks. The builder resolves the cheapest model per harness
   that satisfies `tier`, `reasoning`, and `context`.
 - Use `cost_priority: cheapest`, `balanced`, or `quality-first`.
-- Escape hatch per harness when required: `claude-code: claude-opus-4-7` or
+- Escape hatch per harness when required: `claude-code: claude-opus-4-8` or
   `codex: { tier: premium, reasoning: high }`.
 
 **Important:** `model` defaults to `inherit`, not `opus`. An agent without `model:` gets whatever model the caller uses. Always set model explicitly to avoid surprises in pipelines.

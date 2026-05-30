@@ -111,7 +111,7 @@ def write_escape_hatch_source(tmp_path: Path) -> Path:
         "  tier: standard\n"
         "  reasoning: high\n"
         "  context: large\n"
-        "  claude-code: claude-opus-4-7\n"
+        "  claude-code: claude-opus-4-8\n"
         "  codex:\n"
         "    tier: premium\n"
         "    reasoning: high\n"
@@ -307,15 +307,15 @@ def test_build_agent_model_escape_hatch_overrides_per_harness(tmp_path: Path) ->
     source = write_escape_hatch_source(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["claude-opus-4-7", "gpt-5.5"])
+    model_standards_dir = make_model_standards(tmp_path, ["claude-opus-4-8", "gpt-5.5"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
 
     assert result.returncode == 0, result.stderr
     claude = (output_dir / "escape-agent.md").read_text()
     codex = tomllib.loads((output_dir / "escape-agent.toml").read_text())
-    assert "model: claude-opus-4-7" in claude
-    assert "CLAUDE-OPUS-4-7_LAYER3_MARKER" in claude
+    assert "model: claude-opus-4-8" in claude
+    assert "CLAUDE-OPUS-4-8_LAYER3_MARKER" in claude
     assert codex["model"] == "gpt-5.5"
     assert "GPT-5.5_LAYER3_MARKER" in codex["developer_instructions"]
 
