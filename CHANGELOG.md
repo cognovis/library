@@ -1,5 +1,13 @@
 ## [unreleased]
 
+### Fixed
+
+- *(CL-gx0x)* **Global `~/.agents/orchestrator-config.yml` no longer silently drifts**: the global orchestrator routing config had no catalog-managed deploy (it is not a primitive — the catalog's `orchestrator-config` entry is the `.md` standard, a different file), so the hand-placed global copy drifted from the canonical source (surfaced by the CL-0w6e opus bump, which never reached the deployed config). Added `bin/lib/orchestrator-config-sync.zsh`, sourced by both `cld` and `cdx` as a launch pre-flight: it idempotently refreshes `~/.agents/orchestrator-config.yml` from the installed catalog clone (`~/.local/share/library/cognovis-library-core/.agents/`) or the dev sibling checkout when the global copy is missing or differs — self-healing, silent when current, non-fatal when no source exists. Project-local `.agents/orchestrator-config.yml` files are untouched. Regression test: `tests/test_orchestrator_config_sync.py` (7 cases). NOTE: the related `library sync` gap for renamed/removed primitives (orphaned install on rename) remains open under CL-gx0x.
+
+### Workflow tests
+
+- *(CL-0w6e follow-up)* `test_workflow_runtime_spike.py` / `test_workflow_journal_hardening.py` no longer hard-require a non-existent `meta/workflows/bead-context-pack.js`: the constraint-checker test resolves the real spec from `meta/workflows` or the sibling cognovis-core checkout (skips if absent); the runtime-execution and journal tests use a local spike-compatible single-leaf spec (the real spec is rich multi-agent JS for the live Workflow tool, not parseable by the Python spike runtime). Fixes 4 pre-existing FileNotFoundError failures.
+
 ### Changed
 
 - *(CL-0w6e)* **Bump premium model `claude-opus-4-7` → `claude-opus-4-8` in the central registry**: `models.yaml` premium tier now resolves to `claude-opus-4-8`; the `claude-opus-4-8` model-standard catalog entry in `library.yaml` (name + source URL) replaces the 4-7 one. All `claude-opus-4-7` references removed across docs, agent-forge templates, `cdx-bead-workflow.py`, and the build/registry/route/slot/schema tests (`claude-opus-4-7` no longer appears outside historical run artifacts). Full model IDs are kept deliberately — the registry carries per-ID cost/`reasoning_levels`, and `known_models` validation stays coherent; aliases would lose that. Deployed agents pick up `claude-opus-4-8` (plus its model-standard) on the next `library sync` / agent rebuild. Paired with cognovis-core bead `clc-h1zu` (model-standard file + orchestrator-config).

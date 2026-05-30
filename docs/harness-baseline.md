@@ -54,7 +54,7 @@ state stay outside git.
 |---|---|
 | .agents/standards/ | Domain-specific standards shared across harnesses |
 | .agents/skills/ | Installed skills committed at project level; see mira for reference implementation |
-| .agents/orchestrator-config.yml | Orchestrator routing configuration |
+| .agents/orchestrator-config.yml | Orchestrator routing configuration (project-local). The **global** fallback `~/.agents/orchestrator-config.yml` is self-healed on every `cld`/`cdx` launch from the canonical catalog source (`bin/lib/orchestrator-config-sync.zsh`), so it never silently drifts. |
 
 **MUST NOT be committed:**
 

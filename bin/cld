@@ -155,6 +155,12 @@ if ${verbose}; then
     claude_args=("--verbose" "${claude_args[@]}")
 fi
 
+# ── Orchestrator config pre-flight ───────────────────────────────
+# Self-heal the global ~/.agents/orchestrator-config.yml from the canonical
+# catalog source so it never silently drifts (CL-0w6e follow-up).
+source "${0:A:h}/lib/orchestrator-config-sync.zsh"
+_sync_orchestrator_config
+
 # ── System Prompt Injection ──────────────────────────────────────
 source "${0:A:h}/lib/cld-system-prompt.zsh"
 
