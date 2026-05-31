@@ -13,8 +13,10 @@ Remove reverses steps 3 and 4.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
@@ -160,6 +162,13 @@ def install_simple_file(
     source_file, source_commit, temp_root = _fetch_file_source(parsed, item_name)
 
     try:
+        # 5a. Native parse-gate for workflows — a workflow whose post-`meta` body
+        # does not parse as an async function (e.g. wrapped in
+        # `export async function run(args)`, a second illegal `export`) never
+        # launches under the native Claude Workflow tool. Refuse to deploy it.
+        if primitive_name == "workflow" and source_file.is_file():
+            _assert_workflow_native_parse(source_file, item_name)
+
         cache_path = compute_cache_path(
             f"{primitive_name}",
             marketplace,
@@ -293,6 +302,83 @@ def remove_simple_file(
         data={"name": name, "removed_files": removed_files},
         message=f"{primitive_name.title()} '{name}' removed.",
     )
+
+
+def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
+    """Deploy-gate: a Library workflow is authored once as native Claude Workflow JS.
+
+    The native tool evaluates everything after `export const meta = {...}` as the
+    body of an injected async function (`args`/`agent`/`parallel`/`pipeline`/`phase`/
+    `log`/`budget`/`workflow` are globals; top-level `await`/`return` are valid).
+    A second `export`/`import` inside that body — e.g. the
+    `export async function run(args)` wrapper copied from the library-runtime
+    convention — is a `SyntaxError` and the workflow never launches (clc-j7mn).
+
+    This isolates the post-`meta` body, wraps it as an async function, and runs
+    `node --check`. Raises InstallError on parse failure. If `node` is unavailable
+    the gate is skipped with a warning (do not block installs on a missing toolchain).
+    """
+    node = shutil.which("node")
+    if node is None:
+        print(
+            f"[workflow] WARN: node not found — skipping native parse-gate for '{name}'. "
+            "Install Node.js to enable workflow launch validation.",
+            file=sys.stderr,
+        )
+        return
+
+    src = js_path.read_text(encoding="utf-8")
+    marker = src.find("export const meta")
+    if marker == -1:
+        raise InstallError(
+            f"Workflow '{name}' has no `export const meta = {{...}}` block; "
+            "a native Claude Workflow spec must begin with it."
+        )
+    idx = src.find("{", marker)
+    depth = 0
+    end = -1
+    while idx != -1 and idx < len(src):
+        char = src[idx]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                end = idx + 1
+                break
+        idx += 1
+    if end == -1:
+        raise InstallError(f"Workflow '{name}': unbalanced `export const meta` block.")
+
+    body = src[end:].lstrip(" \t\r\n;")
+    wrapped = (
+        "async function __wf(agent, parallel, pipeline, phase, log, workflow, args, budget) {\n"
+        + body
+        + "\n}\n"
+    )
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False, encoding="utf-8") as handle:
+            handle.write(wrapped)
+            tmp = handle.name
+        result = subprocess.run([node, "--check", tmp], capture_output=True, text=True)
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+    if result.returncode != 0:
+        stderr_lines = [line for line in result.stderr.splitlines() if "Error" in line]
+        detail = (stderr_lines[0] if stderr_lines else result.stderr.strip().splitlines()[0:1] or ["parse failed"])
+        detail = detail[0] if isinstance(detail, list) else detail
+        raise InstallError(
+            f"Workflow '{name}' is not a launchable native Claude Workflow spec: the body "
+            f"after `export const meta` does not parse as an async function ({detail.strip()}). "
+            "Do not wrap the body in `export async function run(args)` — a second `export` is "
+            "illegal. Author the body as top-level statements (see the workflow-forge skill)."
+        )
 
 
 def _fetch_file_source(

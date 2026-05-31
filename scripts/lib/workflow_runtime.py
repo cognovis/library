@@ -1,6 +1,18 @@
 """
 workflow_runtime.py — Spike runtime for Anthropic Workflow JS specs.
 
+NOT CANONICAL (clc-j7mn). The canonical runtime for a Library workflow is the
+native Claude Workflow tool (Claude Code, Opus 4.8+). A workflow is authored once
+as native Claude Workflow JS — `export const meta = {...}` followed by a top-level
+async body — and deployed to `.claude/workflows/`. This module is a constrained
+subset/proof-of-concept (textual extraction, no real JS execution) used for
+experiments and tests; it does NOT provide native `agent()`/`parallel()` semantics,
+journal/resume, or structured leaf isolation. Other harnesses (e.g. Codex) get
+interpretive prompt projections at best, not workflow execution. Do not treat the
+form this module happens to accept as the spec contract — that contract is the
+native tool's, enforced at deploy by the workflow parse-gate in
+`installers/simple_file.py` and at authoring by the `workflow-forge` skill.
+
 This is a constrained proof-of-concept:
 - it reads a workflow spec as source text
 - enforces inert-spine bans
