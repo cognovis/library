@@ -305,6 +305,66 @@ def remove_simple_file(
     )
 
 
+def _meta_object_end(src: str, brace_start: int) -> int:
+    """Return the index just past the balanced meta object literal at `brace_start`.
+
+    Tracks string (`"` `'` `` ` ``) and comment (`//`, `/* */`) state so a brace
+    inside a string — e.g. ``description: "has } brace"`` — does not throw off the
+    depth count. Returns -1 if unbalanced. Kept equivalent to `metaObjectEnd()` in
+    `workflow-forge/scripts/check-workflow-parse.mjs`.
+    """
+    depth = 0
+    in_str: Optional[str] = None  # quote char or None
+    in_line = False
+    in_block = False
+    escaped = False
+    i = brace_start
+    n = len(src)
+    while i < n:
+        char = src[i]
+        nxt = src[i + 1] if i + 1 < n else ""
+        if in_line:
+            if char == "\n":
+                in_line = False
+            i += 1
+            continue
+        if in_block:
+            if char == "*" and nxt == "/":
+                in_block = False
+                i += 1
+            i += 1
+            continue
+        if in_str is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == in_str:
+                in_str = None
+            i += 1
+            continue
+        if char == "/" and nxt == "/":
+            in_line = True
+            i += 1
+            continue
+        if char == "/" and nxt == "*":
+            in_block = True
+            i += 1
+            continue
+        if char in ('"', "'", "`"):
+            in_str = char
+            i += 1
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
 def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
     """Deploy-gate: a Library workflow is authored once as native Claude Workflow JS.
 
@@ -349,22 +409,11 @@ def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
             "move setup code into the body (after meta)."
         )
 
-    # Locate the balanced meta object literal.
+    # Locate the (string/comment-aware) balanced meta object literal, so a brace
+    # inside a string (e.g. `description: "has } brace"`) does not throw the count.
     brace_start = src.find("{", marker)
-    depth = 0
-    end = -1
-    idx = brace_start
-    while idx != -1 and idx < len(src):
-        char = src[idx]
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                end = idx + 1
-                break
-        idx += 1
-    if brace_start == -1 or end == -1:
+    end = _meta_object_end(src, brace_start) if brace_start != -1 else -1
+    if end == -1:
         raise InstallError(f"Workflow '{name}': unbalanced or missing `export const meta` object.")
 
     meta_literal = src[brace_start:end]

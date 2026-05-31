@@ -61,9 +61,13 @@ still harness-neutral JavaScript.
 | Library runtime (`scripts/lib/workflow_runtime.py`) | our runner, shelling each leaf to `claude -p --output-format json` | **Non-canonical spike/subset.** Textual extraction, no native `agent()`/`parallel()`/journal/resume semantics. For experiments/tests only; do not treat the form it accepts as the contract. |
 | Codex / other harnesses | interpretive prompt projection or a dedicated runner | **Compatibility projection, not workflow execution.** Loses native `agent()`, `parallel()`, journal/resume, and structured leaf isolation. Must not weaken the canonical spec. |
 
-This pluggable executor is what makes a workflow cross-harness. The Library runtime
-read-only execution path is implemented and tested; mutating execution requires adapter
-verification (see Adapter Support table below and ADR-0006 Consequences).
+Cross-harness reach is a **projection**, not interchangeable execution (clc-j7mn):
+the canonical spec runs natively under Claude Code, and other harnesses get
+interpretive projections that deliberately drop native semantics. The Library
+runtime below is a non-canonical spike retained for experiments/tests; its
+read-only path is implemented and tested, and mutating execution requires adapter
+verification (see Adapter Support table below and ADR-0006 Consequences, now
+superseded by clc-j7mn for the canonical-form question).
 
 ## Runtime: Library Workflow Runtime
 

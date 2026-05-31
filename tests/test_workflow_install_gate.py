@@ -78,6 +78,19 @@ const t = args.slots?.implementation;
 return { ok: true, t };
 """
 
+# A brace inside a meta string must not throw off the object-literal scan.
+BRACE_IN_META_STRING = """\
+export const meta = {
+  name: "braces",
+  description: "args shape: { beadId: string } with a } brace and a { brace",
+  parameters: [
+    { name: "beadId", type: "string", required: true, help: "id like { x }" }
+  ]
+};
+
+return { ok: true };
+"""
+
 node_required = pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
 
 
@@ -138,6 +151,14 @@ def test_comment_mentioning_meta_not_matched(tmp_path: Path) -> None:
     js.write_text(COMMENT_MENTIONS_META, encoding="utf-8")
     # The marker search must anchor on the real declaration, not the comment text.
     _assert_workflow_native_parse(js, "mentioned")
+
+
+@node_required
+def test_brace_inside_meta_string_allowed(tmp_path: Path) -> None:
+    js = tmp_path / "braces.js"
+    js.write_text(BRACE_IN_META_STRING, encoding="utf-8")
+    # A `}`/`{` inside a meta string must not break the object-literal scan.
+    _assert_workflow_native_parse(js, "braces")
 
 
 def test_skips_gracefully_without_node(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
