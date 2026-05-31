@@ -91,6 +91,25 @@ export const meta = {
 return { ok: true };
 """
 
+# meta must be a pure static literal (standards/workflow/parameters.md).
+META_TEMPLATE_LITERAL = """\
+export const meta = { name: `bad-${1 + 1}`, description: "x" };
+
+return { ok: true };
+"""
+
+META_ARROW_FN = """\
+export const meta = { name: "x", description: "y", make: () => 1 };
+
+return { ok: true };
+"""
+
+META_PARENS_IN_STRING_OK = """\
+export const meta = { name: "x", description: "maps (a) and ... ellipsis in text" };
+
+return { ok: true };
+"""
+
 node_required = pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
 
 
@@ -159,6 +178,29 @@ def test_brace_inside_meta_string_allowed(tmp_path: Path) -> None:
     js.write_text(BRACE_IN_META_STRING, encoding="utf-8")
     # A `}`/`{` inside a meta string must not break the object-literal scan.
     _assert_workflow_native_parse(js, "braces")
+
+
+def test_meta_template_literal_rejected(tmp_path: Path) -> None:
+    js = tmp_path / "tmpl.js"
+    js.write_text(META_TEMPLATE_LITERAL, encoding="utf-8")
+    with pytest.raises(InstallError) as exc:
+        _assert_workflow_native_parse(js, "tmpl")
+    assert "static literal" in str(exc.value)
+
+
+def test_meta_function_value_rejected(tmp_path: Path) -> None:
+    js = tmp_path / "fn.js"
+    js.write_text(META_ARROW_FN, encoding="utf-8")
+    with pytest.raises(InstallError) as exc:
+        _assert_workflow_native_parse(js, "fn")
+    assert "static literal" in str(exc.value)
+
+
+def test_meta_parens_in_string_allowed(tmp_path: Path) -> None:
+    js = tmp_path / "strok.js"
+    js.write_text(META_PARENS_IN_STRING_OK, encoding="utf-8")
+    # Parens/ellipsis inside a meta string are content, not dynamic expressions.
+    _assert_workflow_native_parse(js, "strok")
 
 
 def test_skips_gracefully_without_node(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

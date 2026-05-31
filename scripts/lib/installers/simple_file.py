@@ -365,6 +365,77 @@ def _meta_object_end(src: str, brace_start: int) -> int:
     return -1
 
 
+def _meta_static_violations(meta_literal: str) -> list[str]:
+    """Return reasons `meta_literal` is not a pure static literal (empty list = OK).
+
+    Per standards/workflow/parameters.md the meta block MUST be a pure
+    JSON-parseable literal — no functions, dynamic expressions, or template
+    literals — so a launcher (clw) can read it statically without executing the
+    spec. `node --check` only proves syntactic validity; this enforces the static
+    contract. Scans string/comment-aware and flags, in the code region (outside
+    strings/comments): a template-literal value (backtick), a parenthesis (call /
+    arrow / grouping — i.e. a dynamic expression), or a spread (`...`). Kept
+    equivalent to `metaStaticViolations()` in check-workflow-parse.mjs.
+    """
+    violations: list[str] = []
+    in_str: Optional[str] = None
+    in_line = False
+    in_block = False
+    escaped = False
+    code: list[str] = []
+    i = 0
+    n = len(meta_literal)
+    while i < n:
+        char = meta_literal[i]
+        nxt = meta_literal[i + 1] if i + 1 < n else ""
+        if in_line:
+            if char == "\n":
+                in_line = False
+            i += 1
+            continue
+        if in_block:
+            if char == "*" and nxt == "/":
+                in_block = False
+                i += 1
+            i += 1
+            continue
+        if in_str is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == in_str:
+                in_str = None
+            i += 1
+            continue
+        if char == "/" and nxt == "/":
+            in_line = True
+            i += 1
+            continue
+        if char == "/" and nxt == "*":
+            in_block = True
+            i += 1
+            continue
+        if char in ('"', "'"):
+            in_str = char
+            i += 1
+            continue
+        if char == "`":
+            in_str = "`"
+            if "template literal" not in violations:
+                violations.append("template literal")
+            i += 1
+            continue
+        code.append(char)
+        i += 1
+    code_region = "".join(code)
+    if "(" in code_region:
+        violations.append("function or dynamic expression")
+    if "..." in code_region:
+        violations.append("spread")
+    return violations
+
+
 def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
     """Deploy-gate: a Library workflow is authored once as native Claude Workflow JS.
 
@@ -418,6 +489,16 @@ def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
 
     meta_literal = src[brace_start:end]
     body = src[end:].lstrip(" \t\r\n;")
+
+    # meta must be a pure static literal (no functions/dynamic exprs/template
+    # literals) so launchers can read it without executing the spec.
+    static_violations = _meta_static_violations(meta_literal)
+    if static_violations:
+        raise InstallError(
+            f"Workflow '{name}': `meta` must be a pure static literal (found: "
+            f"{', '.join(static_violations)}). No functions, dynamic expressions, or "
+            "template literals — see standards/workflow/parameters.md (JSON-Literal Constraint)."
+        )
 
     if node is None:
         print(

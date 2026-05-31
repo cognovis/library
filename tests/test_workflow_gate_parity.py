@@ -46,6 +46,10 @@ CASES = [
     ("comment_mentions_meta", '/* after `export const meta` use top-level body; ex: { a: 1 } */\nexport const meta = { name: "a", description: "d" };\nreturn 1;\n', True),
     ("brace_in_string", 'export const meta = { name: "a", description: "has } and { brace" };\nreturn 1;\n', True),
     ("leading_comments", '// c\n/* b */\nexport const meta = { name: "a", description: "d" };\nreturn 1;\n', True),
+    ("meta_template_literal", 'export const meta = { name: `x-${1}`, description: "d" };\nreturn 1;\n', False),
+    ("meta_arrow_fn", 'export const meta = { name: "a", description: "d", f: () => 1 };\nreturn 1;\n', False),
+    ("meta_spread", 'export const meta = { name: "a", description: "d", ...base };\nreturn 1;\n', False),
+    ("parens_in_meta_string", 'export const meta = { name: "a", description: "uses (parens) here" };\nreturn 1;\n', True),
 ]
 
 
