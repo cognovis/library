@@ -41,6 +41,43 @@ const items = args.items ?? [];
 return items;
 """
 
+MALFORMED_META = """\
+export const meta = { name: "bad",, description: "x" };
+
+return { ok: true };
+"""
+
+PRE_META_CODE = """\
+const before = Date.now();
+export const meta = { name: "premeta", description: "x" };
+
+return { ok: true };
+"""
+
+PRE_META_COMMENT_OK = """\
+// a leading comment is fine
+/* and a block comment */
+export const meta = { name: "okc", description: "x" };
+
+return { ok: true };
+"""
+
+# A header comment that MENTIONS `export const meta` and contains braces must not
+# fool the marker search into matching inside the comment (regression for the
+# bead-orchestrator dogfood failure).
+COMMENT_MENTIONS_META = """\
+/**
+ * doc — everything after `export const meta` is the body.
+ * Do NOT use `export async function run(args)`.
+ * Example: args = { slots: { implementation: { agentType: "x" } } }
+ */
+
+export const meta = { name: "mentioned", description: "x" };
+
+const t = args.slots?.implementation;
+return { ok: true, t };
+"""
+
 node_required = pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
 
 
@@ -69,6 +106,38 @@ def test_missing_meta_rejected(tmp_path: Path) -> None:
     with pytest.raises(InstallError) as exc:
         _assert_workflow_native_parse(js, "nometa")
     assert "export const meta" in str(exc.value)
+
+
+@node_required
+def test_malformed_meta_rejected(tmp_path: Path) -> None:
+    js = tmp_path / "bad.js"
+    js.write_text(MALFORMED_META, encoding="utf-8")
+    with pytest.raises(InstallError):
+        _assert_workflow_native_parse(js, "bad")
+
+
+def test_pre_meta_executable_code_rejected(tmp_path: Path) -> None:
+    js = tmp_path / "premeta.js"
+    js.write_text(PRE_META_CODE, encoding="utf-8")
+    with pytest.raises(InstallError) as exc:
+        _assert_workflow_native_parse(js, "premeta")
+    assert "first statement" in str(exc.value)
+
+
+@node_required
+def test_pre_meta_comments_allowed(tmp_path: Path) -> None:
+    js = tmp_path / "okc.js"
+    js.write_text(PRE_META_COMMENT_OK, encoding="utf-8")
+    # Comments before meta are fine — should not raise.
+    _assert_workflow_native_parse(js, "okc")
+
+
+@node_required
+def test_comment_mentioning_meta_not_matched(tmp_path: Path) -> None:
+    js = tmp_path / "mentioned.js"
+    js.write_text(COMMENT_MENTIONS_META, encoding="utf-8")
+    # The marker search must anchor on the real declaration, not the comment text.
+    _assert_workflow_native_parse(js, "mentioned")
 
 
 def test_skips_gracefully_without_node(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

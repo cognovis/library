@@ -195,11 +195,12 @@ description: A test agent base prompt
 # Test Agent Base Prompt Content
 """
 
-FIXTURE_WORKFLOW_JS = """export default {
+FIXTURE_WORKFLOW_JS = """export const meta = {
   name: "test-workflow",
   description: "A test workflow",
-  steps: [],
 };
+
+return { ok: true };
 """
 
 MULTI_HARNESS_AGENT_MD = """---

@@ -48,15 +48,18 @@ const results = await pipeline(
 return { confirmed: results.flat().filter(Boolean).filter(f => f.isReal) }
 ```
 
-**Execution model.** One spec runs under three interchangeable backends; only the
-implementation of `agent()` differs (ADR-0006 Decision 3). The spine is
-harness-neutral JavaScript and never changes between them.
+**Execution model (canonical: native, clc-j7mn).** A workflow is authored once as
+native Claude Workflow JS and the **native Workflow tool is the canonical executor**.
+ADR-0006 Decision 3's "three interchangeable backends" framing is **superseded**:
+the backends are not equivalent, and the canonical spec form is the native one
+(`export const meta` + top-level async body — no `run()` wrapper). The spine is
+still harness-neutral JavaScript.
 
-| Backend | `agent()` provided by | Availability |
-|---------|------------------------|--------------|
-| Native Workflow tool | the Claude Code binary, in-process (gated by `CLAUDE_CODE_WORKFLOWS`) | when Anthropic ships it |
-| Library runtime | our runner (`scripts/lib/workflow_runtime.py`), shelling each leaf to `claude -p --output-format json` | available — read-only path; mutating blocked until adapter is `verified` |
-| Codex | the same runner, shelling each leaf to `codex exec` | runtime exists; read-only path only; mutating blocked (hook chain suppressed via `--ignore-user-config`, see CL-pabj) |
+| Backend | `agent()` provided by | Status |
+|---------|------------------------|--------|
+| Native Workflow tool | the Claude Code binary, in-process | **Canonical.** Ships in Opus 4.8 — not gated, no env var. The only supported native executor today. Deploys are gated by the workflow parse-check (`installers/simple_file.py`; `workflow-forge/scripts/check-workflow-parse.mjs`). |
+| Library runtime (`scripts/lib/workflow_runtime.py`) | our runner, shelling each leaf to `claude -p --output-format json` | **Non-canonical spike/subset.** Textual extraction, no native `agent()`/`parallel()`/journal/resume semantics. For experiments/tests only; do not treat the form it accepts as the contract. |
+| Codex / other harnesses | interpretive prompt projection or a dedicated runner | **Compatibility projection, not workflow execution.** Loses native `agent()`, `parallel()`, journal/resume, and structured leaf isolation. Must not weaken the canonical spec. |
 
 This pluggable executor is what makes a workflow cross-harness. The Library runtime
 read-only execution path is implemented and tested; mutating execution requires adapter

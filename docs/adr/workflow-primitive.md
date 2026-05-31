@@ -107,6 +107,17 @@ Anthropic shipping).
 
 ### Decision 3: Execution is one spec with a pluggable `agent()` executor
 
+> **Superseded by clc-j7mn (2026-05).** The "three interchangeable backends"
+> model below did not survive contact with the native Workflow tool. The native
+> tool (Claude Code, Opus 4.8+) is the **canonical** executor and the canonical
+> spec form (`export const meta` + top-level async body) is its form; a second
+> `export`/`run()` wrapper is a `SyntaxError`. The Library runtime
+> (`workflow_runtime.py`) is a non-canonical spike/subset (textual extraction, no
+> native `agent()`/`parallel()`/journal/resume), and Codex/other harnesses get
+> interpretive projections — **not** equivalent execution. Deploys are gated by a
+> native parse-check (`installers/simple_file.py`, `workflow-forge`). The original
+> decision is retained below as historical record.
+
 A single spec file runs under any of three interchangeable backends; only the
 leaf executor — the implementation of `agent()` — differs:
 

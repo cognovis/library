@@ -14,6 +14,7 @@ Remove reverses steps 3 and 4.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -307,36 +308,52 @@ def remove_simple_file(
 def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
     """Deploy-gate: a Library workflow is authored once as native Claude Workflow JS.
 
-    The native tool evaluates everything after `export const meta = {...}` as the
-    body of an injected async function (`args`/`agent`/`parallel`/`pipeline`/`phase`/
-    `log`/`budget`/`workflow` are globals; top-level `await`/`return` are valid).
-    A second `export`/`import` inside that body — e.g. the
-    `export async function run(args)` wrapper copied from the library-runtime
-    convention — is a `SyntaxError` and the workflow never launches (clc-j7mn).
+    A native spec must (1) begin with `export const meta = {...}` as the first real
+    statement — no executable code before it; (2) have a parseable meta object
+    literal; and (3) have a post-`meta` body that parses as the injected async
+    function the native tool wraps it in (`args`/`agent`/`parallel`/`pipeline`/
+    `phase`/`log`/`budget`/`workflow` are globals; top-level `await`/`return` valid).
+    The `export async function run(args)` wrapper copied from the library-runtime
+    convention is a second `export` — a `SyntaxError` — so the workflow never
+    launches (clc-j7mn).
 
-    This isolates the post-`meta` body, wraps it as an async function, and runs
-    `node --check`. Raises InstallError on parse failure. If `node` is unavailable
-    the gate is skipped with a warning (do not block installs on a missing toolchain).
+    This checks meta-first textually, then runs ONE `node --check` over
+    `const __meta = <meta literal>;` + the body wrapped as an async function — which
+    catches a malformed meta object and a non-parseable body together. Raises
+    InstallError on any failure. If `node` is unavailable the gate is skipped with a
+    warning (do not block installs on a missing toolchain).
     """
     node = shutil.which("node")
-    if node is None:
-        print(
-            f"[workflow] WARN: node not found — skipping native parse-gate for '{name}'. "
-            "Install Node.js to enable workflow launch validation.",
-            file=sys.stderr,
-        )
-        return
-
     src = js_path.read_text(encoding="utf-8")
-    marker = src.find("export const meta")
-    if marker == -1:
+
+    # Locate the real `export const meta` DECLARATION (at statement position), not a
+    # mention inside a header comment — good workflows routinely document the token.
+    meta_match = re.search(r"(?m)^[ \t]*export[ \t]+const[ \t]+meta\b", src)
+    if meta_match is None:
         raise InstallError(
-            f"Workflow '{name}' has no `export const meta = {{...}}` block; "
+            f"Workflow '{name}' has no `export const meta = {{...}}` declaration; "
             "a native Claude Workflow spec must begin with it."
         )
-    idx = src.find("{", marker)
+    marker = meta_match.start()
+
+    # (1) meta must be the first real statement — nothing but whitespace/comments
+    # may precede it (executable pre-meta code is not part of the native body and
+    # would run at import time).
+    preamble = src[:marker]
+    preamble = re.sub(r"/\*.*?\*/", "", preamble, flags=re.S)  # block comments
+    preamble = re.sub(r"(?m)//.*$", "", preamble)              # line comments
+    if preamble.strip():
+        raise InstallError(
+            f"Workflow '{name}': `export const meta` must be the first statement, but "
+            "executable code precedes it. A native spec begins with the meta block; "
+            "move setup code into the body (after meta)."
+        )
+
+    # Locate the balanced meta object literal.
+    brace_start = src.find("{", marker)
     depth = 0
     end = -1
+    idx = brace_start
     while idx != -1 and idx < len(src):
         char = src[idx]
         if char == "{":
@@ -347,11 +364,26 @@ def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
                 end = idx + 1
                 break
         idx += 1
-    if end == -1:
-        raise InstallError(f"Workflow '{name}': unbalanced `export const meta` block.")
+    if brace_start == -1 or end == -1:
+        raise InstallError(f"Workflow '{name}': unbalanced or missing `export const meta` object.")
 
+    meta_literal = src[brace_start:end]
     body = src[end:].lstrip(" \t\r\n;")
+
+    if node is None:
+        print(
+            f"[workflow] WARN: node not found — skipping native parse-gate for '{name}'. "
+            "Install Node.js to enable workflow launch validation.",
+            file=sys.stderr,
+        )
+        return
+
+    # (2)+(3): validate the meta literal AND the body in one parse. The meta object
+    # is assigned to a const (catches malformed literals, e.g. double commas); the
+    # body is wrapped exactly as the native tool runs it (catches a second export,
+    # top-level syntax errors, etc.).
     wrapped = (
+        "const __meta = " + meta_literal + ";\n"
         "async function __wf(agent, parallel, pipeline, phase, log, workflow, args, budget) {\n"
         + body
         + "\n}\n"
@@ -371,13 +403,13 @@ def _assert_workflow_native_parse(js_path: Path, name: str) -> None:
 
     if result.returncode != 0:
         stderr_lines = [line for line in result.stderr.splitlines() if "Error" in line]
-        detail = (stderr_lines[0] if stderr_lines else result.stderr.strip().splitlines()[0:1] or ["parse failed"])
-        detail = detail[0] if isinstance(detail, list) else detail
+        detail = stderr_lines[0].strip() if stderr_lines else "parse failed"
         raise InstallError(
-            f"Workflow '{name}' is not a launchable native Claude Workflow spec: the body "
-            f"after `export const meta` does not parse as an async function ({detail.strip()}). "
-            "Do not wrap the body in `export async function run(args)` — a second `export` is "
-            "illegal. Author the body as top-level statements (see the workflow-forge skill)."
+            f"Workflow '{name}' is not a launchable native Claude Workflow spec "
+            f"({detail}). The meta object must be a valid literal and the body after "
+            "`export const meta` must parse as an async function — do NOT wrap it in "
+            "`export async function run(args)` (a second `export` is illegal). "
+            "See the workflow-forge skill."
         )
 
 
