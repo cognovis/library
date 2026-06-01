@@ -1,4 +1,17 @@
-## [unreleased]
+## [2026.06.1] - 2026-06-01
+
+### Added
+
+- *(clw)* In-code epic expansion + workflow token-usage monitor — bead-review epic expansion is now handled inside the clw workflow code, eliminating the Opus agent; review leaves are pinned to Sonnet for cost efficiency
+- *(catalog)* Register bead-review/review-prep as a first-class library script — `review_prep.py` cataloged for direct library exec
+- *(catalog)* Register bead-context-pack workflow (deploy + enable bead-review enrichment) — validates end-to-end on polaris-ygm3 and mira-rih7m
+
+### Fixed
+
+- *(clw)* List-shaped meta.parameters + register workflow capability
+- *(installer)* Create intermediate subdir for slash-named vendor installs — slash-named vendor scripts (e.g. `bead-review/review-prep`) now install correctly
+
+## [2026.06.0] - 2026-06-01
 
 ### Fixed
 
