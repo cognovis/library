@@ -104,3 +104,54 @@ def test_help_lists_declared_parameters(project: Path) -> None:
     assert "--beadIds" in result.stdout
     assert "[required]" in result.stdout
     assert "--strict" in result.stdout
+
+
+# A workflow whose list param is flagged expandEpics: true.
+_EPIC_WORKFLOW = """\
+export const meta = {
+  "name": "epic-wf",
+  "description": "expandEpics test.",
+  "parameters": [
+    { "name": "beadIds", "type": "list", "required": true, "expandEpics": true, "help": "ids" }
+  ]
+};
+return { ok: true };
+"""
+
+# Stub `bd`: `bd show <id> --json` returns an epic (EP) with two children,
+# or a plain task otherwise. Mirrors the real `[{...}]` list shape.
+_STUB_BD = """\
+#!/usr/bin/env bash
+if [ "$1" = "show" ]; then
+  id="$2"
+  if [ "$id" = "EP" ]; then
+    echo '[{"id":"EP","issue_type":"epic","dependents":[{"id":"EP.1","dependency_type":"parent-child"},{"id":"EP.2","dependency_type":"parent-child"}]}]'
+  else
+    echo "[{\\"id\\":\\"$id\\",\\"issue_type\\":\\"task\\",\\"dependents\\":[]}]"
+  fi
+fi
+"""
+
+
+def test_expand_epics_includes_children(tmp_path: Path) -> None:
+    wf_dir = tmp_path / ".claude" / "workflows"
+    wf_dir.mkdir(parents=True)
+    (wf_dir / "epic-wf.js").write_text(_EPIC_WORKFLOW, encoding="utf-8")
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    bd = stub_bin / "bd"
+    bd.write_text(_STUB_BD, encoding="utf-8")
+    bd.chmod(0o755)
+
+    env = dict(os.environ)
+    env["CLAUDE_BIN"] = "echo"
+    env["HOME"] = str(tmp_path)
+    env["PATH"] = f"{stub_bin}:{env['PATH']}"  # stub bd shadows real bd
+    result = subprocess.run(
+        [str(CLW), "epic-wf", "--beadIds", "EP,solo"],
+        cwd=tmp_path, env=env, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout.split("with args: ", 1)[1].strip())
+    # Epic EP expands to EP + children, epic-first; solo stays as-is.
+    assert payload["beadIds"] == ["EP", "EP.1", "EP.2", "solo"]

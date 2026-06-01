@@ -338,6 +338,47 @@ if missing_required:
     sys.stderr.write(f"\nRun: clw {sys.argv[0].split()[-1] if ' ' in sys.argv[0] else ''} --help  for parameter details\n")
     sys.exit(2)
 
+# Epic expansion (deterministic, in code — replaces a per-run LLM agent):
+# a list param flagged `expandEpics: true` has each bead ID resolved via
+# `bd show <id> --json`; epic IDs are expanded to include their parent-child
+# children (recursively), epic-first, deduplicated. Falls back to the raw IDs
+# if `bd` is unavailable or a lookup fails — never blocks the launch.
+import subprocess
+
+
+def _expand_epics(ids):
+    ordered = []
+    seen = set()
+
+    def visit(bid):
+        if bid in seen:
+            return
+        seen.add(bid)
+        ordered.append(bid)
+        try:
+            proc = subprocess.run(
+                ["bd", "show", bid, "--json"],
+                capture_output=True, text=True, timeout=30,
+            )
+            data = json.loads(proc.stdout)
+            bead = data[0] if isinstance(data, list) and data else (data if isinstance(data, dict) else {})
+            if bead.get("issue_type") == "epic":
+                for dep in bead.get("dependents", []) or []:
+                    if dep.get("dependency_type") == "parent-child" and dep.get("id"):
+                        visit(dep["id"])  # epic-first, children grouped after their epic
+        except Exception:
+            pass  # bd missing / lookup failed -> leave this ID unexpanded
+
+    for bid in ids:
+        visit(bid)
+    return ordered
+
+
+if isinstance(params, dict):
+    for pname, spec in params.items():
+        if isinstance(spec, dict) and spec.get("expandEpics") and isinstance(args.get(pname), list):
+            args[pname] = _expand_epics(args[pname])
+
 print(json.dumps(args))
 PYEOF
 )
