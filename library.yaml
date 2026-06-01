@@ -3979,6 +3979,21 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: manual
+  - name: bead-context-pack
+    description: Gather code/standards/architecture/prior-work for a bead in parallel
+      fresh-context agents, then synthesize one context pack. Used as the rich-context
+      enrichment step by bead-review (childless epics / large beads) and as a
+      context-isolated replacement for orchestrator Phase 1.
+    source: https://github.com/cognovis/library-core/blob/main/workflows/bead-context-pack.js
+    format: claude-workflow-js
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
 
 project_tooling:
 - name: beads-prime
