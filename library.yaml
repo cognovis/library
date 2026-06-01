@@ -329,7 +329,7 @@ library:
       childless-epic/large-effort enrich signal) for the rest. Depends on the
       beads and bead-reviewer skills being installed (resolves their scripts at
       runtime).
-    source: https://github.com/cognovis/library-core/blob/main/skills/bead-reviewer/scripts/review_prep.py
+    source: https://github.com/cognovis/library-core/blob/main/scripts/bead-review/review-prep.py
     language: python
     metadata:
       library:
@@ -3957,6 +3957,8 @@ library:
       bead before orchestration or auditing spec quality.
     source: https://github.com/cognovis/library-core/blob/main/workflows/bead-review.js
     format: claude-workflow-js
+    requires:
+    - script:bead-review/review-prep
     tags:
     - origin:original
     - tier:core
