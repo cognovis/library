@@ -192,8 +192,10 @@ def install_simple_file(
             entrypoint = entry.get("entrypoint") or install_filename
             cached_file = cache_path / item_name / entrypoint
 
-        # 6. Install to target
-        canonical_base.mkdir(parents=True, exist_ok=True)
+        # 6. Install to target. Use install_target.parent (not just
+        # canonical_base) so slash-named items (e.g. "bead-review/review-prep")
+        # get their intermediate subdirectory created before the copy.
+        install_target.parent.mkdir(parents=True, exist_ok=True)
         if install_target.is_symlink():
             install_target.unlink()
         elif install_target.exists():
