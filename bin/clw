@@ -117,18 +117,17 @@ if [[ $# -eq 0 ]] || [[ "$1" == "--help" || "$1" == "-h" ]]; then
     echo ""
 
     local found=0
-    while IFS= read -r wf_path; do
-        [[ -z "$wf_path" ]] && continue
-        local meta_json
-        meta_json=$(_parse_meta "$wf_path")
-        local name="${wf_path:t:r}"
-        local description whenToUse
-        description=$(echo "$meta_json" | uv run python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('description',''))" 2>/dev/null || true)
-        whenToUse=$(echo "$meta_json" | uv run python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('whenToUse',''))" 2>/dev/null || true)
-        local label="$name"
-        [[ -n "$description" ]] && label="${name} — ${description}"
-        [[ -n "$whenToUse" ]] && label="${label} (+${whenToUse})"
-        echo "  $label"
+    local _wf_path _meta_json _wf_name _description _whenToUse _label
+    while IFS= read -r _wf_path; do
+        [[ -z "$_wf_path" ]] && continue
+        _meta_json=$(_parse_meta "$_wf_path")
+        _wf_name="${_wf_path:t:r}"
+        _description=$(echo "$_meta_json" | uv run python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('description',''))" 2>/dev/null || true)
+        _whenToUse=$(echo "$_meta_json" | uv run python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('whenToUse',''))" 2>/dev/null || true)
+        _label="$_wf_name"
+        [[ -n "$_description" ]] && _label="${_wf_name} — ${_description}"
+        [[ -n "$_whenToUse" ]] && _label="${_label} (+${_whenToUse})"
+        echo "  $_label"
         found=1
     done < <(_list_workflows)
 
