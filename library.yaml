@@ -2079,6 +2079,21 @@ library:
           - youtube-transcript-api
           - opencv-python
           - numpy
+  - name: workflow-forge
+    description: Create, validate, and publish Claude workflow JavaScript files (`.claude/workflows/<name>.js`).
+      Use when creating a new workflow, reviewing an existing workflow file, wiring
+      `meta` parameter blocks, or asking about workflow authoring best practices. Triggers
+      on create workflow, workflow-forge, new workflow, validate workflow, workflow
+      parameters, clw workflow.
+    source: https://github.com/cognovis/library-core/blob/main/skills/workflow-forge/SKILL.md
+    tags:
+    - origin:original
+    - tier:domain
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+        plane: dev
   agents:
   - name: architecture-reviewer
     description: Deep architecture-council review of a single bead before implementation.
@@ -2577,6 +2592,19 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: workflow-launcher
+    description: Resolve and execute a named Claude workflow by reading its `meta` block,
+      validating required parameters, coercing types, and running the workflow body.
+      Invoked by `clw <name> [--param value ...]` via exec-replace. Not for direct
+      use; entry point is always the `clw` launcher.
+    source: https://github.com/cognovis/library-core/blob/main/agents/workflow-launcher.md
+    tags:
+    - origin:original
+    - tier:core
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
   prompts:
   - name: compact-reference
     description: Compact reference file(s) using validation-driven workflow (single
@@ -3522,6 +3550,23 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: meta-parameters
+    description: Parameter contract for Claude workflow JavaScript `meta` blocks. Defines
+      required fields (`name`, `description`, `parameters`), supported types (string,
+      list, bool, number), `required` flag, and type-coercion rules consumed by the
+      `clw` launcher and workflow-launcher agent.
+    source: https://github.com/cognovis/library-core/blob/main/standards/workflow/parameters.md
+    tier: domain
+    default_scope: ask
+    tags:
+    - origin:original
+    - tier:domain
+    - category:standard
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+        plane: dev
   guardrails:
   - name: block-destructive-bash
     description: Blocks destructive bash commands (force-pushes, recursive deletes,
@@ -3893,7 +3938,36 @@ library:
     version: 2026.05.15
     tags:
     - origin:original
-  workflows: []
+  workflows:
+  - name: bead-review
+    description: End-to-end bead spec review workflow. Runs bead-reviewer against a
+      bead ID and surfaces findings with a structured verdict. Use when reviewing a
+      bead before orchestration or auditing spec quality.
+    source: https://github.com/cognovis/library-core/blob/main/workflows/bead-review.js
+    format: claude-workflow-js
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+  - name: stream-review
+    description: Cross-bead retrospective review workflow over a closed cohort. Walks
+      stream-reviewer findings via AskUserQuestion, executes approved actions, and
+      stamps reviewed beads.
+    source: https://github.com/cognovis/library-core/blob/main/workflows/stream-review.js
+    format: claude-workflow-js
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+
 project_tooling:
 - name: beads-prime
   description: bd workflow primer — auto-synced from cognovis-library at SessionStart.
