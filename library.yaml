@@ -323,6 +323,18 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: manual
+  - name: bead-review/review-prep
+    description: Deterministic pre-assembly for the bead-review workflow — skips
+      cache-valid beads via the review gate and builds a context packet (plus a
+      childless-epic/large-effort enrich signal) for the rest. Depends on the
+      beads and bead-reviewer skills being installed (resolves their scripts at
+      runtime).
+    source: https://github.com/cognovis/library-core/blob/main/skills/bead-reviewer/scripts/review_prep.py
+    language: python
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
   skills:
   - name: impeccable
     description: 'Frontend design skill (Apache-2.0, third-party). Single user-invocable
