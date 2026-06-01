@@ -169,17 +169,23 @@ for k, v in d.items():
     echo "$meta_json" | uv run python3 -c "
 import json, sys
 d = json.load(sys.stdin)
-params = d.get('parameters', {})
+raw = d.get('parameters', [])
+# meta.parameters is a list of {name,...} objects (clc-iu78). Accept a
+# name-keyed dict too for resilience.
+if isinstance(raw, list):
+    params = [p for p in raw if isinstance(p, dict) and p.get('name')]
+elif isinstance(raw, dict):
+    params = [{**spec, 'name': name} for name, spec in raw.items() if isinstance(spec, dict)]
+else:
+    params = []
 if not params:
     print('  (none)')
 else:
-    for name, spec in params.items():
-        if not isinstance(spec, dict):
-            print(f'  --{name}')
-            continue
+    for spec in params:
+        name = spec.get('name')
         ptype = spec.get('type', 'string')
         required = spec.get('required', False)
-        description = spec.get('description', '')
+        description = spec.get('help', spec.get('description', ''))
         default = spec.get('default', None)
         req_marker = ' [required]' if required else ''
         default_str = f' (default: {default!r})' if default is not None else ''
@@ -232,6 +238,14 @@ cli_args = sys.argv[2:]
 try:
     params = json.loads(params_json)
 except Exception:
+    params = {}
+
+# meta.parameters is a list of {name,...} objects (clc-iu78). Normalize to a
+# name-keyed dict so lookups, defaults, and required-checks work. Accept a
+# legacy name-keyed dict unchanged.
+if isinstance(params, list):
+    params = {p["name"]: p for p in params if isinstance(p, dict) and p.get("name")}
+elif not isinstance(params, dict):
     params = {}
 
 args = {}
@@ -315,7 +329,7 @@ if isinstance(params, dict):
 if missing_required:
     for m in missing_required:
         spec = params.get(m, {})
-        desc = spec.get("description", "") if isinstance(spec, dict) else ""
+        desc = spec.get("help", spec.get("description", "")) if isinstance(spec, dict) else ""
         ptype = spec.get("type", "string") if isinstance(spec, dict) else "string"
         sys.stderr.write(f"ERROR: required parameter --{m} ({ptype}) is missing")
         if desc:

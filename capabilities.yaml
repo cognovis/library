@@ -139,3 +139,9 @@ capabilities:
     codex:
       skills: [mail-send]
       sandbox_mode: workspace-write
+  - name: workflow
+    description: Run named Claude Code workflows via the Workflow tool. Claude-only; no Codex equivalent.
+    claude:
+      tools: [Workflow]
+    codex:
+      sandbox_mode: read-only
