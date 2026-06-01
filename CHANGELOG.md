@@ -9,6 +9,8 @@
 
 ### Added
 
+- *(CL-sevk)* **`bin/clw` workflow launcher**: new `clw` command that discovers, statically parses, and dispatches named Claude Code workflows. Project-first resolution (`.claude/workflows/<name>.js` shadows `~/.claude/workflows/<name>.js`), meta-block extracted with balanced-brace + `json.loads` (no JS execution), required-param validation with type coercion (list/bool/number/string), exec-replaces with `claude --agent workflow-launcher "Run workflow '<name>' with args: <json>"`. `clw --help` prints a discovery table; `clw <name> --help` prints meta detail + parameters. v1 native-tool only; `isolation:'worktree'` exits with unsupported-isolation error. `scripts/install-bin.sh` symlinks `clw` idempotently alongside `cld`/`cdx`/`agr`/`cra`.
+
 - *(clc-j7mn)* **Workflow deploy parse-gate**: `library workflow use`/`sync` now refuses to deploy a workflow whose post-`meta` body does not parse as a native async function (e.g. an `export async function run(args)` wrapper — a second `export` is a `SyntaxError` and the spec never launches under the native Claude Workflow tool). `scripts/lib/installers/simple_file.py` gains `_assert_workflow_native_parse()` (scoped to `primitive_type == "workflow"`): it isolates the body after `export const meta`, wraps it as an async function, and runs `node --check`; raises `InstallError` on failure, skips with a warning when `node` is absent. This is the deploy-side enforcement of the canonical-form decision (cognovis-core clc-j7mn) — the gate the review wave missed (it checked spec-conformance, not native parse). `workflow_runtime.py` is now documented as a non-canonical spike/subset. Regression test: `tests/test_workflow_install_gate.py` (4 cases).
 
 ### Fixed
