@@ -1,0 +1,339 @@
+#!/usr/bin/env zsh
+# clw - Claude Code workflow launcher
+#
+# Usage: clw [--help]
+#        clw <name> [--help]
+#        clw <name> [--<param> <value>] [--<bool-param>] [--no-<bool-param>] ...
+#
+# Discovery order: .claude/workflows/<name>.js (project) then ~/.claude/workflows/<name>.js (global).
+# Meta block is statically parsed (balanced-brace extraction + json.loads) — NO JS execution.
+# exec-replaces with: claude --agent workflow-launcher "Run workflow '<name>' with args: <json>"
+#
+# v1: native-tool only (read-only / self-isolating workflows).
+# meta.isolation:'worktree' is a future opt-in hook; v1 exits with an unsupported-isolation error.
+
+set -uo pipefail
+
+CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude 2>/dev/null)}"
+if [[ -z "${CLAUDE_BIN}" ]]; then
+    echo "ERROR: claude not found in PATH. Install Claude Code first." >&2
+    exit 1
+fi
+
+# ── Static meta-block extractor (pure Python, no JS execution) ───────────────
+# Mirrors WorkflowRuntime._extract_meta + _extract_balanced in workflow_runtime.py.
+_parse_meta() {
+    local file="$1"
+    uv run python3 - "$file" << 'PYEOF'
+import json, sys
+
+def _extract_balanced(source, start_index, open_char, close_char):
+    depth = 0
+    in_string = False
+    string_delim = ""
+    escape = False
+    for index in range(start_index, len(source)):
+        char = source[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == string_delim:
+                in_string = False
+            continue
+        if char in ('"', "'"):
+            in_string = True
+            string_delim = char
+            continue
+        if char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                return source[start_index:index + 1], index + 1
+    raise ValueError(f"Unbalanced {open_char}{close_char} block")
+
+source = open(sys.argv[1], encoding="utf-8").read()
+marker = "export const meta ="
+start = source.find(marker)
+if start == -1:
+    print("{}")
+    sys.exit(0)
+brace_start = source.find("{", start)
+if brace_start == -1:
+    print("{}")
+    sys.exit(0)
+try:
+    block, _ = _extract_balanced(source, brace_start, "{", "}")
+    print(json.dumps(json.loads(block)))
+except Exception:
+    print("{}")
+PYEOF
+}
+
+# ── Workflow discovery ────────────────────────────────────────────────────────
+_find_workflow() {
+    local name="$1"
+    local project_path=".claude/workflows/${name}.js"
+    local global_path="${HOME}/.claude/workflows/${name}.js"
+    if [[ -f "$project_path" ]]; then
+        echo "$project_path"
+    elif [[ -f "$global_path" ]]; then
+        echo "$global_path"
+    else
+        echo ""
+    fi
+}
+
+_list_workflows() {
+    # Print unique workflow paths: project-first, then global (project shadows global).
+    local -A seen=()
+    local -a paths=()
+    for dir in ".claude/workflows" "${HOME}/.claude/workflows"; do
+        [[ -d "$dir" ]] || continue
+        for f in "$dir"/*.js(N); do
+            local name="${f:t:r}"
+            [[ -z "${seen[$name]:-}" ]] && {
+                seen[$name]=1
+                paths+=("$f")
+            }
+        done
+    done
+    for p in "${paths[@]}"; do
+        echo "$p"
+    done
+}
+
+# ── Help: global workflow table ───────────────────────────────────────────────
+if [[ $# -eq 0 ]] || [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    echo "clw - Claude Code workflow launcher"
+    echo ""
+    echo "Usage: clw <name> [--<param> <value>] [--<bool>] [--no-<bool>]"
+    echo "       clw <name> --help        Show workflow meta detail + parameters"
+    echo "       clw --help               Show this help + available workflows"
+    echo ""
+    echo "Available workflows:"
+    echo ""
+
+    local found=0
+    while IFS= read -r wf_path; do
+        [[ -z "$wf_path" ]] && continue
+        local meta_json
+        meta_json=$(_parse_meta "$wf_path")
+        local name="${wf_path:t:r}"
+        local description whenToUse
+        description=$(echo "$meta_json" | uv run python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('description',''))" 2>/dev/null || true)
+        whenToUse=$(echo "$meta_json" | uv run python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('whenToUse',''))" 2>/dev/null || true)
+        local label="$name"
+        [[ -n "$description" ]] && label="${name} — ${description}"
+        [[ -n "$whenToUse" ]] && label="${label} (+${whenToUse})"
+        echo "  $label"
+        found=1
+    done < <(_list_workflows)
+
+    if [[ "$found" -eq 0 ]]; then
+        echo "  (no workflows found in .claude/workflows/ or ~/.claude/workflows/)"
+    fi
+    echo ""
+    echo "Isolation note: v1 is native-tool only. meta.isolation:'worktree' is a future"
+    echo "  opt-in hook; clw exits with an error if a workflow requests worktree isolation."
+    exit 0
+fi
+
+# ── First arg is the workflow name ────────────────────────────────────────────
+WORKFLOW_NAME="$1"
+shift
+
+# ── Per-workflow help: clw <name> --help ─────────────────────────────────────
+if [[ $# -eq 1 && ( "$1" == "--help" || "$1" == "-h" ) ]]; then
+    wf_path=$(_find_workflow "$WORKFLOW_NAME")
+    if [[ -z "$wf_path" ]]; then
+        echo "ERROR: workflow '${WORKFLOW_NAME}' not found in .claude/workflows/ or ~/.claude/workflows/" >&2
+        exit 1
+    fi
+    meta_json=$(_parse_meta "$wf_path")
+    echo "Workflow: $WORKFLOW_NAME"
+    echo "File: $wf_path"
+    echo ""
+    echo "Meta:"
+    echo "$meta_json" | uv run python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for k, v in d.items():
+    if k == 'parameters':
+        continue
+    print(f'  {k}: {v}')
+" 2>/dev/null || true
+    echo ""
+    echo "Parameters:"
+    echo "$meta_json" | uv run python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+params = d.get('parameters', {})
+if not params:
+    print('  (none)')
+else:
+    for name, spec in params.items():
+        if not isinstance(spec, dict):
+            print(f'  --{name}')
+            continue
+        ptype = spec.get('type', 'string')
+        required = spec.get('required', False)
+        description = spec.get('description', '')
+        default = spec.get('default', None)
+        req_marker = ' [required]' if required else ''
+        default_str = f' (default: {default!r})' if default is not None else ''
+        print(f'  --{name}  ({ptype}){req_marker}{default_str}  {description}')
+" 2>/dev/null || true
+    exit 0
+fi
+
+# ── Resolve workflow file ─────────────────────────────────────────────────────
+WF_PATH=$(_find_workflow "$WORKFLOW_NAME")
+if [[ -z "$WF_PATH" ]]; then
+    echo "ERROR: workflow '${WORKFLOW_NAME}' not found." >&2
+    echo "  Searched: .claude/workflows/${WORKFLOW_NAME}.js" >&2
+    echo "  Searched: ${HOME}/.claude/workflows/${WORKFLOW_NAME}.js" >&2
+    exit 1
+fi
+
+# ── Parse meta ────────────────────────────────────────────────────────────────
+META_JSON=$(_parse_meta "$WF_PATH")
+
+# ── Isolation guard: v1 unsupported ──────────────────────────────────────────
+# meta.isolation:'worktree' is documented as a future opt-in hook.
+# v1 exits with an unsupported-isolation error if encountered.
+ISOLATION=$(echo "$META_JSON" | uv run python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print(d.get('isolation', ''))
+" 2>/dev/null || true)
+if [[ "$ISOLATION" == "worktree" ]]; then
+    echo "ERROR: workflow '${WORKFLOW_NAME}' requests isolation:'worktree'." >&2
+    echo "  Worktree isolation is not supported in clw v1 (future hook)." >&2
+    echo "  Use a workflow with no isolation setting, or wait for clw v2." >&2
+    exit 1
+fi
+
+# ── Parse parameters schema from meta ────────────────────────────────────────
+PARAMS_JSON=$(echo "$META_JSON" | uv run python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print(json.dumps(d.get('parameters', {})))
+" 2>/dev/null || echo "{}")
+
+# ── Parse CLI args into typed args object ────────────────────────────────────
+ARGS_JSON=$(uv run python3 - "$PARAMS_JSON" "$@" << 'PYEOF'
+import json, sys
+
+params_json = sys.argv[1]
+cli_args = sys.argv[2:]
+
+try:
+    params = json.loads(params_json)
+except Exception:
+    params = {}
+
+args = {}
+missing_required = []
+i = 0
+
+while i < len(cli_args):
+    arg = cli_args[i]
+    if not arg.startswith("--"):
+        i += 1
+        continue
+
+    # --no-<name> -> bool false
+    if arg.startswith("--no-"):
+        name = arg[5:]
+        spec = params.get(name, {}) if isinstance(params, dict) else {}
+        ptype = spec.get("type", "bool") if isinstance(spec, dict) else "bool"
+        if ptype == "bool" or ptype == "boolean":
+            args[name] = False
+        else:
+            args[name] = False
+        i += 1
+        continue
+
+    name = arg[2:]
+    spec = params.get(name, {}) if isinstance(params, dict) else {}
+    ptype = spec.get("type", "string") if isinstance(spec, dict) else "string"
+
+    # Bool flags: presence -> true (no value consumed)
+    if ptype in ("bool", "boolean"):
+        # Check if next arg looks like a value (doesn't start with --)
+        if i + 1 < len(cli_args) and not cli_args[i + 1].startswith("--"):
+            val_str = cli_args[i + 1]
+            if val_str.lower() in ("true", "1", "yes"):
+                args[name] = True
+                i += 2
+            elif val_str.lower() in ("false", "0", "no"):
+                args[name] = False
+                i += 2
+            else:
+                args[name] = True
+                i += 1
+        else:
+            args[name] = True
+            i += 1
+        continue
+
+    # All other types: consume next arg as value
+    if i + 1 >= len(cli_args):
+        sys.stderr.write(f"ERROR: --{name} requires a value\n")
+        sys.exit(2)
+
+    val_str = cli_args[i + 1]
+    i += 2
+
+    if ptype == "list":
+        args[name] = [v.strip() for v in val_str.split(",")]
+    elif ptype in ("number", "float", "int", "integer"):
+        try:
+            args[name] = float(val_str) if "." in val_str else int(val_str)
+        except ValueError:
+            sys.stderr.write(f"ERROR: --{name} must be a number, got: {val_str!r}\n")
+            sys.exit(2)
+    else:
+        args[name] = val_str
+
+# Apply defaults for missing optional params
+if isinstance(params, dict):
+    for pname, spec in params.items():
+        if pname not in args and isinstance(spec, dict):
+            default = spec.get("default")
+            if default is not None:
+                args[pname] = default
+
+# Check required params
+if isinstance(params, dict):
+    for pname, spec in params.items():
+        if isinstance(spec, dict) and spec.get("required") and pname not in args:
+            missing_required.append(pname)
+
+if missing_required:
+    for m in missing_required:
+        spec = params.get(m, {})
+        desc = spec.get("description", "") if isinstance(spec, dict) else ""
+        ptype = spec.get("type", "string") if isinstance(spec, dict) else "string"
+        sys.stderr.write(f"ERROR: required parameter --{m} ({ptype}) is missing")
+        if desc:
+            sys.stderr.write(f": {desc}")
+        sys.stderr.write("\n")
+    sys.stderr.write(f"\nRun: clw {sys.argv[0].split()[-1] if ' ' in sys.argv[0] else ''} --help  for parameter details\n")
+    sys.exit(2)
+
+print(json.dumps(args))
+PYEOF
+)
+PARSE_EXIT=$?
+if [[ "$PARSE_EXIT" -ne 0 ]]; then
+    exit "$PARSE_EXIT"
+fi
+
+# ── exec-replace with workflow-launcher agent ─────────────────────────────────
+exec "${CLAUDE_BIN}" --dangerously-skip-permissions \
+    --agent workflow-launcher \
+    "Run workflow '${WORKFLOW_NAME}' with args: ${ARGS_JSON}"
