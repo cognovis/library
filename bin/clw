@@ -9,8 +9,9 @@
 # Meta block is statically parsed (balanced-brace extraction + json.loads) — NO JS execution.
 # exec-replaces with: claude --agent workflow-launcher "Run workflow '<name>' with args: <json>"
 #
-# Supports native-tool workflows and worktree isolation (meta.isolation:'worktree').
-# Worktree workflows run the launcher and all agents in an isolated worktree branch.
+# Supports native-tool workflows and optional worktree isolation.
+# Workflows opt into worktree isolation via meta.isolation:'worktree'; the launcher and all
+# agents then run in an isolated worktree branch.
 
 set -uo pipefail
 
