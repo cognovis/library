@@ -206,20 +206,17 @@ fi
 # ── Parse meta ────────────────────────────────────────────────────────────────
 META_JSON=$(_parse_meta "$WF_PATH")
 
-# ── Isolation guard: v1 unsupported ──────────────────────────────────────────
-# meta.isolation:'worktree' is documented as a future opt-in hook.
-# v1 exits with an unsupported-isolation error if encountered.
+# ── Isolation mode ────────────────────────────────────────────────────────────
+# meta.isolation:'worktree' opts the workflow into a Claude Code native --worktree
+# (parallel to `cld -b`). The whole launcher session — Workflow tool and every
+# agent() leaf — then runs inside that worktree, so commits accumulate on an
+# isolated branch. The worktree name is resolved from meta.worktreeName (a
+# `${param}` template) after the args are parsed, just before exec.
 ISOLATION=$(echo "$META_JSON" | uv run python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 print(d.get('isolation', ''))
 " 2>/dev/null || true)
-if [[ "$ISOLATION" == "worktree" ]]; then
-    echo "ERROR: workflow '${WORKFLOW_NAME}' requests isolation:'worktree'." >&2
-    echo "  Worktree isolation is not supported in clw v1 (future hook)." >&2
-    echo "  Use a workflow with no isolation setting, or wait for clw v2." >&2
-    exit 1
-fi
 
 # ── Parse parameters schema from meta ────────────────────────────────────────
 PARAMS_JSON=$(echo "$META_JSON" | uv run python3 -c "
@@ -387,7 +384,46 @@ if [[ "$PARSE_EXIT" -ne 0 ]]; then
     exit "$PARSE_EXIT"
 fi
 
+# ── Worktree isolation (meta.isolation == 'worktree') ─────────────────────────
+# Resolve meta.worktreeName by substituting ${param} from the parsed ARGS_JSON,
+# then (like cld -b) pre-sync git + dolt and add Claude Code's native --worktree
+# plus a full setting-sources registry so leaves can resolve catalogued scripts.
+typeset -a EXTRA_ARGS=()
+if [[ "$ISOLATION" == "worktree" ]]; then
+    WORKTREE_NAME=$(uv run python3 - "$META_JSON" "$ARGS_JSON" << 'PYEOF' 2>/dev/null || true
+import json, re, sys
+from string import Template
+meta = json.loads(sys.argv[1] or "{}")
+args = json.loads(sys.argv[2] or "{}")
+fallback = "wf-" + str(meta.get("name", "run"))
+tmpl = meta.get("worktreeName") or fallback
+# string.Template uses ${param} syntax natively; safe_substitute leaves unknowns.
+name = Template(tmpl).safe_substitute({k: str(v) for k, v in args.items()})
+# Sanitize to a safe branch/worktree name (alnum + -_).
+name = re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-")
+print(name or fallback)
+PYEOF
+)
+
+    if [[ -z "$WORKTREE_NAME" ]]; then
+        echo "ERROR: workflow '${WORKFLOW_NAME}' sets isolation:'worktree' but no worktreeName could be resolved." >&2
+        echo "  Add meta.worktreeName (e.g. 'bead-\${beadId}') referencing a declared parameter." >&2
+        exit 1
+    fi
+
+    echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
+    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null \
+        || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
+    if command -v bd >/dev/null 2>&1; then
+        bd dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
+    fi
+
+    EXTRA_ARGS+=("--worktree" "$WORKTREE_NAME")
+    EXTRA_ARGS+=("--setting-sources" "user,project,local")
+fi
+
 # ── exec-replace with workflow-launcher agent ─────────────────────────────────
 exec "${CLAUDE_BIN}" --dangerously-skip-permissions \
+    "${EXTRA_ARGS[@]}" \
     --agent workflow-launcher \
     "Run workflow '${WORKFLOW_NAME}' with args: ${ARGS_JSON}"

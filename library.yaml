@@ -2214,6 +2214,24 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: codex
+    description: Thin native-workflow leaf that delegates implementation (mode=impl,
+      codex-impl.py) or adversarial review (mode=review, codex-exec.py) to the external
+      Codex CLI and relays structured JSON. Spawned by workflows via agent({agentType:"codex"}).
+      Runs as a cheap Claude relay; the Codex model arrives in the prompt as IMPL_MODEL.
+      Never spawns Claude agents or runs claude --print.
+    source: https://github.com/cognovis/library-core/blob/main/agents/codex.md
+    requires:
+    - skill:beads
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+        plane: dev
   - name: constraint-checker
     description: 'Verifies SLOs, security defaults, and performance constraints against
       a built artifact. Use proactively after holdout validation to check non-functional
@@ -3988,6 +4006,26 @@ library:
       context-isolated replacement for orchestrator Phase 1.
     source: https://github.com/cognovis/library-core/blob/main/workflows/bead-context-pack.js
     format: claude-workflow-js
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+  - name: quick-fix
+    description: Deterministic quick-fix spine for XS/micro bug/chore/task beads —
+      claim (phase0-claim.py) -> implement -> adversarial review -> JS fix loop (<=2)
+      -> metrics/MoC -> learnings + session-close-runner. Native clw port of the prose
+      quick-fix agent; runs in a per-bead worktree (meta.isolation:worktree).
+    source: https://github.com/cognovis/library-core/blob/main/workflows/quick-fix.js
+    format: claude-workflow-js
+    requires:
+    - agent:codex
+    - agent:review-agent
+    - skill:beads
+    - skill:session-close
     tags:
     - origin:original
     - tier:core
