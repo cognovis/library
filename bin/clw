@@ -136,9 +136,23 @@ if [[ $# -eq 0 ]] || [[ "$1" == "--help" || "$1" == "-h" ]]; then
         echo "  (no workflows found in .claude/workflows/ or ~/.claude/workflows/)"
     fi
     echo ""
+    echo "Shorthand: clw -bq <beadId>   ==   clw quick-fix --beadId <beadId>"
+    echo ""
     echo "Isolation: workflows can opt into worktree isolation via meta.isolation:'worktree',"
     echo "  which runs the launcher and all agents in an isolated worktree branch."
     exit 0
+fi
+
+# ── Shorthand: clw -bq <beadId>  ==  clw quick-fix --beadId <beadId> ───────────
+# Mirrors `cld -bq`. Rewrites the positional args, then falls through to normal
+# dispatch; any extra flags after the bead ID pass through unchanged.
+if [[ "$1" == "-bq" || "$1" == "--bead-quick" ]]; then
+    shift
+    if [[ $# -lt 1 || "$1" == -* ]]; then
+        echo "ERROR: clw -bq requires a bead ID. Usage: clw -bq <beadId> [--<param> <value>]" >&2
+        exit 1
+    fi
+    set -- quick-fix --beadId "$@"
 fi
 
 # ── First arg is the workflow name ────────────────────────────────────────────
