@@ -335,6 +335,14 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: manual
+  - name: validate-review-output
+    description: Validate reviewer JSON sidecar output against review-output.schema.json.
+    source: https://github.com/cognovis/library-core/blob/main/scripts/validate-review-output.py
+    language: python
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
   skills:
   - name: impeccable
     description: 'Frontend design skill (Apache-2.0, third-party). Single user-invocable
@@ -1870,6 +1878,7 @@ library:
     - standard:triage-pattern
     - script:triage/present_decisions
     - script:triage/audit_log
+    - script:validate-review-output
     - standard:english-only
     - standard:bead-hygiene
     metadata:
