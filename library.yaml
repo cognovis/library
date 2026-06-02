@@ -343,6 +343,14 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: manual
+  - name: stream-review/completeness_gate
+    description: Optional runtime completeness gate for stream-review cohorts; validates capability evidence against the completeness-gate schema.
+    source: https://github.com/cognovis/library-core/blob/main/skills/stream-review/scripts/completeness_gate.py
+    language: python
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
   skills:
   - name: impeccable
     description: 'Frontend design skill (Apache-2.0, third-party). Single user-invocable
