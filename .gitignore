@@ -12,6 +12,8 @@
 
 # Codex/external session tracking (tool-internal, not project state)
 .context/
+.antigravitycli/
+.cursor/
 
 # Beads orchestrator transient IPC files
 .worktree-handoff.json
