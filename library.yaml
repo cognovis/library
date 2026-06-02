@@ -1867,11 +1867,17 @@ library:
         inventory: convention-scan
         plane: dev
   - name: stream-review
-    description: Run a cross-bead retrospective review on a closed cohort. Spawns
-      the stream-reviewer agent, walks findings via AskUserQuestion, executes approved
-      actions, and stamps reviewed beads. Use when a stream closes, after a wave completes,
-      or to audit a closed epic.
+    description: >-
+      DEPRECATED (AC1, 2026-06-02): the canonical stream-review primitive is now
+      workflow:stream-review (workflows/stream-review.js). This skill entry is superseded
+      and must NOT be installed as the runtime. Use '/library use stream-review' which
+      now installs the workflow, not this skill. The skill remains as the prose specification
+      and executor helper library (judge_pipeline.py, executor.py, triage/).
     source: https://github.com/cognovis/library-core/blob/main/skills/stream-review/SKILL.md
+    deprecated: true
+    deprecated_reason: >-
+      Superseded by workflow:stream-review (AC1 decision 2026-06-02). The canonical runtime
+      is workflows/stream-review.js. '/library use stream-review' installs the workflow.
     requires:
     - agent:stream-reviewer
     - standard:cross-bead-review
@@ -1888,6 +1894,7 @@ library:
     tags:
     - workflow
     - review
+    - deprecated
   - name: stream-verification-ledger
     description: 'use when: creating or refreshing a per-label ledger bead for deferred
       integration, UAT, or manual acceptance checks recorded on source beads. NOT
@@ -3995,11 +4002,20 @@ library:
         source_catalog: cognovis-library-core
         inventory: manual
   - name: stream-review
-    description: Cross-bead retrospective review workflow over a closed cohort. Walks
-      stream-reviewer findings via AskUserQuestion, executes approved actions, and
-      stamps reviewed beads.
+    description: >-
+      Fully autonomous judge-driven cross-bead coherence review workflow (canonical primitive,
+      AC1 2026-06-02). Runs find→verify→classify→execute without per-finding human prompts.
+      Returns one deferred HITL block for ADR/architecture items and low-confidence findings.
+      Use after a stream closes, a wave completes, or to audit a closed epic.
+      Supersedes skill:stream-review as the runtime. Run via: clw stream-review --cohort <selector>.
     source: https://github.com/cognovis/library-core/blob/main/workflows/stream-review.js
     format: claude-workflow-js
+    requires:
+    - agent:stream-reviewer
+    - script:validate-review-output
+    - script:triage/present_decisions
+    - script:triage/audit_log
+    - script:stream-review/completeness_gate
     tags:
     - origin:original
     - tier:core
