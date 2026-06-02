@@ -9,8 +9,8 @@
 # Meta block is statically parsed (balanced-brace extraction + json.loads) — NO JS execution.
 # exec-replaces with: claude --agent workflow-launcher "Run workflow '<name>' with args: <json>"
 #
-# v1: native-tool only (read-only / self-isolating workflows).
-# meta.isolation:'worktree' is a future opt-in hook; v1 exits with an unsupported-isolation error.
+# Supports native-tool workflows and worktree isolation (meta.isolation:'worktree').
+# Worktree workflows run the launcher and all agents in an isolated worktree branch.
 
 set -uo pipefail
 
@@ -135,8 +135,8 @@ if [[ $# -eq 0 ]] || [[ "$1" == "--help" || "$1" == "-h" ]]; then
         echo "  (no workflows found in .claude/workflows/ or ~/.claude/workflows/)"
     fi
     echo ""
-    echo "Isolation note: v1 is native-tool only. meta.isolation:'worktree' is a future"
-    echo "  opt-in hook; clw exits with an error if a workflow requests worktree isolation."
+    echo "Isolation: workflows can opt into worktree isolation via meta.isolation:'worktree',"
+    echo "  which runs the launcher and all agents in an isolated worktree branch."
     exit 0
 fi
 
