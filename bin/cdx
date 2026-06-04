@@ -10,7 +10,7 @@
 #   --exec          → For cdx -b, force non-interactive codex exec mode
 #   -b, --bead ID   → launch Codex workflow orchestrator for the given bead ID
 #                     (Codex remains top-level; helpers run inside the workflow)
-#   -bq, --bead-quick ID → launch with quick-fix prompt for XS/S beads (bug, chore, task)
+#   -bq, --bead-quick ID → launch Codex quick workflow for XS/S beads (bug, chore, task)
 #   -br, --bead-review ID → cmux-review mode (warns if Codex equivalent missing)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #
@@ -286,7 +286,7 @@ Wrapper flags (consumed by cdx, not passed to codex):
   Bead workflows:
     -b,  --bead ID              Launch Codex workflow orchestrator for single bead
                                 (Codex top-level, deterministic helpers inside)
-    -bq, --bead-quick ID        Launch quick-fix prompt for XS/S beads
+    -bq, --bead-quick ID        Launch Codex quick workflow for XS/S beads
     -br, --bead-review ID       Review mode (warns: Codex has no cmux-review equivalent)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
                                 Profiles: cld-default, cdx-default, cdx-composer
@@ -467,30 +467,88 @@ if [[ -n "$bead_quick_id" ]]; then
     # in the default user-global config).
     export CLD_BEAD_LINE=cdx
 
-    # Export CLD_ROUTE_PROFILE when --route-profile is set (CL-iye.1).
-    if [[ -n "$route_profile" ]]; then
-        export CLD_ROUTE_PROFILE="$route_profile"
-    fi
+    # Default quick cdx runs to the composer route profile, matching full cdx -b.
+    route_profile="${route_profile:-${CDX_DEFAULT_ROUTE_PROFILE:-cdx-composer}}"
+    export CLD_ROUTE_PROFILE="$route_profile"
     export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
-    if [[ "$route_profile" == "cdx-composer" ]]; then
-        if [[ ! -f "$QUICK_CURSOR_DISPATCH_SCRIPT" ]]; then
-            echo "ERROR: cdx-composer quick dispatch helper not found: $QUICK_CURSOR_DISPATCH_SCRIPT" >&2
-            exit 1
-        fi
-        if (( ${#codex_args[@]} > 0 )); then
-            echo "WARNING: cdx-composer quick dispatch uses cursor-impl directly; Codex CLI args are ignored: ${codex_args[*]}" >&2
-        fi
-        printf '%s' "$bead_context" | uv run python "$QUICK_CURSOR_DISPATCH_SCRIPT" \
-            "$bead_quick_id" --route-profile "$route_profile"
-        exit $?
-    fi
+    repo_root="$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "ERROR: cdx -bq must run inside a git repository." >&2
+        exit 1
+    }
+    beads_runtime="$(resolve_beads_runtime "$repo_root")" || exit $?
+    export BEADS_RUNTIME_DIR="$beads_runtime"
+    export WORKFLOW_STARTED_AT_EPOCH="${WORKFLOW_STARTED_AT_EPOCH:-$(date +%s)}"
 
-    echo "ERROR: cdx -bq cannot use the prompt-driven Codex quick-fix path." >&2
-    echo "Reason: prompt dispatch can spawn quick-fix as a nested subagent, which cannot invoke session-close for Phase 5." >&2
-    echo "Use 'cdx -b ${bead_quick_id}' for the deterministic full Codex workflow, or 'cld -bq ${bead_quick_id}' for Claude quick-fix." >&2
-    echo "The explicit '--route-profile cdx-composer' path remains limited to the Cursor implementation leaf." >&2
-    exit 2
+    worktree_dir="$(ensure_bead_worktree "$bead_quick_id")" || exit $?
+
+    phase0_script="${beads_runtime}/scripts/phase0-claim.py"
+    slot_dispatch_script="${beads_runtime}/scripts/resolve_slot_dispatch.py"
+    metrics_rollup_script="${beads_runtime}/scripts/metrics-rollup.py"
+    codex_exec_script="${beads_runtime}/scripts/codex-exec.py"
+    cursor_impl_script="${beads_runtime}/scripts/cursor-impl.py"
+    codex_impl_script="${beads_runtime}/scripts/codex-impl.py"
+    parse_review_script="${repo_root}/scripts/parse_codex_review.py"
+
+    prompt="You are the active Codex quick-fix workflow orchestrator for bead ${bead_quick_id}. Run the quick workflow end-to-end: Phase 0 through Phase 5, including session-close. Do not stop after any intermediate phase.
+
+Own orchestration in this current top-level Codex session. Do not spawn the quick-fix agent, do not invoke a nested quick-fix subagent, and do not ask another agent to own this workflow. This current Codex session is the quick orchestrator.
+
+Use deterministic helpers under the pre-resolved beads runtime for claim/routing, slot dispatch, implementation leaves, review, fix-loop leaves, metrics, and workflow events. Do not run helper discovery searches before Phase 0/1; use this exact runtime:
+
+BEADS_RUNTIME_DIR=${beads_runtime}
+
+Use these exact helper paths. Do not infer alternate paths and do not run bounded runtime probes before Phase 0/1:
+
+PHASE0_SCRIPT=${phase0_script}
+SLOT_DISPATCH_SCRIPT=${slot_dispatch_script}
+METRICS_ROLLUP_SCRIPT=${metrics_rollup_script}
+CODEX_EXEC_SCRIPT=${codex_exec_script}
+CURSOR_IMPL_SCRIPT=${cursor_impl_script}
+CODEX_IMPL_SCRIPT=${codex_impl_script}
+PARSE_CODEX_REVIEW_SCRIPT=${parse_review_script}
+
+Use these exact helper CLI contracts. Do not probe these commands with --help during the workflow:
+
+PHASE0_CLAIM_COMMAND=BEADS_RUNTIME_DIR=${beads_runtime} uv run --with pyyaml python ${phase0_script} ${bead_quick_id} --line=cdx --tier=quick --bq --route-profile ${route_profile}
+PHASE0_CONTRACT=bead id is positional; do not pass --bead-id.
+SLOT_DISPATCH_IMPLEMENTATION=EXECUTION_PLAN=<phase0.execution_plan_json> uv run python ${slot_dispatch_script} quick implementation --impl-model=<route_decision.impl_model>
+SLOT_DISPATCH_FIX_LOOP=EXECUTION_PLAN=<phase0.execution_plan_json> uv run python ${slot_dispatch_script} quick fix_loop --impl-model=<route_decision.impl_model>
+EXPECTED_IMPLEMENTER_ADAPTER=cursor-composer
+IMPLEMENTATION_COMMAND=RUN_ID=<run_id> BEAD_ID=${bead_quick_id} PHASE_LABEL=implementation AGENT_LABEL=impl-cursor-self-log WORKSPACE=${worktree_dir} PRE_IMPL_SHA=<phase0.pre_impl_sha> IMPL_MODEL=<implementation_slot.model_or_auto> uv run python ${cursor_impl_script} <prompt>
+CODEX_REVIEW_COMMAND=RUN_ID=<run_id> BEAD_ID=${bead_quick_id} PHASE_LABEL=codex-review ITERATION=1 ${codex_exec_script} --diff-range <pre_impl_sha>...HEAD <review_prompt>
+FIX_LOOP_COMMAND=RUN_ID=<run_id> BEAD_ID=${bead_quick_id} PHASE_LABEL=fix-loop AGENT_LABEL=fix-cursor-self-log WORKSPACE=${worktree_dir} PRE_IMPL_SHA=<current_head_before_fix> IMPL_MODEL=<fix_loop_slot.model_or_auto> uv run python ${cursor_impl_script} <fix_prompt>
+PARSE_REVIEW_COMMAND=uv run python ${parse_review_script} --mode=phase2 <codex_exit> <codex_stdout>
+METRICS_ROLLUP_COMMAND=uv run python ${metrics_rollup_script} <run_id> ${bead_quick_id} <total_findings> <regression_count>
+
+Workflow requirements:
+- Phase 0: run PHASE0_CLAIM_COMMAND exactly. If it aborts, stop before edits.
+- Phase 1: resolve quick.implementation. For cdx-composer it must be cursor-composer. Dispatch Cursor via CURSOR_IMPL_SCRIPT. Treat an empty slot model as auto.
+- Phase 2: run Codex adversarial review with CODEX_EXEC_SCRIPT over <pre_impl_sha>...HEAD. Parse with PARSE_CODEX_REVIEW_SCRIPT. If review is skipped, append a bead note and continue.
+- Phase 3: only if review reports REGRESSION findings, resolve quick.fix_loop and dispatch Cursor via CURSOR_IMPL_SCRIPT. Run at most two fix iterations.
+- Phase 4: append MoC evidence and run metrics rollup if available. Metrics failure is non-blocking.
+- Phase 5: invoke session-close from this top-level Codex session. Do not manually emulate session-close. When spawning the session-close agent, do not combine a full-history fork with explicit agent_type, model, or reasoning_effort overrides; use an isolated prompt if the runtime requires it.
+
+Emit stable lifecycle markers:
+LEAF_DISPATCH workflow=quick slot=implementation adapter=<adapter> harness=<harness> model=<model> source=<source>
+LEAF_DISPATCH workflow=quick slot=fix_loop adapter=<adapter> harness=<harness> model=<model> source=<source>
+CURSOR_AGENT_START and CURSOR_AGENT_EXIT markers from cursor-impl.py must remain visible.
+
+If a required helper, route-profile slot, Cursor adapter, or session-close capability is unavailable, fail closed before partial closeout. Never push a commit or close the bead without Phase 5 session-close.
+
+Worktree: ${worktree_dir}
+Route profile: ${route_profile}
+
+## Compact Output Contract
+
+${compact_output_contract}
+
+## Bead Context
+
+${bead_context}"
+
+    run_codex_exec "${prompt}" "$worktree_dir"
+    exit $?
 fi
 
 # ── Review mode: cdx -br <id> ───────────────────────────────────

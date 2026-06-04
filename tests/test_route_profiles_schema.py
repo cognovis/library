@@ -269,28 +269,35 @@ class TestLauncherRouteProfileFlag:
         assert "compact-bead-context.py" in content
         assert '"${BD_BIN}" show "${bead_id}" --json' in content
 
-    def test_cdx_bq_cdx_composer_uses_inline_cursor_dispatch(self, tmp_path: Path) -> None:
-        """Regression: cdx-composer quick path must not fall back to generic Codex prompt dispatch."""
-        called = tmp_path / "codex-called"
+    def test_cdx_bq_cdx_composer_uses_top_level_codex_quick_orchestrator(
+        self, tmp_path: Path
+    ) -> None:
+        """CL-yty9: cdx-composer quick path keeps Codex as orchestrator."""
+        git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        runtime = self._write_beads_runtime(tmp_path)
+        worktree_root = tmp_path / "worktrees"
+        codex_called = tmp_path / "codex-called"
+        codex_args = tmp_path / "codex-args.txt"
+        codex_prompt = tmp_path / "codex-prompt.txt"
         codex_mock = tmp_path / "codex-mock"
         codex_mock.write_text(
             "#!/bin/sh\n"
             "touch \"$CODEX_CALLED_FILE\"\n"
-            "printf 'CODEX_CALLED\\n'\n",
+            "printf '%s\\n' \"$*\" > \"$CODEX_ARGS_FILE\"\n"
+            "last=''\n"
+            "for arg in \"$@\"; do last=\"$arg\"; done\n"
+            "printf '%s' \"$last\" > \"$CODEX_PROMPT_FILE\"\n",
             encoding="utf-8",
         )
         codex_mock.chmod(0o755)
-        dispatch_mock = tmp_path / "dispatch-mock.py"
+        dispatch_called = tmp_path / "dispatch-called.txt"
+        dispatch_mock = tmp_path / "dispatch-mock"
         dispatch_mock.write_text(
-            "import os, sys\n"
-            "stdin = sys.stdin.read()\n"
-            "print('DISPATCH_CALLED=1')\n"
-            "print(f'DISPATCH_ARGV={sys.argv[1:]}')\n"
-            "print(f'DISPATCH_CLD_ROUTE_PROFILE={os.environ.get(\"CLD_ROUTE_PROFILE\", \"\")}')\n"
-            "print(f'DISPATCH_CLD_COMPACT_OUTPUT={os.environ.get(\"CLD_COMPACT_OUTPUT\", \"\")}')\n"
-            "print(f'DISPATCH_STDIN_HAS_CONTEXT={\"mock bead context\" in stdin}')\n",
+            "#!/bin/sh\n"
+            "touch \"$DISPATCH_CALLED_FILE\"\n",
             encoding="utf-8",
         )
+        dispatch_mock.chmod(0o755)
 
         bd_mock = tmp_path / "bd-mock"
         bd_mock.write_text(
@@ -306,9 +313,19 @@ class TestLauncherRouteProfileFlag:
 
         env = dict(os.environ)
         env["CODEX_BIN"] = str(codex_mock)
-        env["CODEX_CALLED_FILE"] = str(called)
+        env["CODEX_ARGS_FILE"] = str(codex_args)
+        env["CODEX_CALLED_FILE"] = str(codex_called)
+        env["CODEX_PROMPT_FILE"] = str(codex_prompt)
         env["BD_BIN"] = str(bd_mock)
         env["CDX_QUICK_CURSOR_DISPATCH_SCRIPT"] = str(dispatch_mock)
+        env["DISPATCH_CALLED_FILE"] = str(dispatch_called)
+        env["GIT_BIN"] = str(git_mock)
+        env["GIT_ARGV_LOG"] = str(git_log)
+        env["GIT_REPO_ROOT"] = str(repo_root)
+        env["BEADS_RUNTIME_DIR"] = str(runtime)
+        env["CDX_WORKTREE_ROOT"] = str(worktree_root)
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CLD_COMPACT_OUTPUT"] = "0"
 
         result = subprocess.run(
             [str(_CDX_BIN), "-bq", "CL-smoke", "--route-profile", "cdx-composer"],
@@ -318,20 +335,33 @@ class TestLauncherRouteProfileFlag:
             env=env,
         )
 
-        assert result.returncode == 0
-        assert not called.exists()
-        assert "DISPATCH_CALLED=1" in result.stdout
-        assert "DISPATCH_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
-        assert "DISPATCH_CLD_COMPACT_OUTPUT=1" in result.stdout
-        assert "CL-smoke" in result.stdout
-        assert "--route-profile" in result.stdout
-        assert "cdx-composer" in result.stdout
-        assert "DISPATCH_STDIN_HAS_CONTEXT=True" in result.stdout
+        assert result.returncode == 0, result.stderr
+        assert codex_called.exists()
+        assert not dispatch_called.exists()
+        worktree_dir = worktree_root / "bead-CL-smoke"
+        args_text = codex_args.read_text(encoding="utf-8")
+        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
+        assert f"-C {worktree_dir}" in args_text
+        prompt = codex_prompt.read_text(encoding="utf-8")
+        assert "active Codex quick-fix workflow orchestrator" in prompt
+        assert "Do not spawn the quick-fix agent" in prompt
+        assert "PHASE0_CLAIM_COMMAND=" in prompt
+        assert "--tier=quick --bq --route-profile cdx-composer" in prompt
+        assert "SLOT_DISPATCH_IMPLEMENTATION=" in prompt
+        assert "quick implementation" in prompt
+        assert "EXPECTED_IMPLEMENTER_ADAPTER=cursor-composer" in prompt
+        assert "CURSOR_IMPL_SCRIPT=" in prompt
+        assert "CODEX_REVIEW_COMMAND=" in prompt
+        assert "FIX_LOOP_COMMAND=" in prompt
+        assert "METRICS_ROLLUP_COMMAND=" in prompt
+        assert "Phase 5: invoke session-close" in prompt
+        assert "mock bead context" in prompt
 
-    def test_fix_cl_6fvh_cdx_bq_default_fails_closed_before_prompt_dispatch(self, tmp_path: Path) -> None:
-        """CL-6fvh: default quick -bq must not enter nested quick-fix prompt dispatch."""
-        project = tmp_path / "project"
-        project.mkdir()
+    def test_cdx_bq_defaults_to_composer_top_level_quick_orchestrator(self, tmp_path: Path) -> None:
+        """CL-yty9: plain cdx -bq uses cdx-composer without nested quick-fix."""
+        git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        runtime = self._write_beads_runtime(tmp_path)
+        worktree_root = tmp_path / "worktrees"
         called = tmp_path / "codex-called"
         codex_args = tmp_path / "codex-args.txt"
         codex_prompt = tmp_path / "codex-prompt.txt"
@@ -365,6 +395,11 @@ class TestLauncherRouteProfileFlag:
         env["CODEX_ARGS_FILE"] = str(codex_args)
         env["CODEX_CALLED_FILE"] = str(called)
         env["CODEX_PROMPT_FILE"] = str(codex_prompt)
+        env["GIT_BIN"] = str(git_mock)
+        env["GIT_ARGV_LOG"] = str(git_log)
+        env["GIT_REPO_ROOT"] = str(repo_root)
+        env["BEADS_RUNTIME_DIR"] = str(runtime)
+        env["CDX_WORKTREE_ROOT"] = str(worktree_root)
         env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
         env["CLD_COMPACT_OUTPUT"] = "0"
 
@@ -373,19 +408,22 @@ class TestLauncherRouteProfileFlag:
             capture_output=True,
             text=True,
             check=False,
-            cwd=project,
+            cwd=repo_root,
             env=env,
         )
 
-        assert result.returncode == 2
-        assert not called.exists()
-        assert not codex_args.exists()
-        assert not codex_prompt.exists()
-        assert "cannot use the prompt-driven Codex quick-fix path" in result.stderr
-        assert "nested subagent" in result.stderr
-        assert "session-close" in result.stderr
-        assert "cdx -b CL-smoke" in result.stderr
-        assert "cld -bq CL-smoke" in result.stderr
+        assert result.returncode == 0, result.stderr
+        assert called.exists()
+        worktree_dir = worktree_root / "bead-CL-smoke"
+        args_text = codex_args.read_text(encoding="utf-8")
+        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
+        assert f"-C {worktree_dir}" in args_text
+        prompt = codex_prompt.read_text(encoding="utf-8")
+        assert "Route profile: cdx-composer" in prompt
+        assert "--route-profile cdx-composer" in prompt
+        assert "Do not spawn the quick-fix agent" in prompt
+        assert "WORKSPACE=" in prompt
+        assert str(worktree_dir) in prompt
 
     def test_cdx_b_route_profile_can_use_python_workflow_mode(self, tmp_path: Path) -> None:
         """Full cdx -b can route through the deterministic helper when explicitly requested."""

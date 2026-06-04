@@ -8,11 +8,11 @@
 
 ### Fixed
 
-- *(CL-6fvh)* `cdx -bq` without an explicit supported route profile now fails
-  closed before prompt dispatch, instead of spawning `quick-fix` as a nested
-  Codex subagent that cannot run Phase 5 `session-close`. The error points to
-  `cdx -b <id>` for the deterministic Codex workflow and `cld -bq <id>` for
-  Claude quick-fix.
+- *(CL-6fvh, CL-yty9)* `cdx -bq` no longer spawns `quick-fix` as a nested
+  Codex subagent. It now defaults to the `cdx-composer` route profile and
+  launches a top-level Codex quick orchestrator prompt that dispatches Cursor
+  Composer for implementation/fix-loop leaves and preserves Phase 5
+  `session-close`.
 
 - *(clw)* List-shaped meta.parameters + register workflow capability
 - *(installer)* Create intermediate subdir for slash-named vendor installs — slash-named vendor scripts (e.g. `bead-review/review-prep`) now install correctly
