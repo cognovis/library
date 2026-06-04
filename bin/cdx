@@ -115,15 +115,34 @@ sanitize_name() {
 
 ensure_worktree_excluded() {
     local repo_root="$1"
+    local worktree_root="${2:-$(default_codex_worktree_root "$repo_root")}"
     local exclude_file="$repo_root/.git/info/exclude"
 
     if [[ ! -d "$repo_root/.git" ]]; then
         return 0
     fi
-    mkdir -p "$repo_root/.git/info"
-    if [[ ! -f "$exclude_file" ]] || ! grep -qxF ".claude/worktrees/" "$exclude_file"; then
-        printf "\n# cdx/cld bead worktrees\n.claude/worktrees/\n" >> "$exclude_file"
+
+    local repo_abs="${repo_root:A}"
+    local worktree_abs="${worktree_root:A}"
+    if [[ "$worktree_abs" != "$repo_abs"/* ]]; then
+        return 0
     fi
+
+    local exclude_pattern="${worktree_abs#$repo_abs/}"
+    exclude_pattern="${exclude_pattern%/}/"
+
+    mkdir -p "$repo_root/.git/info"
+    if [[ ! -f "$exclude_file" ]] || ! grep -qxF "$exclude_pattern" "$exclude_file"; then
+        printf "\n# cdx bead worktrees\n%s\n" "$exclude_pattern" >> "$exclude_file"
+    fi
+}
+
+default_codex_worktree_root() {
+    local repo_root="$1"
+    local codex_home="${CODEX_HOME:-${HOME:-$repo_root}/.codex}"
+    local repo_slug
+    repo_slug="$(sanitize_name "$repo_root")"
+    printf '%s\n' "${codex_home}/worktrees/${repo_slug}"
 }
 
 ensure_bead_worktree() {
@@ -142,7 +161,7 @@ ensure_bead_worktree() {
 
     local safe_bead
     safe_bead="$(sanitize_name "$bead")"
-    local worktree_root="${CDX_WORKTREE_ROOT:-${repo_root}/.claude/worktrees}"
+    local worktree_root="${CDX_WORKTREE_ROOT:-$(default_codex_worktree_root "$repo_root")}"
     local worktree_dir="${worktree_root}/bead-${safe_bead}"
     local branch_name="${CDX_WORKTREE_BRANCH_PREFIX:-worktree-bead-}${safe_bead}"
 
@@ -157,7 +176,7 @@ ensure_bead_worktree() {
     fi
 
     mkdir -p "$worktree_root"
-    ensure_worktree_excluded "$repo_root"
+    ensure_worktree_excluded "$repo_root" "$worktree_root"
 
     if "${GIT_BIN}" show-ref --verify --quiet "refs/heads/${branch_name}"; then
         "${GIT_BIN}" worktree add "$worktree_dir" "$branch_name" >/dev/null
