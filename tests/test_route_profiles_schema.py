@@ -328,8 +328,8 @@ class TestLauncherRouteProfileFlag:
         assert "cdx-composer" in result.stdout
         assert "DISPATCH_STDIN_HAS_CONTEXT=True" in result.stdout
 
-    def test_fix_cl_r3rt_cdx_bq_default_exec_uses_current_directory(self, tmp_path: Path) -> None:
-        """CL-r3rt: default quick -bq passes no worktree arg, so run_codex_exec must default to cwd."""
+    def test_fix_cl_6fvh_cdx_bq_default_fails_closed_before_prompt_dispatch(self, tmp_path: Path) -> None:
+        """CL-6fvh: default quick -bq must not enter nested quick-fix prompt dispatch."""
         project = tmp_path / "project"
         project.mkdir()
         called = tmp_path / "codex-called"
@@ -377,14 +377,15 @@ class TestLauncherRouteProfileFlag:
             env=env,
         )
 
-        assert result.returncode == 0, result.stderr
-        assert called.exists()
-        args_text = codex_args.read_text(encoding="utf-8")
-        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
-        assert f"-C {project}" in args_text
-        assert "Execute quick-fix workflow end-to-end" in codex_prompt.read_text(
-            encoding="utf-8"
-        )
+        assert result.returncode == 2
+        assert not called.exists()
+        assert not codex_args.exists()
+        assert not codex_prompt.exists()
+        assert "cannot use the prompt-driven Codex quick-fix path" in result.stderr
+        assert "nested subagent" in result.stderr
+        assert "session-close" in result.stderr
+        assert "cdx -b CL-smoke" in result.stderr
+        assert "cld -bq CL-smoke" in result.stderr
 
     def test_cdx_b_route_profile_can_use_python_workflow_mode(self, tmp_path: Path) -> None:
         """Full cdx -b can route through the deterministic helper when explicitly requested."""

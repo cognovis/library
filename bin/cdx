@@ -486,22 +486,11 @@ if [[ -n "$bead_quick_id" ]]; then
         exit $?
     fi
 
-    prompt="Bead ID: ${bead_quick_id}. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5. Do NOT run \`bd prime\` (the SessionStart hook already emitted the workflow primer).
-
-## Compact Output Contract
-
-${compact_output_contract}
-
-## Bead Context
-
-${bead_context}"
-
-    if [[ -n "$route_profile" ]]; then
-        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
-    fi
-
-    run_codex_exec "${prompt}"
-    exit $?
+    echo "ERROR: cdx -bq cannot use the prompt-driven Codex quick-fix path." >&2
+    echo "Reason: prompt dispatch can spawn quick-fix as a nested subagent, which cannot invoke session-close for Phase 5." >&2
+    echo "Use 'cdx -b ${bead_quick_id}' for the deterministic full Codex workflow, or 'cld -bq ${bead_quick_id}' for Claude quick-fix." >&2
+    echo "The explicit '--route-profile cdx-composer' path remains limited to the Cursor implementation leaf." >&2
+    exit 2
 fi
 
 # ── Review mode: cdx -br <id> ───────────────────────────────────
