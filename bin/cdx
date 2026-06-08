@@ -489,6 +489,16 @@ if [[ -n "$bead_quick_id" ]]; then
     cursor_impl_script="${beads_runtime}/scripts/cursor-impl.py"
     codex_impl_script="${beads_runtime}/scripts/codex-impl.py"
     parse_review_script="${repo_root}/scripts/parse_codex_review.py"
+    if [[ ! -f "$parse_review_script" ]]; then
+        for candidate in \
+            "$HOME/code/library/cognovis-core/scripts/parse_codex_review.py" \
+            "$HOME/.agents/scripts/parse_codex_review.py"; do
+            if [[ -f "$candidate" ]]; then
+                parse_review_script="$candidate"
+                break
+            fi
+        done
+    fi
 
     prompt="You are the active Codex quick-fix workflow orchestrator for bead ${bead_quick_id}. Run the quick workflow end-to-end: Phase 0 through Phase 5, including session-close. Do not stop after any intermediate phase.
 
@@ -516,7 +526,7 @@ SLOT_DISPATCH_IMPLEMENTATION=EXECUTION_PLAN=<phase0.execution_plan_json> uv run 
 SLOT_DISPATCH_FIX_LOOP=EXECUTION_PLAN=<phase0.execution_plan_json> uv run python ${slot_dispatch_script} quick fix_loop --impl-model=<route_decision.impl_model>
 EXPECTED_IMPLEMENTER_ADAPTER=cursor-composer
 IMPLEMENTATION_COMMAND=RUN_ID=<run_id> BEAD_ID=${bead_quick_id} PHASE_LABEL=implementation AGENT_LABEL=impl-cursor-self-log WORKSPACE=${worktree_dir} PRE_IMPL_SHA=<phase0.pre_impl_sha> IMPL_MODEL=<implementation_slot.model_or_auto> uv run python ${cursor_impl_script} <prompt>
-CODEX_REVIEW_COMMAND=RUN_ID=<run_id> BEAD_ID=${bead_quick_id} PHASE_LABEL=codex-review ITERATION=1 ${codex_exec_script} --diff-range <pre_impl_sha>...HEAD <review_prompt>
+CODEX_REVIEW_COMMAND=RUN_ID=<run_id> BEAD_ID=${bead_quick_id} PHASE_LABEL=codex-review ITERATION=1 uv run python ${codex_exec_script} --diff-range <pre_impl_sha>...HEAD <review_prompt>
 FIX_LOOP_COMMAND=RUN_ID=<run_id> BEAD_ID=${bead_quick_id} PHASE_LABEL=fix-loop AGENT_LABEL=fix-cursor-self-log WORKSPACE=${worktree_dir} PRE_IMPL_SHA=<current_head_before_fix> IMPL_MODEL=<fix_loop_slot.model_or_auto> uv run python ${cursor_impl_script} <fix_prompt>
 PARSE_REVIEW_COMMAND=uv run python ${parse_review_script} --mode=phase2 <codex_exit> <codex_stdout>
 METRICS_ROLLUP_COMMAND=uv run python ${metrics_rollup_script} <run_id> ${bead_quick_id} <total_findings> <regression_count>

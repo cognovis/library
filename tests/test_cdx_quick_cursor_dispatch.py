@@ -132,6 +132,62 @@ def test_fix_cl_8832_dispatches_cdx_composer_quick_to_cursor_impl(tmp_path: Path
     assert "PROMPT_HAS_CONTEXT=True" in result.stdout
 
 
+def test_empty_slot_model_falls_back_to_auto(tmp_path: Path) -> None:
+    """When the profile slot omits model, quick dispatch uses auto."""
+    runtime = tmp_path / "beads-runtime"
+    scripts = runtime / "scripts"
+    scripts.mkdir(parents=True)
+    cursor_called = tmp_path / "cursor-called.txt"
+    uv_mock = _write_uv_mock(tmp_path)
+
+    (scripts / "phase0-claim.py").write_text(
+        "import json, sys\n"
+        "payload = {\n"
+        "  'bead_id': sys.argv[1],\n"
+        "  'run_id': 'run-123',\n"
+        "  'pre_impl_sha': 'abc123',\n"
+        "  'route_decision': {'impl_model': 'composer-2.5'},\n"
+        "  'execution_plan': {'profile': 'cdx-composer', 'workflow': 'quick', 'slots': {'quick': {'implementation': {'adapter': 'cursor-composer', 'harness': 'cursor', 'model': ''}}}},\n"
+        "  'claim_status': 'CLAIMED',\n"
+        "}\n"
+        "print(json.dumps(payload))\n",
+        encoding="utf-8",
+    )
+    (scripts / "resolve_slot_dispatch.py").write_text(
+        "print('ADAPTER=cursor-composer')\n"
+        "print('HARNESS=cursor')\n"
+        "print('MODEL=')\n"
+        "print('SOURCE=slot')\n",
+        encoding="utf-8",
+    )
+    (scripts / "cursor-impl.py").write_text(
+        "import os, pathlib, sys\n"
+        "pathlib.Path(os.environ['CURSOR_CALLED_FILE']).write_text('called', encoding='utf-8')\n"
+        "print(f'IMPL_MODEL={os.environ.get(\"IMPL_MODEL\", \"\")}', file=sys.stderr)\n",
+        encoding="utf-8",
+    )
+
+    env = dict(os.environ)
+    env["BEADS_RUNTIME_DIR"] = str(runtime)
+    env["CURSOR_CALLED_FILE"] = str(cursor_called)
+    env["PATH"] = f"{uv_mock.parent}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [sys.executable, str(_SCRIPT), "CL-smoke", "--route-profile", "cdx-composer"],
+        input="compact context",
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert cursor_called.exists()
+    assert "model=auto" in result.stderr
+    assert "IMPL_MODEL=auto" in result.stderr
+
+
 def test_refuses_non_cursor_slot_without_fallback(tmp_path: Path) -> None:
     """A bad cdx-composer slot must fail closed instead of silently using Codex/GPT."""
     runtime, _phase0_args, cursor_called = _write_runtime(tmp_path, adapter="codex-impl")

@@ -857,7 +857,7 @@ def _adapter_env(
             "AGENT_LABEL": f"{dispatch.get('ADAPTER', 'unknown')}-full-{slot_name}",
             "WORKSPACE": str(repo_root),
             "PRE_IMPL_SHA": str(payload.get("pre_impl_sha") or ""),
-            "IMPL_MODEL": dispatch.get("MODEL", ""),
+            "IMPL_MODEL": (dispatch.get("MODEL") or "").strip() or "auto",
             "ITERATION": env.get("ITERATION", "1"),
         }
     )

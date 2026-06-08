@@ -203,8 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     if not model:
-        print("ERROR: cursor-composer slot did not provide a model", file=sys.stderr)
-        return 1
+        model = "auto"
 
     print(
         "## LEAF_DISPATCH workflow=quick slot=implementation "
