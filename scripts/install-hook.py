@@ -182,7 +182,7 @@ def _hook_signature(hook: dict) -> str:
 
 def merge_hooks(settings: dict, manifest: dict, guardrail_name: str) -> dict:
     """Deep-merge manifest.hooks into settings.hooks with _origin tag."""
-    settings = json.loads(json.dumps(settings))
+    settings = remove_hooks(settings, guardrail_name)
     settings_hooks = settings.setdefault("hooks", {})
 
     for event, manifest_groups in manifest.get("hooks", {}).items():
@@ -458,7 +458,7 @@ def merge_codex_hooks(
     guardrail_name: str,
 ) -> dict:
     """Deep-merge manifest.hooks into codex hooks.json with _origin tag."""
-    config = json.loads(json.dumps(codex_config))
+    config = remove_codex_hooks(codex_config, guardrail_name)
     config_hooks = config.setdefault("hooks", {})
 
     for event, manifest_groups in manifest.get("hooks", {}).items():

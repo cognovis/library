@@ -31,6 +31,7 @@ import os
 import sys
 import subprocess
 import tempfile
+import importlib.util
 from pathlib import Path
 
 try:
@@ -154,6 +155,19 @@ def assert_invalid(data: dict, schema: dict, label: str) -> None:
 def load_library() -> dict:
     with LIBRARY_PATH.open() as f:
         return yaml.safe_load(f)
+
+
+def load_install_hook_module():
+    """Load scripts/install-hook.py despite the hyphenated filename."""
+    scripts_path = str(REPO_ROOT / "scripts")
+    if scripts_path not in sys.path:
+        sys.path.insert(0, scripts_path)
+    spec = importlib.util.spec_from_file_location("install_hook", INSTALL_HOOK_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +423,143 @@ def test_open_brain_codex_manifest_avoids_claude_only_events():
 
 
 # ---------------------------------------------------------------------------
+# CL-gi5x: Codex hook installs are origin-idempotent
+# ---------------------------------------------------------------------------
+
+
+def test_merge_codex_hooks_replaces_same_origin_with_new_command():
+    """Reinstalling a Codex hook manifest replaces stale same-origin commands."""
+    install_hook = load_install_hook_module()
+    existing = {
+        "hooks": {
+            "SessionStart": [
+                {
+                    "matcher": "startup|clear|compact",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 /old-cache/hooks/scripts/context_inject.py --harness codex",
+                            "timeout": 10,
+                            "_origin": "library:hook:open-brain-hooks",
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    manifest = {
+        "hooks": {
+            "SessionStart": [
+                {
+                    "matcher": "startup|clear|compact",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 /new-cache/hooks/scripts/context_inject.py --harness codex",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    merged = install_hook.merge_codex_hooks(existing, manifest, "open-brain-hooks")
+    hooks = [
+        hook
+        for group in merged["hooks"]["SessionStart"]
+        for hook in group.get("hooks", [])
+        if hook.get("_origin") == "library:hook:open-brain-hooks"
+    ]
+
+    assert len(hooks) == 1, merged
+    assert hooks[0]["command"] == "python3 /new-cache/hooks/scripts/context_inject.py --harness codex"
+    assert "/old-cache/" not in json.dumps(merged), merged
+    print("PASS test_merge_codex_hooks_replaces_same_origin_with_new_command")
+
+
+def test_merge_codex_hooks_collapses_duplicate_same_origin_entries():
+    """Existing duplicate same-origin Codex hooks collapse to the manifest hook."""
+    install_hook = load_install_hook_module()
+    existing = {
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 /cache-a/hooks/scripts/context_inject.py --harness codex",
+                            "_origin": "library:hook:open-brain-hooks",
+                        }
+                    ],
+                },
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 /cache-b/hooks/scripts/context_inject.py --harness codex",
+                            "_origin": "library:hook:open-brain-hooks",
+                        }
+                    ],
+                },
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "bash /Users/malte/.codex/herdr-agent-state.sh session",
+                        }
+                    ],
+                },
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 /cache-a/hooks/scripts/codex_session_summary.py",
+                            "_origin": "library:hook:open-brain-hooks",
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    manifest = {
+        "hooks": {
+            "SessionStart": [
+                {
+                    "matcher": "startup|clear|compact",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python3 /current/hooks/scripts/context_inject.py --harness codex",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    merged = install_hook.merge_codex_hooks(existing, manifest, "open-brain-hooks")
+    serialized = json.dumps(merged)
+    open_brain_hooks = [
+        hook
+        for groups in merged["hooks"].values()
+        for group in groups
+        for hook in group.get("hooks", [])
+        if hook.get("_origin") == "library:hook:open-brain-hooks"
+    ]
+
+    assert len(open_brain_hooks) == 1, merged
+    assert open_brain_hooks[0]["command"] == "python3 /current/hooks/scripts/context_inject.py --harness codex"
+    assert "herdr-agent-state.sh" in serialized, merged
+    assert "/cache-a/" not in serialized, merged
+    assert "/cache-b/" not in serialized, merged
+    print("PASS test_merge_codex_hooks_collapses_duplicate_same_origin_entries")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -428,6 +579,8 @@ if __name__ == "__main__":
         test_install_hook_codex_dry_run_shows_sessionstart,
         test_install_hook_codex_single_hook_uses_current_schema,
         test_open_brain_codex_manifest_avoids_claude_only_events,
+        test_merge_codex_hooks_replaces_same_origin_with_new_command,
+        test_merge_codex_hooks_collapses_duplicate_same_origin_entries,
     ]
 
     passed = 0
