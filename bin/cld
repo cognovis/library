@@ -11,7 +11,6 @@
 #   -b, --bead ID   → launch with bead orchestrator for the given bead ID
 #                     (refuses if ID has children — use -bw instead)
 #   -bq, --bead-quick ID → launch with quick-fix agent for XS/S beads (bug, chore, task)
-#   -bf, --bead-frontend ID → launch frontend-orchestrator Workflow for UI/frontend beads
 #   -bp, --plan-label LABEL → launch with /plan --label LABEL as initial prompt
 #   -bw, --bead-wave ID → dispatch wave-orchestrator for a parent bead's children
 #   -bl, --bead-label LABELS → dispatch wave-orchestrator for beads with LABELS (comma-separated, AND)
@@ -38,7 +37,6 @@ skip_perms=false
 verbose=false
 bead_id=""
 bead_quick_id=""
-bead_frontend_id=""
 bead_wave_id=""
 bead_labels=""
 bead_ids=""
@@ -72,10 +70,6 @@ while (( $# > 0 )); do
             ;;
         -bq|--bead-quick)
             bead_quick_id="$2"
-            shift 2
-            ;;
-        -bf|--bead-frontend)
-            bead_frontend_id="$2"
             shift 2
             ;;
         -bp|--plan-label)
@@ -122,7 +116,6 @@ Wrapper flags (consumed by cld, not passed to claude):
     -b,  --bead ID              Launch bead-orchestrator for single bead
                                 (refuses if ID has children — use -bw)
     -bq, --bead-quick ID        Launch quick-fix agent (XS/S beads)
-    -bf, --bead-frontend ID      Launch frontend-orchestrator Workflow (UI/frontend beads)
     -bp, --plan-label LABEL     Launch with /plan --label LABEL
     -bw, --bead-wave ID         Dispatch wave-orchestrator for parent's children
     -bl, --bead-label LABELS    Dispatch wave-orchestrator for labelled beads
@@ -216,7 +209,7 @@ fi
 
 # ── Auto-expand short bead IDs ──────────────────────────────────
 # e.g. "oms3" → "mira-oms3" when issue_prefix is "mira"
-if [[ -n "$bead_id$bead_quick_id$bead_frontend_id$bead_wave_id$bead_labels$bead_ids" && -z "${BD_BIN}" ]]; then
+if [[ -n "$bead_id$bead_quick_id$bead_wave_id$bead_labels$bead_ids" && -z "${BD_BIN}" ]]; then
     echo "ERROR: bd not found in PATH. Install the beads CLI first."
     exit 1
 fi
@@ -494,63 +487,6 @@ if [[ -n "$bead_quick_id" ]]; then
     claude_args+=("$prompt")
 fi
 
-if [[ -n "$bead_frontend_id" ]]; then
-    bead_frontend_id=$(_expand_bead_id "$bead_frontend_id")
-    local bead_frontend_short=$(_bead_short "$bead_frontend_id")
-
-    # Export CLD_BEAD_LINE=cld — frontend-orchestrator is a cld-line Claude Code Workflow.
-    export CLD_BEAD_LINE=cld
-
-    if [[ -n "$route_profile" ]]; then
-        export CLD_ROUTE_PROFILE="$route_profile"
-    fi
-
-    if ! _bead_exists "$bead_frontend_id"; then
-        _abort_missing_bead "$bead_frontend_id" "Claude"
-    fi
-
-    # ── Claim gate: refuse if bead is already in_progress or closed ──
-    local _BF_STATUS
-    _BF_STATUS=$(_bead_status "$bead_frontend_id" || echo "")
-    if [[ "$_BF_STATUS" == "in_progress" || "$_BF_STATUS" == "closed" ]]; then
-        echo -e "\033[0;31m✗ ${bead_frontend_id} is ${_BF_STATUS}.\033[0m" >&2
-        echo "  Cannot launch: bead is already ${_BF_STATUS}." >&2
-        if [[ "$_BF_STATUS" == "in_progress" ]]; then
-            echo "  To take over: bd update ${bead_frontend_id} --status=open" >&2
-        fi
-        exit 2
-    fi
-
-    # ── Sync: pull latest git + dolt state before worktree creation ──
-    echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
-    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
-    "${BD_BIN}" dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
-
-    # ── Worktree isolation via Claude Code native --worktree ──────
-    local worktree_name="bead-${bead_frontend_id}"
-    claude_args+=("--worktree" "$worktree_name")
-    claude_args+=("--agent" "workflow-launcher")
-    # ── Force full plugin registry in the worktree session ────────
-    claude_args+=("--setting-sources" "user,project,local")
-
-    # ── Set terminal tab title + cmux pane name ──────────────────
-    printf '\033]1;%s\033\\' "$bead_frontend_id"
-    printf '\033]2;%s\033\\' "cld-fe: $bead_frontend_id"
-    _cmux_rename "${bead_frontend_short}-fe"
-
-    # ── Build workflow-launcher args JSON for frontend-orchestrator ──
-    local wf_args
-    wf_args="{\"beadId\":\"${bead_frontend_id}\",\"line\":\"cld\""
-    if [[ -n "$force_tier" ]]; then
-        wf_args+=",\"forceTier\":\"${force_tier}\""
-    fi
-    if [[ -n "$route_profile" ]]; then
-        wf_args+=",\"routeProfile\":\"${route_profile}\""
-    fi
-    wf_args+="}"
-
-    claude_args+=("Run workflow 'frontend-orchestrator' with args: ${wf_args}")
-fi
 if [[ -n "$plan_label" ]]; then
     claude_args+=("/plan --label $plan_label")
 fi

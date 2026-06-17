@@ -137,7 +137,6 @@ if [[ $# -eq 0 ]] || [[ "$1" == "--help" || "$1" == "-h" ]]; then
     fi
     echo ""
     echo "Shorthand: clw -bq <beadId>   ==   clw quick-fix --beadId <beadId>"
-    echo "          clw -bf <beadId>   ==   clw frontend-orchestrator --beadId <beadId>"
     echo ""
     echo "Isolation: workflows can opt into worktree isolation via meta.isolation:'worktree',"
     echo "  which runs the launcher and all agents in an isolated worktree branch."
@@ -154,17 +153,6 @@ if [[ "$1" == "-bq" || "$1" == "--bead-quick" ]]; then
         exit 1
     fi
     set -- quick-fix --beadId "$@"
-fi
-
-# ── Shorthand: clw -bf <beadId>  ==  clw frontend-orchestrator --beadId <beadId> ──
-# Mirrors `cld -bf`. Rewrites positional args and falls through to normal dispatch.
-if [[ "$1" == "-bf" || "$1" == "--bead-frontend" ]]; then
-    shift
-    if [[ $# -lt 1 || "$1" == -* ]]; then
-        echo "ERROR: clw -bf requires a bead ID. Usage: clw -bf <beadId> [--<param> <value>]" >&2
-        exit 1
-    fi
-    set -- frontend-orchestrator --beadId "$@"
 fi
 
 # ── First arg is the workflow name ────────────────────────────────────────────
