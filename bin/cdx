@@ -11,6 +11,7 @@
 #   -b, --bead ID   → launch Codex workflow orchestrator for the given bead ID
 #                     (Codex remains top-level; helpers run inside the workflow)
 #   -bq, --bead-quick ID → launch Codex quick workflow for XS/S beads (bug, chore, task)
+#   -bf, --bead-frontend ID → launch frontend-orchestrator Workflow via claude (UI/frontend beads)
 #   -br, --bead-review ID → cmux-review mode (warns if Codex equivalent missing)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #
@@ -75,6 +76,7 @@ show_help=false
 bead_id=""
 bead_quick_id=""
 bead_review_id=""
+bead_frontend_id=""
 route_profile=""
 codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"
 codex_args=()
@@ -258,6 +260,10 @@ while (( $# > 0 )); do
             bead_quick_id="$2"
             shift 2
             ;;
+        -bf|--bead-frontend)
+            bead_frontend_id="$2"
+            shift 2
+            ;;
         -br|--bead-review)
             bead_review_id="$2"
             shift 2
@@ -287,6 +293,7 @@ Wrapper flags (consumed by cdx, not passed to codex):
     -b,  --bead ID              Launch Codex workflow orchestrator for single bead
                                 (Codex top-level, deterministic helpers inside)
     -bq, --bead-quick ID        Launch Codex quick workflow for XS/S beads
+    -bf, --bead-frontend ID     Launch frontend-orchestrator Workflow via claude (UI/frontend beads)
     -br, --bead-review ID       Review mode (warns: Codex has no cmux-review equivalent)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
                                 Profiles: cld-default, cdx-default, cdx-composer
@@ -559,6 +566,61 @@ ${bead_context}"
 
     run_codex_exec "${prompt}" "$worktree_dir"
     exit $?
+fi
+
+# ── Frontend-orchestrator mode: cdx -bf <id> ────────────────────
+# frontend-orchestrator is a Claude Code Workflow; we delegate to claude workflow-launcher.
+
+if [[ -n "$bead_frontend_id" ]]; then
+    if [[ -z "${BD_BIN}" ]]; then
+        echo "ERROR: bd not found in PATH. Install the beads CLI first." >&2
+        exit 1
+    fi
+
+    local _claude_bin
+    _claude_bin="${CLAUDE_BIN:-$(command -v claude 2>/dev/null || true)}"
+    if [[ -z "$_claude_bin" ]]; then
+        echo "ERROR: -bf requires claude (not codex). Install Claude Code first." >&2
+        exit 1
+    fi
+
+    bead_context=$(fetch_bead_context "${bead_frontend_id}") || {
+        abort_missing_bead "${bead_frontend_id}"
+    }
+
+    # frontend-orchestrator runs on the cld line (Claude Code Workflow)
+    export CLD_BEAD_LINE=cld
+
+    if [[ -n "$route_profile" ]]; then
+        export CLD_ROUTE_PROFILE="$route_profile"
+    fi
+
+    echo -e "\033[0;33mNote: frontend-orchestrator is a Claude Code Workflow — launching via claude workflow-launcher.\033[0m" >&2
+
+    repo_root="$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "ERROR: cdx -bf must run inside a git repository." >&2
+        exit 1
+    }
+
+    echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
+    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null \
+        || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
+    if command -v bd >/dev/null 2>&1; then
+        bd dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
+    fi
+
+    local wf_args
+    wf_args="{\"beadId\":\"${bead_frontend_id}\",\"line\":\"cld\""
+    if [[ -n "$route_profile" ]]; then
+        wf_args+=",\"routeProfile\":\"${route_profile}\""
+    fi
+    wf_args+="}"
+
+    exec "$_claude_bin" --dangerously-skip-permissions \
+        --worktree "bead-${bead_frontend_id}" \
+        --agent workflow-launcher \
+        --setting-sources user,project,local \
+        "Run workflow 'frontend-orchestrator' with args: ${wf_args}"
 fi
 
 # ── Review mode: cdx -br <id> ───────────────────────────────────
