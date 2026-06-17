@@ -4014,6 +4014,27 @@ library:
         source_catalog: cognovis-library-core
         inventory: manual
 
+  - name: frontend-orchestrator
+    description: Lean orchestrator for frontend/UI beads — claim (phase0-claim.py, tier=quick)
+      -> context (mockups/design refs) -> implement -> dev-stack-up (probe-first, idempotent)
+      -> iterative gui-review (playwright-tester against live stack) -> changelog -> session-close.
+      Omits architecture-council, heavy pre-mortem, constraint-checker, and separate UAT.
+      Dev-stack teardown delegated to session-close Step 13. Run via: cld -bf <id> or
+      clw frontend-orchestrator --beadId <id>.
+    source: https://github.com/cognovis/library-core/blob/main/workflows/frontend-orchestrator.js
+    format: claude-workflow-js
+    requires:
+    - agent:playwright-tester
+    - skill:beads
+    - skill:session-close
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
 project_tooling:
 - name: beads-prime
   description: bd workflow primer — auto-synced from cognovis-library at SessionStart.
