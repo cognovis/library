@@ -17,7 +17,7 @@
 #   -bi, --bead-ids IDS → dispatch wave-orchestrator for explicit bead IDs (comma-separated)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #   --force-tier TIER → force routing tier (e.g. mcp, infra); passed to phase0-claim.py
-#                          profiles: cld-default, cdx-default, cdx-composer
+#                          profiles: cld-default, cld-composer (default for -b/-bq), cdx-default, cdx-composer
 
 set -uo pipefail
 
@@ -124,7 +124,7 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 (comma-separated, e.g. fpde-11j,fpde-95b)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
          --force-tier TIER       Force the routing tier (e.g. mcp, infra); passed to phase0-claim.py
-                                Profiles: cld-default, cdx-default, cdx-composer
+                                Profiles: cld-default, cld-composer (default for -b/-bq), cdx-default, cdx-composer
 
   Session:
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
@@ -337,6 +337,17 @@ _cmux_rename() {
     fi
 }
 
+# ── Default implementer route profile (clc-a0bj / clc-1fms) ───────────────
+# Bare `cld -b` / `cld -bq` use the Cursor Composer implementer by default in
+# EVERY project, so no --route-profile flag is needed. An explicit
+# --route-profile overrides. Where a project's resolved orchestrator-config.yml
+# lacks cld-composer, phase0-claim.py warns and falls back to perspective_policy
+# (GPT) — no break. cld-composer ships in the user-global config, so projects
+# that define no route_profiles of their own inherit it via the config merge.
+if [[ -z "$route_profile" && ( -n "$bead_id" || -n "$bead_quick_id" ) ]]; then
+    route_profile="cld-composer"
+fi
+
 if [[ -n "$bead_id" ]]; then
     bead_id=$(_expand_bead_id "$bead_id")
     local bead_short=$(_bead_short "$bead_id")
@@ -434,6 +445,14 @@ if [[ -n "$bead_quick_id" ]]; then
     # the default user-global config, routed via codex-impl.py). Symmetric to
     # cdx -bq's CLD_BEAD_LINE=cdx export.
     export CLD_BEAD_LINE=cld
+
+    # Export CLD_ROUTE_PROFILE so phase0-claim.py resolves the quick execution_plan
+    # from the named route profile. The -bq path previously ignored route profiles
+    # entirely; this makes the cld-composer default (and explicit --route-profile)
+    # take effect for quick-fix too.
+    if [[ -n "$route_profile" ]]; then
+        export CLD_ROUTE_PROFILE="$route_profile"
+    fi
 
     if ! _bead_exists "$bead_quick_id"; then
         _abort_missing_bead "$bead_quick_id" "Claude"
