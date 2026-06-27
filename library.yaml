@@ -2469,6 +2469,22 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
+  - name: release
+    description: 'Cuts a deliberate versioned release. session-close defers all release
+      materialization (changelog, VERSION bump, tag); this agent runs git-cliff once,
+      bumps the version, commits chore(release), creates an annotated tag, and pushes
+      atomically. Use when you decide to ship a release. Triggers on: release, rc, cut
+      a release, version bump, tag a release.'
+    source: https://github.com/cognovis/library-core/blob/main/agents/release.md
+    requires:
+    - skill:session-close
+    tags:
+    - origin:original
+    - tier:core
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
   - name: stream-reviewer
     description: Read-only cross-bead retrospective review of a closed cohort. Use
       after a stream, wave, or epic subtree finishes, before its dependent work locks
