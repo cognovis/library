@@ -25,6 +25,7 @@
 tests/__pycache__/
 **/__pycache__/
 .session-close.lock
+.session-close-state.json
 
 # Library-installed primitives in this marketplace repo (source lives in top-level primitive dirs)
 .claude/skills/

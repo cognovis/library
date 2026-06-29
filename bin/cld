@@ -17,7 +17,7 @@
 #   -bi, --bead-ids IDS → dispatch wave-orchestrator for explicit bead IDs (comma-separated)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #   --force-tier TIER → force routing tier (e.g. mcp, infra); passed to phase0-claim.py
-#                          profiles: cld-default, cld-composer (default for -b/-bq), cdx-default, cdx-composer
+#                          profiles: cld-default, cld-composer (default for -bq only), cdx-default, cdx-composer
 
 set -uo pipefail
 
@@ -124,7 +124,7 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 (comma-separated, e.g. fpde-11j,fpde-95b)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
          --force-tier TIER       Force the routing tier (e.g. mcp, infra); passed to phase0-claim.py
-                                Profiles: cld-default, cld-composer (default for -b/-bq), cdx-default, cdx-composer
+                                Profiles: cld-default, cld-composer (default for -bq only), cdx-default, cdx-composer
 
   Session:
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
@@ -338,13 +338,16 @@ _cmux_rename() {
 }
 
 # ── Default implementer route profile (clc-a0bj / clc-1fms) ───────────────
-# Bare `cld -b` / `cld -bq` use the Cursor Composer implementer by default in
-# EVERY project, so no --route-profile flag is needed. An explicit
-# --route-profile overrides. Where a project's resolved orchestrator-config.yml
-# lacks cld-composer, phase0-claim.py warns and falls back to perspective_policy
-# (GPT) — no break. cld-composer ships in the user-global config, so projects
-# that define no route_profiles of their own inherit it via the config merge.
-if [[ -z "$route_profile" && ( -n "$bead_id" || -n "$bead_quick_id" ) ]]; then
+# Bare `cld -bq` (quick-fix) uses the Cursor Composer implementer by default in
+# EVERY project, so no --route-profile flag is needed. The full `cld -b`
+# orchestrator path intentionally does NOT default to cld-composer: it falls
+# back to perspective_policy.cld (GPT implementer / Opus reviewer). An explicit
+# --route-profile overrides either path. Where a project's resolved
+# orchestrator-config.yml lacks cld-composer, phase0-claim.py warns and falls
+# back to perspective_policy (GPT) — no break. cld-composer ships in the
+# user-global config, so projects that define no route_profiles of their own
+# inherit it via the config merge.
+if [[ -z "$route_profile" && -n "$bead_quick_id" ]]; then
     route_profile="cld-composer"
 fi
 
