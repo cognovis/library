@@ -8,6 +8,11 @@
 
 ### Fixed
 
+- *(CL-dtr2)* `cdx -bq` now mirrors the permissive `cld -bq` quick-tier
+  launch contract: Codex quick dispatch still requests `--tier=quick`, but no
+  longer adds the internal `--bq` strict eligibility guard that rejected larger
+  beads before the quick orchestrator could run.
+
 - *(CL-6fvh, CL-yty9)* `cdx -bq` no longer spawns `quick-fix` as a nested
   Codex subagent. It now defaults to the `cdx-composer` route profile and
   launches a top-level Codex quick orchestrator prompt that dispatches Cursor

@@ -141,7 +141,6 @@ def main(argv: list[str] | None = None) -> int:
             args.bead_id,
             "--line=cdx",
             "--tier=quick",
-            "--bq",
             f"--route-profile={args.route_profile}",
         )
     )

@@ -346,7 +346,8 @@ class TestLauncherRouteProfileFlag:
         assert "active Codex quick-fix workflow orchestrator" in prompt
         assert "Do not spawn the quick-fix agent" in prompt
         assert "PHASE0_CLAIM_COMMAND=" in prompt
-        assert "--tier=quick --bq --route-profile cdx-composer" in prompt
+        assert "--tier=quick --route-profile cdx-composer" in prompt
+        assert "--tier=quick --bq" not in prompt
         assert "SLOT_DISPATCH_IMPLEMENTATION=" in prompt
         assert "quick implementation" in prompt
         assert "EXPECTED_IMPLEMENTER_ADAPTER=cursor-composer" in prompt

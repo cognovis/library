@@ -520,7 +520,7 @@ PARSE_CODEX_REVIEW_SCRIPT=${parse_review_script}
 
 Use these exact helper CLI contracts. Do not probe these commands with --help during the workflow:
 
-PHASE0_CLAIM_COMMAND=BEADS_RUNTIME_DIR=${beads_runtime} uv run --with pyyaml python ${phase0_script} ${bead_quick_id} --line=cdx --tier=quick --bq --route-profile ${route_profile}
+PHASE0_CLAIM_COMMAND=BEADS_RUNTIME_DIR=${beads_runtime} uv run --with pyyaml python ${phase0_script} ${bead_quick_id} --line=cdx --tier=quick --route-profile ${route_profile}
 PHASE0_CONTRACT=bead id is positional; do not pass --bead-id.
 SLOT_DISPATCH_IMPLEMENTATION=EXECUTION_PLAN=<phase0.execution_plan_json> uv run python ${slot_dispatch_script} quick implementation --impl-model=<route_decision.impl_model>
 SLOT_DISPATCH_FIX_LOOP=EXECUTION_PLAN=<phase0.execution_plan_json> uv run python ${slot_dispatch_script} quick fix_loop --impl-model=<route_decision.impl_model>

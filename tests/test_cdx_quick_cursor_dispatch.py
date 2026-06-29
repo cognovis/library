@@ -118,7 +118,7 @@ def test_fix_cl_8832_dispatches_cdx_composer_quick_to_cursor_impl(tmp_path: Path
     ]
     assert "--line=cdx" in phase0_args.read_text(encoding="utf-8")
     assert "--tier=quick" in phase0_args.read_text(encoding="utf-8")
-    assert "--bq" in phase0_args.read_text(encoding="utf-8")
+    assert "--bq" not in phase0_args.read_text(encoding="utf-8")
     assert "--route-profile=cdx-composer" in phase0_args.read_text(encoding="utf-8")
     assert "## LEAF_DISPATCH workflow=quick slot=implementation adapter=cursor-composer" in result.stderr
     assert "harness=cursor" in result.stderr
