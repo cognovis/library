@@ -73,6 +73,12 @@ from lib.output import (
     error_result,
 )
 from lib.primitives import PRIMITIVES, all_primitive_names, get_primitive
+from lib.runtime_context import (
+    GAS_CITY_RUNTIME_RISK,
+    detect_gas_city_context,
+    gas_city_runtime_warning,
+    is_global_runtime_risk,
+)
 from lib.status import cmd_status_impl
 from lib.source import ParsedSource, parse_source
 from lib.sync_audit import cmd_audit_impl, cmd_sync_impl, reinstall_entry
@@ -360,6 +366,14 @@ def build_parser() -> argparse.ArgumentParser:
     top_sync_parser.add_argument("--json", action="store_true", help="Output JSON")
     top_sync_parser.add_argument("--dry-run", action="store_true", help="Show planned syncs")
     top_sync_parser.add_argument("--force", action="store_true", help="Re-install all, even if current")
+    top_sync_parser.add_argument(
+        "--include-global-runtime",
+        action="store_true",
+        help=(
+            "In a Gas City context, allow syncing global runtime-visible entries "
+            "instead of skipping them"
+        ),
+    )
     top_sync_parser.add_argument(
         "--scope",
         choices=["project", "global", "both"],
@@ -1559,7 +1573,7 @@ def cmd_installed(args: argparse.Namespace) -> int:
         return exc.exit_code
 
     if warnings:
-        result["warnings"] = warnings
+        result.setdefault("warnings", []).extend(warnings)
     if include_catalog_diff and catalog_root is not None:
         result["catalog_source"] = str(catalog_root / "library.yaml")
 
@@ -1675,6 +1689,8 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     force = getattr(args, "force", False)
     scope = getattr(args, "scope", "both")
     harness = getattr(args, "harness", "all")
+    include_global_runtime = getattr(args, "include_global_runtime", False)
+    gas_city_context = detect_gas_city_context(project_root=repo_root)
 
     scopes_to_check = _scopes_to_check(scope)
 
@@ -1685,6 +1701,7 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
         "current": [],
         "path_unchanged": [],
         "unknown": [],
+        GAS_CITY_RUNTIME_RISK: [],
         "other": [],
     }
     warnings: list[str] = []
@@ -1731,6 +1748,18 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
                 entry_type = entry.get("type", "")
                 entry_label = f"{entry_type}:{entry_name}"
                 key = (entry_name, entry_type)
+
+                if (
+                    not include_global_runtime
+                    and is_global_runtime_risk(
+                        primitive=entry_type,
+                        scope=s,
+                        gas_city_context=gas_city_context,
+                    )
+                ):
+                    all_skipped.append(entry_label)
+                    skipped_by_status[GAS_CITY_RUNTIME_RISK].append(entry_label)
+                    continue
 
                 status_entry = status_by_key.get(key, {})
                 upstream_status = status_entry.get("upstream_status", "unknown")
@@ -1789,6 +1818,11 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
             f"skipped {unknown_skipped} entries with unknown upstream status; "
             "use --force to refresh them"
         )
+    gas_city_global_runtime_skipped = len(skipped_by_status[GAS_CITY_RUNTIME_RISK])
+    if gas_city_global_runtime_skipped:
+        warnings.append(
+            gas_city_runtime_warning(gas_city_global_runtime_skipped, sync=True)
+        )
 
     result = {
         "status": "dry-run" if dry_run else "ok",
@@ -1799,14 +1833,17 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
         "failed": all_failed,
         "total_refreshed": len(all_refreshed),
         "total_skipped": len(all_skipped),
+        "gas_city_global_runtime_skipped": gas_city_global_runtime_skipped,
     }
+    if gas_city_context.get("active"):
+        result["gas_city_context"] = gas_city_context
     if warnings:
         result["warnings"] = warnings
 
     if dry_run:
         result["summary"] = (
             f"Would refresh {len(all_refreshed)} entries, "
-            f"skip {len(all_skipped)} entries not reported behind"
+            f"skip {len(all_skipped)} entries"
         )
 
     if use_json:

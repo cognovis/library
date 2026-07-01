@@ -13,6 +13,12 @@ from typing import Any
 from .catalog import get_entries
 from .lockfile import find_lockfile, load_lockfile
 from .primitives import all_primitive_names
+from .runtime_context import (
+    GAS_CITY_RUNTIME_RISK,
+    detect_gas_city_context,
+    gas_city_runtime_warning,
+    is_global_runtime_risk,
+)
 from .source import parse_source
 from .status import cmd_status_impl
 
@@ -37,17 +43,28 @@ def cmd_installed_impl(
     catalog: dict[str, Any] | None = None,
     include_catalog_diff: bool = False,
     offline: bool = False,
+    gas_city_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the installed-entry result for human or JSON output."""
     visible_scopes = _scopes_for(scope)
     conflict_index = _build_conflict_index(repo_root, primitive_filter)
     status_index = _build_status_index(repo_root, visible_scopes, primitive_filter, offline)
+    runtime_context = gas_city_context or detect_gas_city_context(project_root=repo_root)
 
     entries: list[dict[str, Any]] = []
+    gas_city_runtime_entries: list[str] = []
     for current_scope in visible_scopes:
         for lock_entry in _load_scope_entries(repo_root, current_scope, primitive_filter):
             key = _entry_key(lock_entry)
             status_entry = status_index.get((current_scope, *key), {})
+            runtime_risk = ""
+            if is_global_runtime_risk(
+                primitive=lock_entry.get("type"),
+                scope=current_scope,
+                gas_city_context=runtime_context,
+            ):
+                runtime_risk = GAS_CITY_RUNTIME_RISK
+                gas_city_runtime_entries.append(f"{key[0]}:{key[1]}")
             entries.append(
                 _format_entry(
                     lock_entry=lock_entry,
@@ -55,6 +72,7 @@ def cmd_installed_impl(
                     scope=current_scope,
                     upstream_status=status_entry.get("upstream_status", "unknown"),
                     precedence=_precedence_for_scope(current_scope, key, conflict_index),
+                    runtime_risk=runtime_risk,
                 )
             )
 
@@ -64,6 +82,15 @@ def cmd_installed_impl(
         "entries": entries,
         "precedence_conflicts": _format_precedence_conflicts(conflict_index, primitive_filter),
     }
+    if runtime_context.get("active"):
+        result["gas_city_context"] = runtime_context
+    if gas_city_runtime_entries:
+        gas_city_runtime_entries = sorted(gas_city_runtime_entries)
+        result["gas_city_global_runtime_entries"] = gas_city_runtime_entries
+        result["gas_city_global_runtime_count"] = len(gas_city_runtime_entries)
+        result["warnings"] = [
+            gas_city_runtime_warning(len(gas_city_runtime_entries)),
+        ]
 
     if include_catalog_diff and catalog is not None:
         result["catalog_diff"] = build_catalog_diff(
@@ -77,11 +104,12 @@ def cmd_installed_impl(
 
 def format_installed_output(result: dict[str, Any]) -> str:
     """Format installed command output for humans."""
+    columns = _installed_columns(result["entries"])
     rows = [
-        {column: str(entry.get(column, "")) for column in INSTALLED_COLUMNS}
+        {column: str(entry.get(column, "")) for column in columns}
         for entry in result["entries"]
     ]
-    sections = [_format_installed_table(rows)]
+    sections = [_format_installed_table(rows, columns)]
 
     catalog_diff = result.get("catalog_diff")
     if catalog_diff is not None and (
@@ -240,6 +268,7 @@ def _format_entry(
     scope: str,
     upstream_status: str,
     precedence: str,
+    runtime_risk: str = "",
 ) -> dict[str, str]:
     source_commit = str(lock_entry.get("source_commit") or "")
     return {
@@ -251,6 +280,7 @@ def _format_entry(
         "installed_at": _date_only(str(lock_entry.get("install_timestamp") or "")),
         "upstream": upstream_status or "unknown",
         "precedence": precedence,
+        "runtime_risk": runtime_risk,
     }
 
 
@@ -338,21 +368,28 @@ def _format_catalog_diff_section(title: str, grouped: dict[str, list[str]]) -> s
     return "\n".join(lines)
 
 
-def _format_installed_table(rows: list[dict[str, str]]) -> str:
-    widths = {column: len(column) for column in INSTALLED_COLUMNS}
+def _installed_columns(entries: list[dict[str, Any]]) -> list[str]:
+    columns = list(INSTALLED_COLUMNS)
+    if any(entry.get("runtime_risk") for entry in entries):
+        columns.append("runtime_risk")
+    return columns
+
+
+def _format_installed_table(rows: list[dict[str, str]], columns: list[str]) -> str:
+    widths = {column: len(column) for column in columns}
     for row in rows:
-        for column in INSTALLED_COLUMNS:
+        for column in columns:
             widths[column] = max(widths[column], len(row.get(column, "")))
 
     lines = [
-        "  ".join(column.ljust(widths[column]) for column in INSTALLED_COLUMNS),
-        "  ".join("-" * widths[column] for column in INSTALLED_COLUMNS),
+        "  ".join(column.ljust(widths[column]) for column in columns),
+        "  ".join("-" * widths[column] for column in columns),
     ]
     for row in rows:
         lines.append(
             "  ".join(
                 row.get(column, "").ljust(widths[column])
-                for column in INSTALLED_COLUMNS
+                for column in columns
             )
         )
     return "\n".join(lines)

@@ -87,6 +87,12 @@ def write_minimal_catalog(project: Path) -> None:
     )
 
 
+def write_gas_city_marker(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / ".gc").mkdir()
+    (path / "city.toml").write_text("[city]\nname = \"test-city\"\n")
+
+
 def test_installed_detects_precedence_conflict(tmp_path: Path):
     project = tmp_path / "project"
     home = tmp_path / "home"
@@ -178,6 +184,24 @@ def test_installed_runs_without_library_yaml_when_global_lockfile_exists(tmp_pat
     assert [(item["scope"], item["name"]) for item in data["entries"]] == [
         ("global", "global-only")
     ]
+
+
+def test_installed_marks_global_runtime_entries_in_gas_city_context(tmp_path: Path):
+    city = tmp_path / "city"
+    home = tmp_path / "home"
+    write_gas_city_marker(city)
+    write_lockfile(home / ".config" / "library" / "global.lock", [entry("global-skill")])
+
+    result = run_library("installed", "--offline", "--json", cwd=city, home=home)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+
+    assert data["gas_city_context"]["active"] is True
+    assert data["entries"][0]["runtime_risk"] == "gas_city_global_runtime"
+    assert data["gas_city_global_runtime_entries"] == ["skill:global-skill"]
+    assert data["gas_city_global_runtime_count"] == 1
+    assert data["warnings"]
+    assert "Gas City context detected" in data["warnings"][0]
 
 
 def test_installed_empty_lockfiles_exit_zero(tmp_path: Path):
@@ -365,6 +389,47 @@ def test_status_audit_and_sync_run_outside_catalog_checkout(tmp_path: Path):
     sync_data = json.loads(sync.stdout)
     assert sync_data["skipped_by_status"]["unknown"] == ["skill:global-only"]
     assert sync_data["warnings"]
+
+
+def test_sync_skips_global_runtime_entries_in_gas_city_context(tmp_path: Path):
+    city = tmp_path / "city"
+    home = tmp_path / "home"
+    write_gas_city_marker(city)
+    write_lockfile(home / ".config" / "library" / "global.lock", [entry("global-skill")])
+
+    result = run_library("sync", "--dry-run", "--force", "--json", cwd=city, home=home)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+
+    assert data["refreshed"] == []
+    assert data["skipped_by_status"]["gas_city_global_runtime"] == ["skill:global-skill"]
+    assert data["gas_city_global_runtime_skipped"] == 1
+    assert data["gas_city_context"]["active"] is True
+    assert data["warnings"]
+    assert "--include-global-runtime" in data["warnings"][0]
+
+
+def test_sync_can_include_global_runtime_entries_in_gas_city_context(tmp_path: Path):
+    city = tmp_path / "city"
+    home = tmp_path / "home"
+    write_gas_city_marker(city)
+    write_lockfile(home / ".config" / "library" / "global.lock", [entry("global-skill")])
+
+    result = run_library(
+        "sync",
+        "--dry-run",
+        "--force",
+        "--include-global-runtime",
+        "--json",
+        cwd=city,
+        home=home,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+
+    assert data["refreshed"] == ["skill:global-skill"]
+    assert data["skipped_by_status"]["gas_city_global_runtime"] == []
+    assert data["gas_city_global_runtime_skipped"] == 0
 
 
 def test_installed_offline_does_not_call_git_for_upstream_status(tmp_path: Path):
