@@ -280,7 +280,7 @@ def test_build_agent_resolves_models_and_capabilities_per_harness(tmp_path: Path
     source = write_capability_source(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["claude-sonnet-4-6", "gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
 
@@ -289,11 +289,11 @@ def test_build_agent_resolves_models_and_capabilities_per_harness(tmp_path: Path
     codex_text = (output_dir / "capability-agent.toml").read_text()
     codex = tomllib.loads(codex_text)
 
-    assert "model: claude-sonnet-4-6" in claude
+    assert "model: sonnet" in claude
     assert "tools: Read, Grep, Glob, Edit, Bash" in claude
     assert "mcp__open-brain__search" in claude
     assert "mcpServers:\n- open-brain" in claude
-    assert "CLAUDE-SONNET-4-6_LAYER3_MARKER" in claude
+    assert "SONNET_LAYER3_MARKER" in claude
 
     assert codex["model"] == "gpt-5.4"
     assert codex["model_reasoning_effort"] == "high"

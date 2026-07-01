@@ -3848,39 +3848,38 @@ library:
           snippet:
             url: https://www.heypresto.ai/mcp
   model_standards:
-  - name: claude-haiku-4-5
-    description: 'Model-standard for Claude Haiku 4.5 — avoid under-scoping multi-step
+  - name: haiku
+    description: 'Model-standard for Claude Haiku — avoid under-scoping multi-step
       plans, no terse-skip on verification steps. Applied to agents that declare model:
-      haiku or model: claude-haiku-4-5 (or an alias).'
-    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-haiku-4-5.md
+      haiku (or a claude-haiku-* id).'
+    source: https://github.com/cognovis/library-core/blob/main/model-standards/haiku.md
     metadata:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
-    version: 2026.05.12
+    version: 2026.07.01
     tags:
     - origin:original
-  - name: claude-opus-4-8
-    description: 'Model-standard for Claude Opus 4.7 — thinking budget and deep reasoning
-      guidance. Applied to agents that declare model: claude-opus-4-8 or model: opus.'
-    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-opus-4-8.md
+  - name: opus
+    description: 'Model-standard for Claude Opus — thinking budget and deep reasoning
+      guidance. Applied to agents that declare model: opus (or a claude-opus-* id).'
+    source: https://github.com/cognovis/library-core/blob/main/model-standards/opus.md
     metadata:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
-    version: 2026.04.30
+    version: 2026.07.01
     tags:
     - origin:original
-  - name: claude-sonnet-4-6
-    description: 'Model-standard for Claude Sonnet 4.6 — conciseness and directness
-      guidance. Applied to agents that declare model: claude-sonnet-4-6 or model:
-      sonnet.'
-    source: https://github.com/cognovis/library-core/blob/main/model-standards/claude-sonnet-4-6.md
+  - name: sonnet
+    description: 'Model-standard for Claude Sonnet — conciseness and directness
+      guidance. Applied to agents that declare model: sonnet (or a claude-sonnet-* id).'
+    source: https://github.com/cognovis/library-core/blob/main/model-standards/sonnet.md
     metadata:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
-    version: 2026.04.30
+    version: 2026.07.01
     tags:
     - origin:original
   - name: gpt-5.4

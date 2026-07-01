@@ -39,7 +39,7 @@ def test_models_yaml_validates_against_schema() -> None:
     model_ids = [model["id"] for model in data["models"]]
     assert len(model_ids) == len(set(model_ids))
     assert {"claude-code", "codex"} <= {model["harness"] for model in data["models"]}
-    assert {"claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"} <= set(model_ids)
+    assert {"haiku", "sonnet", "opus"} <= set(model_ids)
     assert {"gpt-5.4-mini", "gpt-5.4"} <= set(model_ids)
 
 

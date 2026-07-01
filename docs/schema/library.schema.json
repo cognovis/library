@@ -405,7 +405,7 @@
         "mcp:open-brain",
         "script:validate-spec",
         "agent-base:cognovis-base",
-        "model-standard:claude-sonnet-4-6"
+        "model-standard:sonnet"
       ]
     },
     "script_asset": {

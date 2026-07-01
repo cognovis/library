@@ -1,6 +1,6 @@
 version: 1
 models:
-  - id: claude-haiku-4-5
+  - id: haiku
     harness: claude-code
     tier: economy
     reasoning_levels: [low, medium]
@@ -10,17 +10,17 @@ models:
     cost:
       input: 1.0
       output: 5.0
-  - id: claude-sonnet-4-6
+  - id: sonnet
     harness: claude-code
     tier: standard
-    reasoning_levels: [low, medium, high]
+    reasoning_levels: [low, medium, high, xhigh]
     default_reasoning: high
     context: large
     vision: true
     cost:
       input: 3.0
       output: 15.0
-  - id: claude-opus-4-8
+  - id: opus
     harness: claude-code
     tier: premium
     reasoning_levels: [medium, high, xhigh]
