@@ -1,3 +1,36 @@
+## [2026.07.0] - 2026-07-02
+
+### Added
+
+- *(catalog)* Register release agent in `library.yaml`
+- *(catalog)* Register frontend-orchestrator workflow in `library.yaml`; wire `-bf/--bead-frontend` flag in `cld`
+- *(catalog)* Register `stream-review/completeness_gate` script dependency; update stream-review to canonical workflow and deprecate stale skill entry
+- *(catalog)* Register `validate-review-output` script and add to stream-review `requires` (clc-240f)
+- *(cld)* Add top-level cdx quick orchestrator (CL-yty9)
+- *(cld)* Default `cld -b`/`-bq` globally to cld-composer (Cursor Composer) route profile (clc-a0bj)
+
+### Changed
+
+- *(CL-efd1)* Route Claude model tiers via family aliases (`haiku`/`sonnet`/`opus`) in route-profile schema tests — meta tests now expect aliases instead of pinned model IDs
+- *(CL-ryn7)* Remove frontend orchestrator launchers
+
+### Fixed
+
+- *(cld)* Route `cld -b` back to GPT (`perspective_policy.cld`); keep `-bq` on composer
+- *(cdx)* Align `bq` quick routing with `cld`
+- *(CL-gi5x)* Deduplicate Codex hook installs by origin
+- *(CL-9b3v)* Harden cdx quick composer workflow
+- *(CL-6fvh)* Fail closed cdx quick prompt path
+- *(CL-hog3)* Place cdx worktrees under `CODEX_HOME`
+
+### Documentation
+
+- *(CL-dnna)* Add Gas City pilot quick-loop runbook (handoff)
+
+### Internal
+
+- Remove obsolete FHIR release skills from catalog
+
 ## [2026.06.1] - 2026-06-01
 
 ### Added
