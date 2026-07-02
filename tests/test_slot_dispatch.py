@@ -237,13 +237,13 @@ class TestCurrentBehaviorPreserved:
         impl = config["route_profiles"]["cdx-default"]["slots"]["full"]["implementation"]
         assert impl["adapter"] == "claude-agent"
         assert impl["harness"] == "claude"
-        assert impl["model"] == "claude-opus-4-8"
+        assert impl["model"] == "opus"
 
     def test_cdx_default_quick_implementation_is_claude_agent(self, config: dict) -> None:
         impl = config["route_profiles"]["cdx-default"]["slots"]["quick"]["implementation"]
         assert impl["adapter"] == "claude-agent"
         assert impl["harness"] == "claude"
-        assert impl["model"] == "claude-haiku-4-5"
+        assert impl["model"] == "haiku"
 
 
 class TestPhaseProgressMarkerFormat:

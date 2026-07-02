@@ -154,13 +154,13 @@ class TestRouteProfilesSchema:
     def test_cdx_default_full_implementation_values(self, config: dict) -> None:
         impl = config["route_profiles"]["cdx-default"]["slots"]["full"]["implementation"]
         assert impl["adapter"] == "claude-agent"
-        assert impl["model"] == "claude-opus-4-8"
+        assert impl["model"] == "opus"
         assert impl["harness"] == "claude"
 
     def test_cdx_default_quick_implementation_values(self, config: dict) -> None:
         impl = config["route_profiles"]["cdx-default"]["slots"]["quick"]["implementation"]
         assert impl["adapter"] == "claude-agent"
-        assert impl["model"] == "claude-haiku-4-5"
+        assert impl["model"] == "haiku"
         assert impl["harness"] == "claude"
 
     def test_cdx_composer_quick_implementation_values(self, config: dict) -> None:
