@@ -29,6 +29,7 @@ if [[ -z "${CLAUDE_BIN}" ]]; then
 fi
 
 BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
+GIT_BIN="${GIT_BIN:-$(command -v git 2>/dev/null)}"
 
 # ── Parse wrapper flags ──────────────────────────────────────────
 
@@ -44,6 +45,7 @@ route_profile=""
 force_tier=""
 plan_label=""
 show_help=false
+launch_worktree_dir=""
 claude_args=()
 
 while (( $# > 0 )); do
@@ -160,6 +162,7 @@ fi
 # catalog source so it never silently drifts (CL-0w6e follow-up).
 source "${0:A:h}/lib/orchestrator-config-sync.zsh"
 _sync_orchestrator_config
+source "${0:A:h}/lib/worktree-bootstrap.zsh"
 
 # ── System Prompt Injection ──────────────────────────────────────
 source "${0:A:h}/lib/cld-system-prompt.zsh"
@@ -325,6 +328,50 @@ _sanitize_name() {
     echo "$1" | tr -cs 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//'
 }
 
+_ensure_claude_bead_worktree() {
+    local bead="$1"
+
+    if [[ -z "${GIT_BIN}" ]]; then
+        echo "ERROR: git not found in PATH. Cannot create bead worktree." >&2
+        return 1
+    fi
+
+    local repo_root
+    repo_root=$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null) || {
+        echo "ERROR: cld -b must run inside a git repository." >&2
+        return 1
+    }
+
+    local safe_bead
+    safe_bead="$(_sanitize_name "$bead")"
+    local worktree_name="bead-${safe_bead}"
+    local worktree_root="${repo_root}/.claude/worktrees"
+    local worktree_dir="${worktree_root}/${worktree_name}"
+    local branch_name="${CLD_WORKTREE_BRANCH_PREFIX:-worktree-bead-}${safe_bead}"
+
+    if "${GIT_BIN}" worktree list --porcelain 2>/dev/null | grep -Fxq "worktree ${worktree_dir}"; then
+        _bootstrap_worktree_from_main "$repo_root" "$worktree_dir"
+        printf '%s\n' "$worktree_dir"
+        return 0
+    fi
+
+    if [[ -e "$worktree_dir" ]]; then
+        echo "ERROR: worktree path exists but is not registered: $worktree_dir" >&2
+        return 1
+    fi
+
+    mkdir -p "$worktree_root"
+
+    if "${GIT_BIN}" show-ref --verify --quiet "refs/heads/${branch_name}"; then
+        "${GIT_BIN}" worktree add "$worktree_dir" "$branch_name" >/dev/null
+    else
+        "${GIT_BIN}" worktree add -b "$branch_name" "$worktree_dir" HEAD >/dev/null
+    fi
+
+    _bootstrap_worktree_from_main "$repo_root" "$worktree_dir"
+    printf '%s\n' "$worktree_dir"
+}
+
 # Rename cmux surface if running inside cmux
 _cmux_rename() {
     local label="$1"
@@ -396,12 +443,13 @@ if [[ -n "$bead_id" ]]; then
 
     # ── Sync: pull latest git + dolt state before worktree creation ──
     echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
-    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
+    "${GIT_BIN}" fetch origin 2>/dev/null && "${GIT_BIN}" pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
     "${BD_BIN}" dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
 
-    # ── Worktree isolation via Claude Code native --worktree ──────
-    local worktree_name="bead-${bead_id}"
-    claude_args+=("--worktree" "$worktree_name")
+    # ── Worktree isolation with pre-launch runtime overlay bootstrap ──────
+    local worktree_dir
+    worktree_dir="$(_ensure_claude_bead_worktree "$bead_id")" || exit $?
+    launch_worktree_dir="$worktree_dir"
     claude_args+=("--agent" "bead-orchestrator")
     # ── Force full plugin registry in the worktree session ────────
     # CCP-9xy: guarantees core:session-close is spawnable at Phase 16 handoff,
@@ -422,7 +470,7 @@ if [[ -n "$bead_id" ]]; then
 
     # Execute the COMPLETE workflow (phases 0-16 including Phase 16 session-close).
     # Never stop at "Phase 0-5" — that scope does not exist for the full orchestrator.
-    local prompt="Bead ID: $bead_id. Execute the full orchestration workflow end-to-end: Phase 0 through Phase 16 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 16."
+    local prompt="Bead ID: $bead_id. Execute the full orchestration workflow end-to-end: Phase 0 through Phase 16 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 16. Worktree: $worktree_dir."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
@@ -475,12 +523,13 @@ if [[ -n "$bead_quick_id" ]]; then
 
     # ── Sync: pull latest git + dolt state before worktree creation ──
     echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
-    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
+    "${GIT_BIN}" fetch origin 2>/dev/null && "${GIT_BIN}" pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
     "${BD_BIN}" dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
 
-    # ── Worktree isolation via Claude Code native --worktree ──────
-    local worktree_name="bead-${bead_quick_id}"
-    claude_args+=("--worktree" "$worktree_name")
+    # ── Worktree isolation with pre-launch runtime overlay bootstrap ──────
+    local worktree_dir
+    worktree_dir="$(_ensure_claude_bead_worktree "$bead_quick_id")" || exit $?
+    launch_worktree_dir="$worktree_dir"
     claude_args+=("--agent" "quick-fix")
     # ── Force full plugin registry in the worktree session ────────
     # CCP-9xy: guarantees core:session-close is spawnable at Phase 5 handoff,
@@ -500,7 +549,7 @@ if [[ -n "$bead_quick_id" ]]; then
     fi
 
     # Execute the COMPLETE quick-fix workflow (phases 0-5 including Phase 5 session-close).
-    local prompt="Bead ID: $bead_quick_id. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5."
+    local prompt="Bead ID: $bead_quick_id. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5. Worktree: $worktree_dir."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
@@ -608,5 +657,9 @@ fi
 # ── Launch claude ────────────────────────────────────────────────
 # Ensure cmux-shim is used for Stop hook notifications (prevents cmux wrapper override)
 export CMUX_BUNDLED_CLI_PATH="${HOME}/.claude/scripts/cmux-shim.sh"
+
+if [[ -n "$launch_worktree_dir" ]]; then
+    cd "$launch_worktree_dir"
+fi
 
 exec "${CLAUDE_BIN}" "${claude_args[@]}"

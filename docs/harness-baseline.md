@@ -62,6 +62,25 @@ state stay outside git.
 |---|---|---|
 | .agents/skills/*/cache/ | Generated cache directories | `.agents/skills/*/cache/` |
 
+### Bead Worktree Bootstrap
+
+`cld -b`, `cld -bq`, `cdx -b`, and `cdx -bq` prepare ignored runtime overlays
+before launching the bead session. The built-in symlink defaults are `.agents`
+and `.claude/skills`. Additional paths can be configured in
+`.agents/orchestrator-config.yml`:
+
+```yaml
+worktree_bootstrap:
+  symlink_from_main:
+    - .agents
+    - .claude/skills
+```
+
+Each listed path is symlinked from the main checkout into the fresh bead
+worktree when it exists in the main checkout and is absent in the worktree.
+This keeps project-local agents, standards, and Claude skill bridges available
+at session start without committing generated or deployment-only directories.
+
 ### .codex/ (Codex CLI)
 
 **MUST be committed:**
