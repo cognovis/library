@@ -15,8 +15,10 @@ self-healing loop, without a human dispatching it** — reproducing the *shape* 
 methodology pack. Implementation runs on **Codex (gpt-5.5)**, review on **Claude
 (opus)**, both via your existing **login** (no API keys, no `[upstreams]`).
 
-This is a throwaway pilot. It touches NO production repo and NO
-`dolt.cognovis.de` bead state — the pilot city runs its own local managed Dolt.
+This is a throwaway pilot. The original managed-Dolt variant touches NO
+production repo and NO `dolt.cognovis.de` bead state. For real local rigs, use
+the verified shared-server bootstrap below so Gas City talks to the existing
+Homebrew Dolt on `127.0.0.1:3306` instead of starting another managed server.
 
 ---
 
@@ -76,6 +78,250 @@ imports (+ `packs.lock`) for *your* installed binary. Do not hand-write those pi
 
 ---
 
+## Phase 1A — Shared-server Dolt bootstrap (verified 2026-07-03)
+
+Use this path for cities that should share the existing local Homebrew Dolt
+server. It was verified with `python-den` and an adopted `ui-cli` rig against
+`bd version 1.0.5 (Homebrew)`.
+
+Write a small city template so the external endpoint is present from the start:
+
+```toml
+[workspace]
+provider = "codex"
+
+[dolt]
+host = "127.0.0.1"
+port = 3306
+
+[providers]
+[providers.claude]
+base = "builtin:claude"
+ready_delay_ms = 0
+
+[providers.codex]
+base = "builtin:codex"
+ready_delay_ms = 0
+
+[providers."cursor-agent"]
+base = "builtin:cursor"
+ready_delay_ms = 0
+```
+
+Then initialize the city from that file:
+
+```bash
+gc init --file /path/to/city-template.toml \
+  --skip-provider-readiness \
+  --no-start \
+  ~/code/python-den
+```
+
+Current Gas City behavior: if the city HQ database does not exist yet, this may
+exit after writing the scaffold with `database "hq" not found`, and may briefly
+start a managed Dolt server. Stop that server through the generated lifecycle
+script; do not kill the process:
+
+```bash
+GC_CITY_PATH=~/code/python-den \
+GC_BEADS_DIR=~/code/python-den/.beads \
+  ~/code/python-den/.gc/scripts/gc-beads-bd.sh stop
+```
+
+Normalize the generic HQ database name to a city-specific database, then create
+that database on the central Dolt server:
+
+```bash
+gc dolt-config normalize-scope \
+  --city ~/code/python-den \
+  --dir ~/code/python-den \
+  --prefix hq \
+  --dolt-database gc_python_den_hq
+
+bd -C ~/code/python-den init \
+  --reinit-local \
+  --server \
+  --external \
+  --non-interactive \
+  --quiet \
+  -p hq \
+  --database gc_python_den_hq \
+  --server-host 127.0.0.1 \
+  --server-port 3306 \
+  --server-user root \
+  --skip-hooks \
+  --skip-agents
+```
+
+The `bd -C` is intentional. With `bd 1.0.5`, a trailing path argument is not a
+safe way to select the target directory for `bd init`; it can run against the
+current repository instead.
+
+Mark the city endpoint as external and let Gas City register custom types:
+
+```bash
+cd ~/code/python-den
+gc beads city use-external --host 127.0.0.1 --port 3306 --user root --adopt-unverified
+gc doctor --fix
+gc config show --validate
+gc bd list --json --limit 1
+```
+
+Adopt existing rigs only after the City HQ store is healthy:
+
+```bash
+gc rig add ~/code/cli-tools/ui-cli \
+  --adopt \
+  --name ui-cli \
+  --prefix ui-cli \
+  --default-branch main
+
+gc bd --rig ui-cli context --json
+gc bd --rig ui-cli ready --json --limit 1
+gc start --dry-run
+```
+
+Install the stock Gas City methodology pack and role pack with durable git
+subpath sources, not GitHub tree URLs:
+
+```bash
+gc import add --name gc \
+  https://github.com/gastownhall/gascity-packs.git//gascity \
+  --version sha:3b3b89f2011e06d84459aa7bea1552382f13930a
+```
+
+Then add the rig role import under the existing `[[rigs]]` entry:
+
+```toml
+[rigs.imports.gc]
+source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"
+version = "sha:3b3b89f2011e06d84459aa7bea1552382f13930a"
+
+[[rigs.patches]]
+agent = "implementation-worker"
+provider = "codex"
+```
+
+Note the patch target: under a rig-scoped import, `[[rigs.patches]].agent`
+expects the local agent name (`implementation-worker`), not the expanded runtime
+name (`gc.implementation-worker`).
+
+Finish with:
+
+```bash
+gc import install
+gc config show --validate
+gc formula list
+gc agent list
+gc formula show do-work --json
+gc doctor --json
+```
+
+Verified result on 2026-07-03: `gc formula list` exposed `do-work`,
+`build-basic`, `build-basic-review`, `build-from-*`, `review`, and related
+formulas; `gc agent list` exposed `ui-cli/gc.implementation-worker` and the
+review/planning role agents; `gc doctor --json` returned `ok=true`,
+`failed=0`, `blocking_failed=0`. Remaining warnings were non-blocking: local
+Gemini alias not explicit, no sessions until `gc start`, no local Dolt backup
+for the adopted rig, and deprecated `contract = "graph.v2"` declarations inside
+the imported pack.
+
+Verified Proof 1 smoke on 2026-07-03 with `python-den` + `ui-cli`:
+
+```bash
+gc sling ui-cli/gc.implementation-worker ui-cli-otk --on do-work --json --nudge
+```
+
+Result:
+
+- Source smoke bead: `ui-cli-otk`, closed with `gc.outcome=pass`.
+- Workflow root: `ui-cli-kwg`, closed with `gc.outcome=pass`.
+- Finalize step: `ui-cli-v89`, closed with `gc.outcome=pass`.
+- Implementation attempt: `ui-cli-9f4`, closed with `gc.outcome=pass`.
+- Source anchor convoy: `ui-cli-gun`, closed with `gc.outcome=pass`.
+- Commit in isolated worktree:
+  `ad79d8e6590962c15336edf1e4c18082f9233f49`.
+- Marker proof:
+  `/Users/malte/code/cli-tools/ui-cli/worktrees/ui-cli-gun/.gc-smoke/python-den-do-work.txt`
+  contains exactly `gas city python-den smoke ok`.
+- Summary artifact:
+  `/Users/malte/code/cli-tools/ui-cli/.gc/artifacts/do-work/ui-cli-kwg/task-ui-cli-gun-summary.md`.
+
+The adopted rig uses the real `ui-cli` bead database (`beads_ui-cli`) through
+`gc bd --rig ui-cli ...`; those beads are not copied into the City HQ database.
+The City HQ database remains `gc_python_den_hq`.
+
+Operational findings from that smoke:
+
+- Keep `bd 1.0.5`. Do not upgrade bd to fix GC warnings unless this is a
+  deliberate team-wide decision.
+- `gc start` under launchd can pick a stale `/Users/malte/bin/bd` through the
+  `~/.local/bin/bd` wrapper if `~/bin` appears before `/opt/homebrew/bin`.
+  Symptom: `bd list: unknown flag: --include-infra`. Start or install the
+  supervisor with `/opt/homebrew/bin` before `~/bin`.
+- Gas City `1.3.3` emitted
+  `native_store_unavailable gate=version_compat reason="bd version differs from linked beads library version"`
+  against Homebrew `bd 1.0.5`. The CLI path still worked through `gc bd`; treat
+  this as a GC/native-store compatibility warning, not as a reason to change bd.
+- Provider sessions did work, but global Codex startup context was heavy. New
+  Codex sessions spent noticeable time in SessionStart/open-brain/skills context
+  before running the GC claim protocol. This supports keeping GC rigs isolated
+  from globally installed hooks/skills where possible.
+- The workflow materialized local rig artifacts under `.gc/` and `worktrees/`.
+  Keep these local and ignored in adopted source repos:
+  `.gc/artifacts/`, `.gc/scripts/`, `.gc/settings.json`, `.gc/tmp/`, and
+  `worktrees/`.
+
+Optional off-box archive for the City JSONL export:
+
+- The `jsonl-archive` pack is supplemental observability/export state, not the
+  primary beads source of truth. Beads sync remains Dolt-backed through `bd dolt
+  push` / `bd dolt pull`.
+- On 2026-07-03, `python-den` was configured to push that archive to
+  `elysium:/tank/personal/agent-archives/gascity/python-den-jsonl-archive.git`.
+  `/tank/personal` is the Elysium ZFS dataset used for personal off-box backup.
+- Recreate the remote with:
+
+```bash
+ssh -o BatchMode=yes elysium 'set -euo pipefail
+base=/tank/personal/agent-archives/gascity
+repo=$base/python-den-jsonl-archive.git
+install -d -m 700 "$base"
+if [ ! -d "$repo" ]; then
+  git init --bare "$repo" >/dev/null
+  git -C "$repo" symbolic-ref HEAD refs/heads/main
+  git -C "$repo" config receive.denyNonFastforwards true
+fi'
+
+git -C ~/code/python-den/.gc/runtime/packs/core/jsonl-archive \
+  remote add origin elysium:/tank/personal/agent-archives/gascity/python-den-jsonl-archive.git
+
+git -C ~/code/python-den/.gc/runtime/packs/core/jsonl-archive push -u origin main
+```
+
+- If running the pack export script manually outside an active City supervisor,
+  pass the central Dolt endpoint explicitly:
+
+```bash
+GC_CITY=~/code/python-den \
+GC_CITY_RUNTIME_DIR=~/code/python-den/.gc/runtime \
+GC_DOLT_HOST=127.0.0.1 \
+GC_DOLT_PORT=3306 \
+PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+  bash ~/.gc/cache/repos/1d2f032da8cdb758b607f9047362f5779933e41bb913a0d6449e6b4fbdf5ef04/internal/bootstrap/packs/core/assets/scripts/jsonl-export.sh
+```
+
+- Verified 2026-07-03: export state reported `last_logged_mode=push`, the
+  archive pushed successfully, and local `HEAD`, `origin/main`, and Elysium
+  `refs/heads/main` all resolved to
+  `beb24cf8bb4fe960f95adcd33d5954c4f9c00f5c`.
+
+Do not use
+`https://github.com/gastownhall/gascity-packs/tree/main/gascity/roles` directly.
+Use the `.git//gascity/roles` subpath form above.
+
+---
+
 ## Phase 2 — A sandbox rig (fresh git repo, no production beads)
 
 ```bash
@@ -88,12 +334,13 @@ gc rig add ~/code/gc-pilot-sandbox
 gc rig list        # note the assigned prefix, e.g. "gp"
 ```
 
-The rig's beads live in the pilot city's own managed Dolt (scoped by prefix) —
-you do NOT run `bd init` here, and nothing touches dolt.cognovis.de.
+In the managed-Dolt throwaway variant, the rig's beads live in the pilot city's
+own managed Dolt (scoped by prefix) — you do NOT run `bd init` here, and nothing
+touches dolt.cognovis.de. For existing local rigs, use Phase 1A instead.
 
-> RISK FLAG (validate, don't assume): the pilot city starts its own local Dolt
-> sql-server. Watch for port/service collisions with your existing bd/dolt setup.
-> This is the deferred Open Question #1 (binding real rigs to the shared server).
+> RISK FLAG: the managed-Dolt variant starts its own local Dolt sql-server.
+> That did collide conceptually with the existing bd/Dolt topology during the
+> 2026-07-03 smoke. Prefer Phase 1A for real rigs.
 
 ---
 
@@ -155,9 +402,13 @@ source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"
 
 # Override ONLY the implementation role to Codex; everything else stays Claude Opus.
 [[rigs.patches]]
-agent    = "gc.implementation-worker"
+agent    = "implementation-worker"
 provider = "codex"
 ```
+
+The verified current target is the local role name `implementation-worker`.
+If a future Gas City release changes patch addressing, `gc config show
+--validate` is the authority.
 
 Login model: because no `upstream` is set on any agent, Gas City injects no
 `ANTHROPIC_*` / `OPENAI_*` and each harness uses its own login (source:
@@ -283,10 +534,18 @@ orchestration."
 - Wire the Library `gascity_export` machinery so your primitives project into
   these packs (the schema + validator already exist in meta/).
 
-## Caveats I could not verify without a running gc
+## Caveats and resolved checks
 
 - Exact `[[rigs.patches]]` vs `[rigs.imports.gc]` nesting under `[[rigs]]` — the
   validator (Phase 5) is the authority; adjust to what it accepts.
 - Whether `build-basic-review` runs cleanly standalone vs only via a build-*
   entrypoint — `gc formula show` (Phase 7) resolves this.
-- Whether the pilot's managed Dolt collides with your existing bd/dolt services.
+- Resolved 2026-07-03: for real local rigs, use the shared-server bootstrap in
+  Phase 1A. It was verified with City HQ database `gc_python_den_hq` and rig
+  database `beads_ui-cli` on `127.0.0.1:3306`.
+- Resolved 2026-07-03: `ui-cli` beads are available inside `python-den` through
+  the adopted rig (`gc bd --rig ui-cli ...`), backed by the existing
+  `beads_ui-cli` database. They are not duplicated into City HQ.
+- Open follow-up: reduce global Codex/Claude hook and skill injection for GC
+  sessions. The smoke passed, but startup/claim latency and queued nudges show
+  that global context can make Gas City sessions slower and harder to observe.
