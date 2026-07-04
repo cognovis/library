@@ -1297,6 +1297,27 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: fhir-emission
+    description: Emit-side FHIR conformance contract for producing adapters — the
+      $validate gate, generated-helpers-are-not-validators, the required-binding
+      extension trap, profile-repoint-is-not-a-rewrite, Coding.version sourcing, and
+      curated-subset discipline. Use when building or mapping FHIR resources, setting
+      meta.profile, choosing a Coding.system or version, placing a Coding in an
+      extension, or consuming a new IG version or profile migration. Cross-repo
+      (polaris, mira, fhir-*).
+    source: https://github.com/cognovis/library-core/blob/main/skills/fhir-emission/SKILL.md
+    requires:
+    - standard:english-only
+    - standard:no-emoji
+    tags:
+    - origin:original
+    - tier:domain
+    - fhir
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+        plane: dev
   - name: file-inspect
     description: Analyze changed files in a git branch — list modified/added/deleted
       files, categorize by type (scripts/manifests/docs/other), detect embedded version
