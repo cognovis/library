@@ -17,7 +17,7 @@
 #   -bi, --bead-ids IDS → dispatch wave-orchestrator for explicit bead IDs (comma-separated)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #   --force-tier TIER → force routing tier (e.g. mcp, infra); passed to phase0-claim.py
-#                          profiles: cld-default, cld-composer (default for -bq only), cdx-default, cdx-composer
+#                          profiles: cld-default (default for -bq), cld-composer, cdx-default, cdx-composer
 
 set -uo pipefail
 
@@ -124,7 +124,7 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 (comma-separated, e.g. fpde-11j,fpde-95b)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
          --force-tier TIER       Force the routing tier (e.g. mcp, infra); passed to phase0-claim.py
-                                Profiles: cld-default, cld-composer (default for -bq only), cdx-default, cdx-composer
+                                Profiles: cld-default (default for -bq), cld-composer, cdx-default, cdx-composer
 
   Session:
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
@@ -337,18 +337,13 @@ _cmux_rename() {
     fi
 }
 
-# ── Default implementer route profile (clc-a0bj / clc-1fms) ───────────────
-# Bare `cld -bq` (quick-fix) uses the Cursor Composer implementer by default in
-# EVERY project, so no --route-profile flag is needed. The full `cld -b`
-# orchestrator path intentionally does NOT default to cld-composer: it falls
-# back to perspective_policy.cld (GPT implementer / Opus reviewer). An explicit
-# --route-profile overrides either path. Where a project's resolved
-# orchestrator-config.yml lacks cld-composer, phase0-claim.py warns and falls
-# back to perspective_policy (GPT) — no break. cld-composer ships in the
-# user-global config, so projects that define no route_profiles of their own
-# inherit it via the config merge.
+# ── Default quick-fix route profile ───────────────────────────────────────
+# Bare `cld -bq` uses the explicit cld-default quick profile by default, so
+# every project gets the same GPT implementation/review/fix-loop slots without
+# relying on project-local perspective_policy defaults. The optional
+# cld-composer profile remains available via --route-profile cld-composer.
 if [[ -z "$route_profile" && -n "$bead_quick_id" ]]; then
-    route_profile="cld-composer"
+    route_profile="cld-default"
 fi
 
 if [[ -n "$bead_id" ]]; then
@@ -451,7 +446,7 @@ if [[ -n "$bead_quick_id" ]]; then
 
     # Export CLD_ROUTE_PROFILE so phase0-claim.py resolves the quick execution_plan
     # from the named route profile. The -bq path previously ignored route profiles
-    # entirely; this makes the cld-composer default (and explicit --route-profile)
+    # entirely; this makes the cld-default default (and explicit --route-profile)
     # take effect for quick-fix too.
     if [[ -n "$route_profile" ]]; then
         export CLD_ROUTE_PROFILE="$route_profile"

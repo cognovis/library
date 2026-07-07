@@ -148,8 +148,19 @@ class TestRouteProfilesSchema:
     def test_cld_default_quick_implementation_values(self, config: dict) -> None:
         impl = config["route_profiles"]["cld-default"]["slots"]["quick"]["implementation"]
         assert impl["adapter"] == "codex-impl"
-        assert impl["model"] == "gpt-5.4-mini"
+        assert impl["model"] == "gpt-5.5"
+        assert impl["reasoning_effort"] == "medium"
         assert impl["harness"] == "codex"
+
+    def test_cld_default_quick_slot_values(self, config: dict) -> None:
+        slots = config["route_profiles"]["cld-default"]["slots"]["quick"]
+        assert slots["implementation"]["model"] == "gpt-5.5"
+        assert slots["implementation"]["reasoning_effort"] == "medium"
+        assert slots["fix_loop"]["model"] == "gpt-5.5"
+        assert slots["fix_loop"]["reasoning_effort"] == "high"
+        assert slots["review"]["model"] == "claude-opus-4-8"
+        assert slots["review"]["harness"] == "claude"
+        assert slots["session_close"]["model"] == "sonnet"
 
     def test_cdx_default_full_implementation_values(self, config: dict) -> None:
         impl = config["route_profiles"]["cdx-default"]["slots"]["full"]["implementation"]

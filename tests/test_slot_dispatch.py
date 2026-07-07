@@ -208,7 +208,7 @@ class TestCdxComposerFixSlots:
 
 
 class TestCurrentBehaviorPreserved:
-    """AC6: cld-default and cdx-default fixture values unchanged."""
+    """AC6: cld-default and cdx-default fixture values remain explicit."""
 
     @pytest.fixture(params=["user_global", "cognovis_core"])
     def config(self, request):
@@ -226,7 +226,8 @@ class TestCurrentBehaviorPreserved:
         impl = config["route_profiles"]["cld-default"]["slots"]["quick"]["implementation"]
         assert impl["adapter"] == "codex-impl"
         assert impl["harness"] == "codex"
-        assert impl["model"] == "gpt-5.4-mini"
+        assert impl["model"] == "gpt-5.5"
+        assert impl["reasoning_effort"] == "medium"
 
     def test_cld_default_regression_fix_is_claude_agent(self, config: dict) -> None:
         regfix = config["route_profiles"]["cld-default"]["slots"]["full"]["regression_fix"]
