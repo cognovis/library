@@ -2097,6 +2097,26 @@ library:
         source_catalog: cognovis-library-core
         inventory: manual
         plane: dev
+  - name: worktree-cleanup
+    description: Classify and clean up git worktrees and local branches for the current
+      repo. Removes worktrees whose code is already in the default branch, deletes
+      branches merged (incl. squash/rebase) into it, and produces a review overview of
+      the rest — diff vs the default branch plus whether each still hangs on an active
+      bead. Use when worktrees have piled up or the user asks to tidy/prune worktrees.
+      Triggers on worktree cleanup, worktrees aufräumen, prune worktrees, clean up
+      worktrees, stale worktrees, remove merged branches.
+    source: https://github.com/cognovis/library-core/blob/main/skills/worktree-cleanup/SKILL.md
+    requires:
+    - standard:english-only
+    - standard:no-emoji
+    tags:
+    - origin:original
+    - tier:domain
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+        plane: dev
   agents:
   - name: architecture-reviewer
     description: Deep architecture-council review of a single bead before implementation.
