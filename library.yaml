@@ -352,6 +352,21 @@ library:
         source_catalog: cognovis-library-core
         inventory: manual
   skills:
+  - name: pvs-schema-analysis
+    description: Analyze a PVS database schema and produce an annotated JSON inventory.
+      Use for MSSQL or PostgreSQL PVS onboarding, schema archaeology, and adapter planning.
+      Bundles references/sql-catalog.md (read-only SQL query catalog, classification/anonymization
+      rules, FHIR mapping patterns) alongside SKILL.md.
+    source: https://github.com/cognovis/polaris/blob/main/.claude/skills/pvs-schema-analysis/SKILL.md
+    tags:
+    - origin:original
+    - tier:domain
+    - category:skill
+    metadata:
+      library:
+        source_catalog: polaris
+        inventory: manual
+        plane: dev
   - name: impeccable
     description: 'Frontend design skill (Apache-2.0, third-party). Single user-invocable
       /impeccable command with 23 sub-flows: craft, shape, audit, critique, polish,
