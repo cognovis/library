@@ -639,10 +639,16 @@ def remove_agent(
         # every supported harness directory even when nothing is installed yet.
         ops = []
         for install_target in harness_targets:
+            handler_root = install_target.parent / f"{name}-handlers"
             ops.append({
                 "operation": "delete",
                 "path": str(install_target),
                 "details": f"remove {install_target}",
+            })
+            ops.append({
+                "operation": "delete",
+                "path": str(handler_root),
+                "details": f"remove {handler_root}",
             })
         ops.append({
             "operation": "remove_lockfile_entry",
@@ -653,12 +659,22 @@ def remove_agent(
 
     removed_files = []
     for install_target in harness_targets:
+        handler_root = install_target.parent / f"{name}-handlers"
         if install_target.is_symlink():
             install_target.unlink()
             removed_files.append(str(install_target))
         elif install_target.exists():
             install_target.unlink()
             removed_files.append(str(install_target))
+        if handler_root.is_symlink():
+            handler_root.unlink()
+            removed_files.append(str(handler_root))
+        elif handler_root.is_dir():
+            shutil.rmtree(str(handler_root))
+            removed_files.append(str(handler_root))
+        elif handler_root.exists():
+            handler_root.unlink()
+            removed_files.append(str(handler_root))
 
     lock_data = load_lockfile(lockfile_path)
     remove_entry(lock_data, name, primitive_type="agent")
