@@ -1,0 +1,100 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-du1x",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "criterion": "library.py agent remove deletes the agent's installed handler asset directory for every harness, leaving no orphaned handler files",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "EV-RED-AC1",
+        "EV-GREEN-AC1",
+        "EV-FULL-FILE"
+      ]
+    },
+    {
+      "id": "AC2",
+      "criterion": "library.py agent use detects a handler-only catalog change (declared handlers set changed, prompt file byte-identical) and triggers a reinstall through the normal use path",
+      "status": "done",
+      "changed_files": [
+        "scripts/library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "EV-RED-AC2",
+        "EV-GREEN-AC2",
+        "EV-FULL-FILE"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/lib/installers/agent.py",
+    "scripts/library.py",
+    "tests/test_library_py_installers.py",
+    ".beads/runs/d1864561-2ace-4056-b125-00fadd990eb2/implementation_manifest.json",
+    ".beads/runs/d1864561-2ace-4056-b125-00fadd990eb2/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "hash": "0ea24b8",
+      "message": "test(CL-du1x): red - agent remove deletes handler dirs"
+    },
+    {
+      "hash": "0d63df1",
+      "message": "feat(CL-du1x): green - remove agent handler dirs"
+    },
+    {
+      "hash": "77dcadf",
+      "message": "test(CL-du1x): red - handler catalog change reinstalls"
+    },
+    {
+      "hash": "5206783",
+      "message": "feat(CL-du1x): green - reinstall on handler catalog changes"
+    }
+  ],
+  "tests": [
+    {
+      "evidence_ref": "EV-RED-AC1",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_remove_all_deletes_installed_handler_directories",
+      "result": "failed as expected before production code: handler directories were missing from dry-run delete paths"
+    },
+    {
+      "evidence_ref": "EV-GREEN-AC1",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_remove_all_deletes_installed_handler_directories",
+      "result": "passed after remove_agent deleted and previewed handler roots"
+    },
+    {
+      "evidence_ref": "EV-RED-AC2",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_use_reinstalls_when_declared_handlers_change",
+      "result": "failed as expected before production code: the handler-only catalog change was skipped and new handlers were not installed"
+    },
+    {
+      "evidence_ref": "EV-GREEN-AC2",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_use_reinstalls_when_declared_handlers_change",
+      "result": "passed after cmd_use detected handler declaration drift"
+    },
+    {
+      "evidence_ref": "EV-FULL-FILE",
+      "command": "rm -rf /private/tmp/cl-du1x-xdg && XDG_DATA_HOME=/private/tmp/cl-du1x-xdg UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py",
+      "result": "135 passed"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "agent remove now deletes the exact per-harness <agent-name>-handlers directory and previews that deletion in dry-run output.",
+    "agent use now refreshes already-installed agents when declared handler targets differ from lockfile-recorded handler targets; non-agent primitives and agents with no declared or recorded handlers remain unaffected."
+  ],
+  "evidence_refs": [
+    "EV-RED-AC1",
+    "EV-GREEN-AC1",
+    "EV-RED-AC2",
+    "EV-GREEN-AC2",
+    "EV-FULL-FILE",
+    "EV-BD-LINT"
+  ]
+}
