@@ -700,13 +700,18 @@ def _install_with_deps(
         #   (b) the deployed dir content no longer matches the lockfile's
         #       content_sha256 ("local tamper" — e.g. someone ran a manual cp,
         #       a partial-write left bad files, or another tool overwrote it).
-        # Without these checks `use` silently no-ops in both cases, leaving
+        #   (c) an agent's declared private handler set changed while the
+        #       primary installed prompt file stayed byte-identical.
+        # Without these checks `use` silently no-ops in these cases, leaving
         # deployed files stale or broken.
         if is_already_installed(dep_name, repo_root, scope, dep_prim):
             upstream_status = _check_upstream_status_for_entry(
                 catalog, repo_root, scope, dep_prim, dep_name
             )
             local_drift = _has_local_tamper(repo_root, scope, dep_prim, dep_name)
+            handler_drift = _has_agent_handler_declaration_drift(
+                catalog, repo_root, scope, dep_prim, dep_name, harness
+            )
             if upstream_status == "behind":
                 if not use_json:
                     print(
@@ -718,6 +723,13 @@ def _install_with_deps(
                 if not use_json:
                     print(
                         f"[refresh] {dep_prim}:{dep_name} deployed files diverge from lockfile (local tamper) — reinstalling",
+                        file=sys.stderr,
+                    )
+                # Fall through to reinstall
+            elif handler_drift:
+                if not use_json:
+                    print(
+                        f"[refresh] {dep_prim}:{dep_name} declared handlers changed — reinstalling",
                         file=sys.stderr,
                     )
                 # Fall through to reinstall
@@ -826,6 +838,91 @@ def _has_local_tamper(
         # Best-effort: any failure means we don't know — be conservative and
         # don't trigger a refresh just because the check itself broke.
         return False
+
+
+def _has_agent_handler_declaration_drift(
+    catalog: dict,
+    repo_root: Path,
+    scope: str,
+    primitive: str,
+    name: str,
+    harness: str,
+) -> bool:
+    """Return True iff declared agent handlers differ from lockfile records."""
+    if primitive != "agent":
+        return False
+
+    try:
+        from lib.installers.agent import (
+            _declared_handler_paths,
+            _handler_install_target,
+            _resolve_agent_targets,
+        )
+        from lib.lockfile import get_entry
+
+        entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+        agent_name = entry.get("name", name)
+        declared_handlers = _declared_handler_paths(entry, agent_name)
+
+        lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+        if not lockfile_path.exists():
+            return False
+        lock_data = load_lockfile(lockfile_path)
+        lock_entry = get_entry(lock_data, name, primitive)
+        if lock_entry is None:
+            return False
+
+        prim = get_primitive("agent")
+        targets, _harness_missing = _resolve_agent_targets(
+            catalog=catalog,
+            entry=entry,
+            prim=prim,
+            agent_name=agent_name,
+            repo_root=repo_root,
+            scope=scope,
+            harness=harness,
+        )
+
+        expected_handlers: set[str] = set()
+        handler_roots: list[Path] = []
+        for target in targets:
+            agent_base = target["install_target"].parent
+            handler_root = agent_base / f"{agent_name}-handlers"
+            handler_roots.append(handler_root)
+            for handler_path in declared_handlers:
+                expected_handlers.add(
+                    str(_handler_install_target(agent_base, agent_name, handler_path))
+                )
+
+        recorded_handlers = _recorded_agent_handler_targets(
+            lock_entry,
+            handler_roots,
+            repo_root,
+        )
+        return expected_handlers != recorded_handlers
+    except Exception:
+        # Best-effort like the upstream/local-tamper checks: if handler drift
+        # detection itself cannot run, do not force a reinstall.
+        return False
+
+
+def _recorded_agent_handler_targets(
+    lock_entry: dict,
+    handler_roots: list[Path],
+    repo_root: Path,
+) -> set[str]:
+    """Return lockfile-recorded handler targets under the requested harness roots."""
+    recorded: set[str] = set()
+    for bridge in lock_entry.get("bridge_symlinks", []) or []:
+        raw_target = str(bridge).split(" -> ", 1)[0].strip()
+        if not raw_target:
+            continue
+        path = Path(raw_target.rstrip("/"))
+        if not path.is_absolute():
+            path = repo_root / path
+        if any(path.is_relative_to(root) for root in handler_roots):
+            recorded.add(str(path))
+    return recorded
 
 
 def _dispatch_use(
