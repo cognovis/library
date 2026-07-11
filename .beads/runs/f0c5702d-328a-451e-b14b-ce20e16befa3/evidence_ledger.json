@@ -1,0 +1,164 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ii7a",
+  "commands": [
+    {
+      "command": "bd prime",
+      "purpose": "Load the repository bead workflow rules before implementation.",
+      "exit_code": 0,
+      "observed_result": "Beads workflow context loaded."
+    },
+    {
+      "command": "bd show CL-ii7a --json",
+      "purpose": "Confirm current bead scope, MoC, and in-progress status.",
+      "exit_code": 0,
+      "observed_result": "Bead was narrowed to local fixture proof in library/meta and was already in_progress."
+    },
+    {
+      "command": "bd update CL-ii7a --claim",
+      "purpose": "Claim the bead before implementation.",
+      "exit_code": 1,
+      "observed_result": "Claim rejected because the bead was already claimed by session-Solaris.local-75077; implementation continued under the existing in-progress claim."
+    },
+    {
+      "command": "bd lint CL-ii7a",
+      "purpose": "Validate bead template quality before editing.",
+      "exit_code": 0,
+      "observed_result": "No template warnings found."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --extra dev pytest tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_validates_missing_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_rejects_handler_path_traversal tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_dry_run_includes_declared_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_copies_declared_handler_assets -q",
+      "purpose": "Initial red unit gate attempt.",
+      "exit_code": 1,
+      "observed_result": "The command could not complete because uv attempted to download missing dev dependency pluggy with network disabled. Rerun used the existing project .venv with --no-sync."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_validates_missing_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_rejects_handler_path_traversal tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_dry_run_includes_declared_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_copies_declared_handler_assets -q",
+      "purpose": "Mandatory red unit gate for handler validation, dry-run operations, and copy behavior.",
+      "exit_code": 1,
+      "observed_result": "Expected red: 4 failed. Missing/traversal handler installs returned success, dry-run lacked vendor_handler operations, and handler files were absent."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_validate_library.py::test_schema_declares_agent_handlers_field tests/test_validate_library.py::test_schema_accepts_agent_handlers_field -q",
+      "purpose": "Mandatory red schema gate.",
+      "exit_code": 1,
+      "observed_result": "Expected red: schema declaration test failed because handlers was not present in agent_entry; acceptance validation test already passed under the loose existing schema."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a bash tests/smoke/install-agent-with-handlers.sh",
+      "purpose": "Mandatory red smoke gate.",
+      "exit_code": 1,
+      "observed_result": "Expected red: prompts installed, but all three handler files were missing; summary 5 passed, 3 failed."
+    },
+    {
+      "command": "git commit -m \"test(CL-ii7a): red - cover agent handler assets\"",
+      "purpose": "Commit red tests before production changes.",
+      "exit_code": 0,
+      "observed_result": "Created commit 968888d."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_validates_missing_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_rejects_handler_path_traversal tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_dry_run_includes_declared_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_copies_declared_handler_assets -q",
+      "purpose": "First green unit attempt after production implementation.",
+      "exit_code": 1,
+      "observed_result": "Handler behavior passed, but the copy test exposed a test harness bug: yaml was not imported before reading the lockfile."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_validates_missing_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_rejects_handler_path_traversal tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_dry_run_includes_declared_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_copies_declared_handler_assets -q",
+      "purpose": "Green unit gate after fixing the test import.",
+      "exit_code": 0,
+      "observed_result": "4 passed."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_validate_library.py::test_schema_declares_agent_handlers_field tests/test_validate_library.py::test_schema_accepts_agent_handlers_field -q",
+      "purpose": "Green schema gate after adding handlers to agent_entry.",
+      "exit_code": 0,
+      "observed_result": "2 passed."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a bash tests/smoke/install-agent-with-handlers.sh",
+      "purpose": "Green clean-install smoke gate.",
+      "exit_code": 0,
+      "observed_result": "8 passed, 0 failed."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py tests/test_validate_library.py -q",
+      "purpose": "First full changed-file test subset attempt.",
+      "exit_code": 1,
+      "observed_result": "Three pre-existing installer tests failed because subprocesses defaulted to /Users/malte/.local/share/library, which is outside the writable sandbox."
+    },
+    {
+      "command": "XDG_DATA_HOME=/tmp/xdg-data-cl-ii7a-tests UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py tests/test_validate_library.py -q",
+      "purpose": "Full changed-file test subset with writable test cache.",
+      "exit_code": 0,
+      "observed_result": "157 passed."
+    },
+    {
+      "command": "XDG_DATA_HOME=/tmp/xdg-data-cl-ii7a-validate UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync python scripts/validate-library.py",
+      "purpose": "Validate the repository library.yaml against the updated schema.",
+      "exit_code": 0,
+      "observed_result": "PASS: library.yaml is valid against docs/schema/library.schema.json."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync python -m py_compile scripts/lib/installers/agent.py scripts/validate-library.py scripts/library.py tests/test_library_py_installers.py tests/test_validate_library.py",
+      "purpose": "Compile check for touched Python code and related CLI modules.",
+      "exit_code": 0,
+      "observed_result": "Compile check exited 0."
+    },
+    {
+      "command": "bash -n tests/smoke/install-agent-with-handlers.sh",
+      "purpose": "Syntax check the new smoke script.",
+      "exit_code": 0,
+      "observed_result": "Syntax check exited 0."
+    },
+    {
+      "command": "git diff --check",
+      "purpose": "Whitespace check before the green commit.",
+      "exit_code": 0,
+      "observed_result": "Whitespace check exited 0."
+    },
+    {
+      "command": "git commit -m \"feat(CL-ii7a): green - install agent handler assets\"",
+      "purpose": "Commit the green implementation after verification.",
+      "exit_code": 0,
+      "observed_result": "Created commit c75d1b8."
+    },
+    {
+      "command": "BEADS_RUNTIME=/Users/malte/.agents/skills/beads UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync python - <<'PY' ... insert_agent_call(...) ... PY",
+      "purpose": "Attempt the requested p5-impl metrics insert for this run.",
+      "exit_code": 1,
+      "observed_result": "Failed with sqlite3.OperationalError: attempt to write a readonly database. The metrics DB is outside this sandbox's writable roots."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Entire repository test suite",
+      "reason": "The bead explicitly required running only changed-file/targeted tests, not the entire repo suite. The installer and validator test files plus smoke covered all changed behavior."
+    },
+    {
+      "check": "External dependency or real-world agent migration",
+      "reason": "Explicitly out of scope. The proof uses only local committed fixtures and no external resources."
+    },
+    {
+      "check": "Successful metrics insert with exact token counters",
+      "reason": "The current harness did not expose token counters, and the beads metrics SQLite database was readonly in this sandbox. The insert command was attempted and failed with a readonly database error."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/f0c5702d-328a-451e-b14b-ce20e16befa3/implementation_manifest.json",
+      "description": "Implementation manifest for CL-ii7a."
+    },
+    {
+      "path": ".beads/runs/f0c5702d-328a-451e-b14b-ce20e16befa3/evidence_ledger.json",
+      "description": "Evidence ledger for CL-ii7a."
+    },
+    {
+      "path": "tests/smoke/install-agent-with-handlers.sh",
+      "description": "Clean-install smoke test proving local fixture agent handler installation."
+    },
+    {
+      "path": "tests/installers/fixtures/agent-with-handlers/",
+      "description": "Local fixture agent, Codex source, and private handler script."
+    }
+  ]
+}
