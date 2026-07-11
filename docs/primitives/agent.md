@@ -64,6 +64,14 @@ When `library agent use my-agent` runs, the installer:
    opencode).
 3. On reinstall, clears the `my-agent-handlers/` directory first, so handlers
    that were removed or renamed since the last install do not linger on disk.
+4. Detects handler-only catalog changes (declared handlers set changed while the
+   prompt file is byte-identical) and triggers a reinstall, so handler updates
+   are applied even when the prompt itself has not changed.
+
+When `library agent remove my-agent` runs, the installer deletes the
+`my-agent-handlers/` directory for every harness alongside the prompt file,
+leaving no orphaned handler files. Agent names containing `/`, `\`, or `..`
+are rejected before any path is constructed.
 
 Handlers that are shared across multiple agents should be cataloged as
 first-class skills or scripts instead.
