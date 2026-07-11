@@ -2653,16 +2653,16 @@ library:
     - agent:quick-fix
     - skill:bead-reviewer
     handlers:
-    - wave-orchestrator-handlers/_load_hyphen_module.py
-    - wave-orchestrator-handlers/arch-signal-detect.py
-    - wave-orchestrator-handlers/wave-classify.py
-    - wave-orchestrator-handlers/wave-completion.py
-    - wave-orchestrator-handlers/wave-dispatch.py
-    - wave-orchestrator-handlers/wave-lock.py
-    - wave-orchestrator-handlers/wave-preflight.py
-    - wave-orchestrator-handlers/wave-retire.py
-    - wave-orchestrator-handlers/wave-status.py
-    - wave-orchestrator-handlers/wave_helpers.py
+    - wave-orchestrator-scripts/_load_hyphen_module.py
+    - wave-orchestrator-scripts/arch-signal-detect.py
+    - wave-orchestrator-scripts/wave-classify.py
+    - wave-orchestrator-scripts/wave-completion.py
+    - wave-orchestrator-scripts/wave-dispatch.py
+    - wave-orchestrator-scripts/wave-lock.py
+    - wave-orchestrator-scripts/wave-preflight.py
+    - wave-orchestrator-scripts/wave-retire.py
+    - wave-orchestrator-scripts/wave-status.py
+    - wave-orchestrator-scripts/wave_helpers.py
     tags:
     - origin:original
     - tier:domain
