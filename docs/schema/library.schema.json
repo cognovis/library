@@ -1073,6 +1073,14 @@
                   "type": "string"
                 }
               }
+            },
+            "handlers": {
+              "description": "Private handler asset paths owned by this agent. Paths are relative to each harness source file's directory and are installed under <agents-base>/<agent-name>-handlers/.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
             }
           }
         }

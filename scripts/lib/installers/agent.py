@@ -112,6 +112,7 @@ def install_agent(
     # 1. Catalog lookup
     entry = lookup_entry(catalog, "agent", name)
     agent_name = entry.get("name", name)
+    handler_paths = _declared_handler_paths(entry, agent_name)
 
     # 2. Resolve sources and install targets for the requested harness.
     targets, harness_missing = _resolve_agent_targets(
@@ -128,7 +129,9 @@ def install_agent(
     # 3. Dry-run mode.
     if dry_run:
         ops: list[dict[str, Any]] = []
+        target_paths: list[str] = []
         for target in targets:
+            target_paths.append(str(target["install_target"]))
             ops.extend(
                 plan_cache_writes(
                     primitive_type="agent",
@@ -139,6 +142,21 @@ def install_agent(
                     bridge_path=None,
                 )
             )
+            for handler_path in handler_paths:
+                handler_target = _handler_install_target(
+                    target["install_target"].parent,
+                    agent_name,
+                    handler_path,
+                )
+                target_paths.append(str(handler_target))
+                ops.append({
+                    "operation": "vendor_handler",
+                    "path": str(handler_target),
+                    "details": (
+                        f"install private handler asset '{handler_path}' "
+                        f"to {handler_target}"
+                    ),
+                })
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append({
             "operation": "write_lockfile",
@@ -149,7 +167,7 @@ def install_agent(
             ops,
             summary=f"Would install agent '{agent_name}' to "
                     + ", ".join(str(t["install_target"]) for t in targets),
-            target_paths=[str(t["install_target"]) for t in targets],
+            target_paths=target_paths,
             harness_routing=harness,
             conflict_policy="overwrite",
             lockfile_changes=[
@@ -175,6 +193,11 @@ def install_agent(
         parsed = parse_source(target["source"])
         source_file, source_commit, temp_root = _fetch_agent_source(parsed, agent_name)
         try:
+            handler_assets = _validate_handler_assets(
+                source_file.parent,
+                handler_paths,
+                agent_name,
+            )
             cache_path = compute_cache_path(
                 "agent",
                 marketplace,
@@ -219,6 +242,21 @@ def install_agent(
 
             shutil.copy2(str(cached_file), str(install_target))
             checksum = compute_checksum(cached_file)
+            installed_handlers: list[dict[str, Path]] = []
+            for handler_asset in handler_assets:
+                handler_cache_path = cache_path / "handler-assets" / handler_asset["relative_path"]
+                _copy_handler_asset(handler_asset["source_path"], handler_cache_path)
+                handler_target = _handler_install_target(
+                    install_target.parent,
+                    agent_name,
+                    handler_asset["relative_path"],
+                )
+                _copy_handler_asset(handler_cache_path, handler_target)
+                installed_handlers.append({
+                    "source_path": handler_asset["source_path"],
+                    "cache_path": handler_cache_path,
+                    "install_target": handler_target,
+                })
             installed.append({
                 "harness": target["harness"],
                 "source": target["source"],
@@ -227,6 +265,7 @@ def install_agent(
                 "cached_file": cached_file,
                 "install_target": install_target,
                 "checksum": checksum,
+                "handlers": installed_handlers,
             })
         finally:
             _cleanup_source(temp_root)
@@ -243,6 +282,11 @@ def install_agent(
         for item in installed
         if item is not primary
     ]
+    for item in installed:
+        bridge_symlinks.extend(
+            f"{handler['install_target']} -> {handler['cache_path']}"
+            for handler in item["handlers"]
+        )
 
     lockfile_entry = make_entry(
         name=agent_name,
@@ -272,6 +316,10 @@ def install_agent(
                     "harness": item["harness"],
                     "path": str(item["install_target"]),
                     "source_commit": item["source_commit"],
+                    "handlers": [
+                        str(handler["install_target"])
+                        for handler in item["handlers"]
+                    ],
                 }
                 for item in installed
             ],
@@ -286,6 +334,85 @@ def install_agent(
     if harness_missing:
         result["harness_missing"] = harness_missing
     return result
+
+
+def _declared_handler_paths(entry: dict, agent_name: str) -> list[Path]:
+    """Return validated relative handler paths declared by an agent entry."""
+    raw_handlers = entry.get("handlers", [])
+    if raw_handlers is None:
+        raw_handlers = []
+    if not isinstance(raw_handlers, list):
+        raise InstallError(f"Agent '{agent_name}' handlers must be a list of relative paths.")
+
+    handlers: list[Path] = []
+    for raw_handler in raw_handlers:
+        if not isinstance(raw_handler, str) or not raw_handler.strip():
+            raise InstallError(
+                f"Agent '{agent_name}' handlers must contain non-empty relative paths."
+            )
+        handler_path = Path(raw_handler)
+        if handler_path.is_absolute():
+            raise InstallError(
+                f"Handler asset '{raw_handler}' for agent '{agent_name}' must be a relative path."
+            )
+        if any(part == ".." for part in handler_path.parts):
+            raise InstallError(
+                f"Handler asset '{raw_handler}' for agent '{agent_name}' resolves outside "
+                "the agent source directory."
+            )
+        handlers.append(handler_path)
+    return handlers
+
+
+def _validate_handler_assets(
+    source_dir: Path,
+    handler_paths: list[Path],
+    agent_name: str,
+) -> list[dict[str, Path]]:
+    """Validate declared handler assets and return source paths to copy."""
+    resolved_source_dir = source_dir.resolve()
+    handler_assets: list[dict[str, Path]] = []
+    for handler_path in handler_paths:
+        resolved_handler = (resolved_source_dir / handler_path).resolve()
+        if not resolved_handler.is_relative_to(resolved_source_dir):
+            raise InstallError(
+                f"Handler asset '{handler_path}' for agent '{agent_name}' resolves outside "
+                "the agent source directory."
+            )
+        if not resolved_handler.exists():
+            raise InstallError(
+                f"Handler asset '{handler_path}' for agent '{agent_name}' does not exist."
+            )
+        handler_assets.append({
+            "relative_path": handler_path,
+            "source_path": resolved_handler,
+        })
+    return handler_assets
+
+
+def _handler_install_target(
+    agent_base: Path,
+    agent_name: str,
+    handler_path: Path,
+) -> Path:
+    """Return the harness-native install target for a private handler asset."""
+    return agent_base / f"{agent_name}-handlers" / handler_path
+
+
+def _copy_handler_asset(source_path: Path, install_target: Path) -> None:
+    """Copy a private handler file or directory to a clean target path."""
+    install_target.parent.mkdir(parents=True, exist_ok=True)
+    if install_target.is_symlink():
+        install_target.unlink()
+    elif install_target.is_dir():
+        shutil.rmtree(str(install_target))
+    elif install_target.exists():
+        install_target.unlink()
+
+    if source_path.is_dir():
+        shutil.copytree(str(source_path), str(install_target))
+    else:
+        shutil.copy2(str(source_path), str(install_target))
 
 
 def _resolve_agent_targets(
