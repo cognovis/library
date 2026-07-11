@@ -797,6 +797,92 @@ class TestDryRunContractUniformity:
         for handler_target in expected_handler_targets:
             assert str(handler_target) in bridge_text
 
+    def test_agent_remove_all_deletes_installed_handler_directories(
+        self,
+        agent_handlers_project: Path,
+        tmp_path: Path,
+    ):
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+
+        install_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+            env=env,
+        )
+        assert install_result.returncode == 0, install_result.stderr
+
+        handler_roots = [
+            agent_handlers_project / ".claude" / "agents" / "handler-agent-handlers",
+            agent_handlers_project / ".codex" / "agents" / "handler-agent-handlers",
+            agent_handlers_project / ".opencode" / "agents" / "handler-agent-handlers",
+        ]
+        for handler_root in handler_roots:
+            assert (handler_root / "handlers" / "fixture-handler.sh").exists()
+
+        dry_run_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+            env=env,
+        )
+        assert dry_run_result.returncode == 0, dry_run_result.stderr
+        dry_run_data = json.loads(dry_run_result.stdout)
+        delete_paths = {
+            op["path"]
+            for op in dry_run_data["operations"]
+            if op["operation"] == "delete"
+        }
+
+        remove_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+            env=env,
+        )
+        assert remove_result.returncode == 0, remove_result.stderr
+        remove_data = json.loads(remove_result.stdout)
+        removed_files = set(remove_data["data"]["removed_files"])
+
+        missing_dry_run_paths = {str(root) for root in handler_roots} - delete_paths
+        remaining_handler_roots = [root for root in handler_roots if root.exists()]
+        missing_removed_files = {str(root) for root in handler_roots} - removed_files
+
+        assert not missing_dry_run_paths
+        assert not remaining_handler_roots
+        assert not missing_removed_files
+
     def test_reinstall_agent_removes_stale_handler_assets(
         self,
         tmp_path: Path,
