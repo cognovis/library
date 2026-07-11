@@ -91,7 +91,9 @@ class TestInstallMcp(unittest.TestCase):
         self.assertIn("open-brain", data["mcpServers"])
         entry = data["mcpServers"]["open-brain"]
         self.assertEqual(entry.get("_origin"), "library:mcp:open-brain")
-        self.assertEqual(entry.get("command"), "open-brain")
+        self.assertEqual(entry.get("type"), "http")
+        self.assertEqual(entry.get("url"), "https://open-brain.sussdorff.org/mcp")
+        self.assertNotIn("token=", entry.get("url", ""))
 
     # --- AK D3: opencode writes to mcp map ---
 
@@ -105,6 +107,11 @@ class TestInstallMcp(unittest.TestCase):
         self.assertIn("mcp", data)
         self.assertIn("open-brain", data["mcp"])
         self.assertEqual(data["mcp"]["open-brain"]["_origin"], "library:mcp:open-brain")
+        self.assertEqual(data["mcp"]["open-brain"]["type"], "remote")
+        self.assertEqual(
+            data["mcp"]["open-brain"]["url"],
+            "https://open-brain.sussdorff.org/mcp",
+        )
 
     # --- AK D4: codex writes TOML table with _origin tag ---
 
@@ -125,6 +132,11 @@ class TestInstallMcp(unittest.TestCase):
         self.assertEqual(
             data["mcp_servers"]["open-brain"]["_origin"], "library:mcp:open-brain"
         )
+        self.assertEqual(
+            data["mcp_servers"]["open-brain"]["url"],
+            "https://open-brain.sussdorff.org/mcp",
+        )
+        self.assertNotIn("token=", data["mcp_servers"]["open-brain"]["url"])
 
     # --- AK D5: idempotent re-install ---
 

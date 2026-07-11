@@ -58,7 +58,7 @@ These repos contain configuration and skill definitions. Runtime state, caches, 
 
 | Path pattern | Category | Action | Reason |
 |---|---|---|---|
-| `config.toml` | machine-specific | gitignore | Chezmoi-rendered from a 1Password-backed template; gitignored to prevent committing secrets |
+| `config.toml` | machine-specific | gitignore | Unmanaged local Codex configuration. Open-Brain is registered as a credential-free MCP URL and OAuth session state is owned by Codex; chezmoi does not render this file or manage its credentials. |
 | `AGENTS.md` | config | commit | Agent definitions |
 | `RTK.md` | config | commit | Runtime knowledge |
 | `hooks.json` | config | commit | Hook definitions |
@@ -111,6 +111,13 @@ These repos contain configuration and skill definitions. Runtime state, caches, 
 - `~/.cache/` — tool caches that should never be committed
 - `~/.local/share/` — application data for tools that follow XDG conventions
 - `~/.config/` — application config that is not chezmoi-managed
+
+`~/.codex/config.toml` is an explicit exception to the XDG recommendation: Codex
+owns it at its native location. The Library MCP installer may update the
+`mcp_servers` table, but neither the Codex chezmoi external nor a secret template
+owns the file. Open-Brain authentication is completed with `codex mcp login
+open-brain`; the MCP entry contains only the clean HTTPS endpoint. Claude Code
+uses the equivalent HTTP MCP registration and `claude mcp login open-brain`.
 
 The beads Dolt database and server state live under `~/.claude/.beads/` which has its own `.gitignore` that excludes runtime files. The beads config (`config.yaml`) and templates are tracked.
 

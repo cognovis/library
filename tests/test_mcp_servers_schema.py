@@ -108,7 +108,7 @@ def test_mcp_servers_section_accepted():
                 "capabilities": {
                     "stateless": True,
                     "streaming": False,
-                    "auth": "token",
+                    "auth": "oauth",
                 },
                 "install": {
                     "cli": {
@@ -135,7 +135,7 @@ def test_mcp_server_requires_name():
         "mcp_servers": [
             {
                 "description": "Missing name field",
-                "coding_strategy": "cli",
+                "coding_strategy": "mcp",
             }
         ]
     })
@@ -286,7 +286,7 @@ def test_full_example_from_bead_description():
                 "capabilities": {
                     "stateless": True,
                     "streaming": False,
-                    "auth": "token",
+                    "auth": "oauth",
                 },
                 "install": {
                     "cli": {
@@ -295,16 +295,22 @@ def test_full_example_from_bead_description():
                     },
                     "mcp": {
                         "claude_code": {
-                            "config_path": "~/.claude/settings.json",
-                            "snippet": {"type": "stdio", "command": "open-brain"},
+                            "config_path": "~/.claude.json",
+                            "snippet": {
+                                "type": "http",
+                                "url": "https://open-brain.sussdorff.org/mcp",
+                            },
                         },
                         "codex": {
                             "config_path": "~/.codex/config.toml",
-                            "snippet": {"command": "open-brain"},
+                            "snippet": {"url": "https://open-brain.sussdorff.org/mcp"},
                         },
                         "opencode": {
                             "config_path": "~/.config/opencode/opencode.json",
-                            "snippet": {"command": "open-brain"},
+                            "snippet": {
+                                "type": "remote",
+                                "url": "https://open-brain.sussdorff.org/mcp",
+                            },
                         },
                         "claude_ai": {
                             "install_url": "https://claude.ai/example",
