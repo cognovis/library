@@ -980,6 +980,92 @@ class TestDryRunContractUniformity:
         assert keep_handler.exists()
         assert not stale_handler.exists()
 
+    def test_agent_use_reinstalls_when_declared_handlers_change(
+        self,
+        tmp_path: Path,
+    ):
+        source_dir = tmp_path / "handler-change-source"
+        (source_dir / "handlers").mkdir(parents=True)
+        (source_dir / "handler-agent.md").write_text(
+            "---\nname: handler-agent\n---\n# Handler Agent\n"
+        )
+        (source_dir / "handler-agent.toml").write_text('name = "handler-agent"\n')
+        (source_dir / "handlers" / "old-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho OLD\n"
+        )
+        (source_dir / "handlers" / "new-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho NEW\n"
+        )
+
+        project = tmp_path / "handler-change-project"
+        project.mkdir()
+        _write_agent_handler_project(
+            project / "library.yaml",
+            source_dir,
+            ["handlers/old-handler.sh"],
+        )
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+
+        first_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+            env=env,
+        )
+        assert first_result.returncode == 0, first_result.stderr
+
+        handler_roots = [
+            project / ".claude" / "agents" / "handler-agent-handlers",
+            project / ".codex" / "agents" / "handler-agent-handlers",
+            project / ".opencode" / "agents" / "handler-agent-handlers",
+        ]
+        old_handler_targets = [
+            root / "handlers" / "old-handler.sh"
+            for root in handler_roots
+        ]
+        new_handler_targets = [
+            root / "handlers" / "new-handler.sh"
+            for root in handler_roots
+        ]
+        assert all(path.exists() for path in old_handler_targets)
+        assert not any(path.exists() for path in new_handler_targets)
+
+        _write_agent_handler_project(
+            project / "library.yaml",
+            source_dir,
+            ["handlers/new-handler.sh"],
+        )
+
+        second_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+            env=env,
+        )
+        assert second_result.returncode == 0, second_result.stderr
+
+        assert all(path.exists() for path in new_handler_targets)
+        assert not any(path.exists() for path in old_handler_targets)
+        assert (
+            "[refresh] agent:handler-agent declared handlers changed"
+            in second_result.stderr
+        )
+
     def test_library_yaml_declares_opencode_agent_default_dirs(self):
         catalog = LIBRARY_MODULE.load_catalog(REPO_ROOT)
         agent_dirs = {
