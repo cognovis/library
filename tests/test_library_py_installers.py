@@ -797,6 +797,92 @@ class TestDryRunContractUniformity:
         for handler_target in expected_handler_targets:
             assert str(handler_target) in bridge_text
 
+    def test_agent_remove_all_deletes_installed_handler_directories(
+        self,
+        agent_handlers_project: Path,
+        tmp_path: Path,
+    ):
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+
+        install_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+            env=env,
+        )
+        assert install_result.returncode == 0, install_result.stderr
+
+        handler_roots = [
+            agent_handlers_project / ".claude" / "agents" / "handler-agent-handlers",
+            agent_handlers_project / ".codex" / "agents" / "handler-agent-handlers",
+            agent_handlers_project / ".opencode" / "agents" / "handler-agent-handlers",
+        ]
+        for handler_root in handler_roots:
+            assert (handler_root / "handlers" / "fixture-handler.sh").exists()
+
+        dry_run_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+            env=env,
+        )
+        assert dry_run_result.returncode == 0, dry_run_result.stderr
+        dry_run_data = json.loads(dry_run_result.stdout)
+        delete_paths = {
+            op["path"]
+            for op in dry_run_data["operations"]
+            if op["operation"] == "delete"
+        }
+
+        remove_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "remove",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+            env=env,
+        )
+        assert remove_result.returncode == 0, remove_result.stderr
+        remove_data = json.loads(remove_result.stdout)
+        removed_files = set(remove_data["data"]["removed_files"])
+
+        missing_dry_run_paths = {str(root) for root in handler_roots} - delete_paths
+        remaining_handler_roots = [root for root in handler_roots if root.exists()]
+        missing_removed_files = {str(root) for root in handler_roots} - removed_files
+
+        assert not missing_dry_run_paths
+        assert not remaining_handler_roots
+        assert not missing_removed_files
+
     def test_reinstall_agent_removes_stale_handler_assets(
         self,
         tmp_path: Path,
@@ -893,6 +979,92 @@ class TestDryRunContractUniformity:
         assert second["status"] == "ok", second
         assert keep_handler.exists()
         assert not stale_handler.exists()
+
+    def test_agent_use_reinstalls_when_declared_handlers_change(
+        self,
+        tmp_path: Path,
+    ):
+        source_dir = tmp_path / "handler-change-source"
+        (source_dir / "handlers").mkdir(parents=True)
+        (source_dir / "handler-agent.md").write_text(
+            "---\nname: handler-agent\n---\n# Handler Agent\n"
+        )
+        (source_dir / "handler-agent.toml").write_text('name = "handler-agent"\n')
+        (source_dir / "handlers" / "old-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho OLD\n"
+        )
+        (source_dir / "handlers" / "new-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho NEW\n"
+        )
+
+        project = tmp_path / "handler-change-project"
+        project.mkdir()
+        _write_agent_handler_project(
+            project / "library.yaml",
+            source_dir,
+            ["handlers/old-handler.sh"],
+        )
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+
+        first_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+            env=env,
+        )
+        assert first_result.returncode == 0, first_result.stderr
+
+        handler_roots = [
+            project / ".claude" / "agents" / "handler-agent-handlers",
+            project / ".codex" / "agents" / "handler-agent-handlers",
+            project / ".opencode" / "agents" / "handler-agent-handlers",
+        ]
+        old_handler_targets = [
+            root / "handlers" / "old-handler.sh"
+            for root in handler_roots
+        ]
+        new_handler_targets = [
+            root / "handlers" / "new-handler.sh"
+            for root in handler_roots
+        ]
+        assert all(path.exists() for path in old_handler_targets)
+        assert not any(path.exists() for path in new_handler_targets)
+
+        _write_agent_handler_project(
+            project / "library.yaml",
+            source_dir,
+            ["handlers/new-handler.sh"],
+        )
+
+        second_result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+            env=env,
+        )
+        assert second_result.returncode == 0, second_result.stderr
+
+        assert all(path.exists() for path in new_handler_targets)
+        assert not any(path.exists() for path in old_handler_targets)
+        assert (
+            "[refresh] agent:handler-agent declared handlers changed"
+            in second_result.stderr
+        )
 
     def test_library_yaml_declares_opencode_agent_default_dirs(self):
         catalog = LIBRARY_MODULE.load_catalog(REPO_ROOT)
@@ -1062,6 +1234,44 @@ class TestDryRunContractUniformity:
         assert not claude_target.exists()
         assert not codex_target.exists()
         assert not opencode_target.exists()
+
+    @pytest.mark.parametrize("unsafe_name", ["../shared", "..", "a/b", "a\\b", "sub/agent"])
+    def test_agent_remove_rejects_unsafe_name_without_deleting(
+        self,
+        tmp_path: Path,
+        unsafe_name: str,
+    ):
+        """Regression (CL-du1x codex finding): remove_agent() must refuse a name
+        that is not a single safe path component (e.g. '../shared') instead of
+        interpolating it into handler_root and letting shutil.rmtree() delete a
+        directory outside the per-harness agent handler directory.
+        """
+        # Importing here mirrors library.py's `from lib.installers.agent import ...`
+        # wiring; LIBRARY_MODULE has already inserted scripts/ onto sys.path.
+        from lib.installers.agent import remove_agent
+
+        # A sentinel directory that a path-traversal name could otherwise target.
+        # It must survive the refused removal.
+        sentinel = tmp_path / "shared-handlers"
+        sentinel.mkdir()
+        keep = sentinel / "keep.txt"
+        keep.write_text("do not delete", encoding="utf-8")
+
+        result = remove_agent(
+            catalog={},
+            name=unsafe_name,
+            repo_root=tmp_path,
+            scope="project",
+            harness="claude_code",
+        )
+
+        # error_result envelope, consistent with the cursor-harness rejection.
+        assert result["status"] == "error"
+        assert "not a valid agent name" in result["message"]
+        # No filesystem mutation occurred.
+        assert sentinel.exists()
+        assert keep.exists()
+        assert keep.read_text(encoding="utf-8") == "do not delete"
 
     def test_cursor_skill_install_creates_cursor_bridge(self, cursor_project: Path):
         """AC2: --harness cursor installs skill with .cursor/skills/<name>/ bridge."""

@@ -1,0 +1,123 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-du1x",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "criterion": "library.py agent remove deletes the agent's installed handler asset directory for every harness, leaving no orphaned handler files",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "EV-RED-AC1",
+        "EV-GREEN-AC1",
+        "EV-FULL-FILE"
+      ]
+    },
+    {
+      "id": "AC2",
+      "criterion": "library.py agent use detects a handler-only catalog change (declared handlers set changed, prompt file byte-identical) and triggers a reinstall through the normal use path",
+      "status": "done",
+      "changed_files": [
+        "scripts/library.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "EV-RED-AC2",
+        "EV-GREEN-AC2",
+        "EV-FULL-FILE"
+      ]
+    },
+    {
+      "id": "AC3",
+      "criterion": "remove_agent() refuses an unsafe agent name (path separator or '..' traversal segment) with an error_result envelope before constructing or deleting any install-target or handler-root path, preventing shutil.rmtree() from escaping the per-harness agent handler directory (codex adversarial REGRESSION finding)",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "EV-CODEXFIX-AC3"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/lib/installers/agent.py",
+    "scripts/library.py",
+    "tests/test_library_py_installers.py",
+    ".beads/runs/d1864561-2ace-4056-b125-00fadd990eb2/implementation_manifest.json",
+    ".beads/runs/d1864561-2ace-4056-b125-00fadd990eb2/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "hash": "0ea24b8",
+      "message": "test(CL-du1x): red - agent remove deletes handler dirs"
+    },
+    {
+      "hash": "0d63df1",
+      "message": "feat(CL-du1x): green - remove agent handler dirs"
+    },
+    {
+      "hash": "77dcadf",
+      "message": "test(CL-du1x): red - handler catalog change reinstalls"
+    },
+    {
+      "hash": "5206783",
+      "message": "feat(CL-du1x): green - reinstall on handler catalog changes"
+    },
+    {
+      "hash": "codex-fix (single amended commit; self-hash not embeddable)",
+      "message": "fix(CL-du1x): address codex adversarial findings"
+    }
+  ],
+  "tests": [
+    {
+      "evidence_ref": "EV-RED-AC1",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_remove_all_deletes_installed_handler_directories",
+      "result": "failed as expected before production code: handler directories were missing from dry-run delete paths"
+    },
+    {
+      "evidence_ref": "EV-GREEN-AC1",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_remove_all_deletes_installed_handler_directories",
+      "result": "passed after remove_agent deleted and previewed handler roots"
+    },
+    {
+      "evidence_ref": "EV-RED-AC2",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_use_reinstalls_when_declared_handlers_change",
+      "result": "failed as expected before production code: the handler-only catalog change was skipped and new handlers were not installed"
+    },
+    {
+      "evidence_ref": "EV-GREEN-AC2",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_use_reinstalls_when_declared_handlers_change",
+      "result": "passed after cmd_use detected handler declaration drift"
+    },
+    {
+      "evidence_ref": "EV-FULL-FILE",
+      "command": "rm -rf /private/tmp/cl-du1x-xdg && XDG_DATA_HOME=/private/tmp/cl-du1x-xdg UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py",
+      "result": "135 passed"
+    },
+    {
+      "evidence_ref": "EV-CODEXFIX-AC3",
+      "command": "XDG_DATA_HOME=$(mktemp -d) uv run pytest tests/test_library_py_installers.py -k 'unsafe_name'",
+      "result": "5 passed, 135 deselected — remove_agent() returns an error_result and leaves the sentinel handler directory intact for names '../shared', '..', 'a/b', 'a\\\\b', and 'sub/agent'"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "agent remove now deletes the exact per-harness <agent-name>-handlers directory and previews that deletion in dry-run output.",
+    "agent use now refreshes already-installed agents when declared handler targets differ from lockfile-recorded handler targets; non-agent primitives and agents with no declared or recorded handlers remain unaffected.",
+    "agent remove now validates the agent name as a single safe path component before building install-target/handler-root paths; a name containing '/', '\\', or a '..' segment returns an error_result and performs no filesystem mutation, closing the shutil.rmtree() traversal blast-radius flagged by the codex adversarial review."
+  ],
+  "evidence_refs": [
+    "EV-RED-AC1",
+    "EV-GREEN-AC1",
+    "EV-RED-AC2",
+    "EV-GREEN-AC2",
+    "EV-FULL-FILE",
+    "EV-BD-LINT",
+    "EV-CODEXFIX-AC3"
+  ]
+}

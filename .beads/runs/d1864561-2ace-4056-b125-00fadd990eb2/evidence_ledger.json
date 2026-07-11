@@ -1,0 +1,138 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-du1x",
+  "commands": [
+    {
+      "id": "EV-BD-PRIME",
+      "command": "bd prime",
+      "purpose": "Load the project bead workflow instructions before implementation",
+      "exit_code": 0,
+      "observed": "Beads workflow context loaded successfully."
+    },
+    {
+      "id": "EV-BD-SHOW",
+      "command": "bd show CL-du1x --json",
+      "purpose": "Confirm bead status, acceptance criteria, and implementation context",
+      "exit_code": 0,
+      "observed": "CL-du1x was in_progress and matched the supplied acceptance criteria."
+    },
+    {
+      "id": "EV-RED-AC1",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_remove_all_deletes_installed_handler_directories",
+      "purpose": "RED gate for AC1 before production code",
+      "exit_code": 1,
+      "observed": "Failed for the expected reason: missing_dry_run_paths contained all three handler roots; real removal also ran before the assertion."
+    },
+    {
+      "id": "EV-COMMIT-RED-AC1",
+      "command": "git add tests/test_library_py_installers.py && git commit -m \"test(CL-du1x): red \\u2014 agent remove deletes handler dirs\"",
+      "purpose": "Commit the AC1 red test before production code",
+      "exit_code": 0,
+      "observed": "Created commit 0ea24b8."
+    },
+    {
+      "id": "EV-GREEN-AC1",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_remove_all_deletes_installed_handler_directories",
+      "purpose": "GREEN gate for AC1 after remove_agent handler-root deletion",
+      "exit_code": 0,
+      "observed": "1 passed, 133 deselected."
+    },
+    {
+      "id": "EV-COMMIT-GREEN-AC1",
+      "command": "git add scripts/lib/installers/agent.py && git commit -m \"feat(CL-du1x): green \\u2014 remove agent handler dirs\"",
+      "purpose": "Commit the AC1 production change",
+      "exit_code": 0,
+      "observed": "Created commit 0d63df1."
+    },
+    {
+      "id": "EV-RED-AC2",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_use_reinstalls_when_declared_handlers_change",
+      "purpose": "RED gate for AC2 before production code",
+      "exit_code": 1,
+      "observed": "Failed for the expected reason: new_handler_targets were not installed after a handler-only catalog change."
+    },
+    {
+      "id": "EV-COMMIT-RED-AC2",
+      "command": "git add tests/test_library_py_installers.py && git commit -m \"test(CL-du1x): red \\u2014 handler catalog change reinstalls\"",
+      "purpose": "Commit the AC2 red test before production code",
+      "exit_code": 0,
+      "observed": "Created commit 77dcadf."
+    },
+    {
+      "id": "EV-GREEN-AC2",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py -k test_agent_use_reinstalls_when_declared_handlers_change",
+      "purpose": "GREEN gate for AC2 after cmd_use handler drift detection",
+      "exit_code": 0,
+      "observed": "1 passed, 134 deselected."
+    },
+    {
+      "id": "EV-FULL-FILE-SANDBOX-FAIL",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py",
+      "purpose": "Initial full changed-file regression run",
+      "exit_code": 1,
+      "observed": "13 failures were sandbox/environment failures from installer cache writes under /Users/malte/.local/share/library, outside the writable roots; rerun used a writable XDG_DATA_HOME."
+    },
+    {
+      "id": "EV-FULL-FILE",
+      "command": "rm -rf /private/tmp/cl-du1x-xdg && XDG_DATA_HOME=/private/tmp/cl-du1x-xdg UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py",
+      "purpose": "Full changed-file regression run with writable installer cache",
+      "exit_code": 0,
+      "observed": "135 passed in tests/test_library_py_installers.py."
+    },
+    {
+      "id": "EV-COMMIT-GREEN-AC2",
+      "command": "git add scripts/library.py && git commit -m \"feat(CL-du1x): green \\u2014 reinstall on handler catalog changes\"",
+      "purpose": "Commit the AC2 production change after focused and file-level tests passed",
+      "exit_code": 0,
+      "observed": "Created commit 5206783."
+    },
+    {
+      "id": "EV-BD-LINT",
+      "command": "bd lint CL-du1x",
+      "purpose": "Check bead template/status hygiene",
+      "exit_code": 0,
+      "observed": "No template warnings found."
+    },
+    {
+      "id": "EV-GIT-LOG",
+      "command": "git log --oneline -5",
+      "purpose": "Capture implementation commit hashes",
+      "exit_code": 0,
+      "observed": "Latest four implementation commits: 5206783, 77dcadf, 0d63df1, 0ea24b8."
+    },
+    {
+      "id": "EV-CODEXFIX-AC3",
+      "command": "XDG_DATA_HOME=$(mktemp -d) uv run pytest tests/test_library_py_installers.py -k 'unsafe_name'",
+      "purpose": "Verify the codex REGRESSION fix: remove_agent() rejects an unsafe name before any deletion",
+      "exit_code": 0,
+      "observed": "5 passed, 135 deselected. New parametrized test test_agent_remove_rejects_unsafe_name_without_deleting proves the error_result envelope and that the sentinel handler directory survives for names '../shared', '..', 'a/b', 'a\\\\b', 'sub/agent'."
+    },
+    {
+      "id": "EV-CODEXFIX-REGRESSION",
+      "command": "XDG_DATA_HOME=$(mktemp -d) uv run pytest tests/test_library_py_installers.py -k 'unsafe_name or remove_all_deletes_installed_handler or remove_cursor_harness_rejected or remove_all_harness_includes_opencode' -v",
+      "purpose": "Confirm the name guard does not regress existing remove_agent happy-path and cursor-rejection behavior",
+      "exit_code": 0,
+      "observed": "8 passed, 132 deselected. Existing remove tests (handler dir deletion, cursor rejection, all-harness opencode target) still pass alongside the 5 new unsafe-name cases."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Repository-wide pytest suite",
+      "reason": "The bead explicitly constrained verification to tests for changed files and one full run of tests/test_library_py_installers.py."
+    },
+    {
+      "check": "Manual metrics insert_agent_call fallback",
+      "reason": "This Codex implementation run is expected to be recorded automatically by the codex-impl adapter when RUN_ID is set; no reliable token counters were exposed in-session for manual fallback values."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/d1864561-2ace-4056-b125-00fadd990eb2/implementation_manifest.json",
+      "description": "Implementation manifest for CL-du1x."
+    },
+    {
+      "path": ".beads/runs/d1864561-2ace-4056-b125-00fadd990eb2/evidence_ledger.json",
+      "description": "Evidence ledger for CL-du1x."
+    }
+  ]
+}

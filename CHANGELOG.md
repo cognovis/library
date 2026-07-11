@@ -4,6 +4,15 @@
 
 - *(agent installer)* Agent catalog entries can now declare a `handlers` field — an array of relative asset paths for private helper scripts owned by that agent. `library agent use` validates each path (rejects path traversal), copies the assets into a per-harness `<agent-name>-handlers/` directory alongside the installed prompt file, and clears the directory on reinstall so removed or renamed handlers never go stale. This lets deterministic helper scripts used by exactly one agent ship as agent-owned assets instead of requiring a separate public skill install.
 
+### Changed
+
+- *(agent installer)* `library agent remove` now deletes the agent's installed handler asset directory (`<agent-name>-handlers/`) for every harness, leaving no orphaned handler files after uninstall.
+- *(agent installer)* `library agent use` detects handler-only catalog changes (declared handlers set changed while the prompt file is byte-identical) and triggers a full reinstall, ensuring handler updates are applied even when the prompt is unchanged.
+
+### Fixed
+
+- *(agent installer)* `library agent remove` now rejects agent names containing `/`, `\`, or `..` before constructing any delete path, closing a path-traversal exposure introduced by the new handler-directory removal logic.
+
 ## [2026.07.0] - 2026-07-02
 
 ### Added
