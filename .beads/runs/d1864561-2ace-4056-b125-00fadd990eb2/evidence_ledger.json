@@ -99,6 +99,20 @@
       "purpose": "Capture implementation commit hashes",
       "exit_code": 0,
       "observed": "Latest four implementation commits: 5206783, 77dcadf, 0d63df1, 0ea24b8."
+    },
+    {
+      "id": "EV-CODEXFIX-AC3",
+      "command": "XDG_DATA_HOME=$(mktemp -d) uv run pytest tests/test_library_py_installers.py -k 'unsafe_name'",
+      "purpose": "Verify the codex REGRESSION fix: remove_agent() rejects an unsafe name before any deletion",
+      "exit_code": 0,
+      "observed": "5 passed, 135 deselected. New parametrized test test_agent_remove_rejects_unsafe_name_without_deleting proves the error_result envelope and that the sentinel handler directory survives for names '../shared', '..', 'a/b', 'a\\\\b', 'sub/agent'."
+    },
+    {
+      "id": "EV-CODEXFIX-REGRESSION",
+      "command": "XDG_DATA_HOME=$(mktemp -d) uv run pytest tests/test_library_py_installers.py -k 'unsafe_name or remove_all_deletes_installed_handler or remove_cursor_harness_rejected or remove_all_harness_includes_opencode' -v",
+      "purpose": "Confirm the name guard does not regress existing remove_agent happy-path and cursor-rejection behavior",
+      "exit_code": 0,
+      "observed": "8 passed, 132 deselected. Existing remove tests (handler dir deletion, cursor rejection, all-harness opencode target) still pass alongside the 5 new unsafe-name cases."
     }
   ],
   "skipped_checks": [

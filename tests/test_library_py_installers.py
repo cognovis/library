@@ -1235,6 +1235,44 @@ class TestDryRunContractUniformity:
         assert not codex_target.exists()
         assert not opencode_target.exists()
 
+    @pytest.mark.parametrize("unsafe_name", ["../shared", "..", "a/b", "a\\b", "sub/agent"])
+    def test_agent_remove_rejects_unsafe_name_without_deleting(
+        self,
+        tmp_path: Path,
+        unsafe_name: str,
+    ):
+        """Regression (CL-du1x codex finding): remove_agent() must refuse a name
+        that is not a single safe path component (e.g. '../shared') instead of
+        interpolating it into handler_root and letting shutil.rmtree() delete a
+        directory outside the per-harness agent handler directory.
+        """
+        # Importing here mirrors library.py's `from lib.installers.agent import ...`
+        # wiring; LIBRARY_MODULE has already inserted scripts/ onto sys.path.
+        from lib.installers.agent import remove_agent
+
+        # A sentinel directory that a path-traversal name could otherwise target.
+        # It must survive the refused removal.
+        sentinel = tmp_path / "shared-handlers"
+        sentinel.mkdir()
+        keep = sentinel / "keep.txt"
+        keep.write_text("do not delete", encoding="utf-8")
+
+        result = remove_agent(
+            catalog={},
+            name=unsafe_name,
+            repo_root=tmp_path,
+            scope="project",
+            harness="claude_code",
+        )
+
+        # error_result envelope, consistent with the cursor-harness rejection.
+        assert result["status"] == "error"
+        assert "not a valid agent name" in result["message"]
+        # No filesystem mutation occurred.
+        assert sentinel.exists()
+        assert keep.exists()
+        assert keep.read_text(encoding="utf-8") == "do not delete"
+
     def test_cursor_skill_install_creates_cursor_bridge(self, cursor_project: Path):
         """AC2: --harness cursor installs skill with .cursor/skills/<name>/ bridge."""
         result = subprocess.run(

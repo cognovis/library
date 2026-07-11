@@ -29,6 +29,18 @@
         "EV-GREEN-AC2",
         "EV-FULL-FILE"
       ]
+    },
+    {
+      "id": "AC3",
+      "criterion": "remove_agent() refuses an unsafe agent name (path separator or '..' traversal segment) with an error_result envelope before constructing or deleting any install-target or handler-root path, preventing shutil.rmtree() from escaping the per-harness agent handler directory (codex adversarial REGRESSION finding)",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "EV-CODEXFIX-AC3"
+      ]
     }
   ],
   "changed_files": [
@@ -54,6 +66,10 @@
     {
       "hash": "5206783",
       "message": "feat(CL-du1x): green - reinstall on handler catalog changes"
+    },
+    {
+      "hash": "codex-fix (single amended commit; self-hash not embeddable)",
+      "message": "fix(CL-du1x): address codex adversarial findings"
     }
   ],
   "tests": [
@@ -81,13 +97,19 @@
       "evidence_ref": "EV-FULL-FILE",
       "command": "rm -rf /private/tmp/cl-du1x-xdg && XDG_DATA_HOME=/private/tmp/cl-du1x-xdg UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_library_py_installers.py",
       "result": "135 passed"
+    },
+    {
+      "evidence_ref": "EV-CODEXFIX-AC3",
+      "command": "XDG_DATA_HOME=$(mktemp -d) uv run pytest tests/test_library_py_installers.py -k 'unsafe_name'",
+      "result": "5 passed, 135 deselected — remove_agent() returns an error_result and leaves the sentinel handler directory intact for names '../shared', '..', 'a/b', 'a\\\\b', and 'sub/agent'"
     }
   ],
   "external_resources": [],
   "scope_changes": [],
   "downstream_impacts": [
     "agent remove now deletes the exact per-harness <agent-name>-handlers directory and previews that deletion in dry-run output.",
-    "agent use now refreshes already-installed agents when declared handler targets differ from lockfile-recorded handler targets; non-agent primitives and agents with no declared or recorded handlers remain unaffected."
+    "agent use now refreshes already-installed agents when declared handler targets differ from lockfile-recorded handler targets; non-agent primitives and agents with no declared or recorded handlers remain unaffected.",
+    "agent remove now validates the agent name as a single safe path component before building install-target/handler-root paths; a name containing '/', '\\', or a '..' segment returns an error_result and performs no filesystem mutation, closing the shutil.rmtree() traversal blast-radius flagged by the codex adversarial review."
   ],
   "evidence_refs": [
     "EV-RED-AC1",
@@ -95,6 +117,7 @@
     "EV-RED-AC2",
     "EV-GREEN-AC2",
     "EV-FULL-FILE",
-    "EV-BD-LINT"
+    "EV-BD-LINT",
+    "EV-CODEXFIX-AC3"
   ]
 }

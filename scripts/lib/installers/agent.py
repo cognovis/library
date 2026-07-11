@@ -588,6 +588,29 @@ def _expand_agent_path(raw: str, home: Path, root: Path) -> Path:
     return root / raw
 
 
+def _is_safe_agent_name(name: str) -> bool:
+    """Return True when ``name`` is a single safe path component.
+
+    A safe agent name has no path separators ('/' or '\\') and is not a
+    '.'/'..' traversal segment, so it cannot escape the per-harness agent
+    directory when interpolated into install-target or handler-root paths
+    (e.g. ``base / f"{name}.md"`` or ``install_target.parent /
+    f"{name}-handlers"``). Guarding this prevents a removal name such as
+    ``../shared`` from causing ``shutil.rmtree()`` to delete a directory
+    outside the exact per-harness agent handler directory.
+    """
+    if not name or not name.strip():
+        return False
+    if "/" in name or "\\" in name:
+        return False
+    if name in (".", ".."):
+        return False
+    # Belt-and-suspenders: a safe name must be exactly one path component
+    # with no traversal segment.
+    parts = Path(name).parts
+    return parts == (name,) and not any(part == ".." for part in parts)
+
+
 def remove_agent(
     catalog: dict,
     name: str,
@@ -615,6 +638,16 @@ def remove_agent(
         return error_result(
             f"Agent remove for harness 'cursor' is not supported. "
             "Cursor agents (.cursor/agents/) are not implemented by the library installer."
+        )
+
+    # Refuse unsafe names before building any install-target or handler-root
+    # paths. Without this guard a name containing a path separator or a '..'
+    # segment (e.g. '../shared') would be interpolated into handler_root and
+    # let shutil.rmtree() delete a directory outside the per-harness agent dir.
+    if not _is_safe_agent_name(name):
+        return error_result(
+            f"Agent remove refused: '{name}' is not a valid agent name "
+            "(must be a single path component with no '/', '\\', or '..')."
         )
 
     prim = get_primitive("agent")
