@@ -21,6 +21,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -143,6 +144,50 @@ library:
 """
 
 
+AGENT_HANDLER_LIBRARY_YAML = """
+default_dirs:
+  agents:
+    - default: .claude/agents/
+    - default_codex: .codex/agents/
+    - default_opencode: .opencode/agents/
+
+library:
+  agents:
+    - name: handler-agent
+      description: Agent with private handler assets
+      sources:
+        claude: {agent_source}
+        codex: {codex_agent_source}
+        opencode: {agent_source}
+      handlers:
+{handlers_yaml}
+  skills: []
+  standards: []
+  prompts: []
+
+marketplaces: []
+guardrails: []
+mcp_servers: []
+model_standards: []
+"""
+
+
+def _write_agent_handler_project(
+    project: Path,
+    fixture_dir: Path,
+    handlers: list[str],
+) -> None:
+    """Create a library.yaml fixture for agent handler install tests."""
+    handlers_yaml = "".join(f"        - {handler}\n" for handler in handlers)
+    project.write_text(
+        AGENT_HANDLER_LIBRARY_YAML.format(
+            agent_source=fixture_dir / "handler-agent.md",
+            codex_agent_source=fixture_dir / "handler-agent.toml",
+            handlers_yaml=handlers_yaml,
+        )
+    )
+
+
 @pytest.fixture
 def fixture_skill_dir(tmp_path: Path) -> Path:
     """Create a minimal skill directory fixture."""
@@ -219,6 +264,25 @@ def dry_run_contract_project(tmp_path: Path) -> Path:
             model_standard_source=model_standard_file,
             agent_base_source=agent_base_file,
         )
+    )
+    return project
+
+
+@pytest.fixture
+def agent_handler_fixture_dir() -> Path:
+    """Return the committed local fixture agent with a private handler asset."""
+    return REPO_ROOT / "tests" / "installers" / "fixtures" / "agent-with-handlers"
+
+
+@pytest.fixture
+def agent_handlers_project(tmp_path: Path, agent_handler_fixture_dir: Path) -> Path:
+    """Create a clean project that installs a fixture agent with handlers."""
+    project = tmp_path / "agent-handlers-project"
+    project.mkdir()
+    _write_agent_handler_project(
+        project / "library.yaml",
+        agent_handler_fixture_dir,
+        ["handlers/fixture-handler.sh"],
     )
     return project
 
@@ -567,6 +631,268 @@ class TestDryRunContractUniformity:
         assert data["harness_routing"] == harness
         assert expected_fragment in targets
         assert unexpected_fragment not in targets
+
+    def test_install_agent_validates_missing_handler_assets(
+        self,
+        tmp_path: Path,
+        agent_handler_fixture_dir: Path,
+    ):
+        project = tmp_path / "missing-handler-project"
+        project.mkdir()
+        _write_agent_handler_project(
+            project / "library.yaml",
+            agent_handler_fixture_dir,
+            ["handlers/missing-handler.sh"],
+        )
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--harness",
+                "claude_code",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+            env=env,
+        )
+
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "Handler asset" in data["message"]
+        assert "does not exist" in data["message"]
+
+    def test_install_agent_rejects_handler_path_traversal(
+        self,
+        tmp_path: Path,
+    ):
+        project = tmp_path / "traversal-handler-project"
+        project.mkdir()
+        source_dir = tmp_path / "agent-source"
+        source_dir.mkdir()
+        (source_dir / "handler-agent.md").write_text(
+            "---\nname: handler-agent\n---\n# Handler Agent\n"
+        )
+        (source_dir / "handler-agent.toml").write_text('name = "handler-agent"\n')
+        outside_handler = source_dir.parent / "outside-handler.sh"
+        outside_handler.write_text("#!/usr/bin/env bash\necho outside\n")
+        _write_agent_handler_project(
+            project / "library.yaml",
+            source_dir,
+            ["../outside-handler.sh"],
+        )
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--harness",
+                "claude_code",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(project),
+            env=env,
+        )
+
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "outside the agent source directory" in data["message"]
+
+    def test_install_agent_dry_run_includes_declared_handler_assets(
+        self,
+        agent_handlers_project: Path,
+    ):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        operations = data["operations"]
+        target_paths = "\n".join(data["target_paths"])
+
+        assert any(op["operation"] == "vendor_handler" for op in operations)
+        assert ".claude/agents/handler-agent-handlers/handlers/fixture-handler.sh" in target_paths
+        assert ".codex/agents/handler-agent-handlers/handlers/fixture-handler.sh" in target_paths
+        assert ".opencode/agents/handler-agent-handlers/handlers/fixture-handler.sh" in target_paths
+
+    def test_install_agent_copies_declared_handler_assets(
+        self,
+        agent_handlers_project: Path,
+        tmp_path: Path,
+    ):
+        env = {**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg-data")}
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "handler-agent",
+                "--harness",
+                "all",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(agent_handlers_project),
+            env=env,
+        )
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+
+        expected_handler_targets = [
+            agent_handlers_project / ".claude" / "agents" / "handler-agent-handlers" / "handlers" / "fixture-handler.sh",
+            agent_handlers_project / ".codex" / "agents" / "handler-agent-handlers" / "handlers" / "fixture-handler.sh",
+            agent_handlers_project / ".opencode" / "agents" / "handler-agent-handlers" / "handlers" / "fixture-handler.sh",
+        ]
+        for handler_target in expected_handler_targets:
+            assert handler_target.exists()
+            assert "HANDLER_AGENT_PRIVATE_HANDLER" in handler_target.read_text()
+
+        installed_targets = data["data"]["installed_targets"]
+        assert all(item["handlers"] for item in installed_targets)
+        installed_handler_paths = {
+            handler
+            for item in installed_targets
+            for handler in item["handlers"]
+        }
+        assert {str(path) for path in expected_handler_targets} <= installed_handler_paths
+
+        lockfile = agent_handlers_project / ".library.lock"
+        lock_data = yaml.safe_load(lockfile.read_text())
+        lock_entry = next(
+            entry
+            for entry in lock_data["installed"]
+            if entry["name"] == "handler-agent" and entry["type"] == "agent"
+        )
+        bridge_text = "\n".join(lock_entry["bridge_symlinks"])
+        for handler_target in expected_handler_targets:
+            assert str(handler_target) in bridge_text
+
+    def test_reinstall_agent_removes_stale_handler_assets(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Reinstalling with a reduced handler set must delete stale handlers.
+
+        Regression guard for ``install_agent``: it previously only overwrote the
+        currently-declared handler paths, so a handler that was removed or
+        renamed between installs (here ``stale-handler.sh``) lingered on disk
+        and stayed potentially executable even though it was no longer declared.
+
+        Exercised at the ``install_agent`` level (not via the ``use`` CLI verb)
+        because ``use`` short-circuits with "already installed" when the agent
+        file is unchanged, and so would never re-enter the handler copy loop
+        this regression concerns.
+        """
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import agent as agent_mod
+
+        monkeypatch.setattr(
+            agent_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        source_dir = tmp_path / "stale-agent-source"
+        (source_dir / "handlers").mkdir(parents=True)
+        (source_dir / "handler-agent.md").write_text(
+            "---\nname: handler-agent\n---\n# Handler Agent\n"
+        )
+        (source_dir / "handler-agent.toml").write_text('name = "handler-agent"\n')
+        (source_dir / "handlers" / "keep-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho KEEP\n"
+        )
+        (source_dir / "handlers" / "stale-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho STALE\n"
+        )
+
+        project = tmp_path / "stale-handler-project"
+        project.mkdir()
+
+        def _catalog(handlers: list[str]) -> dict:
+            return {
+                "default_dirs": {
+                    "agents": [
+                        {"default": ".claude/agents/"},
+                        {"default_codex": ".codex/agents/"},
+                        {"default_opencode": ".opencode/agents/"},
+                    ]
+                },
+                "library": {
+                    "agents": [
+                        {
+                            "name": "handler-agent",
+                            "description": "Agent with private handler assets",
+                            "sources": {
+                                "claude": str(source_dir / "handler-agent.md"),
+                                "codex": str(source_dir / "handler-agent.toml"),
+                                "opencode": str(source_dir / "handler-agent.md"),
+                            },
+                            "handlers": handlers,
+                        }
+                    ]
+                },
+            }
+
+        handler_dir = (
+            project / ".claude" / "agents" / "handler-agent-handlers" / "handlers"
+        )
+        keep_handler = handler_dir / "keep-handler.sh"
+        stale_handler = handler_dir / "stale-handler.sh"
+
+        # First install declares both handlers.
+        first = agent_mod.install_agent(
+            _catalog(["handlers/keep-handler.sh", "handlers/stale-handler.sh"]),
+            "handler-agent",
+            project,
+            harness="claude_code",
+        )
+        assert first["status"] == "ok", first
+        assert keep_handler.exists()
+        assert stale_handler.exists()
+
+        # Reinstall declaring only the kept handler; the stale one must be gone.
+        second = agent_mod.install_agent(
+            _catalog(["handlers/keep-handler.sh"]),
+            "handler-agent",
+            project,
+            harness="claude_code",
+        )
+        assert second["status"] == "ok", second
+        assert keep_handler.exists()
+        assert not stale_handler.exists()
 
     def test_library_yaml_declares_opencode_agent_default_dirs(self):
         catalog = LIBRARY_MODULE.load_catalog(REPO_ROOT)

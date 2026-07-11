@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Added
+
+- *(agent installer)* Agent catalog entries can now declare a `handlers` field — an array of relative asset paths for private helper scripts owned by that agent. `library agent use` validates each path (rejects path traversal), copies the assets into a per-harness `<agent-name>-handlers/` directory alongside the installed prompt file, and clears the directory on reinstall so removed or renamed handlers never go stale. This lets deterministic helper scripts used by exactly one agent ship as agent-owned assets instead of requiring a separate public skill install.
+
 ## [2026.07.0] - 2026-07-02
 
 ### Added

@@ -1,0 +1,195 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-ii7a",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "description": "Agent catalog entries can declare private handler asset paths, and declared paths are validated to exist and stay within the agent source directory before install.",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "docs/schema/library.schema.json",
+        "tests/test_library_py_installers.py",
+        "tests/test_validate_library.py"
+      ],
+      "evidence_refs": [
+        "E-red-unit",
+        "E-red-schema",
+        "E-green-unit",
+        "E-validate-library"
+      ]
+    },
+    {
+      "id": "AC2",
+      "description": "library.py use installs an agent's declared handler assets alongside its prompt file for every requested harness target: claude_code, codex, and opencode.",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py",
+        "tests/installers/fixtures/agent-with-handlers/handler-agent.md",
+        "tests/installers/fixtures/agent-with-handlers/handler-agent.toml",
+        "tests/installers/fixtures/agent-with-handlers/handlers/fixture-handler.sh"
+      ],
+      "evidence_refs": [
+        "E-red-unit",
+        "E-green-unit",
+        "E-full-targeted"
+      ]
+    },
+    {
+      "id": "AC2-fix",
+      "description": "Reinstalling an agent is idempotent for handler assets: install_agent clears the per-harness <agent-name>-handlers/ directory before copying the currently-declared handler set, so handlers removed or renamed between installs (or dropped entirely) no longer linger on disk. Addresses Codex REGRESSION at scripts/lib/installers/agent.py:245.",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "E-red-stale",
+        "E-green-stale",
+        "E-full-installers-fix",
+        "E-green-smoke-fix"
+      ]
+    },
+    {
+      "id": "AC3",
+      "description": "A clean-install smoke test proves the full mechanism using a local fixture with no external dependency.",
+      "status": "done",
+      "changed_files": [
+        "tests/smoke/install-agent-with-handlers.sh",
+        "tests/installers/fixtures/agent-with-handlers/handler-agent.md",
+        "tests/installers/fixtures/agent-with-handlers/handler-agent.toml",
+        "tests/installers/fixtures/agent-with-handlers/handlers/fixture-handler.sh"
+      ],
+      "evidence_refs": [
+        "E-red-smoke",
+        "E-green-smoke",
+        "E-bash-syntax"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/lib/installers/agent.py",
+    "docs/schema/library.schema.json",
+    "tests/test_library_py_installers.py",
+    "tests/test_validate_library.py",
+    "tests/installers/fixtures/agent-with-handlers/handler-agent.md",
+    "tests/installers/fixtures/agent-with-handlers/handler-agent.toml",
+    "tests/installers/fixtures/agent-with-handlers/handlers/fixture-handler.sh",
+    "tests/smoke/install-agent-with-handlers.sh",
+    ".beads/runs/f0c5702d-328a-451e-b14b-ce20e16befa3/implementation_manifest.json",
+    ".beads/runs/f0c5702d-328a-451e-b14b-ce20e16befa3/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "968888d",
+      "message": "test(CL-ii7a): red - cover agent handler assets",
+      "purpose": "Red tests and local fixtures for handler validation, copying, schema declaration, and smoke coverage."
+    },
+    {
+      "sha": "c75d1b8",
+      "message": "feat(CL-ii7a): green - install agent handler assets",
+      "purpose": "Installer and schema implementation that makes the red tests pass."
+    }
+  ],
+  "tests": [
+    {
+      "id": "E-red-unit",
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_validates_missing_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_rejects_handler_path_traversal tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_dry_run_includes_declared_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_copies_declared_handler_assets -q",
+      "result": "RED: 4 failed for the expected reasons; installs still succeeded with missing/traversal handlers, dry-run lacked vendor_handler operations, and no handler files were copied."
+    },
+    {
+      "id": "E-red-schema",
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_validate_library.py::test_schema_declares_agent_handlers_field tests/test_validate_library.py::test_schema_accepts_agent_handlers_field -q",
+      "result": "RED: 1 failed and 1 passed; schema did not yet declare the handlers property."
+    },
+    {
+      "id": "E-red-smoke",
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a bash tests/smoke/install-agent-with-handlers.sh",
+      "result": "RED: prompts installed but all three handler files were missing."
+    },
+    {
+      "id": "E-green-unit",
+      "command": "XDG_DATA_HOME=/tmp/xdg-data-cl-ii7a-tests UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_validates_missing_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_rejects_handler_path_traversal tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_dry_run_includes_declared_handler_assets tests/test_library_py_installers.py::TestDryRunContractUniformity::test_install_agent_copies_declared_handler_assets tests/test_validate_library.py::test_schema_declares_agent_handlers_field tests/test_validate_library.py::test_schema_accepts_agent_handlers_field -q",
+      "result": "GREEN: 6 passed."
+    },
+    {
+      "id": "E-full-targeted",
+      "command": "XDG_DATA_HOME=/tmp/xdg-data-cl-ii7a-tests UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync pytest tests/test_library_py_installers.py tests/test_validate_library.py -q",
+      "result": "PASS: 157 passed."
+    },
+    {
+      "id": "E-green-smoke",
+      "command": "XDG_DATA_HOME=/tmp/xdg-data-cl-ii7a-smoke UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a bash tests/smoke/install-agent-with-handlers.sh",
+      "result": "PASS: 8 passed, 0 failed."
+    },
+    {
+      "id": "E-validate-library",
+      "command": "XDG_DATA_HOME=/tmp/xdg-data-cl-ii7a-validate UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync python scripts/validate-library.py",
+      "result": "PASS: library.yaml is valid against docs/schema/library.schema.json."
+    },
+    {
+      "id": "E-compile",
+      "command": "UV_CACHE_DIR=/tmp/uv-cache-cl-ii7a uv run --no-sync python -m py_compile scripts/lib/installers/agent.py scripts/validate-library.py scripts/library.py tests/test_library_py_installers.py tests/test_validate_library.py",
+      "result": "PASS: compile check exited 0."
+    },
+    {
+      "id": "E-bash-syntax",
+      "command": "bash -n tests/smoke/install-agent-with-handlers.sh",
+      "result": "PASS: shell syntax check exited 0."
+    },
+    {
+      "id": "E-diff-check",
+      "command": "git diff --check",
+      "result": "PASS: whitespace check exited 0."
+    },
+    {
+      "id": "E-red-stale",
+      "command": "git stash push -- scripts/lib/installers/agent.py && uv run pytest tests/test_library_py_installers.py -k test_reinstall_agent_removes_stale_handler_assets -q; git stash pop",
+      "result": "RED: 1 failed. Without the fix, the previously-installed stale-handler.sh survived the second install (assert not stale_handler.exists() failed). Fix restored via git stash pop."
+    },
+    {
+      "id": "E-green-stale",
+      "command": "uv run pytest tests/test_library_py_installers.py -k test_reinstall_agent_removes_stale_handler_assets -q",
+      "result": "GREEN: 1 passed. After the fix, the stale handler is removed on reinstall while the kept handler remains."
+    },
+    {
+      "id": "E-full-installers-fix",
+      "command": "uv run pytest tests/test_library_py_installers.py -q",
+      "result": "PASS: 133 passed."
+    },
+    {
+      "id": "E-green-smoke-fix",
+      "command": "bash tests/smoke/install-agent-with-handlers.sh",
+      "result": "PASS: 8 passed, 0 failed."
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [
+    {
+      "description": "No implementation-time scope expansion. Work stayed in library/meta and used only local fixtures."
+    }
+  ],
+  "downstream_impacts": [
+    "Agent catalog entries may now declare optional handlers as relative asset paths.",
+    "Agent installs copy declared handler files or directories into each harness agent directory under <agent-name>-handlers/.",
+    "Agent dry-runs include planned handler writes in operations and target_paths.",
+    "Agent lockfile bridge_symlinks now records installed handler target to cache-path mappings."
+  ],
+  "evidence_refs": [
+    "E-red-unit",
+    "E-red-schema",
+    "E-red-smoke",
+    "E-green-unit",
+    "E-full-targeted",
+    "E-green-smoke",
+    "E-validate-library",
+    "E-compile",
+    "E-bash-syntax",
+    "E-diff-check",
+    "E-red-stale",
+    "E-green-stale",
+    "E-full-installers-fix",
+    "E-green-smoke-fix"
+  ]
+}

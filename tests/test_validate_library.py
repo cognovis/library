@@ -10,6 +10,7 @@ Run with:
     python3 -m pytest tests/test_validate_library.py -v
 """
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -86,6 +87,19 @@ def _make_library_yaml_with_entries(entries_by_section: dict[str, list[dict]]) -
     return yaml.dump(data, default_flow_style=False)
 
 
+def _make_library_yaml_with_agent(agent_entry: dict) -> str:
+    """Wrap an agent entry dict into a minimal valid library.yaml string."""
+    data = {
+        "default_dirs": {
+            "agents": [{"default": ".claude/agents/"}],
+        },
+        "library": {
+            "agents": [agent_entry],
+        },
+    }
+    return yaml.dump(data, default_flow_style=False)
+
+
 def _base_skill_entry() -> dict:
     """Return a minimal valid skill entry."""
     return {
@@ -113,6 +127,33 @@ def test_m2_schema_accepts_new_fields():
     result = _run_validator(yaml_str)
     assert result.returncode == 0, (
         f"Expected exit 0 for skill entry with new fields, got {result.returncode}.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
+def test_schema_declares_agent_handlers_field():
+    """Agent entries expose handlers as an array of relative path strings."""
+    schema = json.loads(SCHEMA_PATH.read_text())
+    agent_props = schema["$defs"]["agent_entry"]["allOf"][2]["properties"]
+
+    assert "handlers" in agent_props
+    assert agent_props["handlers"]["type"] == "array"
+    assert agent_props["handlers"]["items"]["type"] == "string"
+
+
+def test_schema_accepts_agent_handlers_field():
+    """Agent entries with declared private handlers validate successfully."""
+    agent_entry = {
+        "name": "handler-agent",
+        "description": "Agent with private handler assets.",
+        "source": "https://github.com/example/repo/blob/main/agents/handler-agent.md",
+        "handlers": ["handlers/fixture-handler.sh"],
+    }
+
+    result = _run_validator(_make_library_yaml_with_agent(agent_entry))
+
+    assert result.returncode == 0, (
+        f"Expected exit 0 for agent entry with handlers, got {result.returncode}.\n"
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
 
