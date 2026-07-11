@@ -39,6 +39,35 @@ built-ins plus custom TOML).
 Install via `library agent use --harness opencode <name>`; remove via
 `library agent remove --harness opencode <name>`.
 
+**`handlers` field — private agent-owned assets.** NORMATIVE.
+
+An agent catalog entry may declare a `handlers` field: an array of asset paths
+relative to the agent source file's directory. These are private helper scripts
+(e.g. bash hooks, Python helpers) that are used exclusively by this agent and
+do not need to be installed as a separate shared skill.
+
+```yaml
+# library.yaml entry
+- name: my-agent
+  source: /path/to/agents/my-agent.md
+  handlers:
+    - handlers/pre-tool-check.sh
+    - handlers/post-run.py
+```
+
+When `library agent use my-agent` runs, the installer:
+
+1. Validates every declared path exists under the agent source directory (path
+   traversal attempts are rejected).
+2. Copies the assets into `<agents-base>/my-agent-handlers/` alongside the
+   installed prompt file, for every requested harness (claude\_code, codex,
+   opencode).
+3. On reinstall, clears the `my-agent-handlers/` directory first, so handlers
+   that were removed or renamed since the last install do not linger on disk.
+
+Handlers that are shared across multiple agents should be cataloged as
+first-class skills or scripts instead.
+
 **`action_boundary` metadata for side-effecting agents.** NORMATIVE.
 Agents that may execute or authorize side effects declare the same boundary fields
 as side-effecting skills. Claude agent sources use YAML frontmatter:
