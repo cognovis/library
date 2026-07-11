@@ -2026,12 +2026,9 @@ library:
     - origin:original
     - tier:domain
   - name: wave-dispatch
-    description: Orchestrate parallel implementation of multiple beads across cmux
-      panes in dependency-aware waves. Use when implementing a whole feature area,
-      dispatching multiple beads at once, or running parallel cld -b sessions. MUST
-      USE when user says "wave", "parallel beads", "implement all beads for X", "start
-      the beads", or references implementing more than 2 beads at once. Also triggers
-      on "cmux dispatch", "multi-bead", "wave orchestrator".
+    description: Preserve wave-orchestrator operational references after handler
+      migration. Use when reading wave recovery, monitoring, integration-verification,
+      or learnings docs; not for installing runtime scripts.
     source: https://github.com/cognovis/library-core/blob/main/skills/wave-dispatch/SKILL.md
     requires:
     - standard:english-only
@@ -2652,10 +2649,25 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.md
     requires:
     - agent:wave-monitor
+    - agent:architecture-reviewer
     - agent:bead-orchestrator
     - agent:quick-fix
-    - skill:wave-dispatch
+    - skill:scenario-generator
+    - skill:beads
     - skill:bead-reviewer
+    - skill:plan
+    - skill:spec-developer
+    handlers:
+    - wave-orchestrator-scripts/_load_hyphen_module.py
+    - wave-orchestrator-scripts/arch-signal-detect.py
+    - wave-orchestrator-scripts/wave-classify.py
+    - wave-orchestrator-scripts/wave-completion.py
+    - wave-orchestrator-scripts/wave-dispatch.py
+    - wave-orchestrator-scripts/wave-lock.py
+    - wave-orchestrator-scripts/wave-preflight.py
+    - wave-orchestrator-scripts/wave-retire.py
+    - wave-orchestrator-scripts/wave-status.py
+    - wave-orchestrator-scripts/wave_helpers.py
     tags:
     - origin:original
     - tier:domain
