@@ -8,6 +8,7 @@
 
 - *(agent installer)* `library agent remove` now deletes the agent's installed handler asset directory (`<agent-name>-handlers/`) for every harness, leaving no orphaned handler files after uninstall.
 - *(agent installer)* `library agent use` detects handler-only catalog changes (declared handlers set changed while the prompt file is byte-identical) and triggers a full reinstall, ensuring handler updates are applied even when the prompt is unchanged.
+- *(catalog)* Wire `wave-orchestrator`'s handler scripts into `library.yaml` via the new `handlers` field and drop `skill:wave-dispatch` from its `requires` list, now that the scripts ship as agent-owned assets (clc-5zg8 companion)
 
 ### Fixed
 
