@@ -127,6 +127,30 @@
       "purpose": "Attempt the requested p5-impl metrics insert for this run.",
       "exit_code": 1,
       "observed_result": "Failed with sqlite3.OperationalError: attempt to write a readonly database. The metrics DB is outside this sandbox's writable roots."
+    },
+    {
+      "command": "git stash push -- scripts/lib/installers/agent.py && uv run pytest tests/test_library_py_installers.py -k test_reinstall_agent_removes_stale_handler_assets -q; git stash pop",
+      "purpose": "Codex REGRESSION fix - red gate: prove the new reinstall test fails without the install_agent handler-directory clear.",
+      "exit_code": 1,
+      "observed_result": "Expected red: 1 failed. stale-handler.sh survived the second install (assert not stale_handler.exists() failed). git stash pop restored the fix."
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py -k test_reinstall_agent_removes_stale_handler_assets -q",
+      "purpose": "Codex REGRESSION fix - green gate: prove the reinstall test passes with the fix in place.",
+      "exit_code": 0,
+      "observed_result": "GREEN: 1 passed. stale-handler.sh removed on reinstall, keep-handler.sh retained."
+    },
+    {
+      "command": "uv run pytest tests/test_library_py_installers.py -q",
+      "purpose": "Codex REGRESSION fix - full installer test file after the fix to confirm no regressions.",
+      "exit_code": 0,
+      "observed_result": "PASS: 133 passed."
+    },
+    {
+      "command": "bash tests/smoke/install-agent-with-handlers.sh",
+      "purpose": "Codex REGRESSION fix - clean-install smoke test after the fix.",
+      "exit_code": 0,
+      "observed_result": "PASS: 8 passed, 0 failed."
     }
   ],
   "skipped_checks": [

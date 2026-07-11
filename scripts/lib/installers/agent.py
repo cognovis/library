@@ -242,6 +242,20 @@ def install_agent(
 
             shutil.copy2(str(cached_file), str(install_target))
             checksum = compute_checksum(cached_file)
+            # Reinstalling must be idempotent: clear any previously-installed
+            # handler directory before copying the currently-declared set, so
+            # handlers that were removed or renamed since the last install do
+            # not linger on disk. This unconditional clear also covers the case
+            # where `handlers` was dropped entirely. Mirrors the cache_path
+            # rmtree convention above and the target-clearing in
+            # _copy_handler_asset.
+            handler_root = install_target.parent / f"{agent_name}-handlers"
+            if handler_root.is_symlink():
+                handler_root.unlink()
+            elif handler_root.is_dir():
+                shutil.rmtree(str(handler_root))
+            elif handler_root.exists():
+                handler_root.unlink()
             installed_handlers: list[dict[str, Path]] = []
             for handler_asset in handler_assets:
                 handler_cache_path = cache_path / "handler-assets" / handler_asset["relative_path"]

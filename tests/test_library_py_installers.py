@@ -797,6 +797,103 @@ class TestDryRunContractUniformity:
         for handler_target in expected_handler_targets:
             assert str(handler_target) in bridge_text
 
+    def test_reinstall_agent_removes_stale_handler_assets(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Reinstalling with a reduced handler set must delete stale handlers.
+
+        Regression guard for ``install_agent``: it previously only overwrote the
+        currently-declared handler paths, so a handler that was removed or
+        renamed between installs (here ``stale-handler.sh``) lingered on disk
+        and stayed potentially executable even though it was no longer declared.
+
+        Exercised at the ``install_agent`` level (not via the ``use`` CLI verb)
+        because ``use`` short-circuits with "already installed" when the agent
+        file is unchanged, and so would never re-enter the handler copy loop
+        this regression concerns.
+        """
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        from lib.installers import agent as agent_mod
+
+        monkeypatch.setattr(
+            agent_mod,
+            "compute_cache_path",
+            lambda primitive_type, marketplace, name, source_commit: (
+                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+            ),
+        )
+
+        source_dir = tmp_path / "stale-agent-source"
+        (source_dir / "handlers").mkdir(parents=True)
+        (source_dir / "handler-agent.md").write_text(
+            "---\nname: handler-agent\n---\n# Handler Agent\n"
+        )
+        (source_dir / "handler-agent.toml").write_text('name = "handler-agent"\n')
+        (source_dir / "handlers" / "keep-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho KEEP\n"
+        )
+        (source_dir / "handlers" / "stale-handler.sh").write_text(
+            "#!/usr/bin/env bash\necho STALE\n"
+        )
+
+        project = tmp_path / "stale-handler-project"
+        project.mkdir()
+
+        def _catalog(handlers: list[str]) -> dict:
+            return {
+                "default_dirs": {
+                    "agents": [
+                        {"default": ".claude/agents/"},
+                        {"default_codex": ".codex/agents/"},
+                        {"default_opencode": ".opencode/agents/"},
+                    ]
+                },
+                "library": {
+                    "agents": [
+                        {
+                            "name": "handler-agent",
+                            "description": "Agent with private handler assets",
+                            "sources": {
+                                "claude": str(source_dir / "handler-agent.md"),
+                                "codex": str(source_dir / "handler-agent.toml"),
+                                "opencode": str(source_dir / "handler-agent.md"),
+                            },
+                            "handlers": handlers,
+                        }
+                    ]
+                },
+            }
+
+        handler_dir = (
+            project / ".claude" / "agents" / "handler-agent-handlers" / "handlers"
+        )
+        keep_handler = handler_dir / "keep-handler.sh"
+        stale_handler = handler_dir / "stale-handler.sh"
+
+        # First install declares both handlers.
+        first = agent_mod.install_agent(
+            _catalog(["handlers/keep-handler.sh", "handlers/stale-handler.sh"]),
+            "handler-agent",
+            project,
+            harness="claude_code",
+        )
+        assert first["status"] == "ok", first
+        assert keep_handler.exists()
+        assert stale_handler.exists()
+
+        # Reinstall declaring only the kept handler; the stale one must be gone.
+        second = agent_mod.install_agent(
+            _catalog(["handlers/keep-handler.sh"]),
+            "handler-agent",
+            project,
+            harness="claude_code",
+        )
+        assert second["status"] == "ok", second
+        assert keep_handler.exists()
+        assert not stale_handler.exists()
+
     def test_library_yaml_declares_opencode_agent_default_dirs(self):
         catalog = LIBRARY_MODULE.load_catalog(REPO_ROOT)
         agent_dirs = {

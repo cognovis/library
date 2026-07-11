@@ -37,6 +37,21 @@
       ]
     },
     {
+      "id": "AC2-fix",
+      "description": "Reinstalling an agent is idempotent for handler assets: install_agent clears the per-harness <agent-name>-handlers/ directory before copying the currently-declared handler set, so handlers removed or renamed between installs (or dropped entirely) no longer linger on disk. Addresses Codex REGRESSION at scripts/lib/installers/agent.py:245.",
+      "status": "done",
+      "changed_files": [
+        "scripts/lib/installers/agent.py",
+        "tests/test_library_py_installers.py"
+      ],
+      "evidence_refs": [
+        "E-red-stale",
+        "E-green-stale",
+        "E-full-installers-fix",
+        "E-green-smoke-fix"
+      ]
+    },
+    {
       "id": "AC3",
       "description": "A clean-install smoke test proves the full mechanism using a local fixture with no external dependency.",
       "status": "done",
@@ -127,6 +142,26 @@
       "id": "E-diff-check",
       "command": "git diff --check",
       "result": "PASS: whitespace check exited 0."
+    },
+    {
+      "id": "E-red-stale",
+      "command": "git stash push -- scripts/lib/installers/agent.py && uv run pytest tests/test_library_py_installers.py -k test_reinstall_agent_removes_stale_handler_assets -q; git stash pop",
+      "result": "RED: 1 failed. Without the fix, the previously-installed stale-handler.sh survived the second install (assert not stale_handler.exists() failed). Fix restored via git stash pop."
+    },
+    {
+      "id": "E-green-stale",
+      "command": "uv run pytest tests/test_library_py_installers.py -k test_reinstall_agent_removes_stale_handler_assets -q",
+      "result": "GREEN: 1 passed. After the fix, the stale handler is removed on reinstall while the kept handler remains."
+    },
+    {
+      "id": "E-full-installers-fix",
+      "command": "uv run pytest tests/test_library_py_installers.py -q",
+      "result": "PASS: 133 passed."
+    },
+    {
+      "id": "E-green-smoke-fix",
+      "command": "bash tests/smoke/install-agent-with-handlers.sh",
+      "result": "PASS: 8 passed, 0 failed."
     }
   ],
   "external_resources": [],
@@ -151,6 +186,10 @@
     "E-validate-library",
     "E-compile",
     "E-bash-syntax",
-    "E-diff-check"
+    "E-diff-check",
+    "E-red-stale",
+    "E-green-stale",
+    "E-full-installers-fix",
+    "E-green-smoke-fix"
   ]
 }
