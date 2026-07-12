@@ -78,6 +78,27 @@
       "purpose": "Validate evidence ledger JSON syntax.",
       "exit_code": 0,
       "observed_result": "JSON parsed and pretty-printed successfully."
+    },
+    {
+      "id": "cmd:route-profiles-red",
+      "command": "uv run pytest tests/test_route_profiles_schema.py -q",
+      "purpose": "Confirm the stale route-profile launcher assertions fail at current HEAD before the fix.",
+      "exit_code": 1,
+      "observed_result": "5 failed, 53 passed. Failures asserted the old --dangerously-bypass-approvals-and-sandbox bead-mode argv (exec-mode 'in' checks and TUI-mode startswith checks)."
+    },
+    {
+      "id": "cmd:route-profiles-green",
+      "command": "uv run pytest tests/test_route_profiles_schema.py -q",
+      "purpose": "Confirm all route-profile launcher tests pass after migrating the 5 stale assertions to the safe-default argv shape.",
+      "exit_code": 0,
+      "observed_result": "58 passed."
+    },
+    {
+      "id": "cmd:full-requested-suites-postfix",
+      "command": "uv run pytest tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py -q",
+      "purpose": "Confirm no regression in the sibling cdx suites after the test-assertion fix.",
+      "exit_code": 0,
+      "observed_result": "38 passed."
     }
   ],
   "skipped_checks": [

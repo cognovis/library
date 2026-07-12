@@ -417,7 +417,7 @@ class TestLauncherRouteProfileFlag:
         assert not dispatch_called.exists()
         worktree_dir = worktree_root / "bead-CL-smoke"
         args_text = codex_args.read_text(encoding="utf-8")
-        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
+        assert 'exec --sandbox workspace-write -c approval_policy="never"' in args_text
         assert f"-C {worktree_dir}" in args_text
         prompt = codex_prompt.read_text(encoding="utf-8")
         assert "active Codex quick-fix workflow orchestrator" in prompt
@@ -485,7 +485,7 @@ class TestLauncherRouteProfileFlag:
         assert called.exists()
         worktree_dir = worktree_root / "bead-CL-smoke"
         args_text = codex_args.read_text(encoding="utf-8")
-        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
+        assert 'exec --sandbox workspace-write -c approval_policy="never"' in args_text
         assert f"-C {worktree_dir}" in args_text
         prompt = codex_prompt.read_text(encoding="utf-8")
         assert "Route profile: cdx-composer" in prompt
@@ -619,7 +619,7 @@ class TestLauncherRouteProfileFlag:
         assert "CODEX_WORKFLOW_STARTED_AT_EPOCH=1800000000" in result.stdout
         args_text = codex_args.read_text(encoding="utf-8")
         worktree_dir = worktree_root / "bead-CL-smoke"
-        assert "exec --dangerously-bypass-approvals-and-sandbox" in args_text
+        assert 'exec --sandbox workspace-write -c approval_policy="never"' in args_text
         assert f"-C {worktree_dir}" in args_text
         assert worktree_dir.exists()
         git_calls = git_log.read_text(encoding="utf-8")
@@ -717,7 +717,7 @@ class TestLauncherRouteProfileFlag:
         assert result.returncode == 0
         args_text = codex_args.read_text(encoding="utf-8")
         worktree_dir = worktree_root / "bead-CL-smoke"
-        assert args_text.startswith("--dangerously-bypass-approvals-and-sandbox")
+        assert args_text.startswith('--sandbox workspace-write -c approval_policy="never"')
         assert not args_text.startswith("exec ")
         assert f"-C {worktree_dir}" in args_text
         assert "You are the active Codex workflow orchestrator" in codex_prompt.read_text(
@@ -768,7 +768,7 @@ class TestLauncherRouteProfileFlag:
         assert result.returncode == 0
         args_text = codex_args.read_text(encoding="utf-8")
         worktree_dir = worktree_root / "bead-CL-smoke"
-        assert args_text.startswith("--dangerously-bypass-approvals-and-sandbox")
+        assert args_text.startswith('--sandbox workspace-write -c approval_policy="never"')
         assert not args_text.startswith("exec ")
         assert f"-C {worktree_dir}" in args_text
 

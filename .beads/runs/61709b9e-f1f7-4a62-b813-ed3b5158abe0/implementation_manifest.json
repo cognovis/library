@@ -42,12 +42,25 @@
         "cmd:full-requested-suites",
         "review:envelope-delimiter-preserved"
       ]
+    },
+    {
+      "id": "4",
+      "status": "done",
+      "summary": "Stale route-profile launcher tests that asserted the old unconditional --dangerously-bypass-approvals-and-sandbox bead-mode argv were migrated to assert the safe default shape (--sandbox workspace-write -c approval_policy=\"never\"), matching the AC1 production behavior. Assertions still positively check the correct new argv rather than being removed.",
+      "changed_files": [
+        "tests/test_route_profiles_schema.py"
+      ],
+      "evidence_refs": [
+        "cmd:route-profiles-regression-fixed",
+        "cmd:full-requested-suites-postfix"
+      ]
     }
   ],
   "changed_files": [
     "bin/cdx",
     "tests/test_cdx_bead_workflow.py",
     "tests/test_cdx_quick_cursor_dispatch.py",
+    "tests/test_route_profiles_schema.py",
     ".beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/implementation_manifest.json",
     ".beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/evidence_ledger.json"
   ],
@@ -78,6 +91,11 @@
       "command": "zsh -n bin/cdx",
       "status": "passed",
       "evidence": "zsh syntax check returned exit 0"
+    },
+    {
+      "command": "uv run pytest tests/test_route_profiles_schema.py -q",
+      "status": "red_then_green",
+      "evidence": "First run failed with 5 stale dangerous-flag assertions; after migrating them to the safe-default argv shape the second run passed 58/58."
     }
   ],
   "external_resources": [],
@@ -111,6 +129,14 @@
     {
       "ref": "review:envelope-delimiter-preserved",
       "note": "Code review confirmed fetch_bead_context(), validate_bead_context_envelope(), and format_untrusted_bead_context() remain the bead-context path."
+    },
+    {
+      "ref": "cmd:route-profiles-regression-fixed",
+      "note": "uv run pytest tests/test_route_profiles_schema.py -q exited 0 with 58 passed after migrating 5 stale dangerous-flag assertions to the safe-default argv shape (was 5 failed / 53 passed at HEAD b141d73)."
+    },
+    {
+      "ref": "cmd:full-requested-suites-postfix",
+      "note": "uv run pytest tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py confirmed 38 passed with no regression after the test-assertion fix."
     }
   ]
 }
