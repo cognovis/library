@@ -197,6 +197,11 @@ model = "gpt-5.4"
 Codex's `sandbox_mode` is the primary access-control mechanism. Derive it from Claude Code fields using this decision tree:
 
 ```
+0. [OVERRIDE — checked first] If `pair_loop_constraints.run_shell == "read_only"`:
+   → sandbox_mode = "read-only"  # enforced regardless of tool list
+   Also strip Write/Edit/MultiEdit from the Claude tool grant.
+   Emit a validation error if the post-build sandbox_mode differs from read-only.
+
 1. If `tools` contains `Write` or `Edit`:
    → sandbox_mode = "workspace-write"
 
@@ -213,6 +218,14 @@ Codex's `sandbox_mode` is the primary access-control mechanism. Derive it from C
 
 5. `danger-full-access`: NEVER auto-emit. Require explicit `codex_sandbox_mode` in frontmatter.
 ```
+
+**`pair_loop_constraints` override (Step 0):** When a unified source declares
+`pair_loop_constraints.run_shell: read_only` (used by in-loop and cold reviewer
+roles), the builder forces `sandbox_mode=read-only` irrespective of which capability
+entry granted shell access. A post-build validation guard raises `BuildAgentError` if
+any code path produces a different result, preventing future capability additions from
+silently re-elevating a reviewer's sandbox. NORMATIVE — enforced by `scripts/build-agent.py`
+since CL-c6bc.
 
 **Lossy trade-off note:** Tool-level granularity is permanently lost. A Claude Code agent that allows `Read, Bash, Grep` but not `Write` maps to `read-only`, which correctly prohibits writes but also prohibits running arbitrary shell commands that could do anything. The Codex sandbox does not distinguish read-only bash from write-capable bash. Document this in the generated TOML as a comment.
 

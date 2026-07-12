@@ -22,6 +22,8 @@
 ### Fixed
 
 - *(agent installer)* `library agent remove` now rejects agent names containing `/`, `\`, or `..` before constructing any delete path, closing a path-traversal exposure introduced by the new handler-directory removal logic.
+- *(build-agent)* `scripts/build-agent.py` now forces `sandbox_mode=read-only` (Codex) and strips `Write`/`Edit`/`MultiEdit` grants (Claude) whenever a unified agent source declares `pair_loop_constraints.run_shell: read_only`, regardless of which capability entry granted shell access. A defensive validation guard raises `BuildAgentError` on post-build drift so future capability additions cannot silently re-elevate a reviewer's sandbox. Previously, the active generated `review-agent.toml` carried `sandbox_mode = "workspace-write"` despite the source role declaring read-only shell constraints.
+- *(agent fleet audit)* New `scripts/agent-fleet-audit.py` replaces the deployed bash audit scripts that only scanned nested agent directories. The new audit inspects both flat and nested Claude `.md` and Codex `.toml` agent roots, reports per-harness counts, and returns non-zero when an expected fleet yields zero inspected agents — preventing silently-compliant scans that inspect no files.
 
 ## [2026.07.0] - 2026-07-02
 
