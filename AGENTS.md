@@ -54,7 +54,7 @@ it is in `bd prime`.
   - `bin/cld` — Claude Code launcher (full-featured zsh wrapper)
   - `bin/cdx` — Codex CLI launcher (parallel to `cld`)
   - `bin/agr` — Antigravity (Gemini CLI) launcher with automatic approvals
-  - `bin/cra` — Cursor Agent launcher with automatic approvals
+  - `bin/cra` — Cursor Agent launcher (approvals on by default; `--yolo` to auto-approve)
 - **Install:** `bash scripts/install-bin.sh` — symlinks into `~/.local/bin/` (must be on `$PATH`). Idempotent.
 - **Per ADR `canonical-library-architecture` Decision 2:** launchers live in `bin/`, not in `~/.claude/scripts/`. The `~/.claude/scripts/` directory is no longer on `$PATH`.
 - **Follow-up:** `CMUX_BUNDLED_CLI_PATH` in `cld` still references `~/.claude/scripts/cmux-shim.sh`. Move target is Phase 2 cleanup per the same ADR.
