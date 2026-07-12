@@ -1,0 +1,106 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-w3q3",
+  "acceptance_criteria": [
+    {
+      "id": "1",
+      "status": "done",
+      "summary": "bin/cld now defaults to --permission-mode auto and only forwards --dangerously-skip-permissions when the wrapper receives explicit --skip-perms. The explicit opt-in path prints a visible yellow stderr warning containing WARNING and dangerously-skip-permissions.",
+      "changed_files": [
+        "bin/cld",
+        "tests/test_launcher_permission_modes.py",
+        "tests/test_cld_single_bead_contract.py"
+      ],
+      "evidence_refs": [
+        "EV-AC1-red-gate",
+        "EV-AC1-green-gate",
+        "EV-AC1-review-default"
+      ]
+    },
+    {
+      "id": "2",
+      "status": "done",
+      "summary": "tests/test_launcher_permission_modes.py covers safe defaults and explicit opt-in for plain passthrough, -b, -bq, and -br. It also stubs bd show with raw untrusted title, description, notes, and acceptance criteria markers and asserts the -b/-bq cld-owned prompt text does not include the marker.",
+      "changed_files": [
+        "tests/test_launcher_permission_modes.py",
+        "tests/test_cld_single_bead_contract.py"
+      ],
+      "evidence_refs": [
+        "EV-AC2-launcher-permission-tests",
+        "EV-AC2-own-prompt-isolation",
+        "EV-required-suite-green"
+      ]
+    }
+  ],
+  "changed_files": [
+    "bin/cld",
+    "tests/test_launcher_permission_modes.py",
+    "tests/test_cld_single_bead_contract.py",
+    ".beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/implementation_manifest.json",
+    ".beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "d9333665e1e4f5f06e388fa721be86c4b25bbc7a",
+      "message": "test(CL-w3q3): red launcher permission-mode regressions"
+    },
+    {
+      "sha": "3b398e46f90645233ec0cef98f0f18a2b802ba2f",
+      "message": "fix(CL-w3q3): green use safe cld permission default"
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_launcher_permission_modes.py tests/test_cld_single_bead_contract.py",
+      "result": "Red gate before production change failed as expected: 9 failed, 23 passed. Failures showed default argv still contained --dangerously-skip-permissions and --skip-perms emitted no warning."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_launcher_permission_modes.py tests/test_cld_single_bead_contract.py",
+      "result": "Green gate after production change passed: 32 passed."
+    },
+    {
+      "command": "zsh -n bin/cld",
+      "result": "Passed with no shell syntax errors."
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [
+    {
+      "status": "deferred",
+      "description": "Original AC3, bead-orchestrator subagent prompt construction on the cld path, is cross-repo work in cognovis-core and was not attempted in this library-platform bead.",
+      "tracking_bead": "cognovis-core clc-n21h"
+    }
+  ],
+  "downstream_impacts": [
+    "bin/cld no longer bypasses Claude permission checks by default for plain passthrough, -b, -bq, or -br invocations.",
+    "Users who intentionally pass --skip-perms still get --dangerously-skip-permissions, but now receive a visible stderr warning.",
+    "The cld-owned -b and -bq launcher prompt remains limited to bead id, portless namespace, and launcher-derived routing fields; raw bd show fields are not embedded.",
+    "No cognovis-core files were edited; original AC3 remains deferred to cognovis-core bead clc-n21h."
+  ],
+  "evidence_refs": [
+    {
+      "id": "EV-AC1-red-gate",
+      "description": "The red pytest run against tests/test_launcher_permission_modes.py and tests/test_cld_single_bead_contract.py failed before production code changed because default cld argv still included --dangerously-skip-permissions and opt-in emitted no warning."
+    },
+    {
+      "id": "EV-AC1-green-gate",
+      "description": "The green pytest run passed after bin/cld changed the default branch to --permission-mode auto and added the explicit opt-in warning."
+    },
+    {
+      "id": "EV-AC1-review-default",
+      "description": "tests/test_cld_single_bead_contract.py::test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt now asserts -br defaults to --model opus followed by --permission-mode auto and no dangerous flag."
+    },
+    {
+      "id": "EV-AC2-launcher-permission-tests",
+      "description": "tests/test_launcher_permission_modes.py::test_cld_defaults_to_permission_auto_without_dangerous_skip and ::test_cld_skip_perms_explicitly_uses_dangerous_skip_and_warns cover plain, -b, -bq, and -br paths."
+    },
+    {
+      "id": "EV-AC2-own-prompt-isolation",
+      "description": "tests/test_launcher_permission_modes.py::test_cld_bead_prompt_does_not_embed_raw_bead_fields stubs bd show with ZZZ_UNTRUSTED_BEAD_FIELD_MARKER_ZZZ in raw bead fields and asserts the marker is absent from -b and -bq prompts."
+    },
+    {
+      "id": "EV-required-suite-green",
+      "description": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_launcher_permission_modes.py tests/test_cld_single_bead_contract.py returned 32 passed."
+    }
+  ]
+}
