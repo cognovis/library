@@ -845,12 +845,12 @@ def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Pat
     assert "factory-ready spec / autonomous-readiness review" in prompt
     assert "SPECIFICATION and readiness ONLY" in prompt
     assert "Do NOT implement" in prompt
-    assert "Do NOT run session-close" in prompt
-    assert "Do NOT review implementation diffs" in prompt
+    assert "do NOT\nrun session-close" in prompt
+    assert "do NOT review implementation diffs" in prompt
     assert "Review terminal state is the final bead-reviewer verdict" in prompt
     assert "cmux trigger-flash --surface surface:33" in prompt
     assert "mock bead context for CL-smoke" in prompt
-    assert git_log.read_text(encoding="utf-8") == ""
+    assert not git_log.exists()
 
 
 def test_cdx_help_documents_review_and_callback_flags_without_stale_warning(tmp_path: Path) -> None:

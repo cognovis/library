@@ -256,10 +256,10 @@ def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: 
     assert "CRITICAL" in prompt
     assert "SPECIFICATION and readiness ONLY" in prompt
     assert "Do NOT implement" in prompt
-    assert "Do NOT create a worktree" in prompt
-    assert "Do NOT run session-close" in prompt
-    assert "Do NOT review implementation diffs" in prompt
-    assert "Emit the bead-reviewer verdict as the terminal state." in prompt
+    assert "do NOT create a worktree" in prompt
+    assert "do NOT\nrun session-close" in prompt
+    assert "do NOT review implementation diffs" in prompt
+    assert "Emit the bead-reviewer verdict\nas the terminal state." in prompt
 
     bd_calls = [json.loads(line) for line in bd_log.read_text(encoding="utf-8").splitlines()]
     assert ["dolt", "pull"] not in bd_calls

@@ -11,7 +11,9 @@
 #   -b, --bead ID   → launch Codex workflow orchestrator for the given bead ID
 #                     (Codex remains top-level; helpers run inside the workflow)
 #   -bq, --bead-quick ID → launch Codex quick workflow for XS/S beads (bug, chore, task)
-#   -br, --bead-review ID → cmux-review mode (warns if Codex equivalent missing)
+#   -br, --bead-review ID → launch critical bead-spec/readiness review
+#   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
+#   --coordinator-surface surface:<n> → coordinator callback surface ref
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #
 # Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
@@ -68,6 +70,59 @@ abort_missing_bead() {
     exit 2
 }
 
+has_coordinator_callback() {
+    [[ -n "$coordinator_workspace" && -n "$coordinator_surface" ]]
+}
+
+coordinator_callback_contract() {
+    local mode="$1"
+
+    if [[ "$mode" == "review" ]]; then
+        cat <<EOF
+Coordinator callback: this session runs under a coordinator that owns cmux
+${coordinator_workspace} / ${coordinator_surface}. Best-effort signaling contract:
+- On a genuine blocking question or a required human decision, run:
+  cmux trigger-flash --surface ${coordinator_surface}
+  then keep the COMPLETE question and its full context visible in this pane
+  (do not clear or truncate it).
+- Review terminal state is the final bead-reviewer verdict; on that verdict run cmux trigger-flash --surface ${coordinator_surface} and keep the complete verdict visible in this pane.
+- Normal progress updates are NOT intervention events and must NOT trigger the callback.
+- If cmux is unavailable, skip the flash (best-effort) but still keep the report visible.
+EOF
+        return
+    fi
+
+    cat <<EOF
+Coordinator callback: this session runs under a coordinator that owns cmux
+${coordinator_workspace} / ${coordinator_surface}. Best-effort signaling contract:
+- On a genuine blocking question or a required human decision, run:
+  cmux trigger-flash --surface ${coordinator_surface}
+  then keep the COMPLETE question and its full context visible in this pane
+  (do not clear or truncate it).
+- On terminal state, run:
+  cmux trigger-flash --surface ${coordinator_surface}
+  then keep the COMPLETE terminal report visible in this pane.
+- Implementation terminal state includes successful OR failed completion of Phase 16
+  session-close. Carry this callback contract into the Phase 16 session-close handoff
+  so the terminal signal fires there.
+- Normal progress updates are NOT intervention events and must NOT trigger the callback.
+- If cmux is unavailable, skip the flash (best-effort) but still keep the report visible.
+EOF
+}
+
+resolve_bead_reviewer_skill_path() {
+    local candidate
+    for candidate in \
+        "$HOME/.agents/skills/bead-reviewer/SKILL.md" \
+        "$HOME/.claude/skills/bead-reviewer/SKILL.md"; do
+        if [[ -f "$candidate" ]]; then
+            printf '%s\n' "${candidate:A}"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # ── Parse wrapper flags ──────────────────────────────────────────
 
 use_full_auto=true
@@ -75,6 +130,8 @@ show_help=false
 bead_id=""
 bead_quick_id=""
 bead_review_id=""
+coordinator_workspace=""
+coordinator_surface=""
 route_profile=""
 codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"
 codex_args=()
@@ -259,7 +316,27 @@ while (( $# > 0 )); do
             shift 2
             ;;
         -br|--bead-review)
-            bead_review_id="$2"
+            bead_review_id="${2:-}"
+            if [[ -z "$bead_review_id" ]]; then
+                echo "ERROR: -br requires a bead id" >&2
+                exit 2
+            fi
+            shift 2
+            ;;
+        --coordinator-workspace)
+            coordinator_workspace="${2:-}"
+            if [[ -z "$coordinator_workspace" ]]; then
+                echo "ERROR: --coordinator-workspace requires an argument" >&2
+                exit 2
+            fi
+            shift 2
+            ;;
+        --coordinator-surface)
+            coordinator_surface="${2:-}"
+            if [[ -z "$coordinator_surface" ]]; then
+                echo "ERROR: --coordinator-surface requires an argument" >&2
+                exit 2
+            fi
             shift 2
             ;;
         --route-profile)
@@ -287,7 +364,11 @@ Wrapper flags (consumed by cdx, not passed to codex):
     -b,  --bead ID              Launch Codex workflow orchestrator for single bead
                                 (Codex top-level, deterministic helpers inside)
     -bq, --bead-quick ID        Launch Codex quick workflow for XS/S beads
-    -br, --bead-review ID       Review mode (warns: Codex has no cmux-review equivalent)
+    -br, --bead-review ID       Fresh-context critical bead-spec/readiness review
+         --coordinator-workspace workspace:<n>
+                                Coordinator callback workspace ref (requires surface)
+         --coordinator-surface surface:<n>
+                                Coordinator callback surface ref (requires workspace)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
                                 Profiles: cld-default, cdx-default, cdx-composer
 
@@ -309,6 +390,26 @@ smoke tests or CI.
 Forwarding to 'codex --help':
 HELP
     exec "${CODEX_BIN}" --help
+fi
+
+if [[ -n "$bead_review_id" && ( -n "$bead_id" || -n "$bead_quick_id" ) ]]; then
+    echo "ERROR: -br/--bead-review is mutually exclusive with -b/--bead and -bq/--bead-quick" >&2
+    exit 2
+fi
+
+if [[ ( -n "$coordinator_workspace" && -z "$coordinator_surface" ) || ( -z "$coordinator_workspace" && -n "$coordinator_surface" ) ]]; then
+    echo "ERROR: coordinator callback requires both --coordinator-workspace and --coordinator-surface" >&2
+    exit 2
+fi
+
+if [[ -n "$coordinator_workspace" && ! "$coordinator_workspace" =~ ^workspace:[0-9]+$ ]]; then
+    echo "ERROR: invalid coordinator workspace '$coordinator_workspace' (expected workspace:<n>)" >&2
+    exit 2
+fi
+
+if [[ -n "$coordinator_surface" && ! "$coordinator_surface" =~ ^surface:[0-9]+$ ]]; then
+    echo "ERROR: invalid coordinator surface '$coordinator_surface' (expected surface:<n>)" >&2
+    exit 2
 fi
 
 # ── Bead orchestrator mode: cdx -b <id> ─────────────────────────
@@ -438,6 +539,12 @@ ${bead_context}"
         prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
     fi
 
+    if has_coordinator_callback; then
+        prompt+="
+
+$(coordinator_callback_contract impl)"
+    fi
+
     case "$resolved_codex_bead_mode" in
         tui)
             run_codex_tui "${prompt}" "$worktree_dir"
@@ -557,6 +664,12 @@ ${compact_output_contract}
 
 ${bead_context}"
 
+    if has_coordinator_callback; then
+        prompt+="
+
+$(coordinator_callback_contract impl)"
+    fi
+
     run_codex_exec "${prompt}" "$worktree_dir"
     exit $?
 fi
@@ -564,25 +677,42 @@ fi
 # ── Review mode: cdx -br <id> ───────────────────────────────────
 
 if [[ -n "$bead_review_id" ]]; then
-    echo "WARNING: cdx -br (review mode) has no full cmux-review equivalent in Codex." >&2
-    echo "  Codex has no multi-pane cmux integration. Launching basic code review instead." >&2
-    echo "  For full review workflow, use: cld -br ${bead_review_id}" >&2
-    echo ""
-
     if [[ -z "${BD_BIN}" ]]; then
         echo "ERROR: bd not found in PATH. Install the beads CLI first."
         exit 1
     fi
 
-    bead_context=$("${BD_BIN}" show "${bead_review_id}" 2>/dev/null) || {
-        echo "ERROR: Could not fetch bead context for ${bead_review_id}. Is the bead ID correct?"
-        exit 1
+    bead_context=$(fetch_bead_context "${bead_review_id}") || {
+        abort_missing_bead "${bead_review_id}"
     }
 
     # cdx-line review mode — set CLD_BEAD_LINE=cdx for downstream tools.
     export CLD_BEAD_LINE=cdx
 
-    prompt="Review the implementation for bead ${bead_review_id}. Check all acceptance criteria are met. Run 'codex exec review' patterns to validate code quality.
+    bead_reviewer_skill_path="$(resolve_bead_reviewer_skill_path || true)"
+    if [[ -n "$bead_reviewer_skill_path" ]]; then
+        bead_reviewer_instruction="Use the bead-reviewer skill guidance at ${bead_reviewer_skill_path} as the source of truth."
+    else
+        bead_reviewer_instruction="Use the bead-reviewer factory-ready criteria as the source of truth. The bead-reviewer SKILL.md path was not found under HOME, so apply this fallback checklist: clear intent, bounded scope, acceptance criteria, Means of Compliance evidence, context pointers, and autonomous execution readiness."
+    fi
+
+    prompt="Bead ID: ${bead_review_id}. ${bead_reviewer_instruction} Perform a CRITICAL
+factory-ready spec / autonomous-readiness review of this bead. Review the bead
+SPECIFICATION and readiness ONLY. Do NOT implement, do NOT create a worktree, do NOT
+run session-close, do NOT review implementation diffs. Emit the bead-reviewer verdict
+as the terminal state.
+
+Fallback factory-ready criteria if the skill text cannot be loaded: clear intent,
+bounded scope, testable acceptance criteria, explicit Means of Compliance, concrete
+context pointers, and sufficient autonomous execution readiness."
+
+    if has_coordinator_callback; then
+        prompt+="
+
+$(coordinator_callback_contract review)"
+    fi
+
+    prompt+="
 
 ## Bead Context
 
