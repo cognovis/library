@@ -377,6 +377,11 @@ def install_mcp(
     try:
         mod = _import_install_mcp()
     except Exception as exc:
+        for key, previous in saved_env.items():
+            if previous is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous
         raise InstallError(f"Cannot load install-mcp.py: {exc}") from exc
 
     service_info: dict[str, Any] | None = None
@@ -710,6 +715,18 @@ def _remove_from_harness(mod, name: str, harness: str) -> int:
             fn = getattr(mod, "install_cursor", None)
             if fn:
                 return fn(name, {}, dry_run=False, remove=True)
-    except (SystemExit, Exception):
-        pass
-    return 0
+        elif harness in ("claude_ai", "claude_ios"):
+            fn = getattr(mod, "install_url_only", None)
+            if fn:
+                return fn(
+                    name,
+                    {},
+                    dry_run=False,
+                    remove=True,
+                    harness=harness,
+                )
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+    except Exception:
+        return 1
+    return 1

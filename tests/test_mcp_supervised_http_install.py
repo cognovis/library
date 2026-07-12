@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,11 +21,65 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from lib.errors import InstallError  # noqa: E402
-from lib.installers.mcp_installer import install_mcp, remove_mcp  # noqa: E402
+from lib.installers import mcp_installer  # noqa: E402
+from lib.installers.mcp_installer import (  # noqa: E402
+    _remove_from_harness,
+    install_mcp,
+    remove_mcp,
+)
 
 
 HTTP_URL = "http://127.0.0.1:8765/mcp"
 PROJECT_SUFFIX = "mcp-servers/cognovis-tools"
+
+
+def test_remove_dispatch_reports_handler_failure() -> None:
+    handler = MagicMock(side_effect=SystemExit(2))
+    module = MagicMock(install_claude_code=handler)
+
+    assert _remove_from_harness(module, "cognovis-tools", "claude_code") == 2
+
+
+def test_remove_dispatch_reports_manual_url_removal_as_failure() -> None:
+    handler = MagicMock(return_value=1)
+    module = MagicMock(install_url_only=handler)
+
+    assert _remove_from_harness(module, "cognovis-tools", "claude_ai") == 1
+    handler.assert_called_once_with(
+        "cognovis-tools",
+        {},
+        dry_run=False,
+        remove=True,
+        harness="claude_ai",
+    )
+
+
+def test_import_failure_restores_environment_overrides(
+    tmp_env: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key = "CLAUDE_SETTINGS_FILE"
+    monkeypatch.setenv(key, "before")
+    monkeypatch.setattr(
+        mcp_installer,
+        "ensure_mcp_deploy_clone",
+        lambda **kwargs: tmp_env["deploy_path"],
+    )
+
+    def fail_import() -> object:
+        raise ImportError("broken install helper")
+
+    monkeypatch.setattr(mcp_installer, "_import_install_mcp", fail_import)
+
+    with pytest.raises(InstallError, match="broken install helper"):
+        install_mcp(
+            tmp_env["catalog"],
+            "cognovis-tools",
+            tmp_env["tmp_path"],
+            harness="claude_code",
+            env_overrides={key: "temporary"},
+        )
+
+    assert os.environ[key] == "before"
 
 
 def _make_supervised_catalog(project_path: Path, *, stdio_command: str = "uv") -> dict:
