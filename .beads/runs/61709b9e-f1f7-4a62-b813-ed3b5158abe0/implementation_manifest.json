@@ -4,7 +4,7 @@
   "acceptance_criteria": [
     {
       "id": "1",
-      "status": "passed",
+      "status": "done",
       "summary": "bin/cdx bead modes default to --sandbox workspace-write with approval_policy=\"never\"; --dangerously-bypass-approvals-and-sandbox is only used when --bead-dangerous-full-auto is supplied, and that path prints a stderr warning.",
       "changed_files": [
         "bin/cdx",
@@ -19,7 +19,7 @@
     },
     {
       "id": "2",
-      "status": "passed",
+      "status": "done",
       "summary": "Prompt-injection fixtures in description, notes, acceptance criteria, and dependency title remain inside the untrusted bead-context delimiter and do not alter quick workflow, route profile, model, permission text, or side effects.",
       "changed_files": [
         "tests/test_cdx_quick_cursor_dispatch.py"
@@ -32,7 +32,7 @@
     },
     {
       "id": "3",
-      "status": "passed",
+      "status": "done",
       "summary": "bin/cdx still obtains bead context through fetch_bead_context(), validates the cdx.bead_context envelope, and wraps it with BEGIN_CDX_BEAD_CONTEXT_UNTRUSTED_DATA / END_CDX_BEAD_CONTEXT_UNTRUSTED_DATA before prompt composition; no raw bead-text fallback or splice was introduced.",
       "changed_files": [
         "bin/cdx"
@@ -87,12 +87,30 @@
     "Operators who need the previous full bypass for bead modes must pass --bead-dangerous-full-auto and will see a stderr warning.",
     "The plain non-bead cdx default launch path remains unchanged and still owns its existing --no-full-auto behavior."
   ],
-  "evidence_refs": {
-    "cmd:red-new-regressions": "Initial targeted pytest run exited 1 with failures showing default dangerous bypass and unparsed --bead-dangerous-full-auto.",
-    "cmd:green-new-regressions": "Targeted pytest run exited 0 with 9 passed after bin/cdx change.",
-    "cmd:full-requested-suites": "Requested two-file pytest run exited 0 with 38 passed.",
-    "cmd:dangerous-occurrence-review": "rg over bin/cdx shows dangerous bypass only in the explicit bead opt-in helper and the out-of-scope plain launch path.",
-    "review:dangerous-flag-scope": "Code review confirmed the three bead-mode call sites use select_bead_codex_permission_args().",
-    "review:envelope-delimiter-preserved": "Code review confirmed fetch_bead_context(), validate_bead_context_envelope(), and format_untrusted_bead_context() remain the bead-context path."
-  }
+  "evidence_refs": [
+    {
+      "ref": "cmd:red-new-regressions",
+      "note": "Initial targeted pytest run exited 1 with failures showing default dangerous bypass and unparsed --bead-dangerous-full-auto."
+    },
+    {
+      "ref": "cmd:green-new-regressions",
+      "note": "Targeted pytest run exited 0 with 9 passed after bin/cdx change."
+    },
+    {
+      "ref": "cmd:full-requested-suites",
+      "note": "Requested two-file pytest run exited 0 with 38 passed."
+    },
+    {
+      "ref": "cmd:dangerous-occurrence-review",
+      "note": "rg over bin/cdx shows dangerous bypass only in the explicit bead opt-in helper and the out-of-scope plain launch path."
+    },
+    {
+      "ref": "review:dangerous-flag-scope",
+      "note": "Code review confirmed the three bead-mode call sites use select_bead_codex_permission_args()."
+    },
+    {
+      "ref": "review:envelope-delimiter-preserved",
+      "note": "Code review confirmed fetch_bead_context(), validate_bead_context_envelope(), and format_untrusted_bead_context() remain the bead-context path."
+    }
+  ]
 }
