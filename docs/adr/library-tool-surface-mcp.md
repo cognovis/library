@@ -325,6 +325,27 @@ under its own epic.
 4. This ADR is linked from `docs/ARCHITECTURE.md`.
 5. Phase 2–7 follow-up beads exist and are sequenced.
 
+## Amendment (CL-j92j, 2026-07)
+
+Phase 6 ("Capabilities migration", above) framed "coarse server-level scoping" as
+registering `mcpServers: [cognovis-tools]` on `manage_beads` with an empty
+`tools: []`. In practice this under-specified the Claude Code consumer: Claude
+Code only allows an agent to call `mcp__<server>__<tool>` when that exact name is
+listed in its `tools:` frontmatter allowlist. `mcpServers:` registration alone
+makes the server reachable but grants no callable tool. The Phase 6
+implementation (bead CL-ugwe.6) shipped `manage_beads.claude.tools: []`, which
+left every consuming agent (`bead-orchestrator`, `quick-fix`, `session-close`,
+`wave-orchestrator`, `bead-author`) with zero callable bead tools despite the
+server being registered — a live regression caught and fixed by bead CL-j92j.
+
+"Coarse server-level scoping" still holds as the *scoping granularity*: all
+`manage_beads`-declaring agents share one capability with the same full set of
+typed tools, rather than per-role tool subsets. What changed is the *mechanism*:
+for Claude Code, coarse scoping is expressed as an explicit list of every
+`mcp__cognovis-tools__bead_*` tool name in `claude.tools`, not as an empty list
+plus `mcpServers:`. `docs/mcp-migration-rollback.md` documents the corrected
+shape and the regression tests that guard it going forward.
+
 ## Cross-References
 
 - [ADR-0002](canonical-library-architecture.md) — deployment-target model
