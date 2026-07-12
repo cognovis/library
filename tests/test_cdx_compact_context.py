@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 
@@ -18,8 +19,12 @@ def _load_module():
     return mod
 
 
-def test_render_context_omits_nested_dependency_bodies() -> None:
-    """Dependency summaries stay compact and do not include nested full descriptions."""
+def _field(envelope: dict, name: str) -> dict:
+    return envelope["data"]["fields"][name]
+
+
+def test_render_context_emits_untrusted_provenance_envelope() -> None:
+    """Bead-controlled fields are serialized as data with trust metadata."""
     mod = _load_module()
     payload = [
         {
@@ -32,6 +37,7 @@ def test_render_context_omits_nested_dependency_bodies() -> None:
             "labels": ["stream:test"],
             "metadata": {"routing": {"routed_effort": "small"}},
             "description": "Implement the parent.",
+            "acceptance_criteria": "Context is wrapped.",
             "notes": "short note",
             "dependencies": [
                 {
@@ -47,11 +53,31 @@ def test_render_context_omits_nested_dependency_bodies() -> None:
     ]
 
     rendered = mod.render_context(payload)
+    envelope = json.loads(rendered)
+    fields = envelope["data"]["fields"]
+    dependency_fields = envelope["data"]["dependencies"][0]["fields"]
 
-    assert "# Bead CL-parent: Parent bead" in rendered
-    assert "- effort: small" in rendered
-    assert "Implement the parent." in rendered
-    assert "- CL-child: Child bead [closed; discovered-from]" in rendered
+    assert envelope["contract_version"] == "1"
+    assert envelope["kind"] == "cdx.bead_context"
+    assert envelope["classification"] == "untrusted"
+    assert _field(envelope, "title") == {
+        "source": "bead.title",
+        "trust": "untrusted",
+        "untrusted": True,
+        "content_type": "text/plain",
+        "value": "Parent bead",
+    }
+    assert fields["description"]["source"] == "bead.description"
+    assert fields["description"]["trust"] == "untrusted"
+    assert fields["description"]["untrusted"] is True
+    assert fields["description"]["value"] == "Implement the parent."
+    assert fields["acceptance_criteria"]["source"] == "bead.acceptance_criteria"
+    assert fields["notes"]["source"] == "bead.notes"
+    assert fields["labels"]["source"] == "bead.labels"
+    assert fields["effort"]["value"] == "small"
+    assert dependency_fields["title"]["source"] == "bead.dependencies[0].title"
+    assert dependency_fields["title"]["trust"] == "untrusted"
+    assert dependency_fields["title"]["value"] == "Child bead"
     assert "NESTED_DEPENDENCY_BODY_SHOULD_NOT_RENDER" not in rendered
     assert "NESTED_DEPENDENCY_NOTES_SHOULD_NOT_RENDER" not in rendered
 
@@ -72,6 +98,6 @@ def test_render_context_truncates_long_notes(monkeypatch) -> None:
     }
 
     rendered = mod.render_context(payload)
+    envelope = json.loads(rendered)
 
-    assert "x" * 20 in rendered
-    assert "[truncated 30 chars]" in rendered
+    assert _field(envelope, "notes")["value"] == f"{'x' * 20}\n\n[truncated 30 chars]"
