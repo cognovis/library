@@ -555,3 +555,121 @@ def test_library_agent_use_builds_single_source_for_both_harnesses(tmp_path: Pat
     assert "CLAUDE_AGENT_BASE_LAYER1_MARKER" in claude.read_text()
     codex_data = tomllib.loads(codex.read_text())
     assert "CODEX_AGENT_BASE_LAYER1_MARKER" in codex_data["developer_instructions"]
+
+
+# ---------------------------------------------------------------------------
+# manage_beads typed-tool regression (CL-j92j)
+#
+# Root cause: capabilities.yaml's manage_beads capability declared
+# `claude.tools: []` (an explicit empty list) alongside `mcpServers:
+# [cognovis-tools]`. Registering an MCP server does not, by itself, grant any
+# callable tool from that server in Claude Code — only exact `mcp__<server>__
+# <tool>` names listed in an agent's `tools:` allowlist are callable. Every
+# agent declaring manage_beads therefore had zero callable bead_* tools
+# despite the server being nominally registered.
+#
+# These fixtures are hermetic: they read the REAL capabilities.yaml in this
+# repo (no cognovis-core sibling checkout required), so they always run.
+# ---------------------------------------------------------------------------
+
+# Source of truth for this list: cognovis-core/mcp-servers/cognovis-tools/
+# tools/bead_tools.py `def bead_*` function names (verified via grep during
+# CL-j92j implementation). Do not add or rename entries without re-verifying
+# against that file.
+_MANAGE_BEADS_TYPED_TOOLS = [
+    "mcp__cognovis-tools__bead_show",
+    "mcp__cognovis-tools__bead_ready",
+    "mcp__cognovis-tools__bead_list",
+    "mcp__cognovis-tools__bead_search",
+    "mcp__cognovis-tools__bead_repos",
+    "mcp__cognovis-tools__bead_create",
+    "mcp__cognovis-tools__bead_claim",
+    "mcp__cognovis-tools__bead_update",
+    "mcp__cognovis-tools__bead_update_notes",
+    "mcp__cognovis-tools__bead_review_write",
+    "mcp__cognovis-tools__bead_close",
+    "mcp__cognovis-tools__bead_dep_add",
+    "mcp__cognovis-tools__bead_dep_remove",
+    "mcp__cognovis-tools__bead_dolt_sync",
+]
+
+
+def _assert_manage_beads_tools_present(tools: set[str]) -> None:
+    """Regression guard: manage_beads must expose every typed bead_* tool.
+
+    Raises AssertionError (with "CL-j92j regression" in the message for the
+    empty case) if *tools* is empty or missing any expected typed tool name.
+    """
+    assert tools, "manage_beads granted zero Claude tools (CL-j92j regression)"
+    missing = set(_MANAGE_BEADS_TYPED_TOOLS) - tools
+    assert not missing, f"manage_beads is missing typed tools: {sorted(missing)}"
+
+
+def write_manage_beads_source(tmp_path: Path) -> Path:
+    source = tmp_path / "bead-capability-agent.md"
+    source.write_text(
+        "---\n"
+        "name: bead-capability-agent\n"
+        "description: Fixture agent that only declares manage_beads.\n"
+        "model: sonnet\n"
+        "capabilities:\n"
+        "  - manage_beads\n"
+        "agent_base: auto\n"
+        "---\n\n"
+        "# Bead Capability Agent\n\nFixture body for CL-j92j regression coverage.\n"
+    )
+    return source
+
+
+def test_manage_beads_capability_registry_has_explicit_typed_tools() -> None:
+    """capabilities.yaml's manage_beads.claude.tools is the explicit typed list."""
+    module = load_build_agent_module()
+    registry = module.load_capabilities_registry()
+    manage_beads = registry.get("manage_beads")
+    assert manage_beads is not None, "manage_beads capability missing from capabilities.yaml"
+
+    claude_binding = manage_beads.get("claude") or {}
+    tools = set(module._as_string_list(claude_binding.get("tools")))  # noqa: SLF001
+    _assert_manage_beads_tools_present(tools)
+
+    mcp_servers = set(module._as_string_list(claude_binding.get("mcpServers")))  # noqa: SLF001
+    assert "cognovis-tools" in mcp_servers, (
+        "manage_beads.claude.mcpServers must keep registering cognovis-tools"
+    )
+
+
+def test_manage_beads_empty_tools_regression_fixture_would_have_caught_the_bug() -> None:
+    """Regression fixture: the pre-CL-j92j `tools: []` shape fails the guard helper.
+
+    Confirms _assert_manage_beads_tools_present is not vacuous — it would have
+    caught the historical bug where manage_beads.claude.tools was an explicit [].
+    """
+    with pytest.raises(AssertionError, match="CL-j92j regression"):
+        _assert_manage_beads_tools_present(set())
+
+
+def test_build_agent_grants_manage_beads_typed_tools_end_to_end(tmp_path: Path) -> None:
+    """An agent declaring only manage_beads gets the full typed bead_* tool set.
+
+    Exercises the real merge path (apply_capabilities -> _set_tools) against
+    the real repo capabilities.yaml, end to end through the CLI entry point.
+    """
+    source = write_manage_beads_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 0, result.stderr
+    built = (output_dir / "bead-capability-agent.md").read_text()
+    frontmatter = yaml.safe_load(built.split("---", 2)[1]) or {}
+    tools = {t.strip() for t in str(frontmatter.get("tools", "")).split(",") if t.strip()}
+    _assert_manage_beads_tools_present(tools)
+
+    mcp_servers = frontmatter.get("mcpServers") or []
+    assert "cognovis-tools" in mcp_servers, (
+        "built agent frontmatter must register the cognovis-tools MCP server "
+        "alongside the typed tools (CL-j92j AC4: server-absent regression)"
+    )
