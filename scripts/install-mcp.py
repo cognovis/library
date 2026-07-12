@@ -295,7 +295,7 @@ def install_claude_code(
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[claude_code] entry missing install.mcp.claude_code.snippet — skip", file=sys.stderr)
+        print("[claude_code] entry missing install.mcp.claude_code.snippet — skip", file=sys.stderr)
         return 0
     updated, action = _merge_json_map(settings, "mcpServers", name, snippet, origin)
     if dry_run:
@@ -335,7 +335,7 @@ def install_codex(name: str, block: dict, dry_run: bool, remove: bool) -> int:
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[codex] entry missing install.mcp.codex.snippet — skip", file=sys.stderr)
+        print("[codex] entry missing install.mcp.codex.snippet — skip", file=sys.stderr)
         return 0
     updated, action = _merge_toml_table(doc, "mcp_servers", name, snippet, origin)
     if dry_run:
@@ -375,7 +375,7 @@ def install_opencode(name: str, block: dict, dry_run: bool, remove: bool) -> int
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[opencode] entry missing install.mcp.opencode.snippet — skip", file=sys.stderr)
+        print("[opencode] entry missing install.mcp.opencode.snippet — skip", file=sys.stderr)
         return 0
     updated, action = _merge_json_map(config, "mcp", name, snippet, origin)
     if dry_run:
@@ -500,6 +500,11 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--remove", action="store_true")
     ap.add_argument(
+        "--rollback-stdio",
+        action="store_true",
+        help="Restore preserved stdio descriptor for supervised MCP servers.",
+    )
+    ap.add_argument(
         "--harness",
         choices=list(HANDLERS.keys()) + ["all"],
         default="all",
@@ -509,6 +514,61 @@ def main() -> int:
 
     library = load_library()
     entry = find_mcp_entry(library, args.name)
+
+    env_overrides = {
+        key: os.environ[key]
+        for key in (
+            "CLAUDE_SETTINGS_FILE",
+            "CODEX_CONFIG_FILE",
+            "OPENCODE_CONFIG_FILE",
+            "GEMINI_SETTINGS_FILE",
+            "CURSOR_MCP_FILE",
+        )
+        if key in os.environ
+    } or None
+
+    if entry.get("supervised_local_service") and args.remove:
+        from lib.installers.mcp_installer import remove_mcp
+
+        result = remove_mcp(
+            catalog=library,
+            name=args.name,
+            repo_root=REPO_ROOT,
+            scope="global",
+            dry_run=args.dry_run,
+            harness=args.harness,
+            env_overrides=env_overrides,
+        )
+        if result.get("status") == "dry-run":
+            for op in result.get("operations", []):
+                print(f"[dry-run] {op.get('operation')}: {op.get('details')}")
+            return 0
+        print(result.get("message", "removed"))
+        return 0 if result.get("status") == "ok" else 1
+
+    if entry.get("supervised_local_service") and not args.remove:
+        from lib.installers.mcp_installer import install_mcp
+
+        result = install_mcp(
+            catalog=library,
+            name=args.name,
+            repo_root=REPO_ROOT,
+            scope="global",
+            dry_run=args.dry_run,
+            harness=args.harness,
+            env_overrides=env_overrides,
+            rollback_stdio=args.rollback_stdio,
+        )
+        if result.get("status") == "dry-run":
+            for op in result.get("operations", []):
+                print(f"[dry-run] {op.get('operation')}: {op.get('details')}")
+            return 0
+        if result.get("status") != "ok":
+            print(result.get("message", "install failed"), file=sys.stderr)
+            return 1
+        print(result.get("message", "installed"))
+        return 0
+
     mcp_block = (entry.get("install", {}) or {}).get("mcp", {})
     if not mcp_block:
         sys.exit(

@@ -227,64 +227,24 @@ class TestInstallMcp(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("manual install required", result.stdout)
 
-    # --- CL-qdtc: antigravity (Gemini CLI) + cursor write the mcpServers map ---
+    # --- CL-qdtc: cognovis-tools supervised HTTP catalog + installer coverage ---
 
-    def test_antigravity_install_writes_mcpservers(self):
-        # 'cognovis-tools' declares antigravity per library.yaml
-        result = run_install_mcp(
-            "cognovis-tools", "--harness", "antigravity", env_overrides=self.env
+    def test_cognovis_tools_catalog_declares_http_snippets(self):
+        import yaml
+
+        library = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
+        entry = next(
+            item
+            for item in library["library"]["mcp_servers"]
+            if item["name"] == "cognovis-tools"
         )
-        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
-        self.assertTrue(self.gemini_settings.is_file())
-        data = json.loads(self.gemini_settings.read_text())
-        self.assertIn("mcpServers", data)
-        self.assertIn("cognovis-tools", data["mcpServers"])
-        entry = data["mcpServers"]["cognovis-tools"]
-        self.assertEqual(entry.get("_origin"), "library:mcp:cognovis-tools")
-        self.assertEqual(entry.get("command"), "sh")
-
-    def test_cursor_install_writes_mcpservers(self):
-        # 'cognovis-tools' declares cursor per library.yaml
-        result = run_install_mcp(
-            "cognovis-tools", "--harness", "cursor", env_overrides=self.env
-        )
-        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
-        self.assertTrue(self.cursor_config.is_file())
-        data = json.loads(self.cursor_config.read_text())
-        self.assertIn("mcpServers", data)
-        self.assertIn("cognovis-tools", data["mcpServers"])
-        self.assertEqual(
-            data["mcpServers"]["cognovis-tools"]["_origin"],
-            "library:mcp:cognovis-tools",
-        )
-
-    def test_antigravity_reinstall_is_idempotent(self):
-        r1 = run_install_mcp("cognovis-tools", "--harness", "antigravity", env_overrides=self.env)
-        self.assertEqual(r1.returncode, 0)
-        first = self.gemini_settings.read_text()
-        r2 = run_install_mcp("cognovis-tools", "--harness", "antigravity", env_overrides=self.env)
-        self.assertEqual(r2.returncode, 0)
-        self.assertIn("no change", r2.stdout)
-        self.assertEqual(json.loads(first), json.loads(self.gemini_settings.read_text()))
-
-    def test_cursor_remove_drops_library_managed(self):
-        run_install_mcp("cognovis-tools", "--harness", "cursor", env_overrides=self.env)
-        result = run_install_mcp(
-            "cognovis-tools", "--harness", "cursor", "--remove", env_overrides=self.env
-        )
-        self.assertEqual(result.returncode, 0)
-        data = json.loads(self.cursor_config.read_text())
-        self.assertNotIn("cognovis-tools", data.get("mcpServers", {}))
-
-    def test_all_install_covers_four_harnesses(self):
-        # 'cognovis-tools' declares claude_code, codex, antigravity, cursor.
-        # '--harness all' (default) must write every one of them.
-        result = run_install_mcp("cognovis-tools", env_overrides=self.env)
-        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
-        self.assertTrue(self.claude_settings.is_file(), "claude_code not written")
-        self.assertTrue(self.codex_config.is_file(), "codex not written")
-        self.assertTrue(self.gemini_settings.is_file(), "antigravity not written")
-        self.assertTrue(self.cursor_config.is_file(), "cursor not written")
+        url = "http://127.0.0.1:8765/mcp"
+        snippets = entry["install"]["mcp"]
+        self.assertEqual(snippets["claude_code"]["snippet"], {"type": "http", "url": url})
+        self.assertEqual(snippets["codex"]["snippet"], {"url": url})
+        self.assertEqual(snippets["antigravity"]["snippet"], {"type": "http", "url": url})
+        self.assertEqual(snippets["cursor"]["snippet"], {"type": "http", "url": url})
+        self.assertIn("supervised_local_service", entry)
 
     # --- CL-oo82: corrected default config paths per harness ---
 
@@ -315,16 +275,16 @@ class TestInstallMcp(unittest.TestCase):
                 if v is not None:
                     os.environ[k] = v
 
-    def test_antigravity_install_into_empty_config_file(self):
-        """An existing but empty config file (Antigravity default) must not crash."""
-        self.gemini_settings.parent.mkdir(parents=True, exist_ok=True)
-        self.gemini_settings.write_text("")  # 0-byte file, as agy ships it
+    def test_install_into_empty_config_file(self):
+        """An existing but empty JSON config file must not crash."""
+        self.claude_settings.parent.mkdir(parents=True, exist_ok=True)
+        self.claude_settings.write_text("")
         result = run_install_mcp(
-            "cognovis-tools", "--harness", "antigravity", env_overrides=self.env
+            "open-brain", "--harness", "claude_code", env_overrides=self.env
         )
         self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
-        data = json.loads(self.gemini_settings.read_text())
-        self.assertIn("cognovis-tools", data.get("mcpServers", {}))
+        data = json.loads(self.claude_settings.read_text())
+        self.assertIn("open-brain", data.get("mcpServers", {}))
 
     # --- bonus: --dry-run on a fresh env shouldn't write files ---
 

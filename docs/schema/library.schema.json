@@ -1204,6 +1204,109 @@
         }
       ]
     },
+    "argv_command": {
+      "description": "Deterministic process invocation as a command plus argv list. Shell interpolation is not allowed when this shape is used.",
+      "type": "object",
+      "required": [
+        "command",
+        "args"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "Executable name or absolute path.",
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "description": "Argv tokens passed to the command without shell interpretation.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "mcp_stdio_descriptor": {
+      "description": "Harness-agnostic stdio MCP registration descriptor preserved for rollback.",
+      "type": "object",
+      "required": [
+        "type",
+        "command",
+        "args"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "stdio"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "supervised_local_service": {
+      "description": "Supervised loopback MCP service metadata for install-time daemon lifecycle. The installer runs install/start/health before writing HTTP harness registrations and preserves stdio_rollback for transactional fallback.",
+      "type": "object",
+      "required": [
+        "url",
+        "install",
+        "start",
+        "health_check",
+        "restart",
+        "stop",
+        "uninstall",
+        "stdio_rollback"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "description": "Loopback Streamable HTTP MCP endpoint written into harness registrations.",
+          "type": "string",
+          "pattern": "^http://127\\.0\\.0\\.1:[0-9]+/mcp$"
+        },
+        "health_url": {
+          "description": "Optional HTTP health probe URL for documentation and live checks.",
+          "type": "string",
+          "pattern": "^http://127\\.0\\.0\\.1:[0-9]+/health$"
+        },
+        "install": {
+          "$ref": "#/$defs/argv_command"
+        },
+        "start": {
+          "$ref": "#/$defs/argv_command"
+        },
+        "health_check": {
+          "$ref": "#/$defs/argv_command"
+        },
+        "restart": {
+          "$ref": "#/$defs/argv_command"
+        },
+        "stop": {
+          "$ref": "#/$defs/argv_command"
+        },
+        "uninstall": {
+          "$ref": "#/$defs/argv_command"
+        },
+        "stdio_rollback": {
+          "$ref": "#/$defs/mcp_stdio_descriptor"
+        },
+        "activation_note": {
+          "description": "Human-readable note about live harness activation gates (roots or workspace_bind probes).",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "mcp_server_entry": {
       "description": "Canonical definition of one MCP server. Describes what the server does and how it should be installed per harness. MCP entries intentionally do not carry metadata.library.harness_support; install.mcp is the source of truth for MCP-specific harness configuration.",
       "type": "object",
@@ -1275,6 +1378,9 @@
               ]
             }
           }
+        },
+        "supervised_local_service": {
+          "$ref": "#/$defs/supervised_local_service"
         },
         "install": {
           "description": "Per-harness install metadata. Does NOT include translator code \u2014 that is a follow-up bead.",
