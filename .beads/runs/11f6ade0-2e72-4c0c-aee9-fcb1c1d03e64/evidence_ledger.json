@@ -1,0 +1,39 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-cqeo",
+  "commands": [
+    {
+      "command": "zsh -n bin/cld",
+      "purpose": "syntax validation after implementation",
+      "exit_code": 0,
+      "observed": "cld: syntax OK"
+    },
+    {
+      "command": "zsh -n bin/cdx",
+      "purpose": "syntax validation after implementation",
+      "exit_code": 0,
+      "observed": "cdx: syntax OK"
+    },
+    {
+      "command": "uv run pytest tests/test_cld_single_bead_contract.py tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py -q",
+      "purpose": "targeted regression suite for callback/review/wave-flag/help/model-selection contracts",
+      "exit_code": 0,
+      "observed": "43 passed in 12.13s"
+    },
+    {
+      "command": "git diff 3a34bee6245ff64f8fa85455324a5a8d132e2cae..HEAD -- bin/cld bin/cdx",
+      "purpose": "manual diff review against /tmp/arch-design-CL-cqeo.md concrete design section",
+      "exit_code": 0,
+      "observed": "all 11 numbered design requirements present and matching pinned Fragment C / Fragment R wording"
+    }
+  ],
+  "skipped_checks": [
+    {
+      "reason": "codex-impl.py (gpt-5.5) itself exited PARTIAL (exit=4, worktree_dirty) after a ~40min stall in its background codex_models_manager model-list refresh thread (network errors against chatgpt.com backend), not a code defect -- its own Completion Report / token-usage metrics logging step never ran. Orchestrator independently verified correctness (syntax + full targeted test pass) before committing on its behalf."
+    }
+  ],
+  "artifacts": [
+    "/tmp/impl-output.log (codex-impl.py stdout: CompletionReport JSON, status=partial)",
+    "/tmp/impl-output.err (codex-impl.py stderr: codex exec streamed output, apply_patch retry + model-refresh network errors)"
+  ]
+}
