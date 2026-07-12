@@ -46,10 +46,14 @@ from typing import Protocol, Sequence
 # Validation
 # ---------------------------------------------------------------------------
 
-WORKSPACE_REF_RE = re.compile(r"^workspace:[0-9]+$")
-SURFACE_REF_RE = re.compile(r"^surface:[0-9]+$")
-RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-EVENT_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+# \Z (not $) anchors strictly at end-of-string: re's `$` treats a trailing
+# "\n" as equivalent to end-of-string, which would let e.g. "run-1\n" match
+# these otherwise-strict identity patterns and leak a stray newline into a
+# state/lock directory or filename.
+WORKSPACE_REF_RE = re.compile(r"^workspace:[0-9]+\Z")
+SURFACE_REF_RE = re.compile(r"^surface:[0-9]+\Z")
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+EVENT_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*\Z")
 
 DEFAULT_STATE_ROOT = Path(".beads") / "callback-state"
 
@@ -219,6 +223,29 @@ def _state_path(state_dir: Path, event: str) -> Path:
     return state_dir / f"{event}.json"
 
 
+# A lock older than this with no corresponding state file is treated as an
+# orphan left behind by a process that crashed between acquiring the lock
+# and writing its state, rather than a legitimate delivery still in flight
+# (cmux invocation + the atomic state write normally complete in well under
+# a second). Conservative on purpose: a value too small risks reclaiming a
+# lock out from under a merely-slow-but-alive delivery and invoking cmux
+# twice for the same run+event.
+STALE_LOCK_SECONDS = 30.0
+
+
+def _lock_is_stale(lock_path: Path) -> bool:
+    """True if ``lock_path`` exists and is older than STALE_LOCK_SECONDS."""
+    try:
+        age = time.time() - lock_path.stat().st_mtime
+    except OSError:
+        # Lock vanished between the caller's exists()-adjacent check and
+        # here (e.g. cleaned up concurrently by another caller). Treat as
+        # not stale -- the caller re-attempts acquisition through the normal
+        # path rather than racing an unlink against nothing.
+        return False
+    return age > STALE_LOCK_SECONDS
+
+
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
     """Write JSON to ``path`` atomically: temp file in the same directory,
     then os.replace() (per python-default-bash-exception / DI standards'
@@ -252,7 +279,10 @@ def deliver_callback(
     same pair is a no-op. A failed delivery attempt (missing cmux binary, or
     cmux itself returning non-zero) rolls back its claim so a later retry can
     still succeed -- a transient failure must not permanently silence the
-    callback for that run+event.
+    callback for that run+event. A lock left behind with no state file after
+    STALE_LOCK_SECONDS (a crashed prior attempt) is reclaimed and retried
+    rather than silently reported as already delivered -- see
+    ``_lock_is_stale``.
     """
     validate_run_id(run_id)
     validate_event(event)
@@ -287,6 +317,33 @@ def deliver_callback(
         acquired = False
     except OSError as exc:
         raise StateError(f"cannot create lock file {lock_path}: {exc}") from exc
+
+    if not acquired and not state_path.exists() and _lock_is_stale(lock_path):
+        # A lock this old with no corresponding state file means a prior
+        # process almost certainly crashed between acquiring the
+        # O_CREAT|O_EXCL lock (above) and the later _atomic_write_json()
+        # call, leaving an orphaned lock behind -- a legitimate concurrent
+        # delivery normally completes the cmux call and writes its state
+        # within a small fraction of STALE_LOCK_SECONDS. Reclaim: remove the
+        # orphaned lock and retry acquisition once. If a genuine concurrent
+        # delivery grabs the lock in that same instant, this retry's
+        # FileExistsError simply falls through to the normal
+        # already_delivered/mismatch handling below -- exactly-once
+        # semantics are preserved either way, and we never call cmux twice
+        # for the same run+event without holding the lock ourselves.
+        with contextlib.suppress(OSError):
+            lock_path.unlink()
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            try:
+                os.write(fd, f"{os.getpid()}\n".encode("utf-8"))
+            finally:
+                os.close(fd)
+            acquired = True
+        except FileExistsError:
+            acquired = False
+        except OSError as exc:
+            raise StateError(f"cannot create lock file {lock_path}: {exc}") from exc
 
     if not acquired:
         # Another invocation already claimed delivery for this run+event.

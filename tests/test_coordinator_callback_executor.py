@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -130,6 +132,35 @@ def test_rejects_invalid_event_name(tmp_path: Path) -> None:
             runner=runner,
         )
     assert runner.calls == []
+
+
+@pytest.mark.parametrize(
+    "ref_kind,bad_ref",
+    [
+        ("workspace", "workspace:1\n"),
+        ("surface", "surface:1\n"),
+    ],
+)
+def test_ref_with_trailing_newline_is_rejected(ref_kind: str, bad_ref: str) -> None:
+    """re's `$` treats a trailing "\\n" as end-of-string, which would
+    otherwise let "workspace:1\\n" slip past this supposedly-strict pattern.
+    """
+    cc = _import_module()
+    with pytest.raises(cc.ValidationError):
+        cc.validate_ref(bad_ref, ref_kind)
+
+
+@pytest.mark.parametrize("bad_run_id", ["run-1\n", "run-1\r\n"], ids=["trailing-lf", "trailing-crlf"])
+def test_run_id_with_trailing_newline_or_crlf_is_rejected(bad_run_id: str) -> None:
+    cc = _import_module()
+    with pytest.raises(cc.ValidationError):
+        cc.validate_run_id(bad_run_id)
+
+
+def test_event_with_trailing_newline_is_rejected() -> None:
+    cc = _import_module()
+    with pytest.raises(cc.ValidationError):
+        cc.validate_event("terminal\n")
 
 
 def test_command_injection_style_ref_is_rejected_before_any_command_runs(tmp_path: Path) -> None:
@@ -340,6 +371,57 @@ def test_stale_mismatched_run_state_fails_visibly_without_invoking_cmux(tmp_path
             run_id="run-1", event="terminal", workspace=None, surface="surface:33",
             state_root=state_root, runner=runner,
         )
+    assert runner.calls == []
+
+
+def test_stale_lock_without_state_is_reclaimed_and_delivers(tmp_path: Path) -> None:
+    """Simulates the crash window between acquiring the lock and writing the
+    state file: a lock file exists but its {event}.json state never got
+    written, and the lock is older than STALE_LOCK_SECONDS. This must not be
+    silently reported as already_delivered without ever invoking cmux --
+    instead the orphaned lock is reclaimed and delivery proceeds normally."""
+    cc = _import_module()
+    state_root = tmp_path / "state"
+    run_state_dir = state_root / "run-1"
+    run_state_dir.mkdir(parents=True)
+    lock_path = run_state_dir / "terminal.lock"
+    lock_path.write_text("12345\n", encoding="utf-8")
+    # Backdate the lock past STALE_LOCK_SECONDS so it is treated as an
+    # orphan left behind by a crashed process, not an in-flight delivery.
+    stale_time = time.time() - (cc.STALE_LOCK_SECONDS + 10)
+    os.utime(lock_path, (stale_time, stale_time))
+
+    runner = cc.MockCommandRunner()
+    result = cc.deliver_callback(
+        run_id="run-1", event="terminal", workspace=None, surface="surface:33",
+        state_root=state_root, runner=runner,
+    )
+    assert result.status == "delivered"
+    assert runner.calls == [["cmux", "trigger-flash", "--surface", "surface:33"]]
+    state_path = run_state_dir / "terminal.json"
+    assert state_path.exists()
+    written = json.loads(state_path.read_text(encoding="utf-8"))
+    assert written["run_id"] == "run-1"
+    assert written["event"] == "terminal"
+
+
+def test_fresh_lock_without_state_is_not_reclaimed(tmp_path: Path) -> None:
+    """A brand-new lock with no state file yet (well within
+    STALE_LOCK_SECONDS) looks identical to a genuine in-flight concurrent
+    delivery -- it must NOT be reclaimed, to avoid a second concurrent cmux
+    invocation for the same run+event."""
+    cc = _import_module()
+    state_root = tmp_path / "state"
+    run_state_dir = state_root / "run-1"
+    run_state_dir.mkdir(parents=True)
+    (run_state_dir / "terminal.lock").write_text("12345\n", encoding="utf-8")
+
+    runner = cc.MockCommandRunner()
+    result = cc.deliver_callback(
+        run_id="run-1", event="terminal", workspace=None, surface="surface:33",
+        state_root=state_root, runner=runner,
+    )
+    assert result.status == "already_delivered"
     assert runner.calls == []
 
 
