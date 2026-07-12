@@ -1,0 +1,136 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-wzv9",
+  "acceptance_criteria": [
+    {
+      "id": "1",
+      "status": "passed",
+      "summary": "compact-bead-context.py now emits a JSON bead-context envelope with field-level provenance and untrusted markers for rendered bead fields and dependency titles; bin/cdx wraps fetched context in an explicit untrusted-data block before every bead prompt splice.",
+      "changed_files": [
+        "scripts/compact-bead-context.py",
+        "bin/cdx",
+        "tests/test_cdx_compact_context.py",
+        "tests/test_cdx_bead_workflow.py"
+      ],
+      "evidence_refs": [
+        "EV-AC1-envelope-shape",
+        "EV-required-suite-green"
+      ]
+    },
+    {
+      "id": "2",
+      "status": "passed",
+      "summary": "Malformed payloads and oversized fields/envelopes fail closed with non-zero exit and clear stderr; cdx no longer falls back to raw bd show text when the compact envelope renderer fails.",
+      "changed_files": [
+        "scripts/compact-bead-context.py",
+        "bin/cdx",
+        "tests/test_cdx_compact_context.py",
+        "tests/test_cdx_bead_workflow.py",
+        "tests/test_route_profiles_schema.py"
+      ],
+      "evidence_refs": [
+        "EV-AC2-rejection",
+        "EV-AC3-cdx-no-raw-fallback",
+        "EV-required-suite-green"
+      ]
+    },
+    {
+      "id": "3",
+      "status": "passed",
+      "summary": "Injection fixtures in description, notes, acceptance criteria, and dependency title remain JSON string values under untrusted field metadata, and all cdx bead modes delimit the whole context block as untrusted data.",
+      "changed_files": [
+        "scripts/compact-bead-context.py",
+        "bin/cdx",
+        "tests/test_cdx_compact_context.py",
+        "tests/test_cdx_bead_workflow.py"
+      ],
+      "evidence_refs": [
+        "EV-AC3-injection-isolation",
+        "EV-AC3-cdx-boundary",
+        "EV-required-suite-green"
+      ]
+    }
+  ],
+  "changed_files": [
+    "bin/cdx",
+    "scripts/compact-bead-context.py",
+    "tests/test_cdx_bead_workflow.py",
+    "tests/test_cdx_compact_context.py",
+    "tests/test_route_profiles_schema.py",
+    ".beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/implementation_manifest.json",
+    ".beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "f7360c44e0cdfa3cdf01f5c7bd87042712fdd243",
+      "message": "test(CL-wzv9): red -- bead context envelope provenance"
+    },
+    {
+      "sha": "884c2c3580eb6a7b49ab26bce6b7f1408b088309",
+      "message": "feat(CL-wzv9): green -- bead context provenance envelope"
+    },
+    {
+      "sha": "656410c69c1d1f9c49ccff32dee08ecbb4533dec",
+      "message": "test(CL-wzv9): red -- reject malformed oversized context"
+    },
+    {
+      "sha": "55b93e088af50251e4cce8c61775a0532d3324e1",
+      "message": "feat(CL-wzv9): green -- reject malformed oversized context"
+    },
+    {
+      "sha": "0860b1a3fa793c3c51907176387138708b0e003b",
+      "message": "test(CL-wzv9): red -- isolate injected bead fields"
+    },
+    {
+      "sha": "40d98be60c546743dc4477b9cb9579f41762a8de",
+      "message": "feat(CL-wzv9): green -- isolate bead context prompts"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py",
+      "result": "3 passed after AC2 green; 7 passed after AC3 test additions"
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"compact_context or untrusted_data\"",
+      "result": "11 passed after cdx trust-boundary implementation"
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "result": "87 passed"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "bin/cdx -b, -bq, and -br now receive the same untrusted-data wrapper around bead context.",
+    "If compact-bead-context.py exists and rejects malformed or oversized bd JSON, cdx aborts instead of falling back to raw bd show text.",
+    "When the compact script is unavailable, cdx still allows the existing plain bd show fallback, but the fallback text is wrapped by the same untrusted-data delimiter."
+  ],
+  "evidence_refs": [
+    {
+      "id": "EV-AC1-envelope-shape",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_emits_untrusted_provenance_envelope validates JSON envelope shape and field-level source/trust/untrusted markers."
+    },
+    {
+      "id": "EV-AC2-rejection",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_rejects_oversized_notes and ::test_main_rejects_malformed_payload_with_clear_error validate fail-closed handling."
+    },
+    {
+      "id": "EV-AC3-injection-isolation",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_isolates_injection_fixture_by_field covers description, notes, acceptance_criteria, and dependency title fixtures."
+    },
+    {
+      "id": "EV-AC3-cdx-boundary",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_wrap_context_as_untrusted_data validates -b, -bq, and -br prompt boundaries."
+    },
+    {
+      "id": "EV-AC3-cdx-no-raw-fallback",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_compact_context_failure_aborts_without_raw_fallback validates compact-script failure does not pass raw bd show output."
+    },
+    {
+      "id": "EV-required-suite-green",
+      "description": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py returned 87 passed."
+    }
+  ]
+}
