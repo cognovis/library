@@ -13,6 +13,16 @@ DEFAULT_TEXT_LIMIT = 12000
 DEFAULT_NOTES_LIMIT = 2000
 
 
+def _untrusted_field(source: str, value: Any, *, content_type: str = "text/plain") -> dict[str, Any]:
+    return {
+        "source": source,
+        "trust": "untrusted",
+        "untrusted": True,
+        "content_type": content_type,
+        "value": value,
+    }
+
+
 def _limit_text(value: Any, limit: int) -> str:
     text = str(value or "").strip()
     if len(text) <= limit:
@@ -29,7 +39,7 @@ def _metadata_value(metadata: dict[str, Any], key: str) -> str:
 
 
 def render_context(payload: Any) -> str:
-    """Render bd show --json payload as compact Markdown."""
+    """Render bd show --json payload as an untrusted-data envelope."""
     if isinstance(payload, list):
         if not payload:
             raise ValueError("bd payload is empty")
@@ -45,40 +55,76 @@ def render_context(payload: Any) -> str:
     text_limit = int(os.environ.get("CDX_BEAD_CONTEXT_TEXT_LIMIT", DEFAULT_TEXT_LIMIT))
     notes_limit = int(os.environ.get("CDX_BEAD_CONTEXT_NOTES_LIMIT", DEFAULT_NOTES_LIMIT))
 
-    lines = [
-        f"# Bead {bead.get('id', '')}: {bead.get('title', '')}".rstrip(),
-        "",
-        f"- status: {bead.get('status', '')}",
-        f"- type: {bead.get('issue_type', '')}",
-        f"- priority: {bead.get('priority', '')}",
-        f"- effort: {_metadata_value(metadata, 'effort') or 'unset'}",
-        f"- assignee: {bead.get('assignee', '') or 'unassigned'}",
-    ]
-    if labels:
-        lines.append(f"- labels: {labels}")
-
     acceptance = str(bead.get("acceptance_criteria") or "").strip()
-    if acceptance:
-        lines.extend(["", "## Acceptance Criteria", acceptance])
-
     description = _limit_text(bead.get("description", ""), text_limit)
-    if description:
-        lines.extend(["", "## Description", description])
-
     notes = _limit_text(bead.get("notes", ""), notes_limit)
-    if notes:
-        lines.extend(["", "## Notes", notes])
+    dependencies = []
+    for index, dep in enumerate(deps):
+        dependencies.append(
+            {
+                "source": f"bead.dependencies[{index}]",
+                "trust": "untrusted",
+                "untrusted": True,
+                "fields": {
+                    "id": _untrusted_field(
+                        f"bead.dependencies[{index}].id",
+                        str(dep.get("id", "") or ""),
+                    ),
+                    "title": _untrusted_field(
+                        f"bead.dependencies[{index}].title",
+                        str(dep.get("title", "") or ""),
+                    ),
+                    "status": _untrusted_field(
+                        f"bead.dependencies[{index}].status",
+                        str(dep.get("status", "") or ""),
+                    ),
+                    "dependency_type": _untrusted_field(
+                        f"bead.dependencies[{index}].dependency_type",
+                        str(dep.get("dependency_type", "") or ""),
+                    ),
+                },
+            }
+        )
 
-    if deps:
-        lines.extend(["", "## Dependencies"])
-        for dep in deps:
-            dep_id = dep.get("id", "")
-            dep_title = dep.get("title", "")
-            dep_status = dep.get("status", "")
-            dep_type = dep.get("dependency_type", "")
-            lines.append(f"- {dep_id}: {dep_title} [{dep_status}; {dep_type}]")
+    envelope = {
+        "contract_version": "1",
+        "kind": "cdx.bead_context",
+        "classification": "untrusted",
+        "data": {
+            "fields": {
+                "id": _untrusted_field("bead.id", str(bead.get("id", "") or "")),
+                "title": _untrusted_field("bead.title", str(bead.get("title", "") or "")),
+                "status": _untrusted_field("bead.status", str(bead.get("status", "") or "")),
+                "issue_type": _untrusted_field(
+                    "bead.issue_type",
+                    str(bead.get("issue_type", "") or ""),
+                ),
+                "priority": _untrusted_field(
+                    "bead.priority",
+                    str(bead.get("priority", "") or ""),
+                ),
+                "effort": _untrusted_field(
+                    "bead.metadata.effort",
+                    _metadata_value(metadata, "effort") or "unset",
+                ),
+                "assignee": _untrusted_field(
+                    "bead.assignee",
+                    str(bead.get("assignee", "") or "unassigned"),
+                ),
+                "labels": _untrusted_field("bead.labels", labels, content_type="application/json"),
+                "acceptance_criteria": _untrusted_field("bead.acceptance_criteria", acceptance),
+                "description": _untrusted_field("bead.description", description),
+                "notes": _untrusted_field("bead.notes", notes),
+            },
+            "dependencies": dependencies,
+        },
+        "meta": {
+            "producer": "compact-bead-context.py",
+            "source": "bd show --json",
+        },
+    }
 
-    return "\n".join(lines).rstrip() + "\n"
+    return json.dumps(envelope, indent=2, sort_keys=True) + "\n"
 
 
 def main() -> int:
