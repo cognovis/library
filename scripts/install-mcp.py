@@ -295,7 +295,7 @@ def install_claude_code(
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[claude_code] entry missing install.mcp.claude_code.snippet — skip", file=sys.stderr)
+        print("[claude_code] entry missing install.mcp.claude_code.snippet — skip", file=sys.stderr)
         return 0
     updated, action = _merge_json_map(settings, "mcpServers", name, snippet, origin)
     if dry_run:
@@ -335,7 +335,7 @@ def install_codex(name: str, block: dict, dry_run: bool, remove: bool) -> int:
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[codex] entry missing install.mcp.codex.snippet — skip", file=sys.stderr)
+        print("[codex] entry missing install.mcp.codex.snippet — skip", file=sys.stderr)
         return 0
     updated, action = _merge_toml_table(doc, "mcp_servers", name, snippet, origin)
     if dry_run:
@@ -375,7 +375,7 @@ def install_opencode(name: str, block: dict, dry_run: bool, remove: bool) -> int
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[opencode] entry missing install.mcp.opencode.snippet — skip", file=sys.stderr)
+        print("[opencode] entry missing install.mcp.opencode.snippet — skip", file=sys.stderr)
         return 0
     updated, action = _merge_json_map(config, "mcp", name, snippet, origin)
     if dry_run:

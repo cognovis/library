@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -21,8 +19,8 @@ FIXTURE_STDIO_SERVER = Path(__file__).resolve().parent / "fixtures" / "minimal_m
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from lib.errors import InstallError
-from lib.installers.mcp_installer import install_mcp, remove_mcp
+from lib.errors import InstallError  # noqa: E402
+from lib.installers.mcp_installer import install_mcp, remove_mcp  # noqa: E402
 
 
 HTTP_URL = "http://127.0.0.1:8765/mcp"
