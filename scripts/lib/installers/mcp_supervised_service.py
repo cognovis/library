@@ -137,6 +137,7 @@ def ensure_supervised_service(
     else:
         install = run_argv_command(service["install"], check=False)
         if install.returncode != 0:
+            _attempt_service_fallback(service, uninstall=True)
             raise InstallError(
                 "Supervised MCP service install failed before registration: "
                 f"{install.stderr.strip() or install.stdout.strip()}"
@@ -145,7 +146,7 @@ def ensure_supervised_service(
 
     after = service_status(service["health_check"])
     if after.get("state") != _HEALTHY_STATE:
-        _attempt_stdio_fallback(entry, project_path)
+        _attempt_service_fallback(service, uninstall=action == "install")
         raise InstallError(
             "Supervised MCP service is not healthy after "
             f"{action}: {after.get('message') or after.get('stderr') or 'unknown error'}"
@@ -214,10 +215,15 @@ def supervised_service_dry_run_ops(
     return ops
 
 
-def _attempt_stdio_fallback(entry: dict[str, Any], project_path: Path) -> None:
-    """Best-effort stop when service activation fails. Registration rollback is caller-owned."""
+def _attempt_service_fallback(
+    service: dict[str, Any], *, uninstall: bool
+) -> None:
+    """Best-effort service rollback; harness registration rollback is caller-owned."""
     try:
-        service = resolve_supervised_service(entry, project_path)
-        run_argv_command(service["stop"], check=False)
+        action = "uninstall" if uninstall else "stop"
+        run_argv_command(service[action], check=False)
     except Exception as exc:  # pragma: no cover - defensive logging only
-        print(f"[mcp-supervised] WARNING: stop during fallback failed: {exc}", file=sys.stderr)
+        print(
+            f"[mcp-supervised] WARNING: service fallback failed: {exc}",
+            file=sys.stderr,
+        )

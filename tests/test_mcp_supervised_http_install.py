@@ -290,8 +290,11 @@ def test_service_failure_writes_no_registration(mock_clone, tmp_env):
     ):
         with patch(
             "lib.installers.mcp_supervised_service.run_argv_command",
-            return_value=MagicMock(returncode=1, stdout="", stderr="install failed"),
-        ):
+            side_effect=[
+                MagicMock(returncode=1, stdout="", stderr="install failed"),
+                MagicMock(returncode=0, stdout="", stderr=""),
+            ],
+        ) as run_command:
                 with pytest.raises(InstallError, match="install failed"):
                     install_mcp(
                         tmp_env["catalog"],
@@ -300,6 +303,7 @@ def test_service_failure_writes_no_registration(mock_clone, tmp_env):
                         harness="claude_code",
                         env_overrides=tmp_env["env"],
                     )
+    assert run_command.call_args_list[-1].args[0]["args"] == ["uninstall-ok"]
     assert claude_path.read_text(encoding="utf-8") == before
     claude = json.loads(claude_path.read_text())
     entry = claude["mcpServers"]["cognovis-tools"]
