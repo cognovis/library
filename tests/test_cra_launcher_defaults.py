@@ -71,7 +71,7 @@ def test_cra_yolo_explicit_opt_in_forwards_flag_and_warns(tmp_path: Path) -> Non
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert "--yolo" in argv
-    assert argv == ["Plain passthrough prompt"]
+    assert argv == ["--yolo", "Plain passthrough prompt"]
     stderr = result.stderr.lower()
     assert "warning" in stderr
     assert "--yolo" in stderr

@@ -5,7 +5,9 @@
 #        cra -h | --help        Show wrapper flag help, then fall through to agent --help
 #
 # Wrapper flags (not passed to agent):
-#   --no-yolo       → Launch agent without the default --yolo auto-approve wrapper
+#   --yolo          → explicit opt-in: forward --yolo to agent (disables approval
+#                     prompts; overrides the safe default; prints a warning)
+#   --no-yolo       → no-op (yolo is off by default); kept for backward compatibility
 #
 # Per AGENTS.md: launchers live in bin/
 
@@ -25,7 +27,7 @@ fi
 
 # ── Parse wrapper flags ──────────────────────────────────────────
 
-use_yolo=true
+use_yolo=false
 show_help=false
 agent_args=()
 
@@ -33,6 +35,10 @@ while (( $# > 0 )); do
     case "$1" in
         -h|--help)
             show_help=true
+            shift
+            ;;
+        --yolo)
+            use_yolo=true
             shift
             ;;
         --no-yolo)
@@ -57,7 +63,10 @@ Usage: cra [wrapper-flags] [agent-args...]
 Wrapper flags (consumed by cra, not passed to agent):
 
   Session:
-         --no-yolo               Launch agent without the default --yolo auto-approve flag
+         --yolo                  Explicit opt-in: forward --yolo to agent
+                                (disables approval prompts; prints a warning)
+         --no-yolo               No-op (yolo is off by default); kept for
+                                backward compatibility
     -h,  --help                  Show this help, then agent --help
 
 ────────────────────────────────────────────────────────────
@@ -66,9 +75,10 @@ HELP
     exec "${AGENT_BIN}" --help
 fi
 
-# ── Default: plain agent launch with yolo ─────────────────────────
+# ── Default: safe launch; --yolo requires explicit opt-in ─────────
 
 if ${use_yolo}; then
+    echo -e "\033[0;33m⚠ WARNING: --yolo selected; forwarding --yolo to agent (disables approval prompts, no safety confirmations).\033[0m" >&2
     exec "${AGENT_BIN}" --yolo "${agent_args[@]}"
 else
     exec "${AGENT_BIN}" "${agent_args[@]}"
