@@ -9,9 +9,10 @@
         "bin/cld"
       ],
       "evidence_refs": [
-        "tests/test_cld_single_bead_contract.py::test_cld_bead_prompt_includes_coordinator_callback_contract_when_pair_present",
-        "tests/test_cld_single_bead_contract.py::test_cld_bead_quick_prompt_includes_coordinator_callback_contract_when_pair_present",
-        "tests/test_cld_single_bead_contract.py (no-callback prompt byte-identical assertions)"
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_with_callback_inject_contract_and_consume_flags[-b]",
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_with_callback_inject_contract_and_consume_flags[-bq]",
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_without_callback_do_not_inject_callback_contract[-b]",
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_without_callback_do_not_inject_callback_contract[-bq]"
       ]
     },
     {
