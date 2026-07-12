@@ -68,6 +68,9 @@ make_tmp() {
     echo "$tmp"
 }
 
+UV_CACHE_TMP=$(make_tmp)
+export UV_CACHE_DIR="${UV_CACHE_DIR:-${UV_CACHE_TMP}/uv-cache}"
+
 # ---------------------------------------------------------------------------
 # Test helpers
 # ---------------------------------------------------------------------------
@@ -219,9 +222,12 @@ if [[ -z "$COGNOVIS_CORE" ]]; then
     PASS_COUNT=$((PASS_COUNT + 1))
 else
     HAIKU_FILE="${COGNOVIS_CORE}/model-standards/claude-haiku-4-5.md"
+    if [[ ! -f "$HAIKU_FILE" ]] && [[ -f "${COGNOVIS_CORE}/model-standards/haiku.md" ]]; then
+        HAIKU_FILE="${COGNOVIS_CORE}/model-standards/haiku.md"
+    fi
     if [[ -f "$HAIKU_FILE" ]]; then
         # Validate YAML frontmatter has model_aliases
-        if python3 -c "
+        if uv run python -c "
 import sys
 try:
     import yaml
@@ -233,21 +239,22 @@ try:
                 fm = yaml.safe_load('\n'.join(lines[1:i])) or {}
                 break
         aliases = fm.get('model_aliases', [])
-        assert 'haiku' in aliases, f'haiku not in model_aliases: {aliases}'
+        model_id = fm.get('model_id')
+        assert model_id == 'haiku' or 'haiku' in aliases, f'haiku not covered by model_id/model_aliases: {model_id}, {aliases}'
         assert 'haiku-4-5' in aliases, f'haiku-4-5 not in model_aliases: {aliases}'
-        print('FRONTMATTER OK: model_aliases =', aliases)
+        print('FRONTMATTER OK: model_id =', model_id, 'model_aliases =', aliases)
         sys.exit(0)
     sys.exit(1)
 except Exception as e:
     print(f'ERROR: {e}', file=sys.stderr)
     sys.exit(1)
 " 2>&1; then
-            pass "claude-haiku-4-5.md exists with valid model_aliases frontmatter"
+            pass "haiku model-standard exists with valid model_aliases frontmatter"
         else
-            fail "claude-haiku-4-5.md exists but has invalid frontmatter"
+            fail "haiku model-standard exists but has invalid frontmatter"
         fi
     else
-        fail "claude-haiku-4-5.md not found at ${HAIKU_FILE}"
+        fail "haiku model-standard not found under ${COGNOVIS_CORE}/model-standards/"
     fi
 fi
 
@@ -264,7 +271,6 @@ CLAUDE_AGENTS_ROOT="${TMP6}/claude-agents"
 CODEX_AGENTS_ROOT="${TMP6}/codex-agents"
 BUILD_OUT="${TMP6}/built-agents"
 MODEL_STANDARDS6="${TMP6}/model-standards"
-export UV_CACHE_DIR="${UV_CACHE_DIR:-${TMP6}/uv-cache}"
 mkdir -p "$CLAUDE_AGENTS_ROOT" "$CODEX_AGENTS_ROOT" "$BUILD_OUT" "$MODEL_STANDARDS6"
 
 if [[ -n "$COGNOVIS_CORE" ]] \
