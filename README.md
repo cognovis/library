@@ -296,9 +296,13 @@ just cdx <bead-id>
 cdx -bq <bead-id>
 just cdx-quick <bead-id>
 
-# Review mode (warns: no cmux equivalent in Codex)
+# Fresh-context bead-spec/readiness review (Opus by default)
 cdx -br <bead-id>
 just cdx-review <bead-id>
+
+# Coordinator callback — signal a cmux pane on blocking questions and session-close
+cdx -b <bead-id> --coordinator-workspace workspace:3 --coordinator-surface surface:5
+cld -b <bead-id> --coordinator-workspace workspace:3 --coordinator-surface surface:5
 ```
 
 ### How It Works
@@ -324,7 +328,7 @@ analysis.
 | `just install-cdx` | — | Install cdx to ~/.local/bin |
 | `just cdx <id>` | `cld -b <id>` | Bead orchestrator mode |
 | `just cdx-quick <id>` | `cld -bq <id>` | Quick-fix mode |
-| `just cdx-review <id>` | `cld -br <id>` | Review mode (warns about limitations) |
+| `just cdx-review <id>` | `cld -br <id>` | Fresh-context bead-spec review (Opus) |
 
 ---
 

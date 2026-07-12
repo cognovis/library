@@ -2,6 +2,14 @@
 
 ### Added
 
+- *(cld/cdx)* New `-br`/`--bead-review <id>` flag launches a fresh-context critical bead-spec/readiness review via the bead-reviewer skill, defaulting to Opus (overridable). Replaces the former `cdx -br` stub that warned about a non-existent `cld -br`; both launchers now have identical, working review semantics.
+- *(cld/cdx)* New `--coordinator-workspace workspace:<n>` and `--coordinator-surface surface:<n>` flags accept an optional coordinator-callback pair for `-b`/`-bq` bead runs. When both are provided, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt; this signals blocking questions, terminal state, and the Phase 16 session-close event to the coordinator pane. Calls without the pair are unchanged.
+
+### Changed
+
+- *(cld/cdx)* Coordinator callback identity travels only via CLI parameters, never environment variables. Malformed or partial callback parameters (only one of the pair supplied, or values not matching `workspace:<n>` / `surface:<n>`) fail with exit 2 before any harness launch.
+- *(cld/cdx)* `cld -r` / `--resume` is unaffected and still forwards to `claude --resume`. Single-bead launcher contract preserved; no CMUX pane creation or wave dispatch.
+
 - *(agent installer)* Agent catalog entries can now declare a `handlers` field — an array of relative asset paths for private helper scripts owned by that agent. `library agent use` validates each path (rejects path traversal), copies the assets into a per-harness `<agent-name>-handlers/` directory alongside the installed prompt file, and clears the directory on reinstall so removed or renamed handlers never go stale. This lets deterministic helper scripts used by exactly one agent ship as agent-owned assets instead of requiring a separate public skill install.
 
 ### Changed
