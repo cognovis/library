@@ -4,7 +4,7 @@
   "acceptance_criteria": [
     {
       "id": "1",
-      "status": "passed",
+      "status": "done",
       "summary": "compact-bead-context.py now emits a JSON bead-context envelope with field-level provenance and untrusted markers for rendered bead fields and dependency titles; bin/cdx wraps fetched context in an explicit untrusted-data block before every bead prompt splice.",
       "changed_files": [
         "scripts/compact-bead-context.py",
@@ -19,7 +19,7 @@
     },
     {
       "id": "2",
-      "status": "passed",
+      "status": "done",
       "summary": "Malformed payloads and oversized fields/envelopes fail closed with non-zero exit and clear stderr; cdx no longer falls back to raw bd show text when the compact envelope renderer fails.",
       "changed_files": [
         "scripts/compact-bead-context.py",
@@ -36,7 +36,7 @@
     },
     {
       "id": "3",
-      "status": "passed",
+      "status": "done",
       "summary": "Injection fixtures in description, notes, acceptance criteria, and dependency title remain JSON string values under untrusted field metadata, and all cdx bead modes delimit the whole context block as untrusted data.",
       "changed_files": [
         "scripts/compact-bead-context.py",
