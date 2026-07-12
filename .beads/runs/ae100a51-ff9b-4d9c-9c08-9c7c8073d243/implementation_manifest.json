@@ -31,6 +31,8 @@
       ],
       "evidence_refs": [
         "EV-AC2-rejection",
+        "EV-AC2-envelope-backstop",
+        "EV-AC2-limit-env-validation",
         "EV-AC3-cdx-no-raw-fallback",
         "EV-P1-missing-renderer-uv",
         "EV-required-suite-green"
@@ -49,6 +51,7 @@
       "evidence_refs": [
         "EV-AC3-injection-isolation",
         "EV-AC3-cdx-boundary",
+        "EV-AC3-real-renderer-cdx-boundary",
         "EV-required-suite-green"
       ]
     }
@@ -100,6 +103,14 @@
     {
       "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
       "result": "89 passed with UV_CACHE_DIR=/tmp/uv-cache in the sandbox"
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"oversized_envelope or limit_env or injected_end_marker\"",
+      "result": "5 passed, 31 deselected for final cold-review advisory coverage"
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "result": "94 passed after final cold-review advisory test additions"
     }
   ],
   "external_resources": [],
@@ -123,12 +134,24 @@
       "description": "tests/test_cdx_compact_context.py::test_render_context_rejects_oversized_notes and ::test_main_rejects_malformed_payload_with_clear_error validate fail-closed handling."
     },
     {
+      "id": "EV-AC2-envelope-backstop",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_rejects_oversized_envelope validates the CDX_BEAD_CONTEXT_ENVELOPE_LIMIT backstop rejects oversized rendered envelopes independently from field limits."
+    },
+    {
+      "id": "EV-AC2-limit-env-validation",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_rejects_non_integer_limit_env and ::test_render_context_rejects_non_positive_limit_env validate _read_limit rejects non-integer, zero, and negative environment values with clear errors."
+    },
+    {
       "id": "EV-AC3-injection-isolation",
       "description": "tests/test_cdx_compact_context.py::test_render_context_isolates_injection_fixture_by_field covers description, notes, acceptance_criteria, and dependency title fixtures."
     },
     {
       "id": "EV-AC3-cdx-boundary",
       "description": "tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_wrap_context_as_untrusted_data validates -b, -bq, and -br prompt boundaries."
+    },
+    {
+      "id": "EV-AC3-real-renderer-cdx-boundary",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_real_renderer_wraps_injected_end_marker_as_data feeds an injected description through the real compact renderer and bin/cdx wrapper, then asserts the injected END_CDX_BEAD_CONTEXT_UNTRUSTED_DATA line is not present as a standalone line inside the wrapped context body."
     },
     {
       "id": "EV-AC3-cdx-no-raw-fallback",
@@ -140,7 +163,7 @@
     },
     {
       "id": "EV-required-suite-green",
-      "description": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py returned 89 passed."
+      "description": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py returned 94 passed after final cold-review advisory test additions."
     }
   ]
 }

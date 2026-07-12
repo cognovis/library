@@ -112,6 +112,50 @@ def test_render_context_rejects_oversized_notes(monkeypatch) -> None:
         mod.render_context(payload)
 
 
+def test_render_context_rejects_oversized_envelope(monkeypatch) -> None:
+    """The rendered envelope size limit fails closed independently from field limits."""
+    mod = _load_module()
+    monkeypatch.setenv("CDX_BEAD_CONTEXT_ENVELOPE_LIMIT", "200")
+    payload = {
+        "id": "CL-envelope",
+        "title": "Envelope bead",
+        "status": "open",
+        "issue_type": "task",
+        "priority": 2,
+        "metadata": {},
+        "description": "Short description",
+        "notes": "short note",
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="bead context envelope exceeds CDX_BEAD_CONTEXT_ENVELOPE_LIMIT",
+    ):
+        mod.render_context(payload)
+
+
+def test_render_context_rejects_non_integer_limit_env(monkeypatch) -> None:
+    """Limit environment variables must parse as integers."""
+    mod = _load_module()
+    monkeypatch.setenv("CDX_BEAD_CONTEXT_TEXT_LIMIT", "not-an-integer")
+
+    with pytest.raises(ValueError, match="CDX_BEAD_CONTEXT_TEXT_LIMIT must be an integer"):
+        mod.render_context({"id": "CL-limit", "metadata": {}})
+
+
+@pytest.mark.parametrize("value", ["0", "-5"])
+def test_render_context_rejects_non_positive_limit_env(monkeypatch, value: str) -> None:
+    """Limit environment variables must be positive."""
+    mod = _load_module()
+    monkeypatch.setenv("CDX_BEAD_CONTEXT_ENVELOPE_LIMIT", value)
+
+    with pytest.raises(
+        ValueError,
+        match="CDX_BEAD_CONTEXT_ENVELOPE_LIMIT must be greater than zero",
+    ):
+        mod.render_context({"id": "CL-limit", "metadata": {}})
+
+
 def test_main_rejects_malformed_payload_with_clear_error() -> None:
     """Malformed stdin fails closed with a useful stderr message."""
     result = subprocess.run(

@@ -145,6 +145,24 @@
       "purpose": "Pair-loop iteration 1 no-regression suite after disabling raw bead-context fallback and emitting labels as a JSON array.",
       "exit_code": 0,
       "result": "89 passed."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"oversized_envelope or limit_env or injected_end_marker\"",
+      "purpose": "Focused verification for final cold-review advisory coverage: envelope-level backstop, _read_limit validation, and real renderer through bin/cdx wrapper.",
+      "exit_code": 0,
+      "result": "5 passed, 31 deselected."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Required no-regression suite after final cold-review advisory test additions.",
+      "exit_code": 0,
+      "result": "94 passed."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run --no-project python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/implementation_manifest.json --evidence .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/evidence_ledger.json --bead-id CL-wzv9",
+      "purpose": "Validate updated implementation manifest and evidence ledger after final cold-review advisory fixes.",
+      "exit_code": 0,
+      "result": "status ok; no manifest or evidence errors."
     }
   ],
   "skipped_checks": [
