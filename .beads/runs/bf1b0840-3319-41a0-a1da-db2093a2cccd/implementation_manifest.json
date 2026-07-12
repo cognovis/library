@@ -52,11 +52,14 @@
       "evidence_refs": [
         "cmd:green-pytest",
         "cmd:fix-CL-t32e-phase5-final-review-pytest",
+        "cmd:fix-CL-t32e-phase7-regression-pytest",
         "test:test_coordinator_callback_executor.py::test_command_injection_style_ref_is_rejected_before_any_command_runs",
         "test:test_coordinator_callback_executor.py::test_missing_cmux_binary_fails_visibly_and_allows_retry",
         "test:test_coordinator_callback_executor.py::test_cmux_invocation_failure_fails_visibly_and_allows_retry",
         "test:test_coordinator_callback_executor.py::test_stale_mismatched_run_state_fails_visibly_without_invoking_cmux",
         "test:test_coordinator_callback_executor.py::test_unwritable_state_path_fails_visibly",
+        "test:test_coordinator_callback_executor.py::test_write_time_mkstemp_failure_fails_visibly",
+        "test:test_coordinator_callback_executor.py::test_unwritable_state_directory_at_write_time_fails_visibly",
         "test:test_coordinator_callback_executor.py::test_main_reports_errors_on_stderr_and_returns_nonzero_without_traceback",
         "test:test_coordinator_callback_executor.py::test_ref_with_trailing_newline_is_rejected",
         "test:test_coordinator_callback_executor.py::test_run_id_with_trailing_newline_or_crlf_is_rejected",
@@ -64,7 +67,7 @@
         "test:test_coordinator_callback_executor.py::test_stale_lock_without_state_is_reclaimed_and_delivers",
         "test:test_coordinator_callback_executor.py::test_fresh_lock_without_state_is_not_reclaimed"
       ],
-      "fix_note": "Phase 5 FINAL_REVIEW fix loop: coordinator promoted two in-loop-reviewer advisories to in-scope AC3 defects. (a) WORKSPACE_REF_RE/SURFACE_REF_RE/RUN_ID_RE/EVENT_NAME_RE used trailing `$` which Python's re treats as end-of-string-or-before-a-trailing-newline, letting e.g. \"run-1\\n\" pass validation; changed all four patterns to `\\Z` (strict end-of-string) and added regression tests for trailing LF on workspace/surface refs and event names plus trailing LF and CRLF on run ids. (b) A lock file left behind by a process that crashed between acquiring the O_CREAT|O_EXCL lock and writing the {event}.json state file was silently reported as `already_delivered` without ever invoking cmux. Added `_lock_is_stale()` (age > STALE_LOCK_SECONDS = 30s) so a lock this old with no state file is reclaimed (stale lock removed, acquisition retried once, delivery proceeds normally) instead of masquerading as a legitimate prior delivery; a lock younger than the threshold is left untouched so a genuine concurrent in-flight delivery (existing test_concurrent_repeated_delivery_invokes_cmux_at_most_once) is not disturbed. Added regression tests for both the reclaim path (backdated lock -> delivers, state file written) and the non-reclaim path (fresh lock -> already_delivered, cmux not invoked)."
+      "fix_note": "Phase 5 FINAL_REVIEW fix loop: coordinator promoted two in-loop-reviewer advisories to in-scope AC3 defects. (a) WORKSPACE_REF_RE/SURFACE_REF_RE/RUN_ID_RE/EVENT_NAME_RE used trailing `$` which Python's re treats as end-of-string-or-before-a-trailing-newline, letting e.g. \"run-1\\n\" pass validation; changed all four patterns to `\\Z` (strict end-of-string) and added regression tests for trailing LF on workspace/surface refs and event names plus trailing LF and CRLF on run ids. (b) A lock file left behind by a process that crashed between acquiring the O_CREAT|O_EXCL lock and writing the {event}.json state file was silently reported as `already_delivered` without ever invoking cmux. Added `_lock_is_stale()` (age > STALE_LOCK_SECONDS = 30s) so a lock this old with no state file is reclaimed (stale lock removed, acquisition retried once, delivery proceeds normally) instead of masquerading as a legitimate prior delivery; a lock younger than the threshold is left untouched so a genuine concurrent in-flight delivery (existing test_concurrent_repeated_delivery_invokes_cmux_at_most_once) is not disturbed. Added regression tests for both the reclaim path (backdated lock -> delivers, state file written) and the non-reclaim path (fresh lock -> already_delivered, cmux not invoked). Phase 7 Codex adversarial-review REGRESSION fix: `_atomic_write_json` called `tempfile.mkstemp()` OUTSIDE its `try/except OSError`, so an mkstemp() failure at write time (state dir became unwritable/full/removed after the earlier mkdir) leaked a raw traceback instead of the visible StateError every other failure mode raises. Because this write runs only after a successful cmux invocation, that uncaught crash left an orphaned lock with no state file -- exactly the precondition _lock_is_stale treats as reclaimable, risking a second cmux flash for an already delivered event. Moved mkstemp() inside the try block with a guarded `tmp_name`-is-None cleanup (nothing to unlink if mkstemp itself failed) so ANY OSError in the atomic-write sequence, including mkstemp(), re-raises as StateError. Added two regression tests exercising write-time failure distinct from the existing mkdir-failure test: one monkeypatching tempfile.mkstemp to raise OSError (deterministic, root-safe), one making the state directory read-only via a chmod-on-run CommandRunner (real filesystem reproduction, skipped when euid==0)."
     },
     {
       "id": "AC4",
@@ -116,6 +119,11 @@
       "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
       "status": "passed",
       "evidence_ref": "cmd:fix-CL-t32e-phase5-final-review-pytest"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "status": "passed",
+      "evidence_ref": "cmd:fix-CL-t32e-phase7-regression-pytest"
     }
   ],
   "external_resources": [],
@@ -148,6 +156,10 @@
     "test:test_coordinator_callback_executor.py::test_run_id_with_trailing_newline_or_crlf_is_rejected",
     "test:test_coordinator_callback_executor.py::test_event_with_trailing_newline_is_rejected",
     "test:test_coordinator_callback_executor.py::test_stale_lock_without_state_is_reclaimed_and_delivers",
-    "test:test_coordinator_callback_executor.py::test_fresh_lock_without_state_is_not_reclaimed"
+    "test:test_coordinator_callback_executor.py::test_fresh_lock_without_state_is_not_reclaimed",
+    "cmd:fix-CL-t32e-phase7-regression-pytest",
+    "cmd:fix-CL-t32e-phase7-regression-py-compile",
+    "test:test_coordinator_callback_executor.py::test_write_time_mkstemp_failure_fails_visibly",
+    "test:test_coordinator_callback_executor.py::test_unwritable_state_directory_at_write_time_fails_visibly"
   ]
 }

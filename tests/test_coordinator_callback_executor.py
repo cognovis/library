@@ -441,6 +441,88 @@ def test_unwritable_state_path_fails_visibly(tmp_path: Path) -> None:
     assert runner.calls == []
 
 
+def test_write_time_mkstemp_failure_fails_visibly(tmp_path: Path, monkeypatch) -> None:
+    """Regression (Phase 7): an OSError from ``tempfile.mkstemp()`` DURING the
+    atomic state write -- distinct from the earlier ``state_dir.mkdir(...)``
+    failure exercised by test_unwritable_state_path_fails_visibly -- must
+    surface as a visible StateError, never an uncaught traceback.
+
+    This is the exact-once hazard the fix guards: the state write runs only
+    AFTER a successful cmux invocation, so cmux IS expected to have fired once
+    here (the callback was genuinely delivered) before mkstemp() fails. Without
+    the fix, mkstemp() sat outside the try/except and leaked a raw traceback,
+    leaving an orphaned lock with no state file -- the precondition a later
+    stale-lock reclaim would misread as "crashed, safe to re-flash". We assert
+    the failure is a clean StateError so main() maps it to EXIT_STATE_ERROR."""
+    cc = _import_module()
+    state_root = tmp_path / "state"
+    runner = cc.MockCommandRunner()
+
+    def _boom(*args, **kwargs):
+        raise OSError("simulated: state directory unwritable at write time")
+
+    monkeypatch.setattr(cc.tempfile, "mkstemp", _boom)
+
+    with pytest.raises(cc.StateError):
+        cc.deliver_callback(
+            run_id="run-1", event="terminal", workspace=None, surface="surface:33",
+            state_root=state_root, runner=runner,
+        )
+    # cmux was invoked exactly once before the write-time failure -- this is the
+    # already-delivered-but-no-state window the fix makes fail visibly.
+    assert runner.calls == [["cmux", "trigger-flash", "--surface", "surface:33"]]
+    # No state file was persisted (the write failed), and no traceback escaped.
+    assert not (state_root / "run-1" / "terminal.json").exists()
+
+
+@pytest.mark.skipif(
+    getattr(os, "geteuid", lambda: -1)() == 0,
+    reason="root ignores directory write permission bits",
+)
+def test_unwritable_state_directory_at_write_time_fails_visibly(tmp_path: Path) -> None:
+    """Regression (Phase 7): the state directory is created and the lock is
+    acquired successfully, but the directory becomes read-only right before the
+    atomic state write (a real filesystem reproduction, distinct from the
+    mkdir-failure path). ``tempfile.mkstemp(dir=state_dir)`` then raises
+    PermissionError, which must be re-raised as a visible StateError.
+
+    A custom runner chmods the state directory read-only as a side effect of
+    the cmux call, precisely modelling a directory whose permissions changed
+    after mkdir -- so cmux IS invoked once (delivery happened) before the write
+    fails. Permissions are restored in a finally so tmp_path cleanup works."""
+    cc = _import_module()
+    state_root = tmp_path / "state"
+    state_dir = state_root / "run-1"
+
+    class _ChmodOnRunRunner:
+        """CommandRunner double that turns state_dir read-only when cmux runs,
+        simulating a permissions change between lock acquisition and write."""
+
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def which(self, name: str) -> str | None:
+            return f"/usr/bin/{name}"
+
+        def run(self, argv):
+            self.calls.append(list(argv))
+            os.chmod(state_dir, 0o555)
+            return cc.CommandResult(0, "", "")
+
+    runner = _ChmodOnRunRunner()
+    try:
+        with pytest.raises(cc.StateError):
+            cc.deliver_callback(
+                run_id="run-1", event="terminal", workspace=None, surface="surface:33",
+                state_root=state_root, runner=runner,
+            )
+        assert runner.calls == [["cmux", "trigger-flash", "--surface", "surface:33"]]
+    finally:
+        # Restore write permission so tmp_path teardown can remove the dir.
+        if state_dir.exists():
+            os.chmod(state_dir, 0o755)
+
+
 def test_main_reports_errors_on_stderr_and_returns_nonzero_without_traceback(tmp_path: Path, capsys) -> None:
     cc = _import_module()
     runner = cc.MockCommandRunner(which_results={"cmux": None})

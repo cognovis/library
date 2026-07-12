@@ -57,6 +57,20 @@
       "exit_code": 0,
       "observed_result": "PY_COMPILE_OK printed; no syntax errors.",
       "name": "fix-CL-t32e-phase5-final-review-py-compile"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Fix gate for Phase 7 Codex adversarial-review REGRESSION: `_atomic_write_json` called tempfile.mkstemp() outside its try/except OSError, so a write-time mkstemp() failure (state dir unwritable/full/removed after the earlier mkdir) leaked a raw traceback instead of a visible StateError -- and because that write runs after a successful cmux invocation, an uncaught crash there left an orphaned lock with no state file, the exact precondition _lock_is_stale would later reclaim and re-flash. Moved mkstemp() inside the try with a guarded tmp_name-is-None cleanup. Ran after the fix plus 2 new write-time regression tests.",
+      "exit_code": 0,
+      "observed_result": "39 passed in 0.06s: the prior 37 tests plus 2 new write-time-failure tests (test_write_time_mkstemp_failure_fails_visibly, which monkeypatches tempfile.mkstemp to raise OSError and asserts a clean StateError with cmux invoked exactly once and no state file written; and test_unwritable_state_directory_at_write_time_fails_visibly, which chmods the state dir read-only via a CommandRunner side effect and asserts StateError, skipped when euid==0). Neither existing stale-lock/reclaim test regressed.",
+      "name": "fix-CL-t32e-phase7-regression-pytest"
+    },
+    {
+      "command": "uv run python -m py_compile scripts/coordinator_callback.py tests/test_coordinator_callback_executor.py",
+      "purpose": "Syntax/compile sanity check after the Phase 7 regression fix.",
+      "exit_code": 0,
+      "observed_result": "py_compile OK printed; no syntax errors.",
+      "name": "fix-CL-t32e-phase7-regression-py-compile"
     }
   ],
   "skipped_checks": [

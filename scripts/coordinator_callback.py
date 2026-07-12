@@ -249,17 +249,31 @@ def _lock_is_stale(lock_path: Path) -> bool:
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
     """Write JSON to ``path`` atomically: temp file in the same directory,
     then os.replace() (per python-default-bash-exception / DI standards'
-    atomic-write guidance for concurrency-safe state files)."""
+    atomic-write guidance for concurrency-safe state files).
+
+    ``tempfile.mkstemp()`` is inside the try/except so that an OSError raised
+    by mkstemp() itself -- e.g. the state directory became unwritable, full,
+    or was removed concurrently after the earlier mkdir -- surfaces as a
+    visible StateError rather than an uncaught traceback, matching every other
+    failure mode in this module (AC3 "unwritable state fail visibly"). This
+    also matters for exactly-once safety: this write runs AFTER a successful
+    cmux invocation, so an uncaught crash here would leave an orphaned lock
+    with no state file -- exactly the precondition _lock_is_stale treats as
+    reclaimable, which could trigger a second cmux flash for an already
+    delivered event. ``tmp_name`` is guarded because if mkstemp() is what
+    failed there is no temp file to clean up yet."""
     directory = path.parent
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(directory))
+    tmp_name: str | None = None
     try:
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(directory))
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, sort_keys=True)
             handle.write("\n")
         os.replace(tmp_name, path)
     except OSError as exc:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_name)
+        if tmp_name is not None:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_name)
         raise StateError(f"failed to write state file {path}: {exc}") from exc
 
 
