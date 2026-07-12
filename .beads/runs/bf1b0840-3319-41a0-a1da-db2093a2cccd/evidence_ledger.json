@@ -43,6 +43,20 @@
       "exit_code": 0,
       "observed_result": "30 passed in 0.06s. Full suite still green after the AC1 guard test was strengthened.",
       "name": "fix-CL-t32e-B-01-pytest"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Fix gate for Phase 5 FINAL_REVIEW fix loop: coordinator-promoted AC3 defects (a) trailing-newline/CRLF slipping past WORKSPACE_REF_RE/SURFACE_REF_RE/RUN_ID_RE/EVENT_NAME_RE (changed `$` to `\\Z`), and (b) a lock-without-state left behind by a crashed delivery being silently reported as already_delivered without ever invoking cmux (added `_lock_is_stale()` reclaim-and-retry). Ran after implementing both fixes plus 7 new regression tests.",
+      "exit_code": 0,
+      "observed_result": "37 passed in 0.06s: the original 30 tests plus 2 new trailing-newline ref tests (workspace, surface), 2 new run-id tests (trailing LF, trailing CRLF), 1 new event-name trailing-LF test, 1 stale-lock-reclaim-and-deliver test, and 1 fresh-lock-not-reclaimed test (guards against breaking the existing concurrent-delivery-at-most-once semantics).",
+      "name": "fix-CL-t32e-phase5-final-review-pytest"
+    },
+    {
+      "command": "uv run python -m py_compile scripts/coordinator_callback.py tests/test_coordinator_callback_executor.py",
+      "purpose": "Syntax/compile sanity check after the Phase 5 FINAL_REVIEW fix loop changes.",
+      "exit_code": 0,
+      "observed_result": "PY_COMPILE_OK printed; no syntax errors.",
+      "name": "fix-CL-t32e-phase5-final-review-py-compile"
     }
   ],
   "skipped_checks": [
