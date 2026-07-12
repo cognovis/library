@@ -1,4 +1,14 @@
-"""Regression tests for cld launcher permission defaults."""
+"""Regression tests for cld launcher permission defaults.
+
+Role-scope audit for launcher-dispatched bead roles:
+- cld/cdx -b and -bq are orchestrator entry points that keep broad workflow
+  permissions while constraining implementer execution to bead worktrees.
+- cld/cdx -br are reviewer entry points and must default to read-only review
+  scope at the launcher boundary.
+- No cld/cdx/cra verifier launcher entry point exists today; verification is
+  dispatched through scoped subagents/adapters outside this launcher surface.
+- cra has no bead-role dispatch surface.
+"""
 
 from __future__ import annotations
 
@@ -114,8 +124,8 @@ def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProce
     return result, argv_file, prompt_file, called_file, bd_log
 
 
-def _argv_has_permission_auto(argv: list[str]) -> bool:
-    return any(left == "--permission-mode" and right == "auto" for left, right in zip(argv, argv[1:]))
+def _argv_has_permission_mode(argv: list[str], mode: str) -> bool:
+    return any(left == "--permission-mode" and right == mode for left, right in zip(argv, argv[1:]))
 
 
 @pytest.mark.parametrize(
@@ -124,7 +134,6 @@ def _argv_has_permission_auto(argv: list[str]) -> bool:
         ["Plain passthrough prompt"],
         ["-b", "CL-safe"],
         ["-bq", "CL-safe"],
-        ["-br", "CL-safe"],
     ],
 )
 def test_cld_defaults_to_permission_auto_without_dangerous_skip(
@@ -137,7 +146,18 @@ def test_cld_defaults_to_permission_auto_without_dangerous_skip(
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert "--dangerously-skip-permissions" not in argv
-    assert _argv_has_permission_auto(argv)
+    assert _argv_has_permission_mode(argv, "auto")
+
+
+def test_cld_bead_review_defaults_to_plan_mode_without_dangerous_skip(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert "--dangerously-skip-permissions" not in argv
+    assert not _argv_has_permission_mode(argv, "auto")
+    assert _argv_has_permission_mode(argv, "plan")
 
 
 @pytest.mark.parametrize(
@@ -159,10 +179,53 @@ def test_cld_skip_perms_explicitly_uses_dangerous_skip_and_warns(
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert "--dangerously-skip-permissions" in argv
-    assert not _argv_has_permission_auto(argv)
+    assert not _argv_has_permission_mode(argv, "auto")
+    assert not _argv_has_permission_mode(argv, "plan")
     stderr = result.stderr.lower()
     assert "warning" in stderr
     assert "dangerously-skip-permissions" in stderr
+
+
+@pytest.mark.parametrize(
+    ("args", "expected_worktree", "expected_agent"),
+    [
+        (["-b", "CL-safe"], "bead-CL-safe", "bead-orchestrator"),
+        (["-bq", "CL-safe"], "bead-CL-safe", "quick-fix"),
+    ],
+)
+def test_cld_implementer_modes_use_bead_worktree_scope(
+    tmp_path: Path,
+    args: list[str],
+    expected_worktree: str,
+    expected_agent: str,
+) -> None:
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, args)
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    worktree_index = argv.index("--worktree")
+    assert argv[worktree_index + 1] == expected_worktree
+    agent_index = argv.index("--agent")
+    assert argv[agent_index + 1] == expected_agent
+
+
+def test_cld_bead_review_does_not_use_implementation_worktree(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert "--worktree" not in argv
+
+
+def test_cld_help_has_no_verifier_launcher_entry_point(tmp_path: Path) -> None:
+    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["--help"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    assert "-bv" not in result.stdout
+    assert "--bead-verify" not in result.stdout
 
 
 @pytest.mark.parametrize(

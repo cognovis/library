@@ -16,6 +16,7 @@ _COMPACT_CONTEXT_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "com
 _CDX_BIN = Path(__file__).resolve().parents[1] / "bin" / "cdx"
 _DANGEROUS_CODEX_ARG = "--dangerously-bypass-approvals-and-sandbox"
 _SAFE_BEAD_CODEX_ARGS = ["--sandbox", "workspace-write", "-c", 'approval_policy="never"']
+_READONLY_BEAD_CODEX_ARGS = ["--sandbox", "read-only"]
 
 
 def _write_launcher_executable(path: Path, content: str) -> Path:
@@ -244,10 +245,19 @@ def _assert_safe_bead_permissions(argv: list[str]) -> None:
     assert argv[config_index + 1] == 'approval_policy="never"'
 
 
+def _assert_readonly_bead_permissions(argv: list[str]) -> None:
+    assert _DANGEROUS_CODEX_ARG not in argv
+    sandbox_index = argv.index("--sandbox")
+    assert argv[sandbox_index + 1] == "read-only"
+    assert "workspace-write" not in argv
+
+
 def _assert_dangerous_bead_permissions(argv: list[str]) -> None:
     assert _DANGEROUS_CODEX_ARG in argv
     for safe_arg in _SAFE_BEAD_CODEX_ARGS:
         assert safe_arg not in argv
+    for readonly_arg in _READONLY_BEAD_CODEX_ARGS:
+        assert readonly_arg not in argv
 
 
 def _write_runtime(
@@ -494,6 +504,7 @@ def _run_workflow(
     uv_argv_log = tmp_path / "uv-argv.jsonl"
     env = dict(os.environ)
     env["BEADS_RUNTIME_DIR"] = str(runtime)
+    env["CONTEXT_PROVIDER_SCRIPT"] = str(runtime / "scripts" / "context_provider.py")
     env["INJECT_STANDARDS_RUNNER"] = str(inject_runner)
     env["METRICS_DIR_OVERRIDE"] = str(metrics_dir)
     env["METRICS_CALLS_FILE"] = str(metrics_calls)
@@ -875,7 +886,6 @@ def test_cdx_bead_modes_wrap_context_as_untrusted_data(
         ["-b", "CL-smoke"],
         ["-b", "CL-smoke", "--exec"],
         ["-bq", "CL-smoke"],
-        ["-br", "CL-smoke"],
     ],
 )
 def test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass(
@@ -893,6 +903,48 @@ def test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass(
     _assert_safe_bead_permissions(argv)
     assert "--bead-dangerous-full-auto" not in argv
     assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
+
+
+def test_cdx_bead_review_defaults_to_readonly_without_dangerous_bypass(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, git_log = _run_cdx_launcher(
+        tmp_path,
+        ["-br", "CL-smoke"],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    _assert_readonly_bead_permissions(argv)
+    assert "--bead-dangerous-full-auto" not in argv
+    assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
+    assert "-C" not in argv
+    assert not git_log.exists()
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-b", "CL-smoke"],
+        ["-b", "CL-smoke", "--exec"],
+        ["-bq", "CL-smoke"],
+    ],
+)
+def test_cdx_implementer_modes_run_from_bead_worktree(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    worktree_index = argv.index("-C")
+    assert Path(argv[worktree_index + 1]) == tmp_path / "worktrees" / "bead-CL-smoke"
+    git_calls = [json.loads(line) for line in git_log.read_text(encoding="utf-8").splitlines()]
+    assert any(call[:2] == ["worktree", "add"] for call in git_calls)
 
 
 @pytest.mark.parametrize(
@@ -1156,7 +1208,8 @@ def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Pat
     prompt = prompt_file.read_text(encoding="utf-8")
     env = json.loads(env_file.read_text(encoding="utf-8"))
     assert argv[0] == "exec"
-    _assert_safe_bead_permissions(argv)
+    _assert_readonly_bead_permissions(argv)
+    assert "-C" not in argv
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
     assert env["CLD_BEAD_LINE"] == "cdx"
@@ -1183,6 +1236,8 @@ def test_cdx_help_documents_review_and_callback_flags_without_stale_warning(tmp_
     assert called_file.exists()
     assert "-br, --bead-review ID" in result.stdout
     assert "--coordinator-workspace workspace:<n>" in result.stdout
+    assert "-bv" not in result.stdout
+    assert "--bead-verify" not in result.stdout
     assert "--coordinator-surface surface:<n>" in result.stdout
     assert "Codex has no cmux-review equivalent" not in result.stdout
 

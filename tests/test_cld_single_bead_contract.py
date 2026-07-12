@@ -248,7 +248,7 @@ def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: 
     assert "CLD_BEAD_LINE=cld" in result.stdout
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert argv[:4] == ["--model", "opus", "--permission-mode", "auto"]
+    assert argv[:4] == ["--model", "opus", "--permission-mode", "plan"]
     assert "--dangerously-skip-permissions" not in argv
     assert "--worktree" not in argv
     assert "--agent" not in argv
