@@ -8,6 +8,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 
 CRA_BIN = Path(__file__).resolve().parents[1] / "bin" / "cra"
 
@@ -77,21 +79,24 @@ def test_cra_yolo_explicit_opt_in_forwards_flag_and_warns(tmp_path: Path) -> Non
     assert "--yolo" in stderr
 
 
-def test_cra_help_exposes_no_bead_role_dispatch_surface(tmp_path: Path) -> None:
-    result, _argv_file, called_file = _run_cra(tmp_path, ["--help"])
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-b", "CL-x", "some prompt"],
+        ["-bq", "CL-x", "some prompt"],
+        ["-br", "CL-x", "some prompt"],
+        ["-bv", "CL-x", "some prompt"],
+        ["--bead", "CL-x", "some prompt"],
+        ["--bead-review", "CL-x", "some prompt"],
+        ["--role", "reviewer", "CL-x", "some prompt"],
+    ],
+)
+def test_cra_forwards_bead_role_like_args_without_intercepting(
+    tmp_path: Path, args: list[str]
+) -> None:
+    result, argv_file, called_file = _run_cra(tmp_path, args)
 
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
-    help_text = result.stdout
-    for forbidden in (
-        "-b",
-        "-bq",
-        "-br",
-        "-bv",
-        "--bead",
-        "--bead-quick",
-        "--bead-review",
-        "--bead-verify",
-        "--role",
-    ):
-        assert forbidden not in help_text
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert argv == args
