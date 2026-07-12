@@ -1,0 +1,194 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-j92j",
+  "commands": [
+    {
+      "command": "grep -n \"^def bead_\" /Users/malte/code/library/cognovis-core/mcp-servers/cognovis-tools/tools/bead_tools.py",
+      "purpose": "Verify the exact set of typed bead_* MCP tool function names before writing any tool name into capabilities.yaml (anti-hallucination requirement).",
+      "exit_code": 0,
+      "observed": "14 functions confirmed: bead_show, bead_ready, bead_list, bead_search, bead_create, bead_claim, bead_update, bead_update_notes, bead_review_write, bead_dep_add, bead_dep_remove, bead_close, bead_repos, bead_dolt_sync — matches the prompt's provided list exactly."
+    },
+    {
+      "command": "grep -n \"^capabilities:\" -A 20 cognovis-core/agents/{review-agent,verification-agent,bead-orchestrator,quick-fix,session-close}.md",
+      "purpose": "Spot-check the design decision context: confirm review-agent/verification-agent do NOT declare manage_beads, and bead-orchestrator/quick-fix/session-close DO.",
+      "exit_code": 0,
+      "observed": "review-agent and verification-agent capabilities: [read_files, run_shell, inspect_git] only, no manage_beads. bead-orchestrator, quick-fix, session-close all declare manage_beads."
+    },
+    {
+      "command": "uv run pytest tests/test_build_agent.py -k \"manage_beads\" -v",
+      "purpose": "RED gate for hermetic capabilities.yaml-level tests (no cognovis-core dependency).",
+      "exit_code": 1,
+      "observed": "2 failed (test_manage_beads_capability_registry_has_explicit_typed_tools, test_build_agent_grants_manage_beads_typed_tools_end_to_end), both failing on 'manage_beads granted zero Claude tools (CL-j92j regression)' — the correct pre-fix reason. 1 passed (the negative regression fixture, which is expected to pass unconditionally since it tests the assertion helper itself)."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_cognovis_agent_fleet_capabilities.py -k \"manage_beads\" -v",
+      "purpose": "RED gate for fleet-level tests against the real cognovis-core sibling checkout. Required setting COGNOVIS_CORE explicitly because the default REPO_ROOT.parent resolution does not find the sibling repo when pytest runs from within a .claude/worktrees/<name>/ checkout.",
+      "exit_code": 1,
+      "observed": "4 failed for the correct pre-fix reason (bead-orchestrator/quick-fix/session-close missing all 14 typed tools; the synthetic role-leakage fixture found zero leaked tools instead of the expected leak). 2 passed (review-agent/verification-agent already correctly have zero bead_* tools both before and after the fix — these assert the invariant that must hold in both states)."
+    },
+    {
+      "command": "git add tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py && git commit -m \"test(CL-j92j): red — ...\"",
+      "purpose": "RED commit per mandatory TDD workflow.",
+      "exit_code": 0,
+      "observed": "Commit 1bd598b created. (A pre-commit hook printed a large unrelated JSON dump of bd issue data to stdout on this and subsequent commits — a pre-existing repo hook side effect unrelated to this bead; the commits themselves succeeded and git log/status confirmed a clean state afterward each time.)"
+    },
+    {
+      "command": "Edit capabilities.yaml: manage_beads.claude.tools: [] -> explicit 14-entry mcp__cognovis-tools__bead_* list",
+      "purpose": "GREEN implementation — the primary fix.",
+      "exit_code": 0,
+      "observed": "capabilities.yaml updated; tools list matches the verified bead_tools.py function names exactly, no additions or renames."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py -k \"manage_beads\" -v",
+      "purpose": "GREEN gate for the new tests.",
+      "exit_code": 0,
+      "observed": "9 passed, 0 failed."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py -x",
+      "purpose": "Full regression gate for touched files (whole test_build_agent.py + test_cognovis_agent_fleet_capabilities.py suite), per prompt Task step 6.",
+      "exit_code": 0,
+      "observed": "45 passed (5.81s-6.04s across two runs, before and after the doc edits). No regressions in the wider agent fleet — every catalog agent still builds for both harnesses."
+    },
+    {
+      "command": "git add capabilities.yaml && git commit -m \"feat(CL-j92j): green — ...\"",
+      "purpose": "GREEN commit per mandatory TDD workflow.",
+      "exit_code": 0,
+      "observed": "Commit f193d6d created."
+    },
+    {
+      "command": "Edit docs/mcp-migration-rollback.md and docs/adr/library-tool-surface-mcp.md",
+      "purpose": "Required doc-consistency fixes: correct the false mcpServers-alone-is-enough claim, update the rollback table's manage_beads After example and smoke-test section, add an ADR-0007 Amendment note.",
+      "exit_code": 0,
+      "observed": "Both docs updated; ADR Status/Decision sections untouched, only a new Amendment subsection added before Cross-References."
+    },
+    {
+      "command": "grep -rn \"mcp-migration-rollback\\|library-tool-surface-mcp\" tests/",
+      "purpose": "Confirm no test directly parses/asserts on doc file contents that could be broken by the wording change.",
+      "exit_code": 0,
+      "observed": "No matches — no test references either doc file."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py",
+      "purpose": "Re-confirm full regression gate after doc edits.",
+      "exit_code": 0,
+      "observed": "45 passed."
+    },
+    {
+      "command": "git add docs/mcp-migration-rollback.md docs/adr/library-tool-surface-mcp.md && git commit -m \"docs(CL-j92j): ...\"",
+      "purpose": "Docs commit.",
+      "exit_code": 0,
+      "observed": "Commit fadc5a6 created."
+    },
+    {
+      "command": "git diff --stat 31de252 HEAD",
+      "purpose": "Scope verification (AC3 review-tier MoC): confirm the full changeset is limited to the 5 named canonical files.",
+      "exit_code": 0,
+      "observed": "5 files changed: capabilities.yaml, docs/adr/library-tool-surface-mcp.md, docs/mcp-migration-rollback.md, tests/test_build_agent.py, tests/test_cognovis_agent_fleet_capabilities.py. No cognovis-core/ files, no installed-artifact files, no unrelated capability edits."
+    },
+    {
+      "command": "mcp__cognovis-tools__bead_show(bead_id=\"CL-j92j\")",
+      "purpose": "AC5 optional stronger-evidence live check: confirm the cognovis-tools MCP server and typed tool are reachable from an agent session.",
+      "exit_code": 0,
+      "observed": "Envelope returned with full bead data for CL-j92j (status ok)."
+    },
+    {
+      "command": "mcp__cognovis-tools__bead_update_notes(bead_id=\"CL-j92j\", notes=\"...\")",
+      "purpose": "AC5 optional stronger-evidence live check: record a real progress note through the typed tool, per the bead's own MoC wording ('records a test note through the typed tool').",
+      "exit_code": 0,
+      "observed": "Envelope returned status ok, 'Notes appended to CL-j92j.' This call used tools already granted to this implementation session by its launching harness, not tools produced by this bead's fix — it demonstrates the typed surface works end-to-end but does not itself verify the capabilities.yaml fix (that is verified by the hermetic/fleet tests above)."
+    },
+    {
+      "command": "uv run python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/implementation_manifest.json --evidence .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/evidence_ledger.json --bead-id CL-j92j --pretty",
+      "purpose": "Validate the two required implementation artifacts against the deterministic contract before the final commit.",
+      "exit_code": 0,
+      "observed": "status: ok, 'implementation artifacts are valid' (after correcting an initial manifest.tests dict-vs-list shape mismatch)."
+    },
+    {
+      "command": "grep -n 'capabilities:' -A 6 cognovis-core/agents/effort-classifier.md cognovis-core/agents/wave-monitor.md; grep -n 'No Write tool' cognovis-core/agents/wave-monitor.md",
+      "purpose": "CL-j92j Part 2 spot-check (read-only reference, no edits): confirm effort-classifier and wave-monitor currently declare manage_beads and that wave-monitor documents a read-only Design Constraint, justifying the read_beads capability and clc-zbj4's future reassignment.",
+      "exit_code": 0,
+      "observed": "effort-classifier capabilities: [read_files, manage_beads]. wave-monitor capabilities: [read_files, run_shell, manage_beads] plus 'No Write tool — wave-monitor is read-only. Cannot mutate bead state.' Confirms both facts; no cognovis-core file was edited."
+    },
+    {
+      "command": "Edit capabilities.yaml: add read_beads capability (5 read-only mcp__cognovis-tools__bead_* tools, mcpServers: [cognovis-tools], codex sandbox_mode: read-only) after manage_beads; clarify manage_beads description (one line).",
+      "purpose": "CL-j92j Part 2 primary change: land the canonical least-privilege read_beads capability so clc-zbj4 has something correct to consume.",
+      "exit_code": 0,
+      "observed": "read_beads added immediately after manage_beads; read-only tool set matches the 5 verified read bead_* function names; sandbox_mode: read-only consistent with read_files/bash_read_only/inspect_git convention. manage_beads description clarified to point read-only consumers at read_beads."
+    },
+    {
+      "command": "Edit tests/test_build_agent.py: add hermetic role-leakage fixture (Part 1 Finding 1) and two hermetic read_beads tests (Part 2).",
+      "purpose": "Give AC4's role-leakage guard cognovis-core-independent coverage and validate read_beads grants exactly the read-only tool set.",
+      "exit_code": 0,
+      "observed": "Added test_manage_beads_role_leakage_regression_fixture_hermetic, test_read_beads_capability_registry_is_read_only_typed_tools, test_build_agent_grants_read_beads_read_only_tools_end_to_end."
+    },
+    {
+      "command": "uv run pytest tests/test_build_agent.py -k \"read_beads\" -v",
+      "purpose": "GREEN gate for the new hermetic read_beads tests with COGNOVIS_CORE unset (no sibling-repo dependency).",
+      "exit_code": 0,
+      "observed": "2 passed, 17 deselected. read_beads registry and end-to-end build tests both pass hermetically."
+    },
+    {
+      "command": "uv run pytest tests/test_build_agent.py -k \"role_leakage_regression_fixture_hermetic\" -v",
+      "purpose": "GREEN gate for the new hermetic role-leakage fixture (Part 1 Finding 1) with COGNOVIS_CORE unset.",
+      "exit_code": 0,
+      "observed": "1 passed, 18 deselected. Synthetic reviewer-shaped agent leaks bead_* tools hermetically, proving the leak-detection mechanism is exercised without cognovis-core."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py -x",
+      "purpose": "Full regression gate for touched files after the Part 1 + Part 2 changes.",
+      "exit_code": 0,
+      "observed": "48 passed (45 pre-existing + 2 read_beads + 1 hermetic role-leakage), 0 failed."
+    },
+    {
+      "command": "Edit docs/mcp-migration-rollback.md and docs/adr/library-tool-surface-mcp.md: record the new read_beads capability and reference clc-zbj4 (cognovis-core repo, separate tracker) as the companion bead that migrates effort-classifier/wave-monitor.",
+      "purpose": "Part 2 doc updates. Explicitly do NOT claim effort-classifier/wave-monitor are already migrated — that is clc-zbj4's job.",
+      "exit_code": 0,
+      "observed": "Rollback doc gains a 'Companion: read_beads read-only capability (CL-j92j)' section; ADR Amendment gains a 'read_beads least-privilege capability (CL-j92j Part 2)' subsection with the two-track split. Both state the least-privilege concern is only closed once clc-zbj4 also ships."
+    },
+    {
+      "command": "uv run python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/implementation_manifest.json --evidence .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/evidence_ledger.json --bead-id CL-j92j --pretty",
+      "purpose": "Re-validate the implementation artifacts after the Part 1 + Part 2 updates.",
+      "exit_code": 0,
+      "observed": "status: ok, implementation artifacts are valid."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Live multi-agent harness smoke (spawning an actual installed bead-orchestrator Claude session and an actual installed review-agent session to attempt a real mutation call and observe a real denial)",
+      "reason": "Explicitly optional per the prompt: 'a hermetic test is acceptable and preferred... you don't need a live multi-agent harness sandbox.' The hermetic fleet-level tests (test_manage_beads_orchestrator_agents_expose_typed_bead_tools, test_manage_beads_read_only_agents_stay_read_only) build the real agent sources and assert the exact tool sets, which is the preferred MoC evidence."
+    },
+    {
+      "check": "scripts/build-agent.py builder-side AC4 regression guard (a new runtime check in apply_capabilities/_set_tools specifically for manage_beads)",
+      "reason": "Explicitly scoped as optional ('only if a narrow AC4 regression guard is genuinely needed beyond test-suite coverage') and explicitly warned against as a blanket rule. The merge logic itself was verified correct and unchanged; AC4 is fully covered by pytest negative regression fixtures per the prompt's own preference ('prefer test-suite failures over adding new blocking runtime behavior')."
+    },
+    {
+      "check": "inspect_git capability fix (same latent bug pattern for git.* tools)",
+      "reason": "Explicitly out of scope — a follow-up bead CL-rx6z already exists for this. Not touched."
+    },
+    {
+      "check": "Rewriting raw-CLI-recipe prose inside cognovis-core/agents/*.md bodies",
+      "reason": "Explicitly out of scope — owned by CL-enim/CL-crn2. cognovis-core/ is a read-only sibling reference for this bead; nothing under it was edited."
+    },
+    {
+      "check": "Filing a new discovered-work bead",
+      "reason": "No new out-of-scope work was discovered beyond the already-filed inspect_git gap (CL-rx6z). Nothing additional needed a quick-capture entry."
+    },
+    {
+      "check": "Reassigning effort-classifier / wave-monitor from manage_beads to read_beads (and any assertion that they already use read_beads)",
+      "reason": "Explicitly out of scope — this is the companion cognovis-core bead clc-zbj4 (separate repo, separate bead tracker). CL-j92j lands only the read_beads capability + hermetic tests in the meta repo. Editing cognovis-core is forbidden for this bead, and no test asserts those two agents use read_beads (they do not yet — that assertion belongs to clc-zbj4)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/implementation_manifest.json",
+      "kind": "implementation_manifest",
+      "description": "Implementation manifest for CL-j92j."
+    },
+    {
+      "path": ".beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/evidence_ledger.json",
+      "kind": "evidence_ledger",
+      "description": "Evidence ledger for CL-j92j."
+    }
+  ]
+}

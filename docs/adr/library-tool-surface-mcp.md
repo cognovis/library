@@ -325,6 +325,54 @@ under its own epic.
 4. This ADR is linked from `docs/ARCHITECTURE.md`.
 5. Phase 2–7 follow-up beads exist and are sequenced.
 
+## Amendment (CL-j92j, 2026-07)
+
+Phase 6 ("Capabilities migration", above) framed "coarse server-level scoping" as
+registering `mcpServers: [cognovis-tools]` on `manage_beads` with an empty
+`tools: []`. In practice this under-specified the Claude Code consumer: Claude
+Code only allows an agent to call `mcp__<server>__<tool>` when that exact name is
+listed in its `tools:` frontmatter allowlist. `mcpServers:` registration alone
+makes the server reachable but grants no callable tool. The Phase 6
+implementation (bead CL-ugwe.6) shipped `manage_beads.claude.tools: []`, which
+left every consuming agent (`bead-orchestrator`, `quick-fix`, `session-close`,
+`wave-orchestrator`, `bead-author`) with zero callable bead tools despite the
+server being registered — a live regression caught and fixed by bead CL-j92j.
+
+"Coarse server-level scoping" still holds as the *scoping granularity*: all
+`manage_beads`-declaring agents share one capability with the same full set of
+typed tools, rather than per-role tool subsets. What changed is the *mechanism*:
+for Claude Code, coarse scoping is expressed as an explicit list of every
+`mcp__cognovis-tools__bead_*` tool name in `claude.tools`, not as an empty list
+plus `mcpServers:`. `docs/mcp-migration-rollback.md` documents the corrected
+shape and the regression tests that guard it going forward.
+
+### `read_beads` least-privilege capability (CL-j92j Part 2)
+
+Populating `manage_beads` with the full 14-tool set surfaced a least-privilege
+gap that "coarse server-level scoping" had deferred: `manage_beads` was the only
+beads capability, so every consumer that needed bead *visibility* was forced to
+also take the 9 mutating tools. Two `cognovis-core` consumers do not need mutation
+per their documented contracts — `effort-classifier` (returns JSON only, never
+calls a `bead_*` tool) and `wave-monitor` (explicit design constraint: "No Write
+tool — wave-monitor is read-only. Cannot mutate bead state.").
+
+CL-j92j adds a second, narrower capability, `read_beads`, to
+`meta/capabilities.yaml`. It grants only the 5 read-only typed tools
+(`bead_show`, `bead_ready`, `bead_list`, `bead_search`, `bead_repos`) with
+`sandbox_mode: read-only` on the Codex binding, and none of the 9 mutating tools.
+This does **not** change the per-role granularity decision for orchestration-class
+agents — they still share `manage_beads`. It adds a read-only alternative for
+non-orchestrator consumers so the coarse-scoping choice no longer forces mutation
+access onto read-only roles.
+
+**Two-track split.** This bead (CL-j92j, `meta` repo) lands the `read_beads`
+capability plus hermetic regression tests only; it reassigns no agent. The
+companion bead **`clc-zbj4`** (in the `cognovis-core` repo, a separate bead
+tracker) reassigns `effort-classifier` and `wave-monitor` from `manage_beads` to
+`read_beads`. The least-privilege concern is only fully closed once both beads
+ship; until `clc-zbj4` lands, those two agents remain on `manage_beads` and still
+receive the full mutating set.
+
 ## Cross-References
 
 - [ADR-0002](canonical-library-architecture.md) — deployment-target model
