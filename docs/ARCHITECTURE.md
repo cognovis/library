@@ -78,6 +78,16 @@ Per **ADR-0002 Decision 2**, the canonical source for all CLI launchers is `cogn
 **Deployment:** `bash scripts/install-bin.sh` creates symlinks from `~/.local/bin/{cld,cdx}` into `bin/`.
 The installer is idempotent and uses `ln -sfn` so updates to this repo are immediately reflected.
 
+**Bead modes:** Both launchers are single-bead launchers with three exclusive bead-dispatch flags:
+
+| Flag | Description |
+|------|-------------|
+| `-b`/`--bead <id>` | Full bead orchestrator run with session-close |
+| `-bq`/`--bead-quick <id>` | Quick-fix run (lighter orchestration) |
+| `-br`/`--bead-review <id>` | Fresh-context critical bead-spec/readiness review via bead-reviewer skill; defaults to Opus model (overridable with an explicit `--model <name>` passthrough argument). Mutually exclusive with `-b`/`-bq`. |
+
+**Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch.
+
 **Route profiles** (`--route-profile NAME`): Both launchers accept an optional `--route-profile` flag
 that selects a named profile from `orchestrator-config.yml`. The name is exported as `CLD_ROUTE_PROFILE`
 and injected into the bead execution prompt so `phase0-claim.py` can resolve the matching `execution_plan`

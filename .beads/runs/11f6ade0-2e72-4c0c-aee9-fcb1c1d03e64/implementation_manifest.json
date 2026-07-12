@@ -1,0 +1,127 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-cqeo",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "done",
+      "changed_files": [
+        "bin/cld"
+      ],
+      "evidence_refs": [
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_with_callback_inject_contract_and_consume_flags[-b]",
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_with_callback_inject_contract_and_consume_flags[-bq]",
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_without_callback_do_not_inject_callback_contract[-b]",
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_without_callback_do_not_inject_callback_contract[-bq]"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "done",
+      "changed_files": [
+        "bin/cld",
+        "bin/cdx"
+      ],
+      "evidence_refs": [
+        "review: grep -c COORDINATOR bin/cld bin/cdx confirms no *_COORDINATOR_* env var read/export"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "done",
+      "changed_files": [
+        "bin/cld",
+        "bin/cdx"
+      ],
+      "evidence_refs": [
+        "tests asserting 'cmux trigger-flash --surface', 'blocking question', 'terminal state', 'Phase 16', negative progress-update assertion"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "done",
+      "changed_files": [
+        "bin/cld"
+      ],
+      "evidence_refs": [
+        "tests/test_cld_single_bead_contract.py::test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "done",
+      "changed_files": [
+        "bin/cdx"
+      ],
+      "evidence_refs": [
+        "tests/test_cdx_bead_workflow.py::test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub",
+        "tests/test_cdx_bead_workflow.py::test_cdx_help_documents_review_and_callback_flags_without_stale_warning"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "done",
+      "changed_files": [
+        "bin/cld",
+        "bin/cdx"
+      ],
+      "evidence_refs": [
+        "review: diff contains no wave-dispatch restoration, no cmux pane create/focus/retire calls -- only trigger-flash instruction TEXT injected into prompts"
+      ]
+    },
+    {
+      "id": "AC7",
+      "status": "done",
+      "changed_files": [
+        "bin/cld",
+        "bin/cdx",
+        "tests/test_cld_single_bead_contract.py",
+        "tests/test_cdx_bead_workflow.py"
+      ],
+      "evidence_refs": [
+        "uv run pytest tests/test_cld_single_bead_contract.py tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py -q => 43 passed"
+      ]
+    }
+  ],
+  "changed_files": [
+    "bin/cld",
+    "bin/cdx",
+    "tests/test_cld_single_bead_contract.py",
+    "tests/test_cdx_bead_workflow.py"
+  ],
+  "commits": [
+    {
+      "sha": "a368d593ba8b7090f1740479cbc57c9b4f873ed1",
+      "message": "test(CL-cqeo): red -- launcher callback and review contracts",
+      "author": "codex-impl"
+    },
+    {
+      "sha": "feabe6968669f807714302653885bb2e0e743cf0",
+      "message": "feat(CL-cqeo): green -- coordinator callback flags + cld/cdx -br fresh-context review",
+      "author": "bead-orchestrator (auto-commit of codex-impl GREEN work)"
+    }
+  ],
+  "tests": [
+    {
+      "file": "tests/test_cld_single_bead_contract.py",
+      "status": "passed"
+    },
+    {
+      "file": "tests/test_cdx_bead_workflow.py",
+      "status": "passed"
+    },
+    {
+      "file": "tests/test_cdx_quick_cursor_dispatch.py",
+      "status": "passed"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "bin/cld and bin/cdx are used by every bead-orchestrator/quick-fix launch in this repo; changes are strictly additive (new optional flags), no-callback behavior verified byte-identical via existing + new regression tests"
+  ],
+  "evidence_refs": [
+    "/tmp/arch-design-CL-cqeo.md (architecture-council design doc, COUNCIL_BLOCKED=false)",
+    "uv run pytest tests/test_cld_single_bead_contract.py tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py -q => 43 passed in 12.13s"
+  ]
+}

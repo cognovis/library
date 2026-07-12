@@ -8,8 +8,140 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "cdx-bead-workflow.py"
+_CDX_BIN = Path(__file__).resolve().parents[1] / "bin" / "cdx"
+
+
+def _write_launcher_executable(path: Path, content: str) -> Path:
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+def _write_codex_capture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
+    codex_mock = tmp_path / "codex-capture"
+    argv_file = tmp_path / "codex-argv.json"
+    prompt_file = tmp_path / "codex-prompt.txt"
+    called_file = tmp_path / "codex-called.txt"
+    env_file = tmp_path / "codex-env.json"
+    _write_launcher_executable(
+        codex_mock,
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, sys\n"
+        "pathlib.Path(os.environ['CODEX_CALLED_FILE']).write_text('called', encoding='utf-8')\n"
+        "pathlib.Path(os.environ['CODEX_ARGV_FILE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
+        "if len(sys.argv) > 1:\n"
+        "    pathlib.Path(os.environ['CODEX_PROMPT_FILE']).write_text(sys.argv[-1], encoding='utf-8')\n"
+        "env = {'CLD_BEAD_LINE': os.environ.get('CLD_BEAD_LINE', ''), 'CLD_ROUTE_PROFILE': os.environ.get('CLD_ROUTE_PROFILE', '')}\n"
+        "pathlib.Path(os.environ['CODEX_ENV_FILE']).write_text(json.dumps(env), encoding='utf-8')\n",
+    )
+    return codex_mock, argv_file, prompt_file, called_file, env_file
+
+
+def _write_launcher_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
+    bd_mock = tmp_path / "bd-launcher-mock"
+    bd_log = tmp_path / "bd-launcher-argv.jsonl"
+    _write_launcher_executable(
+        bd_mock,
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, sys\n"
+        "args = sys.argv[1:]\n"
+        "with pathlib.Path(os.environ['BD_ARGV_LOG']).open('a', encoding='utf-8') as f:\n"
+        "    f.write(json.dumps(args) + '\\n')\n"
+        "if len(args) >= 2 and args[0] == 'show':\n"
+        "    bead_id = args[1]\n"
+        "    if '--json' in args:\n"
+        "        print(json.dumps([{'id': bead_id, 'status': 'open', 'title': 'Smoke bead'}]))\n"
+        "    else:\n"
+        "        print(f'mock bead context for {bead_id}')\n"
+        "    raise SystemExit(0)\n"
+        "raise SystemExit(0)\n",
+    )
+    return bd_mock, bd_log
+
+
+def _write_launcher_git_mock(tmp_path: Path) -> tuple[Path, Path, Path]:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / ".git").mkdir()
+    git_log = tmp_path / "git-argv.jsonl"
+    git_mock = tmp_path / "git-launcher-mock"
+    _write_launcher_executable(
+        git_mock,
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, sys\n"
+        "args = sys.argv[1:]\n"
+        "with pathlib.Path(os.environ['GIT_ARGV_LOG']).open('a', encoding='utf-8') as f:\n"
+        "    f.write(json.dumps(args) + '\\n')\n"
+        "if args[:2] == ['rev-parse', '--show-toplevel']:\n"
+        "    print(os.environ['GIT_REPO_ROOT'])\n"
+        "    raise SystemExit(0)\n"
+        "if args[:3] == ['worktree', 'list', '--porcelain']:\n"
+        "    raise SystemExit(0)\n"
+        "if args[:2] == ['show-ref', '--verify']:\n"
+        "    raise SystemExit(1)\n"
+        "if args[:2] == ['worktree', 'add']:\n"
+        "    worktree_dir = pathlib.Path(args[-2])\n"
+        "    worktree_dir.mkdir(parents=True, exist_ok=True)\n"
+        "    raise SystemExit(0)\n"
+        "raise SystemExit(0)\n",
+    )
+    return git_mock, git_log, repo_root
+
+
+def _write_minimal_beads_runtime(tmp_path: Path) -> Path:
+    runtime = tmp_path / "launcher-beads-runtime"
+    (runtime / "scripts").mkdir(parents=True)
+    return runtime
+
+
+def _run_cdx_launcher(
+    tmp_path: Path,
+    args: list[str],
+    *,
+    with_bead_reviewer_skill: bool = False,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path, Path, Path]:
+    codex_mock, argv_file, prompt_file, called_file, env_file = _write_codex_capture(tmp_path)
+    bd_mock, bd_log = _write_launcher_bd_mock(tmp_path)
+    git_mock, git_log, repo_root = _write_launcher_git_mock(tmp_path)
+    runtime = _write_minimal_beads_runtime(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    if with_bead_reviewer_skill:
+        skill_path = home / ".agents" / "skills" / "bead-reviewer" / "SKILL.md"
+        skill_path.parent.mkdir(parents=True)
+        skill_path.write_text("# bead-reviewer\n", encoding="utf-8")
+
+    env = dict(os.environ)
+    env["HOME"] = str(home)
+    env["CODEX_BIN"] = str(codex_mock)
+    env["CODEX_ARGV_FILE"] = str(argv_file)
+    env["CODEX_PROMPT_FILE"] = str(prompt_file)
+    env["CODEX_CALLED_FILE"] = str(called_file)
+    env["CODEX_ENV_FILE"] = str(env_file)
+    env["BD_BIN"] = str(bd_mock)
+    env["BD_ARGV_LOG"] = str(bd_log)
+    env["GIT_BIN"] = str(git_mock)
+    env["GIT_ARGV_LOG"] = str(git_log)
+    env["GIT_REPO_ROOT"] = str(repo_root)
+    env["BEADS_RUNTIME_DIR"] = str(runtime)
+    env["CDX_WORKTREE_ROOT"] = str(tmp_path / "worktrees")
+    env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+    env["CLD_COMPACT_OUTPUT"] = "0"
+    env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [str(_CDX_BIN), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=repo_root,
+        env=env,
+    )
+    return result, argv_file, prompt_file, called_file, env_file, bd_log, git_log
 
 
 def _write_runtime(
@@ -579,3 +711,170 @@ def test_full_cdx_workflow_fails_closed_for_unsupported_adapter(tmp_path: Path) 
     assert not slot_calls.exists()
     assert "cannot execute adapter 'opencode-agent'" in result.stderr
     assert "cursor-composer" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-b", "CL-smoke", "--exec"],
+        ["-bq", "CL-smoke"],
+    ],
+)
+def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    result, _argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "Coordinator callback" not in prompt
+    assert "trigger-flash" not in prompt
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        [
+            "-b",
+            "CL-smoke",
+            "--exec",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        [
+            "-bq",
+            "CL-smoke",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+    ],
+)
+def test_cdx_bead_modes_with_callback_inject_contract_and_consume_flags(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    result, argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "--coordinator-workspace" not in argv
+    assert "--coordinator-surface" not in argv
+    assert "workspace:15 / surface:33" in prompt
+    assert "cmux trigger-flash --surface surface:33" in prompt
+    assert "blocking question" in prompt
+    assert "terminal state" in prompt
+    assert "Phase 16" in prompt
+    assert "Normal progress updates are NOT intervention events and must NOT trigger the callback." in prompt
+
+
+@pytest.mark.parametrize(
+    "args, message",
+    [
+        (["-b", "CL-smoke", "--coordinator-surface"], "--coordinator-surface requires an argument"),
+        (["-b", "CL-smoke", "--coordinator-surface", "surface:33"], "coordinator callback requires both"),
+        (
+            [
+                "-b",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:x",
+                "--coordinator-surface",
+                "surface:33",
+            ],
+            "invalid coordinator workspace",
+        ),
+        (["-br", "CL-smoke", "-bq", "CL-other"], "mutually exclusive"),
+    ],
+)
+def test_cdx_invalid_callback_or_review_arguments_fail_before_harness(
+    tmp_path: Path,
+    args: list[str],
+    message: str,
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert message in result.stderr
+
+
+def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Path) -> None:
+    result, argv_file, prompt_file, called_file, env_file, _bd_log, git_log = _run_cdx_launcher(
+        tmp_path,
+        [
+            "-br",
+            "CL-smoke",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        with_bead_reviewer_skill=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    assert "use: cld -br" not in result.stderr
+    assert "no full cmux-review equivalent" not in result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    env = json.loads(env_file.read_text(encoding="utf-8"))
+    assert argv[:2] == ["exec", "--dangerously-bypass-approvals-and-sandbox"]
+    assert "--coordinator-workspace" not in argv
+    assert "--coordinator-surface" not in argv
+    assert env["CLD_BEAD_LINE"] == "cdx"
+    assert "Use the bead-reviewer skill guidance" in prompt
+    assert str(tmp_path / "home" / ".agents" / "skills" / "bead-reviewer" / "SKILL.md") in prompt
+    assert "factory-ready spec / autonomous-readiness review" in prompt
+    assert "SPECIFICATION and readiness ONLY" in prompt
+    assert "Do NOT implement" in prompt
+    assert "do NOT\nrun session-close" in prompt
+    assert "do NOT review implementation diffs" in prompt
+    assert "Review terminal state is the final bead-reviewer verdict" in prompt
+    assert "cmux trigger-flash --surface surface:33" in prompt
+    assert "mock bead context for CL-smoke" in prompt
+    assert not git_log.exists()
+
+
+def test_cdx_help_documents_review_and_callback_flags_without_stale_warning(tmp_path: Path) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        ["--help"],
+    )
+
+    assert result.returncode == 0
+    assert called_file.exists()
+    assert "-br, --bead-review ID" in result.stdout
+    assert "--coordinator-workspace workspace:<n>" in result.stdout
+    assert "--coordinator-surface surface:<n>" in result.stdout
+    assert "Codex has no cmux-review equivalent" not in result.stdout
+
+
+def test_cdx_source_has_no_callback_env_or_cmux_pane_creation() -> None:
+    source = _CDX_BIN.read_text(encoding="utf-8")
+
+    assert "WAVE_COORDINATOR" not in source
+    assert "CLD_COORDINATOR" not in source
+    assert "COORDINATOR_WORKSPACE" not in source
+    assert "COORDINATOR_SURFACE" not in source
+    assert "cmux new" not in source
+    assert "cmux split" not in source
+    assert "cmux create" not in source
+    assert "wave-dispatch" not in source
