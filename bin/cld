@@ -9,12 +9,9 @@
 #   -v, --verbose   → enable verbose mode (reasoning traces + token counts)
 #   -c, --caveman   → enable caveman mode for this session (exports CAVEMAN_MODE=1)
 #   -b, --bead ID   → launch with bead orchestrator for the given bead ID
-#                     (refuses if ID has children — use -bw instead)
+#                     (refuses if ID has children)
 #   -bq, --bead-quick ID → launch with quick-fix agent for XS/S beads (bug, chore, task)
 #   -bp, --plan-label LABEL → launch with /plan --label LABEL as initial prompt
-#   -bw, --bead-wave ID → dispatch wave-orchestrator for a parent bead's children
-#   -bl, --bead-label LABELS → dispatch wave-orchestrator for beads with LABELS (comma-separated, AND)
-#   -bi, --bead-ids IDS → dispatch wave-orchestrator for explicit bead IDs (comma-separated)
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
 #   --force-tier TIER → force routing tier (e.g. mcp, infra); passed to phase0-claim.py
 #                          profiles: cld-default (default for -bq), cld-composer, cdx-default, cdx-composer
@@ -37,9 +34,6 @@ skip_perms=false
 verbose=false
 bead_id=""
 bead_quick_id=""
-bead_wave_id=""
-bead_labels=""
-bead_ids=""
 route_profile=""
 force_tier=""
 plan_label=""
@@ -76,17 +70,11 @@ while (( $# > 0 )); do
             plan_label="$2"
             shift 2
             ;;
-        -bw|--bead-wave)
-            bead_wave_id="$2"
-            shift 2
-            ;;
-        -bl|--bead-label)
-            bead_labels="$2"
-            shift 2
-            ;;
-        -bi|--bead-ids)
-            bead_ids="$2"
-            shift 2
+        -bw|--bead-wave|-bl|--bead-label|-bi|--bead-ids)
+            echo "ERROR: cld does not dispatch multi-bead waves." >&2
+            echo "Start wave orchestration manually, then use the wave skills with cmux panes." >&2
+            echo "Use cld -b <bead-id> to implement exactly one bead." >&2
+            exit 2
             ;;
         --route-profile)
             route_profile="$2"
@@ -114,14 +102,9 @@ Wrapper flags (consumed by cld, not passed to claude):
 
   Bead workflows:
     -b,  --bead ID              Launch bead-orchestrator for single bead
-                                (refuses if ID has children — use -bw)
+                                (refuses if ID has children)
     -bq, --bead-quick ID        Launch quick-fix agent (XS/S beads)
     -bp, --plan-label LABEL     Launch with /plan --label LABEL
-    -bw, --bead-wave ID         Dispatch wave-orchestrator for parent's children
-    -bl, --bead-label LABELS    Dispatch wave-orchestrator for labelled beads
-                                (comma-separated, AND semantics)
-    -bi, --bead-ids IDS         Dispatch wave-orchestrator for explicit bead IDs
-                                (comma-separated, e.g. fpde-11j,fpde-95b)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
          --force-tier TIER       Force the routing tier (e.g. mcp, infra); passed to phase0-claim.py
                                 Profiles: cld-default (default for -bq), cld-composer, cdx-default, cdx-composer
@@ -209,7 +192,7 @@ fi
 
 # ── Auto-expand short bead IDs ──────────────────────────────────
 # e.g. "oms3" → "mira-oms3" when issue_prefix is "mira"
-if [[ -n "$bead_id$bead_quick_id$bead_wave_id$bead_labels$bead_ids" && -z "${BD_BIN}" ]]; then
+if [[ -n "$bead_id$bead_quick_id" && -z "${BD_BIN}" ]]; then
     echo "ERROR: bd not found in PATH. Install the beads CLI first."
     exit 1
 fi
@@ -308,23 +291,6 @@ _abort_missing_bead() {
     exit 2
 }
 
-# List IDs of beads matching labels (comma-separated, AND semantics) with status=open
-_beads_by_labels() {
-    local labels_csv="$1"
-    local -a label_args=()
-    local IFS=','
-    for l in ${=labels_csv}; do
-        [[ -n "$l" ]] && label_args+=("-l" "$l")
-    done
-    "${BD_BIN}" list "${label_args[@]}" --status=open --json 2>/dev/null \
-        | jq -r '.[].id' 2>/dev/null
-}
-
-# Sanitize a string for use as a worktree/branch name (keep alnum + -_)
-_sanitize_name() {
-    echo "$1" | tr -cs 'A-Za-z0-9_-' '-' | sed 's/^-*//;s/-*$//'
-}
-
 # Rename cmux surface if running inside cmux
 _cmux_rename() {
     local label="$1"
@@ -371,8 +337,7 @@ if [[ -n "$bead_id" ]]; then
     _child_count=$(_bead_child_count "$bead_id")
     if [[ "$_child_count" -gt 0 ]]; then
         echo -e "\033[0;31m✗ ${bead_id} has ${_child_count} children.\033[0m" >&2
-        echo "  For parallel wave dispatch of children:" >&2
-        echo "    cld -bw ${bead_id}" >&2
+        echo "  Waves must be started manually using the wave skills with cmux panes." >&2
         echo "  To work on a single child, use its own ID with cld -b." >&2
         exit 2
     fi
@@ -506,98 +471,6 @@ fi
 
 if [[ -n "$plan_label" ]]; then
     claude_args+=("/plan --label $plan_label")
-fi
-
-# ── Wave dispatch: parent bead with children ─────────────────────
-if [[ -n "$bead_wave_id" ]]; then
-    bead_wave_id=$(_expand_bead_id "$bead_wave_id")
-    local bead_wave_short=$(_bead_short "$bead_wave_id")
-
-    local _wave_child_count
-    _wave_child_count=$(_bead_child_count "$bead_wave_id")
-    if [[ "$_wave_child_count" -eq 0 ]]; then
-        echo -e "\033[0;31m✗ ${bead_wave_id} has no children.\033[0m" >&2
-        echo "  For single-bead work use: cld -b ${bead_wave_id}" >&2
-        echo "  -bw requires a parent bead with child beads attached." >&2
-        exit 2
-    fi
-
-    echo -e "\033[0;36m⟳ Dispatching wave for ${bead_wave_id} (${_wave_child_count} children)...\033[0m"
-
-    # Terminal tab + cmux pane name
-    printf '\033]1;wave:%s\033\\' "$bead_wave_id"
-    printf '\033]2;%s\033\\' "cld wave: $bead_wave_id"
-    _cmux_rename "${bead_wave_short}-wave"
-
-    # Wave-orchestrator runs from main, not inside a worktree — it spawns
-    # per-bead child sessions that create their own worktrees via cld -b.
-    local prompt="Wave orchestration request: parent bead ${bead_wave_id} has ${_wave_child_count} child beads. Invoke the beads-workflow:wave-orchestrator skill to dispatch them in dependency-aware waves across cmux panes. Use 'bd show ${bead_wave_id} --children --json' to enumerate children."
-    claude_args+=("$prompt")
-fi
-
-# ── Wave dispatch: label-scoped ──────────────────────────────────
-if [[ -n "$bead_labels" ]]; then
-    local _wave_ids
-    _wave_ids=$(_beads_by_labels "$bead_labels")
-    if [[ -z "$_wave_ids" ]]; then
-        echo -e "\033[0;31m✗ No open beads match labels: ${bead_labels}\033[0m" >&2
-        echo "  Labels are matched with AND semantics (comma-separated)." >&2
-        echo "  Check with: bd list -l <label> --status=open" >&2
-        exit 2
-    fi
-
-    local _wave_count
-    _wave_count=$(echo "$_wave_ids" | wc -l | tr -d ' ')
-    local _wave_id_list
-    _wave_id_list=$(echo "$_wave_ids" | tr '\n' ',' | sed 's/,$//')
-
-    # Worktree name uses first label, sanitized
-    local _first_label="${bead_labels%%,*}"
-    local _first_label_safe
-    _first_label_safe=$(_sanitize_name "$_first_label")
-
-    echo -e "\033[0;36m⟳ Dispatching wave for labels [${bead_labels}] (${_wave_count} beads)...\033[0m"
-
-    printf '\033]1;wave:%s\033\\' "$_first_label_safe"
-    printf '\033]2;%s\033\\' "cld wave: $bead_labels"
-    _cmux_rename "${_first_label_safe}-wave"
-
-    local prompt="Wave orchestration request: ${_wave_count} open beads match labels [${bead_labels}] (AND). Invoke the beads-workflow:wave-orchestrator skill to dispatch them in dependency-aware waves across cmux panes. Bead IDs: ${_wave_id_list}."
-    claude_args+=("$prompt")
-fi
-
-# ── Wave dispatch: explicit bead IDs ────────────────────────────
-if [[ -n "$bead_ids" ]]; then
-    # Expand short IDs and normalize to comma-separated list
-    local _raw_ids _expanded_ids=()
-    IFS=',' read -rA _raw_ids <<< "$bead_ids"
-    for _id in "${_raw_ids[@]}"; do
-        _id="${_id// /}"  # strip accidental spaces
-        [[ -z "$_id" ]] && continue
-        _expanded_ids+=("$(_expand_bead_id "$_id")")
-    done
-
-    local _wave_count=${#_expanded_ids[@]}
-    if [[ "$_wave_count" -eq 0 ]]; then
-        echo -e "\033[0;31m✗ No bead IDs provided after parsing: ${bead_ids}\033[0m" >&2
-        exit 2
-    fi
-
-    local _wave_id_list
-    _wave_id_list=$(IFS=','; echo "${_expanded_ids[*]}")
-
-    # Use first bead's short name for tab/pane label
-    local _first_short
-    _first_short=$(_bead_short "${_expanded_ids[1]}")
-
-    echo -e "\033[0;36m⟳ Dispatching wave for ${_wave_count} explicit beads: ${_wave_id_list}...\033[0m"
-
-    printf '\033]1;wave:%s\033\\' "$_first_short"
-    printf '\033]2;%s\033\\' "cld wave: ${_wave_id_list}"
-    _cmux_rename "${_first_short}-wave"
-
-    local prompt="Wave orchestration request: dispatch ${_wave_count} explicit beads in dependency-aware waves across cmux panes. Invoke the beads-workflow:wave-orchestrator skill. Bead IDs: ${_wave_id_list}."
-    claude_args+=("$prompt")
 fi
 
 # ── Launch claude ────────────────────────────────────────────────
