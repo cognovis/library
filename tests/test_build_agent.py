@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import os
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
+
+import pytest
+import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -101,6 +105,37 @@ def write_capability_source(tmp_path: Path) -> Path:
     return source
 
 
+def write_pair_loop_reviewer_source(
+    tmp_path: Path,
+    *,
+    include_constraints: bool = True,
+) -> Path:
+    source = tmp_path / "pair-loop-reviewer.md"
+    constraints = (
+        "pair_loop_constraints:\n"
+        "  review_contexts:\n"
+        "    - in_loop\n"
+        "    - cold\n"
+        "  run_shell: read_only\n"
+        if include_constraints
+        else ""
+    )
+    source.write_text(
+        "---\n"
+        "name: pair-loop-reviewer\n"
+        "description: Pair-loop reviewer fixture.\n"
+        "model: sonnet\n"
+        "tools: Read, Write, Edit, MultiEdit, Bash\n"
+        "capabilities:\n"
+        "  - run_shell\n"
+        f"{constraints}"
+        "agent_base: auto\n"
+        "---\n\n"
+        "# Pair-loop Reviewer\n\nShared body.\n"
+    )
+    return source
+
+
 def write_escape_hatch_source(tmp_path: Path) -> Path:
     source = tmp_path / "escape-agent.md"
     source.write_text(
@@ -173,6 +208,15 @@ def make_model_standards(tmp_path: Path, names: list[str]) -> Path:
             f"{name.upper()}_LAYER3_MARKER\n"
         )
     return model_standards_dir
+
+
+def load_build_agent_module():
+    spec = importlib.util.spec_from_file_location("build_agent_under_test", BUILD_AGENT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def run_build(
@@ -300,6 +344,70 @@ def test_build_agent_resolves_models_and_capabilities_per_harness(tmp_path: Path
     assert codex["sandbox_mode"] == "workspace-write"
     assert '# mcp_servers: ["open-brain"]' in codex_text
     assert "GPT-5.4_LAYER3_MARKER" in codex["developer_instructions"]
+
+
+def test_pair_loop_read_only_constraints_override_run_shell_codex_sandbox(
+    tmp_path: Path,
+) -> None:
+    """Pair-loop reviewers keep read-only Codex sandbox despite run_shell."""
+    source = write_pair_loop_reviewer_source(tmp_path, include_constraints=True)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
+
+    assert result.returncode == 0, result.stderr
+    codex = tomllib.loads((output_dir / "pair-loop-reviewer.toml").read_text())
+    claude_text = (output_dir / "pair-loop-reviewer.md").read_text()
+    claude_frontmatter = yaml.safe_load(claude_text.split("---", 2)[1]) or {}
+    claude_tools = {
+        tool.strip()
+        for tool in str(claude_frontmatter.get("tools", "")).split(",")
+        if tool.strip()
+    }
+
+    assert codex["sandbox_mode"] == "read-only"
+    assert not ({"Write", "Edit", "MultiEdit"} & claude_tools)
+    assert "Bash" in claude_tools
+
+
+def test_run_shell_without_pair_loop_constraints_keeps_workspace_write(
+    tmp_path: Path,
+) -> None:
+    """Non-reviewer run_shell capability keeps the existing workspace-write behavior."""
+    source = write_pair_loop_reviewer_source(tmp_path, include_constraints=False)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="codex")
+
+    assert result.returncode == 0, result.stderr
+    codex = tomllib.loads((output_dir / "pair-loop-reviewer.toml").read_text())
+    assert codex["sandbox_mode"] == "workspace-write"
+
+
+def test_pair_loop_read_only_guard_rejects_drift() -> None:
+    """The defensive guard fails loudly if read-only reviewer constraints drift."""
+    module = load_build_agent_module()
+    frontmatter = {"pair_loop_constraints": {"run_shell": "read_only"}}
+
+    with pytest.raises(module.BuildAgentError, match="pair_loop_constraints"):
+        module._validate_pair_loop_read_only_constraints(  # noqa: SLF001
+            {"sandbox_mode": "workspace-write"},
+            frontmatter,
+            "codex",
+        )
+
+    with pytest.raises(module.BuildAgentError, match="pair_loop_constraints"):
+        module._validate_pair_loop_read_only_constraints(  # noqa: SLF001
+            {"tools": "Read, Write, Bash"},
+            frontmatter,
+            "claude",
+        )
 
 
 def test_build_agent_model_escape_hatch_overrides_per_harness(tmp_path: Path) -> None:
