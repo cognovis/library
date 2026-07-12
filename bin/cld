@@ -184,7 +184,7 @@ fi
 
 # Build final claude args — default to Claude permission auto unless explicitly bypassed
 if ${skip_perms}; then
-    echo -e "\033[0;33m⚠ WARNING: --skip-perms selected; forwarding --dangerously-skip-permissions to claude.\033[0m" >&2
+    echo -e "\033[0;33mWARNING: --skip-perms selected; forwarding --dangerously-skip-permissions to claude.\033[0m" >&2
     claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
 elif [[ -n "$bead_review_id" ]]; then
     claude_args=("--permission-mode" "plan" "${claude_args[@]}")
