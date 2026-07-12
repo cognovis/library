@@ -33,6 +33,8 @@ if [[ -z "$COGNOVIS_CORE" ]]; then
 fi
 
 COMPOSE_SCRIPT="${REPO_ROOT}/scripts/compose-agent.py"
+BUILD_AGENT_SCRIPT="${REPO_ROOT}/scripts/build-agent.py"
+FLEET_AUDIT_SCRIPT="${REPO_ROOT}/scripts/agent-fleet-audit.py"
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -65,6 +67,9 @@ make_tmp() {
     TMPDIRS+=("$tmp")
     echo "$tmp"
 }
+
+UV_CACHE_TMP=$(make_tmp)
+export UV_CACHE_DIR="${UV_CACHE_DIR:-${UV_CACHE_TMP}/uv-cache}"
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -217,9 +222,12 @@ if [[ -z "$COGNOVIS_CORE" ]]; then
     PASS_COUNT=$((PASS_COUNT + 1))
 else
     HAIKU_FILE="${COGNOVIS_CORE}/model-standards/claude-haiku-4-5.md"
+    if [[ ! -f "$HAIKU_FILE" ]] && [[ -f "${COGNOVIS_CORE}/model-standards/haiku.md" ]]; then
+        HAIKU_FILE="${COGNOVIS_CORE}/model-standards/haiku.md"
+    fi
     if [[ -f "$HAIKU_FILE" ]]; then
         # Validate YAML frontmatter has model_aliases
-        if python3 -c "
+        if uv run python -c "
 import sys
 try:
     import yaml
@@ -231,22 +239,128 @@ try:
                 fm = yaml.safe_load('\n'.join(lines[1:i])) or {}
                 break
         aliases = fm.get('model_aliases', [])
-        assert 'haiku' in aliases, f'haiku not in model_aliases: {aliases}'
+        model_id = fm.get('model_id')
+        assert model_id == 'haiku' or 'haiku' in aliases, f'haiku not covered by model_id/model_aliases: {model_id}, {aliases}'
         assert 'haiku-4-5' in aliases, f'haiku-4-5 not in model_aliases: {aliases}'
-        print('FRONTMATTER OK: model_aliases =', aliases)
+        print('FRONTMATTER OK: model_id =', model_id, 'model_aliases =', aliases)
         sys.exit(0)
     sys.exit(1)
 except Exception as e:
     print(f'ERROR: {e}', file=sys.stderr)
     sys.exit(1)
 " 2>&1; then
-            pass "claude-haiku-4-5.md exists with valid model_aliases frontmatter"
+            pass "haiku model-standard exists with valid model_aliases frontmatter"
         else
-            fail "claude-haiku-4-5.md exists but has invalid frontmatter"
+            fail "haiku model-standard exists but has invalid frontmatter"
         fi
     else
-        fail "claude-haiku-4-5.md not found at ${HAIKU_FILE}"
+        fail "haiku model-standard not found under ${COGNOVIS_CORE}/model-standards/"
     fi
+fi
+
+# ---------------------------------------------------------------------------
+# Test 6: generated reviewer artifact and fleet audit use simulated install dirs
+# ---------------------------------------------------------------------------
+echo ""
+echo "=================================================="
+echo "  Test 6: reviewer sandbox and fleet audit"
+echo "=================================================="
+
+TMP6=$(make_tmp)
+CLAUDE_AGENTS_ROOT="${TMP6}/claude-agents"
+CODEX_AGENTS_ROOT="${TMP6}/codex-agents"
+BUILD_OUT="${TMP6}/built-agents"
+MODEL_STANDARDS6="${TMP6}/model-standards"
+mkdir -p "$CLAUDE_AGENTS_ROOT" "$CODEX_AGENTS_ROOT" "$BUILD_OUT" "$MODEL_STANDARDS6"
+
+if [[ -n "$COGNOVIS_CORE" ]] \
+    && [[ -f "${COGNOVIS_CORE}/agents/review-agent.md" ]] \
+    && [[ -d "${COGNOVIS_CORE}/agent-bases" ]] \
+    && [[ -d "${COGNOVIS_CORE}/model-standards" ]]; then
+    REVIEW_SOURCE="${COGNOVIS_CORE}/agents/review-agent.md"
+    BUILD_AGENT_BASES="${COGNOVIS_CORE}/agent-bases"
+    BUILD_MODEL_STANDARDS="${COGNOVIS_CORE}/model-standards"
+else
+    REVIEW_SOURCE="${TMP6}/review-agent.md"
+    BUILD_AGENT_BASES="${TMP6}/agent-bases"
+    BUILD_MODEL_STANDARDS="$MODEL_STANDARDS6"
+    mkdir -p "$BUILD_AGENT_BASES"
+    cp -f "${REPO_ROOT}/tests/compose/fixtures/base-claude-agent-base.md" \
+        "${BUILD_AGENT_BASES}/claude-agent-base.md"
+    cp -f "${REPO_ROOT}/tests/compose/fixtures/base-codex-agent-base.md" \
+        "${BUILD_AGENT_BASES}/codex-agent-base.md"
+    cat > "$REVIEW_SOURCE" <<'MDEOF'
+---
+name: review-agent
+description: Reviewer smoke fixture.
+model: sonnet
+tools: Read, Write, Edit, MultiEdit, Bash
+capabilities:
+  - run_shell
+pair_loop_constraints:
+  review_contexts:
+    - in_loop
+    - cold
+  run_shell: read_only
+agent_base: auto
+---
+
+# Review Agent
+
+Read-only reviewer smoke fixture.
+MDEOF
+fi
+
+if uv run python "$BUILD_AGENT_SCRIPT" "$REVIEW_SOURCE" \
+    --harness all \
+    --output-dir "$BUILD_OUT" \
+    --agent-bases-dir "$BUILD_AGENT_BASES" \
+    --model-standards-dir "$BUILD_MODEL_STANDARDS" > "${TMP6}/build.log" 2>&1; then
+    cp -f "$BUILD_OUT"/*.md "$CLAUDE_AGENTS_ROOT"/
+    cp -f "$BUILD_OUT"/*.toml "$CODEX_AGENTS_ROOT"/
+    pass "review-agent built into simulated Claude and Codex install roots"
+else
+    fail "review-agent build failed for simulated install roots"
+    head -20 "${TMP6}/build.log" | sed 's/^/    /'
+fi
+
+if uv run python "$FLEET_AUDIT_SCRIPT" \
+    --claude-root "$CLAUDE_AGENTS_ROOT" \
+    --codex-root "$CODEX_AGENTS_ROOT" \
+    --json > "${TMP6}/fleet-audit.json" 2> "${TMP6}/fleet-audit.err"; then
+    if uv run python - "${TMP6}/fleet-audit.json" <<'PYEOF'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert payload["harnesses"]["claude"]["inspected_count"] == 1
+assert payload["harnesses"]["codex"]["inspected_count"] == 1
+PYEOF
+    then
+        pass "fleet audit reports one Claude and one Codex simulated agent"
+    else
+        fail "fleet audit counts did not match simulated install roots"
+        cat "${TMP6}/fleet-audit.json" | sed 's/^/    /'
+    fi
+else
+    fail "fleet audit failed for simulated install roots"
+    cat "${TMP6}/fleet-audit.err" | sed 's/^/    /'
+fi
+
+if uv run python - "$BUILD_OUT/review-agent.toml" <<'PYEOF'
+import sys
+import tomllib
+from pathlib import Path
+
+artifact = Path(sys.argv[1])
+data = tomllib.loads(artifact.read_text(encoding="utf-8"))
+assert data["sandbox_mode"] == "read-only", data.get("sandbox_mode")
+PYEOF
+then
+    pass "generated review-agent Codex artifact is read-only"
+else
+    fail "generated review-agent Codex artifact is not read-only"
 fi
 
 # ---------------------------------------------------------------------------

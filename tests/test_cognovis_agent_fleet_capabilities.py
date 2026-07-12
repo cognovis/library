@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -15,7 +16,11 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-COGNOVIS_CORE = REPO_ROOT.parent / "cognovis-core"
+COGNOVIS_CORE = (
+    Path(os.environ["COGNOVIS_CORE"]).expanduser()
+    if os.environ.get("COGNOVIS_CORE")
+    else REPO_ROOT.parent / "cognovis-core"
+)
 AGENTS_DIR = COGNOVIS_CORE / "agents"
 AGENT_BASES_DIR = COGNOVIS_CORE / "agent-bases"
 MODEL_STANDARDS_DIR = COGNOVIS_CORE / "model-standards"
@@ -31,6 +36,14 @@ _MIN_DEV_INSTRUCTIONS_CHARS = 200
 # ci-monitor produces ~5 000 chars; 200 guards against empty-body stubs.
 _MIN_CLAUDE_BODY_CHARS = 200
 
+# These unified sources intentionally keep explicit Claude tool boundaries in
+# addition to capability declarations because their role constraints are part of
+# the source contract.
+_ALLOWED_SOURCE_TOOL_BOUNDARY_AGENTS = {
+    "fix-agent.md",
+    "review-agent.md",
+    "verification-agent.md",
+}
 
 # ---------------------------------------------------------------------------
 # Quality-check helpers (used both by the fleet test and the regression fixture)
@@ -160,16 +173,28 @@ def _frontmatter(path: Path) -> dict:
     return yaml.safe_load(text.split("---", 2)[1]) or {}
 
 
+def _is_wrapper_agent(path: Path) -> bool:
+    return path.name.startswith("phase") and path.name.endswith("-wrapper.md")
+
+
 def test_cognovis_agents_are_capability_first() -> None:
     """Every first-party agent uses capability declarations after CL-2yp."""
     for path in sorted(AGENTS_DIR.glob("*.md")):
         frontmatter = _frontmatter(path)
-        assert frontmatter.get("agent_base") == "auto", f"{path.name} missing agent_base: auto"
+        if not _is_wrapper_agent(path):
+            assert frontmatter.get("agent_base") == "auto", (
+                f"{path.name} missing agent_base: auto"
+            )
+            assert isinstance(frontmatter.get("model"), dict), f"{path.name} model is not a mapping"
+            assert "model_standards" not in frontmatter, (
+                f"{path.name} still has model_standards"
+            )
         assert "agent_base_extends" not in frontmatter, f"{path.name} still uses agent_base_extends"
         assert "capabilities" in frontmatter, f"{path.name} missing capabilities"
-        assert isinstance(frontmatter.get("model"), dict), f"{path.name} model is not a mapping"
-        assert "tools" not in frontmatter, f"{path.name} still has tools"
-        assert "model_standards" not in frontmatter, f"{path.name} still has model_standards"
+        if "tools" in frontmatter:
+            assert path.name in _ALLOWED_SOURCE_TOOL_BOUNDARY_AGENTS, (
+                f"{path.name} has an unapproved source-level tools boundary"
+            )
 
 
 def test_cognovis_agents_have_no_stale_codex_subagent_claims() -> None:
@@ -246,6 +271,33 @@ def test_researcher_build_keeps_claude_builtin_web_tools_blocked(tmp_path: Path)
     assert "mcp__searxng__searxng_web_search" in tools
     assert "WebSearch" not in tools
     assert "WebFetch" not in tools
+
+
+def test_review_agent_codex_build_uses_read_only_sandbox(tmp_path: Path) -> None:
+    """The real review-agent source builds a read-only Codex reviewer artifact."""
+    output_dir = tmp_path / "review-agent"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(BUILD_AGENT),
+            str(AGENTS_DIR / "review-agent.md"),
+            "--harness",
+            "codex",
+            "--output-dir",
+            str(output_dir),
+            "--agent-bases-dir",
+            str(AGENT_BASES_DIR),
+            "--model-standards-dir",
+            str(MODEL_STANDARDS_DIR),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    artifact = output_dir / "review-agent.toml"
+    parsed = tomllib.loads(artifact.read_text(encoding="utf-8"))
+    assert parsed["sandbox_mode"] == "read-only"
 
 
 def test_catalog_agents_build_with_non_stub_artifacts(tmp_path: Path) -> None:

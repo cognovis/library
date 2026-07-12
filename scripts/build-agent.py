@@ -80,6 +80,7 @@ CONTEXT_RANK = {"small": 0, "medium": 1, "large": 2}
 REASONING_RANK = {"low": 0, "medium": 1, "high": 2, "max": 3, "xhigh": 3}
 CODEX_REASONING_VALUE = {"low": "low", "medium": "medium", "high": "high", "max": "xhigh", "xhigh": "xhigh"}
 SANDBOX_RANK = {"read-only": 0, "workspace-write": 1, "danger-full-access": 2}
+CLAUDE_MUTATING_TOOLS = {"Write", "Edit", "MultiEdit"}
 
 
 class BuildAgentError(Exception):
@@ -479,6 +480,57 @@ def apply_capabilities(
             _set_list_field(merged, "skills", _as_string_list(binding.get("skills")))
 
 
+def _has_pair_loop_read_only_run_shell(frontmatter: dict[str, Any]) -> bool:
+    constraints = frontmatter.get("pair_loop_constraints", {})
+    return isinstance(constraints, dict) and constraints.get("run_shell") == "read_only"
+
+
+def _remove_claude_mutating_tools(merged: dict[str, Any]) -> None:
+    tools = _as_string_list(merged.get("tools"))
+    if not tools:
+        return
+    filtered = [tool for tool in tools if tool not in CLAUDE_MUTATING_TOOLS]
+    if filtered:
+        merged["tools"] = ", ".join(filtered)
+    else:
+        merged.pop("tools", None)
+
+
+def _apply_pair_loop_read_only_constraints(
+    merged: dict[str, Any],
+    frontmatter: dict[str, Any],
+    harness: str,
+) -> None:
+    if not _has_pair_loop_read_only_run_shell(frontmatter):
+        return
+    if harness == "codex":
+        # Pair-loop reviewers must stay read-only even when run_shell grants shell inspection.
+        merged["sandbox_mode"] = "read-only"
+    elif harness == "claude":
+        _remove_claude_mutating_tools(merged)
+
+
+def _validate_pair_loop_read_only_constraints(
+    merged: dict[str, Any],
+    frontmatter: dict[str, Any],
+    harness: str,
+) -> None:
+    if not _has_pair_loop_read_only_run_shell(frontmatter):
+        return
+    if harness == "codex" and merged.get("sandbox_mode") != "read-only":
+        raise BuildAgentError(
+            "pair_loop_constraints.run_shell=read_only requires Codex sandbox_mode=read-only"
+        )
+    if harness == "claude":
+        forbidden = CLAUDE_MUTATING_TOOLS & set(_as_string_list(merged.get("tools")))
+        if forbidden:
+            rendered = ", ".join(sorted(forbidden))
+            raise BuildAgentError(
+                "pair_loop_constraints.run_shell=read_only forbids Claude mutating "
+                f"tools: {rendered}"
+            )
+
+
 def frontmatter_for_harness(
     frontmatter: dict[str, Any],
     harness: str,
@@ -503,6 +555,8 @@ def frontmatter_for_harness(
         apply_capabilities(merged, harness, capabilities_registry)
     if harness == "codex":
         apply_codex_defaults(merged, frontmatter, override)
+    _apply_pair_loop_read_only_constraints(merged, frontmatter, harness)
+    _validate_pair_loop_read_only_constraints(merged, frontmatter, harness)
     return merged
 
 
