@@ -3737,52 +3737,109 @@ library:
   mcp_servers:
   - name: cognovis-tools
     description: First-party bead.* typed tools — exposes bd (beads) commands as structured
-      MCP tools for all harness families (ADR-0007 library-tool-surface).
+      MCP tools for all harness families (ADR-0007 library-tool-surface). HTTP activation
+      is gated on all four live roots-or-workspace_bind probes; stdio rollback is preserved
+      in supervised_local_service.
     source: https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml
     species: library-tool-surface
     coding_strategy: mcp
     capabilities:
-      stateless: true
-      streaming: false
+      stateless: false
+      streaming: true
       auth: none
+    supervised_local_service:
+      url: http://127.0.0.1:8765/mcp
+      health_url: http://127.0.0.1:8765/health
+      install:
+        command: uv
+        args:
+        - run
+        - --project
+        - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+        - cognovis-tools-daemon
+        - install
+      start:
+        command: uv
+        args:
+        - run
+        - --project
+        - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+        - cognovis-tools-daemon
+        - start
+      health_check:
+        command: uv
+        args:
+        - run
+        - --project
+        - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+        - cognovis-tools-daemon
+        - status
+      restart:
+        command: uv
+        args:
+        - run
+        - --project
+        - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+        - cognovis-tools-daemon
+        - restart
+      stop:
+        command: uv
+        args:
+        - run
+        - --project
+        - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+        - cognovis-tools-daemon
+        - stop
+      uninstall:
+        command: uv
+        args:
+        - run
+        - --project
+        - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+        - cognovis-tools-daemon
+        - uninstall
+      stdio_rollback:
+        type: stdio
+        command: uv
+        args:
+        - run
+        - --project
+        - ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
+        - python
+        - -m
+        - server
+        - --transport
+        - stdio
+      legacy_stdio_descriptors:
+      - type: stdio
+        command: sh
+        args:
+        - -c
+        - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
+      activation_note: HTTP registrations are written only after the supervised daemon
+        install/start/health_check succeeds. Live activation still requires all four harness
+        families to pass loopback connectivity plus roots-or-workspace_bind probes.
     install:
       mcp:
         claude_code:
           config_path: ~/.claude.json
           snippet:
-            type: stdio
-            command: sh
-            args:
-            - -c
-            - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-              cognovis-tools-mcp
+            type: http
+            url: http://127.0.0.1:8765/mcp
         codex:
           config_path: ~/.codex/config.toml
           snippet:
-            type: stdio
-            command: sh
-            args:
-            - -c
-            - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-              cognovis-tools-mcp
+            url: http://127.0.0.1:8765/mcp
         antigravity:
           config_path: ~/.gemini/config/mcp_config.json
           snippet:
-            type: stdio
-            command: sh
-            args:
-            - -c
-            - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-              cognovis-tools-mcp
+            type: http
+            url: http://127.0.0.1:8765/mcp
         cursor:
           config_path: ~/.cursor/mcp.json
           snippet:
-            type: stdio
-            command: sh
-            args:
-            - -c
-            - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools
-              cognovis-tools-mcp
+            type: http
+            url: http://127.0.0.1:8765/mcp
   - name: open-brain
     description: Stateless memory store via search/save/get — persists observations
       across sessions

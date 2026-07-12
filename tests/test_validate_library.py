@@ -521,61 +521,42 @@ def test_mcp_server_species_library_tool_surface():
         "species": "library-tool-surface",
         "coding_strategy": "mcp",
         "capabilities": {
-            "stateless": True,
-            "streaming": False,
+            "stateless": False,
+            "streaming": True,
             "auth": "none",
+        },
+        "supervised_local_service": {
+            "url": "http://127.0.0.1:8765/mcp",
+            "health_url": "http://127.0.0.1:8765/health",
+            "install": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "install"]},
+            "start": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "start"]},
+            "health_check": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "status"]},
+            "restart": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "restart"]},
+            "stop": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "stop"]},
+            "uninstall": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "uninstall"]},
+            "stdio_rollback": {
+                "type": "stdio",
+                "command": "uv",
+                "args": ["run", "python", "-m", "server", "--transport", "stdio"],
+            },
         },
         "install": {
             "mcp": {
                 "claude_code": {
-                    "config_path": "~/.claude/settings.json",
-                    "snippet": {
-                        "type": "stdio",
-                        "command": "uv",
-                        "args": [
-                            "run",
-                            "--project",
-                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
-                            "cognovis-tools-mcp",
-                        ],
-                    },
+                    "config_path": "~/.claude.json",
+                    "snippet": {"type": "http", "url": "http://127.0.0.1:8765/mcp"},
                 },
                 "codex": {
                     "config_path": "~/.codex/config.toml",
-                    "snippet": {
-                        "command": "uv",
-                        "args": [
-                            "run",
-                            "--project",
-                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
-                            "cognovis-tools-mcp",
-                        ],
-                    },
+                    "snippet": {"url": "http://127.0.0.1:8765/mcp"},
                 },
                 "antigravity": {
-                    "config_path": "~/.config/gemini/settings.json",
-                    "snippet": {
-                        "command": "uv",
-                        "args": [
-                            "run",
-                            "--project",
-                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
-                            "cognovis-tools-mcp",
-                        ],
-                    },
+                    "config_path": "~/.gemini/config/mcp_config.json",
+                    "snippet": {"type": "http", "url": "http://127.0.0.1:8765/mcp"},
                 },
                 "cursor": {
                     "config_path": "~/.cursor/mcp.json",
-                    "snippet": {
-                        "type": "stdio",
-                        "command": "uv",
-                        "args": [
-                            "run",
-                            "--project",
-                            "~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools",
-                            "cognovis-tools-mcp",
-                        ],
-                    },
+                    "snippet": {"type": "http", "url": "http://127.0.0.1:8765/mcp"},
                 },
             }
         },
@@ -584,6 +565,31 @@ def test_mcp_server_species_library_tool_surface():
     result = _run_validator(_make_library_yaml_with_entries({"mcp_servers": [entry]}))
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_supervised_local_service_rejects_non_loopback_url():
+    entry = {
+        "name": "cognovis-tools",
+        "description": "Invalid supervised service URL.",
+        "supervised_local_service": {
+            "url": "http://0.0.0.0:8765/mcp",
+            "install": {"command": "uv", "args": ["install"]},
+            "start": {"command": "uv", "args": ["start"]},
+            "health_check": {"command": "uv", "args": ["status"]},
+            "restart": {"command": "uv", "args": ["restart"]},
+            "stop": {"command": "uv", "args": ["stop"]},
+            "uninstall": {"command": "uv", "args": ["uninstall"]},
+            "stdio_rollback": {
+                "type": "stdio",
+                "command": "uv",
+                "args": ["run", "python", "-m", "server", "--transport", "stdio"],
+            },
+        },
+    }
+
+    result = _run_validator(_make_library_yaml_with_entries({"mcp_servers": [entry]}))
+
+    assert result.returncode == 1
 
 
 @pytest.mark.parametrize("tier_tag", ["tier:domain", "tier:project"])

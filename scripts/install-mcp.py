@@ -131,7 +131,12 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def _merge_json_map(
-    config: dict, top_level_key: str, name: str, snippet: dict, origin: str
+    config: dict,
+    top_level_key: str,
+    name: str,
+    snippet: dict,
+    origin: str,
+    legacy_descriptors: list[dict] | None = None,
 ) -> tuple[dict, str]:
     """Merge snippet into config[top_level_key][name] with _origin tag.
 
@@ -155,6 +160,10 @@ def _merge_json_map(
             return config, "no_change"
         container[name] = new_entry
         return config, "refreshed"
+
+    if _matches_legacy_descriptor(existing, legacy_descriptors or []):
+        container[name] = new_entry
+        return config, "adopted"
 
     # Manual / foreign entry — refuse to clobber.
     return config, "skipped_manual"
@@ -212,7 +221,12 @@ def _write_toml(path: Path, doc) -> None:
 
 
 def _merge_toml_table(
-    doc, table_name: str, name: str, snippet: dict, origin: str
+    doc,
+    table_name: str,
+    name: str,
+    snippet: dict,
+    origin: str,
+    legacy_descriptors: list[dict] | None = None,
 ) -> tuple[Any, str]:
     """Merge snippet into doc[table_name][name] as a TOML sub-table.
 
@@ -238,6 +252,13 @@ def _merge_toml_table(
                 existing[key] = value
             existing["_origin"] = origin
             return doc, "refreshed"
+        if _matches_legacy_descriptor(existing, legacy_descriptors or []):
+            for key in list(existing.keys()):
+                del existing[key]
+            for key, value in snippet.items():
+                existing[key] = value
+            existing["_origin"] = origin
+            return doc, "adopted"
         return doc, "skipped_manual"
 
     new_table = tomlkit.table()
@@ -246,6 +267,23 @@ def _merge_toml_table(
     new_table["_origin"] = origin
     table[name] = new_table
     return doc, "installed"
+
+
+def _matches_legacy_descriptor(
+    existing: Any, legacy_descriptors: list[dict]
+) -> bool:
+    """Match an exact known legacy command without adopting foreign entries."""
+    if not hasattr(existing, "get") or existing.get("_origin") is not None:
+        return False
+    existing_command = existing.get("command")
+    existing_args = list(existing.get("args") or [])
+    for descriptor in legacy_descriptors:
+        if (
+            existing_command == descriptor.get("command")
+            and existing_args == list(descriptor.get("args") or [])
+        ):
+            return True
+    return False
 
 
 def _remove_toml_table(
@@ -295,9 +333,16 @@ def install_claude_code(
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[claude_code] entry missing install.mcp.claude_code.snippet — skip", file=sys.stderr)
+        print("[claude_code] entry missing install.mcp.claude_code.snippet — skip", file=sys.stderr)
         return 0
-    updated, action = _merge_json_map(settings, "mcpServers", name, snippet, origin)
+    updated, action = _merge_json_map(
+        settings,
+        "mcpServers",
+        name,
+        snippet,
+        origin,
+        block.get("_legacy_descriptors"),
+    )
     if dry_run:
         print(f"[claude_code] (dry-run) action={action}")
         print(json.dumps(updated.get("mcpServers", {}).get(name, {}), indent=2))
@@ -335,9 +380,16 @@ def install_codex(name: str, block: dict, dry_run: bool, remove: bool) -> int:
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[codex] entry missing install.mcp.codex.snippet — skip", file=sys.stderr)
+        print("[codex] entry missing install.mcp.codex.snippet — skip", file=sys.stderr)
         return 0
-    updated, action = _merge_toml_table(doc, "mcp_servers", name, snippet, origin)
+    updated, action = _merge_toml_table(
+        doc,
+        "mcp_servers",
+        name,
+        snippet,
+        origin,
+        block.get("_legacy_descriptors"),
+    )
     if dry_run:
         import tomlkit
         print(f"[codex] (dry-run) action={action}")
@@ -375,9 +427,16 @@ def install_opencode(name: str, block: dict, dry_run: bool, remove: bool) -> int
 
     snippet = block.get("snippet")
     if not snippet:
-        print(f"[opencode] entry missing install.mcp.opencode.snippet — skip", file=sys.stderr)
+        print("[opencode] entry missing install.mcp.opencode.snippet — skip", file=sys.stderr)
         return 0
-    updated, action = _merge_json_map(config, "mcp", name, snippet, origin)
+    updated, action = _merge_json_map(
+        config,
+        "mcp",
+        name,
+        snippet,
+        origin,
+        block.get("_legacy_descriptors"),
+    )
     if dry_run:
         print(f"[opencode] (dry-run) action={action}")
         print(json.dumps(updated.get("mcp", {}).get(name, {}), indent=2))
@@ -430,7 +489,14 @@ def _install_json_mcp_servers(
     if not snippet:
         print(f"[{harness}] entry missing install.mcp.{harness}.snippet — skip", file=sys.stderr)
         return 0
-    updated, action = _merge_json_map(config, "mcpServers", name, snippet, origin)
+    updated, action = _merge_json_map(
+        config,
+        "mcpServers",
+        name,
+        snippet,
+        origin,
+        block.get("_legacy_descriptors"),
+    )
     if dry_run:
         print(f"[{harness}] (dry-run) action={action}")
         print(json.dumps(updated.get("mcpServers", {}).get(name, {}), indent=2))
@@ -500,6 +566,11 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--remove", action="store_true")
     ap.add_argument(
+        "--rollback-stdio",
+        action="store_true",
+        help="Restore preserved stdio descriptor for supervised MCP servers.",
+    )
+    ap.add_argument(
         "--harness",
         choices=list(HANDLERS.keys()) + ["all"],
         default="all",
@@ -509,6 +580,61 @@ def main() -> int:
 
     library = load_library()
     entry = find_mcp_entry(library, args.name)
+
+    env_overrides = {
+        key: os.environ[key]
+        for key in (
+            "CLAUDE_SETTINGS_FILE",
+            "CODEX_CONFIG_FILE",
+            "OPENCODE_CONFIG_FILE",
+            "GEMINI_SETTINGS_FILE",
+            "CURSOR_MCP_FILE",
+        )
+        if key in os.environ
+    } or None
+
+    if entry.get("supervised_local_service") and args.remove:
+        from lib.installers.mcp_installer import remove_mcp
+
+        result = remove_mcp(
+            catalog=library,
+            name=args.name,
+            repo_root=REPO_ROOT,
+            scope="global",
+            dry_run=args.dry_run,
+            harness=args.harness,
+            env_overrides=env_overrides,
+        )
+        if result.get("status") == "dry-run":
+            for op in result.get("operations", []):
+                print(f"[dry-run] {op.get('operation')}: {op.get('details')}")
+            return 0
+        print(result.get("message", "removed"))
+        return 0 if result.get("status") == "ok" else 1
+
+    if entry.get("supervised_local_service") and not args.remove:
+        from lib.installers.mcp_installer import install_mcp
+
+        result = install_mcp(
+            catalog=library,
+            name=args.name,
+            repo_root=REPO_ROOT,
+            scope="global",
+            dry_run=args.dry_run,
+            harness=args.harness,
+            env_overrides=env_overrides,
+            rollback_stdio=args.rollback_stdio,
+        )
+        if result.get("status") == "dry-run":
+            for op in result.get("operations", []):
+                print(f"[dry-run] {op.get('operation')}: {op.get('details')}")
+            return 0
+        if result.get("status") != "ok":
+            print(result.get("message", "install failed"), file=sys.stderr)
+            return 1
+        print(result.get("message", "installed"))
+        return 0
+
     mcp_block = (entry.get("install", {}) or {}).get("mcp", {})
     if not mcp_block:
         sys.exit(
