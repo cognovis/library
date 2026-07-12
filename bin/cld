@@ -186,6 +186,8 @@ fi
 if ${skip_perms}; then
     echo -e "\033[0;33m⚠ WARNING: --skip-perms selected; forwarding --dangerously-skip-permissions to claude.\033[0m" >&2
     claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
+elif [[ -n "$bead_review_id" ]]; then
+    claude_args=("--permission-mode" "plan" "${claude_args[@]}")
 else
     claude_args=("--permission-mode" "auto" "${claude_args[@]}")
 fi

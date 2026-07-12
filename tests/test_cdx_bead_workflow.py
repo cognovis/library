@@ -504,6 +504,7 @@ def _run_workflow(
     uv_argv_log = tmp_path / "uv-argv.jsonl"
     env = dict(os.environ)
     env["BEADS_RUNTIME_DIR"] = str(runtime)
+    env["CONTEXT_PROVIDER_SCRIPT"] = str(runtime / "scripts" / "context_provider.py")
     env["INJECT_STANDARDS_RUNNER"] = str(inject_runner)
     env["METRICS_DIR_OVERRIDE"] = str(metrics_dir)
     env["METRICS_CALLS_FILE"] = str(metrics_calls)
