@@ -29,6 +29,7 @@
 
 ### Security
 
+- *(cld)* `cld` no longer unconditionally passes `--dangerously-skip-permissions` to Claude Code. Default invocations (plain `cld`, `-b`, `-bq`, `-br`) now use `--permission-mode auto`, so Claude's normal permission prompts govern tool access. Operators who need the previous bypass behavior must explicitly pass `--skip-perms`; doing so prints a visible stderr warning. This removes an unconditional permission bypass that was active on every `cld` invocation regardless of context.
 - *(cdx)* `cdx -b`, `cdx -bq`, and `cdx -br` now default to `--sandbox workspace-write -c approval_policy="never"` instead of Codex's full `--dangerously-bypass-approvals-and-sandbox`. Operators who need the previous unrestricted bypass for bead-mode invocations must explicitly pass `--bead-dangerous-full-auto`, which prints a visible stderr warning when selected. The plain `cdx` launch path (governed by `--no-full-auto`) is unchanged.
 
 ## [2026.07.0] - 2026-07-02

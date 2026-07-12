@@ -1,0 +1,112 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-w3q3",
+  "commands": [
+    {
+      "command": "sed -n '1,260p' /Users/malte/.agents/skills/beads/SKILL.md",
+      "purpose": "Load the beads skill instructions before implementing the bead.",
+      "exit_code": 0,
+      "observed": "Skill instructions were read successfully."
+    },
+    {
+      "command": "bd prime",
+      "purpose": "Load canonical bead workflow context.",
+      "exit_code": 0,
+      "observed": "Workflow context printed successfully."
+    },
+    {
+      "command": "bd show CL-w3q3 --json",
+      "purpose": "Confirm bead state and reduced-scope notes through the bd CLI.",
+      "exit_code": 0,
+      "observed": "Bead CL-w3q3 was in_progress and already claimed for run_id 04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7; notes identify original AC3 as deferred to cognovis-core clc-n21h."
+    },
+    {
+      "command": "rg -n \"dangerously-skip-permissions|permission-mode|skip-perms|Bead ID:|route_profile|force_tier\" bin/cld tests",
+      "purpose": "Locate the buggy permission conditional, prompt construction points, and stale dangerous-flag assumptions before editing.",
+      "exit_code": 0,
+      "observed": "Found bin/cld default branch still adding --dangerously-skip-permissions and tests/test_cld_single_bead_contract.py expecting that old -br default."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_launcher_permission_modes.py tests/test_cld_single_bead_contract.py",
+      "purpose": "TDD red gate for the new launcher permission-mode regressions and stale -br default assertion.",
+      "exit_code": 1,
+      "observed": "Expected failure before production change: 9 failed, 23 passed. Default paths still contained --dangerously-skip-permissions and explicit --skip-perms emitted no warning."
+    },
+    {
+      "command": "git add tests/test_launcher_permission_modes.py tests/test_cld_single_bead_contract.py && git commit -m \"test(CL-w3q3): red launcher permission-mode regressions\"",
+      "purpose": "Commit the red test changes alone.",
+      "exit_code": 0,
+      "observed": "Committed d9333665e1e4f5f06e388fa721be86c4b25bbc7a."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_launcher_permission_modes.py tests/test_cld_single_bead_contract.py",
+      "purpose": "TDD green gate after updating bin/cld.",
+      "exit_code": 0,
+      "observed": "Both scoped test files passed: 32 passed."
+    },
+    {
+      "command": "git add bin/cld && git commit -m \"fix(CL-w3q3): green use safe cld permission default\"",
+      "purpose": "Commit the production launcher fix separately from the red tests.",
+      "exit_code": 0,
+      "observed": "Committed 3b398e46f90645233ec0cef98f0f18a2b802ba2f."
+    },
+    {
+      "command": "rg -n \"dangerously-skip-permissions|permission-mode|skip-perms\" tests/test_launcher_permission_modes.py tests/test_cld_single_bead_contract.py bin/cld",
+      "purpose": "Verify remaining dangerous-flag references are either explicit opt-in coverage, warning/help text, or safe-default assertions.",
+      "exit_code": 0,
+      "observed": "No stale default assertion remains; tests now assert --permission-mode auto for default -br and dangerous flag only for explicit opt-in."
+    },
+    {
+      "command": "zsh -n bin/cld",
+      "purpose": "Syntax-check the edited zsh launcher.",
+      "exit_code": 0,
+      "observed": "bin/cld parsed without syntax errors."
+    },
+    {
+      "command": "git log --oneline -4",
+      "purpose": "Capture the final implementation commit order.",
+      "exit_code": 0,
+      "observed": "Top commits were 3b398e4 fix(CL-w3q3): green use safe cld permission default and d933366 test(CL-w3q3): red launcher permission-mode regressions."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run python -m json.tool .beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/implementation_manifest.json",
+      "purpose": "Validate implementation manifest JSON syntax.",
+      "exit_code": 0,
+      "observed": "implementation_manifest.json parsed successfully."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run python -m json.tool .beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/evidence_ledger.json",
+      "purpose": "Validate evidence ledger JSON syntax.",
+      "exit_code": 0,
+      "observed": "evidence_ledger.json parsed successfully."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run --no-project python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/implementation_manifest.json --evidence .beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/evidence_ledger.json --bead-id CL-w3q3",
+      "purpose": "Validate implementation artifacts against the beads artifact schema.",
+      "exit_code": 0,
+      "observed": "Artifact validator returned status ok with no manifest or evidence errors."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Original AC3: bead-orchestrator subagent prompt construction and injection fixtures",
+      "reason": "cross-repo - filed as cognovis-core clc-n21h; files live outside this library-platform worktree and were explicitly excluded from this bead's reduced scope"
+    },
+    {
+      "check": "Full repository test suite",
+      "reason": "The bead explicitly required running only tests/test_launcher_permission_modes.py and tests/test_cld_single_bead_contract.py."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/implementation_manifest.json",
+      "kind": "implementation_manifest",
+      "description": "Implementation manifest for CL-w3q3 reduced-scope delivery."
+    },
+    {
+      "path": ".beads/runs/04e2f91c-ae2e-42fa-bec4-8c2ffc917cf7/evidence_ledger.json",
+      "kind": "evidence_ledger",
+      "description": "Evidence ledger for CL-w3q3 reduced-scope delivery."
+    }
+  ]
+}

@@ -182,12 +182,12 @@ if ${caveman}; then
     export CAVEMAN_MODE=1
 fi
 
-# Build final claude args — default to bypass until auto mode is available on plan
+# Build final claude args — default to Claude permission auto unless explicitly bypassed
 if ${skip_perms}; then
+    echo -e "\033[0;33m⚠ WARNING: --skip-perms selected; forwarding --dangerously-skip-permissions to claude.\033[0m" >&2
     claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
 else
-    # claude_args=("--permission-mode" "auto" "${claude_args[@]}")
-    claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
+    claude_args=("--permission-mode" "auto" "${claude_args[@]}")
 fi
 
 if ${verbose}; then
