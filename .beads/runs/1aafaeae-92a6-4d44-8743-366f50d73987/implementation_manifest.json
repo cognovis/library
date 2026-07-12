@@ -41,7 +41,7 @@
     {
       "id": "4",
       "status": "done",
-      "summary": "Hermetic regression fixtures in tests/test_build_agent.py assert manage_beads.claude.tools is non-empty and contains every typed tool (fails if it regresses to []) and that cognovis-tools stays registered in mcpServers. Fleet-level fixtures in tests/test_cognovis_agent_fleet_capabilities.py assert review-agent/verification-agent gain zero bead_* tools, plus a synthetic-reviewer regression fixture proving that assertion is not vacuous (a reviewer-shaped agent that wrongly declares manage_beads is shown to leak all 14 bead_* tools).",
+      "summary": "Hermetic regression fixtures in tests/test_build_agent.py assert manage_beads.claude.tools is non-empty and contains every typed tool (fails if it regresses to []) and that cognovis-tools stays registered in mcpServers. Fleet-level fixtures in tests/test_cognovis_agent_fleet_capabilities.py assert review-agent/verification-agent gain zero bead_* tools, plus a synthetic-reviewer regression fixture proving that assertion is not vacuous (a reviewer-shaped agent that wrongly declares manage_beads is shown to leak all 14 bead_* tools). CL-j92j Part 1 Finding 1 (codex): the fleet-level role-leakage fixture only runs when the cognovis-core sibling checkout is present, leaving AC4's leak guard uncovered on isolated CI / fresh clones; a HERMETIC equivalent (test_manage_beads_role_leakage_regression_fixture_hermetic in tests/test_build_agent.py, built with the self-contained make_agent_bases fixtures) now exercises the same mcp__cognovis-tools__bead_* leak-detection mechanism with no cognovis-core dependency.",
       "changed_files": [
         "tests/test_build_agent.py",
         "tests/test_cognovis_agent_fleet_capabilities.py"
@@ -56,7 +56,7 @@
     {
       "id": "5",
       "status": "done",
-      "summary": "Hermetic smoke: builds the real bead-orchestrator.md and confirms mcp__cognovis-tools__bead_update_notes (and the rest of the typed set) is declared, while review-agent.md/verification-agent.md builds confirm zero bead_* tools. Stronger-evidence live smoke (optional, additionally performed): a real mcp__cognovis-tools__bead_show and mcp__cognovis-tools__bead_update_notes call against this bead (CL-j92j) both succeeded from this implementation session, recording an actual progress note through the typed tool.",
+      "summary": "Hermetic smoke: builds the real bead-orchestrator.md and confirms mcp__cognovis-tools__bead_update_notes (and the rest of the typed set) is declared, while review-agent.md/verification-agent.md builds confirm zero bead_* tools. Platform-mechanism rationale (CL-j92j Part 1 Finding 2, codex): Claude Code enforces tool availability purely by omission from the built tools: allowlist — an agent can only invoke mcp__<server>__<tool> when that exact name appears in its frontmatter, and there is no separate 'attempt the call and receive a runtime denial' code path to exercise. Confirming a mutating bead_* tool is ABSENT from the built frontmatter (as the hermetic and fleet tests already do) is therefore both the correct and the complete AC5 verification that a read-only role cannot mutate; no additional 'attempt-and-get-denied' test is possible or needed. Stronger-evidence live smoke (optional, additionally performed): a real mcp__cognovis-tools__bead_show and mcp__cognovis-tools__bead_update_notes call against this bead (CL-j92j) both succeeded from this implementation session, recording an actual progress note through the typed tool — but those tools were pre-granted to this session by its launching harness, so this remains supplementary evidence that the typed surface works end-to-end, not verification of the capabilities.yaml fix.",
       "changed_files": [
         "tests/test_cognovis_agent_fleet_capabilities.py"
       ],
@@ -87,6 +87,10 @@
     {
       "sha": "fadc5a6",
       "message": "docs(CL-j92j): correct mcpServers-alone-is-enough claim in rollback doc + ADR-0007 amendment"
+    },
+    {
+      "sha": "f04f3a1",
+      "message": "fix(CL-j92j): address codex findings and add read-only read_beads capability"
     }
   ],
   "tests": [
@@ -118,7 +122,9 @@
   "downstream_impacts": [
     "Every agent declaring manage_beads (bead-orchestrator, quick-fix, session-close, wave-orchestrator, bead-author — all in the sibling cognovis-core repo) will gain the 14 typed mcp__cognovis-tools__bead_* tools in their generated Claude frontmatter on next rebuild via build-agent.py / `library use`.",
     "Installed artifacts (e.g. ~/.claude/agents/*.md) are not automatically updated by this bead; a rebuild/reinstall step (library sync / library use) is required to project the fix into an already-installed fleet, and is outside this bead's declared scope.",
-    "docs/mcp-migration-rollback.md and docs/adr/library-tool-surface-mcp.md now correctly describe the mechanism; readers following the rollback doc's manual revert steps will use the corrected explicit-tool-list shape."
+    "docs/mcp-migration-rollback.md and docs/adr/library-tool-surface-mcp.md now correctly describe the mechanism; readers following the rollback doc's manual revert steps will use the corrected explicit-tool-list shape.",
+    "CL-j92j Part 2 adds a new least-privilege capability read_beads to capabilities.yaml (5 read-only mcp__cognovis-tools__bead_* tools, no mutation; codex sandbox_mode: read-only) plus hermetic regression tests. No agent is reassigned by this bead. The companion cognovis-core bead clc-zbj4 (separate repo, separate bead tracker — NOT in scope here) will migrate effort-classifier and wave-monitor from manage_beads to read_beads. Until clc-zbj4 lands, both agents remain on manage_beads and still receive the full 14-tool mutating set; the least-privilege concern is only fully closed once both beads ship.",
+    "manage_beads's description in capabilities.yaml was clarified (one line) to state it is for orchestration-class mutating roles and to point read-only consumers at read_beads, so the two capabilities read unambiguously side by side."
   ],
   "evidence_refs": [
     {
@@ -148,6 +154,18 @@
     {
       "id": "EV-live-smoke-optional",
       "description": "Live mcp__cognovis-tools__bead_show(bead_id=\"CL-j92j\") and mcp__cognovis-tools__bead_update_notes(bead_id=\"CL-j92j\", ...) calls both returned status ok from this implementation session, recording a real progress note. Supplementary evidence only — these tools were pre-granted to this session by its launching harness, not produced by this bead's capabilities.yaml fix."
+    },
+    {
+      "id": "EV-hermetic-role-leakage-gate",
+      "description": "CL-j92j Part 1 Finding 1: test_manage_beads_role_leakage_regression_fixture_hermetic in tests/test_build_agent.py passes with COGNOVIS_CORE unset — a synthetic reviewer-shaped agent (capabilities: [read_files, run_shell, manage_beads]) built via the hermetic make_agent_bases fixtures leaks mcp__cognovis-tools__bead_* tools, proving the leak-detection mechanism is exercised without a cognovis-core dependency."
+    },
+    {
+      "id": "EV-read-beads-hermetic-gate",
+      "description": "CL-j92j Part 2: tests/test_build_agent.py -k read_beads passes with COGNOVIS_CORE unset (2 passed). test_read_beads_capability_registry_is_read_only_typed_tools asserts capabilities.yaml's read_beads grants exactly the 5 read-only tools, no mutating tool, mcpServers keeps cognovis-tools. test_build_agent_grants_read_beads_read_only_tools_end_to_end builds a synthetic read_beads-only agent and asserts exactly the 5 read bead_* tools and none of the 9 mutating (bead_create/bead_claim/bead_update/bead_update_notes/bead_review_write/bead_close/bead_dep_add/bead_dep_remove/bead_dolt_sync)."
+    },
+    {
+      "id": "EV-read-beads-round-regression-gate",
+      "description": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py -x -> 48 passed (45 pre-existing + 2 read_beads + 1 hermetic role-leakage), 0 failed."
     }
   ]
 }

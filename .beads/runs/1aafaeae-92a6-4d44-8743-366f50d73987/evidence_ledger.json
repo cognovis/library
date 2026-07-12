@@ -103,6 +103,54 @@
       "purpose": "Validate the two required implementation artifacts against the deterministic contract before the final commit.",
       "exit_code": 0,
       "observed": "status: ok, 'implementation artifacts are valid' (after correcting an initial manifest.tests dict-vs-list shape mismatch)."
+    },
+    {
+      "command": "grep -n 'capabilities:' -A 6 cognovis-core/agents/effort-classifier.md cognovis-core/agents/wave-monitor.md; grep -n 'No Write tool' cognovis-core/agents/wave-monitor.md",
+      "purpose": "CL-j92j Part 2 spot-check (read-only reference, no edits): confirm effort-classifier and wave-monitor currently declare manage_beads and that wave-monitor documents a read-only Design Constraint, justifying the read_beads capability and clc-zbj4's future reassignment.",
+      "exit_code": 0,
+      "observed": "effort-classifier capabilities: [read_files, manage_beads]. wave-monitor capabilities: [read_files, run_shell, manage_beads] plus 'No Write tool — wave-monitor is read-only. Cannot mutate bead state.' Confirms both facts; no cognovis-core file was edited."
+    },
+    {
+      "command": "Edit capabilities.yaml: add read_beads capability (5 read-only mcp__cognovis-tools__bead_* tools, mcpServers: [cognovis-tools], codex sandbox_mode: read-only) after manage_beads; clarify manage_beads description (one line).",
+      "purpose": "CL-j92j Part 2 primary change: land the canonical least-privilege read_beads capability so clc-zbj4 has something correct to consume.",
+      "exit_code": 0,
+      "observed": "read_beads added immediately after manage_beads; read-only tool set matches the 5 verified read bead_* function names; sandbox_mode: read-only consistent with read_files/bash_read_only/inspect_git convention. manage_beads description clarified to point read-only consumers at read_beads."
+    },
+    {
+      "command": "Edit tests/test_build_agent.py: add hermetic role-leakage fixture (Part 1 Finding 1) and two hermetic read_beads tests (Part 2).",
+      "purpose": "Give AC4's role-leakage guard cognovis-core-independent coverage and validate read_beads grants exactly the read-only tool set.",
+      "exit_code": 0,
+      "observed": "Added test_manage_beads_role_leakage_regression_fixture_hermetic, test_read_beads_capability_registry_is_read_only_typed_tools, test_build_agent_grants_read_beads_read_only_tools_end_to_end."
+    },
+    {
+      "command": "uv run pytest tests/test_build_agent.py -k \"read_beads\" -v",
+      "purpose": "GREEN gate for the new hermetic read_beads tests with COGNOVIS_CORE unset (no sibling-repo dependency).",
+      "exit_code": 0,
+      "observed": "2 passed, 17 deselected. read_beads registry and end-to-end build tests both pass hermetically."
+    },
+    {
+      "command": "uv run pytest tests/test_build_agent.py -k \"role_leakage_regression_fixture_hermetic\" -v",
+      "purpose": "GREEN gate for the new hermetic role-leakage fixture (Part 1 Finding 1) with COGNOVIS_CORE unset.",
+      "exit_code": 0,
+      "observed": "1 passed, 18 deselected. Synthetic reviewer-shaped agent leaks bead_* tools hermetically, proving the leak-detection mechanism is exercised without cognovis-core."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py -x",
+      "purpose": "Full regression gate for touched files after the Part 1 + Part 2 changes.",
+      "exit_code": 0,
+      "observed": "48 passed (45 pre-existing + 2 read_beads + 1 hermetic role-leakage), 0 failed."
+    },
+    {
+      "command": "Edit docs/mcp-migration-rollback.md and docs/adr/library-tool-surface-mcp.md: record the new read_beads capability and reference clc-zbj4 (cognovis-core repo, separate tracker) as the companion bead that migrates effort-classifier/wave-monitor.",
+      "purpose": "Part 2 doc updates. Explicitly do NOT claim effort-classifier/wave-monitor are already migrated — that is clc-zbj4's job.",
+      "exit_code": 0,
+      "observed": "Rollback doc gains a 'Companion: read_beads read-only capability (CL-j92j)' section; ADR Amendment gains a 'read_beads least-privilege capability (CL-j92j Part 2)' subsection with the two-track split. Both state the least-privilege concern is only closed once clc-zbj4 also ships."
+    },
+    {
+      "command": "uv run python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/implementation_manifest.json --evidence .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/evidence_ledger.json --bead-id CL-j92j --pretty",
+      "purpose": "Re-validate the implementation artifacts after the Part 1 + Part 2 updates.",
+      "exit_code": 0,
+      "observed": "status: ok, implementation artifacts are valid."
     }
   ],
   "skipped_checks": [
@@ -125,6 +173,10 @@
     {
       "check": "Filing a new discovered-work bead",
       "reason": "No new out-of-scope work was discovered beyond the already-filed inspect_git gap (CL-rx6z). Nothing additional needed a quick-capture entry."
+    },
+    {
+      "check": "Reassigning effort-classifier / wave-monitor from manage_beads to read_beads (and any assertion that they already use read_beads)",
+      "reason": "Explicitly out of scope — this is the companion cognovis-core bead clc-zbj4 (separate repo, separate bead tracker). CL-j92j lands only the read_beads capability + hermetic tests in the meta repo. Editing cognovis-core is forbidden for this bead, and no test asserts those two agents use read_beads (they do not yet — that assertion belongs to clc-zbj4)."
     }
   ],
   "artifacts": [
