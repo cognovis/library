@@ -32,6 +32,7 @@ from ..source import parse_source
 from ..status import get_remote_sha
 from .mcp_supervised_service import (
     ensure_supervised_service,
+    stop_supervised_service,
     stdio_rollback_snippet,
     supervised_service_dry_run_ops,
     uninstall_supervised_service,
@@ -446,6 +447,13 @@ def install_mcp(
         )
         upsert_entry(lock_data, lockfile_entry)
         save_lockfile(lockfile_path, lock_data)
+
+        # A successful stdio rollback must also deactivate the shared daemon.
+        # Stop only after every selected harness has been rewritten so a
+        # partial config failure leaves the previously active service intact
+        # while the byte-exact snapshots are restored below.
+        if supervised and project_path and rollback_stdio:
+            stop_supervised_service(entry, project_path, dry_run=False)
 
         return success(
             data={

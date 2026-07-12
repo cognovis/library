@@ -665,16 +665,43 @@ def test_stdio_rollback_writes_descriptor_and_handshake(mock_clone, tmp_env):
         "command": sys.executable,
         "args": [str(FIXTURE_STDIO_SERVER)],
     }
-    result = install_mcp(
-        catalog,
-        "cognovis-tools",
-        tmp_env["tmp_path"],
-        harness="all",
-        env_overrides=tmp_env["env"],
-        rollback_stdio=True,
+    with patch("lib.installers.mcp_installer.stop_supervised_service") as stop:
+        result = install_mcp(
+            catalog,
+            "cognovis-tools",
+            tmp_env["tmp_path"],
+            harness="all",
+            env_overrides=tmp_env["env"],
+            rollback_stdio=True,
+        )
+    stop.assert_called_once_with(
+        catalog["library"]["mcp_servers"][0],
+        tmp_env["project_path"],
+        dry_run=False,
     )
     assert result["data"]["transport"] == "stdio"
     claude = json.loads(Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"]).read_text())
     entry = claude["mcpServers"]["cognovis-tools"]
     assert entry["type"] == "stdio"
     _mcp_stdio_handshake(entry["command"], entry["args"])
+
+
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_stdio_rollback_config_failure_does_not_stop_service(mock_clone, tmp_env):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    with patch(
+        "lib.installers.mcp_installer._install_to_harness",
+        return_value=1,
+    ):
+        with patch("lib.installers.mcp_installer.stop_supervised_service") as stop:
+            with pytest.raises(InstallError):
+                install_mcp(
+                    tmp_env["catalog"],
+                    "cognovis-tools",
+                    tmp_env["tmp_path"],
+                    harness="all",
+                    env_overrides=tmp_env["env"],
+                    rollback_stdio=True,
+                )
+
+    stop.assert_not_called()
