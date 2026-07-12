@@ -1,0 +1,70 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-v1tb",
+  "commands": [
+    {
+      "command": "Read bin/cra, bin/cld, tests/test_launcher_permission_modes.py (full files)",
+      "purpose": "Understand current cra flag parsing, the established safe-default pattern shipped for cld in sibling bead CL-w3q3, and the existing mock-capture-binary regression test structure to follow for cra.",
+      "exit_code": 0,
+      "observed": "bin/cra unconditionally set use_yolo=true and had no explicit --yolo opt-in flag; only --no-yolo existed to opt out. bin/cld's --skip-perms opt-in pattern (default safe, explicit opt-in prints a yellow stderr WARNING before forwarding the dangerous flag) was confirmed as the exemplar. tests/test_launcher_permission_modes.py's mock-binary-on-PATH + captured argv/stderr pattern was confirmed as the test exemplar."
+    },
+    {
+      "command": "uv run --with pytest pytest tests/test_cra_launcher_defaults.py -v",
+      "purpose": "TDD red gate for the new cra yolo-default regression tests, before touching bin/cra.",
+      "exit_code": 1,
+      "observed": "Expected failure before production change: 2 failed. test_cra_defaults_to_no_yolo_without_explicit_opt_in failed because default argv still contained --yolo; test_cra_yolo_explicit_opt_in_forwards_flag_and_warns failed because --yolo could not be distinguished as an opt-in (it was forwarded twice: once from agent_args passthrough, once from the unconditional default)."
+    },
+    {
+      "command": "git add tests/test_cra_launcher_defaults.py && git commit -m \"test(CL-v1tb): red — cra safe yolo-default regressions\"",
+      "purpose": "Commit the red test changes alone.",
+      "exit_code": 0,
+      "observed": "Committed b2ccc95."
+    },
+    {
+      "command": "uv run --with pytest pytest tests/test_cra_launcher_defaults.py tests/test_launcher_permission_modes.py -v",
+      "purpose": "TDD green gate after updating bin/cra; first pass after the production edit exposed a test-assertion bug of my own (expected argv without --yolo prepended), which was corrected in the test file.",
+      "exit_code": 0,
+      "observed": "First run: 11 passed, 1 failed (test bug: assertion incorrectly expected --yolo to be absent from the opt-in argv). After fixing the test assertion to expect [\"--yolo\", \"Plain passthrough prompt\"]: 12 passed (2 cra tests + 10 cld regression tests)."
+    },
+    {
+      "command": "zsh -n bin/cra",
+      "purpose": "Syntax-check the edited zsh launcher.",
+      "exit_code": 0,
+      "observed": "bin/cra parsed without syntax errors."
+    },
+    {
+      "command": "git add bin/cra tests/test_cra_launcher_defaults.py && git commit -m \"feat(CL-v1tb): green — cra yolo default requires explicit opt-in\"",
+      "purpose": "Commit the production launcher fix together with the corrected test assertion.",
+      "exit_code": 0,
+      "observed": "Committed c56c4a7."
+    },
+    {
+      "command": "git log --oneline -3",
+      "purpose": "Capture the final implementation commit order.",
+      "exit_code": 0,
+      "observed": "Top commits were c56c4a7 feat(CL-v1tb): green — cra yolo default requires explicit opt-in and b2ccc95 test(CL-v1tb): red — cra safe yolo-default regressions."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Full repository test suite",
+      "reason": "The bead explicitly required running only tests/test_cra_launcher_defaults.py and tests/test_launcher_permission_modes.py."
+    },
+    {
+      "check": "bd close / bd update --append-notes for CL-v1tb",
+      "reason": "This environment does not have bd-write access for this bead per the bead's Project Architecture Context note; implementation and commit only, no bd mutation attempted."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/7647c66f-264f-40b8-979f-c28d0850ad69/implementation_manifest.json",
+      "kind": "implementation_manifest",
+      "description": "Implementation manifest for CL-v1tb."
+    },
+    {
+      "path": ".beads/runs/7647c66f-264f-40b8-979f-c28d0850ad69/evidence_ledger.json",
+      "kind": "evidence_ledger",
+      "description": "Evidence ledger for CL-v1tb."
+    }
+  ]
+}
