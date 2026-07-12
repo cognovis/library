@@ -3810,6 +3810,12 @@ library:
         - server
         - --transport
         - stdio
+      legacy_stdio_descriptors:
+      - type: stdio
+        command: sh
+        args:
+        - -c
+        - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
       activation_note: HTTP registrations are written only after the supervised daemon
         install/start/health_check succeeds. Live activation still requires all four harness
         families to pass loopback connectivity plus roots-or-workspace_bind probes.
