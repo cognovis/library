@@ -1,0 +1,86 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-v1tb",
+  "acceptance_criteria": [
+    {
+      "id": "1",
+      "status": "done",
+      "summary": "bin/cra now defaults use_yolo to false and no longer forwards --yolo unless the wrapper receives explicit --yolo. Selecting the opt-in prints a visible yellow stderr warning containing plain-ASCII 'WARNING:' (no emoji glyph) and '--yolo' before exec'ing with --yolo. --no-yolo remains a backward-compatible no-op. Header comment and --help self-description updated to 'Cursor Agent launcher (approvals on by default; --yolo to auto-approve)'.",
+      "changed_files": [
+        "bin/cra"
+      ],
+      "evidence_refs": [
+        "EV-AC1-red-gate",
+        "EV-AC1-green-gate"
+      ]
+    },
+    {
+      "id": "2",
+      "status": "done",
+      "summary": "tests/test_cra_launcher_defaults.py covers the safe default (plain invocation omits --yolo from captured argv) and the explicit opt-in path (--yolo present in captured argv and a warning present on captured stderr), following the mock-capture-binary pattern from tests/test_launcher_permission_modes.py.",
+      "changed_files": [
+        "tests/test_cra_launcher_defaults.py"
+      ],
+      "evidence_refs": [
+        "EV-AC2-launcher-yolo-tests",
+        "EV-required-suite-green"
+      ]
+    }
+  ],
+  "changed_files": [
+    "bin/cra",
+    "tests/test_cra_launcher_defaults.py",
+    ".beads/runs/7647c66f-264f-40b8-979f-c28d0850ad69/implementation_manifest.json",
+    ".beads/runs/7647c66f-264f-40b8-979f-c28d0850ad69/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "b2ccc95",
+      "message": "test(CL-v1tb): red — cra safe yolo-default regressions"
+    },
+    {
+      "sha": "c56c4a7",
+      "message": "feat(CL-v1tb): green — cra yolo default requires explicit opt-in"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run --with pytest pytest tests/test_cra_launcher_defaults.py -v",
+      "result": "Red gate before production change failed as expected: 2 failed. Default argv still contained --yolo, and the explicit --yolo path forwarded --yolo twice with no way to distinguish opt-in behavior."
+    },
+    {
+      "command": "uv run --with pytest pytest tests/test_cra_launcher_defaults.py tests/test_launcher_permission_modes.py -v",
+      "result": "Green gate after production change passed: 12 passed (2 cra tests + 10 cld regression tests, no regressions)."
+    },
+    {
+      "command": "zsh -n bin/cra",
+      "result": "Passed with no shell syntax errors."
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "bin/cra no longer forwards --yolo to the Cursor Agent binary by default for plain invocations.",
+    "Users who intentionally pass --yolo still get --yolo forwarded, but now receive a visible stderr warning first.",
+    "--no-yolo is now a no-op (yolo is already off by default) but remains accepted and consumed for backward compatibility with existing invocations.",
+    "No changes to bin/cld, bin/cdx, or bead-context/envelope work; those remain out of scope per sibling beads."
+  ],
+  "evidence_refs": [
+    {
+      "id": "EV-AC1-red-gate",
+      "description": "The red pytest run against tests/test_cra_launcher_defaults.py failed before production code changed because default cra argv still included --yolo unconditionally and there was no explicit-opt-in flag to distinguish or warn on."
+    },
+    {
+      "id": "EV-AC1-green-gate",
+      "description": "The green pytest run passed after bin/cra changed use_yolo's default to false, added an explicit --yolo opt-in case, and added the stderr warning before forwarding --yolo."
+    },
+    {
+      "id": "EV-AC2-launcher-yolo-tests",
+      "description": "tests/test_cra_launcher_defaults.py::test_cra_defaults_to_no_yolo_without_explicit_opt_in and ::test_cra_yolo_explicit_opt_in_forwards_flag_and_warns cover the safe default and explicit opt-in paths using a mock agent-capture binary on PATH, following the tests/test_launcher_permission_modes.py subprocess-mock pattern."
+    },
+    {
+      "id": "EV-required-suite-green",
+      "description": "uv run --with pytest pytest tests/test_cra_launcher_defaults.py tests/test_launcher_permission_modes.py returned 12 passed with no regressions in the sibling cld launcher test suite."
+    }
+  ]
+}
