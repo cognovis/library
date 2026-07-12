@@ -1,0 +1,124 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-t32e",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "criterion": "The executor accepts callback identity only as explicit command parameters or validated structured state derived from those parameters.",
+      "status": "done",
+      "changed_files": [
+        "scripts/coordinator_callback.py",
+        "tests/test_coordinator_callback_executor.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-pytest",
+        "test:test_coordinator_callback_executor.py::test_module_has_no_callback_environment_variable_interface",
+        "test:test_coordinator_callback_executor.py::test_main_requires_run_argument",
+        "test:test_coordinator_callback_executor.py::test_main_requires_event_argument",
+        "test:test_coordinator_callback_executor.py::test_rejects_malformed_workspace_ref",
+        "test:test_coordinator_callback_executor.py::test_rejects_malformed_surface_ref",
+        "test:test_coordinator_callback_executor.py::test_rejects_invalid_run_id",
+        "test:test_coordinator_callback_executor.py::test_rejects_invalid_event_name"
+      ]
+    },
+    {
+      "id": "AC2",
+      "criterion": "Concurrent/repeated delivery of the same run/event invokes cmux trigger-flash at most once, while distinct intervention and terminal events remain distinguishable.",
+      "status": "done",
+      "changed_files": [
+        "scripts/coordinator_callback.py",
+        "tests/test_coordinator_callback_executor.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-pytest",
+        "test:test_coordinator_callback_executor.py::test_first_delivery_invokes_cmux_trigger_flash_with_surface_ref",
+        "test:test_coordinator_callback_executor.py::test_uses_workspace_ref_when_only_workspace_given",
+        "test:test_coordinator_callback_executor.py::test_repeated_delivery_same_run_event_is_noop",
+        "test:test_coordinator_callback_executor.py::test_distinct_event_types_same_run_both_deliver",
+        "test:test_coordinator_callback_executor.py::test_distinct_run_ids_same_event_both_deliver",
+        "test:test_coordinator_callback_executor.py::test_concurrent_repeated_delivery_invokes_cmux_at_most_once"
+      ]
+    },
+    {
+      "id": "AC3",
+      "criterion": "Malformed refs, missing cmux, stale/mismatched run state, and unwritable state fail visibly without command injection.",
+      "status": "done",
+      "changed_files": [
+        "scripts/coordinator_callback.py",
+        "tests/test_coordinator_callback_executor.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-pytest",
+        "test:test_coordinator_callback_executor.py::test_command_injection_style_ref_is_rejected_before_any_command_runs",
+        "test:test_coordinator_callback_executor.py::test_missing_cmux_binary_fails_visibly_and_allows_retry",
+        "test:test_coordinator_callback_executor.py::test_cmux_invocation_failure_fails_visibly_and_allows_retry",
+        "test:test_coordinator_callback_executor.py::test_stale_mismatched_run_state_fails_visibly_without_invoking_cmux",
+        "test:test_coordinator_callback_executor.py::test_unwritable_state_path_fails_visibly",
+        "test:test_coordinator_callback_executor.py::test_main_reports_errors_on_stderr_and_returns_nonzero_without_traceback"
+      ]
+    },
+    {
+      "id": "AC4",
+      "criterion": "Focused unit/integration tests cover validation, exactly-once behavior, concurrency, and no-callback behavior.",
+      "status": "done",
+      "changed_files": [
+        "tests/test_coordinator_callback_executor.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-pytest",
+        "cmd:green-pytest",
+        "test:test_coordinator_callback_executor.py::test_no_callback_when_neither_workspace_nor_surface_supplied",
+        "test:test_coordinator_callback_executor.py::test_main_no_callback_exits_zero_without_invoking_cmux",
+        "test:test_coordinator_callback_executor.py::test_main_delivers_successfully_end_to_end"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/coordinator_callback.py",
+    "tests/test_coordinator_callback_executor.py",
+    ".beads/runs/bf1b0840-3319-41a0-a1da-db2093a2cccd/implementation_manifest.json",
+    ".beads/runs/bf1b0840-3319-41a0-a1da-db2093a2cccd/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "hash": "32974c5",
+      "message": "test(CL-t32e): red — coordinator callback executor test suite"
+    },
+    {
+      "hash": "3483de6",
+      "message": "feat(CL-t32e): green — shared coordinator callback executor"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "status": "passed",
+      "evidence_ref": "cmd:green-pytest"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "Sibling beads CL-gzvu (bin/cld) and CL-eqiq (bin/cdx) can wire their existing --coordinator-workspace/--coordinator-surface prose contract to invoke this executor (e.g. via `uv run python scripts/coordinator_callback.py --run <run_id> --event intervention|terminal [--workspace workspace:<n>] [--surface surface:<n>]`) instead of relying on a best-effort agent-followed prose instruction.",
+    "No behavior change to bin/cld or bin/cdx in this bead; both launchers are untouched."
+  ],
+  "evidence_refs": [
+    "cmd:red-pytest",
+    "cmd:green-pytest",
+    "test:test_coordinator_callback_executor.py::test_module_has_no_callback_environment_variable_interface",
+    "test:test_coordinator_callback_executor.py::test_rejects_malformed_workspace_ref",
+    "test:test_coordinator_callback_executor.py::test_rejects_malformed_surface_ref",
+    "test:test_coordinator_callback_executor.py::test_rejects_invalid_run_id",
+    "test:test_coordinator_callback_executor.py::test_rejects_invalid_event_name",
+    "test:test_coordinator_callback_executor.py::test_command_injection_style_ref_is_rejected_before_any_command_runs",
+    "test:test_coordinator_callback_executor.py::test_repeated_delivery_same_run_event_is_noop",
+    "test:test_coordinator_callback_executor.py::test_distinct_event_types_same_run_both_deliver",
+    "test:test_coordinator_callback_executor.py::test_distinct_run_ids_same_event_both_deliver",
+    "test:test_coordinator_callback_executor.py::test_concurrent_repeated_delivery_invokes_cmux_at_most_once",
+    "test:test_coordinator_callback_executor.py::test_missing_cmux_binary_fails_visibly_and_allows_retry",
+    "test:test_coordinator_callback_executor.py::test_cmux_invocation_failure_fails_visibly_and_allows_retry",
+    "test:test_coordinator_callback_executor.py::test_stale_mismatched_run_state_fails_visibly_without_invoking_cmux",
+    "test:test_coordinator_callback_executor.py::test_unwritable_state_path_fails_visibly",
+    "test:test_coordinator_callback_executor.py::test_no_callback_when_neither_workspace_nor_surface_supplied"
+  ]
+}
