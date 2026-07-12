@@ -4,6 +4,7 @@
 
 - *(cld/cdx)* New `-br`/`--bead-review <id>` flag launches a fresh-context critical bead-spec/readiness review via the bead-reviewer skill, defaulting to Opus (overridable). Replaces the former `cdx -br` stub that warned about a non-existent `cld -br`; both launchers now have identical, working review semantics.
 - *(cld/cdx)* New `--coordinator-workspace workspace:<n>` and `--coordinator-surface surface:<n>` flags accept an optional coordinator-callback pair for `-b`/`-bq` bead runs. When both are provided, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt; this signals blocking questions, terminal state, and the Phase 16 session-close event to the coordinator pane. Calls without the pair are unchanged.
+- *(cdx)* New `--bead-dangerous-full-auto` flag: opts bead modes (`-b`/`-bq`/`-br`) into Codex's full `--dangerously-bypass-approvals-and-sandbox`. Prints a visible stderr warning when used. Required for operators who relied on the previous unconditional bypass behavior and need unrestricted tool access.
 
 ### Changed
 
@@ -25,6 +26,10 @@
 - *(agent installer)* `library agent remove` now rejects agent names containing `/`, `\`, or `..` before constructing any delete path, closing a path-traversal exposure introduced by the new handler-directory removal logic.
 - *(build-agent)* `scripts/build-agent.py` now forces `sandbox_mode=read-only` (Codex) and strips `Write`/`Edit`/`MultiEdit` grants (Claude) whenever a unified agent source declares `pair_loop_constraints.run_shell: read_only`, regardless of which capability entry granted shell access. A defensive validation guard raises `BuildAgentError` on post-build drift so future capability additions cannot silently re-elevate a reviewer's sandbox. Previously, the active generated `review-agent.toml` carried `sandbox_mode = "workspace-write"` despite the source role declaring read-only shell constraints.
 - *(agent fleet audit)* New `scripts/agent-fleet-audit.py` replaces the deployed bash audit scripts that only scanned nested agent directories. The new audit inspects both flat and nested Claude `.md` and Codex `.toml` agent roots, reports per-harness counts, and returns non-zero when an expected fleet yields zero inspected agents — preventing silently-compliant scans that inspect no files.
+
+### Security
+
+- *(cdx)* `cdx -b`, `cdx -bq`, and `cdx -br` now default to `--sandbox workspace-write -c approval_policy="never"` instead of Codex's full `--dangerously-bypass-approvals-and-sandbox`. Operators who need the previous unrestricted bypass for bead-mode invocations must explicitly pass `--bead-dangerous-full-auto`, which prints a visible stderr warning when selected. The plain `cdx` launch path (governed by `--no-full-auto`) is unchanged.
 
 ## [2026.07.0] - 2026-07-02
 

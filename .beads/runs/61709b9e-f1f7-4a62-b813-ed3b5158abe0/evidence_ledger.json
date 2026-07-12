@@ -1,0 +1,124 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-1s89",
+  "commands": [
+    {
+      "id": "cmd:bd-prime",
+      "command": "bd prime",
+      "purpose": "Load the repository beads workflow instructions.",
+      "exit_code": 0,
+      "observed_result": "Workflow primer printed successfully."
+    },
+    {
+      "id": "cmd:bd-show",
+      "command": "bd show CL-1s89 --json",
+      "purpose": "Verify bead state and dependency context through bd CLI.",
+      "exit_code": 0,
+      "observed_result": "CL-1s89 was in_progress with run_id 61709b9e-f1f7-4a62-b813-ed3b5158abe0 and dependency CL-wzv9 closed."
+    },
+    {
+      "id": "cmd:red-new-regressions",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass tests/test_cdx_quick_cursor_dispatch.py::test_injected_bead_fields_do_not_change_quick_dispatch_control_plane -v",
+      "purpose": "RED gate for new AC1 and AC2 regression tests.",
+      "exit_code": 1,
+      "observed_result": "8 failed and 1 passed. Failures showed bead-mode argv still contained --dangerously-bypass-approvals-and-sandbox by default and forwarded --bead-dangerous-full-auto as an unparsed Codex arg."
+    },
+    {
+      "id": "cmd:zsh-syntax",
+      "command": "zsh -n bin/cdx",
+      "purpose": "Check zsh syntax after production edits.",
+      "exit_code": 0,
+      "observed_result": "No syntax errors."
+    },
+    {
+      "id": "cmd:dangerous-occurrence-review",
+      "command": "rg -n \"dangerously-bypass|bead-dangerous-full-auto|workspace-write|approval_policy\" bin/cdx",
+      "purpose": "Review remaining dangerous bypass references and safe default wiring.",
+      "exit_code": 0,
+      "observed_result": "Dangerous bypass remains in select_bead_codex_permission_args() for explicit opt-in and in the out-of-scope plain launch path; safe bead-mode argv uses --sandbox workspace-write -c approval_policy=\"never\"."
+    },
+    {
+      "id": "cmd:green-new-regressions",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass tests/test_cdx_quick_cursor_dispatch.py::test_injected_bead_fields_do_not_change_quick_dispatch_control_plane -v",
+      "purpose": "GREEN gate for new regression tests after production edits.",
+      "exit_code": 0,
+      "observed_result": "9 passed."
+    },
+    {
+      "id": "cmd:full-requested-suites",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py -v",
+      "purpose": "Run the full requested test_cdx_bead_workflow.py and test_cdx_quick_cursor_dispatch.py suites.",
+      "exit_code": 0,
+      "observed_result": "38 passed."
+    },
+    {
+      "id": "cmd:red-commit",
+      "command": "git add tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py && git commit -m \"test(CL-1s89): red - bead cdx safety regressions\"",
+      "purpose": "Commit the RED test state.",
+      "exit_code": 0,
+      "observed_result": "Created commit 330393e6f97a0f3a7894efcc39960f9ab9be1371."
+    },
+    {
+      "id": "cmd:green-commit",
+      "command": "git add bin/cdx && git commit -m \"feat(CL-1s89): green - safe cdx bead permissions\"",
+      "purpose": "Commit the GREEN production change.",
+      "exit_code": 0,
+      "observed_result": "Created commit 0d864457a398bb00e1eca7e2dff9be41a63a4dc7."
+    },
+    {
+      "id": "cmd:manifest-json-valid",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m json.tool .beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/implementation_manifest.json",
+      "purpose": "Validate implementation manifest JSON syntax.",
+      "exit_code": 0,
+      "observed_result": "JSON parsed and pretty-printed successfully."
+    },
+    {
+      "id": "cmd:evidence-json-valid",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run python -m json.tool .beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/evidence_ledger.json",
+      "purpose": "Validate evidence ledger JSON syntax.",
+      "exit_code": 0,
+      "observed_result": "JSON parsed and pretty-printed successfully."
+    },
+    {
+      "id": "cmd:route-profiles-red",
+      "command": "uv run pytest tests/test_route_profiles_schema.py -q",
+      "purpose": "Confirm the stale route-profile launcher assertions fail at current HEAD before the fix.",
+      "exit_code": 1,
+      "observed_result": "5 failed, 53 passed. Failures asserted the old --dangerously-bypass-approvals-and-sandbox bead-mode argv (exec-mode 'in' checks and TUI-mode startswith checks)."
+    },
+    {
+      "id": "cmd:route-profiles-green",
+      "command": "uv run pytest tests/test_route_profiles_schema.py -q",
+      "purpose": "Confirm all route-profile launcher tests pass after migrating the 5 stale assertions to the safe-default argv shape.",
+      "exit_code": 0,
+      "observed_result": "58 passed."
+    },
+    {
+      "id": "cmd:full-requested-suites-postfix",
+      "command": "uv run pytest tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py -q",
+      "purpose": "Confirm no regression in the sibling cdx suites after the test-assertion fix.",
+      "exit_code": 0,
+      "observed_result": "38 passed."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Full repository pytest suite",
+      "reason": "Explicit bead instruction limited verification to tests/test_cdx_bead_workflow.py and tests/test_cdx_quick_cursor_dispatch.py."
+    },
+    {
+      "check": "External resource verification",
+      "reason": "No external resources, URLs, packages, APIs, or network endpoints were introduced."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/implementation_manifest.json",
+      "description": "Implementation manifest for CL-1s89."
+    },
+    {
+      "path": ".beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/evidence_ledger.json",
+      "description": "Command and verification evidence ledger for CL-1s89."
+    }
+  ]
+}

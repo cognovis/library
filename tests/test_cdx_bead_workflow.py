@@ -14,6 +14,8 @@ import pytest
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "cdx-bead-workflow.py"
 _COMPACT_CONTEXT_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compact-bead-context.py"
 _CDX_BIN = Path(__file__).resolve().parents[1] / "bin" / "cdx"
+_DANGEROUS_CODEX_ARG = "--dangerously-bypass-approvals-and-sandbox"
+_SAFE_BEAD_CODEX_ARGS = ["--sandbox", "workspace-write", "-c", 'approval_policy="never"']
 
 
 def _write_launcher_executable(path: Path, content: str) -> Path:
@@ -232,6 +234,20 @@ def _run_cdx_launcher(
         env=env,
     )
     return result, argv_file, prompt_file, called_file, env_file, bd_log, git_log
+
+
+def _assert_safe_bead_permissions(argv: list[str]) -> None:
+    assert _DANGEROUS_CODEX_ARG not in argv
+    sandbox_index = argv.index("--sandbox")
+    assert argv[sandbox_index + 1] == "workspace-write"
+    config_index = argv.index("-c")
+    assert argv[config_index + 1] == 'approval_policy="never"'
+
+
+def _assert_dangerous_bead_permissions(argv: list[str]) -> None:
+    assert _DANGEROUS_CODEX_ARG in argv
+    for safe_arg in _SAFE_BEAD_CODEX_ARGS:
+        assert safe_arg not in argv
 
 
 def _write_runtime(
@@ -853,6 +869,58 @@ def test_cdx_bead_modes_wrap_context_as_untrusted_data(
     assert begin < context < end
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-b", "CL-smoke"],
+        ["-b", "CL-smoke", "--exec"],
+        ["-bq", "CL-smoke"],
+        ["-br", "CL-smoke"],
+    ],
+)
+def test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    _assert_safe_bead_permissions(argv)
+    assert "--bead-dangerous-full-auto" not in argv
+    assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-b", "CL-smoke", "--bead-dangerous-full-auto"],
+        ["-b", "CL-smoke", "--exec", "--bead-dangerous-full-auto"],
+        ["-bq", "CL-smoke", "--bead-dangerous-full-auto"],
+        ["-br", "CL-smoke", "--bead-dangerous-full-auto"],
+    ],
+)
+def test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    _assert_dangerous_bead_permissions(argv)
+    assert "--bead-dangerous-full-auto" not in argv
+    assert "WARNING: --bead-dangerous-full-auto selected" in result.stderr
+
+
 def test_cdx_real_renderer_wraps_injected_end_marker_as_data(tmp_path: Path) -> None:
     injection_fixture = (
         "Before delimiter\n"
@@ -1087,7 +1155,8 @@ def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Pat
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
     env = json.loads(env_file.read_text(encoding="utf-8"))
-    assert argv[:2] == ["exec", "--dangerously-bypass-approvals-and-sandbox"]
+    assert argv[0] == "exec"
+    _assert_safe_bead_permissions(argv)
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
     assert env["CLD_BEAD_LINE"] == "cdx"

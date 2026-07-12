@@ -303,19 +303,34 @@ just cdx-review <bead-id>
 # Coordinator callback — signal a cmux pane on blocking questions and session-close
 cdx -b <bead-id> --coordinator-workspace workspace:3 --coordinator-surface surface:5
 cld -b <bead-id> --coordinator-workspace workspace:3 --coordinator-surface surface:5
+
+# Full bypass for bead modes (opt-in only; prints stderr warning)
+cdx -b <bead-id> --bead-dangerous-full-auto
 ```
+
+> **Permission defaults for bead modes:** `cdx -b`, `cdx -bq`, and `cdx -br` use
+> `--sandbox workspace-write -c approval_policy="never"` by default. Pass
+> `--bead-dangerous-full-auto` only when you need Codex's full
+> `--dangerously-bypass-approvals-and-sandbox` behavior; this prints a visible
+> warning to stderr. The plain `cdx` launch path is unaffected.
 
 ### How It Works
 
 Codex has no `--bead` flag. `cdx` synthesizes bead context by:
 
 1. Calling `bd show <bead-id>` to fetch the full bead description and acceptance criteria
-2. Injecting this context as an initial prompt to `codex exec`
+2. Serializing the bead fields (title, description, AC, notes, labels, dependency titles) as a
+   validated, provenance-tagged JSON envelope wrapped in explicit untrusted-data delimiters, then
+   injecting it as an initial prompt to `codex exec`
 3. The bead-orchestrator skill is invoked by natural-language reference in the prompt
+
+The envelope approach prevents bead-authored text from being interpreted as launcher instructions
+(prompt-injection isolation). `bin/cdx` fails closed with a non-zero exit on any malformed or
+oversized envelope rather than passing raw text through.
 
 ```bash
 # Under the hood, cdx -b <id> is equivalent to:
-codex exec "Work on bead <id>. Use the bead-orchestrator skill. [bead context injected here]"
+codex exec "Work on bead <id>. Use the bead-orchestrator skill. [validated JSON envelope injected here]"
 ```
 
 See `docs/research/codex-prompts.md` for the full rationale and prompt-injection vs flag-dispatch

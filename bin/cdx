@@ -12,6 +12,7 @@
 #                     (Codex remains top-level; helpers run inside the workflow)
 #   -bq, --bead-quick ID → launch Codex quick workflow for XS/S beads (bug, chore, task)
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
+#   --bead-dangerous-full-auto → For bead modes only, bypass approvals and sandbox
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
@@ -200,6 +201,8 @@ coordinator_workspace=""
 coordinator_surface=""
 route_profile=""
 codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"
+bead_dangerous_full_auto=false
+bead_codex_permission_args=()
 codex_args=()
 compact_output_contract="Default output mode is compact. Emit stable lifecycle markers and concise summaries only.
 - Do not paste full diffs, full file bodies, full search hits, or long command output unless needed to diagnose a blocking failure.
@@ -209,10 +212,11 @@ compact_output_contract="Default output mode is compact. Emit stable lifecycle m
 run_codex_exec() {
     local prompt="$1"
     local worktree_dir="${2:-$PWD}"
+    select_bead_codex_permission_args
 
     if [[ "${CLD_COMPACT_OUTPUT:-1}" == "1" && -f "$CODEX_JSONL_FILTER_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
         set +e
-        "${CODEX_BIN}" exec --json --dangerously-bypass-approvals-and-sandbox -C "$worktree_dir" "${codex_args[@]}" "${prompt}" \
+        "${CODEX_BIN}" exec --json "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}" \
             | uv run python "$CODEX_JSONL_FILTER_SCRIPT"
         local -a pipe_status=("${pipestatus[@]}")
         set -e
@@ -222,14 +226,25 @@ run_codex_exec() {
         return "${pipe_status[2]}"
     fi
 
-    exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
+    exec "${CODEX_BIN}" exec "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
 }
 
 run_codex_tui() {
     local prompt="$1"
     local worktree_dir="$2"
+    select_bead_codex_permission_args
 
-    exec "${CODEX_BIN}" --dangerously-bypass-approvals-and-sandbox -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
+    exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
+}
+
+select_bead_codex_permission_args() {
+    if ${bead_dangerous_full_auto}; then
+        echo "WARNING: --bead-dangerous-full-auto selected; bead-mode Codex will bypass approvals and sandboxing." >&2
+        bead_codex_permission_args=("--dangerously-bypass-approvals-and-sandbox")
+        return
+    fi
+
+    bead_codex_permission_args=("--sandbox" "workspace-write" "-c" 'approval_policy="never"')
 }
 
 sanitize_name() {
@@ -373,6 +388,10 @@ while (( $# > 0 )); do
             codex_bead_mode="exec"
             shift
             ;;
+        --bead-dangerous-full-auto)
+            bead_dangerous_full_auto=true
+            shift
+            ;;
         -b|--bead)
             bead_id="$2"
             shift 2
@@ -437,6 +456,9 @@ Wrapper flags (consumed by cdx, not passed to codex):
                                 Coordinator callback surface ref (requires workspace)
          --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
                                 Profiles: cld-default, cdx-default, cdx-composer
+         --bead-dangerous-full-auto
+                                For bead modes only, pass Codex's dangerous
+                                approvals+sandbox bypass after explicit opt-in
 
   Session:
          --no-full-auto          Launch codex without the default --full-auto wrapper
@@ -799,7 +821,8 @@ $(coordinator_callback_contract review)"
 
 ${bead_context}"
 
-    exec "${CODEX_BIN}" exec --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}" "${prompt}"
+    select_bead_codex_permission_args
+    exec "${CODEX_BIN}" exec "${bead_codex_permission_args[@]}" "${codex_args[@]}" "${prompt}"
 fi
 
 # ── Default: plain Codex launch ─────────────────────────────────
