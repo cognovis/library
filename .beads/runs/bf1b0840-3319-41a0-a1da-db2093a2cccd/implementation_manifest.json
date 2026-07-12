@@ -12,6 +12,7 @@
       ],
       "evidence_refs": [
         "cmd:green-pytest",
+        "cmd:fix-CL-t32e-B-01-pytest",
         "test:test_coordinator_callback_executor.py::test_module_has_no_callback_environment_variable_interface",
         "test:test_coordinator_callback_executor.py::test_main_requires_run_argument",
         "test:test_coordinator_callback_executor.py::test_main_requires_event_argument",
@@ -19,7 +20,8 @@
         "test:test_coordinator_callback_executor.py::test_rejects_malformed_surface_ref",
         "test:test_coordinator_callback_executor.py::test_rejects_invalid_run_id",
         "test:test_coordinator_callback_executor.py::test_rejects_invalid_event_name"
-      ]
+      ],
+      "fix_note": "Cold-review finding CL-t32e-B-01: test_module_has_no_callback_environment_variable_interface previously asserted an enumerated list of specific env-var-name substrings, which left un-listed env-var names undetected. Replaced with the structurally stronger `assert \"os.environ\" not in source` / `assert \"getenv\" not in source`, which the current scripts/coordinator_callback.py already satisfies (zero os.environ/getenv references). No production code change required."
     },
     {
       "id": "AC2",

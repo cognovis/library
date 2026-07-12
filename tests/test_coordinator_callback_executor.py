@@ -52,13 +52,8 @@ def _import_module():
 def test_module_has_no_callback_environment_variable_interface() -> None:
     """Identity (run/event/workspace/surface) must come only from CLI params."""
     source = SCRIPT.read_text(encoding="utf-8")
-    assert "os.environ.get(\"CMUX_WORKSPACE" not in source
-    assert "os.environ.get(\"CMUX_SURFACE" not in source
-    assert "os.environ[\"WORKSPACE_REF\"]" not in source
-    assert "os.environ[\"RUN_ID\"]" not in source
-    assert "os.environ.get(\"RUN_ID\"" not in source
-    assert "os.environ.get(\"COORDINATOR_WORKSPACE\"" not in source
-    assert "os.environ.get(\"COORDINATOR_SURFACE\"" not in source
+    assert "os.environ" not in source
+    assert "getenv" not in source
 
 
 def test_main_requires_run_argument() -> None:

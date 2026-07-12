@@ -36,6 +36,13 @@
       "exit_code": 0,
       "observed_result": "2 files changed, 803 insertions(+): scripts/coordinator_callback.py (390 lines) and tests/test_coordinator_callback_executor.py (413 lines). No other files touched.",
       "name": "scope-check"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Fix gate for cold-review finding CL-t32e-B-01 (brittle enumerated env-var-name string matching in test_module_has_no_callback_environment_variable_interface). Replaced the enumerated substring assertions with the structurally stronger `assert \"os.environ\" not in source` / `assert \"getenv\" not in source`, which closes the under-guarding gap without requiring any change to scripts/coordinator_callback.py (it already contains zero os.environ/getenv references).",
+      "exit_code": 0,
+      "observed_result": "30 passed in 0.06s. Full suite still green after the AC1 guard test was strengthened.",
+      "name": "fix-CL-t32e-B-01-pytest"
     }
   ],
   "skipped_checks": [
