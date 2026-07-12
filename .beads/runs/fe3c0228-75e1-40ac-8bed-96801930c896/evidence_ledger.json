@@ -1,0 +1,50 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-c6bc",
+  "commands": {
+    "red-pytest": {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-CL-c6bc COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py tests/test_agent_tool_audit.py",
+      "purpose": "Red gate for pair-loop reviewer sandbox enforcement, COGNOVIS_CORE env override, and temp-dir fleet audit regressions.",
+      "exit_code": 1,
+      "observed_result": "Expected red failures: 6 failed, 33 passed. Failures showed Codex sandbox_mode was workspace-write for pair-loop reviewers, the defensive guard helper was absent, and scripts/agent-fleet-audit.py did not exist."
+    },
+    "red-smoke": {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-CL-c6bc bash tests/smoke/install-agent-composed.sh",
+      "purpose": "Red gate for the simulated installed-fleet smoke section.",
+      "exit_code": 1,
+      "observed_result": "Expected red failures in the new smoke section: fleet audit failed because scripts/agent-fleet-audit.py was missing, and generated review-agent Codex artifact was workspace-write."
+    },
+    "green-pytest": {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-CL-c6bc COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py tests/test_agent_tool_audit.py",
+      "purpose": "Green gate for the scoped pytest suite, including the real cognovis-core review-agent build with COGNOVIS_CORE set.",
+      "exit_code": 0,
+      "observed_result": "39 passed in 6.61s. The cognovis fleet tests ran instead of skipping because COGNOVIS_CORE was set to /Users/malte/code/library/cognovis-core."
+    },
+    "green-smoke": {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-CL-c6bc COGNOVIS_CORE=/Users/malte/code/library/cognovis-core bash tests/smoke/install-agent-composed.sh",
+      "purpose": "Green gate for the smoke script using the real cognovis-core review-agent source and temp Claude/Codex install roots.",
+      "exit_code": 0,
+      "observed_result": "Summary: 7 passed, 0 failed. The new section built review-agent into simulated Claude and Codex install roots, fleet audit reported one Claude and one Codex agent, and the generated Codex artifact was read-only."
+    }
+  },
+  "skipped_checks": [
+    {
+      "check": "Full repository pytest suite",
+      "reason": "Out of scope by prompt; only tests/test_build_agent.py, tests/test_cognovis_agent_fleet_capabilities.py with COGNOVIS_CORE, tests/test_agent_tool_audit.py, and tests/smoke/install-agent-composed.sh were requested."
+    },
+    {
+      "check": "Mutation or commit in /Users/malte/code/library/cognovis-core, ~/.claude, or ~/.codex",
+      "reason": "Explicitly out of scope. These locations were read-only reference fixtures only."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/fe3c0228-75e1-40ac-8bed-96801930c896/implementation_manifest.json",
+      "description": "Acceptance-criteria manifest for CL-c6bc implementation."
+    },
+    {
+      "path": ".beads/runs/fe3c0228-75e1-40ac-8bed-96801930c896/evidence_ledger.json",
+      "description": "Command evidence ledger for CL-c6bc red and green gates."
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-c6bc",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "criterion": "The fleet audit inspects every active Claude flat agent file and every active Codex TOML agent file in the configured installation roots, reports per-harness counts, and returns non-zero when an expected fleet yields zero inspected agents.",
+      "status": "done",
+      "changed_files": [
+        "scripts/agent-fleet-audit.py",
+        "tests/test_agent_tool_audit.py",
+        "tests/smoke/install-agent-composed.sh"
+      ],
+      "evidence_refs": [
+        "cmd:green-pytest",
+        "cmd:green-smoke",
+        "test:test_agent_tool_audit.py::test_fleet_audit_counts_flat_claude_agents_missed_by_legacy_scan",
+        "test:test_agent_tool_audit.py::test_fleet_audit_fails_closed_for_empty_or_missing_roots"
+      ]
+    },
+    {
+      "id": "AC2",
+      "criterion": "Generated in-loop and cold reviewer configurations for Claude and Codex expose read-only file and repository inspection but no write/edit capability and no mutating shell or workspace-write sandbox.",
+      "status": "done",
+      "changed_files": [
+        "scripts/build-agent.py",
+        "tests/test_build_agent.py",
+        "tests/test_cognovis_agent_fleet_capabilities.py",
+        "tests/test_agent_tool_audit.py",
+        "tests/smoke/install-agent-composed.sh"
+      ],
+      "evidence_refs": [
+        "cmd:green-pytest",
+        "cmd:green-smoke",
+        "test:test_build_agent.py::test_pair_loop_read_only_constraints_override_run_shell_codex_sandbox",
+        "test:test_cognovis_agent_fleet_capabilities.py::test_review_agent_codex_build_uses_read_only_sandbox"
+      ]
+    },
+    {
+      "id": "AC3",
+      "criterion": "Capability resolution does not translate a reviewer need for safe command inspection into a workspace-write Codex sandbox.",
+      "status": "done",
+      "changed_files": [
+        "scripts/build-agent.py",
+        "tests/test_build_agent.py",
+        "tests/test_agent_tool_audit.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-pytest",
+        "test:test_build_agent.py::test_run_shell_without_pair_loop_constraints_keeps_workspace_write",
+        "test:test_agent_tool_audit.py::test_pair_loop_reviewer_regression_builds_read_only_codex_artifact"
+      ]
+    },
+    {
+      "id": "AC4",
+      "criterion": "Regression tests reproduce the obsolete-layout false-success and workspace-write reviewer failures before the fix and pass after the fix.",
+      "status": "done",
+      "changed_files": [
+        "tests/test_build_agent.py",
+        "tests/test_cognovis_agent_fleet_capabilities.py",
+        "tests/test_agent_tool_audit.py",
+        "tests/smoke/install-agent-composed.sh"
+      ],
+      "evidence_refs": [
+        "cmd:red-pytest",
+        "cmd:red-smoke",
+        "cmd:green-pytest",
+        "cmd:green-smoke"
+      ]
+    },
+    {
+      "id": "AC5",
+      "criterion": "An installed-fleet smoke check confirms the generated reviewer artifacts and audit result match the source role constraints.",
+      "status": "done",
+      "changed_files": [
+        "tests/smoke/install-agent-composed.sh",
+        "scripts/agent-fleet-audit.py",
+        "scripts/build-agent.py"
+      ],
+      "evidence_refs": [
+        "cmd:green-smoke"
+      ]
+    }
+  ],
+  "changed_files": [
+    "scripts/build-agent.py",
+    "scripts/agent-fleet-audit.py",
+    "tests/test_build_agent.py",
+    "tests/test_cognovis_agent_fleet_capabilities.py",
+    "tests/test_agent_tool_audit.py",
+    "tests/smoke/install-agent-composed.sh",
+    ".beads/runs/fe3c0228-75e1-40ac-8bed-96801930c896/implementation_manifest.json",
+    ".beads/runs/fe3c0228-75e1-40ac-8bed-96801930c896/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "hash": "26b8220",
+      "message": "test(CL-c6bc): red - reviewer sandbox and fleet audit regressions"
+    },
+    {
+      "hash": "0e8c7a9",
+      "message": "feat(CL-c6bc): green - enforce read-only reviewers and fleet audit"
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-CL-c6bc COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py tests/test_agent_tool_audit.py",
+      "status": "passed",
+      "evidence_ref": "cmd:green-pytest"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-CL-c6bc COGNOVIS_CORE=/Users/malte/code/library/cognovis-core bash tests/smoke/install-agent-composed.sh",
+      "status": "passed",
+      "evidence_ref": "cmd:green-smoke"
+    }
+  ],
+  "external_resources": [
+    {
+      "path": "/Users/malte/code/library/cognovis-core/agents/review-agent.md",
+      "access": "read-only",
+      "purpose": "Real unified reviewer source used by cognovis fleet regression and smoke build"
+    },
+    {
+      "path": "/Users/malte/code/library/cognovis-core/agent-bases",
+      "access": "read-only",
+      "purpose": "Real agent-base layers used for review-agent smoke build when COGNOVIS_CORE is set"
+    },
+    {
+      "path": "/Users/malte/code/library/cognovis-core/model-standards",
+      "access": "read-only",
+      "purpose": "Real model-standard layers used for review-agent smoke build when COGNOVIS_CORE is set"
+    }
+  ],
+  "scope_changes": [
+    {
+      "description": "Updated existing cognovis fleet tests to honor COGNOVIS_CORE and tolerate current real fixture shapes: phase wrapper agents without composed bases and the small allowlist of source-level Claude tools boundaries.",
+      "reason": "The previous hardcoded sibling path made the whole file skip in this worktree; enabling the real fixture exposed stale assumptions unrelated to this bead's production code."
+    },
+    {
+      "description": "Updated the smoke script's haiku model-standard check to accept the current cognovis-core model-standard filename haiku.md and model_id coverage.",
+      "reason": "The smoke script must be runnable with COGNOVIS_CORE set so the new reviewer smoke can exercise the real source."
+    }
+  ],
+  "downstream_impacts": [
+    "Unified agent sources with pair_loop_constraints.run_shell=read_only now force Codex sandbox_mode to read-only after capability resolution and defaults.",
+    "Claude artifacts for those pair-loop read-only sources drop Write/Edit/MultiEdit tool grants defensively.",
+    "A new canonical scripts/agent-fleet-audit.py can be used by installers or CI to fail closed when configured agent roots are empty or missing."
+  ],
+  "evidence_refs": {
+    "cmd:red-pytest": "evidence_ledger.commands.red-pytest",
+    "cmd:red-smoke": "evidence_ledger.commands.red-smoke",
+    "cmd:green-pytest": "evidence_ledger.commands.green-pytest",
+    "cmd:green-smoke": "evidence_ledger.commands.green-smoke"
+  }
+}
