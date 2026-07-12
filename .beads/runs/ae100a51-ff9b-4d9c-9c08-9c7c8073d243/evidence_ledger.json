@@ -1,0 +1,208 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-wzv9",
+  "commands": [
+    {
+      "command": "bd prime",
+      "purpose": "Load the canonical beads workflow context before implementation.",
+      "exit_code": 0,
+      "result": "Workflow context printed successfully."
+    },
+    {
+      "command": "bd update CL-wzv9 --claim",
+      "purpose": "Claim the bead before implementation.",
+      "exit_code": 1,
+      "result": "Claim rejected because the bead was already claimed by session-Solaris.local-64679; implementation continued in the provided worktree."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py",
+      "purpose": "AC1 red gate for JSON provenance envelope tests.",
+      "exit_code": 1,
+      "result": "2 tests failed with JSONDecodeError because the renderer still emitted Markdown."
+    },
+    {
+      "command": "git add tests/test_cdx_compact_context.py && git commit -m \"test(CL-wzv9): red -- bead context envelope provenance\"",
+      "purpose": "Commit AC1 red tests.",
+      "exit_code": 0,
+      "result": "Committed f7360c44e0cdfa3cdf01f5c7bd87042712fdd243."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py",
+      "purpose": "AC1 green gate for compact envelope renderer.",
+      "exit_code": 0,
+      "result": "2 passed."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Required no-regression suite after AC1 green.",
+      "exit_code": 0,
+      "result": "78 passed."
+    },
+    {
+      "command": "git add scripts/compact-bead-context.py && git commit -m \"feat(CL-wzv9): green -- bead context provenance envelope\"",
+      "purpose": "Commit AC1 production implementation.",
+      "exit_code": 0,
+      "result": "Committed 884c2c3580eb6a7b49ab26bce6b7f1408b088309."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py",
+      "purpose": "AC2 red gate for oversized rejection.",
+      "exit_code": 1,
+      "result": "Oversized notes test failed with DID NOT RAISE because the renderer still truncated."
+    },
+    {
+      "command": "git add tests/test_cdx_compact_context.py && git commit -m \"test(CL-wzv9): red -- reject malformed oversized context\"",
+      "purpose": "Commit AC2 red tests.",
+      "exit_code": 0,
+      "result": "Committed 656410c69c1d1f9c49ccff32dee08ecbb4533dec."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py",
+      "purpose": "AC2 green gate for malformed and oversized rejection.",
+      "exit_code": 0,
+      "result": "3 passed."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Required no-regression suite after AC2 green.",
+      "exit_code": 0,
+      "result": "79 passed."
+    },
+    {
+      "command": "git add scripts/compact-bead-context.py && git commit -m \"feat(CL-wzv9): green -- reject malformed oversized context\"",
+      "purpose": "Commit AC2 production implementation.",
+      "exit_code": 0,
+      "result": "Committed 55b93e088af50251e4cce8c61775a0532d3324e1."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"compact_context or untrusted_data\"",
+      "purpose": "AC3 red gate for injection isolation and cdx prompt trust boundaries.",
+      "exit_code": 1,
+      "result": "4 cdx workflow tests failed because BEGIN/END trust markers were absent and compact failure still fell back to raw text."
+    },
+    {
+      "command": "git add tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py && git commit -m \"test(CL-wzv9): red -- isolate injected bead fields\"",
+      "purpose": "Commit AC3 red tests.",
+      "exit_code": 0,
+      "result": "Committed 0860b1a3fa793c3c51907176387138708b0e003b."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"compact_context or untrusted_data\"",
+      "purpose": "AC3 green gate for injection isolation, cdx prompt boundaries, and no raw fallback.",
+      "exit_code": 0,
+      "result": "11 passed."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Required no-regression suite after first AC3 implementation attempt.",
+      "exit_code": 1,
+      "result": "82 passed and 5 route-profile tests failed because their bd mocks returned plain text for the compact JSON path."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Historical no-regression suite after initial route-profile fixture updates; superseded by pair-loop iteration 1 fail-closed fixture coverage.",
+      "exit_code": 0,
+      "result": "87 passed."
+    },
+    {
+      "command": "git add bin/cdx tests/test_cdx_bead_workflow.py tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py && git commit -m \"feat(CL-wzv9): green -- isolate bead context prompts\"",
+      "purpose": "Commit AC3 cdx implementation and fixture updates.",
+      "exit_code": 0,
+      "result": "Committed 40d98be60c546743dc4477b9cb9579f41762a8de."
+    },
+    {
+      "command": "if [[ -n \"${BEADS_RUNTIME:-${BEADS_RUNTIME_DIR:-}}\" ]]; then printf '%s\\n' \"${BEADS_RUNTIME:-${BEADS_RUNTIME_DIR:-}}\"; else exit 3; fi",
+      "purpose": "Probe optional metrics runtime availability.",
+      "exit_code": 3,
+      "result": "No BEADS_RUNTIME or BEADS_RUNTIME_DIR value was present in this shell."
+    },
+    {
+      "command": "uv run python -m json.tool .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/implementation_manifest.json >/dev/null",
+      "purpose": "Validate implementation manifest JSON syntax.",
+      "exit_code": 2,
+      "result": "uv failed to initialize its default cache under /Users/malte/.cache/uv due sandbox permissions."
+    },
+    {
+      "command": "uv run python -m json.tool .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/evidence_ledger.json >/dev/null",
+      "purpose": "Validate evidence ledger JSON syntax.",
+      "exit_code": 2,
+      "result": "uv failed to initialize its default cache under /Users/malte/.cache/uv due sandbox permissions."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run python -m json.tool .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/implementation_manifest.json >/dev/null",
+      "purpose": "Validate implementation manifest JSON syntax with a sandbox-writable uv cache.",
+      "exit_code": 0,
+      "result": "Manifest JSON parsed successfully."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run python -m json.tool .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/evidence_ledger.json >/dev/null",
+      "purpose": "Validate evidence ledger JSON syntax with a sandbox-writable uv cache.",
+      "exit_code": 0,
+      "result": "Evidence ledger JSON parsed successfully."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Pair-loop iteration 1 no-regression suite after disabling raw bead-context fallback and emitting labels as a JSON array.",
+      "exit_code": 0,
+      "result": "89 passed."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"oversized_envelope or limit_env or injected_end_marker\"",
+      "purpose": "Focused verification for final cold-review advisory coverage: envelope-level backstop, _read_limit validation, and real renderer through bin/cdx wrapper.",
+      "exit_code": 0,
+      "result": "5 passed, 31 deselected."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Required no-regression suite after final cold-review advisory test additions.",
+      "exit_code": 0,
+      "result": "94 passed."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run --no-project python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/implementation_manifest.json --evidence .beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/evidence_ledger.json --bead-id CL-wzv9",
+      "purpose": "Validate updated implementation manifest and evidence ledger after final cold-review advisory fixes.",
+      "exit_code": 0,
+      "result": "status ok; no manifest or evidence errors."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Codex-regression fix: no-regression suite after adding launcher-side envelope validation in bin/cdx and the plain-text fail-closed test, plus updating the two shared launcher renderer fixtures to emit valid envelopes.",
+      "exit_code": 0,
+      "result": "95 passed."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_bead_workflow.py::test_cdx_non_envelope_renderer_output_fails_closed -v",
+      "purpose": "Codex-regression fix: verify the new regression test that a non-envelope renderer (plain text incl. a forged END_ marker) fails closed with return 2 and leaks no content.",
+      "exit_code": 0,
+      "result": "1 passed."
+    },
+    {
+      "command": "zsh -n bin/cdx",
+      "purpose": "Codex-regression fix: syntax-check bin/cdx after adding validate_bead_context_envelope() and the point-of-trust validation guard.",
+      "exit_code": 0,
+      "result": "bin/cdx syntax OK."
+    },
+    {
+      "command": "git commit -m \"fix(CL-wzv9): validate compact-bead-context envelope shape before trusting launcher output\" -- bin/cdx tests/test_cdx_bead_workflow.py tests/test_route_profiles_schema.py",
+      "purpose": "Codex-regression fix: commit the launcher-side envelope validation and its regression test.",
+      "exit_code": 0,
+      "result": "Committed 8d75ab88fa359083d3277b3209ffafa6cf2e4808."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "optional metrics insert_agent_call",
+      "reason": "BEADS_RUNTIME/BEADS_RUNTIME_DIR was not set, so the metrics module path could not be resolved without guessing."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/implementation_manifest.json",
+      "description": "Implementation manifest for CL-wzv9."
+    },
+    {
+      "path": ".beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/evidence_ledger.json",
+      "description": "Evidence ledger for CL-wzv9."
+    }
+  ]
+}

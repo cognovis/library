@@ -1,0 +1,186 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-wzv9",
+  "acceptance_criteria": [
+    {
+      "id": "1",
+      "status": "done",
+      "summary": "compact-bead-context.py now emits a JSON bead-context envelope with field-level provenance and untrusted markers for rendered bead fields and dependency titles, including labels as a JSON array value; bin/cdx wraps fetched context in an explicit untrusted-data block before every bead prompt splice. Regression fix: bin/cdx fetch_bead_context() now independently validates that renderer stdout is a well-formed cdx.bead_context envelope (contract_version=1, kind=cdx.bead_context, classification=untrusted) before trusting it, so an env-overridden or buggy CDX_COMPACT_CONTEXT_SCRIPT cannot pass arbitrary text through the trust boundary on exit code alone.",
+      "changed_files": [
+        "scripts/compact-bead-context.py",
+        "bin/cdx",
+        "tests/test_cdx_compact_context.py",
+        "tests/test_cdx_bead_workflow.py",
+        "tests/test_route_profiles_schema.py"
+      ],
+      "evidence_refs": [
+        "EV-AC1-envelope-shape",
+        "EV-P1-label-json-array",
+        "EV-AC1-launcher-envelope-validation",
+        "EV-required-suite-green"
+      ]
+    },
+    {
+      "id": "2",
+      "status": "done",
+      "summary": "Malformed payloads, oversized fields/envelopes, missing compact renderer, missing uv, and compact renderer failures fail closed with non-zero exit and clear stderr; cdx no longer falls back to raw bd show text.",
+      "changed_files": [
+        "scripts/compact-bead-context.py",
+        "bin/cdx",
+        "tests/test_cdx_compact_context.py",
+        "tests/test_cdx_bead_workflow.py",
+        "tests/test_route_profiles_schema.py"
+      ],
+      "evidence_refs": [
+        "EV-AC2-rejection",
+        "EV-AC2-envelope-backstop",
+        "EV-AC2-limit-env-validation",
+        "EV-AC3-cdx-no-raw-fallback",
+        "EV-P1-missing-renderer-uv",
+        "EV-required-suite-green"
+      ]
+    },
+    {
+      "id": "3",
+      "status": "done",
+      "summary": "Injection fixtures in description, notes, acceptance criteria, and dependency title remain JSON string values under untrusted field metadata, and all cdx bead modes delimit the whole context block as untrusted data. Regression fix: the 'cannot be mistaken for control instructions by construction' guarantee is now enforced at the point of trust in bin/cdx rather than relying solely on compact-bead-context.py correctness; renderer output that is not a valid envelope (e.g. plain text containing a standalone END_CDX_BEAD_CONTEXT_UNTRUSTED_DATA line) fails closed with return 2 before any Codex launch.",
+      "changed_files": [
+        "scripts/compact-bead-context.py",
+        "bin/cdx",
+        "tests/test_cdx_compact_context.py",
+        "tests/test_cdx_bead_workflow.py",
+        "tests/test_route_profiles_schema.py"
+      ],
+      "evidence_refs": [
+        "EV-AC3-injection-isolation",
+        "EV-AC3-cdx-boundary",
+        "EV-AC3-real-renderer-cdx-boundary",
+        "EV-AC1-launcher-envelope-validation",
+        "EV-required-suite-green"
+      ]
+    }
+  ],
+  "changed_files": [
+    "bin/cdx",
+    "scripts/compact-bead-context.py",
+    "tests/test_cdx_bead_workflow.py",
+    "tests/test_cdx_compact_context.py",
+    "tests/test_route_profiles_schema.py",
+    ".beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/implementation_manifest.json",
+    ".beads/runs/ae100a51-ff9b-4d9c-9c08-9c7c8073d243/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "f7360c44e0cdfa3cdf01f5c7bd87042712fdd243",
+      "message": "test(CL-wzv9): red -- bead context envelope provenance"
+    },
+    {
+      "sha": "884c2c3580eb6a7b49ab26bce6b7f1408b088309",
+      "message": "feat(CL-wzv9): green -- bead context provenance envelope"
+    },
+    {
+      "sha": "656410c69c1d1f9c49ccff32dee08ecbb4533dec",
+      "message": "test(CL-wzv9): red -- reject malformed oversized context"
+    },
+    {
+      "sha": "55b93e088af50251e4cce8c61775a0532d3324e1",
+      "message": "feat(CL-wzv9): green -- reject malformed oversized context"
+    },
+    {
+      "sha": "0860b1a3fa793c3c51907176387138708b0e003b",
+      "message": "test(CL-wzv9): red -- isolate injected bead fields"
+    },
+    {
+      "sha": "40d98be60c546743dc4477b9cb9579f41762a8de",
+      "message": "feat(CL-wzv9): green -- isolate bead context prompts"
+    },
+    {
+      "sha": "8d75ab88fa359083d3277b3209ffafa6cf2e4808",
+      "message": "fix(CL-wzv9): validate compact-bead-context envelope shape before trusting launcher output"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py",
+      "result": "3 passed after AC2 green; 7 passed after AC3 test additions"
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"compact_context or untrusted_data\"",
+      "result": "11 passed after cdx trust-boundary implementation"
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "result": "89 passed with UV_CACHE_DIR=/tmp/uv-cache in the sandbox"
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_cdx_bead_workflow.py -k \"oversized_envelope or limit_env or injected_end_marker\"",
+      "result": "5 passed, 31 deselected for final cold-review advisory coverage"
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "result": "94 passed after final cold-review advisory test additions"
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "result": "95 passed after regression fix adding launcher-side envelope validation and the plain-text fail-closed test"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "bin/cdx -b, -bq, and -br now receive the same untrusted-data wrapper around bead context.",
+    "If compact-bead-context.py is missing, uv is unavailable, or the renderer rejects malformed or oversized bd JSON, cdx aborts instead of falling back to raw bd show text.",
+    "The plain bd show fallback is disabled, so the untrusted-data boundary is not forgeable by raw bead-controlled physical lines.",
+    "bin/cdx now runs a second uv run python -c validation pass over renderer stdout before every bead prompt splice; a broken or maliciously overridden CDX_COMPACT_CONTEXT_SCRIPT that emits non-envelope text (even a forged END_ marker line) fails closed with return 2 instead of escaping the untrusted-data delimiter."
+  ],
+  "evidence_refs": [
+    {
+      "id": "EV-AC1-envelope-shape",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_emits_untrusted_provenance_envelope validates JSON envelope shape and field-level source/trust/untrusted markers."
+    },
+    {
+      "id": "EV-P1-label-json-array",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_emits_untrusted_provenance_envelope asserts labels use content_type application/json with a JSON array value."
+    },
+    {
+      "id": "EV-AC2-rejection",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_rejects_oversized_notes and ::test_main_rejects_malformed_payload_with_clear_error validate fail-closed handling."
+    },
+    {
+      "id": "EV-AC2-envelope-backstop",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_rejects_oversized_envelope validates the CDX_BEAD_CONTEXT_ENVELOPE_LIMIT backstop rejects oversized rendered envelopes independently from field limits."
+    },
+    {
+      "id": "EV-AC2-limit-env-validation",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_rejects_non_integer_limit_env and ::test_render_context_rejects_non_positive_limit_env validate _read_limit rejects non-integer, zero, and negative environment values with clear errors."
+    },
+    {
+      "id": "EV-AC3-injection-isolation",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_isolates_injection_fixture_by_field covers description, notes, acceptance_criteria, and dependency title fixtures."
+    },
+    {
+      "id": "EV-AC3-cdx-boundary",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_wrap_context_as_untrusted_data validates -b, -bq, and -br prompt boundaries."
+    },
+    {
+      "id": "EV-AC3-real-renderer-cdx-boundary",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_real_renderer_wraps_injected_end_marker_as_data feeds an injected description through the real compact renderer and bin/cdx wrapper, then asserts the injected END_CDX_BEAD_CONTEXT_UNTRUSTED_DATA line is not present as a standalone line inside the wrapped context body."
+    },
+    {
+      "id": "EV-AC3-cdx-no-raw-fallback",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_compact_context_failure_aborts_without_raw_fallback validates compact-script failure does not pass raw bd show output."
+    },
+    {
+      "id": "EV-AC1-launcher-envelope-validation",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_non_envelope_renderer_output_fails_closed points CDX_COMPACT_CONTEXT_SCRIPT at a fixture that emits plain text including a standalone END_CDX_BEAD_CONTEXT_UNTRUSTED_DATA line and asserts cdx -bq fails closed (return 2, no Codex invocation, no leaked forged content). bin/cdx fetch_bead_context() validates renderer stdout as a cdx.bead_context envelope (contract_version=1, kind=cdx.bead_context, classification=untrusted) via an independent uv run python -c check before trusting it. The shared launcher fixtures in tests/test_cdx_bead_workflow.py and tests/test_route_profiles_schema.py were updated to emit valid envelopes so the new point-of-trust validation does not fail-close the happy-path launcher tests."
+    },
+    {
+      "id": "EV-P1-missing-renderer-uv",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_missing_compact_context_script_aborts_without_raw_fallback and ::test_cdx_missing_uv_aborts_without_raw_fallback validate missing renderer and missing uv abort before launching Codex."
+    },
+    {
+      "id": "EV-required-suite-green",
+      "description": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py returned 95 passed after the regression fix added launcher-side envelope validation and the plain-text fail-closed test (was 94 passed after the prior cold-review advisory additions)."
+    }
+  ]
+}
