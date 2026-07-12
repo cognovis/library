@@ -30,6 +30,12 @@ from ..output import dry_run_result, success
 from ..source import resolve_marketplace
 from ..source import parse_source
 from ..status import get_remote_sha
+from .mcp_supervised_service import (
+    ensure_supervised_service,
+    stdio_rollback_snippet,
+    supervised_service_dry_run_ops,
+    uninstall_supervised_service,
+)
 
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
@@ -38,6 +44,78 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
 _WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "antigravity", "cursor"]
 # Full set for an "all" install: writable configs plus URL-only (manual) harnesses.
 _ALL_MCP_HARNESSES = _WRITABLE_MCP_HARNESSES + ["claude_ai", "claude_ios"]
+
+
+def _snapshot_config(path: Path) -> str | None:
+    if path.is_file():
+        return path.read_text()
+    return None
+
+
+def _restore_config(path: Path, snapshot: str | None) -> None:
+    if snapshot is None:
+        if path.is_file():
+            path.unlink()
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(snapshot)
+
+
+def _project_path_from_deploy(deploy_path: Path | None, mcp_subdir: str | None) -> Path | None:
+    if deploy_path is None:
+        return None
+    if mcp_subdir:
+        return deploy_path / mcp_subdir
+    return deploy_path
+
+
+def _harness_block_for_install(
+    entry: dict,
+    harness: str,
+    *,
+    rollback_stdio: bool,
+    project_path: Path | None,
+) -> dict | None:
+    install_block = entry.get("install", {}) or {}
+    mcp_block = install_block.get("mcp", {}) or {}
+    block = mcp_block.get(harness)
+    if block is None:
+        return None
+    if not rollback_stdio:
+        return block
+    if project_path is None:
+        raise InstallError("Cannot resolve stdio rollback without a deploy project path.")
+    rollback = stdio_rollback_snippet(entry, project_path)
+    return {
+        **block,
+        "snippet": rollback,
+    }
+
+
+def _rollback_harnesses_to_stdio(
+    mod,
+    entry: dict,
+    mcp_name: str,
+    harnesses: list[str],
+    project_path: Path,
+) -> list[str]:
+    restored: list[str] = []
+    for harness in harnesses:
+        block = _harness_block_for_install(
+            entry,
+            harness,
+            rollback_stdio=True,
+            project_path=project_path,
+        )
+        if block is None:
+            continue
+        path = _mcp_config_path(harness)
+        if path is None:
+            continue
+        rc = _install_to_harness(mod, mcp_name, block, harness, dry_run=False)
+        if rc == 0:
+            restored.append(harness)
+    return restored
 
 
 def _import_install_mcp():
@@ -194,51 +272,35 @@ def install_mcp(
     dry_run: bool = False,
     harness: str = "all",
     env_overrides: dict | None = None,
+    rollback_stdio: bool = False,
 ) -> dict[str, Any]:
     """Install an MCP server from the catalog.
 
     Per ADR-0002 deploy-clone model: clones/updates the MCP server source repo to
     the deploy path and verifies launchability BEFORE writing any harness registration.
-    If the deploy clone cannot be established, raises InstallError without writing any
-    dangling registration.
-
-    Args:
-        catalog: Parsed library.yaml dict.
-        name: MCP server name.
-        repo_root: Project root.
-        scope: 'project' or 'global' (for lockfile).
-        dry_run: If True, return planned ops without mutating.
-        harness: Target harness ('claude_code', 'codex', 'opencode', 'antigravity',
-            'cursor', 'claude_ai', 'claude_ios', or 'all').
-        env_overrides: Optional env var overrides (for testing).
-
-    Returns:
-        Operation result dict.
-
-    Raises:
-        InstallError: When the deploy clone cannot be established (clone fails or
-            entry point missing). No registration is written in this case.
+    Supervised entries additionally install/start/health-check the loopback daemon before
+    HTTP registrations are written. Any service or harness failure restores prior config
+    snapshots and rolls back to the preserved stdio descriptor when available.
     """
-    # 1. Catalog lookup — use catalog passed in (not re-reading disk)
     entry = lookup_entry(catalog, "mcp", name)
     mcp_name = entry.get("name", name)
     marketplace = resolve_marketplace(catalog, entry)
+    supervised = entry.get("supervised_local_service")
+    project_path = None
 
-    # 2. Derive deploy path and ensure the source repo clone is present and launchable.
-    # This MUST happen before any harness registration is written (no dangling registration).
     clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, mcp_name)
     if clone_url and deploy_path:
-        # ensure_mcp_deploy_clone raises InstallError on failure — no registration written
-        ensure_mcp_deploy_clone(
+        deploy_path = ensure_mcp_deploy_clone(
             clone_url=clone_url,
             mcp_subdir=mcp_subdir or "",
             deploy_path=deploy_path,
             dry_run=dry_run,
         )
+        project_path = _project_path_from_deploy(deploy_path, mcp_subdir)
 
-    # 3. Dry-run
+    harnesses = _selected_mcp_harnesses(entry, harness)
+
     if dry_run:
-        harnesses = _selected_mcp_harnesses(entry, harness)
         ops: list[dict[str, Any]] = []
         target_paths: list[Path] = []
         if clone_url and deploy_path:
@@ -249,6 +311,14 @@ def install_mcp(
                     f"clone/update '{clone_url}' to {deploy_path} "
                     f"(subdir={mcp_subdir or '/'})"
                 ),
+            })
+        if supervised and project_path and not rollback_stdio:
+            ops.extend(supervised_service_dry_run_ops(entry, project_path))
+        elif rollback_stdio and project_path:
+            ops.append({
+                "operation": "rollback_stdio",
+                "path": str(project_path),
+                "details": "restore preserved stdio descriptor for declared harnesses",
             })
         for selected in harnesses:
             path = _mcp_config_path(selected)
@@ -265,11 +335,15 @@ def install_mcp(
                 )
                 continue
             target_paths.append(path)
+            transport = "stdio" if rollback_stdio else "http"
             ops.append(
                 {
                     "operation": "install_mcp_server",
                     "path": str(path),
-                    "details": f"add '{mcp_name}' to MCP config (harness={selected})",
+                    "details": (
+                        f"add '{mcp_name}' to MCP config "
+                        f"(harness={selected}, transport={transport})"
+                    ),
                 }
             )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
@@ -294,45 +368,52 @@ def install_mcp(
             requires_user_confirmation=False,
         )
 
-    # 4. Apply env overrides (config file paths for testing) BEFORE loading install-mcp.py.
-    # install-mcp.py reads config paths from env vars at module-import time, so overrides
-    # must be set before exec_module runs. This is the same semantics as the original code
-    # but with steps reordered to ensure test fixtures take effect.
     saved_env: dict = {}
     if env_overrides:
         for k, v in env_overrides.items():
             saved_env[k] = os.environ.get(k)
             os.environ[k] = v
 
-    # 5. Load install-mcp.py module for its write helpers (after env overrides are applied)
     try:
         mod = _import_install_mcp()
     except Exception as exc:
         raise InstallError(f"Cannot load install-mcp.py: {exc}") from exc
 
+    service_info: dict[str, Any] | None = None
+    writable_harnesses = [h for h in harnesses if _mcp_config_path(h) is not None]
+    snapshots: dict[Path, str | None] = {}
+
     try:
-        # 6. Determine which harnesses to install using catalog entry (not re-loaded library)
-        mcp_harness = harness
+        for h in writable_harnesses:
+            path = _mcp_config_path(h)
+            if path is not None:
+                snapshots[path] = _snapshot_config(path)
+
+        if supervised and project_path and not rollback_stdio:
+            service_info = ensure_supervised_service(entry, project_path, dry_run=False)
+
         install_block = entry.get("install", {}) or {}
         mcp_block = install_block.get("mcp", {}) or {}
+        harnesses_to_install = harnesses
+        if harness == "all" and not mcp_block:
+            harnesses_to_install = ["claude_code"]
 
-        if mcp_harness == "all":
-            harnesses_to_install = [h for h in _ALL_MCP_HARNESSES if mcp_block.get(h)]
-            if not harnesses_to_install:
-                harnesses_to_install = ["claude_code"]
-        else:
-            harnesses_to_install = [mcp_harness]
-
-        installed_harnesses = []
+        installed_harnesses: list[str] = []
         for h in harnesses_to_install:
-            block = mcp_block.get(h)
+            block = _harness_block_for_install(
+                entry,
+                h,
+                rollback_stdio=rollback_stdio,
+                project_path=project_path,
+            )
             if block is None:
                 continue
             rc = _install_to_harness(mod, mcp_name, block, h, dry_run=False)
-            if rc == 0:
+            if rc != 0:
+                raise InstallError(f"Failed to install MCP server '{mcp_name}' for harness '{h}'.")
+            if _mcp_config_path(h) is not None:
                 installed_harnesses.append(h)
 
-        # 7. Write lockfile
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         lock_data = load_lockfile(lockfile_path)
         source_str = entry.get("source") or f"mcp:{mcp_name}"
@@ -356,12 +437,29 @@ def install_mcp(
                 "name": mcp_name,
                 "installed_harnesses": installed_harnesses,
                 "deploy_path": str(deploy_path) if deploy_path else None,
+                "service": service_info,
+                "transport": "stdio" if rollback_stdio else "http",
             },
-            message=f"MCP server '{mcp_name}' installed for: {', '.join(installed_harnesses) or 'none'}",
+            message=(
+                f"MCP server '{mcp_name}' installed for: "
+                f"{', '.join(installed_harnesses) or 'none'}"
+            ),
         )
 
+    except Exception:
+        for path, snapshot in snapshots.items():
+            _restore_config(path, snapshot)
+        if supervised and project_path:
+            _rollback_harnesses_to_stdio(
+                mod,
+                entry,
+                mcp_name,
+                writable_harnesses,
+                project_path,
+            )
+        raise
+
     finally:
-        # Restore env
         for k, v in saved_env.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -488,30 +586,45 @@ def remove_mcp(
     harness: str = "all",
     env_overrides: dict | None = None,
 ) -> dict[str, Any]:
-    """Remove an MCP server."""
+    """Remove an MCP server and any owned supervised service state."""
     entry = lookup_entry(catalog, "mcp", name)
     mcp_name = entry.get("name", name)
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+    clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, mcp_name)
+    project_path = _project_path_from_deploy(deploy_path, mcp_subdir)
+    supervised = entry.get("supervised_local_service")
 
     if dry_run:
         ops = [
-            {"operation": "remove_mcp_server", "path": "~/.claude/settings.json",
-             "details": f"remove '{mcp_name}'"},
-            {"operation": "remove_lockfile_entry", "path": str(lockfile_path),
-             "details": f"remove '{mcp_name}'"},
+            {
+                "operation": "remove_mcp_server",
+                "path": "~/.claude/settings.json",
+                "details": f"remove '{mcp_name}'",
+            },
+            {
+                "operation": "remove_lockfile_entry",
+                "path": str(lockfile_path),
+                "details": f"remove '{mcp_name}'",
+            },
         ]
+        if supervised and project_path:
+            ops.append({
+                "operation": "supervised_service_uninstall",
+                "path": str(project_path),
+                "details": f"stop and uninstall owned daemon for '{mcp_name}'",
+            })
         return dry_run_result(ops, summary=f"Would remove MCP server '{mcp_name}'")
-
-    try:
-        mod = _import_install_mcp()
-    except Exception as exc:
-        raise InstallError(f"Cannot load install-mcp.py: {exc}") from exc
 
     saved_env: dict = {}
     if env_overrides:
         for k, v in env_overrides.items():
             saved_env[k] = os.environ.get(k)
             os.environ[k] = v
+
+    try:
+        mod = _import_install_mcp()
+    except Exception as exc:
+        raise InstallError(f"Cannot load install-mcp.py: {exc}") from exc
 
     try:
         if harness == "all":
@@ -524,6 +637,9 @@ def remove_mcp(
             rc = _remove_from_harness(mod, mcp_name, h)
             if rc == 0:
                 removed_harnesses.append(h)
+
+        if supervised and project_path:
+            uninstall_supervised_service(entry, project_path, dry_run=False)
 
         lock_data = load_lockfile(lockfile_path)
         remove_entry(lock_data, mcp_name, primitive_type="mcp")

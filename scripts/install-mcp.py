@@ -500,6 +500,11 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--remove", action="store_true")
     ap.add_argument(
+        "--rollback-stdio",
+        action="store_true",
+        help="Restore preserved stdio descriptor for supervised MCP servers.",
+    )
+    ap.add_argument(
         "--harness",
         choices=list(HANDLERS.keys()) + ["all"],
         default="all",
@@ -509,6 +514,61 @@ def main() -> int:
 
     library = load_library()
     entry = find_mcp_entry(library, args.name)
+
+    env_overrides = {
+        key: os.environ[key]
+        for key in (
+            "CLAUDE_SETTINGS_FILE",
+            "CODEX_CONFIG_FILE",
+            "OPENCODE_CONFIG_FILE",
+            "GEMINI_SETTINGS_FILE",
+            "CURSOR_MCP_FILE",
+        )
+        if key in os.environ
+    } or None
+
+    if entry.get("supervised_local_service") and args.remove:
+        from lib.installers.mcp_installer import remove_mcp
+
+        result = remove_mcp(
+            catalog=library,
+            name=args.name,
+            repo_root=REPO_ROOT,
+            scope="global",
+            dry_run=args.dry_run,
+            harness=args.harness,
+            env_overrides=env_overrides,
+        )
+        if result.get("status") == "dry-run":
+            for op in result.get("operations", []):
+                print(f"[dry-run] {op.get('operation')}: {op.get('details')}")
+            return 0
+        print(result.get("message", "removed"))
+        return 0 if result.get("status") == "ok" else 1
+
+    if entry.get("supervised_local_service") and not args.remove:
+        from lib.installers.mcp_installer import install_mcp
+
+        result = install_mcp(
+            catalog=library,
+            name=args.name,
+            repo_root=REPO_ROOT,
+            scope="global",
+            dry_run=args.dry_run,
+            harness=args.harness,
+            env_overrides=env_overrides,
+            rollback_stdio=args.rollback_stdio,
+        )
+        if result.get("status") == "dry-run":
+            for op in result.get("operations", []):
+                print(f"[dry-run] {op.get('operation')}: {op.get('details')}")
+            return 0
+        if result.get("status") != "ok":
+            print(result.get("message", "install failed"), file=sys.stderr)
+            return 1
+        print(result.get("message", "installed"))
+        return 0
+
     mcp_block = (entry.get("install", {}) or {}).get("mcp", {})
     if not mcp_block:
         sys.exit(
