@@ -449,14 +449,9 @@ def install_mcp(
     except Exception:
         for path, snapshot in snapshots.items():
             _restore_config(path, snapshot)
-        if supervised and project_path:
-            _rollback_harnesses_to_stdio(
-                mod,
-                entry,
-                mcp_name,
-                writable_harnesses,
-                project_path,
-            )
+        # Restore the byte-exact pre-install registration state. During the
+        # normal migration this is the existing stdio descriptor. Synthesizing
+        # a second fallback here would corrupt prior custom or healthy config.
         raise
 
     finally:

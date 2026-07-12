@@ -279,6 +279,13 @@ def test_service_before_registration(mock_clone, tmp_env):
 @patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
 def test_service_failure_writes_no_registration(mock_clone, tmp_env):
     mock_clone.return_value = tmp_env["deploy_path"]
+    claude_path = Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"])
+    _seed_prior_config(
+        claude_path,
+        "cognovis-tools",
+        {"type": "stdio", "command": "uv", "args": ["run", "legacy"]},
+    )
+    before = claude_path.read_text(encoding="utf-8")
     with patch(
         "lib.installers.mcp_supervised_service.service_status",
         return_value={"state": "unhealthy"},
@@ -295,19 +302,37 @@ def test_service_failure_writes_no_registration(mock_clone, tmp_env):
                         harness="claude_code",
                         env_overrides=tmp_env["env"],
                     )
-    claude = json.loads(Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"]).read_text())
+    assert claude_path.read_text(encoding="utf-8") == before
+    claude = json.loads(claude_path.read_text())
     entry = claude["mcpServers"]["cognovis-tools"]
     assert entry.get("type") == "stdio"
     assert "url" not in entry
 
 
 @patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
-def test_partial_harness_failure_restores_snapshots_and_stdio(mock_clone, tmp_env):
+def test_partial_harness_failure_restores_exact_snapshots(mock_clone, tmp_env):
     mock_clone.return_value = tmp_env["deploy_path"]
     claude_path = Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"])
     codex_path = Path(tmp_env["env"]["CODEX_CONFIG_FILE"])
-    _seed_prior_config(claude_path, "manual-server", {"type": "stdio", "command": "keep"})
+    claude_path.parent.mkdir(parents=True, exist_ok=True)
+    claude_path.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "cognovis-tools": {
+                        "type": "stdio",
+                        "command": "uv",
+                        "args": ["run", "legacy"],
+                    },
+                    "manual-server": {"type": "stdio", "command": "keep"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     _seed_prior_config(codex_path, "manual-server", {"command": "keep"})
+    claude_before = claude_path.read_text(encoding="utf-8")
+    codex_before = codex_path.read_text(encoding="utf-8")
 
     original_install = __import__(
         "lib.installers.mcp_installer", fromlist=["_install_to_harness"]
@@ -336,6 +361,8 @@ def test_partial_harness_failure_restores_snapshots_and_stdio(mock_clone, tmp_en
                     env_overrides=tmp_env["env"],
                 )
 
+    assert claude_path.read_text(encoding="utf-8") == claude_before
+    assert codex_path.read_text(encoding="utf-8") == codex_before
     restored = json.loads(claude_path.read_text())
     assert restored["mcpServers"]["manual-server"]["command"] == "keep"
     claude_entry = restored["mcpServers"].get("cognovis-tools", {})
