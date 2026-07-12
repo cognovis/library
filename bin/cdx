@@ -244,6 +244,11 @@ select_bead_codex_permission_args() {
         return
     fi
 
+    if [[ -n "$bead_review_id" ]]; then
+        bead_codex_permission_args=("--sandbox" "read-only")
+        return
+    fi
+
     bead_codex_permission_args=("--sandbox" "workspace-write" "-c" 'approval_policy="never"')
 }
 
