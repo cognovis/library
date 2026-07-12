@@ -1,0 +1,98 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-1s89",
+  "acceptance_criteria": [
+    {
+      "id": "1",
+      "status": "passed",
+      "summary": "bin/cdx bead modes default to --sandbox workspace-write with approval_policy=\"never\"; --dangerously-bypass-approvals-and-sandbox is only used when --bead-dangerous-full-auto is supplied, and that path prints a stderr warning.",
+      "changed_files": [
+        "bin/cdx",
+        "tests/test_cdx_bead_workflow.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-new-regressions",
+        "cmd:green-new-regressions",
+        "cmd:full-requested-suites",
+        "review:dangerous-flag-scope"
+      ]
+    },
+    {
+      "id": "2",
+      "status": "passed",
+      "summary": "Prompt-injection fixtures in description, notes, acceptance criteria, and dependency title remain inside the untrusted bead-context delimiter and do not alter quick workflow, route profile, model, permission text, or side effects.",
+      "changed_files": [
+        "tests/test_cdx_quick_cursor_dispatch.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-new-regressions",
+        "cmd:green-new-regressions",
+        "cmd:full-requested-suites"
+      ]
+    },
+    {
+      "id": "3",
+      "status": "passed",
+      "summary": "bin/cdx still obtains bead context through fetch_bead_context(), validates the cdx.bead_context envelope, and wraps it with BEGIN_CDX_BEAD_CONTEXT_UNTRUSTED_DATA / END_CDX_BEAD_CONTEXT_UNTRUSTED_DATA before prompt composition; no raw bead-text fallback or splice was introduced.",
+      "changed_files": [
+        "bin/cdx"
+      ],
+      "evidence_refs": [
+        "cmd:dangerous-occurrence-review",
+        "cmd:full-requested-suites",
+        "review:envelope-delimiter-preserved"
+      ]
+    }
+  ],
+  "changed_files": [
+    "bin/cdx",
+    "tests/test_cdx_bead_workflow.py",
+    "tests/test_cdx_quick_cursor_dispatch.py",
+    ".beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/implementation_manifest.json",
+    ".beads/runs/61709b9e-f1f7-4a62-b813-ed3b5158abe0/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "hash": "330393e6f97a0f3a7894efcc39960f9ab9be1371",
+      "message": "test(CL-1s89): red - bead cdx safety regressions",
+      "purpose": "RED tests for safe bead-mode permissions and injection isolation"
+    },
+    {
+      "hash": "0d864457a398bb00e1eca7e2dff9be41a63a4dc7",
+      "message": "feat(CL-1s89): green - safe cdx bead permissions",
+      "purpose": "Production change for safe bead-mode Codex invocation defaults and explicit dangerous opt-in"
+    }
+  ],
+  "tests": [
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass tests/test_cdx_bead_workflow.py::test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass tests/test_cdx_quick_cursor_dispatch.py::test_injected_bead_fields_do_not_change_quick_dispatch_control_plane -v",
+      "status": "red_then_green",
+      "evidence": "First run failed with 8 expected launcher failures and 1 passing injection-isolation test; second run passed 9/9 after production changes."
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_cdx_bead_workflow.py tests/test_cdx_quick_cursor_dispatch.py -v",
+      "status": "passed",
+      "evidence": "38 passed"
+    },
+    {
+      "command": "zsh -n bin/cdx",
+      "status": "passed",
+      "evidence": "zsh syntax check returned exit 0"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "cdx -b, cdx -b --exec, cdx -bq, and cdx -br now run Codex with workspace-write sandboxing and approval_policy=\"never\" by default.",
+    "Operators who need the previous full bypass for bead modes must pass --bead-dangerous-full-auto and will see a stderr warning.",
+    "The plain non-bead cdx default launch path remains unchanged and still owns its existing --no-full-auto behavior."
+  ],
+  "evidence_refs": {
+    "cmd:red-new-regressions": "Initial targeted pytest run exited 1 with failures showing default dangerous bypass and unparsed --bead-dangerous-full-auto.",
+    "cmd:green-new-regressions": "Targeted pytest run exited 0 with 9 passed after bin/cdx change.",
+    "cmd:full-requested-suites": "Requested two-file pytest run exited 0 with 38 passed.",
+    "cmd:dangerous-occurrence-review": "rg over bin/cdx shows dangerous bypass only in the explicit bead opt-in helper and the out-of-scope plain launch path.",
+    "review:dangerous-flag-scope": "Code review confirmed the three bead-mode call sites use select_bead_codex_permission_args().",
+    "review:envelope-delimiter-preserved": "Code review confirmed fetch_bead_context(), validate_bead_context_envelope(), and format_untrusted_bead_context() remain the bead-context path."
+  }
+}
