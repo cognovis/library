@@ -1,0 +1,153 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-j92j",
+  "acceptance_criteria": [
+    {
+      "id": "1",
+      "status": "done",
+      "summary": "capabilities.yaml's manage_beads.claude.tools now lists the full explicit set of 14 mcp__cognovis-tools__bead_* typed tool names, including bead_update_notes. bead-orchestrator.md and quick-fix.md (built via build-agent.py --harness claude) now expose all of them, matching their documented workflow needs (bead_close for the Phase-0/Step-5c recovery paths, bead_create/bead_dep_add for discovered-work routing, bead_review_write for the reviewer gate refresh).",
+      "changed_files": [
+        "capabilities.yaml",
+        "tests/test_cognovis_agent_fleet_capabilities.py"
+      ],
+      "evidence_refs": [
+        "EV-fleet-red-gate",
+        "EV-fleet-green-gate"
+      ]
+    },
+    {
+      "id": "2",
+      "status": "done",
+      "summary": "session-close.md builds with the full typed bead_* tool set (close/update operations retained). review-agent.md and verification-agent.md were confirmed, at both source-frontmatter level and built-artifact level, to not declare manage_beads and to gain zero mcp__cognovis-tools__bead_* tools — no narrow review-cache/evidence write was documented for either role, so none was added. Neither file was modified.",
+      "changed_files": [
+        "tests/test_cognovis_agent_fleet_capabilities.py"
+      ],
+      "evidence_refs": [
+        "EV-fleet-green-gate",
+        "EV-role-matrix-preexisting"
+      ]
+    },
+    {
+      "id": "3",
+      "status": "done",
+      "summary": "The only production change is capabilities.yaml (the canonical capability registry). scripts/build-agent.py's apply_capabilities()/_set_tools() merge logic was read and confirmed correct as-is and was not modified. No file under cognovis-core/, ~/.claude/agents/, ~/.codex/agents/, or any other installed-artifact location was touched. All generated agent artifacts asserted on in tests are reproduced live by build-agent.py from capabilities.yaml plus the real cognovis-core/agents/*.md sources at test-run time, not from any pre-built/hand-edited copy.",
+      "changed_files": [
+        "capabilities.yaml"
+      ],
+      "evidence_refs": [
+        "EV-scope-diff"
+      ]
+    },
+    {
+      "id": "4",
+      "status": "done",
+      "summary": "Hermetic regression fixtures in tests/test_build_agent.py assert manage_beads.claude.tools is non-empty and contains every typed tool (fails if it regresses to []) and that cognovis-tools stays registered in mcpServers. Fleet-level fixtures in tests/test_cognovis_agent_fleet_capabilities.py assert review-agent/verification-agent gain zero bead_* tools, plus a synthetic-reviewer regression fixture proving that assertion is not vacuous (a reviewer-shaped agent that wrongly declares manage_beads is shown to leak all 14 bead_* tools).",
+      "changed_files": [
+        "tests/test_build_agent.py",
+        "tests/test_cognovis_agent_fleet_capabilities.py"
+      ],
+      "evidence_refs": [
+        "EV-hermetic-red-gate",
+        "EV-hermetic-green-gate",
+        "EV-fleet-red-gate",
+        "EV-fleet-green-gate"
+      ]
+    },
+    {
+      "id": "5",
+      "status": "done",
+      "summary": "Hermetic smoke: builds the real bead-orchestrator.md and confirms mcp__cognovis-tools__bead_update_notes (and the rest of the typed set) is declared, while review-agent.md/verification-agent.md builds confirm zero bead_* tools. Stronger-evidence live smoke (optional, additionally performed): a real mcp__cognovis-tools__bead_show and mcp__cognovis-tools__bead_update_notes call against this bead (CL-j92j) both succeeded from this implementation session, recording an actual progress note through the typed tool.",
+      "changed_files": [
+        "tests/test_cognovis_agent_fleet_capabilities.py"
+      ],
+      "evidence_refs": [
+        "EV-fleet-green-gate",
+        "EV-live-smoke-optional"
+      ]
+    }
+  ],
+  "changed_files": [
+    "capabilities.yaml",
+    "docs/mcp-migration-rollback.md",
+    "docs/adr/library-tool-surface-mcp.md",
+    "tests/test_build_agent.py",
+    "tests/test_cognovis_agent_fleet_capabilities.py",
+    ".beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/implementation_manifest.json",
+    ".beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "1bd598b",
+      "message": "test(CL-j92j): red — manage_beads must expose typed cognovis-tools bead_* tools"
+    },
+    {
+      "sha": "f193d6d",
+      "message": "feat(CL-j92j): green — populate manage_beads.claude.tools with typed cognovis-tools bead_* names"
+    },
+    {
+      "sha": "fadc5a6",
+      "message": "docs(CL-j92j): correct mcpServers-alone-is-enough claim in rollback doc + ADR-0007 amendment"
+    }
+  ],
+  "tests": [
+    {
+      "command": "uv run pytest tests/test_build_agent.py -k \"manage_beads\" -v",
+      "result": "RED gate (hermetic, no cognovis-core dependency): 2 failed for the correct pre-fix reason (manage_beads granted zero Claude tools), 1 passed (the negative-fixture test that exercises the assertion helper itself and is expected to pass unconditionally)."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_cognovis_agent_fleet_capabilities.py -k \"manage_beads\" -v",
+      "result": "RED gate (fleet, real cognovis-core sibling sources): 4 failed for the correct pre-fix reason (bead-orchestrator/quick-fix/session-close missing all 14 typed tools; synthetic role-leakage fixture found zero leaked tools instead of the expected leak), 2 passed (review-agent/verification-agent already correctly had zero bead_* tools, which must hold both before and after the fix)."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py -k \"manage_beads\" -v",
+      "result": "GREEN gate: 9 passed, 0 failed."
+    },
+    {
+      "command": "COGNOVIS_CORE=/Users/malte/code/library/cognovis-core uv run pytest tests/test_build_agent.py tests/test_cognovis_agent_fleet_capabilities.py -x",
+      "result": "Full regression gate for touched files: 45 passed, 0 failed, 0 skipped-due-to-error. Re-ran after the doc edits with the same result."
+    },
+    {
+      "command": "uv run python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/implementation_manifest.json --evidence .beads/runs/1aafaeae-92a6-4d44-8743-366f50d73987/evidence_ledger.json --bead-id CL-j92j --pretty",
+      "result": "status: ok, implementation artifacts are valid (after correcting an initial schema-shape mismatch on manifest.tests)."
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [
+    "None. Stayed within the prompt's declared scope: inspect_git (CL-rx6z) was not touched, no cognovis-core/ files were edited, no agent-body prose was rewritten, scripts/build-agent.py was not modified (merge logic verified correct as-is; AC4 satisfied via pytest negative regression fixtures per the prompt's stated preference for test-suite failures over new blocking runtime behavior)."
+  ],
+  "downstream_impacts": [
+    "Every agent declaring manage_beads (bead-orchestrator, quick-fix, session-close, wave-orchestrator, bead-author — all in the sibling cognovis-core repo) will gain the 14 typed mcp__cognovis-tools__bead_* tools in their generated Claude frontmatter on next rebuild via build-agent.py / `library use`.",
+    "Installed artifacts (e.g. ~/.claude/agents/*.md) are not automatically updated by this bead; a rebuild/reinstall step (library sync / library use) is required to project the fix into an already-installed fleet, and is outside this bead's declared scope.",
+    "docs/mcp-migration-rollback.md and docs/adr/library-tool-surface-mcp.md now correctly describe the mechanism; readers following the rollback doc's manual revert steps will use the corrected explicit-tool-list shape."
+  ],
+  "evidence_refs": [
+    {
+      "id": "EV-fleet-red-gate",
+      "description": "Fleet-level RED run confirming bead-orchestrator/quick-fix/session-close missed all 14 typed bead_* tools before the fix."
+    },
+    {
+      "id": "EV-fleet-green-gate",
+      "description": "Fleet-level GREEN run confirming bead-orchestrator/quick-fix/session-close expose all 14 typed bead_* tools (including bead_update_notes and bead_close) after the fix, and that review-agent/verification-agent still expose zero."
+    },
+    {
+      "id": "EV-hermetic-red-gate",
+      "description": "Hermetic RED run against the real capabilities.yaml confirming manage_beads.claude.tools was empty before the fix."
+    },
+    {
+      "id": "EV-hermetic-green-gate",
+      "description": "Hermetic GREEN run confirming manage_beads.claude.tools is the full typed list and mcpServers still includes cognovis-tools after the fix."
+    },
+    {
+      "id": "EV-role-matrix-preexisting",
+      "description": "Source-level check (grep on cognovis-core/agents/{review-agent,verification-agent}.md capabilities: block) confirming neither declares manage_beads, both before and after this bead's change."
+    },
+    {
+      "id": "EV-scope-diff",
+      "description": "git diff --stat 31de252 HEAD limited to capabilities.yaml, docs/mcp-migration-rollback.md, docs/adr/library-tool-surface-mcp.md, tests/test_build_agent.py, tests/test_cognovis_agent_fleet_capabilities.py."
+    },
+    {
+      "id": "EV-live-smoke-optional",
+      "description": "Live mcp__cognovis-tools__bead_show(bead_id=\"CL-j92j\") and mcp__cognovis-tools__bead_update_notes(bead_id=\"CL-j92j\", ...) calls both returned status ok from this implementation session, recording a real progress note. Supplementary evidence only — these tools were pre-granted to this session by its launching harness, not produced by this bead's capabilities.yaml fix."
+    }
+  ]
+}
