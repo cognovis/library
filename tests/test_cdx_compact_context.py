@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compact-bead-context.py"
@@ -82,8 +86,8 @@ def test_render_context_emits_untrusted_provenance_envelope() -> None:
     assert "NESTED_DEPENDENCY_NOTES_SHOULD_NOT_RENDER" not in rendered
 
 
-def test_render_context_truncates_long_notes(monkeypatch) -> None:
-    """Long volatile notes are bounded before they enter the Codex prompt."""
+def test_render_context_rejects_oversized_notes(monkeypatch) -> None:
+    """Long volatile notes are rejected instead of silently truncated."""
     mod = _load_module()
     monkeypatch.setenv("CDX_BEAD_CONTEXT_NOTES_LIMIT", "20")
     payload = {
@@ -97,7 +101,21 @@ def test_render_context_truncates_long_notes(monkeypatch) -> None:
         "notes": "x" * 50,
     }
 
-    rendered = mod.render_context(payload)
-    envelope = json.loads(rendered)
+    with pytest.raises(ValueError, match="bead.notes exceeds CDX_BEAD_CONTEXT_NOTES_LIMIT"):
+        mod.render_context(payload)
 
-    assert _field(envelope, "notes")["value"] == f"{'x' * 20}\n\n[truncated 30 chars]"
+
+def test_main_rejects_malformed_payload_with_clear_error() -> None:
+    """Malformed stdin fails closed with a useful stderr message."""
+    result = subprocess.run(
+        [sys.executable, str(_SCRIPT)],
+        input='"not a bead payload"',
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "compact-bead-context.py:" in result.stderr
+    assert "bd payload must be object or list" in result.stderr
