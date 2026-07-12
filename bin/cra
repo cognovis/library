@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# cra - Cursor Agent launcher with automatic approvals
+# cra - Cursor Agent launcher (approvals on by default; --yolo to auto-approve)
 #
 # Usage: cra [wrapper-flags] [agent-args...]
 #        cra -h | --help        Show wrapper flag help, then fall through to agent --help
@@ -56,7 +56,7 @@ done
 
 if ${show_help}; then
     cat <<'HELP'
-cra - Cursor Agent launcher with automatic approvals
+cra - Cursor Agent launcher (approvals on by default; --yolo to auto-approve)
 
 Usage: cra [wrapper-flags] [agent-args...]
 
@@ -78,7 +78,7 @@ fi
 # ── Default: safe launch; --yolo requires explicit opt-in ─────────
 
 if ${use_yolo}; then
-    echo -e "\033[0;33m⚠ WARNING: --yolo selected; forwarding --yolo to agent (disables approval prompts, no safety confirmations).\033[0m" >&2
+    echo -e "\033[0;33mWARNING: --yolo selected; forwarding --yolo to agent (disables approval prompts, no safety confirmations).\033[0m" >&2
     exec "${AGENT_BIN}" --yolo "${agent_args[@]}"
 else
     exec "${AGENT_BIN}" "${agent_args[@]}"

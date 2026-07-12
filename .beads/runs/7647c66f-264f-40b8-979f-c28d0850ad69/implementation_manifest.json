@@ -5,7 +5,7 @@
     {
       "id": "1",
       "status": "done",
-      "summary": "bin/cra now defaults use_yolo to false and no longer forwards --yolo unless the wrapper receives explicit --yolo. Selecting the opt-in prints a visible yellow stderr warning containing WARNING and --yolo before exec'ing with --yolo. --no-yolo remains a backward-compatible no-op.",
+      "summary": "bin/cra now defaults use_yolo to false and no longer forwards --yolo unless the wrapper receives explicit --yolo. Selecting the opt-in prints a visible yellow stderr warning containing plain-ASCII 'WARNING:' (no emoji glyph) and '--yolo' before exec'ing with --yolo. --no-yolo remains a backward-compatible no-op. Header comment and --help self-description updated to 'Cursor Agent launcher (approvals on by default; --yolo to auto-approve)'.",
       "changed_files": [
         "bin/cra"
       ],

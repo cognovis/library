@@ -43,6 +43,24 @@
       "purpose": "Capture the final implementation commit order.",
       "exit_code": 0,
       "observed": "Top commits were c56c4a7 feat(CL-v1tb): green — cra yolo default requires explicit opt-in and b2ccc95 test(CL-v1tb): red — cra safe yolo-default regressions."
+    },
+    {
+      "command": "Fix pass (Codex adversarial + Opus advisory): edit bin/cra to remove the ⚠ emoji from the --yolo stderr warning (no-emoji standard REGRESSION) and update the stale 'with automatic approvals' self-description in the header comment (line 2) and the --help heredoc to 'Cursor Agent launcher (approvals on by default; --yolo to auto-approve)'.",
+      "purpose": "Resolve the Phase 7 Codex REGRESSION (emoji in source) and the Phase 5 Opus advisory (stale self-description) without touching bin/cld, bin/cdx, AGENTS.md, or any out-of-scope file.",
+      "exit_code": 0,
+      "observed": "bin/cra warning now begins with plain-ASCII 'WARNING:' and retains the yellow ANSI color wrapper; header comment and --help both read 'Cursor Agent launcher (approvals on by default; --yolo to auto-approve)'. grep for ⚠ in bin/cra returned no matches."
+    },
+    {
+      "command": "zsh -n bin/cra",
+      "purpose": "Syntax-check bin/cra after the fix-pass edits.",
+      "exit_code": 0,
+      "observed": "SYNTAX_OK — no shell syntax errors."
+    },
+    {
+      "command": "uv run --with pytest pytest tests/test_cra_launcher_defaults.py tests/test_launcher_permission_modes.py -v",
+      "purpose": "Confirm the emoji removal and self-description edits did not regress the scoped suite; verify test_cra_yolo_explicit_opt_in_forwards_flag_and_warns still finds 'warning' and '--yolo' in stderr with plain-ASCII text.",
+      "exit_code": 0,
+      "observed": "12 passed in 5.14s (2 cra tests + 10 cld regression tests); no tests weakened or skipped."
     }
   ],
   "skipped_checks": [
