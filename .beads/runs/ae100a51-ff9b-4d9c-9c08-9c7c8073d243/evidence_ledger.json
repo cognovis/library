@@ -163,6 +163,30 @@
       "purpose": "Validate updated implementation manifest and evidence ledger after final cold-review advisory fixes.",
       "exit_code": 0,
       "result": "status ok; no manifest or evidence errors."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Codex-regression fix: no-regression suite after adding launcher-side envelope validation in bin/cdx and the plain-text fail-closed test, plus updating the two shared launcher renderer fixtures to emit valid envelopes.",
+      "exit_code": 0,
+      "result": "95 passed."
+    },
+    {
+      "command": "uv run pytest tests/test_cdx_bead_workflow.py::test_cdx_non_envelope_renderer_output_fails_closed -v",
+      "purpose": "Codex-regression fix: verify the new regression test that a non-envelope renderer (plain text incl. a forged END_ marker) fails closed with return 2 and leaks no content.",
+      "exit_code": 0,
+      "result": "1 passed."
+    },
+    {
+      "command": "zsh -n bin/cdx",
+      "purpose": "Codex-regression fix: syntax-check bin/cdx after adding validate_bead_context_envelope() and the point-of-trust validation guard.",
+      "exit_code": 0,
+      "result": "bin/cdx syntax OK."
+    },
+    {
+      "command": "git commit -m \"fix(CL-wzv9): validate compact-bead-context envelope shape before trusting launcher output\" -- bin/cdx tests/test_cdx_bead_workflow.py tests/test_route_profiles_schema.py",
+      "purpose": "Codex-regression fix: commit the launcher-side envelope validation and its regression test.",
+      "exit_code": 0,
+      "result": "Committed 8d75ab88fa359083d3277b3209ffafa6cf2e4808."
     }
   ],
   "skipped_checks": [
