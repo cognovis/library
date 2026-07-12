@@ -82,7 +82,10 @@ def _harness_block_for_install(
     if block is None:
         return None
     if not rollback_stdio:
-        return block
+        legacy = (entry.get("supervised_local_service") or {}).get(
+            "legacy_stdio_descriptors", []
+        )
+        return {**block, "_legacy_descriptors": legacy} if legacy else block
     if project_path is None:
         raise InstallError("Cannot resolve stdio rollback without a deploy project path.")
     rollback = stdio_rollback_snippet(entry, project_path)
@@ -461,6 +464,20 @@ def install_mcp(
     except Exception:
         for path, snapshot in snapshots.items():
             _restore_config(path, snapshot)
+        if (
+            supervised
+            and project_path
+            and service_info is not None
+            and service_info.get("action") == "install"
+        ):
+            try:
+                uninstall_supervised_service(entry, project_path, dry_run=False)
+            except Exception as cleanup_error:
+                print(
+                    "[mcp-supervised] WARNING: could not remove newly installed "
+                    f"service after registration rollback: {cleanup_error}",
+                    file=sys.stderr,
+                )
         # Restore the byte-exact pre-install registration state. During the
         # normal migration this is the existing stdio descriptor. Synthesizing
         # a second fallback here would corrupt prior custom or healthy config.

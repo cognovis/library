@@ -159,6 +159,13 @@ def _make_supervised_catalog(project_path: Path, *, stdio_command: str = "uv") -
                             "command": stdio_command,
                             "args": stdio_args,
                         },
+                        "legacy_stdio_descriptors": [
+                            {
+                                "type": "stdio",
+                                "command": "sh",
+                                "args": ["-c", "legacy-cognovis-tools"],
+                            }
+                        ],
                     },
                     "install": {
                         "mcp": {
@@ -364,6 +371,82 @@ def test_service_failure_writes_no_registration(mock_clone, tmp_env):
     entry = claude["mcpServers"]["cognovis-tools"]
     assert entry.get("type") == "stdio"
     assert "url" not in entry
+
+
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_known_legacy_stdio_descriptors_are_adopted(mock_clone, tmp_env):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    claude_path = Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"])
+    codex_path = Path(tmp_env["env"]["CODEX_CONFIG_FILE"])
+    _seed_prior_config(
+        claude_path,
+        "cognovis-tools",
+        {"type": "stdio", "command": "sh", "args": ["-c", "legacy-cognovis-tools"]},
+    )
+    codex_path.parent.mkdir(parents=True, exist_ok=True)
+    codex_path.write_text(
+        '[mcp_servers.cognovis-tools]\ncommand = "sh"\nargs = ["-c", "legacy-cognovis-tools"]\n',
+        encoding="utf-8",
+    )
+
+    with patch(
+        "lib.installers.mcp_supervised_service.service_status",
+        side_effect=[
+            {"state": "unhealthy"},
+            {"state": "healthy", "version": "test:1"},
+        ],
+    ):
+        with patch(
+            "lib.installers.mcp_supervised_service.run_argv_command",
+            return_value=MagicMock(returncode=0, stdout="", stderr=""),
+        ):
+            result = install_mcp(
+                tmp_env["catalog"],
+                "cognovis-tools",
+                tmp_env["tmp_path"],
+                harness="all",
+                env_overrides=tmp_env["env"],
+            )
+
+    assert result["status"] == "ok"
+    claude = json.loads(claude_path.read_text(encoding="utf-8"))
+    assert claude["mcpServers"]["cognovis-tools"]["url"] == HTTP_URL
+    assert claude["mcpServers"]["cognovis-tools"]["_origin"] == (
+        "library:mcp:cognovis-tools"
+    )
+    codex = codex_path.read_text(encoding="utf-8")
+    assert f'url = "{HTTP_URL}"' in codex
+    assert '_origin = "library:mcp:cognovis-tools"' in codex
+
+
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_config_failure_uninstalls_newly_created_service(mock_clone, tmp_env):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    with patch(
+        "lib.installers.mcp_installer.ensure_supervised_service",
+        return_value={"action": "install", "state": "healthy", "version": "test:1"},
+    ):
+        with patch(
+            "lib.installers.mcp_installer._install_to_harness",
+            return_value=1,
+        ):
+            with patch(
+                "lib.installers.mcp_installer.uninstall_supervised_service"
+            ) as uninstall:
+                with pytest.raises(InstallError):
+                    install_mcp(
+                        tmp_env["catalog"],
+                        "cognovis-tools",
+                        tmp_env["tmp_path"],
+                        harness="claude_code",
+                        env_overrides=tmp_env["env"],
+                    )
+
+    uninstall.assert_called_once_with(
+        tmp_env["catalog"]["library"]["mcp_servers"][0],
+        tmp_env["project_path"],
+        dry_run=False,
+    )
 
 
 @patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")

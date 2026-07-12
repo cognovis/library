@@ -1300,6 +1300,14 @@
         "stdio_rollback": {
           "$ref": "#/$defs/mcp_stdio_descriptor"
         },
+        "legacy_stdio_descriptors": {
+          "description": "Exact unowned legacy stdio descriptors that this supervised service may adopt during a one-time transport migration. Foreign same-name entries remain protected.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mcp_stdio_descriptor"
+          },
+          "default": []
+        },
         "activation_note": {
           "description": "Human-readable note about live harness activation gates (roots or workspace_bind probes).",
           "type": "string",
