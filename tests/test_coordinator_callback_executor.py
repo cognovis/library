@@ -28,10 +28,18 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "coordinator_callback
 
 def _import_module():
     """Dynamically import coordinator_callback.py (matches repo convention,
-    e.g. _import_sync_script() in test_project_tooling.py)."""
+    e.g. _import_sync_script() in test_project_tooling.py).
+
+    Registers the module in sys.modules before exec_module(): the module uses
+    ``from __future__ import annotations`` with ``@dataclasses.dataclass``,
+    and dataclasses resolves annotations via ``sys.modules[cls.__module__]``
+    -- without this registration that lookup returns None and dataclass
+    construction crashes.
+    """
     spec = importlib.util.spec_from_file_location("coordinator_callback", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
