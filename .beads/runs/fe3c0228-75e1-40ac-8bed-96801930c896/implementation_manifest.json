@@ -146,10 +146,16 @@
     "Claude artifacts for those pair-loop read-only sources drop Write/Edit/MultiEdit tool grants defensively.",
     "A new canonical scripts/agent-fleet-audit.py can be used by installers or CI to fail closed when configured agent roots are empty or missing."
   ],
-  "evidence_refs": {
-    "cmd:red-pytest": "evidence_ledger.commands.red-pytest",
-    "cmd:red-smoke": "evidence_ledger.commands.red-smoke",
-    "cmd:green-pytest": "evidence_ledger.commands.green-pytest",
-    "cmd:green-smoke": "evidence_ledger.commands.green-smoke"
-  }
+  "evidence_refs": [
+    "cmd:green-pytest",
+    "cmd:green-smoke",
+    "test:test_agent_tool_audit.py::test_fleet_audit_counts_flat_claude_agents_missed_by_legacy_scan",
+    "test:test_agent_tool_audit.py::test_fleet_audit_fails_closed_for_empty_or_missing_roots",
+    "test:test_build_agent.py::test_pair_loop_read_only_constraints_override_run_shell_codex_sandbox",
+    "test:test_cognovis_agent_fleet_capabilities.py::test_review_agent_codex_build_uses_read_only_sandbox",
+    "test:test_build_agent.py::test_run_shell_without_pair_loop_constraints_keeps_workspace_write",
+    "test:test_agent_tool_audit.py::test_pair_loop_reviewer_regression_builds_read_only_codex_artifact",
+    "cmd:red-pytest",
+    "cmd:red-smoke"
+  ]
 }
