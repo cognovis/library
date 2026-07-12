@@ -54,6 +54,54 @@ the same shape as the existing `query_memory` (`mcp__open-brain__*`) and
 `search_searxng` (`mcp__searxng__searxng_web_search`) capabilities, which list their
 tools explicitly for the same reason.
 
+## Companion: `read_beads` read-only capability (CL-j92j)
+
+`manage_beads` is a single coarse capability that grants the full 14-tool mutating
+set. Two of its historical consumers in the `cognovis-core` sibling repo —
+`effort-classifier` and `wave-monitor` — do not need mutation access per their own
+documented contracts (`effort-classifier` returns JSON only and never calls a
+`bead_*` tool; `wave-monitor` has an explicit `## Design Constraints` line: "No
+Write tool — wave-monitor is read-only. Cannot mutate bead state."). Sharing
+`manage_beads` therefore over-granted them the 9 mutating tools.
+
+CL-j92j adds a least-privilege sibling capability, `read_beads`, to
+`capabilities.yaml`. It grants only the 5 read-only typed tools and none of the 9
+mutating ones:
+
+```yaml
+read_beads:
+  claude:
+    tools:
+      - mcp__cognovis-tools__bead_show
+      - mcp__cognovis-tools__bead_ready
+      - mcp__cognovis-tools__bead_list
+      - mcp__cognovis-tools__bead_search
+      - mcp__cognovis-tools__bead_repos
+    mcpServers: [cognovis-tools]
+    skills: [beads]
+  codex:
+    mcp_servers: [cognovis-tools]
+    skills: [beads]
+    sandbox_mode: read-only
+```
+
+**Scope split:** CL-j92j (this bead, `meta` repo) lands the `read_beads` capability
+and its hermetic regression tests only. It does **not** reassign any agent. The
+companion bead **`clc-zbj4`** (in the `cognovis-core` repo, a separate bead
+tracker) migrates `effort-classifier` and `wave-monitor` from `manage_beads` to
+`read_beads`. Until `clc-zbj4` lands, those two agents still declare `manage_beads`
+and still receive the full 14-tool set — the least-privilege gap is not closed
+until both beads ship. The 5 genuinely orchestration-class consumers
+(`bead-orchestrator`, `quick-fix`, `session-close`, `wave-orchestrator`,
+`bead-author`) correctly keep `manage_beads`.
+
+To roll back `read_beads`: remove the `read_beads` entry from `capabilities.yaml`
+and its hermetic tests in `tests/test_build_agent.py`
+(`test_read_beads_capability_registry_is_read_only_typed_tools`,
+`test_build_agent_grants_read_beads_read_only_tools_end_to_end`). Note that
+`clc-zbj4`, if already landed, depends on `read_beads` existing — coordinate the
+rollback across both repos.
+
 ## Prerequisites for the migrated capabilities to work
 
 Before an agent using `manage_beads` can operate:

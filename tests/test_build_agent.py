@@ -673,3 +673,169 @@ def test_build_agent_grants_manage_beads_typed_tools_end_to_end(tmp_path: Path) 
         "built agent frontmatter must register the cognovis-tools MCP server "
         "alongside the typed tools (CL-j92j AC4: server-absent regression)"
     )
+
+
+def write_synthetic_reviewer_manage_beads_source(tmp_path: Path) -> Path:
+    """A reviewer-shaped agent that WRONGLY declares manage_beads.
+
+    Mirrors the fleet-level fixture in
+    tests/test_cognovis_agent_fleet_capabilities.py::
+    test_manage_beads_role_leakage_regression_fixture_would_be_caught, but is
+    fully self-contained so the AC4 role-leakage guard has coverage even when
+    the cognovis-core sibling checkout is absent (isolated CI, fresh clone).
+    """
+    source = tmp_path / "synthetic-reviewer.md"
+    source.write_text(
+        "---\n"
+        "name: synthetic-reviewer\n"
+        "description: Synthetic reviewer fixture that wrongly declares manage_beads.\n"
+        "model: sonnet\n"
+        "capabilities:\n"
+        "  - read_files\n"
+        "  - run_shell\n"
+        "  - manage_beads\n"
+        "agent_base: auto\n"
+        "---\n\n# Synthetic Reviewer\n\nFixture body for CL-j92j hermetic role-leakage coverage.\n"
+    )
+    return source
+
+
+def test_manage_beads_role_leakage_regression_fixture_hermetic(tmp_path: Path) -> None:
+    """AC4 (hermetic): a reviewer-shaped agent that declares manage_beads leaks bead_* tools.
+
+    Proves the mcp__cognovis-tools__bead_* leak-detection mechanism (asserted
+    against the real review-agent/verification-agent sources by the fleet test
+    test_manage_beads_read_only_agents_stay_read_only) is exercised without any
+    cognovis-core dependency. Uses the hermetic agent-base fixtures so the guard
+    is covered in environments where the sibling checkout is unavailable.
+    """
+    source = write_synthetic_reviewer_manage_beads_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 0, result.stderr
+    built = (output_dir / "synthetic-reviewer.md").read_text()
+    frontmatter = yaml.safe_load(built.split("---", 2)[1]) or {}
+    tools = {t.strip() for t in str(frontmatter.get("tools", "")).split(",") if t.strip()}
+    leaked = {t for t in tools if t.startswith("mcp__cognovis-tools__bead_")}
+    assert leaked, (
+        "hermetic fixture expected mcp__cognovis-tools__bead_* tools to leak when a "
+        "reviewer-shaped agent wrongly declares manage_beads — the leak-detection "
+        "assertion is therefore not vacuous"
+    )
+
+
+# ---------------------------------------------------------------------------
+# read_beads read-only typed-tool capability (CL-j92j Part 2)
+#
+# read_beads is the least-privilege sibling of manage_beads: it grants the 5
+# read-only bead_* tools and NONE of the 9 mutating ones. It exists so
+# non-orchestrator consumers (classifiers, pollers) can see bead state without
+# gaining mutation access. The companion cognovis-core bead clc-zbj4 (separate
+# repo, separate tracker) migrates effort-classifier / wave-monitor onto it;
+# these hermetic tests must exist and pass independent of that cross-repo work.
+# ---------------------------------------------------------------------------
+
+# The 5 read-only tools read_beads is allowed to grant.
+_READ_BEADS_READ_TOOLS = {
+    "mcp__cognovis-tools__bead_show",
+    "mcp__cognovis-tools__bead_ready",
+    "mcp__cognovis-tools__bead_list",
+    "mcp__cognovis-tools__bead_search",
+    "mcp__cognovis-tools__bead_repos",
+}
+
+# The 9 mutating tools read_beads must NEVER grant.
+_READ_BEADS_FORBIDDEN_MUTATING_TOOLS = {
+    "mcp__cognovis-tools__bead_create",
+    "mcp__cognovis-tools__bead_claim",
+    "mcp__cognovis-tools__bead_update",
+    "mcp__cognovis-tools__bead_update_notes",
+    "mcp__cognovis-tools__bead_review_write",
+    "mcp__cognovis-tools__bead_close",
+    "mcp__cognovis-tools__bead_dep_add",
+    "mcp__cognovis-tools__bead_dep_remove",
+    "mcp__cognovis-tools__bead_dolt_sync",
+}
+
+
+def write_read_beads_source(tmp_path: Path) -> Path:
+    source = tmp_path / "read-beads-agent.md"
+    source.write_text(
+        "---\n"
+        "name: read-beads-agent\n"
+        "description: Fixture agent that only declares read_beads.\n"
+        "model: sonnet\n"
+        "capabilities:\n"
+        "  - read_beads\n"
+        "agent_base: auto\n"
+        "---\n\n"
+        "# Read Beads Agent\n\nFixture body for CL-j92j read_beads coverage.\n"
+    )
+    return source
+
+
+def test_read_beads_capability_registry_is_read_only_typed_tools() -> None:
+    """capabilities.yaml's read_beads grants exactly the 5 read-only bead_* tools.
+
+    Mirrors test_manage_beads_capability_registry_has_explicit_typed_tools: reads
+    the real capabilities.yaml directly and asserts the read-only tool set is
+    exact, non-empty, free of any mutating tool, and keeps cognovis-tools
+    registered.
+    """
+    module = load_build_agent_module()
+    registry = module.load_capabilities_registry()
+    read_beads = registry.get("read_beads")
+    assert read_beads is not None, "read_beads capability missing from capabilities.yaml"
+
+    claude_binding = read_beads.get("claude") or {}
+    tools = set(module._as_string_list(claude_binding.get("tools")))  # noqa: SLF001
+    assert tools == _READ_BEADS_READ_TOOLS, (
+        f"read_beads.claude.tools must be exactly the 5 read-only tools; got {sorted(tools)}"
+    )
+    assert not (tools & _READ_BEADS_FORBIDDEN_MUTATING_TOOLS), (
+        "read_beads.claude.tools must not grant any mutating bead_* tool"
+    )
+
+    mcp_servers = set(module._as_string_list(claude_binding.get("mcpServers")))  # noqa: SLF001
+    assert "cognovis-tools" in mcp_servers, (
+        "read_beads.claude.mcpServers must keep registering cognovis-tools"
+    )
+
+
+def test_build_agent_grants_read_beads_read_only_tools_end_to_end(tmp_path: Path) -> None:
+    """An agent declaring only read_beads gets the 5 read tools and none of the 9 mutating.
+
+    Exercises the real merge path (apply_capabilities -> _set_tools) against the
+    real repo capabilities.yaml, end to end through the CLI entry point.
+    """
+    source = write_read_beads_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 0, result.stderr
+    built = (output_dir / "read-beads-agent.md").read_text()
+    frontmatter = yaml.safe_load(built.split("---", 2)[1]) or {}
+    tools = {t.strip() for t in str(frontmatter.get("tools", "")).split(",") if t.strip()}
+
+    bead_tools = {t for t in tools if t.startswith("mcp__cognovis-tools__bead_")}
+    assert bead_tools == _READ_BEADS_READ_TOOLS, (
+        f"read_beads agent must grant exactly the 5 read-only bead_* tools; got {sorted(bead_tools)}"
+    )
+    leaked = tools & _READ_BEADS_FORBIDDEN_MUTATING_TOOLS
+    assert not leaked, (
+        f"read_beads agent leaked mutating bead_* tools: {sorted(leaked)}"
+    )
+
+    mcp_servers = frontmatter.get("mcpServers") or []
+    assert "cognovis-tools" in mcp_servers, (
+        "built read_beads agent frontmatter must register the cognovis-tools MCP server"
+    )
