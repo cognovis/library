@@ -47,6 +47,32 @@ if [[ -z "${BD_BIN}" ]]; then
     BD_BIN="$(command -v bd 2>/dev/null || true)"
 fi
 
+# Independently verify that renderer stdout is the expected untrusted-data
+# envelope BEFORE the launcher trusts it and wraps it in the BEGIN/END
+# delimiters. This enforces the "cannot be mistaken for control instructions by
+# construction" guarantee at the point of trust (the launcher itself), so it
+# holds regardless of which renderer produced the output — CDX_COMPACT_CONTEXT_SCRIPT
+# is user/config-overridable and must not be trusted on exit code alone.
+# Returns 0 when the payload parses as JSON with the exact contract fields,
+# non-zero otherwise (invalid JSON or missing/mismatched contract).
+validate_bead_context_envelope() {
+    local envelope="$1"
+
+    printf '%s' "$envelope" | uv run python -c '
+import json, sys
+
+raw = sys.stdin.read()
+envelope = json.loads(raw)
+ok = (
+    isinstance(envelope, dict)
+    and envelope.get("contract_version") == "1"
+    and envelope.get("kind") == "cdx.bead_context"
+    and envelope.get("classification") == "untrusted"
+)
+sys.exit(0 if ok else 1)
+' 2>/dev/null
+}
+
 fetch_bead_context() {
     local bead_id="$1"
     local bead_json=""
@@ -73,6 +99,12 @@ fetch_bead_context() {
     }
     if compact_context=$(printf '%s' "$bead_json" | uv run python "$COMPACT_CONTEXT_SCRIPT" 2>"$compact_error_file"); then
         rm -f "$compact_error_file"
+        if ! validate_bead_context_envelope "$compact_context"; then
+            echo "ERROR: bead context envelope failed contract validation for ${bead_id}." >&2
+            echo "Expected a cdx.bead_context envelope (contract_version=1, classification=untrusted) from ${COMPACT_CONTEXT_SCRIPT}." >&2
+            echo "Aborting before launching Codex. Raw bead context fallback is disabled." >&2
+            return 2
+        fi
         printf '%s\n' "$compact_context"
         return 0
     fi

@@ -69,12 +69,36 @@ def _write_cdx_bd_mock(tmp_path: Path) -> Path:
 
 
 def _write_cdx_compact_context_script(tmp_path: Path) -> Path:
+    """Renderer stand-in that emits a valid cdx.bead_context envelope.
+
+    The launcher independently validates the envelope contract before trusting
+    renderer output, so this fixture emits the real contract shape and embeds
+    the bead id in a field value (existing assertions match ``compact context
+    for <id>``).
+    """
     compact_context_script = tmp_path / "compact-context.py"
     compact_context_script.write_text(
         "import json, sys\n"
         "payload = json.load(sys.stdin)\n"
         "bead = payload[0] if isinstance(payload, list) else payload\n"
-        "print(f\"compact context for {bead['id']}\")\n",
+        "envelope = {\n"
+        "    'contract_version': '1',\n"
+        "    'kind': 'cdx.bead_context',\n"
+        "    'classification': 'untrusted',\n"
+        "    'data': {\n"
+        "        'fields': {\n"
+        "            'summary': {\n"
+        "                'source': 'bead.summary',\n"
+        "                'trust': 'untrusted',\n"
+        "                'untrusted': True,\n"
+        "                'content_type': 'text/plain',\n"
+        "                'value': f\"compact context for {bead['id']}\",\n"
+        "            }\n"
+        "        }\n"
+        "    },\n"
+        "    'meta': {'producer': 'route-profile-test-fixture', 'source': 'bd show --json'},\n"
+        "}\n"
+        "print(json.dumps(envelope, indent=2, sort_keys=True))\n",
         encoding="utf-8",
     )
     return compact_context_script
