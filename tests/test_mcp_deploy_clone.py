@@ -18,7 +18,6 @@ Run with:
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -32,8 +31,11 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from lib.errors import InstallError
-from lib.installers.mcp_installer import ensure_mcp_deploy_clone, install_mcp
+from lib.errors import InstallError  # noqa: E402
+from lib.installers.mcp_installer import (  # noqa: E402
+    ensure_mcp_deploy_clone,
+    install_mcp,
+)
 
 
 class TestEnsureMcpDeployClone:
@@ -48,13 +50,35 @@ class TestEnsureMcpDeployClone:
         # Make it look like a git repo so the pull path fires instead of clone
         (deploy_path / ".git").mkdir()
 
-        result = ensure_mcp_deploy_clone(
-            clone_url="https://github.com/cognovis/library-core.git",
-            mcp_subdir="mcp-servers/cognovis-tools",
-            deploy_path=deploy_path,
-            dry_run=False,
-        )
+        with patch("subprocess.run") as run:
+            run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            result = ensure_mcp_deploy_clone(
+                clone_url="https://github.com/cognovis/library-core.git",
+                mcp_subdir="mcp-servers/cognovis-tools",
+                deploy_path=deploy_path,
+                dry_run=False,
+            )
         assert result == deploy_path
+
+    def test_update_failure_refuses_stale_existing_clone(self, tmp_path):
+        deploy_path = tmp_path / "cognovis-library-core"
+        subdir = deploy_path / "mcp-servers" / "cognovis-tools"
+        subdir.mkdir(parents=True)
+        (subdir / "pyproject.toml").write_text("[project]\nname='cognovis-tools'\n")
+        (deploy_path / ".git").mkdir()
+
+        with patch("subprocess.run") as run:
+            run.return_value = MagicMock(
+                returncode=1,
+                stdout="",
+                stderr="local changes would be overwritten",
+            )
+            with pytest.raises(InstallError, match="potentially stale runtime"):
+                ensure_mcp_deploy_clone(
+                    clone_url="https://github.com/cognovis/library-core.git",
+                    mcp_subdir="mcp-servers/cognovis-tools",
+                    deploy_path=deploy_path,
+                )
 
     def test_raises_install_error_when_subdir_missing_pyproject(self, tmp_path):
         """ensure_mcp_deploy_clone raises InstallError when subdir has no pyproject.toml."""
@@ -64,13 +88,15 @@ class TestEnsureMcpDeployClone:
         subdir = deploy_path / "mcp-servers" / "broken-tools"
         subdir.mkdir(parents=True)
 
-        with pytest.raises(InstallError, match="pyproject.toml"):
-            ensure_mcp_deploy_clone(
-                clone_url="https://github.com/cognovis/library-core.git",
-                mcp_subdir="mcp-servers/broken-tools",
-                deploy_path=deploy_path,
-                dry_run=False,
-            )
+        with patch("subprocess.run") as run:
+            run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with pytest.raises(InstallError, match="pyproject.toml"):
+                ensure_mcp_deploy_clone(
+                    clone_url="https://github.com/cognovis/library-core.git",
+                    mcp_subdir="mcp-servers/broken-tools",
+                    deploy_path=deploy_path,
+                    dry_run=False,
+                )
 
     def test_dry_run_returns_path_without_cloning(self, tmp_path):
         """ensure_mcp_deploy_clone in dry-run mode returns the deploy_path without cloning."""
@@ -214,6 +240,23 @@ class TestDeployPathDerivation:
         assert mcp_subdir == "mcp-servers/cognovis-tools"
         assert deploy_path is not None
         assert "cognovis-library-core" in str(deploy_path)
+
+    def test_supervised_source_uses_dedicated_runtime_clone(self):
+        from lib.installers.mcp_installer import _derive_deploy_path
+
+        entry = {
+            "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
+            "supervised_local_service": {"url": "http://127.0.0.1:8765/mcp"},
+        }
+
+        _, _, deploy_path = _derive_deploy_path(entry, "cognovis-tools")
+
+        assert deploy_path is not None
+        assert deploy_path.parts[-3:] == (
+            "mcp-servers",
+            "cognovis-tools",
+            "cognovis-library-core",
+        )
 
     def test_mcp_yaml_source_returns_none(self):
         """mcp.yaml source URL returns (None, None, None) — no deploy clone needed."""

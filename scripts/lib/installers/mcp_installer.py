@@ -169,7 +169,15 @@ def _derive_deploy_path(entry: dict, mcp_name: str) -> tuple[str | None, str | N
         # Fallback: last two path components
         _parts = clone_url.rstrip("/").rstrip(".git").rsplit("/", 2)
         deploy_dir_name = "-".join(p.rstrip(".git") for p in _parts[-2:])
-    deploy_path = Path.home() / ".local" / "share" / "library" / deploy_dir_name
+    deploy_root = Path.home() / ".local" / "share" / "library"
+    if entry.get("supervised_local_service"):
+        # A supervised runtime must never share the mutable developer/source
+        # clone used by other Library operations. A dedicated clone makes
+        # updates atomic for this service and prevents local source edits from
+        # silently leaving the daemon on stale code.
+        deploy_path = deploy_root / "mcp-servers" / mcp_name / deploy_dir_name
+    else:
+        deploy_path = deploy_root / deploy_dir_name
 
     # Derive mcp_subdir from file_path: only apply deploy-clone for pyproject.toml sources.
     # pyproject.toml sources indicate a uv-based library-tool-surface MCP server that needs
@@ -227,12 +235,11 @@ def ensure_mcp_deploy_clone(
             text=True,
         )
         if result.returncode != 0:
-            # Pull failed (e.g. diverged history). Log a warning but do not abort —
-            # the existing clone is still usable for the current deploy.
-            print(
-                f"[mcp-deploy] WARNING: git pull failed for {deploy_path}: "
-                f"{result.stderr.strip() or result.stdout.strip()}",
-                file=sys.stderr,
+            detail = result.stderr.strip() or result.stdout.strip()
+            raise InstallError(
+                f"Failed to update MCP server source at {deploy_path}: {detail}. "
+                "Refusing to continue with a potentially stale runtime; no harness "
+                "registration has been written."
             )
     else:
         # Fresh clone
