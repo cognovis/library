@@ -56,26 +56,33 @@ fetch_bead_context() {
 
     bead_json=$("${BD_BIN}" show "${bead_id}" --json 2>/dev/null) || return 1
 
-    if [[ -f "$COMPACT_CONTEXT_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
-        compact_error_file="$(mktemp "${TMPDIR:-/tmp}/cdx-bead-context.XXXXXX")" || {
-            echo "ERROR: failed to create temporary error log for bead context envelope." >&2
-            return 2
-        }
-        if compact_context=$(printf '%s' "$bead_json" | uv run python "$COMPACT_CONTEXT_SCRIPT" 2>"$compact_error_file"); then
-            rm -f "$compact_error_file"
-            printf '%s\n' "$compact_context"
-            return 0
-        fi
-        compact_error="$(<"$compact_error_file")"
-        rm -f "$compact_error_file"
-        echo "ERROR: failed to build bead context envelope for ${bead_id}." >&2
-        if [[ -n "$compact_error" ]]; then
-            print -r -- "$compact_error" >&2
-        fi
+    if [[ ! -f "$COMPACT_CONTEXT_SCRIPT" ]]; then
+        echo "ERROR: bead context envelope renderer not found: $COMPACT_CONTEXT_SCRIPT" >&2
+        echo "Aborting before launching Codex. Raw bead context fallback is disabled." >&2
+        return 2
+    fi
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "ERROR: uv not found in PATH. Cannot build bead context envelope for ${bead_id}." >&2
+        echo "Aborting before launching Codex. Raw bead context fallback is disabled." >&2
         return 2
     fi
 
-    "${BD_BIN}" show "${bead_id}" 2>/dev/null
+    compact_error_file="$(mktemp "${TMPDIR:-/tmp}/cdx-bead-context.XXXXXX")" || {
+        echo "ERROR: failed to create temporary error log for bead context envelope." >&2
+        return 2
+    }
+    if compact_context=$(printf '%s' "$bead_json" | uv run python "$COMPACT_CONTEXT_SCRIPT" 2>"$compact_error_file"); then
+        rm -f "$compact_error_file"
+        printf '%s\n' "$compact_context"
+        return 0
+    fi
+    compact_error="$(<"$compact_error_file")"
+    rm -f "$compact_error_file"
+    echo "ERROR: failed to build bead context envelope for ${bead_id}." >&2
+    if [[ -n "$compact_error" ]]; then
+        print -r -- "$compact_error" >&2
+    fi
+    return 2
 }
 
 format_untrusted_bead_context() {

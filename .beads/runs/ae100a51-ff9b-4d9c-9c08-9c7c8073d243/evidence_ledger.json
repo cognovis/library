@@ -100,7 +100,7 @@
     },
     {
       "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
-      "purpose": "Required no-regression suite after updating route-profile fixtures to use the raw fallback path explicitly.",
+      "purpose": "Historical no-regression suite after initial route-profile fixture updates; superseded by pair-loop iteration 1 fail-closed fixture coverage.",
       "exit_code": 0,
       "result": "87 passed."
     },
@@ -139,6 +139,12 @@
       "purpose": "Validate evidence ledger JSON syntax with a sandbox-writable uv cache.",
       "exit_code": 0,
       "result": "Evidence ledger JSON parsed successfully."
+    },
+    {
+      "command": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
+      "purpose": "Pair-loop iteration 1 no-regression suite after disabling raw bead-context fallback and emitting labels as a JSON array.",
+      "exit_code": 0,
+      "result": "89 passed."
     }
   ],
   "skipped_checks": [

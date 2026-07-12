@@ -71,10 +71,10 @@ def render_context(payload: Any) -> str:
     labels_value = bead.get("labels") or []
     if not isinstance(labels_value, list):
         raise ValueError(f"bead.labels must be list, got {type(labels_value).__name__}")
-    labels = ", ".join(
+    labels = [
         _limit_text(label, text_limit, f"bead.labels[{index}]", "CDX_BEAD_CONTEXT_TEXT_LIMIT")
         for index, label in enumerate(labels_value)
-    )
+    ]
     deps = bead.get("dependencies") or []
     if not isinstance(deps, list):
         raise ValueError(f"bead.dependencies must be list, got {type(deps).__name__}")

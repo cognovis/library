@@ -49,6 +49,57 @@ REQUIRED_QUICK_SLOTS = {"implementation", "fix_loop"}
 REQUIRED_SLOT_FIELDS = {"adapter", "harness", "model"}
 
 
+def _write_cdx_bd_mock(tmp_path: Path) -> Path:
+    bd_mock = tmp_path / "bd-mock"
+    bd_mock.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = show ]; then\n"
+        "  if [ \"$3\" = --json ]; then\n"
+        "    printf '[{\"id\":\"%s\",\"status\":\"open\",\"title\":\"Smoke bead\",\"description\":\"mock bead context for %s\"}]\\n' \"$2\" \"$2\"\n"
+        "  else\n"
+        "    printf 'mock bead context for %s\\n' \"$2\"\n"
+        "  fi\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 1\n",
+        encoding="utf-8",
+    )
+    bd_mock.chmod(0o755)
+    return bd_mock
+
+
+def _write_cdx_compact_context_script(tmp_path: Path) -> Path:
+    compact_context_script = tmp_path / "compact-context.py"
+    compact_context_script.write_text(
+        "import json, sys\n"
+        "payload = json.load(sys.stdin)\n"
+        "bead = payload[0] if isinstance(payload, list) else payload\n"
+        "print(f\"compact context for {bead['id']}\")\n",
+        encoding="utf-8",
+    )
+    return compact_context_script
+
+
+def _prepend_cdx_uv_mock(env: dict[str, str], tmp_path: Path) -> None:
+    uv_mock = tmp_path / "uv"
+    uv_mock.write_text(
+        f"#!{sys.executable}\n"
+        "import subprocess, sys\n"
+        "args = sys.argv[1:]\n"
+        "if not args or args[0] != 'run':\n"
+        "    raise SystemExit(64)\n"
+        "args = args[1:]\n"
+        "while len(args) >= 2 and args[0] == '--with':\n"
+        "    args = args[2:]\n"
+        "if not args or args[0] != 'python':\n"
+        "    raise SystemExit(65)\n"
+        "raise SystemExit(subprocess.call([sys.executable, *args[1:]]))\n",
+        encoding="utf-8",
+    )
+    uv_mock.chmod(0o755)
+    env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
+
+
 def _load_config(path: Path) -> dict:
     """Load a YAML config file."""
     if not path.exists():
@@ -310,17 +361,7 @@ class TestLauncherRouteProfileFlag:
         )
         dispatch_mock.chmod(0o755)
 
-        bd_mock = tmp_path / "bd-mock"
-        bd_mock.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = show ]; then\n"
-            "  printf 'mock bead context for %s\\n' \"$2\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        bd_mock.chmod(0o755)
+        bd_mock = _write_cdx_bd_mock(tmp_path)
 
         env = dict(os.environ)
         env["CODEX_BIN"] = str(codex_mock)
@@ -335,8 +376,9 @@ class TestLauncherRouteProfileFlag:
         env["GIT_REPO_ROOT"] = str(repo_root)
         env["BEADS_RUNTIME_DIR"] = str(runtime)
         env["CDX_WORKTREE_ROOT"] = str(worktree_root)
-        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CLD_COMPACT_OUTPUT"] = "0"
+        _prepend_cdx_uv_mock(env, tmp_path)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-bq", "CL-smoke", "--route-profile", "cdx-composer"],
@@ -367,7 +409,7 @@ class TestLauncherRouteProfileFlag:
         assert "FIX_LOOP_COMMAND=" in prompt
         assert "METRICS_ROLLUP_COMMAND=" in prompt
         assert "Phase 5: invoke session-close" in prompt
-        assert "mock bead context" in prompt
+        assert "compact context for CL-smoke" in prompt
 
     def test_cdx_bq_defaults_to_composer_top_level_quick_orchestrator(self, tmp_path: Path) -> None:
         """CL-yty9: plain cdx -bq uses cdx-composer without nested quick-fix."""
@@ -389,17 +431,7 @@ class TestLauncherRouteProfileFlag:
         )
         codex_mock.chmod(0o755)
 
-        bd_mock = tmp_path / "bd-mock"
-        bd_mock.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = show ]; then\n"
-            "  printf 'mock bead context for %s\\n' \"$2\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        bd_mock.chmod(0o755)
+        bd_mock = _write_cdx_bd_mock(tmp_path)
 
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
@@ -412,8 +444,9 @@ class TestLauncherRouteProfileFlag:
         env["GIT_REPO_ROOT"] = str(repo_root)
         env["BEADS_RUNTIME_DIR"] = str(runtime)
         env["CDX_WORKTREE_ROOT"] = str(worktree_root)
-        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CLD_COMPACT_OUTPUT"] = "0"
+        _prepend_cdx_uv_mock(env, tmp_path)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-bq", "CL-smoke"],
@@ -457,31 +490,22 @@ class TestLauncherRouteProfileFlag:
             "print(f\"WORKFLOW_CLD_ROUTE_PROFILE={os.environ.get('CLD_ROUTE_PROFILE', '')}\")\n"
             "print(f\"WORKFLOW_CLD_COMPACT_OUTPUT={os.environ.get('CLD_COMPACT_OUTPUT', '')}\")\n"
             "print('WORKFLOW_ARGS=' + ' '.join(sys.argv[1:]))\n"
-            "if 'mock bead context' in stdin:\n"
+            "if 'compact context for CL-smoke' in stdin:\n"
             "    print('WORKFLOW_STDIN_HAS_CONTEXT=True')\n",
             encoding="utf-8",
         )
         workflow_mock.chmod(0o755)
 
-        bd_mock = tmp_path / "bd-mock"
-        bd_mock.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = show ]; then\n"
-            "  printf 'mock bead context for %s\\n' \"$2\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        bd_mock.chmod(0o755)
+        bd_mock = _write_cdx_bd_mock(tmp_path)
 
         env = dict(os.environ)
         env["CODEX_BIN"] = str(codex_mock)
         env["CODEX_CALLED_FILE"] = str(codex_called)
         env["BD_BIN"] = str(bd_mock)
-        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
         env["CDX_BEAD_WORKFLOW"] = "python"
+        _prepend_cdx_uv_mock(env, tmp_path)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke", "--route-profile", "cdx-composer"],
@@ -512,17 +536,7 @@ class TestLauncherRouteProfileFlag:
         workflow_mock.chmod(0o755)
         workflow_called = tmp_path / "workflow-called.txt"
 
-        bd_mock = tmp_path / "bd-mock"
-        bd_mock.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = show ]; then\n"
-            "  printf 'mock bead context for %s\\n' \"$2\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        bd_mock.chmod(0o755)
+        bd_mock = _write_cdx_bd_mock(tmp_path)
 
         codex_mock = tmp_path / "codex-mock"
         codex_args = tmp_path / "codex-args.txt"
@@ -549,7 +563,7 @@ class TestLauncherRouteProfileFlag:
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
         env["CODEX_BIN"] = str(codex_mock)
-        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CODEX_ARGS_FILE"] = str(codex_args)
         env["CODEX_CALLED_FILE"] = str(codex_called)
         env["CODEX_PROMPT_FILE"] = str(codex_prompt)
@@ -562,6 +576,7 @@ class TestLauncherRouteProfileFlag:
         env["WORKFLOW_STARTED_AT_EPOCH"] = "1800000000"
         env["WORKFLOW_CALLED_FILE"] = str(workflow_called)
         env["CLD_COMPACT_OUTPUT"] = "0"
+        _prepend_cdx_uv_mock(env, tmp_path)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke", "--exec"],
@@ -624,7 +639,7 @@ class TestLauncherRouteProfileFlag:
         assert "BLOCKED_ADAPTER_UNAVAILABLE" in prompt
         assert "bead-orchestrator agent/workflow" not in prompt
         assert "implement bead CL-smoke" not in prompt
-        assert "mock bead context for CL-smoke" in prompt
+        assert "compact context for CL-smoke" in prompt
         assert "Route profile: cdx-composer" in prompt
         assert "BEAD_REVIEWER_REFRESH_REQUIRED" in prompt
         assert "Cursor/Composer" in prompt
@@ -635,17 +650,7 @@ class TestLauncherRouteProfileFlag:
         workflow_mock.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
         workflow_mock.chmod(0o755)
 
-        bd_mock = tmp_path / "bd-mock"
-        bd_mock.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = show ]; then\n"
-            "  printf 'mock bead context for %s\\n' \"$2\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        bd_mock.chmod(0o755)
+        bd_mock = _write_cdx_bd_mock(tmp_path)
 
         codex_mock = tmp_path / "codex-mock"
         codex_args = tmp_path / "codex-args.txt"
@@ -666,7 +671,7 @@ class TestLauncherRouteProfileFlag:
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
         env["CODEX_BIN"] = str(codex_mock)
-        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CODEX_ARGS_FILE"] = str(codex_args)
         env["CODEX_PROMPT_FILE"] = str(codex_prompt)
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
@@ -675,6 +680,7 @@ class TestLauncherRouteProfileFlag:
         env["GIT_BIN"] = str(git_mock)
         env["GIT_REPO_ROOT"] = str(repo_root)
         env["BEADS_RUNTIME_DIR"] = str(beads_runtime)
+        _prepend_cdx_uv_mock(env, tmp_path)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke", "--tui"],
@@ -700,17 +706,7 @@ class TestLauncherRouteProfileFlag:
         workflow_mock.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
         workflow_mock.chmod(0o755)
 
-        bd_mock = tmp_path / "bd-mock"
-        bd_mock.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = show ]; then\n"
-            "  printf 'mock bead context for %s\\n' \"$2\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        bd_mock.chmod(0o755)
+        bd_mock = _write_cdx_bd_mock(tmp_path)
 
         codex_mock = tmp_path / "codex-mock"
         codex_args = tmp_path / "codex-args.txt"
@@ -727,7 +723,7 @@ class TestLauncherRouteProfileFlag:
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
         env["CODEX_BIN"] = str(codex_mock)
-        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CODEX_ARGS_FILE"] = str(codex_args)
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
         env["CDX_WORKTREE_ROOT"] = str(worktree_root)
@@ -735,6 +731,7 @@ class TestLauncherRouteProfileFlag:
         env["GIT_BIN"] = str(git_mock)
         env["GIT_REPO_ROOT"] = str(repo_root)
         env["BEADS_RUNTIME_DIR"] = str(beads_runtime)
+        _prepend_cdx_uv_mock(env, tmp_path)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke"],
@@ -757,17 +754,7 @@ class TestLauncherRouteProfileFlag:
         workflow_mock.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
         workflow_mock.chmod(0o755)
 
-        bd_mock = tmp_path / "bd-mock"
-        bd_mock.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = show ]; then\n"
-            "  printf 'mock bead context for %s\\n' \"$2\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        bd_mock.chmod(0o755)
+        bd_mock = _write_cdx_bd_mock(tmp_path)
 
         codex_mock = tmp_path / "codex-mock"
         codex_args = tmp_path / "codex-args.txt"
@@ -784,7 +771,7 @@ class TestLauncherRouteProfileFlag:
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
         env["CODEX_BIN"] = str(codex_mock)
-        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(tmp_path / "missing-compact-context.py")
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CODEX_ARGS_FILE"] = str(codex_args)
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
         env["CODEX_HOME"] = str(codex_home)
@@ -793,6 +780,7 @@ class TestLauncherRouteProfileFlag:
         env["GIT_REPO_ROOT"] = str(repo_root)
         env["BEADS_RUNTIME_DIR"] = str(beads_runtime)
         env.pop("CDX_WORKTREE_ROOT", None)
+        _prepend_cdx_uv_mock(env, tmp_path)
 
         result = subprocess.run(
             [str(_CDX_BIN), "-b", "CL-smoke", "--exec"],

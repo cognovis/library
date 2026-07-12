@@ -5,7 +5,7 @@
     {
       "id": "1",
       "status": "done",
-      "summary": "compact-bead-context.py now emits a JSON bead-context envelope with field-level provenance and untrusted markers for rendered bead fields and dependency titles; bin/cdx wraps fetched context in an explicit untrusted-data block before every bead prompt splice.",
+      "summary": "compact-bead-context.py now emits a JSON bead-context envelope with field-level provenance and untrusted markers for rendered bead fields and dependency titles, including labels as a JSON array value; bin/cdx wraps fetched context in an explicit untrusted-data block before every bead prompt splice.",
       "changed_files": [
         "scripts/compact-bead-context.py",
         "bin/cdx",
@@ -14,13 +14,14 @@
       ],
       "evidence_refs": [
         "EV-AC1-envelope-shape",
+        "EV-P1-label-json-array",
         "EV-required-suite-green"
       ]
     },
     {
       "id": "2",
       "status": "done",
-      "summary": "Malformed payloads and oversized fields/envelopes fail closed with non-zero exit and clear stderr; cdx no longer falls back to raw bd show text when the compact envelope renderer fails.",
+      "summary": "Malformed payloads, oversized fields/envelopes, missing compact renderer, missing uv, and compact renderer failures fail closed with non-zero exit and clear stderr; cdx no longer falls back to raw bd show text.",
       "changed_files": [
         "scripts/compact-bead-context.py",
         "bin/cdx",
@@ -31,6 +32,7 @@
       "evidence_refs": [
         "EV-AC2-rejection",
         "EV-AC3-cdx-no-raw-fallback",
+        "EV-P1-missing-renderer-uv",
         "EV-required-suite-green"
       ]
     },
@@ -97,20 +99,24 @@
     },
     {
       "command": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py",
-      "result": "87 passed"
+      "result": "89 passed with UV_CACHE_DIR=/tmp/uv-cache in the sandbox"
     }
   ],
   "external_resources": [],
   "scope_changes": [],
   "downstream_impacts": [
     "bin/cdx -b, -bq, and -br now receive the same untrusted-data wrapper around bead context.",
-    "If compact-bead-context.py exists and rejects malformed or oversized bd JSON, cdx aborts instead of falling back to raw bd show text.",
-    "When the compact script is unavailable, cdx still allows the existing plain bd show fallback, but the fallback text is wrapped by the same untrusted-data delimiter."
+    "If compact-bead-context.py is missing, uv is unavailable, or the renderer rejects malformed or oversized bd JSON, cdx aborts instead of falling back to raw bd show text.",
+    "The plain bd show fallback is disabled, so the untrusted-data boundary is not forgeable by raw bead-controlled physical lines."
   ],
   "evidence_refs": [
     {
       "id": "EV-AC1-envelope-shape",
       "description": "tests/test_cdx_compact_context.py::test_render_context_emits_untrusted_provenance_envelope validates JSON envelope shape and field-level source/trust/untrusted markers."
+    },
+    {
+      "id": "EV-P1-label-json-array",
+      "description": "tests/test_cdx_compact_context.py::test_render_context_emits_untrusted_provenance_envelope asserts labels use content_type application/json with a JSON array value."
     },
     {
       "id": "EV-AC2-rejection",
@@ -129,8 +135,12 @@
       "description": "tests/test_cdx_bead_workflow.py::test_cdx_compact_context_failure_aborts_without_raw_fallback validates compact-script failure does not pass raw bd show output."
     },
     {
+      "id": "EV-P1-missing-renderer-uv",
+      "description": "tests/test_cdx_bead_workflow.py::test_cdx_missing_compact_context_script_aborts_without_raw_fallback and ::test_cdx_missing_uv_aborts_without_raw_fallback validate missing renderer and missing uv abort before launching Codex."
+    },
+    {
       "id": "EV-required-suite-green",
-      "description": "uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py returned 87 passed."
+      "description": "UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/test_cdx_compact_context.py tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py returned 89 passed."
     }
   ]
 }

@@ -83,6 +83,8 @@ def test_render_context_emits_untrusted_provenance_envelope() -> None:
     assert fields["acceptance_criteria"]["source"] == "bead.acceptance_criteria"
     assert fields["notes"]["source"] == "bead.notes"
     assert fields["labels"]["source"] == "bead.labels"
+    assert fields["labels"]["content_type"] == "application/json"
+    assert fields["labels"]["value"] == ["stream:test"]
     assert fields["effort"]["value"] == "small"
     assert dependency_fields["title"]["source"] == "bead.dependencies[0].title"
     assert dependency_fields["title"]["trust"] == "untrusted"
