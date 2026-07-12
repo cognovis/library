@@ -75,3 +75,23 @@ def test_cra_yolo_explicit_opt_in_forwards_flag_and_warns(tmp_path: Path) -> Non
     stderr = result.stderr.lower()
     assert "warning" in stderr
     assert "--yolo" in stderr
+
+
+def test_cra_help_exposes_no_bead_role_dispatch_surface(tmp_path: Path) -> None:
+    result, _argv_file, called_file = _run_cra(tmp_path, ["--help"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    help_text = result.stdout
+    for forbidden in (
+        "-b",
+        "-bq",
+        "-br",
+        "-bv",
+        "--bead",
+        "--bead-quick",
+        "--bead-review",
+        "--bead-verify",
+        "--role",
+    ):
+        assert forbidden not in help_text
