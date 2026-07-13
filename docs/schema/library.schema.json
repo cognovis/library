@@ -1423,7 +1423,7 @@
               }
             },
             "mcp": {
-              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are supported harness names (claude_code, codex, opencode, cursor, claude_ai, claude_ios). Registration into a harness means agents running in it can call the server's typed tools; it does NOT imply the harness orchestrates Library workflows. Values are open objects \u2014 the translator bead will define stricter schemas.",
+              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are supported harness names (claude_code, codex, opencode, antigravity, cursor, claude_ai, claude_ios). Registration into a harness means agents running in it can call the server's typed tools; it does NOT imply the harness orchestrates Library workflows. Values are open objects \u2014 the translator bead will define stricter schemas.",
               "type": "object",
               "properties": {
                 "claude_code": {
@@ -1460,6 +1460,22 @@
                 },
                 "opencode": {
                   "description": "Config hints for OpenCode (~/.config/opencode/opencode.json).",
+                  "type": "object",
+                  "properties": {
+                    "config_path": {
+                      "description": "Path to the harness config file that receives the snippet.",
+                      "type": "string"
+                    },
+                    "snippet": {
+                      "description": "Canonical MCP server descriptor. Structure is harness-specific \u2014 translator bead enforces exact shape.",
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "antigravity": {
+                  "description": "Config hints for Antigravity-compatible MCP registration.",
                   "type": "object",
                   "properties": {
                     "config_path": {

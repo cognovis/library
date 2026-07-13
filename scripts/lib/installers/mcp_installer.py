@@ -43,7 +43,7 @@ from .mcp_supervised_service import (
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Harnesses whose config files install-mcp.py can write, in install order.
-_WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "cursor"]
+_WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "antigravity", "cursor"]
 # Full set for an "all" install: writable configs plus URL-only (manual) harnesses.
 _ALL_MCP_HARNESSES = _WRITABLE_MCP_HARNESSES + ["claude_ai", "claude_ios"]
 
@@ -67,9 +67,11 @@ def _retired_registration_specs(
     entry: dict,
     harness: str,
     env_overrides: dict | None = None,
+    *,
+    rollback_stdio: bool = False,
 ) -> list[tuple[dict, Path]]:
     """Resolve legacy JSON registrations retired by an all-harness migration."""
-    if harness != "all":
+    if harness != "all" and not rollback_stdio:
         return []
     install = entry.get("install", {}) or {}
     resolved: list[tuple[dict, Path]] = []
@@ -87,13 +89,7 @@ def _retired_registration_specs(
 def _matches_legacy_stdio(existing: Any, descriptors: list[dict]) -> bool:
     if not isinstance(existing, dict) or existing.get("_origin") is not None:
         return False
-    command = existing.get("command")
-    args = list(existing.get("args") or [])
-    return any(
-        command == descriptor.get("command")
-        and args == list(descriptor.get("args") or [])
-        for descriptor in descriptors
-    )
+    return any(existing == descriptor for descriptor in descriptors)
 
 
 def _remove_retired_json_registration(
@@ -384,7 +380,12 @@ def install_mcp(
         project_path = _project_path_from_deploy(deploy_path, mcp_subdir)
 
     harnesses = _selected_mcp_harnesses(entry, harness)
-    retired_specs = _retired_registration_specs(entry, harness, env_overrides)
+    retired_specs = _retired_registration_specs(
+        entry,
+        harness,
+        env_overrides,
+        rollback_stdio=rollback_stdio,
+    )
 
     if dry_run:
         ops: list[dict[str, Any]] = []
@@ -643,10 +644,14 @@ def _selected_mcp_harnesses(entry: dict, harness: str) -> list[str]:
     including url-only harnesses (claude_ai, claude_ios). Real install
     falls back to claude_code only when no harnesses are declared.
     """
+    mcp_block = ((entry.get("install") or {}).get("mcp") or {})
     if harness != "all":
+        if mcp_block and not mcp_block.get(harness):
+            raise InstallError(
+                f"MCP server {entry.get('name')!r} does not declare harness {harness!r}."
+            )
         return [harness]
 
-    mcp_block = ((entry.get("install") or {}).get("mcp") or {})
     declared = [
         candidate
         for candidate in _ALL_MCP_HARNESSES
@@ -681,6 +686,13 @@ def _mcp_config_path(harness: str) -> Path | None:
             os.environ.get(
                 "OPENCODE_CONFIG_FILE",
                 str(Path.home() / ".config" / "opencode" / "opencode.json"),
+            )
+        )
+    if harness == "antigravity":
+        return Path(
+            os.environ.get(
+                "GEMINI_SETTINGS_FILE",
+                str(Path.home() / ".gemini" / "config" / "mcp_config.json"),
             )
         )
     if harness == "cursor":
@@ -797,6 +809,10 @@ def _install_to_harness(mod, name: str, block: dict, harness: str, dry_run: bool
             fn = getattr(mod, "install_opencode", None)
             if fn:
                 return fn(name, block, dry_run=dry_run, remove=False)
+        elif harness == "antigravity":
+            fn = getattr(mod, "install_antigravity", None)
+            if fn:
+                return fn(name, block, dry_run=dry_run, remove=False)
         elif harness == "cursor":
             fn = getattr(mod, "install_cursor", None)
             if fn:
@@ -808,8 +824,8 @@ def _install_to_harness(mod, name: str, block: dict, harness: str, dry_run: bool
     except SystemExit as e:
         return int(str(e)) if str(e).isdigit() else 1
     except Exception:
-        pass
-    return 0
+        return 1
+    return 1
 
 
 def _remove_from_harness(mod, name: str, harness: str) -> int:
@@ -825,6 +841,10 @@ def _remove_from_harness(mod, name: str, harness: str) -> int:
                 return fn(name, {}, dry_run=False, remove=True)
         elif harness == "opencode":
             fn = getattr(mod, "install_opencode", None)
+            if fn:
+                return fn(name, {}, dry_run=False, remove=True)
+        elif harness == "antigravity":
+            fn = getattr(mod, "install_antigravity", None)
             if fn:
                 return fn(name, {}, dry_run=False, remove=True)
         elif harness == "cursor":

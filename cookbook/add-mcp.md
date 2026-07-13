@@ -40,6 +40,9 @@ library:
           codex:
             config_path: ~/.codex/config.toml
             snippet: { ... }
+          antigravity:
+            config_path: ~/.gemini/config/mcp_config.json
+            snippet: { ... }
           cursor:
             config_path: ~/.cursor/mcp.json
             snippet: { ... }
@@ -57,6 +60,9 @@ Full schema definition: `docs/schema/library.schema.json` — `$defs/mcp_server_
 Use `species: external-capability` for third-party capability providers such as `open-brain`,
 `executive-circle`, or `heypresto`. Use `species: library-tool-surface` for first-party Library
 servers that expose typed tool families over existing Library CLIs or Scripts.
+
+The generic schema and installer support an `antigravity` registration block,
+but each product declares only the harnesses it actually supports.
 
 `cognovis-tools` is the reference `library-tool-surface` entry. Its job is to register the typed
 tool surface into exactly three coding harness families:
@@ -151,6 +157,12 @@ install:
       snippet:
         command: <command-name>
         args: [<arg>, <arg>]
+    antigravity:
+      config_path: ~/.gemini/config/mcp_config.json
+      snippet:
+        command: <command-name>
+        args: [<arg>, <arg>]
+        env: {}
     cursor:
       config_path: ~/.cursor/mcp.json
       snippet:

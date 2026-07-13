@@ -11,6 +11,7 @@ Supported harnesses:
   claude_code  -> ~/.claude.json                       ("mcpServers" map)
   codex        -> ~/.codex/config.toml                 ("mcp_servers" table)
   opencode     -> ~/.config/opencode/opencode.json     ("mcp" map)
+  antigravity  -> ~/.gemini/config/mcp_config.json     ("mcpServers" map)
   cursor       -> ~/.cursor/mcp.json                   ("mcpServers" map)
   claude_ai    -> emits install URL (manual: no programmatic install)
   claude_ios   -> emits install URL (manual: no programmatic install)
@@ -57,6 +58,12 @@ OPENCODE_CONFIG = Path(
     os.environ.get(
         "OPENCODE_CONFIG_FILE",
         str(Path.home() / ".config" / "opencode" / "opencode.json"),
+    )
+)
+GEMINI_SETTINGS = Path(
+    os.environ.get(
+        "GEMINI_SETTINGS_FILE",
+        str(Path.home() / ".gemini" / "config" / "mcp_config.json"),
     )
 )
 CURSOR_MCP_CONFIG = Path(
@@ -510,6 +517,18 @@ def install_cursor(name: str, block: dict, dry_run: bool, remove: bool) -> int:
     )
 
 
+def install_antigravity(name: str, block: dict, dry_run: bool, remove: bool) -> int:
+    """Install/remove in the Antigravity MCP JSON config."""
+    return _install_json_mcp_servers(
+        name,
+        block,
+        dry_run,
+        remove,
+        harness="antigravity",
+        config_path=GEMINI_SETTINGS,
+    )
+
+
 def install_url_only(name: str, block: dict, dry_run: bool, remove: bool, harness: str) -> int:
     """For claude_ai / claude_ios: emit the manual install URL."""
     url = block.get("install_url", "(no install_url declared)")
@@ -529,6 +548,7 @@ HANDLERS: dict[str, Callable[..., int]] = {
     "claude_code": install_claude_code,
     "codex": install_codex,
     "opencode": install_opencode,
+    "antigravity": install_antigravity,
     "cursor": install_cursor,
     "claude_ai": lambda n, b, d, r: install_url_only(n, b, d, r, "claude_ai"),
     "claude_ios": lambda n, b, d, r: install_url_only(n, b, d, r, "claude_ios"),

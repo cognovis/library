@@ -8,7 +8,7 @@
 
 ### Changed
 
-- *(clc-g5ky)* cognovis-tools now supports exactly Claude Code, Codex, and Cursor Agent. The catalog, schema, installer choices, documentation, tests, and live activation gate no longer expose Antigravity; an all-harness install transactionally removes a previously library-managed registration from the retired JSON config before activation completes.
+- *(clc-g5ky)* cognovis-tools now supports exactly Claude Code, Codex, and Cursor Agent. Its catalog entry, product documentation, tests, and live activation gate no longer declare Antigravity; an all-harness install transactionally removes a previously library-managed registration from the retired JSON config before activation completes. Generic MCP installer support for other products is unchanged.
 
 - *(cld/cdx)* Coordinator callback identity travels only via CLI parameters, never environment variables. Malformed or partial callback parameters (only one of the pair supplied, or values not matching `workspace:<n>` / `surface:<n>`) fail with exit 2 before any harness launch.
 - *(cld/cdx)* `cld -r` / `--resume` is unaffected and still forwards to `claude --resume`. Single-bead launcher contract preserved; no CMUX pane creation or wave dispatch.

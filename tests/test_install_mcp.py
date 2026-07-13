@@ -29,9 +29,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALL_MCP = REPO_ROOT / "scripts" / "install-mcp.py"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from lib.errors import InstallError  # noqa: E402
-
-
 def run_install_mcp(*args: str, env_overrides: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """Invoke install-mcp.py with optional env overrides."""
     env = os.environ.copy()
@@ -248,12 +245,12 @@ class TestInstallMcp(unittest.TestCase):
         self.assertEqual(set(snippets), {"claude_code", "codex", "cursor"})
         self.assertIn("supervised_local_service", entry)
 
-    def test_retired_harness_is_not_selectable(self):
+    def test_cognovis_tools_does_not_declare_retired_harness(self):
         result = run_install_mcp(
             "cognovis-tools", "--harness", "antigravity", env_overrides=self.env
         )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("invalid choice", result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not declare harness", result.stderr)
 
     # --- CL-oo82: corrected default config paths per harness ---
 
@@ -270,8 +267,10 @@ class TestInstallMcp(unittest.TestCase):
             self.assertEqual(
                 _mcp_config_path("codex"), Path.home() / ".codex" / "config.toml"
             )
-            with self.assertRaisesRegex(InstallError, "Unsupported MCP harness"):
-                _mcp_config_path("antigravity")
+            self.assertEqual(
+                _mcp_config_path("antigravity"),
+                Path.home() / ".gemini" / "config" / "mcp_config.json",
+            )
         finally:
             for k, v in saved.items():
                 if v is not None:
