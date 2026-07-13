@@ -35,6 +35,7 @@ COMPACT_CONTEXT_SCRIPT="${CDX_COMPACT_CONTEXT_SCRIPT:-${CDX_SCRIPT_DIR:h}/script
 QUICK_CURSOR_DISPATCH_SCRIPT="${CDX_QUICK_CURSOR_DISPATCH_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/cdx-quick-cursor-dispatch.py}"
 FULL_BEAD_WORKFLOW_SCRIPT="${CDX_BEAD_WORKFLOW_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/cdx-bead-workflow.py}"
 CODEX_JSONL_FILTER_SCRIPT="${CDX_JSONL_FILTER_SCRIPT:-${CDX_SCRIPT_DIR:h}/scripts/filter-codex-jsonl.py}"
+BEAD_REVIEW_CLIENT="${CDX_BEAD_REVIEW_CLIENT:-${CDX_SCRIPT_DIR}/lib/bead-review-client.py}"
 
 # ── Orchestrator config pre-flight ───────────────────────────────
 # Self-heal the global ~/.agents/orchestrator-config.yml from the canonical
@@ -780,54 +781,58 @@ fi
 # ── Review mode: cdx -br <id> ───────────────────────────────────
 
 if [[ -n "$bead_review_id" ]]; then
-    if [[ -z "${BD_BIN}" ]]; then
-        echo "ERROR: bd not found in PATH. Install the beads CLI first."
+    if ${bead_dangerous_full_auto}; then
+        echo "ERROR: --bead-dangerous-full-auto is incompatible with the isolated -br workflow" >&2
+        exit 2
+    fi
+    if [[ ! -x "$BEAD_REVIEW_CLIENT" ]]; then
+        echo "ERROR: shared bead review client is not executable: $BEAD_REVIEW_CLIENT" >&2
         exit 1
     fi
 
-    bead_context=$(fetch_bead_context "${bead_review_id}") || {
-        fetch_status=$?
-        if (( fetch_status == 1 )); then
-            abort_missing_bead "${bead_review_id}"
-        fi
-        exit "$fetch_status"
-    }
-    bead_context="$(format_untrusted_bead_context "$bead_context")"
-
-    # cdx-line review mode — set CLD_BEAD_LINE=cdx for downstream tools.
-    export CLD_BEAD_LINE=cdx
-
-    bead_reviewer_skill_path="$(resolve_bead_reviewer_skill_path || true)"
-    if [[ -n "$bead_reviewer_skill_path" ]]; then
-        bead_reviewer_instruction="Use the bead-reviewer skill guidance at ${bead_reviewer_skill_path} as the source of truth."
+    local bead_review_model=""
+    local bead_review_model_requested=false
+    local -a review_model_args=()
+    local index=1
+    while (( index <= ${#codex_args[@]} )); do
+        case "${codex_args[index]}" in
+            -m|--model)
+                bead_review_model_requested=true
+                (( index++ ))
+                bead_review_model="${codex_args[index]:-}"
+                ;;
+            -m=*|--model=*)
+                bead_review_model_requested=true
+                bead_review_model="${codex_args[index]#*=}"
+                ;;
+        esac
+        (( index++ ))
+    done
+    if ${bead_review_model_requested} && [[ -z "$bead_review_model" ]]; then
+        echo "ERROR: --model requires a value" >&2
+        exit 2
+    fi
+    if [[ -n "$bead_review_model" ]]; then
+        review_model_args=(--model "$bead_review_model")
     else
-        bead_reviewer_instruction="Use the bead-reviewer factory-ready criteria as the source of truth. The bead-reviewer SKILL.md path was not found under HOME, so apply this fallback checklist: clear intent, bounded scope, acceptance criteria, Means of Compliance evidence, context pointers, and autonomous execution readiness."
+        review_model_args=()
     fi
 
-    prompt="Bead ID: ${bead_review_id}. ${bead_reviewer_instruction} Perform a CRITICAL
-factory-ready spec / autonomous-readiness review of this bead. Review the bead
-SPECIFICATION and readiness ONLY. Do NOT implement, do NOT create a worktree, do NOT
-run session-close, do NOT review implementation diffs. Emit the bead-reviewer verdict
-as the terminal state.
-
-Fallback factory-ready criteria if the skill text cannot be loaded: clear intent,
-bounded scope, testable acceptance criteria, explicit Means of Compliance, concrete
-context pointers, and sufficient autonomous execution readiness."
-
-    if has_coordinator_callback; then
-        prompt+="
-
-$(coordinator_callback_contract review)"
+    export CLD_BEAD_LINE=cdx
+    if "${BEAD_REVIEW_CLIENT}" \
+        --provider codex \
+        --adapter codex-exec \
+        --bead-id "$bead_review_id" \
+        --repo-dir "$PWD" \
+        "${review_model_args[@]}"; then
+        review_exit=0
+    else
+        review_exit=$?
     fi
-
-    prompt+="
-
-## Bead Context
-
-${bead_context}"
-
-    select_bead_codex_permission_args
-    exec "${CODEX_BIN}" exec "${bead_codex_permission_args[@]}" "${codex_args[@]}" "${prompt}"
+    if has_coordinator_callback && command -v cmux &>/dev/null; then
+        cmux trigger-flash --surface "$coordinator_surface" 2>/dev/null || true
+    fi
+    exit "$review_exit"
 fi
 
 # ── Default: plain Codex launch ─────────────────────────────────

@@ -296,8 +296,9 @@ just cdx <bead-id>
 cdx -bq <bead-id>
 just cdx-quick <bead-id>
 
-# Fresh-context bead-spec/readiness review (Opus by default)
+# Provider-neutral bead-spec/readiness review through cognovis-tools
 cdx -br <bead-id>
+cld -br <bead-id>              # Claude reviewer, Opus by default
 just cdx-review <bead-id>
 
 # Coordinator callback — signal a cmux pane on blocking questions and session-close
@@ -308,21 +309,28 @@ cld -b <bead-id> --coordinator-workspace workspace:3 --coordinator-surface surfa
 cdx -b <bead-id> --bead-dangerous-full-auto
 ```
 
-> **Permission defaults for bead modes:** `cdx -b`, `cdx -bq`, and `cdx -br` use
+> **Permission defaults for bead modes:** `cdx -b` and `cdx -bq` use
 > `--sandbox workspace-write -c approval_policy="never"` by default. Pass
 > `--bead-dangerous-full-auto` only when you need Codex's full
 > `--dangerously-bypass-approvals-and-sandbox` behavior; this prints a visible
-> warning to stderr. The plain `cdx` launch path is unaffected.
+> warning to stderr. `cdx -br` and `cld -br` instead delegate to the shared
+> cognovis-tools review client; permission-bypass flags are rejected for that path.
+> The plain `cdx` launch path is unaffected.
 
 ### How It Works
 
-Codex has no `--bead` flag. `cdx` synthesizes bead context by:
+For `-b` and `-bq`, Codex has no `--bead` flag. `cdx` synthesizes bead context by:
 
 1. Calling `bd show <bead-id>` to fetch the full bead description and acceptance criteria
 2. Serializing the bead fields (title, description, AC, notes, labels, dependency titles) as a
    validated, provenance-tagged JSON envelope wrapped in explicit untrusted-data delimiters, then
    injecting it as an initial prompt to `codex exec`
 3. The bead-orchestrator skill is invoked by natural-language reference in the prompt
+
+For `-br`, both launchers call `bin/lib/bead-review-client.py`. The client reads the
+bead through cognovis-tools, starts a fresh role-scoped reviewer session, validates a
+typed terminal verdict, and writes `metadata.review` through cognovis-tools. The child
+reviewer receives no MCP surface; the parent client owns both typed tool calls.
 
 The envelope approach prevents bead-authored text from being interpreted as launcher instructions
 (prompt-injection isolation). `bin/cdx` fails closed with a non-zero exit on any malformed or
@@ -343,7 +351,7 @@ analysis.
 | `just install-cdx` | — | Install cdx to ~/.local/bin |
 | `just cdx <id>` | `cld -b <id>` | Bead orchestrator mode |
 | `just cdx-quick <id>` | `cld -bq <id>` | Quick-fix mode |
-| `just cdx-review <id>` | `cld -br <id>` | Fresh-context bead-spec review (Opus) |
+| `just cdx-review <id>` | `cdx -br <id>` | Shared cognovis-tools bead-spec review (Codex reviewer) |
 
 ---
 

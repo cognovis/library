@@ -145,6 +145,18 @@ def _write_launcher_uv_mock(tmp_path: Path) -> Path:
     return uv_mock
 
 
+def _write_review_client_capture(tmp_path: Path) -> Path:
+    return _write_launcher_executable(
+        tmp_path / "review-client",
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, sys\n"
+        "pathlib.Path(os.environ['CODEX_CALLED_FILE']).write_text('called', encoding='utf-8')\n"
+        "pathlib.Path(os.environ['CODEX_ARGV_FILE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
+        "pathlib.Path(os.environ['CODEX_ENV_FILE']).write_text(json.dumps({'CLD_BEAD_LINE': os.environ.get('CLD_BEAD_LINE', '')}), encoding='utf-8')\n"
+        "print('review report')\n",
+    )
+
+
 def _write_launcher_git_mock(tmp_path: Path) -> tuple[Path, Path, Path]:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -190,6 +202,7 @@ def _run_cdx_launcher(
     bead_payload: object | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path, Path, Path]:
     codex_mock, argv_file, prompt_file, called_file, env_file = _write_codex_capture(tmp_path)
+    review_client = _write_review_client_capture(tmp_path)
     bd_mock, bd_log = _write_launcher_bd_mock(tmp_path)
     git_mock, git_log, repo_root = _write_launcher_git_mock(tmp_path)
     runtime = _write_minimal_beads_runtime(tmp_path)
@@ -210,6 +223,7 @@ def _run_cdx_launcher(
     env["CODEX_PROMPT_FILE"] = str(prompt_file)
     env["CODEX_CALLED_FILE"] = str(called_file)
     env["CODEX_ENV_FILE"] = str(env_file)
+    env["CDX_BEAD_REVIEW_CLIENT"] = str(review_client)
     env["BD_BIN"] = str(bd_mock)
     env["BD_ARGV_LOG"] = str(bd_log)
     env["GIT_BIN"] = str(git_mock)
@@ -858,7 +872,6 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
     [
         ["-b", "CL-smoke", "--exec"],
         ["-bq", "CL-smoke"],
-        ["-br", "CL-smoke"],
     ],
 )
 def test_cdx_bead_modes_wrap_context_as_untrusted_data(
@@ -905,7 +918,7 @@ def test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass(
     assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
 
 
-def test_cdx_bead_review_defaults_to_readonly_without_dangerous_bypass(tmp_path: Path) -> None:
+def test_cdx_bead_review_delegates_to_shared_client(tmp_path: Path) -> None:
     result, argv_file, _prompt_file, called_file, _env_file, _bd_log, git_log = _run_cdx_launcher(
         tmp_path,
         ["-br", "CL-smoke"],
@@ -914,11 +927,31 @@ def test_cdx_bead_review_defaults_to_readonly_without_dangerous_bypass(tmp_path:
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    _assert_readonly_bead_permissions(argv)
+    assert argv[argv.index("--provider") + 1] == "codex"
+    assert argv[argv.index("--adapter") + 1] == "codex-exec"
+    assert argv[argv.index("--bead-id") + 1] == "CL-smoke"
     assert "--bead-dangerous-full-auto" not in argv
-    assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
     assert "-C" not in argv
     assert not git_log.exists()
+
+
+def test_cdx_bead_review_preserves_model_override(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, ["-br", "CL-smoke", "--model", "gpt-test"])
+    )
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert argv[argv.index("--model") + 1] == "gpt-test"
+
+
+def test_cdx_bead_review_rejects_missing_model_value(tmp_path: Path) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, ["-br", "CL-smoke", "--model"])
+    )
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "--model requires a value" in result.stderr
 
 
 @pytest.mark.parametrize(
@@ -953,7 +986,6 @@ def test_cdx_implementer_modes_run_from_bead_worktree(
         ["-b", "CL-smoke", "--bead-dangerous-full-auto"],
         ["-b", "CL-smoke", "--exec", "--bead-dangerous-full-auto"],
         ["-bq", "CL-smoke", "--bead-dangerous-full-auto"],
-        ["-br", "CL-smoke", "--bead-dangerous-full-auto"],
     ],
 )
 def test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass(
@@ -971,6 +1003,17 @@ def test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass(
     _assert_dangerous_bead_permissions(argv)
     assert "--bead-dangerous-full-auto" not in argv
     assert "WARNING: --bead-dangerous-full-auto selected" in result.stderr
+
+
+def test_cdx_review_rejects_dangerous_bypass(tmp_path: Path) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path, ["-br", "CL-smoke", "--bead-dangerous-full-auto"]
+        )
+    )
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "incompatible" in result.stderr
 
 
 def test_cdx_real_renderer_wraps_injected_end_marker_as_data(tmp_path: Path) -> None:
@@ -1187,7 +1230,7 @@ def test_cdx_invalid_callback_or_review_arguments_fail_before_harness(
 
 
 def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Path) -> None:
-    result, argv_file, prompt_file, called_file, env_file, _bd_log, git_log = _run_cdx_launcher(
+    result, argv_file, _prompt_file, called_file, env_file, _bd_log, git_log = _run_cdx_launcher(
         tmp_path,
         [
             "-br",
@@ -1205,24 +1248,14 @@ def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Pat
     assert "use: cld -br" not in result.stderr
     assert "no full cmux-review equivalent" not in result.stderr
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    prompt = prompt_file.read_text(encoding="utf-8")
     env = json.loads(env_file.read_text(encoding="utf-8"))
-    assert argv[0] == "exec"
-    _assert_readonly_bead_permissions(argv)
+    assert argv[argv.index("--provider") + 1] == "codex"
+    assert argv[argv.index("--adapter") + 1] == "codex-exec"
+    assert argv[argv.index("--bead-id") + 1] == "CL-smoke"
     assert "-C" not in argv
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
     assert env["CLD_BEAD_LINE"] == "cdx"
-    assert "Use the bead-reviewer skill guidance" in prompt
-    assert str(tmp_path / "home" / ".agents" / "skills" / "bead-reviewer" / "SKILL.md") in prompt
-    assert "factory-ready spec / autonomous-readiness review" in prompt
-    assert "SPECIFICATION and readiness ONLY" in prompt
-    assert "Do NOT implement" in prompt
-    assert "do NOT\nrun session-close" in prompt
-    assert "do NOT review implementation diffs" in prompt
-    assert "Review terminal state is the final bead-reviewer verdict" in prompt
-    assert "cmux trigger-flash --surface surface:33" in prompt
-    assert "compact context for CL-smoke" in prompt
     assert not git_log.exists()
 
 

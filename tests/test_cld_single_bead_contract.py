@@ -38,6 +38,17 @@ def _write_claude_capture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     return claude_mock, argv_file, prompt_file, called_file
 
 
+def _write_review_client_capture(tmp_path: Path) -> Path:
+    return _write_executable(
+        tmp_path / "review-client",
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, sys\n"
+        "pathlib.Path(os.environ['CLAUDE_CALLED_FILE']).write_text('called', encoding='utf-8')\n"
+        "pathlib.Path(os.environ['CLAUDE_ARGV_FILE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
+        "print(f\"CLD_BEAD_LINE={os.environ.get('CLD_BEAD_LINE', '')}\")\n",
+    )
+
+
 def _write_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
     bd_mock = tmp_path / "bd-mock"
     bd_log = tmp_path / "bd-argv.jsonl"
@@ -131,6 +142,7 @@ BEAD_REVIEW_DISALLOWED_TOOLS = (
 
 def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
     claude_mock, argv_file, prompt_file, called_file = _write_claude_capture(tmp_path)
+    review_client = _write_review_client_capture(tmp_path)
     bd_mock, bd_log = _write_bd_mock(tmp_path)
     _write_cld_path_mocks(tmp_path)
     home = tmp_path / "home"
@@ -142,6 +154,7 @@ def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProce
     env["CLAUDE_ARGV_FILE"] = str(argv_file)
     env["CLAUDE_PROMPT_FILE"] = str(prompt_file)
     env["CLAUDE_CALLED_FILE"] = str(called_file)
+    env["CLD_BEAD_REVIEW_CLIENT"] = str(review_client)
     env["BD_BIN"] = str(bd_mock)
     env["BD_ARGV_LOG"] = str(bd_log)
     env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
@@ -350,54 +363,22 @@ def test_cld_invalid_callback_or_review_arguments_fail_before_harness(
     assert message in result.stderr
 
 
-def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: Path) -> None:
-    result, argv_file, prompt_file, called_file, bd_log = _run_cld(tmp_path, ["-br", "CL-smoke"])
+def test_cld_bead_review_defaults_to_opus_and_shared_client(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, bd_log = _run_cld(
+        tmp_path, ["-br", "CL-smoke"]
+    )
 
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     assert "CLD_BEAD_LINE=cld" in result.stdout
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    prompt = prompt_file.read_text(encoding="utf-8")
-    # model + permission-mode must both be present (order-flexible, but each
-    # flag's own value must be exact).
-    # CL-9knh iteration 3: -br switched from `plan` to `dontAsk` because
-    # `--permission-mode plan` was found to categorically block MCP tool
-    # execution even for tools explicitly present in --allowedTools.
+    assert _argv_flag_value(argv, "--provider") == "claude"
+    assert _argv_flag_value(argv, "--adapter") == "claude-agent"
+    assert _argv_flag_value(argv, "--bead-id") == "CL-smoke"
     assert _argv_flag_value(argv, "--model") == "opus"
-    assert _argv_flag_value(argv, "--permission-mode") == "dontAsk"
-    # Narrow read + review-cache tool profile (CL-9knh): deterministic,
-    # single "--flag=value" argv token per flag — see bin/cld -br block.
-    # --tools hard-excludes Bash from the built-in tool set (fix-cycle 2).
-    tools_value = _argv_flag_value(argv, "--tools")
-    allowed_value = _argv_flag_value(argv, "--allowedTools")
-    disallowed_value = _argv_flag_value(argv, "--disallowedTools")
-    assert tools_value == BEAD_REVIEW_TOOLS
-    assert allowed_value == BEAD_REVIEW_ALLOWED_TOOLS
-    assert disallowed_value == BEAD_REVIEW_DISALLOWED_TOOLS
-    # No edit/write/workspace-implementation capability leaks into -br's
-    # granted (--allowedTools) tool set, and no Bash entry anywhere.
-    allowed_set = set(allowed_value.split(","))
-    assert "Edit" not in allowed_set
-    assert "Write" not in allowed_set
-    assert "NotebookEdit" not in allowed_set
-    assert "Bash" not in allowed_value
-    assert "--dangerously-skip-permissions" not in argv
     assert "--worktree" not in argv
     assert "--agent" not in argv
-    assert "--setting-sources" not in argv
-    # The review prompt must remain the final positional claude argument.
-    assert argv[-1] == prompt
-    assert "Use the bead-reviewer skill" in prompt
-    assert "CRITICAL" in prompt
-    assert "SPECIFICATION and readiness ONLY" in prompt
-    assert "Do NOT implement" in prompt
-    assert "do NOT create a worktree" in prompt
-    assert "do NOT\nrun session-close" in prompt
-    assert "do NOT review implementation diffs" in prompt
-    assert "Emit the bead-reviewer verdict\nas the terminal state." in prompt
-
     bd_calls = [json.loads(line) for line in bd_log.read_text(encoding="utf-8").splitlines()]
-    assert ["dolt", "pull"] not in bd_calls
     assert not any(call[:1] == ["dolt"] for call in bd_calls)
 
 
@@ -416,11 +397,7 @@ def test_cld_bead_review_honors_explicit_model_override(tmp_path: Path) -> None:
 
 
 def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) -> None:
-    """Fix-cycle 2: the review-mode callback contract no longer asks the
-    reviewer to run `cmux trigger-flash` itself — it has no Bash. It
-    explains that the launcher runs the flash automatically after this
-    session exits."""
-    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
         tmp_path,
         [
             "-br",
@@ -435,15 +412,9 @@ def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    prompt = prompt_file.read_text(encoding="utf-8")
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
-    assert "workspace:15 / surface:33" in prompt
-    assert "no Bash access" in prompt
-    assert "cannot signal the coordinator directly" in prompt
-    assert "cmux trigger-flash --surface surface:33" in prompt
-    assert "you do not need to, and cannot, run it yourself" in prompt
-    assert "Phase 16" not in prompt
+    assert _argv_flag_value(argv, "--provider") == "claude"
 
 
 def test_cld_resume_flag_continues_to_forward_to_claude(tmp_path: Path) -> None:

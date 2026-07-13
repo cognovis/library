@@ -84,7 +84,13 @@ The installer is idempotent and uses `ln -sfn` so updates to this repo are immed
 |------|-------------|
 | `-b`/`--bead <id>` | Full bead orchestrator run with session-close |
 | `-bq`/`--bead-quick <id>` | Quick-fix run (lighter orchestration) |
-| `-br`/`--bead-review <id>` | Fresh-context critical bead-spec/readiness review via bead-reviewer skill; defaults to Opus model (overridable with an explicit `--model <name>` passthrough argument). Runs in read-only scope at the launcher boundary (`cld`: `--permission-mode dontAsk` plus a narrow `--tools`/`--allowedTools`/`--disallowedTools` profile — `plan` mode was found to categorically block MCP tool execution even for allowlisted tools, CL-9knh; `cdx`: `--sandbox read-only`). Mutually exclusive with `-b`/`-bq`. |
+| `-br`/`--bead-review <id>` | Thin adapter to `bin/lib/bead-review-client.py`. The shared client calls cognovis-tools for `bead_show`, starts a fresh role-scoped reviewer with `agent_session_start`, validates its terminal result, and persists it with `bead_review_write`. Claude defaults to Opus and accepts an explicit `--model`; Codex accepts `-m`/`--model`. The child session has no MCP surface and bypass flags are rejected. Mutually exclusive with `-b`/`-bq`. |
+
+The review client is the trust boundary: bead-authored fields are serialized into a
+bounded, provenance-tagged untrusted-data envelope; provider output must contain one
+terminal typed result record with a supported verdict. No metadata write occurs on a
+malformed response or failed provider turn. The MCP transport is pinned to the local
+loopback endpoint.
 
 **Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch. `scripts/coordinator_callback.py` (CL-t32e) provides a standalone, tested exactly-once delivery executor for this contract (atomic lock + state file per `(run_id, event)`); it is not yet wired into `bin/cld`/`bin/cdx` — that lifecycle wiring is scoped to CL-gzvu (`cld`) and CL-eqiq (`cdx`), which will replace the best-effort prompt-injected contract described above with calls to this executor.
 

@@ -68,6 +68,6 @@ cdx bead-id:
 cdx-quick bead-id:
     cdx -bq {{bead-id}}
 
-# Launch Codex in review mode for a bead (equivalent to cld -br; warns about limitations)
+# Launch the shared cognovis-tools review path with a Codex reviewer
 cdx-review bead-id:
     cdx -br {{bead-id}}
