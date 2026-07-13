@@ -434,6 +434,22 @@ if [[ -n "$bead_review_id" ]]; then
         claude_args=("--model" "opus" "${claude_args[@]}")
     fi
 
+    # ── Narrow read + review-cache tool profile (CL-9knh) ─────────
+    # -br is a spec-readiness reviewer, not an implementer: grant only the
+    # canonical local read-only set (Read/Bash/Grep/Glob — Bash is for
+    # read-only git/grep/test-style commands, never file modification) plus
+    # the cognovis-tools MCP read surface the bead-reviewer skill's own
+    # tooling contract documents, plus the single typed mutation exception
+    # (bead_review_write) for writing metadata.review. --disallowedTools is
+    # defense-in-depth on top of --permission-mode plan and the allowlist:
+    # even if either has a bug, general bead mutations and file edits stay
+    # blocked. Passed as a single comma-separated string per flag (not
+    # separate argv tokens) since --allowedTools/--disallowedTools are
+    # variadic and would otherwise swallow the trailing review prompt.
+    local bead_review_allowed_tools="Read,Bash,Grep,Glob,mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
+    local bead_review_disallowed_tools="Edit,Write,NotebookEdit,mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_claim,mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
+    claude_args+=("--allowedTools" "$bead_review_allowed_tools" "--disallowedTools" "$bead_review_disallowed_tools")
+
     printf '\033]1;%s\033\\' "${bead_review_id}-review"
     printf '\033]2;%s\033\\' "cld-review: $bead_review_id"
     _cmux_rename "${bead_review_short}-review"
