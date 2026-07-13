@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -764,4 +765,109 @@ def test_cld_implementer_modes_still_use_exec_and_do_not_flash_cmux(
     assert _cmux_trigger_flash_calls(cmux_log) == [], (
         "launcher invoked cmux trigger-flash for an implementer (-b/-bq) mode; "
         "only -br's post-exit flash should ever fire"
+    )
+
+
+# ── Headless (non-interactive) exit via --print (CL-9knh, iteration 4) ────
+# A live smoke against an uncached bead confirmed the review itself works
+# end-to-end, but exposed a structural bug: bin/cld's -br path launched
+# claude WITHOUT --print, i.e. as a genuinely interactive session. Without
+# --print, "the model finished its turn" is not the same as "the process
+# exits" -- Claude Code stays alive at an interactive prompt waiting for
+# more input, so the launcher's foreground `"${CLAUDE_BIN}"
+# "${claude_args[@]}"` call (see the post-exit cmux flash block) never
+# returns on its own, and the post-exit flash never fires autonomously.
+# Interactive Claude also restores its alternate terminal screen buffer on
+# exit, wiping the verdict text from the pane's visible scrollback even
+# once the session IS terminated. --print fixes both: it runs the prompt
+# non-interactively, prints the response as plain text (default
+# --output-format, no alternate-screen TUI), and exits automatically once
+# the turn completes. -br only -- -b/-bq/plain passthrough must keep their
+# current exec-based, fully interactive behavior since they run long
+# multi-phase orchestrations that legitimately need to stay interactive.
+
+
+def test_cld_bead_review_claude_args_include_print_for_headless_exit(tmp_path: Path) -> None:
+    """-br must add --print to claude_args so the subprocess runs
+    non-interactively and exits automatically once its turn completes."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert "--print" in argv, "-br must launch claude with --print for headless (non-interactive) exit"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["Plain passthrough prompt"],
+        ["-b", "CL-safe"],
+        ["-bq", "CL-safe"],
+    ],
+)
+def test_cld_bead_review_print_flag_does_not_leak_into_other_modes(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    """--print is -br-only: -b/-bq/plain-passthrough must keep their current
+    (non-`--print`, `exec`-based) fully interactive behavior -- those modes
+    run long multi-phase orchestrations that legitimately need to stay
+    interactive and are unaffected by this bead."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, args)
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert "--print" not in argv
+
+
+def test_cld_bead_review_launcher_regains_control_and_flashes_promptly_after_claude_exits(
+    tmp_path: Path,
+) -> None:
+    """CL-9knh iteration 4: prove the launcher regains control PROMPTLY once
+    the (now --print-aware) claude subprocess exits -- bounded wall-clock
+    time, not "eventually" or dependent on the process being externally
+    killed. The mock `claude` binary (see _write_claude_capture) already
+    exits immediately by construction -- it is a short Python script, not a
+    long-running process -- so this test's job is to make that prompt-exit
+    property an explicit, load-bearing assertion (elapsed time, not just
+    "the flash eventually happened") rather than an implicit side effect of
+    the mock. There is no sleep/timeout/retry anywhere in this launcher
+    path; a slow result here would indicate the launcher is relying on
+    something other than the subprocess exiting on its own (e.g. still
+    using `exec`, or waiting on an external kill)."""
+    cmux_log = tmp_path / "cmux-argv.jsonl"
+
+    start = time.monotonic()
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-br",
+            "CL-safe",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        cmux_log=cmux_log,
+    )
+    elapsed = time.monotonic() - start
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert "--print" in argv, "-br must launch claude with --print for headless (non-interactive) exit"
+
+    flash_calls = _cmux_trigger_flash_calls(cmux_log)
+    assert flash_calls == [
+        ["trigger-flash", "--surface", "surface:33"]
+    ], f"expected exactly one prompt trigger-flash call, got: {flash_calls}"
+
+    # Bounded, not "eventual": the entire launcher invocation (subprocess
+    # launch -> claude exit -> post-exit cmux flash -> launcher exit) must
+    # complete well within a few seconds.
+    assert elapsed < 5.0, (
+        f"launcher took {elapsed:.2f}s to regain control and flash cmux after "
+        "claude exited; expected prompt (bounded) completion, not an eventual/hung result"
     )
