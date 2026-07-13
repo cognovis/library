@@ -129,10 +129,29 @@ def _argv_has_permission_mode(argv: list[str], mode: str) -> bool:
 
 
 def _argv_flag_value(argv: list[str], flag: str) -> str | None:
+    """Look up a flag's value, supporting both "--flag value" (two argv
+    tokens) and "--flag=value" (one argv token) forms. The -br tool-profile
+    flags use the "=" form specifically: claude's --allowedTools/
+    --disallowedTools are variadic (`<tools...>`) and greedily collect every
+    subsequent non-flag argv element when passed as a separate token,
+    swallowing the trailing review prompt — see bin/cld for the full
+    explanation. "--flag=value" binds the value to the flag as one token so
+    there is nothing left for the variadic collection to swallow.
+    """
+    prefix = f"{flag}="
+    for token in argv:
+        if token.startswith(prefix):
+            return token[len(prefix):]
     for left, right in zip(argv, argv[1:]):
         if left == flag:
             return right
     return None
+
+
+def _argv_has_flag(argv: list[str], flag: str) -> bool:
+    """True if `flag` appears bare, as "--flag=value", or as "--flag" "value"."""
+    prefix = f"{flag}="
+    return any(token == flag or token.startswith(prefix) for token in argv)
 
 
 # Deterministic narrow review tool profile for cld -br (CL-9knh). Bash is
@@ -290,8 +309,8 @@ def test_cld_bead_review_tool_profile_does_not_leak_into_implementer_modes(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert "--allowedTools" not in argv
-    assert "--disallowedTools" not in argv
+    assert not _argv_has_flag(argv, "--allowedTools")
+    assert not _argv_has_flag(argv, "--disallowedTools")
 
 
 @pytest.mark.parametrize(

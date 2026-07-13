@@ -80,6 +80,19 @@ def _write_cld_path_mocks(tmp_path: Path) -> None:
 
 
 def _argv_flag_value(argv: list[str], flag: str) -> str | None:
+    """Look up a flag's value, supporting both "--flag value" (two argv
+    tokens) and "--flag=value" (one argv token) forms. The -br tool-profile
+    flags use the "=" form specifically: claude's --allowedTools/
+    --disallowedTools are variadic (`<tools...>`) and greedily collect every
+    subsequent non-flag argv element when passed as a separate token,
+    swallowing the trailing review prompt — see bin/cld for the full
+    explanation. "--flag=value" binds the value to the flag as one token so
+    there is nothing left for the variadic collection to swallow.
+    """
+    prefix = f"{flag}="
+    for token in argv:
+        if token.startswith(prefix):
+            return token[len(prefix):]
     for left, right in zip(argv, argv[1:]):
         if left == flag:
             return right
@@ -279,12 +292,17 @@ def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: 
     assert _argv_flag_value(argv, "--model") == "opus"
     assert _argv_flag_value(argv, "--permission-mode") == "plan"
     # Narrow read + review-cache tool profile (CL-9knh): deterministic,
-    # single comma-separated string per flag — see bin/cld -br block.
-    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
-    assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
-    # No edit/write/workspace-implementation capability leaks into -br argv.
-    assert "Edit" not in argv
-    assert "Write" not in argv
+    # single "--flag=value" argv token per flag — see bin/cld -br block.
+    allowed_value = _argv_flag_value(argv, "--allowedTools")
+    disallowed_value = _argv_flag_value(argv, "--disallowedTools")
+    assert allowed_value == BEAD_REVIEW_ALLOWED_TOOLS
+    assert disallowed_value == BEAD_REVIEW_DISALLOWED_TOOLS
+    # No edit/write/workspace-implementation capability leaks into -br's
+    # granted (--allowedTools) tool set.
+    allowed_set = set(allowed_value.split(","))
+    assert "Edit" not in allowed_set
+    assert "Write" not in allowed_set
+    assert "NotebookEdit" not in allowed_set
     assert "--dangerously-skip-permissions" not in argv
     assert "--worktree" not in argv
     assert "--agent" not in argv

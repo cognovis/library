@@ -443,12 +443,22 @@ if [[ -n "$bead_review_id" ]]; then
     # (bead_review_write) for writing metadata.review. --disallowedTools is
     # defense-in-depth on top of --permission-mode plan and the allowlist:
     # even if either has a bug, general bead mutations and file edits stay
-    # blocked. Passed as a single comma-separated string per flag (not
-    # separate argv tokens) since --allowedTools/--disallowedTools are
-    # variadic and would otherwise swallow the trailing review prompt.
+    # blocked. Passed as --flag=value (single argv token, not "--flag"
+    # "value" as two tokens): claude's --allowedTools/--disallowedTools are
+    # variadic (`<tools...>`) and greedily collect every subsequent
+    # non-flag argv element — including a would-be separate value token AND
+    # the trailing review prompt after it — splitting each on commas/spaces
+    # and misinterpreting prompt words as bogus tool-deny-rules (confirmed
+    # empirically: "--disallowedTools" "value" "$prompt" made claude treat
+    # every word of the prompt as a deny rule and then error with "Input
+    # must be provided ... when using --print" because the prompt was
+    # consumed as flag values, not the positional prompt). The "--flag=value"
+    # form binds the value to the flag as one token, so the flag's variadic
+    # collection has nothing left to swallow and the trailing prompt stays
+    # the last positional claude argument.
     local bead_review_allowed_tools="Read,Bash,Grep,Glob,mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
     local bead_review_disallowed_tools="Edit,Write,NotebookEdit,mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_claim,mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
-    claude_args+=("--allowedTools" "$bead_review_allowed_tools" "--disallowedTools" "$bead_review_disallowed_tools")
+    claude_args+=("--allowedTools=${bead_review_allowed_tools}" "--disallowedTools=${bead_review_disallowed_tools}")
 
     printf '\033]1;%s\033\\' "${bead_review_id}-review"
     printf '\033]2;%s\033\\' "cld-review: $bead_review_id"
