@@ -871,3 +871,117 @@ def test_cld_bead_review_launcher_regains_control_and_flashes_promptly_after_cla
         f"launcher took {elapsed:.2f}s to regain control and flash cmux after "
         "claude exited; expected prompt (bounded) completion, not an eventual/hung result"
     )
+
+
+# ── Non-zero exit propagation (CL-9knh, Fix6, Opus cold-review advisory) ──
+# The -br post-exit block (see above) captures claude's exit code via
+# `_claude_exit=$?` immediately after the foreground call -- before the
+# cmux flash runs -- and the flash's own failure is swallowed by `|| true`,
+# so it cannot clobber the propagated code. That is correct by code
+# inspection, but every existing test above uses a mock `claude` that
+# always exits 0, so only the success path was ever exercised. These two
+# helpers build a variant mock that exits with a caller-chosen non-zero
+# code so the failure path gets real coverage.
+
+
+def _write_claude_capture_with_exit_code(
+    tmp_path: Path, exit_code: int
+) -> tuple[Path, Path, Path, Path]:
+    """Like _write_claude_capture, but the mock exits with a specific
+    non-zero code instead of always succeeding with 0."""
+    claude_mock = tmp_path / "claude-capture"
+    argv_file = tmp_path / "claude-argv.json"
+    prompt_file = tmp_path / "claude-prompt.txt"
+    called_file = tmp_path / "claude-called.txt"
+    _write_executable(
+        claude_mock,
+        f"#!{sys.executable}\n"
+        "import json, os, pathlib, sys\n"
+        "pathlib.Path(os.environ['CLAUDE_CALLED_FILE']).write_text('called', encoding='utf-8')\n"
+        "pathlib.Path(os.environ['CLAUDE_ARGV_FILE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
+        "prompt = sys.argv[-1] if len(sys.argv) > 1 else ''\n"
+        "pathlib.Path(os.environ['CLAUDE_PROMPT_FILE']).write_text(prompt, encoding='utf-8')\n"
+        f"sys.exit({exit_code})\n",
+    )
+    return claude_mock, argv_file, prompt_file, called_file
+
+
+def _run_cld_with_claude_exit_code(
+    tmp_path: Path,
+    args: list[str],
+    exit_code: int,
+    cmux_log: Path | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
+    """Same wiring as _run_cld, but the mock `claude` binary exits with
+    `exit_code` instead of always succeeding."""
+    claude_mock, argv_file, prompt_file, called_file = _write_claude_capture_with_exit_code(
+        tmp_path, exit_code
+    )
+    bd_mock, bd_log = _write_bd_mock(tmp_path)
+    _write_cld_path_mocks(tmp_path, cmux_log=cmux_log)
+    home = tmp_path / "home"
+    home.mkdir()
+
+    env = dict(os.environ)
+    env["HOME"] = str(home)
+    env["CLAUDE_BIN"] = str(claude_mock)
+    env["CLAUDE_ARGV_FILE"] = str(argv_file)
+    env["CLAUDE_PROMPT_FILE"] = str(prompt_file)
+    env["CLAUDE_CALLED_FILE"] = str(called_file)
+    env["BD_BIN"] = str(bd_mock)
+    env["BD_ARGV_LOG"] = str(bd_log)
+    env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [str(CLD_BIN), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+        env=env,
+    )
+    return result, argv_file, prompt_file, called_file, bd_log
+
+
+def test_cld_bead_review_launcher_propagates_nonzero_exit_code_and_still_flashes(
+    tmp_path: Path,
+) -> None:
+    """CL-9knh Fix6 (Opus cold-review advisory): the -br post-exit block
+    captures claude's exit code via `_claude_exit=$?` immediately after the
+    foreground call, before the cmux flash runs, and the flash's own
+    failure is swallowed by `|| true` so it cannot clobber the propagated
+    code. This test exercises the previously-uncovered non-zero-exit path
+    with a distinctive code (17, not 1, to avoid confusion with a generic
+    failure) and asserts BOTH halves of the contract together: the
+    launcher's own process exit code is exactly the code claude exited
+    with (not 0, not some other transformed value), AND the cmux flash
+    still fires exactly once even though claude failed -- confirming the
+    flash fires regardless of why/how the session ended, not only on a
+    clean exit (the original Fix 2 design intent)."""
+    cmux_log = tmp_path / "cmux-argv.jsonl"
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld_with_claude_exit_code(
+        tmp_path,
+        [
+            "-br",
+            "CL-safe",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        exit_code=17,
+        cmux_log=cmux_log,
+    )
+
+    assert result.returncode == 17, (
+        "expected the launcher to propagate claude's exit code (17) verbatim, "
+        f"got {result.returncode}: {result.stderr}"
+    )
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
+
+    flash_calls = _cmux_trigger_flash_calls(cmux_log)
+    assert flash_calls == [
+        ["trigger-flash", "--surface", "surface:33"]
+    ], f"expected exactly one trigger-flash call on non-zero exit, got: {flash_calls}"
