@@ -84,7 +84,7 @@ The installer is idempotent and uses `ln -sfn` so updates to this repo are immed
 |------|-------------|
 | `-b`/`--bead <id>` | Full bead orchestrator run with session-close |
 | `-bq`/`--bead-quick <id>` | Quick-fix run (lighter orchestration) |
-| `-br`/`--bead-review <id>` | Fresh-context critical bead-spec/readiness review via bead-reviewer skill; defaults to Opus model (overridable with an explicit `--model <name>` passthrough argument). Runs in read-only scope at the launcher boundary (`cld`: `--permission-mode plan`; `cdx`: `--sandbox read-only`). Mutually exclusive with `-b`/`-bq`. |
+| `-br`/`--bead-review <id>` | Fresh-context critical bead-spec/readiness review via bead-reviewer skill; defaults to Opus model (overridable with an explicit `--model <name>` passthrough argument). Runs in read-only scope at the launcher boundary (`cld`: `--permission-mode dontAsk` plus a narrow `--tools`/`--allowedTools`/`--disallowedTools` profile — `plan` mode was found to categorically block MCP tool execution even for allowlisted tools, CL-9knh; `cdx`: `--sandbox read-only`). Mutually exclusive with `-b`/`-bq`. |
 
 **Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch.
 

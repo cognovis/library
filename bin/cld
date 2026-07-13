@@ -470,8 +470,10 @@ if [[ -n "$bead_review_id" ]]; then
     # how the reviewer now signals the coordinator without any Bash access.
     #
     # --disallowedTools remains defense-in-depth on top of --permission-mode
-    # plan, --tools, and the allowlist: even if any of those has a bug,
-    # general bead mutations and file edits stay blocked.
+    # (dontAsk as of CL-9knh iteration 3 — plan was found to categorically
+    # block MCP tool execution even for allowlisted tools; see the mode
+    # selection block below), --tools, and the allowlist: even if any of
+    # those has a bug, general bead mutations and file edits stay blocked.
     #
     # Passed as --flag=value (single argv token, not "--flag" "value" as two
     # tokens) for --tools/--allowedTools/--disallowedTools alike: claude's
