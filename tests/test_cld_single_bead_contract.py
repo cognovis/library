@@ -79,6 +79,56 @@ def _write_cld_path_mocks(tmp_path: Path) -> None:
     )
 
 
+def _argv_flag_value(argv: list[str], flag: str) -> str | None:
+    """Look up a flag's value, supporting both "--flag value" (two argv
+    tokens) and "--flag=value" (one argv token) forms. The -br tool-profile
+    flags use the "=" form specifically: claude's --allowedTools/
+    --disallowedTools are variadic (`<tools...>`) and greedily collect every
+    subsequent non-flag argv element when passed as a separate token,
+    swallowing the trailing review prompt — see bin/cld for the full
+    explanation. "--flag=value" binds the value to the flag as one token so
+    there is nothing left for the variadic collection to swallow.
+    """
+    prefix = f"{flag}="
+    for token in argv:
+        if token.startswith(prefix):
+            return token[len(prefix):]
+    for left, right in zip(argv, argv[1:]):
+        if left == flag:
+            return right
+    return None
+
+
+# Deterministic narrow review tool profile for cld -br (CL-9knh, fix-cycle 2).
+# Kept in sync with the identical constants in test_launcher_permission_modes.py
+# and with the production implementation in bin/cld. Bash is HARD-EXCLUDED via
+# --tools (BEAD_REVIEW_TOOLS below), not merely left out of --allowedTools —
+# see test_launcher_permission_modes.py's constant docstring for the full
+# rationale (plan-mode classifier auto-approval of unrelated Bash commands
+# once Bash is registered as available at all). This profile is a SINGLE
+# fixed string now — no callback-conditional Bash grant exists anymore.
+BEAD_REVIEW_ALLOWED_TOOLS = (
+    "Read,Grep,Glob,"
+    "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
+    "mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,"
+    "mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
+)
+
+
+# --tools value that hard-excludes Bash from the built-in tool set for -br
+# (unconditionally, callback or not).
+BEAD_REVIEW_TOOLS = "Read,Grep,Glob"
+
+
+BEAD_REVIEW_DISALLOWED_TOOLS = (
+    "Edit,Write,NotebookEdit,"
+    "mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_claim,"
+    "mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,"
+    "mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,"
+    "mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
+)
+
+
 def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
     claude_mock, argv_file, prompt_file, called_file = _write_claude_capture(tmp_path)
     bd_mock, bd_log = _write_bd_mock(tmp_path)
@@ -226,6 +276,66 @@ def test_cld_bead_modes_with_callback_inject_contract_and_consume_flags(
             "invalid coordinator surface",
         ),
         (["-br", "CL-smoke", "-b", "CL-other"], "mutually exclusive"),
+        # Finding 3.1: shell-metacharacter coordinator-surface values must
+        # still be rejected by the existing ^surface:[0-9]+$ validation
+        # BEFORE any --allowedTools string is ever constructed for -br's
+        # tool profile (which interpolates the validated surface value into
+        # a Bash(...) permission entry — see Finding 2).
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33; rm -rf /",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33 && evil",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33 | evil",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33$(evil)",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33`evil`",
+            ],
+            "invalid coordinator surface",
+        ),
     ],
 )
 def test_cld_invalid_callback_or_review_arguments_fail_before_harness(
@@ -248,11 +358,35 @@ def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: 
     assert "CLD_BEAD_LINE=cld" in result.stdout
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert argv[:4] == ["--model", "opus", "--permission-mode", "plan"]
+    # model + permission-mode must both be present (order-flexible, but each
+    # flag's own value must be exact).
+    # CL-9knh iteration 3: -br switched from `plan` to `dontAsk` because
+    # `--permission-mode plan` was found to categorically block MCP tool
+    # execution even for tools explicitly present in --allowedTools.
+    assert _argv_flag_value(argv, "--model") == "opus"
+    assert _argv_flag_value(argv, "--permission-mode") == "dontAsk"
+    # Narrow read + review-cache tool profile (CL-9knh): deterministic,
+    # single "--flag=value" argv token per flag — see bin/cld -br block.
+    # --tools hard-excludes Bash from the built-in tool set (fix-cycle 2).
+    tools_value = _argv_flag_value(argv, "--tools")
+    allowed_value = _argv_flag_value(argv, "--allowedTools")
+    disallowed_value = _argv_flag_value(argv, "--disallowedTools")
+    assert tools_value == BEAD_REVIEW_TOOLS
+    assert allowed_value == BEAD_REVIEW_ALLOWED_TOOLS
+    assert disallowed_value == BEAD_REVIEW_DISALLOWED_TOOLS
+    # No edit/write/workspace-implementation capability leaks into -br's
+    # granted (--allowedTools) tool set, and no Bash entry anywhere.
+    allowed_set = set(allowed_value.split(","))
+    assert "Edit" not in allowed_set
+    assert "Write" not in allowed_set
+    assert "NotebookEdit" not in allowed_set
+    assert "Bash" not in allowed_value
     assert "--dangerously-skip-permissions" not in argv
     assert "--worktree" not in argv
     assert "--agent" not in argv
     assert "--setting-sources" not in argv
+    # The review prompt must remain the final positional claude argument.
+    assert argv[-1] == prompt
     assert "Use the bead-reviewer skill" in prompt
     assert "CRITICAL" in prompt
     assert "SPECIFICATION and readiness ONLY" in prompt
@@ -282,6 +416,10 @@ def test_cld_bead_review_honors_explicit_model_override(tmp_path: Path) -> None:
 
 
 def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) -> None:
+    """Fix-cycle 2: the review-mode callback contract no longer asks the
+    reviewer to run `cmux trigger-flash` itself — it has no Bash. It
+    explains that the launcher runs the flash automatically after this
+    session exits."""
     result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
         tmp_path,
         [
@@ -301,8 +439,10 @@ def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) 
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
     assert "workspace:15 / surface:33" in prompt
-    assert "Review terminal state is the final bead-reviewer verdict" in prompt
+    assert "no Bash access" in prompt
+    assert "cannot signal the coordinator directly" in prompt
     assert "cmux trigger-flash --surface surface:33" in prompt
+    assert "you do not need to, and cannot, run it yourself" in prompt
     assert "Phase 16" not in prompt
 
 
