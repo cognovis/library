@@ -883,7 +883,7 @@ def test_targeted_stdio_rollback_removes_retired_registration(mock_clone, tmp_en
         )
     )
 
-    with patch("lib.installers.mcp_installer.stop_supervised_service"):
+    with patch("lib.installers.mcp_installer.stop_supervised_service") as stop:
         result = install_mcp(
             catalog,
             "cognovis-tools",
@@ -893,6 +893,7 @@ def test_targeted_stdio_rollback_removes_retired_registration(mock_clone, tmp_en
             rollback_stdio=True,
         )
 
+    stop.assert_not_called()
     assert result["data"]["retired_registrations_removed"] == [str(retired_path)]
     assert "cognovis-tools" not in json.loads(retired_path.read_text()).get(
         "mcpServers", {}
