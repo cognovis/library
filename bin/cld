@@ -435,6 +435,30 @@ if [[ -n "$bead_review_id" ]]; then
         claude_args=("--model" "opus" "${claude_args[@]}")
     fi
 
+    # ── Headless (non-interactive) exit for prompt post-exit flash ────
+    # (CL-9knh, iteration 4) Without --print, claude runs as a genuinely
+    # interactive session: it responds to the given prompt once and then
+    # stays alive at an interactive prompt waiting for MORE input — "the
+    # model finished its turn" is not the same as "the process exits." That
+    # means the launcher's foreground `"${CLAUDE_BIN}" "${claude_args[@]}"`
+    # call (see the post-exit cmux flash block near the end of this script)
+    # never returns on its own, so the flash never fires autonomously — a
+    # live smoke confirmed the flash only fired after the hung session was
+    # terminated externally, not as autonomous behavior. Interactive
+    # claude also restores its alternate terminal screen buffer on exit
+    # (the same mechanism vim/less use), which wipes the verdict text from
+    # the pane's visible scrollback even once the session IS terminated,
+    # violating the coordinator-callback contract's requirement to keep
+    # the complete verdict visible. --print runs the prompt
+    # non-interactively, prints the response as plain text (default
+    # --output-format, no alternate-screen TUI), and exits automatically
+    # once the turn completes — fixing both problems. -br only: -b/-bq/
+    # plain passthrough keep their current exec-based, fully interactive
+    # behavior (see the bottom of this script) since they run long
+    # multi-phase orchestrations that legitimately need to stay
+    # interactive.
+    claude_args=("--print" "${claude_args[@]}")
+
     # ── Narrow read + review-cache tool profile (CL-9knh, fix-cycle 2) ─
     # -br is a spec-readiness reviewer, not an implementer: grant only the
     # canonical local read-only set (Read/Grep/Glob) plus the cognovis-tools
