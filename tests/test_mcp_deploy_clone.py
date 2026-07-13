@@ -23,6 +23,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -33,6 +34,8 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from lib.errors import InstallError  # noqa: E402
 from lib.installers.mcp_installer import (  # noqa: E402
+    _derive_deploy_path,
+    _project_path_from_deploy,
     ensure_mcp_deploy_clone,
     install_mcp,
 )
@@ -227,10 +230,37 @@ class TestInstallMcpDeployCloneIntegration:
 class TestDeployPathDerivation:
     """Tests for _derive_deploy_path — ensuring only pyproject.toml sources trigger deploy-clone."""
 
+    def test_cognovis_tools_supervised_catalog_paths_match_derived_project_path(self):
+        """cognovis-tools supervised commands point at the installer-derived project path."""
+        catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
+        entry = next(
+            item
+            for item in catalog["library"]["mcp_servers"]
+            if item["name"] == "cognovis-tools"
+        )
+        _, mcp_subdir, deploy_path = _derive_deploy_path(entry, "cognovis-tools")
+        project_path = _project_path_from_deploy(deploy_path, mcp_subdir)
+        supervised_service = entry["supervised_local_service"]
+        command_names = [
+            "install",
+            "start",
+            "health_check",
+            "restart",
+            "stop",
+            "uninstall",
+            "stdio_rollback",
+        ]
+
+        assert project_path is not None
+        expected_project_path = f"~/{project_path.relative_to(Path.home())}"
+        for command_name in command_names:
+            assert expected_project_path in supervised_service[command_name]["args"]
+        assert expected_project_path in supervised_service["legacy_stdio_descriptors"][0][
+            "args"
+        ][-1]
+
     def test_pyproject_source_returns_clone_info(self):
         """pyproject.toml source URL derives clone_url, mcp_subdir, and deploy_path."""
-        from lib.installers.mcp_installer import _derive_deploy_path
-
         entry = {
             "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
         }
@@ -242,8 +272,6 @@ class TestDeployPathDerivation:
         assert "cognovis-library-core" in str(deploy_path)
 
     def test_supervised_source_uses_dedicated_runtime_clone(self):
-        from lib.installers.mcp_installer import _derive_deploy_path
-
         entry = {
             "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
             "supervised_local_service": {"url": "http://127.0.0.1:8765/mcp"},
@@ -260,8 +288,6 @@ class TestDeployPathDerivation:
 
     def test_mcp_yaml_source_returns_none(self):
         """mcp.yaml source URL returns (None, None, None) — no deploy clone needed."""
-        from lib.installers.mcp_installer import _derive_deploy_path
-
         entry = {
             "source": "https://github.com/sussdorff/open-brain/blob/main/mcp.yaml",
         }
@@ -273,8 +299,6 @@ class TestDeployPathDerivation:
 
     def test_no_source_returns_none(self):
         """Missing source field returns (None, None, None)."""
-        from lib.installers.mcp_installer import _derive_deploy_path
-
         entry = {}
         clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, "test-mcp")
 

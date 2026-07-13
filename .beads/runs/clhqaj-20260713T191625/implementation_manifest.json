@@ -1,0 +1,93 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-hqaj",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "criterion": "Every supervised_local_service command path for the cognovis-tools entry in library.yaml references the installer-derived per-mcp deploy path, with no remaining references to the shared deploy clone in that block.",
+      "status": "done",
+      "changed_files": [
+        "library.yaml"
+      ],
+      "evidence_refs": [
+        "cmd:grep-no-shared-supervised-block",
+        "cmd:grep-nested-supervised-block",
+        "diff:library-yaml-supervised-paths"
+      ]
+    },
+    {
+      "id": "AC2",
+      "criterion": "python3 scripts/validate-library.py passes after the edit.",
+      "status": "done",
+      "changed_files": [
+        "library.yaml"
+      ],
+      "evidence_refs": [
+        "cmd:validate-library"
+      ]
+    },
+    {
+      "id": "AC3",
+      "criterion": "A validator test asserts the cognovis-tools supervised_local_service command paths equal the path computed by mcp_installer.py:_derive_deploy_path.",
+      "status": "done",
+      "changed_files": [
+        "tests/test_mcp_deploy_clone.py"
+      ],
+      "evidence_refs": [
+        "cmd:red-derived-path-test",
+        "cmd:green-derived-path-test",
+        "cmd:full-deploy-clone-tests",
+        "test:TestDeployPathDerivation.test_cognovis_tools_supervised_catalog_paths_match_derived_project_path"
+      ]
+    }
+  ],
+  "changed_files": [
+    "library.yaml",
+    "tests/test_mcp_deploy_clone.py",
+    ".beads/runs/clhqaj-20260713T191625/implementation_manifest.json",
+    ".beads/runs/clhqaj-20260713T191625/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "hash": "ce9a719",
+      "message": "test(CL-hqaj): red - assert catalog supervised paths match installer deploy path"
+    },
+    {
+      "hash": "pending-final-commit",
+      "message": "fix(CL-hqaj): green - repoint cognovis-tools supervised_local_service args at installer-derived per-mcp deploy path"
+    }
+  ],
+  "tests": [
+    {
+      "command": "PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-hqaj/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run pytest tests/test_mcp_deploy_clone.py::TestDeployPathDerivation::test_cognovis_tools_supervised_catalog_paths_match_derived_project_path -q",
+      "status": "passed",
+      "evidence_ref": "cmd:green-derived-path-test"
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run python3 scripts/validate-library.py",
+      "status": "passed",
+      "evidence_ref": "cmd:validate-library"
+    },
+    {
+      "command": "HOME=/private/tmp/clhqaj-home PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-hqaj/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run pytest tests/test_mcp_deploy_clone.py -q",
+      "status": "passed",
+      "evidence_ref": "cmd:full-deploy-clone-tests"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "The cognovis-tools supervised daemon lifecycle commands now resolve to the dedicated per-mcp deploy clone instead of the shared cognovis-library-core clone.",
+    "The deploy-clone regression test now fails when the catalog path drifts from the installer-derived supervised project path."
+  ],
+  "evidence_refs": [
+    "cmd:red-derived-path-test",
+    "cmd:green-derived-path-test",
+    "cmd:validate-library",
+    "cmd:full-deploy-clone-tests",
+    "cmd:grep-no-shared-supervised-block",
+    "cmd:grep-nested-supervised-block",
+    "diff:library-yaml-supervised-paths",
+    "test:TestDeployPathDerivation.test_cognovis_tools_supervised_catalog_paths_match_derived_project_path"
+  ]
+}

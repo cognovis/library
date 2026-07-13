@@ -21,7 +21,6 @@ BUILD_AGENT = REPO_ROOT / "scripts" / "build-agent.py"
 MUTATING_AGENTS = {
     "bead-author",
     "bead-orchestrator",
-    "quick-fix",
     "session-close",
     "wave-orchestrator",
 }
@@ -49,6 +48,9 @@ TYPED_BEAD_TOOLS = {
     "mcp__cognovis-tools__bead_search",
     "mcp__cognovis-tools__bead_repos",
     "mcp__cognovis-tools__bead_create",
+    "mcp__cognovis-tools__bead_effort_classify",
+    "mcp__cognovis-tools__bead_claim_prepare",
+    "mcp__cognovis-tools__bead_claim_commit",
     "mcp__cognovis-tools__bead_claim",
     "mcp__cognovis-tools__bead_update",
     "mcp__cognovis-tools__bead_update_notes",

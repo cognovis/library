@@ -283,10 +283,10 @@ ensure_worktree_excluded() {
 
 default_codex_worktree_root() {
     local repo_root="$1"
-    local codex_home="${CODEX_HOME:-${HOME:-$repo_root}/.codex}"
+    local worktree_home="${CDX_WORKTREE_HOME:-${HOME:-$repo_root}/code/.worktrees}"
     local repo_slug
-    repo_slug="$(sanitize_name "$repo_root")"
-    printf '%s\n' "${codex_home}/worktrees/${repo_slug}"
+    repo_slug="$(sanitize_name "${repo_root:t}")"
+    printf '%s\n' "${worktree_home}/${repo_slug}"
 }
 
 ensure_bead_worktree() {
