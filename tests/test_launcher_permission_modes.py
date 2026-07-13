@@ -269,14 +269,10 @@ def test_cld_bead_review_allowed_tools_exclude_bash_always(tmp_path: Path, args:
     assert allowed == BEAD_REVIEW_ALLOWED_TOOLS
 
 
-def test_cld_bead_review_tools_flag_hard_excludes_bash_always(tmp_path: Path) -> None:
-    """Fix 1 (CL-9knh fix-cycle 2): --tools=Read,Grep,Glob must be present in
-    argv for EVERY -br invocation, callback or not — this is what actually
-    removes Bash from the built-in tool set (--allowedTools/--disallowedTools
-    alone only govern approval-without-prompting for tools that ARE
-    registered, which was empirically shown to be insufficient)."""
-    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
-        tmp_path,
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-br", "CL-safe"],
         [
             "-br",
             "CL-safe",
@@ -285,18 +281,21 @@ def test_cld_bead_review_tools_flag_hard_excludes_bash_always(tmp_path: Path) ->
             "--coordinator-surface",
             "surface:33",
         ],
-    )
+    ],
+    ids=["no-callback", "with-callback"],
+)
+def test_cld_bead_review_tools_flag_hard_excludes_bash_always(tmp_path: Path, args: list[str]) -> None:
+    """Fix 1 (CL-9knh fix-cycle 2): --tools=Read,Grep,Glob must be present in
+    argv for EVERY -br invocation, callback or not — this is what actually
+    removes Bash from the built-in tool set (--allowedTools/--disallowedTools
+    alone only govern approval-without-prompting for tools that ARE
+    registered, which was empirically shown to be insufficient)."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, args)
 
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
-
-    result2, argv_file2, _pf2, called_file2, _bl2 = _run_cld(tmp_path, ["-br", "CL-safe"])
-    assert result2.returncode == 0, result2.stderr
-    assert called_file2.exists()
-    argv2 = json.loads(argv_file2.read_text(encoding="utf-8"))
-    assert _argv_flag_value(argv2, "--tools") == BEAD_REVIEW_TOOLS
 
 
 @pytest.mark.parametrize("args", [["-b", "CL-safe"], ["-bq", "CL-safe"]])
@@ -638,7 +637,12 @@ def test_cld_bead_review_launcher_flashes_cmux_after_exit_with_callback(tmp_path
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
-    assert not any("Bash" in token for token in argv)
+    # No Bash tool-permission entry anywhere (the review prompt's prose may
+    # legitimately mention "Bash" while explaining why it has no access —
+    # check the tool-profile flag values specifically, not the whole argv).
+    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
+    assert "Bash" not in _argv_flag_value(argv, "--allowedTools")
+    assert "Bash" not in _argv_flag_value(argv, "--tools")
 
     flash_calls = _cmux_trigger_flash_calls(cmux_log)
     assert flash_calls == [
