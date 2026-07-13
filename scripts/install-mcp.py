@@ -7,12 +7,10 @@ into the target harness config file under the correct top-level key. Tags
 every entry with `_origin = "library:mcp:<name>"` for idempotent re-install
 and clean `--remove`.
 
-Supported harnesses (CL-l0c Deliverable D; antigravity + cursor added in CL-qdtc;
-config paths corrected in CL-oo82):
+Supported harnesses:
   claude_code  -> ~/.claude.json                       ("mcpServers" map)
   codex        -> ~/.codex/config.toml                 ("mcp_servers" table)
   opencode     -> ~/.config/opencode/opencode.json     ("mcp" map)
-  antigravity  -> ~/.gemini/config/mcp_config.json     ("mcpServers" map)
   cursor       -> ~/.cursor/mcp.json                   ("mcpServers" map)
   claude_ai    -> emits install URL (manual: no programmatic install)
   claude_ios   -> emits install URL (manual: no programmatic install)
@@ -20,8 +18,7 @@ config paths corrected in CL-oo82):
 
 NOTE: claude_code user-scoped MCP servers live in the top-level `mcpServers` map
 of ~/.claude.json — NOT ~/.claude/settings.json (that file holds permissions,
-hooks, and env; its `mcpServers` key is ignored by Claude Code). Antigravity
-(Gemini/Codeium CLI, `agy`) reads MCP servers from ~/.gemini/config/mcp_config.json.
+hooks and env; its `mcpServers` key is ignored by Claude Code).
 
 Usage:
     install-mcp.py <name>                          # install to all declared harnesses
@@ -60,14 +57,6 @@ OPENCODE_CONFIG = Path(
     os.environ.get(
         "OPENCODE_CONFIG_FILE",
         str(Path.home() / ".config" / "opencode" / "opencode.json"),
-    )
-)
-# Antigravity (Gemini/Codeium CLI, `agy`) reads MCP servers from
-# ~/.gemini/config/mcp_config.json (NOT ~/.config/gemini/settings.json).
-GEMINI_SETTINGS = Path(
-    os.environ.get(
-        "GEMINI_SETTINGS_FILE",
-        str(Path.home() / ".gemini" / "config" / "mcp_config.json"),
     )
 )
 CURSOR_MCP_CONFIG = Path(
@@ -114,8 +103,7 @@ def _load_json(path: Path) -> dict:
         return {}
     text = path.read_text()
     if not text.strip():
-        # Empty config file (e.g. Antigravity ships an empty mcp_config.json) —
-        # treat as an empty object rather than crashing on json.load.
+        # Treat an empty config as an empty object rather than crashing.
         return {}
     return json.loads(text)
 
@@ -466,9 +454,9 @@ def _install_json_mcp_servers(
 ) -> int:
     """Install/remove in a JSON config under the standard ``mcpServers`` map.
 
-    Shared by harnesses whose config files use the same ``{"mcpServers": {...}}``
-    shape as Claude Code (Gemini CLI / Antigravity, Cursor). The only per-harness
-    differences are the config path and the log label.
+    Shared by harnesses whose config files use the standard
+    ``{"mcpServers": {...}}`` shape. Per-harness differences are the config
+    path and log label.
     """
     config = _load_json(config_path)
     origin = f"{ORIGIN_PREFIX}{name}"
@@ -515,13 +503,6 @@ def _install_json_mcp_servers(
     return 0
 
 
-def install_antigravity(name: str, block: dict, dry_run: bool, remove: bool) -> int:
-    """Install/remove in ~/.config/gemini/settings.json under mcpServers."""
-    return _install_json_mcp_servers(
-        name, block, dry_run, remove, harness="antigravity", config_path=GEMINI_SETTINGS
-    )
-
-
 def install_cursor(name: str, block: dict, dry_run: bool, remove: bool) -> int:
     """Install/remove in ~/.cursor/mcp.json under mcpServers."""
     return _install_json_mcp_servers(
@@ -548,7 +529,6 @@ HANDLERS: dict[str, Callable[..., int]] = {
     "claude_code": install_claude_code,
     "codex": install_codex,
     "opencode": install_opencode,
-    "antigravity": install_antigravity,
     "cursor": install_cursor,
     "claude_ai": lambda n, b, d, r: install_url_only(n, b, d, r, "claude_ai"),
     "claude_ios": lambda n, b, d, r: install_url_only(n, b, d, r, "claude_ios"),

@@ -9,6 +9,7 @@ re-read of library.yaml — tests can use tmpdir fixtures.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -42,7 +43,7 @@ from .mcp_supervised_service import (
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Harnesses whose config files install-mcp.py can write, in install order.
-_WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "antigravity", "cursor"]
+_WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "cursor"]
 # Full set for an "all" install: writable configs plus URL-only (manual) harnesses.
 _ALL_MCP_HARNESSES = _WRITABLE_MCP_HARNESSES + ["claude_ai", "claude_ios"]
 
@@ -60,6 +61,79 @@ def _restore_config(path: Path, snapshot: str | None) -> None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(snapshot)
+
+
+def _retired_registration_specs(
+    entry: dict,
+    harness: str,
+    env_overrides: dict | None = None,
+) -> list[tuple[dict, Path]]:
+    """Resolve legacy JSON registrations retired by an all-harness migration."""
+    if harness != "all":
+        return []
+    install = entry.get("install", {}) or {}
+    resolved: list[tuple[dict, Path]] = []
+    for spec in install.get("retired_mcp_registrations", []) or []:
+        env_name = spec.get("config_path_env")
+        raw_path = (env_overrides or {}).get(env_name) if env_name else None
+        raw_path = raw_path or (os.environ.get(env_name) if env_name else None)
+        raw_path = raw_path or spec.get("config_path")
+        if not raw_path:
+            raise InstallError("Retired MCP registration is missing config_path.")
+        resolved.append((spec, Path(raw_path).expanduser()))
+    return resolved
+
+
+def _matches_legacy_stdio(existing: Any, descriptors: list[dict]) -> bool:
+    if not isinstance(existing, dict) or existing.get("_origin") is not None:
+        return False
+    command = existing.get("command")
+    args = list(existing.get("args") or [])
+    return any(
+        command == descriptor.get("command")
+        and args == list(descriptor.get("args") or [])
+        for descriptor in descriptors
+    )
+
+
+def _remove_retired_json_registration(
+    *,
+    path: Path,
+    top_level_key: str,
+    name: str,
+    legacy_descriptors: list[dict],
+) -> bool:
+    """Remove one owned or exact-known legacy registration from a JSON config."""
+    if not path.is_file() or not path.read_text().strip():
+        return False
+    try:
+        config = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise InstallError(f"Cannot migrate retired MCP config {path}: {exc}") from exc
+    if not isinstance(config, dict):
+        raise InstallError(f"Cannot migrate retired MCP config {path}: root must be an object.")
+    container = config.get(top_level_key, {})
+    if not isinstance(container, dict):
+        raise InstallError(
+            f"Cannot migrate retired MCP config {path}: {top_level_key} must be an object."
+        )
+    existing = container.get(name)
+    if existing is None:
+        return False
+    origin = f"library:mcp:{name}"
+    owned = isinstance(existing, dict) and existing.get("_origin") == origin
+    if not owned and not _matches_legacy_stdio(existing, legacy_descriptors):
+        raise InstallError(
+            f"Retired MCP registration {top_level_key}.{name} in {path} is not "
+            "library-owned or an exact known legacy descriptor; remove it manually."
+        )
+    del container[name]
+    if container:
+        config[top_level_key] = container
+    else:
+        config.pop(top_level_key, None)
+    path.write_text(json.dumps(config, indent=2) + "\n")
+    return True
 
 
 def _project_path_from_deploy(deploy_path: Path | None, mcp_subdir: str | None) -> Path | None:
@@ -310,6 +384,7 @@ def install_mcp(
         project_path = _project_path_from_deploy(deploy_path, mcp_subdir)
 
     harnesses = _selected_mcp_harnesses(entry, harness)
+    retired_specs = _retired_registration_specs(entry, harness, env_overrides)
 
     if dry_run:
         ops: list[dict[str, Any]] = []
@@ -330,6 +405,16 @@ def install_mcp(
                 "operation": "rollback_stdio",
                 "path": str(project_path),
                 "details": "restore preserved stdio descriptor for declared harnesses",
+            })
+        for spec, path in retired_specs:
+            target_paths.append(path)
+            ops.append({
+                "operation": "remove_retired_mcp_registration",
+                "path": str(path),
+                "details": (
+                    f"remove owned '{mcp_name}' registration from "
+                    f"{spec['top_level_key']}"
+                ),
             })
         for selected in harnesses:
             path = _mcp_config_path(selected)
@@ -404,6 +489,8 @@ def install_mcp(
             path = _mcp_config_path(h)
             if path is not None:
                 snapshots[path] = _snapshot_config(path)
+        for _, path in retired_specs:
+            snapshots.setdefault(path, _snapshot_config(path))
 
         if supervised and project_path and not rollback_stdio:
             service_info = ensure_supervised_service(entry, project_path, dry_run=False)
@@ -429,6 +516,17 @@ def install_mcp(
                 raise InstallError(f"Failed to install MCP server '{mcp_name}' for harness '{h}'.")
             if _mcp_config_path(h) is not None:
                 installed_harnesses.append(h)
+
+        retired_registrations_removed: list[str] = []
+        legacy_descriptors = (supervised or {}).get("legacy_stdio_descriptors", [])
+        for spec, path in retired_specs:
+            if _remove_retired_json_registration(
+                path=path,
+                top_level_key=spec["top_level_key"],
+                name=mcp_name,
+                legacy_descriptors=legacy_descriptors,
+            ):
+                retired_registrations_removed.append(str(path))
 
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         lock_data = load_lockfile(lockfile_path)
@@ -459,6 +557,7 @@ def install_mcp(
             data={
                 "name": mcp_name,
                 "installed_harnesses": installed_harnesses,
+                "retired_registrations_removed": retired_registrations_removed,
                 "deploy_path": str(deploy_path) if deploy_path else None,
                 "service": service_info,
                 "transport": "stdio" if rollback_stdio else "http",
@@ -584,14 +683,6 @@ def _mcp_config_path(harness: str) -> Path | None:
                 str(Path.home() / ".config" / "opencode" / "opencode.json"),
             )
         )
-    if harness == "antigravity":
-        # Antigravity (Gemini/Codeium CLI) reads MCP from ~/.gemini/config/mcp_config.json.
-        return Path(
-            os.environ.get(
-                "GEMINI_SETTINGS_FILE",
-                str(Path.home() / ".gemini" / "config" / "mcp_config.json"),
-            )
-        )
     if harness == "cursor":
         return Path(
             os.environ.get(
@@ -599,14 +690,15 @@ def _mcp_config_path(harness: str) -> Path | None:
                 str(Path.home() / ".cursor" / "mcp.json"),
             )
         )
-    # claude_code (default): user-scoped MCP lives in ~/.claude.json `mcpServers`,
-    # NOT ~/.claude/settings.json.
-    return Path(
-        os.environ.get(
-            "CLAUDE_SETTINGS_FILE",
-            str(Path.home() / ".claude.json"),
+    if harness == "claude_code":
+        # User-scoped MCP lives in ~/.claude.json `mcpServers`, not settings.json.
+        return Path(
+            os.environ.get(
+                "CLAUDE_SETTINGS_FILE",
+                str(Path.home() / ".claude.json"),
+            )
         )
-    )
+    raise InstallError(f"Unsupported MCP harness: {harness}")
 
 
 def remove_mcp(
@@ -705,10 +797,6 @@ def _install_to_harness(mod, name: str, block: dict, harness: str, dry_run: bool
             fn = getattr(mod, "install_opencode", None)
             if fn:
                 return fn(name, block, dry_run=dry_run, remove=False)
-        elif harness == "antigravity":
-            fn = getattr(mod, "install_antigravity", None)
-            if fn:
-                return fn(name, block, dry_run=dry_run, remove=False)
         elif harness == "cursor":
             fn = getattr(mod, "install_cursor", None)
             if fn:
@@ -737,10 +825,6 @@ def _remove_from_harness(mod, name: str, harness: str) -> int:
                 return fn(name, {}, dry_run=False, remove=True)
         elif harness == "opencode":
             fn = getattr(mod, "install_opencode", None)
-            if fn:
-                return fn(name, {}, dry_run=False, remove=True)
-        elif harness == "antigravity":
-            fn = getattr(mod, "install_antigravity", None)
             if fn:
                 return fn(name, {}, dry_run=False, remove=True)
         elif harness == "cursor":

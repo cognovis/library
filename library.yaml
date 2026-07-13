@@ -3737,9 +3737,9 @@ library:
   mcp_servers:
   - name: cognovis-tools
     description: First-party bead.* typed tools — exposes bd (beads) commands as structured
-      MCP tools for all harness families (ADR-0007 library-tool-surface). HTTP activation
-      is gated on all four live roots-or-workspace_bind probes; stdio rollback is preserved
-      in supervised_local_service.
+      MCP tools for Claude Code, Codex, and Cursor Agent (ADR-0007 library-tool-surface).
+      HTTP activation is gated on all three live roots-or-workspace_bind probes; stdio
+      rollback is preserved in supervised_local_service.
     source: https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml
     species: library-tool-surface
     coding_strategy: mcp
@@ -3817,9 +3817,13 @@ library:
         - -c
         - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
       activation_note: HTTP registrations are written only after the supervised daemon
-        install/start/health_check succeeds. Live activation still requires all four harness
-        families to pass loopback connectivity plus roots-or-workspace_bind probes.
+        install/start/health_check succeeds. Live activation requires Claude Code, Codex,
+        and Cursor Agent to pass loopback connectivity plus roots-or-workspace_bind probes.
     install:
+      retired_mcp_registrations:
+      - config_path: ~/.gemini/config/mcp_config.json
+        config_path_env: GEMINI_SETTINGS_FILE
+        top_level_key: mcpServers
       mcp:
         claude_code:
           config_path: ~/.claude.json
@@ -3829,11 +3833,6 @@ library:
         codex:
           config_path: ~/.codex/config.toml
           snippet:
-            url: http://127.0.0.1:8765/mcp
-        antigravity:
-          config_path: ~/.gemini/config/mcp_config.json
-          snippet:
-            type: http
             url: http://127.0.0.1:8765/mcp
         cursor:
           config_path: ~/.cursor/mcp.json

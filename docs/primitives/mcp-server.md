@@ -160,15 +160,13 @@ external repo for third-party). The Library installer (`/library use`)
 writes the per-harness MCP registration pointing at the source location. No
 server code is vendored into the consumer project; only registration.
 
-A `library-tool-surface` server registers into all four `bin/` launcher
-harness families: Claude Code (`~/.claude/.mcp.json`), Codex
-(`~/.codex/config.toml`), Antigravity (`agr`), and Cursor (`cra`). Per
+A `library-tool-surface` server registers into the supported launcher harnesses.
+For `cognovis-tools`, that set is exactly Claude Code (`~/.claude.json`), Codex
+(`~/.codex/config.toml`), and Cursor Agent (`~/.cursor/mcp.json`). Per
 ADR-0007, **registration is decoupled from orchestration role**: registering
 the server means agents running in that harness can call its typed tools; it
 does NOT make the harness an orchestration runner. Full bead orchestration
-runs only under Claude Code and Codex; Antigravity and Cursor are
-implementation-surface consumers that register the server so their agents do
-not flag-guess CLIs. The `install.mcp` schema carries `antigravity` and
-`cursor` keys for this reason.
+runs only under Claude Code and Codex; Cursor Agent is an implementation-surface
+consumer that registers the server so its agents do not flag-guess CLIs.
 
 ---

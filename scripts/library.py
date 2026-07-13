@@ -16,7 +16,7 @@ Options:
   --scope       project (default) or global
   --target-project
                 Project root for project-scoped writes
-  --harness     claude_code, codex, cursor, opencode, antigravity, or all (where applicable)
+  --harness     claude_code, codex, cursor, opencode, or all (where applicable)
 
 Exit codes:
   0  success
@@ -160,7 +160,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         use_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+            choices=["claude_code", "codex", "cursor", "opencode", "all"],
             default="all",
             help="Target harness (default: all)",
         )
@@ -186,7 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         remove_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+            choices=["claude_code", "codex", "cursor", "opencode", "all"],
             default="claude_code",
             help="Target harness for harness-specific removals (default: claude_code)",
         )
@@ -217,7 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         sync_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+            choices=["claude_code", "codex", "cursor", "opencode", "all"],
             default="all",
         )
 
@@ -374,7 +374,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     top_sync_parser.add_argument(
         "--harness",
-        choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+        choices=["claude_code", "codex", "cursor", "opencode", "all"],
         default="all",
     )
 

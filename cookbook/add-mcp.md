@@ -40,9 +40,6 @@ library:
           codex:
             config_path: ~/.codex/config.toml
             snippet: { ... }
-          antigravity:
-            config_path: ~/.config/gemini/settings.json
-            snippet: { ... }
           cursor:
             config_path: ~/.cursor/mcp.json
             snippet: { ... }
@@ -62,21 +59,19 @@ Use `species: external-capability` for third-party capability providers such as 
 servers that expose typed tool families over existing Library CLIs or Scripts.
 
 `cognovis-tools` is the reference `library-tool-surface` entry. Its job is to register the typed
-tool surface into all four coding harness families:
+tool surface into exactly three coding harness families:
 
 - `claude_code` for `cld`
 - `codex` for `cdx`
-- `antigravity` for `agr`
 - `cursor` for `cra`
 
 Registration is not orchestration. Claude Code and Codex remain the bead orchestration runners;
-Antigravity and Cursor are implementation-surface consumers that need the MCP registration so their
-agents call the server's typed tools (e.g. `bead.*` for cognovis-tools) directly instead of reconstructing CLI flags.
+Cursor is an implementation-surface consumer that needs the MCP registration so its agents call
+the server's typed tools directly instead of reconstructing CLI flags.
 
-## Registering for All 4 Harnesses
+## Registering cognovis-tools for all supported harnesses
 
-Use all four coding-harness keys when a first-party `library-tool-surface` must be available in
-every implementation surface:
+Use the three supported coding-harness keys for cognovis-tools:
 
 ```yaml
 install:
@@ -86,9 +81,6 @@ install:
       snippet: {command: uv}
     codex:
       config_path: ~/.codex/config.toml
-      snippet: {command: uv}
-    antigravity:
-      config_path: ~/.config/gemini/settings.json
       snippet: {command: uv}
     cursor:
       config_path: ~/.cursor/mcp.json
@@ -127,7 +119,7 @@ an add URL available: `mobile_strategy: mcp` with `install_url`.
 
 For `species: library-tool-surface`, `coding_strategy` should normally be `mcp`, and the
 `install.mcp` block should register every coding harness surface that will consume the typed tools.
-For `cognovis-tools`, that means `claude_code`, `codex`, `antigravity`, and `cursor`.
+For `cognovis-tools`, that means `claude_code`, `codex`, and `cursor`.
 
 ### 3. Fill in capabilities
 
@@ -159,12 +151,6 @@ install:
       snippet:
         command: <command-name>
         args: [<arg>, <arg>]
-    antigravity:
-      config_path: ~/.config/gemini/settings.json
-      snippet:
-        command: <command-name>
-        args: [<arg>, <arg>]
-        env: {}
     cursor:
       config_path: ~/.cursor/mcp.json
       snippet:
@@ -189,13 +175,6 @@ install:
           - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
     codex:
       config_path: ~/.codex/config.toml
-      snippet:
-        command: sh
-        args:
-          - -c
-          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
-    antigravity:
-      config_path: ~/.config/gemini/settings.json
       snippet:
         command: sh
         args:

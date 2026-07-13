@@ -8,6 +8,8 @@
 
 ### Changed
 
+- *(clc-g5ky)* cognovis-tools now supports exactly Claude Code, Codex, and Cursor Agent. The catalog, schema, installer choices, documentation, tests, and live activation gate no longer expose Antigravity; an all-harness install transactionally removes a previously library-managed registration from the retired JSON config before activation completes.
+
 - *(cld/cdx)* Coordinator callback identity travels only via CLI parameters, never environment variables. Malformed or partial callback parameters (only one of the pair supplied, or values not matching `workspace:<n>` / `surface:<n>`) fail with exit 2 before any harness launch.
 - *(cld/cdx)* `cld -r` / `--resume` is unaffected and still forwards to `claude --resume`. Single-bead launcher contract preserved; no CMUX pane creation or wave dispatch.
 - *(cld)* `cld -br` review sessions no longer signal the coordinator themselves (they have no Bash access, see Security below). The launcher now runs `cmux trigger-flash` on the coordinator's behalf after the Claude subprocess exits, collapsing the previous two-trigger contract (mid-session blocking-question flash + separate terminal-verdict flash) into a single post-exit signal; the coordinator distinguishes a clean verdict from a blocking question by inspecting the pane's visible output. (CL-9knh)

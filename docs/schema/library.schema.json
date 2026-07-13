@@ -1423,7 +1423,7 @@
               }
             },
             "mcp": {
-              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are harness names (claude_code, codex, opencode, antigravity, cursor, claude_ai, claude_ios). Registration into a harness means agents running in it can call the server's typed tools; it does NOT imply the harness orchestrates Library workflows. Per ADR-0007, full bead orchestration runs only under Claude Code and Codex; antigravity and cursor are implementation-surface consumers that register the server so their agents do not flag-guess CLIs. Values are open objects \u2014 the translator bead will define stricter schemas.",
+              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are supported harness names (claude_code, codex, opencode, cursor, claude_ai, claude_ios). Registration into a harness means agents running in it can call the server's typed tools; it does NOT imply the harness orchestrates Library workflows. Values are open objects \u2014 the translator bead will define stricter schemas.",
               "type": "object",
               "properties": {
                 "claude_code": {
@@ -1460,22 +1460,6 @@
                 },
                 "opencode": {
                   "description": "Config hints for OpenCode (~/.config/opencode/opencode.json).",
-                  "type": "object",
-                  "properties": {
-                    "config_path": {
-                      "description": "Path to the harness config file that receives the snippet.",
-                      "type": "string"
-                    },
-                    "snippet": {
-                      "description": "Canonical MCP server descriptor. Structure is harness-specific \u2014 translator bead enforces exact shape.",
-                      "type": "object",
-                      "additionalProperties": true
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                "antigravity": {
-                  "description": "Config hints for Antigravity (Gemini CLI, launched via `agr`). Implementation-surface consumer per ADR-0007 \u2014 registers the server so its agents call typed tools; not an orchestration runner.",
                   "type": "object",
                   "properties": {
                     "config_path": {
@@ -1530,6 +1514,36 @@
                 }
               },
               "additionalProperties": false
+            },
+            "retired_mcp_registrations": {
+              "description": "Owned legacy JSON registrations removed transactionally during an all-harness install or stdio rollback. This is migration metadata, not a supported harness declaration.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "config_path",
+                  "top_level_key"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "config_path": {
+                    "description": "Legacy JSON config path containing the retired registration.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "config_path_env": {
+                    "description": "Optional environment override used by tests and managed deployments.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "top_level_key": {
+                    "description": "JSON object key containing MCP server registrations.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "default": []
             }
           }
         },

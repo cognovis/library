@@ -550,10 +550,6 @@ def test_mcp_server_species_library_tool_surface():
                     "config_path": "~/.codex/config.toml",
                     "snippet": {"url": "http://127.0.0.1:8765/mcp"},
                 },
-                "antigravity": {
-                    "config_path": "~/.gemini/config/mcp_config.json",
-                    "snippet": {"type": "http", "url": "http://127.0.0.1:8765/mcp"},
-                },
                 "cursor": {
                     "config_path": "~/.cursor/mcp.json",
                     "snippet": {"type": "http", "url": "http://127.0.0.1:8765/mcp"},
