@@ -1,0 +1,82 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-hqaj",
+  "commands": [
+    {
+      "name": "red-derived-path-test",
+      "command": "PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-hqaj/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run pytest tests/test_mcp_deploy_clone.py::TestDeployPathDerivation::test_cognovis_tools_supervised_catalog_paths_match_derived_project_path -q",
+      "purpose": "Red gate for the new catalog regression test before changing library.yaml.",
+      "exit_code": 1,
+      "observed_result": "Expected failure: the test derived ~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools but the catalog still contained ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools."
+    },
+    {
+      "name": "green-derived-path-test",
+      "command": "PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-hqaj/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run pytest tests/test_mcp_deploy_clone.py::TestDeployPathDerivation::test_cognovis_tools_supervised_catalog_paths_match_derived_project_path -q",
+      "purpose": "Green gate for the new catalog regression test after repointing library.yaml.",
+      "exit_code": 0,
+      "observed_result": "1 passed in 0.12s."
+    },
+    {
+      "name": "validate-library",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run python3 scripts/validate-library.py",
+      "purpose": "Smoke validation that library.yaml still conforms to docs/schema/library.schema.json.",
+      "exit_code": 0,
+      "observed_result": "PASS: library.yaml is valid against docs/schema/library.schema.json."
+    },
+    {
+      "name": "full-deploy-clone-tests-initial",
+      "command": "PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-hqaj/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run pytest tests/test_mcp_deploy_clone.py -q",
+      "purpose": "Initial full-file regression run requested by the bead.",
+      "exit_code": 1,
+      "observed_result": "11 passed and 1 failed. The failure was a sandbox PermissionError writing /Users/malte/.config/library/global.lock in an existing integration test, not a catalog-path assertion failure."
+    },
+    {
+      "name": "full-deploy-clone-tests",
+      "command": "HOME=/private/tmp/clhqaj-home PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-hqaj/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run pytest tests/test_mcp_deploy_clone.py -q",
+      "purpose": "Full-file regression run with HOME redirected to writable temp space for the existing global-lock integration test.",
+      "exit_code": 0,
+      "observed_result": "12 passed in 0.14s."
+    },
+    {
+      "name": "grep-no-shared-supervised-block",
+      "command": "sed -n '3770,3845p' library.yaml | rg \"~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools\"",
+      "purpose": "Confirm the cognovis-tools supervised_local_service block no longer references the shared deploy clone path.",
+      "exit_code": 1,
+      "observed_result": "No matches, which is the expected result for this negative grep."
+    },
+    {
+      "name": "grep-nested-supervised-block",
+      "command": "sed -n '3770,3845p' library.yaml | rg \"~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools\"",
+      "purpose": "Confirm the cognovis-tools supervised_local_service block contains the installer-derived per-mcp deploy project path.",
+      "exit_code": 0,
+      "observed_result": "Eight matches: install, start, health_check, restart, stop, uninstall, stdio_rollback, and legacy_stdio_descriptors[0].args."
+    },
+    {
+      "name": "artifact-validation",
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache-clhqaj uv run python /Users/malte/.agents/skills/beads/scripts/implementation_artifacts.py validate --manifest .beads/runs/clhqaj-20260713T191625/implementation_manifest.json --evidence .beads/runs/clhqaj-20260713T191625/evidence_ledger.json --bead-id CL-hqaj",
+      "purpose": "Validate the required implementation_manifest.json and evidence_ledger.json shapes.",
+      "exit_code": 0,
+      "observed_result": "status ok; manifest_errors and evidence_errors were empty."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Full repository test suite",
+      "reason": "Explicitly out of scope. The bead requested only tests/test_mcp_deploy_clone.py plus scripts/validate-library.py."
+    },
+    {
+      "check": "External URL, package registry, or third-party API verification",
+      "reason": "Explicitly out of scope. The bead is a local catalog path-string fix and local regression test."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/clhqaj-20260713T191625/implementation_manifest.json",
+      "description": "Acceptance-criteria manifest for CL-hqaj implementation."
+    },
+    {
+      "path": ".beads/runs/clhqaj-20260713T191625/evidence_ledger.json",
+      "description": "Command evidence ledger for CL-hqaj red and green gates."
+    }
+  ]
+}
