@@ -358,17 +358,74 @@ def test_cld_bead_review_allowed_and_disallowed_tools_do_not_overlap(tmp_path: P
     assert not (allowed_set & disallowed_set), "a tool cannot be both allowed and disallowed"
 
 
-def test_cld_bead_review_still_uses_plan_mode_with_tool_profile(tmp_path: Path) -> None:
-    """AK4 negative matrix: reject non-plan-mode regression once the tool profile is added."""
+def test_cld_bead_review_uses_dontask_mode_with_tool_profile(tmp_path: Path) -> None:
+    """AK4 negative matrix, updated for CL-9knh iteration 3: -br must use
+    `dontAsk`, not `plan` or any other mode. `--permission-mode plan` was
+    found (via independent live probes — see bead CL-9knh notes) to
+    categorically block MCP tool execution even for tools explicitly present
+    in --allowedTools, which defeats the whole point of the -br tool
+    profile. `dontAsk` was verified via a live `claude --print
+    --permission-mode dontAsk ...` dry-run to allow allowlisted tools while
+    still honoring --disallowedTools."""
     result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
 
     assert result.returncode == 0, result.stderr
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert _argv_has_permission_mode(argv, "plan")
+    assert _argv_has_permission_mode(argv, "dontAsk")
     assert not _argv_has_permission_mode(argv, "auto")
     assert not _argv_has_permission_mode(argv, "acceptEdits")
     assert not _argv_has_permission_mode(argv, "bypassPermissions")
+    assert not _argv_has_permission_mode(argv, "plan")
+    assert not _argv_has_permission_mode(argv, "manual")
     assert "--dangerously-skip-permissions" not in argv
+
+
+def test_cld_bead_review_dontask_mode_grants_full_allowed_tools_together(tmp_path: Path) -> None:
+    """CL-9knh iteration 3 positive-case coverage: prove the ARGV-level
+    contract that --permission-mode dontAsk and the full expected
+    --allowedTools profile are emitted TOGETHER for the same -br invocation.
+
+    This repo's launcher test harness mocks the `claude` binary (it only
+    captures argv/prompt — see _write_claude_capture) and this suite has no
+    precedent for live-binary tests that exercise real Claude Code
+    permission/tool-execution behavior (tests/smoke/ only checks filesystem
+    install paths, never invokes a live Claude Code session — see
+    tests/smoke/README.md "Known Limitations"). Introducing a live,
+    API-key-dependent test here would break this suite's fast/hermetic
+    design (~15-20s via subprocess mocks). The actual runtime claim this
+    fix depends on — "an allowlisted MCP tool call succeeds under dontAsk,
+    where it was denied under plan" — is therefore proven by the live AK5
+    smoke run against an uncached bead (coordinator-run, outside this
+    suite), not by a unit test. This test only guards the argv shape that
+    makes that runtime behavior possible.
+    """
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--permission-mode") == "dontAsk"
+    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
+
+
+def test_cld_bead_review_dontask_mode_still_blocks_all_mutations(tmp_path: Path) -> None:
+    """CL-9knh iteration 3 negative-case coverage: switching -br's
+    permission mode from `plan` to `dontAsk` must not widen the tool
+    profile. --tools stays hard-limited to Read,Grep,Glob (Bash excluded),
+    and --disallowedTools still carries the full mutation blocklist with
+    Edit/Write/NotebookEdit absent from --allowedTools."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--permission-mode") == "dontAsk"
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
+    assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
+    allowed_set = set(_argv_flag_value(argv, "--allowedTools").split(","))
+    assert "Bash" not in allowed_set
+    assert "Edit" not in allowed_set
+    assert "Write" not in allowed_set
+    assert "NotebookEdit" not in allowed_set
 
 
 def test_cld_bead_review_callback_contract_unaffected_by_tool_profile(tmp_path: Path) -> None:
@@ -485,7 +542,9 @@ def test_cld_defaults_to_permission_auto_without_dangerous_skip(
     assert _argv_has_permission_mode(argv, "auto")
 
 
-def test_cld_bead_review_defaults_to_plan_mode_without_dangerous_skip(tmp_path: Path) -> None:
+def test_cld_bead_review_defaults_to_dontask_mode_without_dangerous_skip(tmp_path: Path) -> None:
+    """CL-9knh iteration 3: -br defaults to `dontAsk` (not `plan` or
+    `auto`) without --skip-perms."""
     result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
 
     assert result.returncode == 0, result.stderr
@@ -493,7 +552,8 @@ def test_cld_bead_review_defaults_to_plan_mode_without_dangerous_skip(tmp_path: 
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert "--dangerously-skip-permissions" not in argv
     assert not _argv_has_permission_mode(argv, "auto")
-    assert _argv_has_permission_mode(argv, "plan")
+    assert not _argv_has_permission_mode(argv, "plan")
+    assert _argv_has_permission_mode(argv, "dontAsk")
 
 
 @pytest.mark.parametrize(
@@ -517,6 +577,7 @@ def test_cld_skip_perms_explicitly_uses_dangerous_skip_and_warns(
     assert "--dangerously-skip-permissions" in argv
     assert not _argv_has_permission_mode(argv, "auto")
     assert not _argv_has_permission_mode(argv, "plan")
+    assert not _argv_has_permission_mode(argv, "dontAsk")
     stderr = result.stderr.lower()
     assert "warning" in stderr
     assert "dangerously-skip-permissions" in stderr

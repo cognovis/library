@@ -360,8 +360,11 @@ def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: 
     prompt = prompt_file.read_text(encoding="utf-8")
     # model + permission-mode must both be present (order-flexible, but each
     # flag's own value must be exact).
+    # CL-9knh iteration 3: -br switched from `plan` to `dontAsk` because
+    # `--permission-mode plan` was found to categorically block MCP tool
+    # execution even for tools explicitly present in --allowedTools.
     assert _argv_flag_value(argv, "--model") == "opus"
-    assert _argv_flag_value(argv, "--permission-mode") == "plan"
+    assert _argv_flag_value(argv, "--permission-mode") == "dontAsk"
     # Narrow read + review-cache tool profile (CL-9knh): deterministic,
     # single "--flag=value" argv token per flag — see bin/cld -br block.
     # --tools hard-excludes Bash from the built-in tool set (fix-cycle 2).
