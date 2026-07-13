@@ -58,6 +58,14 @@ TYPED_BEAD_TOOLS = {
     "mcp__cognovis-tools__bead_dep_remove",
     "mcp__cognovis-tools__bead_dolt_sync",
 }
+READ_ONLY_BEAD_TOOLS = {
+    "mcp__cognovis-tools__bead_show",
+    "mcp__cognovis-tools__bead_ready",
+    "mcp__cognovis-tools__bead_list",
+    "mcp__cognovis-tools__bead_search",
+    "mcp__cognovis-tools__bead_repos",
+}
+MUTATING_BEAD_TOOLS = TYPED_BEAD_TOOLS - READ_ONLY_BEAD_TOOLS
 
 
 pytestmark = pytest.mark.skipif(
@@ -90,13 +98,24 @@ def _build(agent_name: str, harness: str, output_dir: Path) -> Path:
     return next(output_dir.glob(f"*{suffix}"))
 
 
+def _claude_frontmatter(artifact: Path) -> dict:
+    return yaml.safe_load(artifact.read_text().split("---", 2)[1]) or {}
+
+
+def _claude_tools(frontmatter: dict) -> set[str]:
+    tools = frontmatter.get("tools", "")
+    if isinstance(tools, str):
+        return {tool.strip() for tool in tools.split(",") if tool.strip()}
+    return set(tools)
+
+
 @pytest.mark.parametrize("agent_name", sorted(MUTATING_AGENTS))
 def test_mutating_agents_receive_cognovis_tools_in_both_harnesses(
     agent_name: str, tmp_path: Path
 ) -> None:
     claude_artifact = _build(agent_name, "claude", tmp_path / agent_name / "claude")
-    frontmatter = yaml.safe_load(claude_artifact.read_text().split("---", 2)[1]) or {}
-    tools = {tool.strip() for tool in frontmatter["tools"].split(",")}
+    frontmatter = _claude_frontmatter(claude_artifact)
+    tools = _claude_tools(frontmatter)
     assert not TYPED_BEAD_TOOLS - tools
     assert "cognovis-tools" in frontmatter["mcpServers"]
 
@@ -106,6 +125,39 @@ def test_mutating_agents_receive_cognovis_tools_in_both_harnesses(
         line for line in codex_text.splitlines() if line.startswith("# mcp_servers:")
     )
     assert "cognovis-tools" in mcp_line
+
+
+def test_wave_monitor_receives_read_only_bead_tools_in_both_harnesses(
+    tmp_path: Path,
+) -> None:
+    claude_artifact = _build("wave-monitor", "claude", tmp_path / "claude")
+    claude_frontmatter = _claude_frontmatter(claude_artifact)
+    claude_tools = _claude_tools(claude_frontmatter)
+    assert READ_ONLY_BEAD_TOOLS <= claude_tools
+    assert not MUTATING_BEAD_TOOLS & claude_tools
+    assert "cognovis-tools" in claude_frontmatter["mcpServers"]
+
+    codex_artifact = _build("wave-monitor", "codex", tmp_path / "codex")
+    codex_text = codex_artifact.read_text()
+    assert '# mcp_servers: ["cognovis-tools"]' in codex_text
+    assert 'sandbox_mode = "read-only"' in codex_text
+
+
+def test_effort_classifier_receives_no_bead_access_in_either_harness(
+    tmp_path: Path,
+) -> None:
+    claude_artifact = _build("effort-classifier", "claude", tmp_path / "claude")
+    claude_frontmatter = _claude_frontmatter(claude_artifact)
+    assert not TYPED_BEAD_TOOLS & _claude_tools(claude_frontmatter)
+    assert "cognovis-tools" not in claude_frontmatter.get("mcpServers", [])
+
+    codex_artifact = _build("effort-classifier", "codex", tmp_path / "codex")
+    codex_mcp_lines = [
+        line
+        for line in codex_artifact.read_text().splitlines()
+        if line.startswith("# mcp_servers:")
+    ]
+    assert all("cognovis-tools" not in line for line in codex_mcp_lines)
 
 
 def test_catalog_declares_cognovis_tools_for_all_mutating_primitives() -> None:
@@ -123,3 +175,11 @@ def test_catalog_declares_cognovis_tools_for_all_mutating_primitives() -> None:
     intake = entries["skills"]["intake"]
     assert "agent:bead-author" not in intake.get("requires", [])
     assert "inline cognovis-tools bead creation" in intake["description"]
+
+
+def test_catalog_installs_cognovis_tools_only_for_the_read_only_consumer() -> None:
+    catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())["library"]
+    agents = {entry["name"]: entry for entry in catalog["agents"]}
+
+    assert "mcp:cognovis-tools" in agents["wave-monitor"].get("requires", [])
+    assert "mcp:cognovis-tools" not in agents["effort-classifier"].get("requires", [])

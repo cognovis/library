@@ -2650,6 +2650,7 @@ library:
       Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.'
     source: https://github.com/cognovis/library-core/blob/main/agents/wave-monitor.md
     requires:
+    - mcp:cognovis-tools
     - skill:beads
     tags:
     - origin:original
