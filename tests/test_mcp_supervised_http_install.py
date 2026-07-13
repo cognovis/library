@@ -23,6 +23,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 from lib.errors import InstallError  # noqa: E402
 from lib.installers import mcp_installer  # noqa: E402
 from lib.installers.mcp_installer import (  # noqa: E402
+    _install_to_harness,
     _remove_from_harness,
     install_mcp,
     remove_mcp,
@@ -52,6 +53,19 @@ def test_remove_dispatch_reports_manual_url_removal_as_failure() -> None:
         remove=True,
         harness="claude_ai",
     )
+
+
+def test_install_dispatch_reports_writer_exception_as_failure() -> None:
+    module = MagicMock()
+    module.install_cursor.side_effect = OSError("write failed")
+
+    assert _install_to_harness(
+        module,
+        "cognovis-tools",
+        {"snippet": {"type": "http", "url": HTTP_URL}},
+        "cursor",
+        dry_run=False,
+    ) == 1
 
 
 def test_import_failure_restores_environment_overrides(
@@ -168,6 +182,13 @@ def _make_supervised_catalog(project_path: Path, *, stdio_command: str = "uv") -
                         ],
                     },
                     "install": {
+                        "retired_mcp_registrations": [
+                            {
+                                "config_path": "~/.gemini/config/mcp_config.json",
+                                "config_path_env": "GEMINI_SETTINGS_FILE",
+                                "top_level_key": "mcpServers",
+                            }
+                        ],
                         "mcp": {
                             "claude_code": {
                                 "config_path": "~/.claude.json",
@@ -176,10 +197,6 @@ def _make_supervised_catalog(project_path: Path, *, stdio_command: str = "uv") -
                             "codex": {
                                 "config_path": "~/.codex/config.toml",
                                 "snippet": {"url": HTTP_URL},
-                            },
-                            "antigravity": {
-                                "config_path": "~/.gemini/config/mcp_config.json",
-                                "snippet": {"type": "http", "url": HTTP_URL},
                             },
                             "cursor": {
                                 "config_path": "~/.cursor/mcp.json",
@@ -294,7 +311,7 @@ def tmp_env(tmp_path: Path):
     }
 
 
-def test_library_yaml_declares_four_exact_http_snippets():
+def test_library_yaml_declares_three_exact_http_snippets():
     library = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
     entry = next(
         item for item in library["library"]["mcp_servers"] if item["name"] == "cognovis-tools"
@@ -302,8 +319,8 @@ def test_library_yaml_declares_four_exact_http_snippets():
     snippets = entry["install"]["mcp"]
     assert snippets["claude_code"]["snippet"] == {"type": "http", "url": HTTP_URL}
     assert snippets["codex"]["snippet"] == {"url": HTTP_URL}
-    assert snippets["antigravity"]["snippet"] == {"type": "http", "url": HTTP_URL}
     assert snippets["cursor"]["snippet"] == {"type": "http", "url": HTTP_URL}
+    assert set(snippets) == {"claude_code", "codex", "cursor"}
     assert entry["capabilities"]["stateless"] is False
     assert entry["capabilities"]["streaming"] is True
     assert entry["supervised_local_service"]["stdio_rollback"]["type"] == "stdio"
@@ -578,7 +595,7 @@ def test_uninstall_removes_owned_registration_and_service(mock_clone, tmp_env):
             env_overrides=tmp_env["env"],
         )
         assert mock_run.call_count >= 2
-    for key in ("CLAUDE_SETTINGS_FILE", "GEMINI_SETTINGS_FILE", "CURSOR_MCP_FILE"):
+    for key in ("CLAUDE_SETTINGS_FILE", "CURSOR_MCP_FILE"):
         data = json.loads(Path(tmp_env["env"][key]).read_text())
         assert "cognovis-tools" not in data.get("mcpServers", {})
 
@@ -606,10 +623,11 @@ def test_dry_run_reports_service_and_registration_actions(mock_clone, tmp_env):
     assert "clone_mcp_source" in ops
     assert "supervised_service" in ops
     assert "install_mcp_server" in ops
+    assert "remove_retired_mcp_registration" in ops
 
 
 @patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
-def test_four_harness_outputs_are_exact(mock_clone, tmp_env):
+def test_three_harness_outputs_are_exact(mock_clone, tmp_env):
     mock_clone.return_value = tmp_env["deploy_path"]
     with patch(
         "lib.installers.mcp_supervised_service.service_status",
@@ -641,19 +659,173 @@ def test_four_harness_outputs_are_exact(mock_clone, tmp_env):
     assert 'url = "http://127.0.0.1:8765/mcp"' in codex
     assert '_origin = "library:mcp:cognovis-tools"' in codex
 
-    antigravity = json.loads(Path(tmp_env["env"]["GEMINI_SETTINGS_FILE"]).read_text())
-    assert antigravity["mcpServers"]["cognovis-tools"] == {
-        "type": "http",
-        "url": HTTP_URL,
-        "_origin": "library:mcp:cognovis-tools",
-    }
-
     cursor = json.loads(Path(tmp_env["env"]["CURSOR_MCP_FILE"]).read_text())
     assert cursor["mcpServers"]["cognovis-tools"] == {
         "type": "http",
         "url": HTTP_URL,
         "_origin": "library:mcp:cognovis-tools",
     }
+
+
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_all_harness_install_removes_owned_retired_registration(mock_clone, tmp_env):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    retired_path = Path(tmp_env["env"]["GEMINI_SETTINGS_FILE"])
+    retired_path.parent.mkdir(parents=True, exist_ok=True)
+    retired_path.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "cognovis-tools": {
+                        "type": "stdio",
+                        "command": "uv",
+                        "_origin": "library:mcp:cognovis-tools",
+                    },
+                    "manual-server": {"command": "keep"},
+                }
+            }
+        )
+    )
+    with patch(
+        "lib.installers.mcp_installer.ensure_supervised_service",
+        return_value={"action": "restart", "state": "healthy", "version": "test:1"},
+    ):
+        result = install_mcp(
+            tmp_env["catalog"],
+            "cognovis-tools",
+            tmp_env["tmp_path"],
+            harness="all",
+            env_overrides=tmp_env["env"],
+        )
+
+    retired = json.loads(retired_path.read_text())
+    assert "cognovis-tools" not in retired["mcpServers"]
+    assert retired["mcpServers"]["manual-server"] == {"command": "keep"}
+    assert result["data"]["retired_registrations_removed"] == [str(retired_path)]
+
+
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_all_harness_install_removes_exact_legacy_retired_registration(mock_clone, tmp_env):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    retired_path = Path(tmp_env["env"]["GEMINI_SETTINGS_FILE"])
+    retired_path.parent.mkdir(parents=True, exist_ok=True)
+    retired_path.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "cognovis-tools": {
+                        "type": "stdio",
+                        "command": "sh",
+                        "args": ["-c", "legacy-cognovis-tools"],
+                    }
+                }
+            }
+        )
+    )
+    with patch(
+        "lib.installers.mcp_installer.ensure_supervised_service",
+        return_value={"action": "restart", "state": "healthy", "version": "test:1"},
+    ):
+        install_mcp(
+            tmp_env["catalog"],
+            "cognovis-tools",
+            tmp_env["tmp_path"],
+            harness="all",
+            env_overrides=tmp_env["env"],
+        )
+
+    assert "cognovis-tools" not in json.loads(retired_path.read_text()).get(
+        "mcpServers", {}
+    )
+
+
+@pytest.mark.parametrize(
+    "retired_entry",
+    [
+        {"command": "foreign"},
+        {
+            "type": "stdio",
+            "command": "sh",
+            "args": ["-c", "legacy-cognovis-tools"],
+            "env": {"FOREIGN": "1"},
+        },
+        {
+            "type": "http",
+            "command": "sh",
+            "args": ["-c", "legacy-cognovis-tools"],
+        },
+    ],
+)
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_foreign_retired_registration_aborts_and_restores_supported_configs(
+    mock_clone, tmp_env, retired_entry
+):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    retired_path = Path(tmp_env["env"]["GEMINI_SETTINGS_FILE"])
+    retired_path.parent.mkdir(parents=True, exist_ok=True)
+    foreign = {"mcpServers": {"cognovis-tools": retired_entry}}
+    retired_path.write_text(json.dumps(foreign))
+    with patch(
+        "lib.installers.mcp_installer.ensure_supervised_service",
+        return_value={"action": "restart", "state": "healthy", "version": "test:1"},
+    ):
+        with pytest.raises(InstallError, match="not library-owned"):
+            install_mcp(
+                tmp_env["catalog"],
+                "cognovis-tools",
+                tmp_env["tmp_path"],
+                harness="all",
+                env_overrides=tmp_env["env"],
+            )
+
+    assert json.loads(retired_path.read_text()) == foreign
+    assert not Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"]).exists()
+    assert not Path(tmp_env["env"]["CODEX_CONFIG_FILE"]).exists()
+    assert not Path(tmp_env["env"]["CURSOR_MCP_FILE"]).exists()
+
+
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_real_writer_exception_restores_supported_and_retired_configs(mock_clone, tmp_env):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    claude_path = Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"])
+    claude_path.parent.mkdir(parents=True, exist_ok=True)
+    claude_before = '{"mcpServers":{"manual":{"command":"keep"}}}\n'
+    claude_path.write_text(claude_before)
+    retired_path = Path(tmp_env["env"]["GEMINI_SETTINGS_FILE"])
+    retired_path.parent.mkdir(parents=True, exist_ok=True)
+    retired_before = json.dumps(
+        {
+            "mcpServers": {
+                "cognovis-tools": {
+                    "type": "stdio",
+                    "command": "uv",
+                    "_origin": "library:mcp:cognovis-tools",
+                }
+            }
+        }
+    )
+    retired_path.write_text(retired_before)
+    module = MagicMock()
+    module.install_claude_code.side_effect = OSError("write failed")
+
+    with patch("lib.installers.mcp_installer._import_install_mcp", return_value=module):
+        with patch(
+            "lib.installers.mcp_installer.ensure_supervised_service",
+            return_value={"action": "restart", "state": "healthy", "version": "test:1"},
+        ):
+            with pytest.raises(InstallError, match="claude_code"):
+                install_mcp(
+                    tmp_env["catalog"],
+                    "cognovis-tools",
+                    tmp_env["tmp_path"],
+                    harness="all",
+                    env_overrides=tmp_env["env"],
+                )
+
+    assert claude_path.read_text() == claude_before
+    assert retired_path.read_text() == retired_before
+    assert not Path(tmp_env["env"]["CODEX_CONFIG_FILE"]).exists()
+    assert not Path(tmp_env["env"]["CURSOR_MCP_FILE"]).exists()
 
 
 @patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
@@ -684,6 +856,51 @@ def test_stdio_rollback_writes_descriptor_and_handshake(mock_clone, tmp_env):
     entry = claude["mcpServers"]["cognovis-tools"]
     assert entry["type"] == "stdio"
     _mcp_stdio_handshake(entry["command"], entry["args"])
+
+
+@patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
+def test_targeted_stdio_rollback_removes_retired_registration(mock_clone, tmp_env):
+    mock_clone.return_value = tmp_env["deploy_path"]
+    catalog = _make_supervised_catalog(tmp_env["project_path"], stdio_command=sys.executable)
+    catalog["library"]["mcp_servers"][0]["supervised_local_service"]["stdio_rollback"] = {
+        "type": "stdio",
+        "command": sys.executable,
+        "args": [str(FIXTURE_STDIO_SERVER)],
+    }
+    retired_path = Path(tmp_env["env"]["GEMINI_SETTINGS_FILE"])
+    retired_path.parent.mkdir(parents=True, exist_ok=True)
+    retired_path.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "cognovis-tools": {
+                        "type": "stdio",
+                        "command": "uv",
+                        "_origin": "library:mcp:cognovis-tools",
+                    }
+                }
+            }
+        )
+    )
+
+    with patch("lib.installers.mcp_installer.stop_supervised_service") as stop:
+        result = install_mcp(
+            catalog,
+            "cognovis-tools",
+            tmp_env["tmp_path"],
+            harness="claude_code",
+            env_overrides=tmp_env["env"],
+            rollback_stdio=True,
+        )
+
+    stop.assert_not_called()
+    assert result["data"]["retired_registrations_removed"] == [str(retired_path)]
+    assert "cognovis-tools" not in json.loads(retired_path.read_text()).get(
+        "mcpServers", {}
+    )
+    assert Path(tmp_env["env"]["CLAUDE_SETTINGS_FILE"]).exists()
+    assert not Path(tmp_env["env"]["CODEX_CONFIG_FILE"]).exists()
+    assert not Path(tmp_env["env"]["CURSOR_MCP_FILE"]).exists()
 
 
 @patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")

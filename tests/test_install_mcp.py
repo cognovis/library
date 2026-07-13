@@ -13,7 +13,7 @@ Tests:
   AK D8: claude_ai / claude_ios emit install URL (no programmatic install)
 
 Run with:
-    python3 -m pytest tests/test_install_mcp.py -v
+    uv run --with pytest python -m pytest tests/test_install_mcp.py -v
 """
 from __future__ import annotations
 
@@ -29,14 +29,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALL_MCP = REPO_ROOT / "scripts" / "install-mcp.py"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-
 def run_install_mcp(*args: str, env_overrides: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """Invoke install-mcp.py with optional env overrides."""
     env = os.environ.copy()
     if env_overrides:
         env.update(env_overrides)
     return subprocess.run(
-        ["python3", str(INSTALL_MCP), *args],
+        ["uv", "run", "python", str(INSTALL_MCP), *args],
         capture_output=True,
         text=True,
         env=env,
@@ -242,33 +241,35 @@ class TestInstallMcp(unittest.TestCase):
         snippets = entry["install"]["mcp"]
         self.assertEqual(snippets["claude_code"]["snippet"], {"type": "http", "url": url})
         self.assertEqual(snippets["codex"]["snippet"], {"url": url})
-        self.assertEqual(snippets["antigravity"]["snippet"], {"type": "http", "url": url})
         self.assertEqual(snippets["cursor"]["snippet"], {"type": "http", "url": url})
+        self.assertEqual(set(snippets), {"claude_code", "codex", "cursor"})
         self.assertIn("supervised_local_service", entry)
+
+    def test_cognovis_tools_does_not_declare_retired_harness(self):
+        result = run_install_mcp(
+            "cognovis-tools", "--harness", "antigravity", env_overrides=self.env
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not declare harness", result.stderr)
 
     # --- CL-oo82: corrected default config paths per harness ---
 
     def test_default_config_paths_are_harness_correct(self):
-        """claude_code -> ~/.claude.json; antigravity -> ~/.gemini/config/mcp_config.json.
-
-        Claude Code reads user-scoped MCP from ~/.claude.json (NOT
-        ~/.claude/settings.json); Antigravity (agy) reads ~/.gemini/config/mcp_config.json
-        (NOT ~/.config/gemini/settings.json).
-        """
+        """Supported harnesses resolve to their native global config paths."""
         from lib.installers.mcp_installer import _mcp_config_path
 
         # Clear any env overrides so we observe the real defaults.
         saved = {k: os.environ.pop(k, None)
-                 for k in ("CLAUDE_SETTINGS_FILE", "GEMINI_SETTINGS_FILE", "CURSOR_MCP_FILE")}
+                 for k in ("CLAUDE_SETTINGS_FILE", "CURSOR_MCP_FILE")}
         try:
             self.assertEqual(_mcp_config_path("claude_code"), Path.home() / ".claude.json")
-            self.assertEqual(
-                _mcp_config_path("antigravity"),
-                Path.home() / ".gemini" / "config" / "mcp_config.json",
-            )
             self.assertEqual(_mcp_config_path("cursor"), Path.home() / ".cursor" / "mcp.json")
             self.assertEqual(
                 _mcp_config_path("codex"), Path.home() / ".codex" / "config.toml"
+            )
+            self.assertEqual(
+                _mcp_config_path("antigravity"),
+                Path.home() / ".gemini" / "config" / "mcp_config.json",
             )
         finally:
             for k, v in saved.items():
