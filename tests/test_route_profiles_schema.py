@@ -333,13 +333,20 @@ class TestLauncherRouteProfileFlag:
         assert "Full cdx -b defaults to TUI mode" in content
         assert "pass --exec for non-interactive" in content
 
-    def test_cld_exports_cld_route_profile(self) -> None:
+    def test_cld_does_not_export_or_read_ambient_route_profile(self) -> None:
         content = _CLD_BIN.read_text(encoding="utf-8")
-        assert "CLD_ROUTE_PROFILE" in content, "bin/cld must export CLD_ROUTE_PROFILE"
+        assert "export CLD_ROUTE_PROFILE" not in content
+        assert "${CLD_ROUTE_PROFILE" not in content
+        assert "$CLD_ROUTE_PROFILE" not in content
+        assert "CDX_DEFAULT_ROUTE_PROFILE" not in content
 
-    def test_cdx_exports_cld_route_profile(self) -> None:
+    def test_cdx_does_not_export_or_read_ambient_route_profile(self) -> None:
         content = _CDX_BIN.read_text(encoding="utf-8")
-        assert "CLD_ROUTE_PROFILE" in content, "bin/cdx must export CLD_ROUTE_PROFILE"
+        assert "export CLD_ROUTE_PROFILE" not in content
+        assert "${CLD_ROUTE_PROFILE" not in content
+        assert "$CLD_ROUTE_PROFILE" not in content
+        assert "${CDX_DEFAULT_ROUTE_PROFILE" not in content
+        assert "$CDX_DEFAULT_ROUTE_PROFILE" not in content
 
     def test_cld_route_profile_parsing_pattern_present(self) -> None:
         """bin/cld must have a case statement handling --route-profile."""
@@ -354,6 +361,116 @@ class TestLauncherRouteProfileFlag:
         content = _CDX_BIN.read_text(encoding="utf-8")
         assert "compact-bead-context.py" in content
         assert '"${BD_BIN}" show "${bead_id}" --json' in content
+
+    def _run_cdx_route_profile_capture(
+        self,
+        tmp_path: Path,
+        args: list[str],
+        env_overrides: dict[str, str],
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
+        runtime = self._write_beads_runtime(tmp_path)
+        worktree_root = tmp_path / "worktrees"
+        called = tmp_path / "codex-called"
+        codex_prompt = tmp_path / "codex-prompt.txt"
+        codex_mock = tmp_path / "codex-mock"
+        codex_mock.write_text(
+            "#!/bin/sh\n"
+            "touch \"$CODEX_CALLED_FILE\"\n"
+            "printf 'CODEX_CLD_ROUTE_PROFILE=%s\\n' \"$CLD_ROUTE_PROFILE\"\n"
+            "last=''\n"
+            "for arg in \"$@\"; do last=\"$arg\"; done\n"
+            "printf '%s' \"$last\" > \"$CODEX_PROMPT_FILE\"\n",
+            encoding="utf-8",
+        )
+        codex_mock.chmod(0o755)
+
+        bd_mock = _write_cdx_bd_mock(tmp_path)
+
+        env = dict(os.environ)
+        env["BD_BIN"] = str(bd_mock)
+        env["CODEX_BIN"] = str(codex_mock)
+        env["CODEX_CALLED_FILE"] = str(called)
+        env["CODEX_PROMPT_FILE"] = str(codex_prompt)
+        env["GIT_BIN"] = str(git_mock)
+        env["GIT_ARGV_LOG"] = str(git_log)
+        env["GIT_REPO_ROOT"] = str(repo_root)
+        env["BEADS_RUNTIME_DIR"] = str(runtime)
+        env["CDX_WORKTREE_ROOT"] = str(worktree_root)
+        env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
+        env["CLD_COMPACT_OUTPUT"] = "0"
+        env.update(env_overrides)
+        _prepend_cdx_uv_mock(env, tmp_path)
+
+        result = subprocess.run(
+            [str(_CDX_BIN), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+            env=env,
+        )
+
+        prompt = codex_prompt.read_text(encoding="utf-8") if codex_prompt.exists() else ""
+        return result, prompt
+
+    @pytest.mark.parametrize(
+        ("args", "tier"),
+        [
+            (["-b", "CL-smoke", "--exec"], "auto"),
+            (["-bq", "CL-smoke"], "quick"),
+        ],
+    )
+    def test_cdx_default_route_profile_ignores_conflicting_ambient_env(
+        self,
+        tmp_path: Path,
+        args: list[str],
+        tier: str,
+    ) -> None:
+        result, prompt = self._run_cdx_route_profile_capture(
+            tmp_path,
+            args,
+            {
+                "CLD_ROUTE_PROFILE": "evil-profile",
+                "CDX_DEFAULT_ROUTE_PROFILE": "evil-profile",
+            },
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert "CODEX_CLD_ROUTE_PROFILE=\n" in result.stdout
+        assert "CODEX_CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
+        assert "Route profile: cdx-composer" in prompt
+        assert f"--tier={tier} --route-profile cdx-composer" in prompt
+        assert "evil-profile" not in prompt
+
+    @pytest.mark.parametrize(
+        ("args", "tier"),
+        [
+            (["-b", "CL-smoke", "--exec", "--route-profile", "custom-profile"], "auto"),
+            (["-bq", "CL-smoke", "--route-profile", "custom-profile"], "quick"),
+        ],
+    )
+    def test_cdx_explicit_route_profile_ignores_conflicting_ambient_env(
+        self,
+        tmp_path: Path,
+        args: list[str],
+        tier: str,
+    ) -> None:
+        result, prompt = self._run_cdx_route_profile_capture(
+            tmp_path,
+            args,
+            {
+                "CLD_ROUTE_PROFILE": "evil-profile",
+                "CDX_DEFAULT_ROUTE_PROFILE": "evil-profile",
+            },
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert "CODEX_CLD_ROUTE_PROFILE=\n" in result.stdout
+        assert "CODEX_CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
+        assert "Route profile: custom-profile" in prompt
+        assert f"--tier={tier} --route-profile custom-profile" in prompt
+        assert "evil-profile" not in prompt
 
     def test_cdx_bq_cdx_composer_uses_top_level_codex_quick_orchestrator(
         self, tmp_path: Path
@@ -542,7 +659,8 @@ class TestLauncherRouteProfileFlag:
         assert result.returncode == 0
         assert not codex_called.exists()
         assert "WORKFLOW_CALLED=1" in result.stdout
-        assert "WORKFLOW_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "WORKFLOW_CLD_ROUTE_PROFILE=\n" in result.stdout
+        assert "WORKFLOW_CLD_ROUTE_PROFILE=cdx-composer" not in result.stdout
         assert "WORKFLOW_CLD_COMPACT_OUTPUT=1" in result.stdout
         assert "CL-smoke" in result.stdout
         assert "--route-profile cdx-composer" in result.stdout
@@ -613,7 +731,8 @@ class TestLauncherRouteProfileFlag:
         assert result.returncode == 0
         assert codex_called.exists()
         assert not workflow_called.exists()
-        assert "CODEX_CLD_ROUTE_PROFILE=cdx-composer" in result.stdout
+        assert "CODEX_CLD_ROUTE_PROFILE=\n" in result.stdout
+        assert "CODEX_CLD_ROUTE_PROFILE=cdx-composer" not in result.stdout
         assert "CODEX_CLD_COMPACT_OUTPUT=0" in result.stdout
         assert f"CODEX_BEADS_RUNTIME_DIR={beads_runtime}" in result.stdout
         assert "CODEX_WORKFLOW_STARTED_AT_EPOCH=1800000000" in result.stdout
