@@ -1,0 +1,104 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-t32e",
+  "commands": [
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Red gate for the full coordinator callback executor test suite, written before scripts/coordinator_callback.py existed.",
+      "exit_code": 1,
+      "observed_result": "30 failed. Every test failed with FileNotFoundError from importlib.util.spec_from_file_location/exec_module because scripts/coordinator_callback.py did not exist yet -- red for the right reason (missing module, not a logic bug).",
+      "name": "red-pytest"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "First run after implementing scripts/coordinator_callback.py.",
+      "exit_code": 1,
+      "observed_result": "29 failed, 1 passed. All failures were the same AttributeError: 'NoneType' object has no attribute '__dict__' inside dataclasses._process_class, caused by the test helper's dynamic import via importlib.util not registering the module in sys.modules before exec_module -- dataclasses resolves postponed annotations via sys.modules[cls.__module__]. This was a test-infrastructure bug, not a production-logic failure; fixed by registering sys.modules[spec.name] = module before spec.loader.exec_module(module) in the test file's _import_module() helper.",
+      "name": "green-pytest-diagnose"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Green gate for the full coordinator callback executor test suite after fixing the test import helper.",
+      "exit_code": 0,
+      "observed_result": "30 passed in 0.06s. Covers AC1 (explicit-parameter identity, malformed workspace/surface/run-id/event-name validation, no environment-variable identity interface), AC2 (first delivery invokes cmux with the correct ref, workspace-only fallback, repeated delivery is a no-op, distinct events and distinct run ids both still deliver, a 32-way ThreadPoolExecutor concurrent-duplicate test invokes cmux exactly once), AC3 (malformed/command-injection-style refs rejected before any command runs, missing cmux binary fails visibly and rolls back its lock so a later retry still delivers, a non-zero cmux exit fails visibly and also allows retry, stale/mismatched state file content is detected and rejected without invoking cmux, an unwritable state path fails visibly, and main() reports errors on stderr with a non-zero exit and no traceback), and AC4 (no-callback behavior: neither --workspace nor --surface supplied exits 0 without invoking cmux, both via the internal deliver_callback() API and via main()).",
+      "name": "green-pytest"
+    },
+    {
+      "command": "uv run python -m py_compile scripts/coordinator_callback.py tests/test_coordinator_callback_executor.py",
+      "purpose": "Syntax/compile sanity check on both new files.",
+      "exit_code": 0,
+      "observed_result": "COMPILE_OK printed; no syntax errors.",
+      "name": "py-compile"
+    },
+    {
+      "command": "git diff --stat 67ba98a..HEAD",
+      "purpose": "Confirm this bead's commits touch only the two new files and do not modify bin/cld, bin/cdx, or any other existing file (scope-out check per bead instructions).",
+      "exit_code": 0,
+      "observed_result": "2 files changed, 803 insertions(+): scripts/coordinator_callback.py (390 lines) and tests/test_coordinator_callback_executor.py (413 lines). No other files touched.",
+      "name": "scope-check"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Fix gate for cold-review finding CL-t32e-B-01 (brittle enumerated env-var-name string matching in test_module_has_no_callback_environment_variable_interface). Replaced the enumerated substring assertions with the structurally stronger `assert \"os.environ\" not in source` / `assert \"getenv\" not in source`, which closes the under-guarding gap without requiring any change to scripts/coordinator_callback.py (it already contains zero os.environ/getenv references).",
+      "exit_code": 0,
+      "observed_result": "30 passed in 0.06s. Full suite still green after the AC1 guard test was strengthened.",
+      "name": "fix-CL-t32e-B-01-pytest"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Fix gate for Phase 5 FINAL_REVIEW fix loop: coordinator-promoted AC3 defects (a) trailing-newline/CRLF slipping past WORKSPACE_REF_RE/SURFACE_REF_RE/RUN_ID_RE/EVENT_NAME_RE (changed `$` to `\\Z`), and (b) a lock-without-state left behind by a crashed delivery being silently reported as already_delivered without ever invoking cmux (added `_lock_is_stale()` reclaim-and-retry). Ran after implementing both fixes plus 7 new regression tests.",
+      "exit_code": 0,
+      "observed_result": "37 passed in 0.06s: the original 30 tests plus 2 new trailing-newline ref tests (workspace, surface), 2 new run-id tests (trailing LF, trailing CRLF), 1 new event-name trailing-LF test, 1 stale-lock-reclaim-and-deliver test, and 1 fresh-lock-not-reclaimed test (guards against breaking the existing concurrent-delivery-at-most-once semantics).",
+      "name": "fix-CL-t32e-phase5-final-review-pytest"
+    },
+    {
+      "command": "uv run python -m py_compile scripts/coordinator_callback.py tests/test_coordinator_callback_executor.py",
+      "purpose": "Syntax/compile sanity check after the Phase 5 FINAL_REVIEW fix loop changes.",
+      "exit_code": 0,
+      "observed_result": "PY_COMPILE_OK printed; no syntax errors.",
+      "name": "fix-CL-t32e-phase5-final-review-py-compile"
+    },
+    {
+      "command": "uv run pytest tests/test_coordinator_callback_executor.py -q",
+      "purpose": "Fix gate for Phase 7 Codex adversarial-review REGRESSION: `_atomic_write_json` called tempfile.mkstemp() outside its try/except OSError, so a write-time mkstemp() failure (state dir unwritable/full/removed after the earlier mkdir) leaked a raw traceback instead of a visible StateError -- and because that write runs after a successful cmux invocation, an uncaught crash there left an orphaned lock with no state file, the exact precondition _lock_is_stale would later reclaim and re-flash. Moved mkstemp() inside the try with a guarded tmp_name-is-None cleanup. Ran after the fix plus 2 new write-time regression tests.",
+      "exit_code": 0,
+      "observed_result": "39 passed in 0.06s: the prior 37 tests plus 2 new write-time-failure tests (test_write_time_mkstemp_failure_fails_visibly, which monkeypatches tempfile.mkstemp to raise OSError and asserts a clean StateError with cmux invoked exactly once and no state file written; and test_unwritable_state_directory_at_write_time_fails_visibly, which chmods the state dir read-only via a CommandRunner side effect and asserts StateError, skipped when euid==0). Neither existing stale-lock/reclaim test regressed.",
+      "name": "fix-CL-t32e-phase7-regression-pytest"
+    },
+    {
+      "command": "uv run python -m py_compile scripts/coordinator_callback.py tests/test_coordinator_callback_executor.py",
+      "purpose": "Syntax/compile sanity check after the Phase 7 regression fix.",
+      "exit_code": 0,
+      "observed_result": "py_compile OK printed; no syntax errors.",
+      "name": "fix-CL-t32e-phase7-regression-py-compile"
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Full repository pytest suite",
+      "reason": "Out of scope by prompt (\"Run ONLY tests for files you changed\"); this bead added exactly one new test file and one new production module with no dependents yet, so tests/test_coordinator_callback_executor.py is the complete regression surface."
+    },
+    {
+      "check": "Wiring scripts/coordinator_callback.py into bin/cld or bin/cdx",
+      "reason": "Explicit Scope-Out per bead instructions -- lifecycle wiring belongs to sibling beads CL-gzvu (cld) and CL-eqiq (cdx)."
+    },
+    {
+      "check": "Real cmux binary invocation",
+      "reason": "Per python/dependency-injection.md, all subprocess/which calls in the delivery path go through an injectable CommandRunner; tests use MockCommandRunner exclusively and never shell out to a real cmux binary, by design."
+    },
+    {
+      "check": "Metrics logging to canonical beads metrics database",
+      "reason": "Attempted per the Metrics Logging instructions using the insert_agent_call helper; treated as best-effort per the bead's own instruction (\"do not block completion on this\")."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/bf1b0840-3319-41a0-a1da-db2093a2cccd/implementation_manifest.json",
+      "description": "Acceptance-criteria manifest for CL-t32e implementation."
+    },
+    {
+      "path": ".beads/runs/bf1b0840-3319-41a0-a1da-db2093a2cccd/evidence_ledger.json",
+      "description": "Command evidence ledger for CL-t32e red and green gates."
+    }
+  ]
+}

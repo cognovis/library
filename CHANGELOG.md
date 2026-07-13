@@ -37,6 +37,10 @@
 - *(cdx)* `cdx -br`/`--bead-review` now uses `--sandbox read-only` instead of `--sandbox workspace-write`, restricting the reviewer launcher entry point to read-only scope. The `--bead-dangerous-full-auto` flag is still accepted but explicitly opts out of this constraint.
 - *(cra)* `cra` no longer unconditionally forwards `--yolo` to Cursor Agent. Default invocations now run with Cursor's normal approval prompts active. Operators who need the previous bypass behavior must explicitly pass `--yolo`; doing so prints a visible stderr warning. This removes an unconditional approval bypass that was active on every `cra` invocation regardless of context.
 
+### Internal
+
+- *(coordinator callbacks)* New standalone `scripts/coordinator_callback.py` executor: a CLI that delivers a `cmux trigger-flash` callback for a given `(run_id, event)` pair exactly once, driven only by explicit `--run`/`--event`/`--workspace`/`--surface` parameters (never environment variables), using an atomic per-run lock + state-file protocol with stale-lock reclaim and mismatched-state detection. Malformed refs/run-id/event names, a missing `cmux` binary, and unwritable state directories fail visibly with distinct exit codes instead of silently invoking cmux twice or crashing. This is a standalone primitive only — it is **not yet wired into `bin/cld` or `bin/cdx`**, which still implement the current best-effort prose contract; launcher integration is scoped to sibling beads CL-gzvu (`cld`) and CL-eqiq (`cdx`). Covered by `tests/test_coordinator_callback_executor.py`.
+
 ## [2026.07.0] - 2026-07-02
 
 ### Added
