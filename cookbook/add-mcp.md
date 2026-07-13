@@ -184,14 +184,14 @@ install:
         command: sh
         args:
           - -c
-          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
+          - uv run --project ~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
     codex:
       config_path: ~/.codex/config.toml
       snippet:
         command: sh
         args:
           - -c
-          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
+          - uv run --project ~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
     cursor:
       config_path: ~/.cursor/mcp.json
       snippet:
@@ -199,7 +199,7 @@ install:
         command: sh
         args:
           - -c
-          - uv run --project ~/.local/share/library/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
+          - uv run --project ~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
 ```
 
 ### Registration smoke
