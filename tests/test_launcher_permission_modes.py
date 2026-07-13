@@ -128,6 +128,172 @@ def _argv_has_permission_mode(argv: list[str], mode: str) -> bool:
     return any(left == "--permission-mode" and right == mode for left, right in zip(argv, argv[1:]))
 
 
+def _argv_flag_value(argv: list[str], flag: str) -> str | None:
+    for left, right in zip(argv, argv[1:]):
+        if left == flag:
+            return right
+    return None
+
+
+# Deterministic narrow review tool profile for cld -br (CL-9knh). Bash is
+# read-only-by-convention here (git/grep/test-style commands), never for
+# file modification — Edit/Write/NotebookEdit are explicitly blocked below.
+BEAD_REVIEW_ALLOWED_TOOLS = (
+    "Read,Bash,Grep,Glob,"
+    "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
+    "mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,"
+    "mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
+)
+
+BEAD_REVIEW_DISALLOWED_TOOLS = (
+    "Edit,Write,NotebookEdit,"
+    "mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_claim,"
+    "mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,"
+    "mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,"
+    "mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
+)
+
+
+def test_cld_bead_review_allowed_tools_include_all_required_read_tools(tmp_path: Path) -> None:
+    """AK4 negative matrix: reject missing read tools in the -br profile."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    allowed = _argv_flag_value(argv, "--allowedTools")
+    assert allowed is not None, "missing --allowedTools flag: no read tools would be granted under plan mode"
+    allowed_set = set(allowed.split(","))
+    required_read_tools = {
+        "Read",
+        "Bash",
+        "Grep",
+        "Glob",
+        "mcp__cognovis-tools__bead_show",
+        "mcp__cognovis-tools__bead_search",
+        "mcp__cognovis-tools__bead_list",
+        "mcp__cognovis-tools__bead_repos",
+        "mcp__cognovis-tools__bead_ready",
+        "mcp__cognovis-tools__bead_review_write",
+    }
+    missing = required_read_tools - allowed_set
+    assert not missing, f"missing required read tools in --allowedTools: {missing}"
+    assert allowed == BEAD_REVIEW_ALLOWED_TOOLS
+
+
+def test_cld_bead_review_disallowed_tools_block_all_general_mutations(tmp_path: Path) -> None:
+    """AK4 negative matrix: reject leaked general bead mutations in the -br profile."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    disallowed = _argv_flag_value(argv, "--disallowedTools")
+    assert disallowed is not None, "missing --disallowedTools flag: no defense-in-depth against mutation leakage"
+    disallowed_set = set(disallowed.split(","))
+    forbidden_mutations = {
+        "Edit",
+        "Write",
+        "NotebookEdit",
+        "mcp__cognovis-tools__bead_create",
+        "mcp__cognovis-tools__bead_claim",
+        "mcp__cognovis-tools__bead_update",
+        "mcp__cognovis-tools__bead_update_notes",
+        "mcp__cognovis-tools__bead_close",
+        "mcp__cognovis-tools__bead_dep_add",
+        "mcp__cognovis-tools__bead_dep_remove",
+        "mcp__cognovis-tools__bead_dolt_sync",
+    }
+    missing = forbidden_mutations - disallowed_set
+    assert not missing, f"leaked general mutation tools not blocked by --disallowedTools: {missing}"
+    assert disallowed == BEAD_REVIEW_DISALLOWED_TOOLS
+    # bead_review_write is the ONE allowed mutation exception — it must never
+    # be blocked, or the reviewer could not write metadata.review.
+    assert "mcp__cognovis-tools__bead_review_write" not in disallowed_set
+
+
+def test_cld_bead_review_allowed_and_disallowed_tools_do_not_overlap(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    allowed_value = _argv_flag_value(argv, "--allowedTools")
+    disallowed_value = _argv_flag_value(argv, "--disallowedTools")
+    assert allowed_value is not None
+    assert disallowed_value is not None
+    allowed_set = set(allowed_value.split(","))
+    disallowed_set = set(disallowed_value.split(","))
+    assert not (allowed_set & disallowed_set), "a tool cannot be both allowed and disallowed"
+
+
+def test_cld_bead_review_still_uses_plan_mode_with_tool_profile(tmp_path: Path) -> None:
+    """AK4 negative matrix: reject non-plan-mode regression once the tool profile is added."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_has_permission_mode(argv, "plan")
+    assert not _argv_has_permission_mode(argv, "auto")
+    assert not _argv_has_permission_mode(argv, "acceptEdits")
+    assert not _argv_has_permission_mode(argv, "bypassPermissions")
+    assert "--dangerously-skip-permissions" not in argv
+
+
+def test_cld_bead_review_callback_contract_unaffected_by_tool_profile(tmp_path: Path) -> None:
+    """AK4 negative matrix: reject callback regression once the tool profile is added."""
+    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-br",
+            "CL-safe",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
+    assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
+    assert "Coordinator callback" in prompt
+    assert "cmux trigger-flash --surface surface:33" in prompt
+    # The review prompt must remain the last positional claude argument even
+    # with the new variadic-flag values inserted ahead of it.
+    assert argv[-1] == prompt
+
+
+def test_cld_bead_review_model_override_preserves_tool_profile(tmp_path: Path) -> None:
+    """AK4 negative matrix: reject model-override regression once the tool profile is added."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path, ["-br", "CL-safe", "--model", "sonnet"]
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--model") == "sonnet"
+    assert "opus" not in argv
+    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
+    assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
+
+
+@pytest.mark.parametrize("args", [["-b", "CL-safe"], ["-bq", "CL-safe"]])
+def test_cld_bead_review_tool_profile_does_not_leak_into_implementer_modes(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    """The narrow -br-only tool profile must never reach -b/-bq (implementer) dispatch."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, args)
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert "--allowedTools" not in argv
+    assert "--disallowedTools" not in argv
+
+
 @pytest.mark.parametrize(
     "args",
     [

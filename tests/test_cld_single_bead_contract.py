@@ -79,6 +79,32 @@ def _write_cld_path_mocks(tmp_path: Path) -> None:
     )
 
 
+def _argv_flag_value(argv: list[str], flag: str) -> str | None:
+    for left, right in zip(argv, argv[1:]):
+        if left == flag:
+            return right
+    return None
+
+
+# Deterministic narrow review tool profile for cld -br (CL-9knh). Kept in
+# sync with the identical constants in test_launcher_permission_modes.py and
+# with the production implementation in bin/cld.
+BEAD_REVIEW_ALLOWED_TOOLS = (
+    "Read,Bash,Grep,Glob,"
+    "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
+    "mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,"
+    "mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
+)
+
+BEAD_REVIEW_DISALLOWED_TOOLS = (
+    "Edit,Write,NotebookEdit,"
+    "mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_claim,"
+    "mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,"
+    "mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,"
+    "mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
+)
+
+
 def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
     claude_mock, argv_file, prompt_file, called_file = _write_claude_capture(tmp_path)
     bd_mock, bd_log = _write_bd_mock(tmp_path)
@@ -248,11 +274,23 @@ def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: 
     assert "CLD_BEAD_LINE=cld" in result.stdout
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert argv[:4] == ["--model", "opus", "--permission-mode", "plan"]
+    # model + permission-mode must both be present (order-flexible, but each
+    # flag's own value must be exact).
+    assert _argv_flag_value(argv, "--model") == "opus"
+    assert _argv_flag_value(argv, "--permission-mode") == "plan"
+    # Narrow read + review-cache tool profile (CL-9knh): deterministic,
+    # single comma-separated string per flag — see bin/cld -br block.
+    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
+    assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
+    # No edit/write/workspace-implementation capability leaks into -br argv.
+    assert "Edit" not in argv
+    assert "Write" not in argv
     assert "--dangerously-skip-permissions" not in argv
     assert "--worktree" not in argv
     assert "--agent" not in argv
     assert "--setting-sources" not in argv
+    # The review prompt must remain the final positional claude argument.
+    assert argv[-1] == prompt
     assert "Use the bead-reviewer skill" in prompt
     assert "CRITICAL" in prompt
     assert "SPECIFICATION and readiness ONLY" in prompt
