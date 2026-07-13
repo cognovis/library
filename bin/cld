@@ -359,14 +359,11 @@ _coordinator_callback_contract() {
     if [[ "$mode" == "review" ]]; then
         cat <<EOF
 Coordinator callback: this session runs under a coordinator that owns cmux
-${coordinator_workspace} / ${coordinator_surface}. Best-effort signaling contract:
-- On a genuine blocking question or a required human decision, run:
-  cmux trigger-flash --surface ${coordinator_surface}
-  then keep the COMPLETE question and its full context visible in this pane
-  (do not clear or truncate it).
-- Review terminal state is the final bead-reviewer verdict; on that verdict run cmux trigger-flash --surface ${coordinator_surface} and keep the complete verdict visible in this pane.
-- Normal progress updates are NOT intervention events and must NOT trigger the callback.
-- If cmux is unavailable, skip the flash (best-effort) but still keep the report visible.
+${coordinator_workspace} / ${coordinator_surface}. This read-only review session has no Bash access, so it cannot signal the coordinator directly:
+- Emit your complete verdict as your final output, then end your turn normally. If you hit a genuine blocking question requiring a human decision before you can reach a verdict, emit that question with its full context instead, then end your turn normally.
+- The launcher automatically runs cmux trigger-flash --surface ${coordinator_surface} once this session exits — you do not need to, and cannot, run it yourself.
+- Normal progress updates are NOT terminal state and do not need special handling — just keep working until you reach a verdict or a genuine blocking question.
+- Keep the COMPLETE verdict or question (with its full context) visible in this pane; do not clear or truncate it.
 EOF
         return
     fi
@@ -434,53 +431,61 @@ if [[ -n "$bead_review_id" ]]; then
         claude_args=("--model" "opus" "${claude_args[@]}")
     fi
 
-    # ── Narrow read + review-cache tool profile (CL-9knh) ─────────
+    # ── Narrow read + review-cache tool profile (CL-9knh, fix-cycle 2) ─
     # -br is a spec-readiness reviewer, not an implementer: grant only the
     # canonical local read-only set (Read/Grep/Glob) plus the cognovis-tools
     # MCP read surface the bead-reviewer skill's own tooling contract
     # documents, plus the single typed mutation exception (bead_review_write)
-    # for writing metadata.review. General Bash is deliberately NOT granted:
-    # Bash can mutate files or bead state (e.g. `uv run python -c
-    # "os.remove(...)"`, arbitrary shell one-liners) regardless of
-    # --disallowedTools blocking Edit/Write/NotebookEdit — those are
-    # separate, unrelated Claude-native tools, so "read-only by convention"
-    # is not an enforceable boundary. The ONLY Bash grant this profile ever
-    # makes is a single EXACT-match entry (added below, only when a
-    # coordinator callback is present) for the one command the reviewer
-    # genuinely needs Bash for: signaling review-terminal-state via `cmux
-    # trigger-flash --surface ${coordinator_surface}` (see
-    # _coordinator_callback_contract). --disallowedTools is defense-in-depth
-    # on top of --permission-mode plan and the allowlist: even if either has
-    # a bug, general bead mutations and file edits stay blocked. Passed as
-    # --flag=value (single argv token, not "--flag" "value" as two tokens):
-    # claude's --allowedTools/--disallowedTools are variadic (`<tools...>`)
-    # and greedily collect every subsequent non-flag argv element —
-    # including a would-be separate value token AND the trailing review
-    # prompt after it — splitting each on commas/spaces and misinterpreting
-    # prompt words as bogus tool-deny-rules (confirmed empirically:
-    # "--disallowedTools" "value" "$prompt" made claude treat every word of
-    # the prompt as a deny rule and then error with "Input must be provided
-    # ... when using --print" because the prompt was consumed as flag
-    # values, not the positional prompt). The "--flag=value" form binds the
-    # value to the flag as one token, so the flag's variadic collection has
-    # nothing left to swallow and the trailing prompt stays the last
-    # positional claude argument.
+    # for writing metadata.review.
+    #
+    # Bash is HARD-EXCLUDED via --tools, not merely left out of
+    # --allowedTools. An earlier design (fix-cycle 1) granted a single
+    # EXACT-match --allowedTools entry, "Bash(cmux trigger-flash --surface
+    # ...)", reasoning that exact-match specifiers only authorize that one
+    # literal command. Two Opus reviews approved that design as CLEAN, but
+    # live `claude --print --permission-mode plan` dry-runs proved it wrong:
+    # Claude Code has a plan-mode classifier that independently judges
+    # whether a Bash invocation "looks safe" and can silently auto-approve
+    # it (permission_denials: []) REGARDLESS of --allowedTools content, as
+    # long as Bash is registered as an available tool in the session at
+    # all. Confirmed empirically: with
+    # --allowedTools="Read,Grep,Glob,Bash(cmux trigger-flash --surface
+    # surface:33)" (Bash available but supposedly restricted to one exact
+    # literal command), a COMPLETELY DIFFERENT command (`git status`) still
+    # executed with zero denial. The exact-match specifier does not gate the
+    # classifier's independent judgment once Bash is registered at all. The
+    # only verified hard boundary is removing Bash from the built-in tool
+    # SET via --tools (which governs tool *registration*, unlike
+    # --allowedTools/--disallowedTools, which only govern
+    # approval-without-prompting for tools that ARE registered) — confirmed
+    # empirically: with --tools=Read,Grep,Glob (no Bash in the set at all),
+    # a probe session reported Bash was "not available ... at all", and a
+    # --print --output-format json run showed zero Bash tool_use entries and
+    # no classifier auto-approval leak. See _coordinator_callback_contract's
+    # review branch and Fix 2 below (launcher-side post-exit cmux flash) for
+    # how the reviewer now signals the coordinator without any Bash access.
+    #
+    # --disallowedTools remains defense-in-depth on top of --permission-mode
+    # plan, --tools, and the allowlist: even if any of those has a bug,
+    # general bead mutations and file edits stay blocked.
+    #
+    # Passed as --flag=value (single argv token, not "--flag" "value" as two
+    # tokens) for --tools/--allowedTools/--disallowedTools alike: claude's
+    # --tools/--allowedTools/--disallowedTools are all variadic
+    # (`<tools...>`) and greedily collect every subsequent non-flag argv
+    # element — including a would-be separate value token AND the trailing
+    # review prompt after it — splitting each on commas/spaces and
+    # misinterpreting prompt words as bogus tool rules (confirmed
+    # empirically for --disallowedTools in fix-cycle 1, and reconfirmed for
+    # --tools here: the two-token form swallowed the prompt and claude then
+    # errored with "Input must be provided ... when using --print"). The
+    # "--flag=value" form binds the value to the flag as one token, so the
+    # flag's variadic collection has nothing left to swallow and the
+    # trailing prompt stays the last positional claude argument.
+    local bead_review_tools="Read,Grep,Glob"
     local bead_review_allowed_tools="Read,Grep,Glob,mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
     local bead_review_disallowed_tools="Edit,Write,NotebookEdit,mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_claim,mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
-    if _has_coordinator_callback; then
-        # $coordinator_surface is already regex-validated
-        # (^surface:[0-9]+$, see the validation block near the top of this
-        # script) before this point is ever reached, so its literal value is
-        # known and injection-free. Exact-match, NO trailing " *": this is
-        # the ONLY Bash entry -br's tool profile ever grants, and it exists
-        # solely so the review-terminal-state callback can run without an
-        # interactive approval prompt. Do not widen this to a prefix
-        # pattern (e.g. "Bash(cmux trigger-flash *)") — that would also
-        # authorize arbitrary trailing shell chaining/substitution
-        # (";", "&&", "|", "$(...)") appended after a valid prefix.
-        bead_review_allowed_tools+=",Bash(cmux trigger-flash --surface ${coordinator_surface})"
-    fi
-    claude_args+=("--allowedTools=${bead_review_allowed_tools}" "--disallowedTools=${bead_review_disallowed_tools}")
+    claude_args+=("--tools=${bead_review_tools}" "--allowedTools=${bead_review_allowed_tools}" "--disallowedTools=${bead_review_disallowed_tools}")
 
     printf '\033]1;%s\033\\' "${bead_review_id}-review"
     printf '\033]2;%s\033\\' "cld-review: $bead_review_id"
@@ -677,5 +682,41 @@ fi
 # ── Launch claude ────────────────────────────────────────────────
 # Ensure cmux-shim is used for Stop hook notifications (prevents cmux wrapper override)
 export CMUX_BUNDLED_CLI_PATH="${HOME}/.claude/scripts/cmux-shim.sh"
+
+# ── -br (bead-review) launcher-side post-exit cmux flash (CL-9knh) ────
+# The -br tool profile hard-excludes Bash (see the tool-profile block
+# above), so a review session can no longer run `cmux trigger-flash` itself
+# to signal the coordinator on terminal state. Responsibility for that
+# single signal moves here, into the launcher's own (unrestricted) shell
+# context, run AFTER the claude subprocess exits. This requires running
+# claude as a foreground child instead of `exec`-replacing this process —
+# `exec` never returns, so nothing could run after it — while every other
+# mode (-b, -bq, plain passthrough) keeps the original `exec` behavior
+# unchanged (process replacement, signal forwarding) since they have no
+# post-exit work to do.
+#
+# Known, deliberate scope reduction: the OLD in-session design had two
+# distinct triggers (mid-session "blocking question" flash + a separate
+# terminal-verdict flash). This launcher-side flash collapses both into ONE
+# signal that fires whenever the claude subprocess exits, for any reason
+# (clean verdict, error, or the model ending its turn on a blocking
+# question) — the coordinator is expected to inspect the pane's visible
+# output to distinguish those cases. Building a live mid-session signaling
+# channel for a Bash-less session is out of scope here (would require
+# re-granting some capability); track as a future "parameterized callback
+# lifecycle" bead if ever needed.
+if [[ -n "$bead_review_id" ]]; then
+    "${CLAUDE_BIN}" "${claude_args[@]}"
+    _claude_exit=$?
+    if _has_coordinator_callback && command -v cmux &>/dev/null; then
+        # $coordinator_surface is already regex-validated
+        # (^surface:[0-9]+$, see the validation block near the top of this
+        # script) before this point is ever reached, so its literal value is
+        # known and injection-free. Best-effort: a failed/unavailable cmux
+        # must not affect this launcher's own exit code.
+        cmux trigger-flash --surface "${coordinator_surface}" 2>/dev/null || true
+    fi
+    exit "${_claude_exit}"
+fi
 
 exec "${CLAUDE_BIN}" "${claude_args[@]}"
