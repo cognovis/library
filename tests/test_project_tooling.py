@@ -447,6 +447,13 @@ def _init_git_repo(project_root: Path) -> None:
         capture_output=True,
         text=True,
     )
+    subprocess.run(
+        ["git", "config", "core.hooksPath", ".git/hooks"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_sync_runtime_file_target():
@@ -559,6 +566,7 @@ def test_sync_runtime_git_hook():
         project_root = tmp / "project"
         lib_root.mkdir()
         project_root.mkdir()
+        _init_git_repo(project_root)
 
         # Create source hook file in library
         hook_content = "#!/usr/bin/env bash\ncommand -v bd &>/dev/null || exit 0\n"
@@ -566,8 +574,7 @@ def test_sync_runtime_git_hook():
         source_file.parent.mkdir(parents=True)
         source_file.write_text(hook_content)
 
-        # Create .git/hooks/ and .beads/ in project (conditions require both)
-        (project_root / ".git" / "hooks").mkdir(parents=True)
+        # Create .beads/ in project (conditions require it)
         (project_root / ".beads").mkdir()
 
         entries = [
@@ -579,7 +586,6 @@ def test_sync_runtime_git_hook():
                 "source": "prime/hooks/post-commit.sh",
                 "conditions": [
                     {"dir_exists": ".beads"},
-                    {"dir_exists": ".git/hooks"},
                 ],
                 "sync_strategy": "overwrite_if_source_newer",
             }

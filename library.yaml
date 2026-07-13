@@ -4230,6 +4230,24 @@ project_tooling:
   - beads
   - git-hooks
   - fleet-policy
+- name: gitleaks-pre-push-hook
+  description: Installs .git/hooks/pre-push hook that scans outgoing commits with
+    gitleaks before push and chains a preserved local hook when one already exists.
+  target_kind: git_hook
+  target_path: .git/hooks/pre-push
+  hook_name: pre-push
+  source: prime/hooks/pre-push.sh
+  chain_existing: true
+  conditions:
+  - dir_exists: .beads
+  - command_available: git
+  sync_strategy: overwrite_if_source_newer
+  conflict_policy: canonical_wins
+  tags:
+  - beads
+  - git-hooks
+  - security
+  - fleet-policy
 - name: consumer-agents-gitignore-profile
   description: Consumer projects commit vendored .agents content so worktrees and
     teammates receive the same project-local skills, standards, agents, and prompts.

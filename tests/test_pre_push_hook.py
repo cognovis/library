@@ -18,6 +18,13 @@ def _write_executable(path: Path, content: str) -> None:
     path.chmod(0o755)
 
 
+def _link_system_tools(fake_bin: Path) -> None:
+    for tool in ("cat", "dirname", "mktemp", "rm"):
+        tool_path = shutil.which(tool)
+        if tool_path:
+            (fake_bin / tool).symlink_to(tool_path)
+
+
 def _copy_hook(tmp: Path) -> Path:
     hooks_dir = tmp / "hooks"
     hooks_dir.mkdir()
@@ -29,16 +36,17 @@ def _copy_hook(tmp: Path) -> Path:
 
 def _write_fake_tools(fake_bin: Path) -> None:
     fake_bin.mkdir()
+    _link_system_tools(fake_bin)
     _write_executable(
         fake_bin / "timeout",
-        "#!/usr/bin/env bash\n"
+        "#!/bin/bash\n"
         "printf '%s\\n' \"$*\" >> \"$TIMEOUT_LOG\"\n"
         "shift\n"
         "exec \"$@\"\n",
     )
     _write_executable(
         fake_bin / "gitleaks",
-        "#!/usr/bin/env bash\n"
+        "#!/bin/bash\n"
         "printf '%s\\n' \"$*\" >> \"$GITLEAKS_LOG\"\n"
         "if [[ -n \"${GITLEAKS_FAIL_ON:-}\" && \"$*\" == *\"$GITLEAKS_FAIL_ON\"* ]]; then\n"
         "  exit 1\n"
@@ -83,7 +91,7 @@ def test_pre_push_scans_clean_range_then_chains_with_replayed_stdin_and_args() -
         env["CHAIN_STDIN_LOG"] = str(tmp / "chain.stdin")
         _write_executable(
             hook_path.parent / "pre-push.local",
-            "#!/usr/bin/env bash\n"
+            "#!/bin/bash\n"
             "printf 'args:%s|%s\\n' \"$1\" \"$2\" >> \"$CHAIN_LOG\"\n"
             "cat > \"$CHAIN_STDIN_LOG\"\n"
             "exit \"${CHAIN_EXIT_CODE:-0}\"\n",
@@ -112,7 +120,7 @@ def test_pre_push_blocks_finding_before_chained_hook_runs() -> None:
         env["CHAIN_LOG"] = str(tmp / "chain.log")
         _write_executable(
             hook_path.parent / "pre-push.local",
-            "#!/usr/bin/env bash\n"
+            "#!/bin/bash\n"
             "printf 'chained\\n' >> \"$CHAIN_LOG\"\n",
         )
         stdin = f"refs/heads/main {'a' * 40} refs/heads/main {'b' * 40}\n"
@@ -155,7 +163,7 @@ def test_pre_push_fails_closed_on_malformed_input_without_chaining() -> None:
         env["CHAIN_LOG"] = str(tmp / "chain.log")
         _write_executable(
             hook_path.parent / "pre-push.local",
-            "#!/usr/bin/env bash\n"
+            "#!/bin/bash\n"
             "printf 'chained\\n' >> \"$CHAIN_LOG\"\n",
         )
 
@@ -174,7 +182,8 @@ def test_pre_push_fails_closed_without_timeout_or_gtimeout() -> None:
         hook_path = _copy_hook(tmp)
         fake_bin = tmp / "bin"
         fake_bin.mkdir()
-        _write_executable(fake_bin / "gitleaks", "#!/usr/bin/env bash\nexit 0\n")
+        _link_system_tools(fake_bin)
+        _write_executable(fake_bin / "gitleaks", "#!/bin/bash\nexit 0\n")
         env = os.environ.copy()
         env["PATH"] = str(fake_bin)
         stdin = f"refs/heads/main {'a' * 40} refs/heads/main {'b' * 40}\n"
@@ -192,7 +201,8 @@ def test_pre_push_fails_closed_without_gitleaks() -> None:
         hook_path = _copy_hook(tmp)
         fake_bin = tmp / "bin"
         fake_bin.mkdir()
-        _write_executable(fake_bin / "timeout", "#!/usr/bin/env bash\nexit 0\n")
+        _link_system_tools(fake_bin)
+        _write_executable(fake_bin / "timeout", "#!/bin/bash\nexit 0\n")
         env = os.environ.copy()
         env["PATH"] = str(fake_bin)
         stdin = f"refs/heads/main {'a' * 40} refs/heads/main {'b' * 40}\n"
