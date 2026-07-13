@@ -29,6 +29,7 @@ Run with:
 
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -335,6 +336,37 @@ def test_project_tooling_profiles_field():
     print("PASS test_project_tooling_profiles_field")
 
 
+def test_git_hook_chain_existing_field():
+    """git_hook entries accept the opt-in chain_existing boolean field."""
+    schema = load_schema()
+    data = minimal_library({
+        "project_tooling": [
+            minimal_tooling_entry(
+                target_kind="git_hook",
+                target_path=".git/hooks/pre-push",
+                hook_name="pre-push",
+                source="prime/hooks/pre-push.sh",
+                chain_existing=True,
+            )
+        ]
+    })
+    assert_valid(data, schema, "git_hook with chain_existing=true")
+
+    data_invalid = minimal_library({
+        "project_tooling": [
+            minimal_tooling_entry(
+                target_kind="git_hook",
+                target_path=".git/hooks/pre-push",
+                hook_name="pre-push",
+                source="prime/hooks/pre-push.sh",
+                chain_existing="yes",
+            )
+        ]
+    })
+    assert_invalid(data_invalid, schema, "git_hook with non-boolean chain_existing")
+    print("PASS test_git_hook_chain_existing_field")
+
+
 def test_gitignore_patch_fields():
     """gitignore_patch fields ensure_lines/remove_lines validate."""
     schema = load_schema()
@@ -405,6 +437,16 @@ def _import_sync_script():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def _init_git_repo(project_root: Path) -> None:
+    subprocess.run(
+        ["git", "init"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_sync_runtime_file_target():
@@ -558,6 +600,110 @@ def test_sync_runtime_git_hook():
         assert os.access(hook_path, os.X_OK), "Hook file lost executable bit on second run"
 
     print("PASS test_sync_runtime_git_hook")
+
+
+def test_sync_runtime_git_hook_honors_core_hooks_path():
+    """git_hook targets install into the effective hooks path from core.hooksPath."""
+    import os
+    sync = _import_sync_script()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        lib_root = tmp / "library"
+        project_root = tmp / "project"
+        lib_root.mkdir()
+        project_root.mkdir()
+        _init_git_repo(project_root)
+        subprocess.run(
+            ["git", "config", "core.hooksPath", "managed-hooks"],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        hook_content = "#!/usr/bin/env bash\necho managed pre-push\n"
+        source_file = lib_root / "prime" / "hooks" / "pre-push.sh"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text(hook_content)
+
+        entries = [
+            {
+                "name": "gitleaks-pre-push-hook",
+                "description": "Test pre-push hook entry",
+                "target_kind": "git_hook",
+                "target_path": ".git/hooks/pre-push",
+                "hook_name": "pre-push",
+                "source": "prime/hooks/pre-push.sh",
+                "sync_strategy": "overwrite_if_source_newer",
+            }
+        ]
+
+        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+
+        hook_path = project_root / "managed-hooks" / "pre-push"
+        default_hook_path = project_root / ".git" / "hooks" / "pre-push"
+        assert result["synced"] == 1, result
+        assert hook_path.read_text() == hook_content
+        assert os.access(hook_path, os.X_OK), "Hook file is not executable"
+        assert not default_hook_path.exists(), "Hook was installed into the inactive default hooks path"
+
+    print("PASS test_sync_runtime_git_hook_honors_core_hooks_path")
+
+
+def test_sync_runtime_git_hook_chain_existing_preserves_foreign_hook_once():
+    """chain_existing moves a foreign hook aside once and keeps later syncs idempotent."""
+    sync = _import_sync_script()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        lib_root = tmp / "library"
+        project_root = tmp / "project"
+        lib_root.mkdir()
+        project_root.mkdir()
+        _init_git_repo(project_root)
+
+        wrapper_content = (
+            "#!/usr/bin/env bash\n"
+            "# managed-by: cognovis-library chain_existing (CL-rkww)\n"
+            "echo managed wrapper\n"
+        )
+        source_file = lib_root / "prime" / "hooks" / "pre-push.sh"
+        source_file.parent.mkdir(parents=True)
+        source_file.write_text(wrapper_content)
+
+        hooks_dir = project_root / ".git" / "hooks"
+        hook_path = hooks_dir / "pre-push"
+        sidecar_path = hooks_dir / "pre-push.local"
+        foreign_content = "#!/usr/bin/env bash\necho foreign hook\n"
+        hook_path.write_text(foreign_content)
+        hook_path.chmod(0o755)
+
+        entries = [
+            {
+                "name": "gitleaks-pre-push-hook",
+                "description": "Test pre-push hook entry",
+                "target_kind": "git_hook",
+                "target_path": ".git/hooks/pre-push",
+                "hook_name": "pre-push",
+                "source": "prime/hooks/pre-push.sh",
+                "chain_existing": True,
+                "sync_strategy": "overwrite_if_source_newer",
+            }
+        ]
+
+        first = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        second = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        third = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+
+        assert first["synced"] == 1, first
+        assert second["skipped"] == 1, second
+        assert third["skipped"] == 1, third
+        assert hook_path.read_text() == wrapper_content
+        assert sidecar_path.read_text() == foreign_content
+        assert not (hooks_dir / "pre-push.local.local").exists()
+
+    print("PASS test_sync_runtime_git_hook_chain_existing_preserves_foreign_hook_once")
 
 
 def test_sync_runtime_idempotent():
@@ -729,12 +875,15 @@ ALL_TESTS = [
     test_git_hook_target_requires_source,
     test_json_field_enforce_fields,
     test_project_tooling_profiles_field,
+    test_git_hook_chain_existing_field,
     test_gitignore_patch_fields,
     test_full_beads_prime_example,
     test_library_yaml_has_project_tooling,
     test_sync_runtime_file_target,
     test_sync_runtime_json_field_enforce,
     test_sync_runtime_git_hook,
+    test_sync_runtime_git_hook_honors_core_hooks_path,
+    test_sync_runtime_git_hook_chain_existing_preserves_foreign_hook_once,
     test_sync_runtime_idempotent,
     test_sync_runtime_gitignore_profile_consumer,
     test_sync_runtime_gitignore_profile_marketplace,
