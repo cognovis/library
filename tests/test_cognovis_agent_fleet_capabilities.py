@@ -324,6 +324,9 @@ _MANAGE_BEADS_TYPED_TOOLS = {
     "mcp__cognovis-tools__bead_search",
     "mcp__cognovis-tools__bead_repos",
     "mcp__cognovis-tools__bead_create",
+    "mcp__cognovis-tools__bead_effort_classify",
+    "mcp__cognovis-tools__bead_claim_prepare",
+    "mcp__cognovis-tools__bead_claim_commit",
     "mcp__cognovis-tools__bead_claim",
     "mcp__cognovis-tools__bead_update",
     "mcp__cognovis-tools__bead_update_notes",
@@ -335,8 +338,9 @@ _MANAGE_BEADS_TYPED_TOOLS = {
 }
 
 # Real agents that declare manage_beads and must therefore expose the typed
-# tools (orchestrator-capable: bead-orchestrator, quick-fix, session-close).
-_MANAGE_BEADS_ORCHESTRATOR_AGENTS = ["bead-orchestrator", "quick-fix", "session-close"]
+# tools (orchestrator-capable: bead-orchestrator and session-close). quick-fix
+# is a compatibility redirect and intentionally has no bead mutation authority.
+_MANAGE_BEADS_ORCHESTRATOR_AGENTS = ["bead-orchestrator", "session-close"]
 
 # Real read-only agents that must NEVER declare manage_beads / gain any
 # mcp__cognovis-tools__bead_* tool.
@@ -374,12 +378,13 @@ def _build_claude_tools(agent_stem: str, tmp_path: Path) -> set[str]:
 def test_manage_beads_orchestrator_agents_expose_typed_bead_tools(
     agent_stem: str, tmp_path: Path
 ) -> None:
-    """AC1/AC2/AC5: bead-orchestrator/quick-fix/session-close get the full typed
-    bead_* tool set, including the bead_update_notes and bead_close operations
-    their documented workflows require."""
+    """AC1/AC2/AC5: orchestrator-class agents get the full typed bead_* tool set,
+    including the Bead Claim prepare/commit operations their workflows require."""
     tools = _build_claude_tools(agent_stem, tmp_path)
     missing = _MANAGE_BEADS_TYPED_TOOLS - tools
     assert not missing, f"{agent_stem}: missing typed manage_beads tools: {sorted(missing)}"
+    assert "mcp__cognovis-tools__bead_claim_prepare" in tools
+    assert "mcp__cognovis-tools__bead_claim_commit" in tools
     assert "mcp__cognovis-tools__bead_update_notes" in tools
     assert "mcp__cognovis-tools__bead_close" in tools
 

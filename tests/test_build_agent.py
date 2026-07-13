@@ -583,6 +583,9 @@ _MANAGE_BEADS_TYPED_TOOLS = [
     "mcp__cognovis-tools__bead_search",
     "mcp__cognovis-tools__bead_repos",
     "mcp__cognovis-tools__bead_create",
+    "mcp__cognovis-tools__bead_effort_classify",
+    "mcp__cognovis-tools__bead_claim_prepare",
+    "mcp__cognovis-tools__bead_claim_commit",
     "mcp__cognovis-tools__bead_claim",
     "mcp__cognovis-tools__bead_update",
     "mcp__cognovis-tools__bead_update_notes",
@@ -675,6 +678,27 @@ def test_build_agent_grants_manage_beads_typed_tools_end_to_end(tmp_path: Path) 
     )
 
 
+# Guards CL-h76a: bead-orchestrator instructions required Bead Claim tools that
+# the generated Claude tools allowlist did not expose.
+def test_regression_bead_claim_prepare_is_projected_to_manage_beads(tmp_path: Path) -> None:
+    source = write_manage_beads_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 0, result.stderr
+    built = (output_dir / "bead-capability-agent.md").read_text()
+    frontmatter = yaml.safe_load(built.split("---", 2)[1]) or {}
+    tools = {t.strip() for t in str(frontmatter.get("tools", "")).split(",") if t.strip()}
+    assert {
+        "mcp__cognovis-tools__bead_claim_prepare",
+        "mcp__cognovis-tools__bead_claim_commit",
+    } <= tools
+
+
 def write_synthetic_reviewer_manage_beads_source(tmp_path: Path) -> Path:
     """A reviewer-shaped agent that WRONGLY declares manage_beads.
 
@@ -733,7 +757,7 @@ def test_manage_beads_role_leakage_regression_fixture_hermetic(tmp_path: Path) -
 # read_beads read-only typed-tool capability (CL-j92j Part 2)
 #
 # read_beads is the least-privilege sibling of manage_beads: it grants the 5
-# read-only bead_* tools and NONE of the 9 mutating ones. It exists so
+# read-only bead_* tools and NONE of the 12 mutating ones. It exists so
 # non-orchestrator consumers (classifiers, pollers) can see bead state without
 # gaining mutation access. The companion cognovis-core bead clc-zbj4 (separate
 # repo, separate tracker) migrates effort-classifier / wave-monitor onto it;
@@ -749,9 +773,12 @@ _READ_BEADS_READ_TOOLS = {
     "mcp__cognovis-tools__bead_repos",
 }
 
-# The 9 mutating tools read_beads must NEVER grant.
+# The 12 mutating tools read_beads must NEVER grant.
 _READ_BEADS_FORBIDDEN_MUTATING_TOOLS = {
     "mcp__cognovis-tools__bead_create",
+    "mcp__cognovis-tools__bead_effort_classify",
+    "mcp__cognovis-tools__bead_claim_prepare",
+    "mcp__cognovis-tools__bead_claim_commit",
     "mcp__cognovis-tools__bead_claim",
     "mcp__cognovis-tools__bead_update",
     "mcp__cognovis-tools__bead_update_notes",
@@ -808,7 +835,7 @@ def test_read_beads_capability_registry_is_read_only_typed_tools() -> None:
 
 
 def test_build_agent_grants_read_beads_read_only_tools_end_to_end(tmp_path: Path) -> None:
-    """An agent declaring only read_beads gets the 5 read tools and none of the 9 mutating.
+    """An agent declaring only read_beads gets the 5 read tools and none of the 12 mutating.
 
     Exercises the real merge path (apply_capabilities -> _set_tools) against the
     real repo capabilities.yaml, end to end through the CLI entry point.

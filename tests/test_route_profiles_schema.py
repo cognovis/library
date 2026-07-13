@@ -772,8 +772,8 @@ class TestLauncherRouteProfileFlag:
         assert not args_text.startswith("exec ")
         assert f"-C {worktree_dir}" in args_text
 
-    def test_cdx_b_default_worktree_root_uses_codex_home(self, tmp_path: Path) -> None:
-        """CL-hog3: cdx-owned bead worktrees default to CODEX_HOME/worktrees."""
+    def test_cdx_b_default_worktree_root_uses_shared_code_directory(self, tmp_path: Path) -> None:
+        """cdx-owned bead worktrees default to ~/code/.worktrees/<repo>."""
         workflow_mock = tmp_path / "workflow-mock"
         workflow_mock.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
         workflow_mock.chmod(0o755)
@@ -790,7 +790,7 @@ class TestLauncherRouteProfileFlag:
         codex_mock.chmod(0o755)
         git_mock, git_log, repo_root = self._write_git_mock(tmp_path)
         beads_runtime = self._write_beads_runtime(tmp_path)
-        codex_home = tmp_path / "codex-home"
+        home = tmp_path / "home"
 
         env = dict(os.environ)
         env["BD_BIN"] = str(bd_mock)
@@ -798,7 +798,7 @@ class TestLauncherRouteProfileFlag:
         env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(_write_cdx_compact_context_script(tmp_path))
         env["CODEX_ARGS_FILE"] = str(codex_args)
         env["CDX_BEAD_WORKFLOW_SCRIPT"] = str(workflow_mock)
-        env["CODEX_HOME"] = str(codex_home)
+        env["HOME"] = str(home)
         env["GIT_ARGV_LOG"] = str(git_log)
         env["GIT_BIN"] = str(git_mock)
         env["GIT_REPO_ROOT"] = str(repo_root)
@@ -815,8 +815,7 @@ class TestLauncherRouteProfileFlag:
         )
 
         assert result.returncode == 0
-        repo_slug = self._repo_slug(repo_root)
-        worktree_dir = codex_home / "worktrees" / repo_slug / "bead-CL-smoke"
+        worktree_dir = home / "code" / ".worktrees" / repo_root.name / "bead-CL-smoke"
         args_text = codex_args.read_text(encoding="utf-8")
         assert f"-C {worktree_dir}" in args_text
         assert worktree_dir.exists()

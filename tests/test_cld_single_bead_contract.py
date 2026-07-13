@@ -133,7 +133,9 @@ BEAD_REVIEW_TOOLS = "Read,Grep,Glob"
 
 BEAD_REVIEW_DISALLOWED_TOOLS = (
     "Edit,Write,NotebookEdit,"
-    "mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_claim,"
+    "mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_effort_classify,"
+    "mcp__cognovis-tools__bead_claim_prepare,mcp__cognovis-tools__bead_claim_commit,"
+    "mcp__cognovis-tools__bead_claim,"
     "mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,"
     "mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,"
     "mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
