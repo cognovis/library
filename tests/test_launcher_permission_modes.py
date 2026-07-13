@@ -154,15 +154,31 @@ def _argv_has_flag(argv: list[str], flag: str) -> bool:
     return any(token == flag or token.startswith(prefix) for token in argv)
 
 
-# Deterministic narrow review tool profile for cld -br (CL-9knh). Bash is
-# read-only-by-convention here (git/grep/test-style commands), never for
-# file modification — Edit/Write/NotebookEdit are explicitly blocked below.
+# Deterministic narrow review tool profile for cld -br (CL-9knh). General
+# Bash is NOT granted: Bash can mutate files/bead state regardless of
+# Edit/Write/NotebookEdit being disallowed (e.g. `uv run python -c
+# "os.remove(...)"` or arbitrary shell one-liners), so "read-only by
+# convention" is not an enforceable boundary. The ONLY Bash grant -br ever
+# makes is a single exact-match entry for the coordinator callback's
+# terminal-state signal (see BEAD_REVIEW_ALLOWED_TOOLS_WITH_CALLBACK below),
+# added only when both --coordinator-workspace/--coordinator-surface are
+# present.
 BEAD_REVIEW_ALLOWED_TOOLS = (
-    "Read,Bash,Grep,Glob,"
+    "Read,Grep,Glob,"
     "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
     "mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,"
     "mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
 )
+
+
+def bead_review_allowed_tools_with_callback(surface: str) -> str:
+    """The -br allowedTools value when a coordinator callback is present:
+    BEAD_REVIEW_ALLOWED_TOOLS plus exactly one EXACT-match (no trailing "*")
+    Bash grant scoped to the single cmux trigger-flash invocation for the
+    given validated surface value.
+    """
+    return f"{BEAD_REVIEW_ALLOWED_TOOLS},Bash(cmux trigger-flash --surface {surface})"
+
 
 BEAD_REVIEW_DISALLOWED_TOOLS = (
     "Edit,Write,NotebookEdit,"
@@ -185,7 +201,6 @@ def test_cld_bead_review_allowed_tools_include_all_required_read_tools(tmp_path:
     allowed_set = set(allowed.split(","))
     required_read_tools = {
         "Read",
-        "Bash",
         "Grep",
         "Glob",
         "mcp__cognovis-tools__bead_show",
@@ -198,6 +213,22 @@ def test_cld_bead_review_allowed_tools_include_all_required_read_tools(tmp_path:
     missing = required_read_tools - allowed_set
     assert not missing, f"missing required read tools in --allowedTools: {missing}"
     assert allowed == BEAD_REVIEW_ALLOWED_TOOLS
+
+
+def test_cld_bead_review_allowed_tools_exclude_bash_without_callback(tmp_path: Path) -> None:
+    """Finding 1/3: Bash must be entirely absent from --allowedTools when no
+    coordinator callback flags are passed — not even a narrowed pattern."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    allowed = _argv_flag_value(argv, "--allowedTools")
+    assert allowed is not None
+    allowed_set = set(allowed.split(","))
+    assert "Bash" not in allowed_set
+    assert not any(tool.startswith("Bash(") for tool in allowed_set)
+    assert "Bash" not in allowed
 
 
 def test_cld_bead_review_disallowed_tools_block_all_general_mutations(tmp_path: Path) -> None:
@@ -275,13 +306,50 @@ def test_cld_bead_review_callback_contract_unaffected_by_tool_profile(tmp_path: 
     assert result.returncode == 0, result.stderr
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
+    assert _argv_flag_value(argv, "--allowedTools") == bead_review_allowed_tools_with_callback("surface:33")
     assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
     assert "Coordinator callback" in prompt
     assert "cmux trigger-flash --surface surface:33" in prompt
     # The review prompt must remain the last positional claude argument even
     # with the new variadic-flag values inserted ahead of it.
     assert argv[-1] == prompt
+
+
+def test_cld_bead_review_callback_grant_is_structurally_pure(tmp_path: Path) -> None:
+    """Finding 3.2: the cmux callback exception must be exactly one narrow
+    Bash grant and must not be widenable into a general shell escape.
+
+    Asserts the generated --allowedTools value contains the entry
+    `Bash(cmux trigger-flash --surface surface:33)` VERBATIM with no
+    trailing "*", and that the full --allowedTools string contains none of
+    "*", ";", "&&", "|", "$(" anywhere.
+    """
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-br",
+            "CL-safe",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    allowed = _argv_flag_value(argv, "--allowedTools")
+    assert allowed is not None
+    assert "Bash(cmux trigger-flash --surface surface:33)" in allowed
+    assert "Bash(cmux trigger-flash --surface surface:33)*" not in allowed
+    for forbidden in ("*", ";", "&&", "|", "$("):
+        assert forbidden not in allowed, f"forbidden shell-escape substring {forbidden!r} found in --allowedTools"
+    # Exactly one Bash entry — the exact-match cmux grant — no other Bash
+    # pattern of any kind.
+    allowed_tools = allowed.split(",")
+    bash_entries = [tool for tool in allowed_tools if tool == "Bash" or tool.startswith("Bash(")]
+    assert bash_entries == ["Bash(cmux trigger-flash --surface surface:33)"]
 
 
 def test_cld_bead_review_model_override_preserves_tool_profile(tmp_path: Path) -> None:

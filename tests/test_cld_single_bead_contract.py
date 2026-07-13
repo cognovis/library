@@ -101,13 +101,22 @@ def _argv_flag_value(argv: list[str], flag: str) -> str | None:
 
 # Deterministic narrow review tool profile for cld -br (CL-9knh). Kept in
 # sync with the identical constants in test_launcher_permission_modes.py and
-# with the production implementation in bin/cld.
+# with the production implementation in bin/cld. General Bash is NOT
+# granted — see test_launcher_permission_modes.py's constant docstring for
+# the full rationale. The only Bash grant -br ever makes is the single
+# exact-match cmux trigger-flash entry added when a coordinator callback is
+# present (bead_review_allowed_tools_with_callback below).
 BEAD_REVIEW_ALLOWED_TOOLS = (
-    "Read,Bash,Grep,Glob,"
+    "Read,Grep,Glob,"
     "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
     "mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,"
     "mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
 )
+
+
+def bead_review_allowed_tools_with_callback(surface: str) -> str:
+    return f"{BEAD_REVIEW_ALLOWED_TOOLS},Bash(cmux trigger-flash --surface {surface})"
+
 
 BEAD_REVIEW_DISALLOWED_TOOLS = (
     "Edit,Write,NotebookEdit,"
@@ -265,6 +274,66 @@ def test_cld_bead_modes_with_callback_inject_contract_and_consume_flags(
             "invalid coordinator surface",
         ),
         (["-br", "CL-smoke", "-b", "CL-other"], "mutually exclusive"),
+        # Finding 3.1: shell-metacharacter coordinator-surface values must
+        # still be rejected by the existing ^surface:[0-9]+$ validation
+        # BEFORE any --allowedTools string is ever constructed for -br's
+        # tool profile (which interpolates the validated surface value into
+        # a Bash(...) permission entry — see Finding 2).
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33; rm -rf /",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33 && evil",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33 | evil",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33$(evil)",
+            ],
+            "invalid coordinator surface",
+        ),
+        (
+            [
+                "-br",
+                "CL-smoke",
+                "--coordinator-workspace",
+                "workspace:15",
+                "--coordinator-surface",
+                "surface:33`evil`",
+            ],
+            "invalid coordinator surface",
+        ),
     ],
 )
 def test_cld_invalid_callback_or_review_arguments_fail_before_harness(
