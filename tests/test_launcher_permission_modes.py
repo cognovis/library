@@ -83,23 +83,38 @@ def _write_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
     return bd_mock, bd_log
 
 
-def _write_cld_path_mocks(tmp_path: Path) -> None:
+def _write_cld_path_mocks(tmp_path: Path, cmux_log: Path | None = None) -> None:
     _write_executable(
         tmp_path / "git",
         "#!/bin/sh\n"
         "exit 0\n",
     )
-    _write_executable(
-        tmp_path / "cmux",
-        "#!/bin/sh\n"
-        "exit 1\n",
-    )
+    if cmux_log is None:
+        _write_executable(
+            tmp_path / "cmux",
+            "#!/bin/sh\n"
+            "exit 1\n",
+        )
+    else:
+        _write_executable(
+            tmp_path / "cmux",
+            f"#!{sys.executable}\n"
+            "import json, os, pathlib, sys\n"
+            f"log = pathlib.Path({str(cmux_log)!r})\n"
+            "with log.open('a', encoding='utf-8') as f:\n"
+            "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            "raise SystemExit(0)\n",
+        )
 
 
-def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
+def _run_cld(
+    tmp_path: Path,
+    args: list[str],
+    cmux_log: Path | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
     claude_mock, argv_file, prompt_file, called_file = _write_claude_capture(tmp_path)
     bd_mock, bd_log = _write_bd_mock(tmp_path)
-    _write_cld_path_mocks(tmp_path)
+    _write_cld_path_mocks(tmp_path, cmux_log=cmux_log)
     home = tmp_path / "home"
     home.mkdir()
 
@@ -154,15 +169,18 @@ def _argv_has_flag(argv: list[str], flag: str) -> bool:
     return any(token == flag or token.startswith(prefix) for token in argv)
 
 
-# Deterministic narrow review tool profile for cld -br (CL-9knh). General
-# Bash is NOT granted: Bash can mutate files/bead state regardless of
-# Edit/Write/NotebookEdit being disallowed (e.g. `uv run python -c
-# "os.remove(...)"` or arbitrary shell one-liners), so "read-only by
-# convention" is not an enforceable boundary. The ONLY Bash grant -br ever
-# makes is a single exact-match entry for the coordinator callback's
-# terminal-state signal (see BEAD_REVIEW_ALLOWED_TOOLS_WITH_CALLBACK below),
-# added only when both --coordinator-workspace/--coordinator-surface are
-# present.
+# Deterministic narrow review tool profile for cld -br (CL-9knh, fix-cycle 2).
+# Bash is HARD-EXCLUDED via --tools (the built-in tool-set flag), not merely
+# left ungranted in --allowedTools: empirical testing showed Claude Code's
+# plan-mode classifier can silently auto-approve Bash invocations that "look
+# safe" (e.g. `git status`) regardless of --allowedTools/--disallowedTools
+# content, as long as Bash is registered as an available tool at all — even
+# when --allowedTools only contains one exact-match Bash(...) entry for a
+# completely different command. Only removing Bash from the --tools built-in
+# set (not just the allow/deny lists) makes it genuinely unavailable. This
+# profile is therefore a SINGLE fixed string — no callback-conditional Bash
+# grant exists anymore. See BEAD_REVIEW_TOOLS below for the --tools value
+# that performs the actual hard exclusion.
 BEAD_REVIEW_ALLOWED_TOOLS = (
     "Read,Grep,Glob,"
     "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
@@ -171,13 +189,11 @@ BEAD_REVIEW_ALLOWED_TOOLS = (
 )
 
 
-def bead_review_allowed_tools_with_callback(surface: str) -> str:
-    """The -br allowedTools value when a coordinator callback is present:
-    BEAD_REVIEW_ALLOWED_TOOLS plus exactly one EXACT-match (no trailing "*")
-    Bash grant scoped to the single cmux trigger-flash invocation for the
-    given validated surface value.
-    """
-    return f"{BEAD_REVIEW_ALLOWED_TOOLS},Bash(cmux trigger-flash --surface {surface})"
+# --tools value that hard-excludes Bash from the built-in tool set for -br
+# (unconditionally, callback or not). This is what genuinely makes Bash
+# unavailable — --allowedTools/--disallowedTools alone only govern
+# approval-without-prompting for tools that ARE registered.
+BEAD_REVIEW_TOOLS = "Read,Grep,Glob"
 
 
 BEAD_REVIEW_DISALLOWED_TOOLS = (
@@ -215,10 +231,31 @@ def test_cld_bead_review_allowed_tools_include_all_required_read_tools(tmp_path:
     assert allowed == BEAD_REVIEW_ALLOWED_TOOLS
 
 
-def test_cld_bead_review_allowed_tools_exclude_bash_without_callback(tmp_path: Path) -> None:
-    """Finding 1/3: Bash must be entirely absent from --allowedTools when no
-    coordinator callback flags are passed — not even a narrowed pattern."""
-    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, ["-br", "CL-safe"])
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-br", "CL-safe"],
+        [
+            "-br",
+            "CL-safe",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+    ],
+    ids=["no-callback", "with-callback"],
+)
+def test_cld_bead_review_allowed_tools_exclude_bash_always(tmp_path: Path, args: list[str]) -> None:
+    """Fix-cycle 2: Bash must be entirely absent from --allowedTools in BOTH
+    the callback and no-callback cases — not even a narrowed exact-match
+    pattern. The old design granted a single exact-match Bash(...) entry for
+    the coordinator callback; that design is abandoned because Claude Code's
+    plan-mode classifier can auto-approve unrelated Bash commands once Bash
+    is registered as available at all, regardless of --allowedTools content.
+    Bash exclusion is now enforced via --tools (see
+    test_cld_bead_review_tools_flag_hard_excludes_bash_always)."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, args)
 
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
@@ -229,6 +266,52 @@ def test_cld_bead_review_allowed_tools_exclude_bash_without_callback(tmp_path: P
     assert "Bash" not in allowed_set
     assert not any(tool.startswith("Bash(") for tool in allowed_set)
     assert "Bash" not in allowed
+    assert allowed == BEAD_REVIEW_ALLOWED_TOOLS
+
+
+def test_cld_bead_review_tools_flag_hard_excludes_bash_always(tmp_path: Path) -> None:
+    """Fix 1 (CL-9knh fix-cycle 2): --tools=Read,Grep,Glob must be present in
+    argv for EVERY -br invocation, callback or not — this is what actually
+    removes Bash from the built-in tool set (--allowedTools/--disallowedTools
+    alone only govern approval-without-prompting for tools that ARE
+    registered, which was empirically shown to be insufficient)."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-br",
+            "CL-safe",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
+
+    result2, argv_file2, _pf2, called_file2, _bl2 = _run_cld(tmp_path, ["-br", "CL-safe"])
+    assert result2.returncode == 0, result2.stderr
+    assert called_file2.exists()
+    argv2 = json.loads(argv_file2.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv2, "--tools") == BEAD_REVIEW_TOOLS
+
+
+@pytest.mark.parametrize("args", [["-b", "CL-safe"], ["-bq", "CL-safe"]])
+def test_cld_bead_review_tools_flag_does_not_leak_into_implementer_modes(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    """The -br-only --tools hard exclusion must never reach -b/-bq
+    (implementer) dispatch — those modes need full Bash access."""
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(tmp_path, args)
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert not _argv_has_flag(argv, "--tools")
 
 
 def test_cld_bead_review_disallowed_tools_block_all_general_mutations(tmp_path: Path) -> None:
@@ -290,7 +373,10 @@ def test_cld_bead_review_still_uses_plan_mode_with_tool_profile(tmp_path: Path) 
 
 
 def test_cld_bead_review_callback_contract_unaffected_by_tool_profile(tmp_path: Path) -> None:
-    """AK4 negative matrix: reject callback regression once the tool profile is added."""
+    """Fix-cycle 2: the -br callback contract still fires (prompt text +
+    --tools/--allowedTools/--disallowedTools profile), but the reviewer no
+    longer has Bash to run cmux trigger-flash itself — the launcher runs it
+    post-exit instead (see launcher-side flash coverage below)."""
     result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
         tmp_path,
         [
@@ -306,23 +392,26 @@ def test_cld_bead_review_callback_contract_unaffected_by_tool_profile(tmp_path: 
     assert result.returncode == 0, result.stderr
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert _argv_flag_value(argv, "--allowedTools") == bead_review_allowed_tools_with_callback("surface:33")
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
+    assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
     assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
     assert "Coordinator callback" in prompt
+    assert "no Bash access" in prompt
     assert "cmux trigger-flash --surface surface:33" in prompt
+    assert "you do not need to, and cannot, run it yourself" in prompt
     # The review prompt must remain the last positional claude argument even
     # with the new variadic-flag values inserted ahead of it.
     assert argv[-1] == prompt
 
 
-def test_cld_bead_review_callback_grant_is_structurally_pure(tmp_path: Path) -> None:
-    """Finding 3.2: the cmux callback exception must be exactly one narrow
-    Bash grant and must not be widenable into a general shell escape.
-
-    Asserts the generated --allowedTools value contains the entry
-    `Bash(cmux trigger-flash --surface surface:33)` VERBATIM with no
-    trailing "*", and that the full --allowedTools string contains none of
-    "*", ";", "&&", "|", "$(" anywhere.
+def test_cld_bead_review_callback_no_longer_grants_any_bash_permission_string(tmp_path: Path) -> None:
+    """Fix-cycle 2: the OLD exact-match `Bash(cmux trigger-flash --surface
+    ...)` --allowedTools grant is fully removed, not just narrowed further.
+    No argv token for -br (with a coordinator callback present) may contain
+    the substring "Bash(" or the bare string "Bash" anywhere — confirming
+    the coordinator-surface value is no longer interpolated into any Bash
+    permission string at all. Bash exclusion now happens exclusively via
+    --tools (see test_cld_bead_review_tools_flag_hard_excludes_bash_always).
     """
     result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
         tmp_path,
@@ -339,17 +428,10 @@ def test_cld_bead_review_callback_grant_is_structurally_pure(tmp_path: Path) -> 
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    allowed = _argv_flag_value(argv, "--allowedTools")
-    assert allowed is not None
-    assert "Bash(cmux trigger-flash --surface surface:33)" in allowed
-    assert "Bash(cmux trigger-flash --surface surface:33)*" not in allowed
-    for forbidden in ("*", ";", "&&", "|", "$("):
-        assert forbidden not in allowed, f"forbidden shell-escape substring {forbidden!r} found in --allowedTools"
-    # Exactly one Bash entry — the exact-match cmux grant — no other Bash
-    # pattern of any kind.
-    allowed_tools = allowed.split(",")
-    bash_entries = [tool for tool in allowed_tools if tool == "Bash" or tool.startswith("Bash(")]
-    assert bash_entries == ["Bash(cmux trigger-flash --surface surface:33)"]
+    for token in argv:
+        assert "Bash(" not in token, f"unexpected Bash(...) permission string in argv: {token!r}"
+        assert token != "Bash"
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
 
 
 def test_cld_bead_review_model_override_preserves_tool_profile(tmp_path: Path) -> None:
@@ -362,6 +444,7 @@ def test_cld_bead_review_model_override_preserves_tool_profile(tmp_path: Path) -
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert _argv_flag_value(argv, "--model") == "sonnet"
     assert "opus" not in argv
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
     assert _argv_flag_value(argv, "--allowedTools") == BEAD_REVIEW_ALLOWED_TOOLS
     assert _argv_flag_value(argv, "--disallowedTools") == BEAD_REVIEW_DISALLOWED_TOOLS
 
@@ -379,6 +462,7 @@ def test_cld_bead_review_tool_profile_does_not_leak_into_implementer_modes(
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert not _argv_has_flag(argv, "--allowedTools")
     assert not _argv_has_flag(argv, "--disallowedTools")
+    assert not _argv_has_flag(argv, "--tools")
 
 
 @pytest.mark.parametrize(
@@ -502,3 +586,117 @@ def test_cld_bead_prompt_does_not_embed_raw_bead_fields(
     assert "Bead ID: CL-safe" in prompt
     assert "Portless namespace: CL-safe" in prompt
     assert UNTRUSTED_MARKER not in prompt
+
+
+# ── Launcher-side cmux flash (Fix 2, CL-9knh fix-cycle 2) ─────────────────
+# With Bash hard-excluded from -br's tool set, the reviewer session can no
+# longer run `cmux trigger-flash` itself. bin/cld now runs the claude
+# subprocess as a foreground child for -br (instead of `exec`-replacing
+# itself), captures its exit code, and — only when a coordinator callback is
+# present — invokes `cmux trigger-flash --surface ${coordinator_surface}`
+# from the launcher's OWN process after the subprocess exits, then exits
+# with the captured code. These tests extend the mock `cmux` binary to log
+# its invocations so the flash's origin (launcher vs. claude subprocess) is
+# provable by construction, not by timing.
+
+
+def _cmux_trigger_flash_calls(cmux_log: Path) -> list[list[str]]:
+    """Extract only the `trigger-flash` invocations from a cmux call log.
+
+    The launcher's `_cmux_rename` helper unconditionally calls
+    `cmux identify --json` (for pane-tab renaming) in every bead mode, so a
+    raw non-empty log does not by itself indicate a flash occurred — these
+    tests must filter to `trigger-flash` calls specifically.
+    """
+    if not cmux_log.exists():
+        return []
+    calls = [json.loads(line) for line in cmux_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [call for call in calls if call and call[0] == "trigger-flash"]
+
+
+def test_cld_bead_review_launcher_flashes_cmux_after_exit_with_callback(tmp_path: Path) -> None:
+    """The mock `claude` binary used here (see _write_claude_capture) is a
+    pure Python script that only writes argv/prompt files — it never itself
+    invokes cmux — so a logged trigger-flash call proves the flash
+    genuinely originates from the launcher process, not from anything the
+    claude mock does."""
+    cmux_log = tmp_path / "cmux-argv.jsonl"
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-br",
+            "CL-safe",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        cmux_log=cmux_log,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
+    assert not any("Bash" in token for token in argv)
+
+    flash_calls = _cmux_trigger_flash_calls(cmux_log)
+    assert flash_calls == [
+        ["trigger-flash", "--surface", "surface:33"]
+    ], f"expected exactly one trigger-flash call, got: {flash_calls}"
+
+
+def test_cld_bead_review_launcher_does_not_flash_cmux_without_callback(tmp_path: Path) -> None:
+    """Without coordinator callback flags, the launcher must never invoke
+    cmux trigger-flash at all — _has_coordinator_callback gates the
+    post-exit flash exactly as it gated the old in-session callback
+    contract. (cmux identify --json from _cmux_rename may still be logged;
+    only trigger-flash calls are asserted here.)"""
+    cmux_log = tmp_path / "cmux-argv.jsonl"
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["-br", "CL-safe"],
+        cmux_log=cmux_log,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--tools") == BEAD_REVIEW_TOOLS
+
+    assert _cmux_trigger_flash_calls(cmux_log) == [], (
+        "launcher invoked cmux trigger-flash without a coordinator callback present"
+    )
+
+
+@pytest.mark.parametrize("args", [["-b", "CL-safe"], ["-bq", "CL-safe"]])
+def test_cld_implementer_modes_still_use_exec_and_do_not_flash_cmux(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    """-b/-bq must keep the original `exec` behavior (no post-exit launcher
+    code runs for them) and must never trigger the -br-only launcher-side
+    cmux flash, even when coordinator callback flags are present — those
+    modes signal the coordinator from inside their own (unrestricted) Bash
+    session, per _coordinator_callback_contract's impl branch. (cmux
+    identify --json from _cmux_rename may still be logged; only
+    trigger-flash calls are asserted here.)"""
+    cmux_log = tmp_path / "cmux-argv.jsonl"
+    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            *args,
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        cmux_log=cmux_log,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    assert _cmux_trigger_flash_calls(cmux_log) == [], (
+        "launcher invoked cmux trigger-flash for an implementer (-b/-bq) mode; "
+        "only -br's post-exit flash should ever fire"
+    )

@@ -99,13 +99,14 @@ def _argv_flag_value(argv: list[str], flag: str) -> str | None:
     return None
 
 
-# Deterministic narrow review tool profile for cld -br (CL-9knh). Kept in
-# sync with the identical constants in test_launcher_permission_modes.py and
-# with the production implementation in bin/cld. General Bash is NOT
-# granted — see test_launcher_permission_modes.py's constant docstring for
-# the full rationale. The only Bash grant -br ever makes is the single
-# exact-match cmux trigger-flash entry added when a coordinator callback is
-# present (bead_review_allowed_tools_with_callback below).
+# Deterministic narrow review tool profile for cld -br (CL-9knh, fix-cycle 2).
+# Kept in sync with the identical constants in test_launcher_permission_modes.py
+# and with the production implementation in bin/cld. Bash is HARD-EXCLUDED via
+# --tools (BEAD_REVIEW_TOOLS below), not merely left out of --allowedTools —
+# see test_launcher_permission_modes.py's constant docstring for the full
+# rationale (plan-mode classifier auto-approval of unrelated Bash commands
+# once Bash is registered as available at all). This profile is a SINGLE
+# fixed string now — no callback-conditional Bash grant exists anymore.
 BEAD_REVIEW_ALLOWED_TOOLS = (
     "Read,Grep,Glob,"
     "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
@@ -114,8 +115,9 @@ BEAD_REVIEW_ALLOWED_TOOLS = (
 )
 
 
-def bead_review_allowed_tools_with_callback(surface: str) -> str:
-    return f"{BEAD_REVIEW_ALLOWED_TOOLS},Bash(cmux trigger-flash --surface {surface})"
+# --tools value that hard-excludes Bash from the built-in tool set for -br
+# (unconditionally, callback or not).
+BEAD_REVIEW_TOOLS = "Read,Grep,Glob"
 
 
 BEAD_REVIEW_DISALLOWED_TOOLS = (
@@ -362,16 +364,20 @@ def test_cld_bead_review_defaults_to_opus_and_uses_review_only_prompt(tmp_path: 
     assert _argv_flag_value(argv, "--permission-mode") == "plan"
     # Narrow read + review-cache tool profile (CL-9knh): deterministic,
     # single "--flag=value" argv token per flag — see bin/cld -br block.
+    # --tools hard-excludes Bash from the built-in tool set (fix-cycle 2).
+    tools_value = _argv_flag_value(argv, "--tools")
     allowed_value = _argv_flag_value(argv, "--allowedTools")
     disallowed_value = _argv_flag_value(argv, "--disallowedTools")
+    assert tools_value == BEAD_REVIEW_TOOLS
     assert allowed_value == BEAD_REVIEW_ALLOWED_TOOLS
     assert disallowed_value == BEAD_REVIEW_DISALLOWED_TOOLS
     # No edit/write/workspace-implementation capability leaks into -br's
-    # granted (--allowedTools) tool set.
+    # granted (--allowedTools) tool set, and no Bash entry anywhere.
     allowed_set = set(allowed_value.split(","))
     assert "Edit" not in allowed_set
     assert "Write" not in allowed_set
     assert "NotebookEdit" not in allowed_set
+    assert "Bash" not in allowed_value
     assert "--dangerously-skip-permissions" not in argv
     assert "--worktree" not in argv
     assert "--agent" not in argv
@@ -407,6 +413,10 @@ def test_cld_bead_review_honors_explicit_model_override(tmp_path: Path) -> None:
 
 
 def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) -> None:
+    """Fix-cycle 2: the review-mode callback contract no longer asks the
+    reviewer to run `cmux trigger-flash` itself — it has no Bash. It
+    explains that the launcher runs the flash automatically after this
+    session exits."""
     result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
         tmp_path,
         [
@@ -426,8 +436,10 @@ def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) 
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
     assert "workspace:15 / surface:33" in prompt
-    assert "Review terminal state is the final bead-reviewer verdict" in prompt
+    assert "no Bash access" in prompt
+    assert "cannot signal the coordinator directly" in prompt
     assert "cmux trigger-flash --surface surface:33" in prompt
+    assert "you do not need to, and cannot, run it yourself" in prompt
     assert "Phase 16" not in prompt
 
 
