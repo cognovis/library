@@ -95,11 +95,11 @@ loopback endpoint.
 **Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch. `scripts/coordinator_callback.py` (CL-t32e) provides a standalone, tested exactly-once delivery executor for this contract (atomic lock + state file per `(run_id, event)`); it is not yet wired into `bin/cld`/`bin/cdx` — that lifecycle wiring is scoped to CL-gzvu (`cld`) and CL-eqiq (`cdx`), which will replace the best-effort prompt-injected contract described above with calls to this executor.
 
 **Route profiles** (`--route-profile NAME`): Both launchers accept an optional `--route-profile` flag
-that selects a named profile from `orchestrator-config.yml`. The name is exported as `CLD_ROUTE_PROFILE`
-and injected into the bead execution prompt so `phase0-claim.py` can resolve the matching `execution_plan`
-(slots, adapter, model, reasoning_effort, timeout). Built-in profiles: `cld-default`, `cdx-default`,
-`cdx-composer`. When omitted, `perspective_policy` in `orchestrator-config.yml` is the backward-compatible
-fallback.
+that selects a named profile from `orchestrator-config.yml`. The selected name is passed explicitly as a
+`--route-profile` parameter to `phase0-claim.py` and threaded through the bead-orchestrator prompt text so
+downstream workflow entries resolve the matching `execution_plan` (slots, adapter, model, reasoning_effort,
+timeout). Built-in profiles: `cld-default`, `cdx-default`, `cdx-composer`. When omitted, `cld` passes
+`cld-default` and `cdx` passes `cdx-composer` as code-defined launcher defaults.
 
 `~/.local/bin/` must be in `$PATH`. The `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
 (only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).
