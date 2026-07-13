@@ -139,6 +139,18 @@ capabilities:
       mcp_servers: [cognovis-tools]
       skills: [beads]
       sandbox_mode: workspace-write
+  - name: manage_agent_sessions
+    description: Start, resume, inspect, and cancel role-scoped provider sessions through the typed cognovis-tools gateway.
+    claude:
+      tools:
+        - mcp__cognovis-tools__agent_session_start
+        - mcp__cognovis-tools__agent_session_continue
+        - mcp__cognovis-tools__agent_session_status
+        - mcp__cognovis-tools__agent_session_cancel
+      mcpServers: [cognovis-tools]
+    codex:
+      mcp_servers: [cognovis-tools]
+      sandbox_mode: workspace-write
   - name: read_beads
     description: Read-only typed access to beads issues via cognovis-tools MCP (no mutation). For non-orchestrator consumers (e.g. classifiers, pollers) that need bead visibility but must not mutate bead state.
     claude:

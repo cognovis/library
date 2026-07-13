@@ -839,3 +839,78 @@ def test_build_agent_grants_read_beads_read_only_tools_end_to_end(tmp_path: Path
     assert "cognovis-tools" in mcp_servers, (
         "built read_beads agent frontmatter must register the cognovis-tools MCP server"
     )
+
+
+# ---------------------------------------------------------------------------
+# manage_agent_sessions typed-tool capability (CL-2n27)
+# ---------------------------------------------------------------------------
+
+_AGENT_SESSION_TOOLS = {
+    "mcp__cognovis-tools__agent_session_start",
+    "mcp__cognovis-tools__agent_session_continue",
+    "mcp__cognovis-tools__agent_session_status",
+    "mcp__cognovis-tools__agent_session_cancel",
+}
+
+
+def write_manage_agent_sessions_source(tmp_path: Path, *, enabled: bool) -> Path:
+    source = tmp_path / "agent-session-capability-agent.md"
+    capability = "  - manage_agent_sessions\n" if enabled else ""
+    source.write_text(
+        "---\n"
+        "name: agent-session-capability-agent\n"
+        "description: Fixture agent for typed provider session dispatch.\n"
+        "model: sonnet\n"
+        "capabilities:\n"
+        "  - read_files\n"
+        f"{capability}"
+        "agent_base: auto\n"
+        "---\n\n"
+        "# Agent Session Capability Agent\n\nFixture body for CL-2n27 coverage.\n"
+    )
+    return source
+
+
+def test_manage_agent_sessions_registry_grants_exact_typed_tools() -> None:
+    """The dedicated capability grants exactly the four provider-session tools."""
+    module = load_build_agent_module()
+    registry = module.load_capabilities_registry()
+    capability = registry.get("manage_agent_sessions")
+    assert capability is not None, "manage_agent_sessions capability missing"
+
+    claude_binding = capability.get("claude") or {}
+    tools = set(module._as_string_list(claude_binding.get("tools")))  # noqa: SLF001
+    assert tools == _AGENT_SESSION_TOOLS
+    assert set(module._as_string_list(claude_binding.get("mcpServers"))) == {  # noqa: SLF001
+        "cognovis-tools"
+    }
+
+    codex_binding = capability.get("codex") or {}
+    assert set(module._as_string_list(codex_binding.get("mcp_servers"))) == {  # noqa: SLF001
+        "cognovis-tools"
+    }
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_build_agent_scopes_agent_session_tools_to_declared_capability(
+    tmp_path: Path, enabled: bool
+) -> None:
+    """The builder grants all four tools only when the capability is declared."""
+    source = write_manage_agent_sessions_source(tmp_path, enabled=enabled)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = tmp_path / "model-standards"
+    model_standards_dir.mkdir()
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 0, result.stderr
+    built = (output_dir / "agent-session-capability-agent.md").read_text()
+    frontmatter = yaml.safe_load(built.split("---", 2)[1]) or {}
+    tools = {
+        tool.strip()
+        for tool in str(frontmatter.get("tools", "")).split(",")
+        if tool.strip()
+    }
+    granted = tools & _AGENT_SESSION_TOOLS
+    assert granted == (_AGENT_SESSION_TOOLS if enabled else set())
