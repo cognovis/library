@@ -33,7 +33,8 @@ def _write_claude_capture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
         "pathlib.Path(os.environ['CLAUDE_ARGV_FILE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
         "if len(sys.argv) > 1:\n"
         "    pathlib.Path(os.environ['CLAUDE_PROMPT_FILE']).write_text(sys.argv[-1], encoding='utf-8')\n"
-        "print(f\"CLD_BEAD_LINE={os.environ.get('CLD_BEAD_LINE', '')}\")\n",
+        "print(f\"CLD_BEAD_LINE={os.environ.get('CLD_BEAD_LINE', '')}\")\n"
+        "print(f\"CLD_ROUTE_PROFILE={os.environ.get('CLD_ROUTE_PROFILE', '')}\")\n",
     )
     return claude_mock, argv_file, prompt_file, called_file
 
@@ -142,7 +143,11 @@ BEAD_REVIEW_DISALLOWED_TOOLS = (
 )
 
 
-def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
+def _run_cld(
+    tmp_path: Path,
+    args: list[str],
+    env_overrides: dict[str, str] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path]:
     claude_mock, argv_file, prompt_file, called_file = _write_claude_capture(tmp_path)
     review_client = _write_review_client_capture(tmp_path)
     bd_mock, bd_log = _write_bd_mock(tmp_path)
@@ -160,6 +165,8 @@ def _run_cld(tmp_path: Path, args: list[str]) -> tuple[subprocess.CompletedProce
     env["BD_BIN"] = str(bd_mock)
     env["BD_ARGV_LOG"] = str(bd_log)
     env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
+    if env_overrides:
+        env.update(env_overrides)
 
     result = subprocess.run(
         [str(CLD_BIN), *args],
@@ -228,6 +235,48 @@ def test_cld_bead_modes_without_callback_do_not_inject_callback_contract(
     assert argv[-1] == prompt
     assert "Coordinator callback" not in prompt
     assert "trigger-flash" not in prompt
+
+
+@pytest.mark.parametrize("flag", ["-b", "-bq"])
+def test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    result, _argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-smoke"],
+        env_overrides={"CLD_ROUTE_PROFILE": "evil-profile"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    assert "CLD_ROUTE_PROFILE=\n" in result.stdout
+    assert "CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "Route profile: cld-default" in prompt
+    assert "--route-profile cld-default" in prompt
+    assert "evil-profile" not in prompt
+
+
+@pytest.mark.parametrize("flag", ["-b", "-bq"])
+def test_cld_bead_modes_explicit_route_profile_is_parameter_only_with_ambient_env(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    result, _argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-smoke", "--route-profile", "custom-profile"],
+        env_overrides={"CLD_ROUTE_PROFILE": "evil-profile"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    assert "CLD_ROUTE_PROFILE=\n" in result.stdout
+    assert "CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "Route profile: custom-profile" in prompt
+    assert "--route-profile custom-profile" in prompt
+    assert "evil-profile" not in prompt
 
 
 @pytest.mark.parametrize("flag", ["-b", "-bq"])

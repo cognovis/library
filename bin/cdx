@@ -15,7 +15,7 @@
 #   --bead-dangerous-full-auto → For bead modes only, bypass approvals and sandbox
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
-#   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
+#   --route-profile NAME → select named route profile (passed to phase0-claim.py as --route-profile)
 #
 # Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
 #       context and pass it to Codex (TUI by default; pass --exec for
@@ -441,6 +441,11 @@ while (( $# > 0 )); do
     esac
 done
 
+unset CLD_ROUTE_PROFILE CDX_DEFAULT_ROUTE_PROFILE
+if [[ -z "$route_profile" ]]; then
+    route_profile="cdx-composer"
+fi
+
 # ── Help ──────────────────────────────────────────────────────────
 
 if ${show_help}; then
@@ -460,7 +465,7 @@ Wrapper flags (consumed by cdx, not passed to codex):
                                 Coordinator callback workspace ref (requires surface)
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
-         --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
+         --route-profile NAME    Select named route profile (passed to phase0-claim.py as --route-profile)
                                 Profiles: cld-default, cdx-default, cdx-composer
          --bead-dangerous-full-auto
                                 For bead modes only, pass Codex's dangerous
@@ -529,11 +534,6 @@ if [[ -n "$bead_id" ]]; then
     # perspective_policy.cdx in .agents/orchestrator-config.yml.
     export CLD_BEAD_LINE=cdx
 
-    # Export CLD_ROUTE_PROFILE when --route-profile is set (CL-iye.1).
-    route_profile="${route_profile:-${CDX_DEFAULT_ROUTE_PROFILE:-cdx-composer}}"
-    if [[ -n "$route_profile" ]]; then
-        export CLD_ROUTE_PROFILE="$route_profile"
-    fi
     export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
     workflow_mode="${CDX_BEAD_WORKFLOW:-codex}"
@@ -678,9 +678,6 @@ if [[ -n "$bead_quick_id" ]]; then
     # in the default user-global config).
     export CLD_BEAD_LINE=cdx
 
-    # Default quick cdx runs to the composer route profile, matching full cdx -b.
-    route_profile="${route_profile:-${CDX_DEFAULT_ROUTE_PROFILE:-cdx-composer}}"
-    export CLD_ROUTE_PROFILE="$route_profile"
     export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
     repo_root="$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null)" || {

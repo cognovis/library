@@ -39,7 +39,7 @@ def _write_codex_capture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
         "pathlib.Path(os.environ['CODEX_ARGV_FILE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
         "if len(sys.argv) > 1:\n"
         "    pathlib.Path(os.environ['CODEX_PROMPT_FILE']).write_text(sys.argv[-1], encoding='utf-8')\n"
-        "env = {'CLD_BEAD_LINE': os.environ.get('CLD_BEAD_LINE', ''), 'CLD_ROUTE_PROFILE': os.environ.get('CLD_ROUTE_PROFILE', '')}\n"
+        "env = {'CLD_BEAD_LINE': os.environ.get('CLD_BEAD_LINE', '')}\n"
         "pathlib.Path(os.environ['CODEX_ENV_FILE']).write_text(json.dumps(env), encoding='utf-8')\n",
     )
     return codex_mock, argv_file, prompt_file, called_file, env_file
