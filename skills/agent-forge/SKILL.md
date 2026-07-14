@@ -227,7 +227,7 @@ Malformed, nested, or unclosed directive blocks fail `scripts/build-agent.py`.
 - Implementation: `read_files`, `edit_files`, `run_shell`
 - Research: `read_files`, `search_web`
 - SearXNG-only research: `search_searxng`, `use_skills`
-- Orchestration: `spawn_subagents`, `manage_beads`
+- Orchestration: `spawn_subagents`, `run_shell`, `use_skills`
 
 Minimal capabilities reduce attack surface and keep the agent focused.
 

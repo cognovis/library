@@ -980,8 +980,6 @@ library:
       final closeout. Use when implementing a bead by ID, or to list ready beads.
       Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
     source: https://github.com/cognovis/library-core/blob/main/skills/beads/SKILL.md
-    requires:
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -997,7 +995,6 @@ library:
     requires:
     - standard:healthcare-control-areas
     - standard:english-only
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:project
@@ -1057,7 +1054,6 @@ library:
     - standard:tool-standards
     - standard:english-only
     - standard:no-emoji
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:domain
@@ -1223,7 +1219,6 @@ library:
     requires:
     - standard:english-only
     - mcp:open-brain
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -1408,7 +1403,6 @@ library:
     - standard:english-only
     - skill:plan
     - skill:bead-reviewer
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -1448,14 +1442,13 @@ library:
         inventory: convention-scan
   - name: intake
     description: Route raw transcripts, lists, bug reports, or epic-scale goals into
-      inline cognovis-tools bead creation with duplicate checks, HITL approval, and
+      inline direct-bd creation with duplicate checks, HITL approval, and
       deterministic author checks. Use when turning notes into beads, filing transcript
       work, or starting intake.
     source: https://github.com/cognovis/library-core/blob/main/skills/intake/SKILL.md
     requires:
     - standard:english-only
     - skill:bug-triage
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -1558,7 +1551,6 @@ library:
     requires:
     - standard:english-only
     - agent:plan-reviewer
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -1739,7 +1731,6 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/refactor-note/SKILL.md
     requires:
     - standard:english-only
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -1757,7 +1748,6 @@ library:
     requires:
     - standard:english-only
     - mcp:open-brain
-    - mcp:cognovis-tools
     - skill:bead-metrics
     tags:
     - origin:original
@@ -1776,7 +1766,6 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/review-conventions/SKILL.md
     requires:
     - standard:english-only
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -1807,7 +1796,6 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
     requires:
     - skill:beads
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -1996,7 +1984,6 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/vision/SKILL.md
     requires:
     - standard:english-only
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:domain
@@ -2015,7 +2002,6 @@ library:
     - standard:tool-standards
     - standard:english-only
     - standard:no-emoji
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:domain
@@ -2044,7 +2030,6 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/wave-dispatch/SKILL.md
     requires:
     - standard:english-only
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -2060,7 +2045,6 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/workplan/SKILL.md
     requires:
     - standard:english-only
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
@@ -2181,10 +2165,8 @@ library:
         plane: dev
   - name: bead-author
     description: Drafts factory-ready bead payloads from raw briefs or pre-extracted
-      specs, validates them with bead-author-check, and then creates the bead.
+      specs, validates them with bead-author-check, and then creates the bead through bd.
     source: https://github.com/cognovis/library-core/blob/main/agents/bead-author.md
-    requires:
-    - mcp:cognovis-tools
     metadata:
       library:
         source_catalog: cognovis-library-core
@@ -2193,23 +2175,6 @@ library:
     tags:
     - origin:original
     - tier:domain
-  - name: bead-claim-wrapper
-    description: Thin harness leaf for the canonical Bead Claim prepare and commit
-      operations. Calls typed cognovis-tools tools, captures the local Git baseline,
-      and relays structured results without deciding routing or reviewing repository
-      content. Use only when bead-orchestrator dispatches a prepare or commit boundary
-      step.
-    source: https://github.com/cognovis/library-core/blob/main/agents/bead-claim-wrapper.md
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
-    tags:
-    - origin:original
-    - tier:domain
-    requires:
-    - mcp:cognovis-tools
   - name: bead-context
     description: Read-only subagent that locates the primary files, tests, symbols,
       and graph neighbors relevant to a bead. Calls the deterministic context provider
@@ -2229,7 +2194,7 @@ library:
     description: Repository-aware, read-only reviewer for Bead Claim. Validate whether
       a bead is implementable against the assigned worktree, project standards, ADRs,
       source, and tests, then return structured preflight evidence. Use only when dispatched
-      by bead-orchestrator after bead_claim_prepare.
+      by bead-orchestrator during the direct claim preflight.
     source: https://github.com/cognovis/library-core/blob/main/agents/bead-spec-reviewer.md
     metadata:
       library:
@@ -2255,7 +2220,6 @@ library:
     - agent:judge-default
     - agent:doc-changelog-updater
     - agent:feature-doc-updater
-    - agent:bead-claim-wrapper
     - agent:bead-spec-reviewer
     - agent:bead-context
     - skill:beads
@@ -2556,7 +2520,7 @@ library:
   - name: session-close
     description: 'Closes a coding session through exactly four durable states: Ship,
       Finalize, Analyze, and Cleanup. It drives the Python Session Close application
-      plus typed cognovis-tools finalization, waits for configured post-push CI on the
+      plus deterministic direct-bd finalization, waits for configured post-push CI on the
       exact SHA, records no-CI repositories explicitly, persists one analysis bundle,
       and performs bounded cleanup. It does not run release versioning or Bash handlers.'
     source: https://github.com/cognovis/library-core/blob/main/agents/session-close.md
@@ -2679,7 +2643,6 @@ library:
       Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.'
     source: https://github.com/cognovis/library-core/blob/main/agents/wave-monitor.md
     requires:
-    - mcp:cognovis-tools
     - skill:beads
     tags:
     - origin:original
@@ -2698,7 +2661,6 @@ library:
       at once. Also triggers on "cmux dispatch", "multi-bead", "wave orchestrator".
     source: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.md
     requires:
-    - mcp:cognovis-tools
     - agent:wave-monitor
     - agent:architecture-reviewer
     - agent:bead-orchestrator

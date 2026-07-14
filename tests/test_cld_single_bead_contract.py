@@ -111,38 +111,6 @@ def _argv_flag_value(argv: list[str], flag: str) -> str | None:
     return None
 
 
-# Deterministic narrow review tool profile for cld -br (CL-9knh, fix-cycle 2).
-# Kept in sync with the identical constants in test_launcher_permission_modes.py
-# and with the production implementation in bin/cld. Bash is HARD-EXCLUDED via
-# --tools (BEAD_REVIEW_TOOLS below), not merely left out of --allowedTools —
-# see test_launcher_permission_modes.py's constant docstring for the full
-# rationale (plan-mode classifier auto-approval of unrelated Bash commands
-# once Bash is registered as available at all). This profile is a SINGLE
-# fixed string now — no callback-conditional Bash grant exists anymore.
-BEAD_REVIEW_ALLOWED_TOOLS = (
-    "Read,Grep,Glob,"
-    "mcp__cognovis-tools__bead_show,mcp__cognovis-tools__bead_search,"
-    "mcp__cognovis-tools__bead_list,mcp__cognovis-tools__bead_repos,"
-    "mcp__cognovis-tools__bead_ready,mcp__cognovis-tools__bead_review_write"
-)
-
-
-# --tools value that hard-excludes Bash from the built-in tool set for -br
-# (unconditionally, callback or not).
-BEAD_REVIEW_TOOLS = "Read,Grep,Glob"
-
-
-BEAD_REVIEW_DISALLOWED_TOOLS = (
-    "Edit,Write,NotebookEdit,"
-    "mcp__cognovis-tools__bead_create,mcp__cognovis-tools__bead_effort_classify,"
-    "mcp__cognovis-tools__bead_claim_prepare,mcp__cognovis-tools__bead_claim_commit,"
-    "mcp__cognovis-tools__bead_claim,"
-    "mcp__cognovis-tools__bead_update,mcp__cognovis-tools__bead_update_notes,"
-    "mcp__cognovis-tools__bead_close,mcp__cognovis-tools__bead_dep_add,"
-    "mcp__cognovis-tools__bead_dep_remove,mcp__cognovis-tools__bead_dolt_sync"
-)
-
-
 def _run_cld(
     tmp_path: Path,
     args: list[str],
@@ -264,10 +232,9 @@ def test_regression_cld_bead_modes_forward_requested_workflow(
         assert "do not fall back to full" in prompt
 
 
-# Guards CL-1n24: force-tier must use the typed claim contract symmetrically;
-# neither launcher mode may send the orchestrator back to legacy Phase 0.
+# Force-tier must reach the direct claim preflight symmetrically.
 @pytest.mark.parametrize("flag", ["-b", "-bq"])
-def test_regression_cld_bead_modes_forward_force_tier_to_claim_prepare(
+def test_cld_bead_modes_forward_force_tier_to_direct_preflight(
     tmp_path: Path,
     flag: str,
 ) -> None:
@@ -280,8 +247,8 @@ def test_regression_cld_bead_modes_forward_force_tier_to_claim_prepare(
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
     assert "force_tier=mcp" in prompt
-    assert "bead_claim_prepare" in prompt
-    assert "phase0-claim.py" not in prompt
+    assert "phase0-claim.py" in prompt
+    assert "bead_claim_prepare" not in prompt
     assert "takes precedence over requested_workflow" in prompt
 
 
@@ -332,7 +299,8 @@ def test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env
     prompt = prompt_file.read_text(encoding="utf-8")
     assert "Route profile: cld-default" in prompt
     assert "route_profile=cld-default" in prompt
-    assert "bead_claim_prepare" in prompt
+    assert "phase0-claim.py" in prompt
+    assert "bead_claim_prepare" not in prompt
     assert "evil-profile" not in prompt
 
 
@@ -354,7 +322,8 @@ def test_cld_bead_modes_explicit_route_profile_is_parameter_only_with_ambient_en
     prompt = prompt_file.read_text(encoding="utf-8")
     assert "Route profile: custom-profile" in prompt
     assert "route_profile=custom-profile" in prompt
-    assert "bead_claim_prepare" in prompt
+    assert "phase0-claim.py" in prompt
+    assert "bead_claim_prepare" not in prompt
     assert "evil-profile" not in prompt
 
 

@@ -74,7 +74,7 @@ mcp:
 ## Selection
 
 Operator-driven for v1 (`--route-profile <profile> --force-tier mcp`). The
-launcher forwards both values to the typed `bead_claim_prepare` contract, with
+launcher forwards both values to the deterministic `phase0-claim.py` direct-bd preflight, with
 `surface:mcp` label inference as an **assist only** — NOT pipeline-blocking
 force-routing. Rationale: the infra review (`033a639`) showed
 `surface:permissions` over-inference force-routing product beads to INFRA

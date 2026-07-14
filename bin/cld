@@ -15,8 +15,8 @@
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #   -bp, --plan-label LABEL → launch with /plan --label LABEL as initial prompt
-#   --route-profile NAME → select named route profile (passed to bead_claim_prepare)
-#   --force-tier TIER → force routing tier; passed to bead_claim_prepare
+#   --route-profile NAME → select named route profile for direct claim preflight
+#   --force-tier TIER → force routing tier for direct claim preflight
 #                          profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
 set -uo pipefail
@@ -147,9 +147,9 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 Coordinator callback workspace ref (requires surface)
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
-         --route-profile NAME    Select named route profile (passed to bead_claim_prepare)
+         --route-profile NAME    Select named route profile for direct claim preflight
          --force-tier TIER       Force the routing tier (quick, gsd, paul, mcp)
-                                (passed to bead_claim_prepare)
+                                (passed to the direct claim preflight)
                                 quick is an eligibility override, unlike strict -bq
                                 Profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
@@ -535,18 +535,18 @@ if [[ -n "$bead_id" ]]; then
     fi
 
     # Enter the canonical orchestrator with automatic quick/full profile selection.
-    local prompt="Bead ID: $bead_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=auto. Pass requested_workflow=auto to bead_claim_prepare. Continue through the resolved quick or full profile and session-close without stopping after an intermediate phase."
+    local prompt="Bead ID: $bead_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=auto. Pass requested_workflow=auto to the phase0-claim.py direct-bd preflight. Continue through the resolved quick or full profile and session-close without stopping after an intermediate phase."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
     fi
 
     if [[ -n "$route_profile" ]]; then
-        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to bead_claim_prepare)."
+        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to phase0-claim.py)."
     fi
 
     if [[ -n "$force_tier" ]]; then
-        prompt+=" Force tier: $force_tier (pass force_tier=$force_tier to bead_claim_prepare). This explicit administrative override takes precedence over requested_workflow."
+        prompt+=" Force tier: $force_tier (pass force_tier=$force_tier to phase0-claim.py). This explicit administrative override takes precedence over requested_workflow."
     fi
 
     if _has_coordinator_callback; then
@@ -611,18 +611,18 @@ if [[ -n "$bead_quick_id" ]]; then
 
     # Enter the canonical orchestrator with a strict quick request. Ineligibility
     # is terminal before claim; it must never silently fall back to full.
-    local prompt="Bead ID: $bead_quick_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=quick. Pass requested_workflow=quick to bead_claim_prepare. If strict quick is ineligible, stop before claim and do not fall back to full. If eligible, continue through the resolved quick profile and session-close without stopping after an intermediate phase."
+    local prompt="Bead ID: $bead_quick_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=quick. Pass requested_workflow=quick to the phase0-claim.py direct-bd preflight. If strict quick is ineligible, stop before claim and do not fall back to full. If eligible, continue through the resolved quick profile and session-close without stopping after an intermediate phase."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
     fi
 
     if [[ -n "$route_profile" ]]; then
-        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to bead_claim_prepare)."
+        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to phase0-claim.py)."
     fi
 
     if [[ -n "$force_tier" ]]; then
-        prompt+=" Force tier: $force_tier (pass force_tier=$force_tier to bead_claim_prepare). This explicit administrative override takes precedence over requested_workflow."
+        prompt+=" Force tier: $force_tier (pass force_tier=$force_tier to phase0-claim.py). This explicit administrative override takes precedence over requested_workflow."
     fi
 
     if _has_coordinator_callback; then

@@ -115,36 +115,6 @@ capabilities:
     codex:
       mcp_servers: [playwright]
       sandbox_mode: workspace-write
-  - name: manage_beads
-    description: Full mutating beads lifecycle (read, claim, update, export, close) via typed MCP tools, for orchestration-class roles that mutate bead state; read-only consumers should use read_beads instead (ADR-0007 Phase 6).
-    claude:
-      tools:
-        - mcp__cognovis-tools__bead_show
-        - mcp__cognovis-tools__bead_ready
-        - mcp__cognovis-tools__bead_list
-        - mcp__cognovis-tools__bead_search
-        - mcp__cognovis-tools__bead_repos
-        - mcp__cognovis-tools__bead_create
-        - mcp__cognovis-tools__bead_effort_classify
-        - mcp__cognovis-tools__bead_claim_prepare
-        - mcp__cognovis-tools__bead_claim_commit
-        - mcp__cognovis-tools__bead_claim
-        - mcp__cognovis-tools__bead_update
-        - mcp__cognovis-tools__bead_update_notes
-        - mcp__cognovis-tools__bead_review_write
-        - mcp__cognovis-tools__bead_close
-        - mcp__cognovis-tools__bead_dep_add
-        - mcp__cognovis-tools__bead_dep_remove
-        - mcp__cognovis-tools__bead_dolt_sync
-        - mcp__cognovis-tools__session_close_record_handoff
-        - mcp__cognovis-tools__bead_session_close_finalize
-        - mcp__cognovis-tools__bead_session_close_finalize_status
-      mcpServers: [cognovis-tools]
-      skills: [beads]
-    codex:
-      mcp_servers: [cognovis-tools]
-      skills: [beads]
-      sandbox_mode: workspace-write
   - name: manage_agent_sessions
     description: Start, resume, inspect, and cancel role-scoped provider sessions through the typed cognovis-tools gateway.
     claude:
@@ -157,21 +127,6 @@ capabilities:
     codex:
       mcp_servers: [cognovis-tools]
       sandbox_mode: workspace-write
-  - name: read_beads
-    description: Read-only typed access to beads issues via cognovis-tools MCP (no mutation). For non-orchestrator consumers (e.g. classifiers, pollers) that need bead visibility but must not mutate bead state.
-    claude:
-      tools:
-        - mcp__cognovis-tools__bead_show
-        - mcp__cognovis-tools__bead_ready
-        - mcp__cognovis-tools__bead_list
-        - mcp__cognovis-tools__bead_search
-        - mcp__cognovis-tools__bead_repos
-      mcpServers: [cognovis-tools]
-      skills: [beads]
-    codex:
-      mcp_servers: [cognovis-tools]
-      skills: [beads]
-      sandbox_mode: read-only
   - name: update_docs
     description: Edit documentation and changelog files.
     claude:

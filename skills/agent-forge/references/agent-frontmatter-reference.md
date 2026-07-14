@@ -177,7 +177,7 @@ capabilities: [read_files, inspect_git]
 capabilities: [search_searxng, use_skills]
 
 # Orchestrator agent
-capabilities: [read_files, run_shell, spawn_subagents, manage_beads]
+capabilities: [read_files, run_shell, spawn_subagents, use_skills]
 ```
 
 ---

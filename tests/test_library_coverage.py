@@ -85,7 +85,7 @@ EXPECTED_SUSSDORFF_SKILLS = {
 
 # Expected cognovis agents
 EXPECTED_COGNOVIS_AGENTS = {
-    "bead-claim-wrapper", "bead-orchestrator", "bead-spec-reviewer", "ci-monitor",
+    "bead-orchestrator", "bead-spec-reviewer", "ci-monitor",
     "constraint-checker",
     "doc-changelog-updater", "feature-doc-updater", "holdout-validator", "implementer",
     "integration-test-runner", "learning-extractor", "pester-test-engineer",
@@ -171,11 +171,7 @@ def test_regression_bead_orchestrator_installs_spec_reviewer():
     }
 
     assert "bead-spec-reviewer" in agents
-    assert "bead-claim-wrapper" in agents
     assert "agent:bead-spec-reviewer" in agents["bead-orchestrator"].get(
-        "requires", []
-    )
-    assert "agent:bead-claim-wrapper" in agents["bead-orchestrator"].get(
         "requires", []
     )
 

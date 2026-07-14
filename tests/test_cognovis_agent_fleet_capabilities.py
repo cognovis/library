@@ -301,155 +301,19 @@ def test_review_agent_codex_build_uses_read_only_sandbox(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
-# manage_beads typed-tool role matrix (CL-j92j)
-#
-# Root cause: capabilities.yaml's manage_beads capability declared an
-# explicit `claude.tools: []` alongside `mcpServers: [cognovis-tools]`.
-# Registering an MCP server does not by itself grant any callable tool from
-# it in Claude Code — only exact `mcp__<server>__<tool>` names listed in an
-# agent's `tools:` allowlist are callable. Every real agent declaring
-# manage_beads therefore had zero callable bead_* tools. These fixtures
-# build the REAL agent sources in cognovis-core/agents/ (hence this file's
-# skip-if-sibling-absent marker) to prove the fix and to lock in the role
-# boundary: orchestrator-capable agents get the typed tools, review/
-# verification roles never do.
+# Retired Bead MCP capability contract (clc-jzu5)
 # ---------------------------------------------------------------------------
 
-# Source of truth: cognovis-core/mcp-servers/cognovis-tools/tools/bead_tools.py
-# `def bead_*` function names (verified via grep during CL-j92j implementation).
-_MANAGE_BEADS_TYPED_TOOLS = {
-    "mcp__cognovis-tools__bead_show",
-    "mcp__cognovis-tools__bead_ready",
-    "mcp__cognovis-tools__bead_list",
-    "mcp__cognovis-tools__bead_search",
-    "mcp__cognovis-tools__bead_repos",
-    "mcp__cognovis-tools__bead_create",
-    "mcp__cognovis-tools__bead_effort_classify",
-    "mcp__cognovis-tools__bead_claim_prepare",
-    "mcp__cognovis-tools__bead_claim_commit",
-    "mcp__cognovis-tools__bead_claim",
-    "mcp__cognovis-tools__bead_update",
-    "mcp__cognovis-tools__bead_update_notes",
-    "mcp__cognovis-tools__bead_review_write",
-    "mcp__cognovis-tools__bead_close",
-    "mcp__cognovis-tools__bead_dep_add",
-    "mcp__cognovis-tools__bead_dep_remove",
-    "mcp__cognovis-tools__bead_dolt_sync",
-    "mcp__cognovis-tools__session_close_record_handoff",
-    "mcp__cognovis-tools__bead_session_close_finalize",
-    "mcp__cognovis-tools__bead_session_close_finalize_status",
-}
 
-# Real agents that declare manage_beads and must therefore expose the typed
-# tools (orchestrator-capable: bead-orchestrator and session-close). quick-fix
-# is a compatibility redirect and intentionally has no bead mutation authority.
-_MANAGE_BEADS_ORCHESTRATOR_AGENTS = ["bead-orchestrator", "session-close"]
-
-# Real read-only agents that must NEVER declare manage_beads / gain any
-# mcp__cognovis-tools__bead_* tool.
-_MANAGE_BEADS_READ_ONLY_AGENTS = ["review-agent", "verification-agent"]
-
-
-def _build_claude_tools(agent_stem: str, tmp_path: Path) -> set[str]:
-    """Build the real agent source for Claude and return its declared tool set."""
-    output_dir = tmp_path / agent_stem
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(BUILD_AGENT),
-            str(AGENTS_DIR / f"{agent_stem}.md"),
-            "--harness",
-            "claude",
-            "--output-dir",
-            str(output_dir),
-            "--agent-bases-dir",
-            str(AGENT_BASES_DIR),
-            "--model-standards-dir",
-            str(MODEL_STANDARDS_DIR),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, f"{agent_stem} failed to build:\n{result.stderr}"
-    artifact = next(output_dir.glob("*.md"))
-    frontmatter = yaml.safe_load(artifact.read_text().split("---", 2)[1]) or {}
-    return {t.strip() for t in str(frontmatter.get("tools", "")).split(",") if t.strip()}
-
-
-@pytest.mark.parametrize("agent_stem", _MANAGE_BEADS_ORCHESTRATOR_AGENTS)
-def test_manage_beads_orchestrator_agents_expose_typed_bead_tools(
-    agent_stem: str, tmp_path: Path
-) -> None:
-    """AC1/AC2/AC5: orchestrator-class agents get the full typed bead_* tool set,
-    including the Bead Claim prepare/commit operations their workflows require."""
-    tools = _build_claude_tools(agent_stem, tmp_path)
-    missing = _MANAGE_BEADS_TYPED_TOOLS - tools
-    assert not missing, f"{agent_stem}: missing typed manage_beads tools: {sorted(missing)}"
-    assert "mcp__cognovis-tools__bead_claim_prepare" in tools
-    assert "mcp__cognovis-tools__bead_claim_commit" in tools
-    assert "mcp__cognovis-tools__bead_update_notes" in tools
-    assert "mcp__cognovis-tools__bead_close" in tools
-
-
-@pytest.mark.parametrize("agent_stem", _MANAGE_BEADS_READ_ONLY_AGENTS)
-def test_manage_beads_read_only_agents_stay_read_only(agent_stem: str, tmp_path: Path) -> None:
-    """AC2/AC4: review-agent/verification-agent do not declare manage_beads and
-    must not gain any mcp__cognovis-tools__bead_* mutating tool."""
-    frontmatter = _frontmatter(AGENTS_DIR / f"{agent_stem}.md")
-    assert "manage_beads" not in frontmatter.get("capabilities", []), (
-        f"{agent_stem} must not declare manage_beads (role-boundary source guard)"
-    )
-    tools = _build_claude_tools(agent_stem, tmp_path)
-    leaked = {t for t in tools if t.startswith("mcp__cognovis-tools__bead_")}
-    assert not leaked, (
-        f"{agent_stem}: mutating bead tools leaked into a read-only role: {sorted(leaked)}"
-    )
-
-
-def test_manage_beads_role_leakage_regression_fixture_would_be_caught(tmp_path: Path) -> None:
-    """Regression fixture: a synthetic reviewer-shaped agent that DOES declare
-    manage_beads is shown to leak bead_* tools, proving the leak-detection
-    assertion in test_manage_beads_read_only_agents_stay_read_only is not vacuous.
-    """
-    source = tmp_path / "synthetic-reviewer.md"
-    source.write_text(
-        "---\n"
-        "name: synthetic-reviewer\n"
-        "description: Synthetic reviewer fixture that wrongly declares manage_beads.\n"
-        "model: sonnet\n"
-        "capabilities:\n"
-        "  - read_files\n"
-        "  - run_shell\n"
-        "  - manage_beads\n"
-        "agent_base: auto\n"
-        "---\n\n# Synthetic Reviewer\n\nFixture body.\n"
-    )
-    output_dir = tmp_path / "out"
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(BUILD_AGENT),
-            str(source),
-            "--harness",
-            "claude",
-            "--output-dir",
-            str(output_dir),
-            "--agent-bases-dir",
-            str(AGENT_BASES_DIR),
-            "--model-standards-dir",
-            str(MODEL_STANDARDS_DIR),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    artifact = next(output_dir.glob("*.md"))
-    frontmatter = yaml.safe_load(artifact.read_text().split("---", 2)[1]) or {}
-    tools = {t.strip() for t in str(frontmatter.get("tools", "")).split(",") if t.strip()}
-    leaked = {t for t in tools if t.startswith("mcp__cognovis-tools__bead_")}
-    assert leaked, "fixture expected to leak bead tools when manage_beads is wrongly declared"
+def test_catalog_agents_do_not_declare_retired_bead_capabilities() -> None:
+    retired = {"manage_beads", "read_beads"}
+    offenders: dict[str, list[str]] = {}
+    for source in AGENTS_DIR.glob("*.md"):
+        declared = set(_frontmatter(source).get("capabilities", []))
+        leaked = sorted(retired & declared)
+        if leaked:
+            offenders[source.stem] = leaked
+    assert not offenders
 
 
 def test_catalog_agents_build_with_non_stub_artifacts(tmp_path: Path) -> None:
@@ -625,7 +489,7 @@ def test_catalog_agent_requires_refs_resolve() -> None:
     for agent_file in sorted(AGENTS_DIR.glob("*.md")):
         fm = _frontmatter(agent_file)
         agent_refs = [
-            r for r in fm.get("requires", [])
+            r for r in (fm.get("requires") or [])
             if isinstance(r, str) and r.startswith("agent:")
         ]
         if not agent_refs:
@@ -638,8 +502,8 @@ def test_catalog_agent_requires_refs_resolve() -> None:
             )
 
 
-def test_regression_unified_quick_routing_catalog_contract() -> None:
-    """CL-sl3j: catalog the unified orchestrator and compatibility alias graph."""
+def test_unified_quick_routing_catalog_uses_direct_claim_preflight() -> None:
+    """Catalog the unified orchestrator without the retired claim wrapper."""
     catalog = yaml.safe_load(LIBRARY_YAML.read_text(encoding="utf-8")) or {}
     agents = {
         agent["name"]: agent
@@ -647,7 +511,7 @@ def test_regression_unified_quick_routing_catalog_contract() -> None:
     }
 
     orchestrator_requires = set(agents["bead-orchestrator"].get("requires", []))
-    assert "agent:bead-claim-wrapper" in orchestrator_requires
+    assert "agent:bead-claim-wrapper" not in orchestrator_requires
     assert "agent:bead-spec-reviewer" in orchestrator_requires
     assert "agent:quick-fix" not in orchestrator_requires
 
