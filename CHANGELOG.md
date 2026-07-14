@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- *(clc-m4rc, audit)* Top-level Library audits now compare each bootstrap-installed `/library` skill surface and Python control plane with the running platform source, report legacy lock entries without `checksum_type` as actionable local drift, and retain agent capability frontmatter inside the checksum boundary. The recurring drift-summary path receives the same deterministic findings.
+
 ### Added
 
 - *(cld/cdx)* `-br`/`--bead-review <id>` is now a thin provider selector over a shared cognovis-tools client. The client owns the typed bead read, fresh role-scoped reviewer dispatch, terminal verdict validation, and `metadata.review` write. Claude defaults to Opus; both launchers retain explicit model overrides.
