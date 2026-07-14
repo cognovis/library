@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -17,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_PATH = REPO_ROOT / "library.yaml"
 
 
-pytestmark = pytest.mark.skipif(
+network_test = pytest.mark.skipif(
     os.environ.get("NETWORK_TESTS") != "1",
     reason="Set NETWORK_TESTS=1 to verify library.yaml source URLs against GitHub.",
 )
@@ -105,6 +108,29 @@ def _github_targets() -> tuple[list[GithubTarget], list[tuple[str, list[str]]]]:
     return targets, unsupported
 
 
+def _run_gh_api(
+    endpoint: str,
+    *,
+    max_attempts: int = 3,
+    sleep: Callable[[float], object] = time.sleep,
+) -> subprocess.CompletedProcess[str]:
+    """Run a GitHub API probe, retrying only transient server failures."""
+    for attempt in range(max_attempts):
+        result = subprocess.run(
+            ["gh", "api", endpoint],
+            capture_output=True,
+            text=True,
+        )
+        detail = result.stderr.strip() or result.stdout.strip()
+        is_server_error = re.search(r"\bHTTP 5\d{2}\b", detail) is not None
+        if result.returncode == 0 or not is_server_error or attempt == max_attempts - 1:
+            return result
+        sleep(float(2**attempt))
+
+    raise AssertionError("max_attempts must be positive")
+
+
+@network_test
 def test_github_source_urls_are_live() -> None:
     """Every GitHub source URL in library.yaml resolves through the GitHub API."""
     if shutil.which("gh") is None:
@@ -117,11 +143,7 @@ def test_github_source_urls_are_live() -> None:
 
     failures: list[str] = []
     for target in targets:
-        result = subprocess.run(
-            ["gh", "api", target.endpoint],
-            capture_output=True,
-            text=True,
-        )
+        result = _run_gh_api(target.endpoint)
         if result.returncode != 0:
             failures.append(
                 f"{target.source} at {', '.join(target.locations)}\n"
@@ -130,3 +152,88 @@ def test_github_source_urls_are_live() -> None:
             )
 
     assert not failures, "Dead library.yaml GitHub source URL(s):\n" + "\n".join(failures)
+
+
+# Regression guard for CL-fxeb: transient GitHub server errors must not make the
+# scheduled source-liveness workflow fail on the first attempt.
+def test_regression_transient_github_5xx_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    results = iter(
+        [
+            subprocess.CompletedProcess(
+                ["gh", "api", "repos/example/catalog"],
+                1,
+                stderr="gh: HTTP 502",
+            ),
+            subprocess.CompletedProcess(
+                ["gh", "api", "repos/example/catalog"],
+                0,
+                stdout="{}",
+                stderr="",
+            ),
+        ]
+    )
+    calls: list[list[str]] = []
+    delays: list[float] = []
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return next(results)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = _run_gh_api(
+        "repos/example/catalog",
+        sleep=delays.append,
+    )
+
+    assert result.returncode == 0
+    assert calls == [
+        ["gh", "api", "repos/example/catalog"],
+        ["gh", "api", "repos/example/catalog"],
+    ]
+    assert delays == [1.0]
+
+
+# Regression guard for CL-fxeb: permanent missing sources must still fail fast.
+def test_regression_permanent_github_4xx_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout="",
+            stderr="gh: Not Found (HTTP 404)",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = _run_gh_api("repos/example/missing", sleep=lambda _: None)
+
+    assert result.returncode == 1
+    assert calls == [["gh", "api", "repos/example/missing"]]
+
+
+def test_github_5xx_retries_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+    delays: list[float] = []
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout="",
+            stderr="gh: Service Unavailable (HTTP 503)",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = _run_gh_api("repos/example/unavailable", sleep=delays.append)
+
+    assert result.returncode == 1
+    assert len(calls) == 3
+    assert delays == [1.0, 2.0]

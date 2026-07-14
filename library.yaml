@@ -2725,21 +2725,6 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
-  - name: install-playwright
-    description: Install and verify Playwright MCP with Microsoft Edge browser automation.
-      Handles extension installation, token extraction, Claude Code configuration,
-      and comprehensive verification. Use when setting up Playwright MCP for the first
-      time or troubleshooting installation issues.
-    source: https://github.com/cognovis/library-core/blob/main/prompts/install-playwright.md
-    tags:
-    - origin:original
-    - tier:domain
-    - category:command
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
   - name: install-plugin
     description: 'prompt from cognovis-library-core: install-plugin'
     source: https://github.com/cognovis/library-core/blob/main/prompts/install-plugin.md
@@ -3539,18 +3524,6 @@ library:
     - category:standard
     - frontend
     - realtime
-  - name: surface-labels
-    description: Surface Labels Convention
-    source: https://github.com/cognovis/library-core/blob/main/standards/orchestrator/surface-labels.md
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
-    tags:
-    - origin:original
-    - tier:domain
-    - category:standard
   - name: tdd-api-contracts
     description: API contract testing conventions for endpoint status, shape, fields,
       errors, and environment-independent base URLs.

@@ -98,7 +98,7 @@ EXPECTED_SUSSDORFF_AGENTS: set[str] = set()
 
 # Expected prompts (commands only)
 EXPECTED_PROMPTS = {
-    "compact-reference", "install-playwright", "install-plugin",
+    "compact-reference", "install-plugin",
 }
 
 # Expected standards

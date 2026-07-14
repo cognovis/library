@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- *(CL-fxeb, CI/catalog)* Restore the scheduled source-URL liveness gate by removing two catalog entries whose upstream primitives were intentionally retired, and retry transient GitHub API 5xx responses with bounded backoff while permanent 4xx failures still fail fast.
 - *(CL-6n0a, cld/cdx)* Route-profile authority is now parameter-only in `bin/cld` and `bin/cdx`: explicit
   `--route-profile` values and launcher defaults are passed to Phase 0 as CLI parameters, while inherited
   `CLD_ROUTE_PROFILE` / `CDX_DEFAULT_ROUTE_PROFILE` values are sanitized and are no longer read or exported
