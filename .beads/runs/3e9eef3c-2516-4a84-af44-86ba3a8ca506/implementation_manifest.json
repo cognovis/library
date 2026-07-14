@@ -154,6 +154,18 @@
     {
       "sha": "d2d8124",
       "message": "feat(CL-rkww): green - install chain-safe gitleaks pre-push hook"
+    },
+    {
+      "sha": "b155d74",
+      "message": "chore(CL-rkww): add implementation evidence artifacts (squashed, post-remediation)"
+    },
+    {
+      "sha": "dff7d40",
+      "message": "chore(CL-rkww): record orchestrator git-history remediation"
+    },
+    {
+      "sha": "601fb44",
+      "message": "chore(CL-rkww): fix evidence_refs schema shape in implementation manifest"
     }
   ],
   "tests": [
