@@ -1,0 +1,43 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-6n0a",
+  "commands": [
+    {
+      "command": "uv run pytest tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py tests/test_cld_single_bead_contract.py tests/test_launcher_permission_modes.py -v",
+      "exit_code": 2,
+      "summary": "Initial requested command did not reach tests because the host pytest entrypoint could not import yaml."
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --with pyyaml pytest tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py tests/test_cld_single_bead_contract.py tests/test_launcher_permission_modes.py -v",
+      "exit_code": 2,
+      "summary": "Transient pyyaml with host pytest still did not expose yaml to collection."
+    },
+    {
+      "command": "UV_CACHE_DIR=/private/tmp/uv-cache uv run --with pytest --with pyyaml python -m pytest tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py tests/test_cld_single_bead_contract.py tests/test_launcher_permission_modes.py -v",
+      "exit_code": 2,
+      "summary": "Network-restricted environment could not fetch transient pytest/pyyaml dependencies."
+    },
+    {
+      "command": "PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-6n0a/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py tests/test_cld_single_bead_contract.py tests/test_launcher_permission_modes.py -v",
+      "exit_code": 1,
+      "summary": "Red gate after test changes: 12 failed, 127 passed; failures showed current env export/default behavior."
+    },
+    {
+      "command": "PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-6n0a/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py tests/test_cld_single_bead_contract.py tests/test_launcher_permission_modes.py -v",
+      "exit_code": 0,
+      "summary": "Green gate after implementation: 139 passed."
+    },
+    {
+      "command": "bash -n bin/cld && bash -n bin/cdx",
+      "exit_code": 0,
+      "summary": "Launcher syntax smoke passed."
+    },
+    {
+      "command": "rg -n \"CLD_ROUTE_PROFILE|CDX_DEFAULT_ROUTE_PROFILE\" --glob '!**/.git/**' --glob '!**/.venv/**' --glob '!**/node_modules/**' .",
+      "exit_code": 0,
+      "summary": "Remaining references are sanitizer lines, tests, and changelog evidence; no launcher read/export remains."
+    }
+  ],
+  "skipped_checks": [],
+  "artifacts": []
+}

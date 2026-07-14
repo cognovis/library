@@ -15,9 +15,9 @@
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #   -bp, --plan-label LABEL → launch with /plan --label LABEL as initial prompt
-#   --route-profile NAME → select named route profile (exports CLD_ROUTE_PROFILE)
+#   --route-profile NAME → select named route profile (passed to phase0-claim.py as --route-profile)
 #   --force-tier TIER → force routing tier (e.g. mcp, infra); passed to phase0-claim.py
-#                          profiles: cld-default (default for -bq), cld-composer, cdx-default, cdx-composer
+#                          profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
 set -uo pipefail
 
@@ -122,6 +122,11 @@ while (( $# > 0 )); do
     esac
 done
 
+unset CLD_ROUTE_PROFILE
+if [[ -z "$route_profile" ]]; then
+    route_profile="cld-default"
+fi
+
 # ── Help: print wrapper flags, then fall through to claude --help ─
 if ${show_help}; then
     cat <<'EOF'
@@ -142,9 +147,9 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 Coordinator callback workspace ref (requires surface)
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
-         --route-profile NAME    Select named route profile (exports CLD_ROUTE_PROFILE)
+         --route-profile NAME    Select named route profile (passed to phase0-claim.py as --route-profile)
          --force-tier TIER       Force the routing tier (e.g. mcp, infra); passed to phase0-claim.py
-                                Profiles: cld-default (default for -bq), cld-composer, cdx-default, cdx-composer
+                                Profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
   Session:
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
@@ -413,15 +418,6 @@ _cmux_rename() {
     fi
 }
 
-# ── Default quick-fix route profile ───────────────────────────────────────
-# Bare `cld -bq` uses the explicit cld-default quick profile by default, so
-# every project gets the same GPT implementation/review/fix-loop slots without
-# relying on project-local perspective_policy defaults. The optional
-# cld-composer profile remains available via --route-profile cld-composer.
-if [[ -z "$route_profile" && -n "$bead_quick_id" ]]; then
-    route_profile="cld-default"
-fi
-
 if [[ -n "$bead_review_id" ]]; then
     if ${skip_perms}; then
         echo "ERROR: --skip-perms is incompatible with the isolated -br workflow" >&2
@@ -478,12 +474,6 @@ if [[ -n "$bead_id" ]]; then
     # .agents/orchestrator-config.yml. Symmetric to cdx's CLD_BEAD_LINE=cdx
     # export for the cdx-line entry points.
     export CLD_BEAD_LINE=cld
-
-    # Export CLD_ROUTE_PROFILE so phase0-claim.py can resolve execution_plan
-    # from the named route profile (CL-iye.1).
-    if [[ -n "$route_profile" ]]; then
-        export CLD_ROUTE_PROFILE="$route_profile"
-    fi
 
     if ! _bead_exists "$bead_id"; then
         _abort_missing_bead "$bead_id" "Claude"
@@ -572,14 +562,6 @@ if [[ -n "$bead_quick_id" ]]; then
     # cdx -bq's CLD_BEAD_LINE=cdx export.
     export CLD_BEAD_LINE=cld
 
-    # Export CLD_ROUTE_PROFILE so phase0-claim.py resolves the quick execution_plan
-    # from the named route profile. The -bq path previously ignored route profiles
-    # entirely; this makes the cld-default default (and explicit --route-profile)
-    # take effect for quick-fix too.
-    if [[ -n "$route_profile" ]]; then
-        export CLD_ROUTE_PROFILE="$route_profile"
-    fi
-
     if ! _bead_exists "$bead_quick_id"; then
         _abort_missing_bead "$bead_quick_id" "Claude"
     fi
@@ -627,6 +609,10 @@ if [[ -n "$bead_quick_id" ]]; then
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
+    fi
+
+    if [[ -n "$route_profile" ]]; then
+        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
     fi
 
     if _has_coordinator_callback; then

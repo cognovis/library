@@ -26,6 +26,11 @@
 
 ### Fixed
 
+- *(CL-6n0a, cld/cdx)* Route-profile authority is now parameter-only in `bin/cld` and `bin/cdx`: explicit
+  `--route-profile` values and launcher defaults are passed to Phase 0 as CLI parameters, while inherited
+  `CLD_ROUTE_PROFILE` / `CDX_DEFAULT_ROUTE_PROFILE` values are sanitized and are no longer read or exported
+  by either launcher.
+
 - *(capabilities.yaml)* `manage_beads` capability now enumerates all 14 typed `mcp__cognovis-tools__*` tool names in its `claude.tools` list. Previously, `tools: []` (empty) alongside `mcpServers: [cognovis-tools]` left every agent declaring `manage_beads` (bead-orchestrator, quick-fix, session-close, wave-orchestrator, bead-author) with zero callable bead MCP tools — Claude Code requires exact tool names in the allowlist; server registration alone is not sufficient. Also adds a new `read_beads` capability (5 read-only tools) for non-orchestrator consumers (classifiers, pollers) that need bead visibility without mutation rights, enforcing least-privilege. Corrected `docs/mcp-migration-rollback.md` and amended ADR-0007 (`docs/adr/library-tool-surface-mcp.md`) to document this constraint.
 
 - *(cdx)* Bead-context text passed to `cdx -b`/`-bq` (title, description, acceptance criteria, notes, labels, dependency titles) is now serialized as a validated, provenance-tagged JSON envelope wrapped in explicit untrusted-data delimiters, instead of being embedded as raw Markdown. This closes a prompt-injection risk where bead-authored text could previously be mistaken for launcher instructions by the Codex orchestration prompt. `bin/cdx` independently validates the renderer's output shape and fails closed (non-zero exit, clear error message) on any malformed, oversized, or unvalidated envelope rather than silently truncating or passing raw text through. `-br` uses the equivalent envelope in the shared review client.
@@ -33,6 +38,7 @@
 - *(build-agent)* `scripts/build-agent.py` now forces `sandbox_mode=read-only` (Codex) and strips `Write`/`Edit`/`MultiEdit` grants (Claude) whenever a unified agent source declares `pair_loop_constraints.run_shell: read_only`, regardless of which capability entry granted shell access. A defensive validation guard raises `BuildAgentError` on post-build drift so future capability additions cannot silently re-elevate a reviewer's sandbox. Previously, the active generated `review-agent.toml` carried `sandbox_mode = "workspace-write"` despite the source role declaring read-only shell constraints.
 - *(agent fleet audit)* New `scripts/agent-fleet-audit.py` replaces the deployed bash audit scripts that only scanned nested agent directories. The new audit inspects both flat and nested Claude `.md` and Codex `.toml` agent roots, reports per-harness counts, and returns non-zero when an expected fleet yields zero inspected agents — preventing silently-compliant scans that inspect no files.
 - *(cld/cdx)* Review execution is synchronous and headless inside cognovis-tools; launchers print the validated report and regain control for callback delivery without entering a provider TUI.
+- *(catalog)* The `cognovis-tools` MCP catalog entry's `supervised_local_service` commands (`install`, `start`, `health_check`, `restart`, `stop`, `uninstall`, `stdio_rollback`, `legacy_stdio_descriptors`) now point at the installer-derived per-mcp deploy clone (`~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools`) instead of a stale shared clone path that never matched what the installer actually creates. A new validator test asserts catalog and installer paths stay in sync so this can't drift again (CL-hqaj).
 
 ### Security
 
@@ -221,17 +227,17 @@
 
 - *(CL-vaiw)* `cdx -b` and `cdx -bq` now default to a compact output
   contract that discourages full diffs, full file bodies, and broad command
-  dumps while preserving route-profile propagation and leaf-dispatch markers;
-  bead context is compacted from `bd show --json` before entering the prompt.
+  dumps while preserving explicit route-profile parameters and leaf-dispatch
+  markers; bead context is compacted from `bd show --json` before entering
+  the prompt.
 
 - *(CL-h3a8)* `library agent use --harness all` now includes OpenCode
   agent sources in `.opencode/agents/`, so a subsequent
   `library agent remove --harness all` removes Claude, Codex, and OpenCode
   agent files in one pass.
 
-- *(CL-kpt1)* `cdx -bq --route-profile <name>` now exports `CLD_ROUTE_PROFILE`
-  and carries the selected route profile into the quick-fix prompt, matching
-  full `cdx -b` behavior.
+- *(CL-kpt1)* `cdx -bq --route-profile <name>` now carries the selected
+  route profile into the quick-fix prompt, matching full `cdx -b` behavior.
 
 ### 🛡️ Security / Safety
 
@@ -351,7 +357,7 @@
 - **CL-iye.2**: Add `cursor-impl.py` — Cursor Agent/Composer implementer adapter for bead workflow leaves. Headless dispatch via `cursor-agent --print --force --trust`, preflight checks (binary, auth, model availability), timeout+cleanup, CompletionReport JSON, and metrics recording. Implementer leaf only — not an orchestrator. Source in `cognovis-core/skills/beads/scripts/cursor-impl.py`.
 - *(CL-iye.8)* Generalize `harness_support` to a closed enum of five harness IDs — `claude_code`, `codex`, `cursor`, `opencode`, and `gemini`; schema now accepts and validates all five IDs, `library.py --harness` accepts `cursor` and `opencode`, and `_check_harness_support` enforces `not-supported` for any accepted ID; MCP server entries and project tooling entries intentionally carry no `harness_support` (documented in schema descriptions and `docs/PRIMITIVES.md`); CL-iye.3 can implement a Cursor projection without changes to the core gate
 - *(CL-d7e)* Compatibility pre-install gate in `library.py` — catalog entries can declare a `compatibility` field (e.g. `claude_code>=4.0`); `library use` exits with code 4 and a clear error message when the current harness version does not satisfy the constraint. Entries without a `compatibility` field are unaffected. Version detection is best-effort: if the harness binary is absent or non-versioned, a warning is emitted and installation proceeds.
-- *(CL-iye.1)* `--route-profile NAME` flag for `bin/cld` and `bin/cdx` — selects a named route profile, exports `CLD_ROUTE_PROFILE`, and injects the profile name into the bead execution prompt so `phase0-claim.py` resolves the correct `execution_plan` (slots, adapter, model, reasoning_effort, timeout) from `orchestrator-config.yml`. Built-in profiles: `cld-default`, `cdx-default`, `cdx-composer`. Backward-compatible: `perspective_policy` remains the fallback when no profile is given.
+- *(CL-iye.1)* `--route-profile NAME` flag for `bin/cld` and `bin/cdx` — selects a named route profile and injects the profile name into the bead execution prompt so `phase0-claim.py` resolves the correct `execution_plan` (slots, adapter, model, reasoning_effort, timeout) from `orchestrator-config.yml`. Built-in profiles: `cld-default`, `cdx-default`, `cdx-composer`.
 - *(CL-iye.3)* Cursor harness projection for skills, agents, rules, and runtime requirements — `library use --harness cursor` installs skills to `.cursor/skills/<name>/` (project) or `~/.cursor/skills/<name>/` (global); agent installs are explicitly rejected with a compatibility message; MCP and guardrail installs under `--harness cursor` or `--harness opencode` are rejected before any side effects; `runtime_requirements` can declare `cursor-agent` as a required binary (checked via the existing binary gate); dry-run `--json` output includes `target_paths`, `harness_routing`, and `conflict_policy` for Cursor targets; Cursor harness targets documented in `docs/PRIMITIVES.md`, `docs/harness-baseline.md`, and `docs/primitives/skill.md`
 
 ### 🐛 Bug Fixes

@@ -1,0 +1,97 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-6n0a",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "passed",
+      "changed_files": [
+        "bin/cld",
+        "bin/cdx",
+        "tests/test_cld_single_bead_contract.py",
+        "tests/test_route_profiles_schema.py"
+      ],
+      "evidence": "Explicit --route-profile values are preserved verbatim in cld and cdx full/quick prompt and Phase 0 parameter text even with conflicting ambient env values; child CLD_ROUTE_PROFILE remains empty."
+    },
+    {
+      "id": "AC2",
+      "status": "passed",
+      "changed_files": [
+        "bin/cld",
+        "bin/cdx",
+        "tests/test_cld_single_bead_contract.py",
+        "tests/test_route_profiles_schema.py",
+        "tests/test_cdx_bead_workflow.py"
+      ],
+      "evidence": "bin/cld and bin/cdx no longer export or read CLD_ROUTE_PROFILE/CDX_DEFAULT_ROUTE_PROFILE for route resolution; inherited legacy env values are sanitized before child launch and negative tests verify empty child env."
+    },
+    {
+      "id": "AC3",
+      "status": "passed",
+      "changed_files": [
+        "bin/cld",
+        "bin/cdx",
+        "tests/test_cld_single_bead_contract.py",
+        "tests/test_route_profiles_schema.py"
+      ],
+      "evidence": "cld now defaults both -b and -bq to cld-default; cdx defaults both -b and -bq to cdx-composer; both defaults are passed explicitly as route-profile parameters."
+    },
+    {
+      "id": "AC4",
+      "status": "passed",
+      "changed_files": [
+        "CHANGELOG.md",
+        "docs/ARCHITECTURE.md",
+        "tests/test_route_profiles_schema.py",
+        "tests/test_cdx_bead_workflow.py",
+        "tests/test_cld_single_bead_contract.py"
+      ],
+      "evidence": "Full and quick route-profile tests were updated for both launchers, conflicting ambient env negative cases were added, source-level no-export/no-read assertions were added, and launcher/docs/changelog wording now describes parameter-only threading."
+    }
+  ],
+  "changed_files": [
+    "CHANGELOG.md",
+    "bin/cld",
+    "bin/cdx",
+    "docs/ARCHITECTURE.md",
+    "tests/test_route_profiles_schema.py",
+    "tests/test_cdx_bead_workflow.py",
+    "tests/test_cld_single_bead_contract.py",
+    ".beads/runs/66cde2b6-c8a7-4f16-b170-5c30d6bccc37/implementation_manifest.json",
+    ".beads/runs/66cde2b6-c8a7-4f16-b170-5c30d6bccc37/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "1084143",
+      "message": "test(CL-6n0a): red - assert parameter-only route profiles"
+    },
+    {
+      "sha": "d85960a",
+      "message": "feat(CL-6n0a): green - make route profiles parameter-only"
+    }
+  ],
+  "tests": [
+    {
+      "command": "PYTHONPATH=/Users/malte/code/library/meta/.claude/worktrees/bead-CL-6n0a/.venv/lib/python3.14/site-packages UV_CACHE_DIR=/private/tmp/uv-cache uv run pytest tests/test_route_profiles_schema.py tests/test_cdx_bead_workflow.py tests/test_cld_single_bead_contract.py tests/test_launcher_permission_modes.py -v",
+      "result": "red: 12 failed, 127 passed before implementation; green: 139 passed after implementation"
+    },
+    {
+      "command": "bash -n bin/cld && bash -n bin/cdx",
+      "result": "passed"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "Phase 0 receives route profile authority only through explicit --route-profile CLI parameters.",
+    "Child processes launched by cld/cdx no longer receive inherited CLD_ROUTE_PROFILE or CDX_DEFAULT_ROUTE_PROFILE values from the launcher environment."
+  ],
+  "evidence_refs": [
+    "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env",
+    "tests/test_cld_single_bead_contract.py::test_cld_bead_modes_explicit_route_profile_is_parameter_only_with_ambient_env",
+    "tests/test_route_profiles_schema.py::TestLauncherRouteProfileFlag::test_cdx_default_route_profile_ignores_conflicting_ambient_env",
+    "tests/test_route_profiles_schema.py::TestLauncherRouteProfileFlag::test_cdx_explicit_route_profile_ignores_conflicting_ambient_env",
+    "tests/test_route_profiles_schema.py::TestLauncherRouteProfileFlag::test_cld_does_not_export_or_read_ambient_route_profile",
+    "tests/test_route_profiles_schema.py::TestLauncherRouteProfileFlag::test_cdx_does_not_export_or_read_ambient_route_profile"
+  ]
+}
