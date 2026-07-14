@@ -102,8 +102,12 @@ timeout). Built-in profiles: `cld-default`, `cdx-default`, `cdx-composer`. When 
 `cld-default` and `cdx` passes `cdx-composer` as code-defined launcher defaults.
 
 **Forced tiers** (`--force-tier TIER`): `cld -b` and `cld -bq` pass the optional administrative override
-as the typed `force_tier` parameter to `bead_claim_prepare`. Supported tiers are `quick`, `gsd`, `solo`,
-`paul`, and `mcp`; the legacy `phase0-claim.py` path is not used by these launchers.
+as the typed `force_tier` parameter to `bead_claim_prepare`. Supported tiers are `quick`, `gsd`, `paul`,
+and `mcp`; the legacy `phase0-claim.py` path is not used by these launchers. GSD and PAUL use the named
+profile's full execution plan, while PAUL additionally enables architecture review and UAT. The typed
+path rejects `solo` because the unified orchestrator has no active-context implementation path yet.
+`--force-tier quick` is an administrative eligibility bypass and is not equivalent to bare `-bq`, which
+requests strict quick and fails closed when the bead is ineligible.
 
 `~/.local/bin/` must be in `$PATH`. The `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
 (only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).

@@ -285,6 +285,35 @@ def test_regression_cld_bead_modes_forward_force_tier_to_claim_prepare(
     assert "takes precedence over requested_workflow" in prompt
 
 
+def test_regression_cld_help_distinguishes_forced_quick_from_strict_bq(
+    tmp_path: Path,
+) -> None:
+    result, _argv_file, _prompt_file, _called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["--help"],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "quick, gsd, paul, mcp" in result.stdout
+    assert "solo" not in result.stdout
+    assert "quick is an eligibility override, unlike strict -bq" in result.stdout
+
+
+@pytest.mark.parametrize("force_tier", ["solo", "infra"])
+def test_regression_cld_rejects_unsupported_force_tier_before_launch(
+    tmp_path: Path,
+    force_tier: str,
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["-b", "CL-smoke", "--force-tier", force_tier],
+    )
+
+    assert result.returncode == 2
+    assert f"invalid force tier '{force_tier}'" in result.stderr
+    assert not called_file.exists()
+
+
 @pytest.mark.parametrize("flag", ["-b", "-bq"])
 def test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env(
     tmp_path: Path,

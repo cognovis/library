@@ -148,8 +148,9 @@ Wrapper flags (consumed by cld, not passed to claude):
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
          --route-profile NAME    Select named route profile (passed to bead_claim_prepare)
-         --force-tier TIER       Force the routing tier (quick, gsd, solo, paul, mcp)
+         --force-tier TIER       Force the routing tier (quick, gsd, paul, mcp)
                                 (passed to bead_claim_prepare)
+                                quick is an eligibility override, unlike strict -bq
                                 Profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
   Session:
@@ -166,6 +167,11 @@ fi
 
 if [[ -n "$bead_review_id" && ( -n "$bead_id" || -n "$bead_quick_id" ) ]]; then
     echo "ERROR: -br/--bead-review is mutually exclusive with -b/--bead and -bq/--bead-quick" >&2
+    exit 2
+fi
+
+if [[ -n "$force_tier" && ! "$force_tier" =~ ^(quick|gsd|paul|mcp)$ ]]; then
+    echo "ERROR: invalid force tier '$force_tier' (expected quick, gsd, paul, or mcp)" >&2
     exit 2
 fi
 
