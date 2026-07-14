@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 import yaml
@@ -440,6 +440,28 @@ class TestCmdStatusImpl:
 # ---------------------------------------------------------------------------
 
 class TestStatusCLI:
+    def test_status_main_loads_catalog_for_runtime_classification(self, tmp_path):
+        """Top-level status must pass catalog metadata to runtime checks."""
+        import library as library_cli
+
+        catalog = {"library": {"mcp_servers": [{"name": "cognovis-tools"}]}}
+        with patch.object(
+            library_cli, "_resolve_catalog_root", return_value=tmp_path
+        ), patch.object(
+            library_cli, "load_catalog", return_value=catalog
+        ), patch.object(
+            library_cli, "_resolve_lifecycle_project_root", return_value=tmp_path
+        ), patch.object(
+            library_cli, "cmd_status", return_value=0
+        ) as status:
+            assert library_cli.main(["status", "--scope", "project"]) == 0
+
+        status.assert_called_once_with(
+            ANY,
+            tmp_path,
+            catalog,
+        )
+
     def test_status_subcommand_exists(self):
         """library.py status --help must not error."""
         result = run_library("status", "--help")
