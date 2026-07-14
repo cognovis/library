@@ -6,14 +6,12 @@ AKs covered: 1, 2, 8 (partial)
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -317,7 +315,6 @@ class TestAuditDriftOnly:
     def test_audit_legacy_file_entry_requires_checksum_migration(self, project_dir):
         """Legacy entries without checksum_type are actionable drift, never silently clean."""
         from lib.sync_audit import cmd_audit_impl
-        from lib.lockfile import find_lockfile, load_lockfile, save_lockfile, upsert_entry
 
         # Create a fake lockfile with a legacy entry (no checksum_type)
         lockfile_path = project_dir / ".library.lock"
@@ -389,8 +386,8 @@ class TestAuditLibraryBootstrap:
         entry = result["entries"][0]
         assert entry["name"] == "library"
         assert entry["primitive"] == "skill"
-        assert entry["source_path"] == str(source / "SKILL.md")
-        assert entry["install_target"] == str(installed / "SKILL.md")
+        assert entry["source_path"] == str(source)
+        assert entry["install_target"] == str(installed)
         assert entry["reason"] == "library_bootstrap_content_mismatch"
 
 
@@ -652,6 +649,29 @@ class TestAuditClaudeAgentFrontmatter:
         assert entry["status"] == "clean"
         assert "agent_frontmatter_issue" not in entry
 
+    def test_audit_detects_agent_capability_frontmatter_drift(self, project_dir):
+        """Capability changes remain part of the installed agent checksum surface."""
+        from lib.sync_audit import cmd_audit_impl
+
+        agent_path = self._write_agent_lockfile(
+            project_dir,
+            "capability-agent",
+            (
+                "---\n"
+                "name: capability-agent\n"
+                "description: Capability checksum fixture\n"
+                "tools: Read\n"
+                "---\n\n"
+                "# Body\n"
+            ),
+        )
+        agent_path.write_text(agent_path.read_text().replace("tools: Read", "tools: Read, Write"))
+
+        result = cmd_audit_impl({}, "agent", project_dir, scope="project")
+
+        assert result["status"] == "drift"
+        assert result["entries"][0]["drift_kind"] == "local"
+
     def test_agent_audit_json_output_includes_frontmatter_repair_hint(self, project_dir):
         """CLI JSON output includes path and targeted sync hint for frontmatter failures."""
         self._write_agent_lockfile(
@@ -796,7 +816,7 @@ class TestTopLevelSync:
             if "repo-current" in " ".join(cmd):
                 r.stdout = f"{INSTALLED_SHA}\tHEAD\n"
             else:
-                r.stdout = f"new_sha999999999999999999999999999999999999999999999999\tHEAD\n"
+                r.stdout = "new_sha999999999999999999999999999999999999999999999999\tHEAD\n"
             return r
 
         with patch("lib.status.subprocess.run", side_effect=mock_ls_remote):
@@ -1042,6 +1062,7 @@ class TestHookScript:
             capture_output=True,
             text=True,
             cwd=str(project_dir),
+            env={**os.environ, "HOME": str(project_dir / "isolated-home")},
         )
         # Clean project: no output expected
         assert result.stdout.strip() == "", \
@@ -1049,16 +1070,12 @@ class TestHookScript:
 
     def test_hook_script_outputs_drift_section_when_drift_exists(self, project_dir):
         """AK7: hook script prints drift section when local drift detected."""
-        from lib.lockfile import compute_directory_hash
-
         hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
 
         # Create a drift scenario: lockfile says one hash, cache has different content
         cache_dir = project_dir / "hook-test-cache"
         cache_dir.mkdir(parents=True)
         (cache_dir / "SKILL.md").write_bytes(b"original content")
-
-        real_hash = compute_directory_hash(cache_dir)
 
         # Write lockfile with WRONG hash to simulate drift
         entry = {
