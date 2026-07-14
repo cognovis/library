@@ -176,6 +176,19 @@ def test_regression_bead_orchestrator_installs_spec_reviewer():
     )
 
 
+def test_regression_session_close_depends_on_cognovis_beads():
+    """The Session Close installer must use the renamed orchestration overlay."""
+    skills = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("skills", [])
+    }
+
+    assert "cognovis-beads" in skills
+    requires = skills["session-close"].get("requires", [])
+    assert "skill:cognovis-beads" in requires
+    assert "skill:beads" not in requires
+
+
 def test_sussdorff_agents_registered():
     """All expected sussdorff agents must be registered in library.agents."""
     library = load_library()
