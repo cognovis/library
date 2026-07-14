@@ -1793,7 +1793,7 @@ library:
       origin declares push workflows. Other repositories record CI as not configured.'
     source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
     requires:
-    - skill:beads
+    - skill:cognovis-beads
     tags:
     - origin:original
     - tier:core
