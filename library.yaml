@@ -1798,12 +1798,12 @@ library:
         inventory: convention-scan
         plane: dev
   - name: session-close
-    description: 'Handler scripts and helper assets for the session-close agent. Bundles
-      bash + python implementations of the double-merge close workflow: changelog,
-      CalVer versioning, doc-gap detection, beads close, phase-B prepare/ship/close,
-      pipeline-watch, CI monitor, lockfile management, render-summary, turn-log upload,
-      and plugin-cache sync. Consumed by the `session-close` agent (Claude `.md` +
-      Codex `.toml`).'
+    description: 'Deterministic Python application for exactly four durable states:
+      Ship, Finalize, Analyze, and Cleanup. Ship performs content-bound staging,
+      temporary-worktree integration, fail-closed Gitleaks scanning, push, checkpointing,
+      and conditional GitHub Actions attestation without Bash orchestration. `gitleaks`
+      is required for outgoing paths; authenticated `gh` is required only when a GitHub
+      origin declares push workflows. Other repositories record CI as not configured.'
     source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
     requires:
     - skill:beads
@@ -2554,11 +2554,11 @@ library:
         inventory: convention-scan
         plane: dev
   - name: session-close
-    description: 'Orchestrates a full session close with double-merge strategy for
-      parallel safety. Commits, generates changelog, version tags (auto-detects SemVer
-      vs CalVer), extracts learnings, saves session summary, and pushes. Use when
-      ending a session, releasing, or creating a versioned checkpoint. Triggers on:
-      session-close, session close, release, rc, session beenden.'
+    description: 'Closes a coding session through exactly four durable states: Ship,
+      Finalize, Analyze, and Cleanup. It drives the Python Session Close application
+      plus typed cognovis-tools finalization, waits for configured post-push CI on the
+      exact SHA, records no-CI repositories explicitly, persists one analysis bundle,
+      and performs bounded cleanup. It does not run release versioning or Bash handlers.'
     source: https://github.com/cognovis/library-core/blob/main/agents/session-close.md
     requires:
     - mcp:open-brain
