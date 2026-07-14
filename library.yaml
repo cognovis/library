@@ -974,12 +974,10 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
-  - name: beads
-    description: Dispatch bead implementation to the unified bead-orchestrator. Bead
-      Claim selects a quick or full workflow profile and runs it end-to-end including
-      final closeout. Use when implementing a bead by ID, or to list ready beads.
-      Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
-    source: https://github.com/cognovis/library-core/blob/main/skills/beads/SKILL.md
+  - name: cognovis-beads
+    description: Invoke Cognovis bead implementation orchestration or the journaled
+      Dolt sync overlay while upstream bd owns normal tracker behavior and commands.
+    source: https://github.com/cognovis/library-core/blob/main/skills/cognovis-beads/SKILL.md
     tags:
     - origin:original
     - tier:core

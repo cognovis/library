@@ -61,7 +61,7 @@ def get_registered_names(library_data):
 
 # Expected cognovis skills (names as they appear in library.yaml)
 EXPECTED_COGNOVIS_SKILLS = {
-    "angebotserstellung", "beads", "billing-reviewer", "binary-explorer",
+    "angebotserstellung", "cognovis-beads", "billing-reviewer", "binary-explorer",
     "brand-forge", "bug-triage", "claude-md-pruner", "cmux", "cmux-browser", "cmux-markdown",
     "codex", "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
     "infra-principles", "inject-standards", "mail-send",
