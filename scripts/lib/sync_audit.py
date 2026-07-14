@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from .errors import EXIT_NOT_FOUND, InstallError, LibraryError
+from .errors import EXIT_NOT_FOUND, LibraryError
 from .installers.standard import _parse_standard_category
 from .lockfile import (
     compute_checksum,
@@ -26,6 +26,77 @@ from .output import dry_run_result, success
 from .paths import resolve_install_paths
 from .primitives import get_primitive
 from .source import parse_source
+
+
+_PLATFORM_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _library_skill_targets() -> tuple[Path, ...]:
+    """Return bootstrap-managed Library skill targets for present harnesses."""
+    home = Path.home()
+    candidates = (
+        home / ".claude" / "skills" / "library",
+        home / ".codex" / "skills" / "library",
+        home / ".agents" / "skills" / "library",
+        home / ".opencode" / "skills" / "library",
+    )
+    return tuple(candidate for candidate in candidates if candidate.parent.parent.is_dir())
+
+
+def _library_surface_hash(root: Path) -> str:
+    """Hash the Library skill plus its deterministic Python control plane."""
+    files = [root / "SKILL.md", root / "scripts" / "library.py"]
+    lib_root = root / "scripts" / "lib"
+    if lib_root.is_dir():
+        files.extend(sorted(lib_root.rglob("*.py")))
+
+    digest = hashlib.sha256()
+    for file_path in files:
+        if not file_path.is_file():
+            digest.update(str(file_path.relative_to(root)).encode())
+            digest.update(b"\0missing\0")
+            continue
+        digest.update(str(file_path.relative_to(root)).encode())
+        digest.update(b"\0")
+        digest.update(compute_checksum(file_path).encode())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _audit_library_bootstrap() -> list[dict[str, Any]]:
+    """Report diverged or missing bootstrap-installed Library skill surfaces."""
+    source_path = _PLATFORM_ROOT / "SKILL.md"
+    if not source_path.is_file():
+        return []
+
+    expected_sha = _library_surface_hash(_PLATFORM_ROOT)
+    findings: list[dict[str, Any]] = []
+    for target_root in _library_skill_targets():
+        try:
+            actual_sha = _library_surface_hash(target_root) if target_root.is_dir() else ""
+        except OSError:
+            actual_sha = ""
+        if actual_sha == expected_sha:
+            continue
+        findings.append({
+            "name": "library",
+            "primitive": "skill",
+            "scope": "global",
+            "expected_sha": expected_sha,
+            "actual_sha": actual_sha,
+            "source_path": str(_PLATFORM_ROOT),
+            "install_target": str(target_root),
+            "drift": True,
+            "status": "drift",
+            "drift_kind": "local",
+            "reason": (
+                "library_bootstrap_content_mismatch"
+                if actual_sha
+                else "library_bootstrap_target_missing"
+            ),
+            "upstream_status": "unknown",
+        })
+    return findings
 
 
 def _check_standard_path_drift(
@@ -235,7 +306,7 @@ def cmd_audit_impl(
       - status:
         - "drift": local-tamper, upstream-behind, or both
         - "clean": no drift
-        - "unknown": entry without checksum_type, or path not found
+        - "unknown": path not found or checksum type is unsupported
       - drift_kind (present when status="drift"):
         - "local":    installed files differ from lockfile content_sha
         - "upstream": catalog source has moved beyond lockfile source_commit
@@ -278,7 +349,13 @@ def cmd_audit_impl(
     else:
         entries = list(installed)
 
-    if not entries:
+    bootstrap_findings = (
+        _audit_library_bootstrap()
+        if primitive in ("all", "search", None)
+        else []
+    )
+
+    if not entries and not bootstrap_findings:
         return {
             "status": "clean",
             "entries": [],
@@ -308,8 +385,8 @@ def cmd_audit_impl(
             # of local-tamper drift; we report upstream as "unknown" for everything.
             upstream_by_key = {}
 
-    audit_entries = []
-    any_drift = False
+    audit_entries = list(bootstrap_findings)
+    any_drift = bool(bootstrap_findings)
 
     for entry in entries:
         entry_name = entry.get("name", "")
@@ -322,10 +399,14 @@ def cmd_audit_impl(
         drift = False
         entry_status = "unknown"
 
-        # Entries without checksum_type report unknown, never drift unless an
-        # additional health check below finds a broken installed artifact.
+        legacy_checksum_type_missing = checksum_type is None
+
+        # A tracked entry without checksum metadata cannot prove integrity.
+        # Report actionable drift so recurring audits cannot silently pass it.
         if checksum_type is None:
-            entry_status = "unknown"
+            drift = True
+            any_drift = True
+            entry_status = "drift"
         elif checksum_type == "file":
             # For file-type: check single file.
             # Detect missing install target first: a lockfile path that ends with
@@ -424,6 +505,8 @@ def cmd_audit_impl(
             "status": entry_status,
             "upstream_status": upstream_status,
         }
+        if legacy_checksum_type_missing:
+            audit_entry["reason"] = "legacy_checksum_type_missing"
 
         # Promote to "drift" if upstream has moved. Track drift_kind so consumers
         # can tell why (local tamper vs upstream behind vs both — different fixes).
