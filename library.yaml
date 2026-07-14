@@ -975,11 +975,10 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: beads
-    description: Dispatch bead implementation to the full implementation orchestrator
-      (Phase 0–16 end-to-end including final closeout) or a quick-fix agent (lightweight,
-      Phase 0–5 end-to-end including final closeout). Use when implementing a bead
-      by ID, or to list ready beads. Triggers on implementiere bead, arbeite an bead,
-      slice bead, bead zu gross.
+    description: Dispatch bead implementation to the unified bead-orchestrator. Bead
+      Claim selects a quick or full workflow profile and runs it end-to-end including
+      final closeout. Use when implementing a bead by ID, or to list ready beads.
+      Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
     source: https://github.com/cognovis/library-core/blob/main/skills/beads/SKILL.md
     requires:
     - mcp:cognovis-tools
@@ -2509,17 +2508,13 @@ library:
         inventory: convention-scan
         plane: dev
   - name: quick-fix
-    description: Lightweight orchestrator for XS/micro beads (bugs, chores, tasks).
-      Claims bead, spawns Sonnet implementer, triggers Codex review, handles fix loop
-      (max 2 iterations), then hands off to session-close. Skips plan gates, break
-      analysis, UAT, docs, and verification phases.
+    description: Deprecated compatibility redirect for old launchers that still select
+      quick-fix. Delegates one strict quick workflow request to bead-orchestrator and
+      performs no claim, repository inspection, implementation, review, or closeout
+      itself.
     source: https://github.com/cognovis/library-core/blob/main/agents/quick-fix.md
     requires:
-    - mcp:cognovis-tools
-    - agent:review-agent
-    - agent:session-close
-    - skill:bead-reviewer
-    - skill:beads
+    - agent:bead-orchestrator
     tags:
     - origin:original
     - tier:core

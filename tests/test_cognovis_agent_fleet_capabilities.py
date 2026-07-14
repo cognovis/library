@@ -638,6 +638,32 @@ def test_catalog_agent_requires_refs_resolve() -> None:
             )
 
 
+def test_regression_unified_quick_routing_catalog_contract() -> None:
+    """CL-sl3j: catalog the unified orchestrator and compatibility alias graph."""
+    catalog = yaml.safe_load(LIBRARY_YAML.read_text(encoding="utf-8")) or {}
+    agents = {
+        agent["name"]: agent
+        for agent in catalog.get("library", {}).get("agents", [])
+    }
+
+    orchestrator_requires = set(agents["bead-orchestrator"].get("requires", []))
+    assert "agent:bead-claim-wrapper" in orchestrator_requires
+    assert "agent:bead-spec-reviewer" in orchestrator_requires
+    assert "agent:quick-fix" not in orchestrator_requires
+
+    quick_fix = agents["quick-fix"]
+    assert quick_fix.get("requires") == ["agent:bead-orchestrator"]
+    assert "Deprecated compatibility redirect" in quick_fix["description"]
+
+    skills = {
+        skill["name"]: skill
+        for skill in catalog.get("library", {}).get("skills", [])
+    }
+    beads_description = skills["beads"]["description"]
+    assert "unified bead-orchestrator" in beads_description
+    assert "quick-fix agent" not in beads_description
+
+
 # ---------------------------------------------------------------------------
 # Plugin-prefixed body ref unit tests
 # ---------------------------------------------------------------------------

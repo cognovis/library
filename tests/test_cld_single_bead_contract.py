@@ -237,6 +237,33 @@ def test_cld_bead_modes_without_callback_do_not_inject_callback_contract(
     assert "trigger-flash" not in prompt
 
 
+# Guards CL-sl3j: both launcher modes must enter the one canonical orchestrator,
+# while the prompt preserves the strict auto/quick Bead Claim distinction.
+@pytest.mark.parametrize(
+    ("flag", "requested_workflow"),
+    [("-b", "auto"), ("-bq", "quick")],
+)
+def test_regression_cld_bead_modes_forward_requested_workflow(
+    tmp_path: Path,
+    flag: str,
+    requested_workflow: str,
+) -> None:
+    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-smoke"],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert _argv_flag_value(argv, "--agent") == "bead-orchestrator"
+    assert f"requested_workflow={requested_workflow}" in prompt
+    if requested_workflow == "quick":
+        assert "requested_workflow=auto" not in prompt
+        assert "do not fall back to full" in prompt
+
+
 @pytest.mark.parametrize("flag", ["-b", "-bq"])
 def test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env(
     tmp_path: Path,
@@ -254,7 +281,8 @@ def test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env
     assert "CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
     prompt = prompt_file.read_text(encoding="utf-8")
     assert "Route profile: cld-default" in prompt
-    assert "--route-profile cld-default" in prompt
+    assert "route_profile=cld-default" in prompt
+    assert "bead_claim_prepare" in prompt
     assert "evil-profile" not in prompt
 
 
@@ -275,7 +303,8 @@ def test_cld_bead_modes_explicit_route_profile_is_parameter_only_with_ambient_en
     assert "CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
     prompt = prompt_file.read_text(encoding="utf-8")
     assert "Route profile: custom-profile" in prompt
-    assert "--route-profile custom-profile" in prompt
+    assert "route_profile=custom-profile" in prompt
+    assert "bead_claim_prepare" in prompt
     assert "evil-profile" not in prompt
 
 

@@ -379,33 +379,14 @@ class TestSlotDispatchErrorPropagation:
                     f"resolve_slot_dispatch.py call with EXECUTION_PLAN: {line.strip()!r}"
                 )
 
-    def test_no_blanket_stderr_suppression_in_quick_fix(self) -> None:
-        """AC4: quick-fix call sites do not suppress resolve_slot_dispatch errors when EXECUTION_PLAN is set."""
+    def test_quick_fix_compatibility_redirect_owns_no_slot_dispatch(self) -> None:
+        """CL-sl3j: the compatibility agent delegates instead of resolving slots."""
         _QF_PATH = _COGNOVIS_ROOT / "agents" / "quick-fix.md"
         if not _QF_PATH.exists():
             pytest.skip(f"quick-fix.md not found at {_QF_PATH}")
         content = _QF_PATH.read_text(encoding="utf-8")
-        lines = content.splitlines()
-        for i, line in enumerate(lines):
-            if "resolve_slot_dispatch.py" in line and "EXECUTION_PLAN=" in line:
-                assert "2>/dev/null" not in line, (
-                    f"Line {i + 1} in quick-fix.md blanket-suppresses stderr on "
-                    f"resolve_slot_dispatch.py call with EXECUTION_PLAN: {line.strip()!r}"
-                )
-
-    def test_quick_fix_cursor_dispatch_emits_leaf_marker(self) -> None:
-        """Cursor Composer quick dispatch must be visible in noisy harness output."""
-        _QF_PATH = _COGNOVIS_ROOT / "agents" / "quick-fix.md"
-        if not _QF_PATH.exists():
-            pytest.skip(f"quick-fix.md not found at {_QF_PATH}")
-        content = _QF_PATH.read_text(encoding="utf-8")
-        assert "## LEAF_DISPATCH workflow=quick slot=implementation" in content
-        assert "adapter=$IMPL_SLOT_ADAPTER" in content
-        assert "harness=${IMPL_SLOT_HARNESS:-cursor}" in content
-        assert "model=$IMPL_SLOT_MODEL" in content
-        assert "source=${IMPL_SLOT_SOURCE:-slot}" in content
-        assert "## LEAF_DISPATCH workflow=quick slot=fix_loop" in content
-        assert "adapter=$FIXLOOP_ADAPTER" in content
-        assert "harness=${FIXLOOP_HARNESS:-cursor}" in content
-        assert "model=$FIXLOOP_MODEL" in content
-        assert "source=${FIXLOOP_SOURCE:-slot}" in content
+        assert "DEPRECATED COMPATIBILITY ADAPTER" in content
+        assert "Spawn `bead-orchestrator` once" in content
+        assert "requested_workflow=quick" in content
+        assert "resolve_slot_dispatch.py" not in content
+        assert "## LEAF_DISPATCH" not in content

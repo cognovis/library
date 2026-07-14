@@ -10,12 +10,12 @@
 #   -c, --caveman   → enable caveman mode for this session (exports CAVEMAN_MODE=1)
 #   -b, --bead ID   → launch with bead orchestrator for the given bead ID
 #                     (refuses if ID has children)
-#   -bq, --bead-quick ID → launch with quick-fix agent for XS/S beads (bug, chore, task)
+#   -bq, --bead-quick ID → launch bead orchestrator with strict quick workflow
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #   -bp, --plan-label LABEL → launch with /plan --label LABEL as initial prompt
-#   --route-profile NAME → select named route profile (passed to phase0-claim.py as --route-profile)
+#   --route-profile NAME → select named route profile (passed to bead_claim_prepare)
 #   --force-tier TIER → force routing tier (e.g. mcp, infra); passed to phase0-claim.py
 #                          profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
@@ -139,7 +139,7 @@ Wrapper flags (consumed by cld, not passed to claude):
   Bead workflows:
     -b,  --bead ID              Launch bead-orchestrator for single bead
                                 (refuses if ID has children)
-    -bq, --bead-quick ID        Launch quick-fix agent (XS/S beads)
+    -bq, --bead-quick ID        Launch bead-orchestrator with strict quick workflow
     -br, --bead-review ID       Fresh-context critical bead-spec/readiness review
                                 (uses bead-reviewer skill; defaults to --model opus)
     -bp, --plan-label LABEL     Launch with /plan --label LABEL
@@ -147,7 +147,7 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 Coordinator callback workspace ref (requires surface)
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
-         --route-profile NAME    Select named route profile (passed to phase0-claim.py as --route-profile)
+         --route-profile NAME    Select named route profile (passed to bead_claim_prepare)
          --force-tier TIER       Force the routing tier (e.g. mcp, infra); passed to phase0-claim.py
                                 Profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
@@ -527,16 +527,15 @@ if [[ -n "$bead_id" ]]; then
         bead_ns="${bead_prefix}-${bead_num}"
     fi
 
-    # Execute the COMPLETE workflow (phases 0-16 including Phase 16 session-close).
-    # Never stop at "Phase 0-5" — that scope does not exist for the full orchestrator.
-    local prompt="Bead ID: $bead_id. Execute the full orchestration workflow end-to-end: Phase 0 through Phase 16 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 16."
+    # Enter the canonical orchestrator with automatic quick/full profile selection.
+    local prompt="Bead ID: $bead_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=auto. Pass requested_workflow=auto to bead_claim_prepare. Continue through the resolved quick or full profile and session-close without stopping after an intermediate phase."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
     fi
 
     if [[ -n "$route_profile" ]]; then
-        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
+        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to bead_claim_prepare)."
     fi
 
     if [[ -n "$force_tier" ]]; then
@@ -556,10 +555,9 @@ if [[ -n "$bead_quick_id" ]]; then
     bead_quick_id=$(_expand_bead_id "$bead_quick_id")
     local bead_quick_short=$(_bead_short "$bead_quick_id")
 
-    # Export CLD_BEAD_LINE=cld so the quick-fix agent resolves the impl model
-    # from perspective_policy.cld.tier_impl_override.quick (= gpt-5.4-mini in
-    # the default user-global config, routed via codex-impl.py). Symmetric to
-    # cdx -bq's CLD_BEAD_LINE=cdx export.
+    # Export CLD_BEAD_LINE=cld so bead-orchestrator resolves the quick profile
+    # from perspective_policy.cld. Symmetric to cdx -bq's CLD_BEAD_LINE=cdx
+    # export.
     export CLD_BEAD_LINE=cld
 
     if ! _bead_exists "$bead_quick_id"; then
@@ -586,9 +584,9 @@ if [[ -n "$bead_quick_id" ]]; then
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_quick_id}"
     claude_args+=("--worktree" "$worktree_name")
-    claude_args+=("--agent" "quick-fix")
+    claude_args+=("--agent" "bead-orchestrator")
     # ── Force full plugin registry in the worktree session ────────
-    # CCP-9xy: guarantees core:session-close is spawnable at Phase 5 handoff,
+    # CCP-9xy: guarantees core:session-close is spawnable at closeout,
     # even if a project-level .claude/settings overrides setting-sources.
     claude_args+=("--setting-sources" "user,project,local")
 
@@ -604,15 +602,16 @@ if [[ -n "$bead_quick_id" ]]; then
         bead_ns="${bead_prefix}-${bead_num}"
     fi
 
-    # Execute the COMPLETE quick-fix workflow (phases 0-5 including Phase 5 session-close).
-    local prompt="Bead ID: $bead_quick_id. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5 (session-close). Do not stop after any intermediate phase. Session-close auto-triggers in Phase 5."
+    # Enter the canonical orchestrator with a strict quick request. Ineligibility
+    # is terminal before claim; it must never silently fall back to full.
+    local prompt="Bead ID: $bead_quick_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=quick. Pass requested_workflow=quick to bead_claim_prepare. If strict quick is ineligible, stop before claim and do not fall back to full. If eligible, continue through the resolved quick profile and session-close without stopping after an intermediate phase."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
     fi
 
     if [[ -n "$route_profile" ]]; then
-        prompt+=" Route profile: $route_profile (pass --route-profile $route_profile to phase0-claim.py)."
+        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to bead_claim_prepare)."
     fi
 
     if _has_coordinator_callback; then

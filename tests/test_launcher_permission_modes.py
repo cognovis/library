@@ -171,7 +171,10 @@ def test_review_propagates_client_failure_and_still_flashes(tmp_path: Path) -> N
 
 @pytest.mark.parametrize(
     ("args", "agent"),
-    [(["-b", "CL-safe"], "bead-orchestrator"), (["-bq", "CL-safe"], "quick-fix")],
+    [
+        (["-b", "CL-safe"], "bead-orchestrator"),
+        (["-bq", "CL-safe"], "bead-orchestrator"),
+    ],
 )
 def test_implementer_modes_keep_auto_permissions_and_worktree(
     tmp_path: Path, args: list[str], agent: str
