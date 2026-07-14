@@ -106,6 +106,13 @@
       "purpose": "Check whether the current local branch range is pushable through the new pre-push hook.",
       "exit_code": 2,
       "observed_result": "The hook scanned 7 commits, reported leaks found: 2, and blocked the range because earlier local evidence commits contained a secret-shaped sentinel before it was redacted from HEAD."
+    },
+    {
+      "id": "orchestrator_history_remediation",
+      "command": "git reset --soft d2d8124 && git commit -m \"chore(CL-rkww): add implementation evidence artifacts\"",
+      "purpose": "Remove a raw synthetic AGE-format test-fixture secret key that had been committed (6b693b4, still present in 42df219) and only content-redacted, not history-removed, in 70e1888 -- caught by the hook itself dogfooding this branch push range (exit 2, leaks found: 2). Implementer could not self-remediate (sandboxed shared-gitdir write restrictions). Verified the 6 squashed commits touched only the two artifact JSON files before squashing (no source/test impact).",
+      "exit_code": 0,
+      "observed_result": "Squashed into single commit b155d74. Re-scan: gitleaks git --log-opts=b9a51a768f42e4d8266c54589f0b4a4fc24ef006..HEAD reports no leaks found (3 commits scanned). Dogfood run of prime/hooks/pre-push.sh against this branch push range now exits 0."
     }
   ],
   "skipped_checks": [
