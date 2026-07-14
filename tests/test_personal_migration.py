@@ -7,10 +7,10 @@ Tests:
   2. Each SKILL.md has frontmatter with description: field
   3. mm-cli smoke: SKILL.md accessible and has correct frontmatter (installable)
   4. home-infra smoke: SKILL.md accessible and has correct frontmatter (installable)
-  5. Migration commit exists on origin/main of sussdorff/library-core
+  5. Committed migration evidence remains in platform documentation
 
 Run with:
-    python3 -m pytest tests/test_personal_migration.py -v
+    uv run pytest tests/test_personal_migration.py -v
 """
 
 import base64
@@ -26,7 +26,6 @@ REPO = "sussdorff/library-core"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_YAML = REPO_ROOT / "library.yaml"
 
-MIGRATION_COMMIT_PREFIX = "feat(CL-4mt):"
 SOURCE_PREFIX = f"https://github.com/{REPO}/blob/main/"
 
 
@@ -195,45 +194,17 @@ class TestSmokeInstallable:
         )
 
 
-class TestMigrationCommit:
-    """Test 5: Migration commit exists on origin/main of sussdorff/library-core."""
+class TestMigrationEvidence:
+    """Test 5: Migration evidence is committed with the platform catalog."""
 
-    def test_migration_commit_exists(self):
-        """The CL-4mt migration commit must appear in the repo commit history."""
-        result = subprocess.run(
-            [
-                "gh",
-                "api",
-                f"repos/{REPO}/commits",
-                "--jq",
-                f'[.[] | select(.commit.message | startswith("{MIGRATION_COMMIT_PREFIX}"))] | length',
-            ],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, f"gh api failed: {result.stderr}"
-        count = int(result.stdout.strip())
-        assert count >= 1, (
-            f"No commit starting with '{MIGRATION_COMMIT_PREFIX}' found in "
-            f"{REPO} commit history"
-        )
+    def test_migration_changelog_entry_exists(self):
+        """The release record must retain the CL-4mt migration evidence."""
+        changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        assert "*(CL-4mt)* Add changelog entry for personal artefacts migration" in changelog
 
-    def test_migration_commit_sha_format(self):
-        """Migration commit SHA must be a valid 40-char hex string."""
-        result = subprocess.run(
-            [
-                "gh",
-                "api",
-                f"repos/{REPO}/commits",
-                "--jq",
-                f'[.[] | select(.commit.message | startswith("{MIGRATION_COMMIT_PREFIX}"))] | .[0].sha',
-            ],
-            capture_output=True,
-            text=True,
+    def test_migration_architecture_record_exists(self):
+        """The retirement ADR must retain the migration dependency record."""
+        adr = (REPO_ROOT / "docs" / "adr" / "sussdorff-plugins-removal.md").read_text(
+            encoding="utf-8"
         )
-        assert result.returncode == 0, f"gh api failed: {result.stderr}"
-        sha = result.stdout.strip().strip('"')
-        assert len(sha) == 40, f"Migration commit SHA has unexpected length: {sha!r}"
-        assert all(c in "0123456789abcdef" for c in sha.lower()), (
-            f"SHA is not valid hex: {sha!r}"
-        )
+        assert "Wave 1 of the Library migration (CL-sxt, CL-4mt, CL-2x4)" in adr

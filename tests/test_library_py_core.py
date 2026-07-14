@@ -5,16 +5,17 @@ test_library_py_core.py — Tests for scripts/lib/ core modules (AK1, AK2, AK3, 
 Tests:
   AK1:  scripts/library.py exists and parses primitive-first commands
   AK2:  scripts/lib/ package contains all required modules
-  AK3:  `python3 scripts/library.py <primitive> list --json` works for all supported primitives
+  AK3:  `uv run --script scripts/library.py <primitive> list --json` works for all supported primitives
   AK7:  Lockfile create/update is deterministic and schema-compatible
   AK8:  scripts/validate-library.py --quiet still passes
   AK10: No legacy unscoped command forms promoted in docs
 
 Run with:
-    python3 -m pytest tests/test_library_py_core.py -v
+    uv run pytest tests/test_library_py_core.py -v
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -48,6 +49,27 @@ SUPPORTED_PRIMITIVES = [
 def test_library_py_exists():
     """scripts/library.py must exist."""
     assert LIBRARY_PY.exists(), f"Expected {LIBRARY_PY} to exist — not found."
+
+
+def test_user_facing_library_cli_commands_use_script_dependencies():
+    """User-facing invocations must activate library.py's PEP 723 environment."""
+    paths = [
+        REPO_ROOT / "SKILL.md",
+        REPO_ROOT / "scripts" / "library.py",
+        REPO_ROOT / "scripts" / "lib" / "errors.py",
+        REPO_ROOT / "scripts" / "lib" / "output.py",
+        *sorted((REPO_ROOT / "cookbook").glob("*.md")),
+    ]
+    bare_invocation = re.compile(
+        r"\bpython(?:3)?\b[^\n]*(?<![-\w])library\.py"
+    )
+    offenders = [
+        str(path.relative_to(REPO_ROOT))
+        for path in paths
+        if bare_invocation.search(path.read_text(encoding="utf-8"))
+    ]
+
+    assert offenders == []
 
 
 def test_library_py_help():
@@ -195,7 +217,7 @@ def test_lib_importable():
 
 @pytest.mark.parametrize("primitive", SUPPORTED_PRIMITIVES)
 def test_primitive_list_json(primitive: str):
-    """python3 scripts/library.py <primitive> list --json must exit 0 and return valid JSON."""
+    """The dependency-owning Library CLI must return valid list JSON."""
     result = subprocess.run(
         [sys.executable, str(LIBRARY_PY), primitive, "list", "--json"],
         capture_output=True,
@@ -218,7 +240,7 @@ def test_primitive_list_json(primitive: str):
 
 @pytest.mark.parametrize("primitive", SUPPORTED_PRIMITIVES)
 def test_primitive_list_human(primitive: str):
-    """python3 scripts/library.py <primitive> list (human format) must exit 0."""
+    """The dependency-owning Library CLI must return human-readable lists."""
     result = subprocess.run(
         [sys.executable, str(LIBRARY_PY), primitive, "list"],
         capture_output=True,

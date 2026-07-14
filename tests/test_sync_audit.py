@@ -922,6 +922,50 @@ class TestTopLevelSync:
         assert data["refreshed"] == ["mcp:cognovis-tools"]
         assert data["skipped"] == []
 
+    def test_mcp_sync_preserves_actionable_installer_error(
+        self, tmp_path, monkeypatch
+    ):
+        from lib.errors import InstallError
+        from lib.sync_audit import cmd_sync_impl
+
+        entry = {
+            "name": "cognovis-tools",
+            "type": "mcp",
+            "marketplace": "cognovis-core",
+        }
+        (tmp_path / ".library.lock").write_text(
+            yaml.safe_dump({"installed": [entry]}), encoding="utf-8"
+        )
+        monkeypatch.setattr(
+            "lib.sync_audit.reinstall_entry",
+            MagicMock(
+                side_effect=InstallError(
+                    "codex MCP installer failed for 'cognovis-tools': "
+                    "tomlkit required for Codex TOML manipulation"
+                )
+            ),
+        )
+
+        result = cmd_sync_impl(
+            catalog={},
+            primitive="mcp",
+            repo_root=tmp_path,
+            scope="project",
+            harness="codex",
+        )
+
+        assert result["data"]["synced"] == []
+        assert result["data"]["failed"] == [
+            {
+                "name": "cognovis-tools",
+                "type": "mcp",
+                "error": (
+                    "codex MCP installer failed for 'cognovis-tools': "
+                    "tomlkit required for Codex TOML manipulation"
+                ),
+            }
+        ]
+
 
 # ---------------------------------------------------------------------------
 # AK7: Hook script smoke test

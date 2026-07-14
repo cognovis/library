@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -59,13 +60,91 @@ def test_install_dispatch_reports_writer_exception_as_failure() -> None:
     module = MagicMock()
     module.install_cursor.side_effect = OSError("write failed")
 
-    assert _install_to_harness(
-        module,
-        "cognovis-tools",
-        {"snippet": {"type": "http", "url": HTTP_URL}},
-        "cursor",
-        dry_run=False,
-    ) == 1
+    with pytest.raises(InstallError, match="cursor.*write failed"):
+        _install_to_harness(
+            module,
+            "cognovis-tools",
+            {"snippet": {"type": "http", "url": HTTP_URL}},
+            "cursor",
+            dry_run=False,
+        )
+
+
+def test_library_cli_declares_runtime_dependencies_for_codex_sync(tmp_path: Path) -> None:
+    library_script = SCRIPTS_DIR / "library.py"
+    source = library_script.read_text(encoding="utf-8")
+    metadata = source.split("# /// script\n", 1)[1].split("# ///\n", 1)[0]
+    script_config = tomllib.loads(
+        "\n".join(line.removeprefix("# ") for line in metadata.splitlines())
+    )
+
+    assert "tomlkit>=0.13" in script_config["dependencies"]
+
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--isolated",
+            "--no-project",
+            "--script",
+            str(library_script),
+            "--version",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("library.py ")
+
+
+def test_install_to_harness_preserves_codex_installer_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("[mcp_servers.invalid\n", encoding="utf-8")
+    monkeypatch.setenv("CODEX_CONFIG_FILE", str(config_path))
+    installer = mcp_installer._import_install_mcp()
+
+    with pytest.raises(InstallError) as error:
+        _install_to_harness(
+            installer,
+            "cognovis-tools",
+            {"snippet": {"url": HTTP_URL}},
+            "codex",
+            dry_run=False,
+        )
+
+    message = str(error.value)
+    assert "codex" in message
+    assert "Unexpected character" in message
+    assert "line 1 col 20" in message
+    assert error.value.__cause__ is not None
+
+
+def test_install_to_harness_preserves_codex_system_exit_cause(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CODEX_CONFIG_FILE", str(tmp_path / "config.toml"))
+    installer = mcp_installer._import_install_mcp()
+    real_import = __import__
+
+    def import_without_tomlkit(name, *args, **kwargs):
+        if name == "tomlkit":
+            raise ImportError("simulated missing tomlkit")
+        return real_import(name, *args, **kwargs)
+
+    with patch("builtins.__import__", side_effect=import_without_tomlkit):
+        with pytest.raises(InstallError, match="tomlkit required for Codex TOML"):
+            _install_to_harness(
+                installer,
+                "cognovis-tools",
+                {"snippet": {"url": HTTP_URL}},
+                "codex",
+                dry_run=False,
+            )
 
 
 def test_import_failure_restores_environment_overrides(

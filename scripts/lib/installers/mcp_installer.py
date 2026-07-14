@@ -890,10 +890,17 @@ def _install_to_harness(mod, name: str, block: dict, harness: str, dry_run: bool
             fn = getattr(mod, "install_url_only", None)
             if fn:
                 return fn(name, block, dry_run=dry_run, remove=False, harness=harness)
-    except SystemExit as e:
-        return int(str(e)) if str(e).isdigit() else 1
-    except Exception:
-        return 1
+    except SystemExit as exc:
+        if exc.code in (None, 0, "0"):
+            return 0
+        detail = str(exc.code).strip() or "unknown installer failure"
+        raise InstallError(
+            f"{harness} MCP installer failed for '{name}': {detail}"
+        ) from exc
+    except Exception as exc:
+        raise InstallError(
+            f"{harness} MCP installer failed for '{name}': {exc}"
+        ) from exc
     return 1
 
 
