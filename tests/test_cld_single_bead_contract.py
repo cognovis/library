@@ -264,6 +264,27 @@ def test_regression_cld_bead_modes_forward_requested_workflow(
         assert "do not fall back to full" in prompt
 
 
+# Guards CL-1n24: force-tier must use the typed claim contract symmetrically;
+# neither launcher mode may send the orchestrator back to legacy Phase 0.
+@pytest.mark.parametrize("flag", ["-b", "-bq"])
+def test_regression_cld_bead_modes_forward_force_tier_to_claim_prepare(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    result, _argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-smoke", "--force-tier", "mcp"],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "force_tier=mcp" in prompt
+    assert "bead_claim_prepare" in prompt
+    assert "phase0-claim.py" not in prompt
+    assert "takes precedence over requested_workflow" in prompt
+
+
 @pytest.mark.parametrize("flag", ["-b", "-bq"])
 def test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env(
     tmp_path: Path,

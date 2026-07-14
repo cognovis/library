@@ -73,7 +73,8 @@ mcp:
 
 ## Selection
 
-Operator-driven for v1 (`--route-profile` / `--force-tier mcp`), with
+Operator-driven for v1 (`--route-profile <profile> --force-tier mcp`). The
+launcher forwards both values to the typed `bead_claim_prepare` contract, with
 `surface:mcp` label inference as an **assist only** — NOT pipeline-blocking
 force-routing. Rationale: the infra review (`033a639`) showed
 `surface:permissions` over-inference force-routing product beads to INFRA
@@ -95,11 +96,11 @@ Mirrors the infra recipe extracted from `033a639`:
 3. `skills/beads/scripts/infer_surface_labels.py` — add a `SurfaceRule` for
    `surface:mcp`. Do **not** add it to `PIPELINE_SURFACES` for v1
    (operator-driven selection).
-4. `skills/beads/scripts/phase0-claim.py` — extend `VALID_TIERS`,
-   `--force-tier` choices, `workflow_for_tier` (`mcp→mcp`), and
-   `route_flags_for_tier` (emit `implementation_strategy=subagent`,
-   `verification_kind=mcp_handshake`, `pre_push_advisory_required=true`,
-   `advisory_review_kind=opposite_family_pre_push`).
+4. `mcp-servers/cognovis-tools/tools/bead_claim_protocol.py` and
+   `bead_tools.py` — accept and persist the `force_tier` override, map `mcp` to
+   the `mcp` workflow, and materialize the matching route-profile execution
+   plan. `skills/beads/scripts/phase0-claim.py` retains equivalent behavior for
+   compatibility launchers only.
 5. `.agents/orchestrator-config.yml` — add `model_tiers.mcp`,
    `perspective_policy[cld|cdx].tier_*` for the opposite-family reviewer, and
    an `mcp:` slot block under **each** profile (`cld-default`, `cdx-default`,

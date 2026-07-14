@@ -96,10 +96,14 @@ loopback endpoint.
 
 **Route profiles** (`--route-profile NAME`): Both launchers accept an optional `--route-profile` flag
 that selects a named profile from `orchestrator-config.yml`. The selected name is passed explicitly as a
-`--route-profile` parameter to `phase0-claim.py` and threaded through the bead-orchestrator prompt text so
+`route_profile` parameter to `bead_claim_prepare` and threaded through the bead-orchestrator prompt text so
 downstream workflow entries resolve the matching `execution_plan` (slots, adapter, model, reasoning_effort,
 timeout). Built-in profiles: `cld-default`, `cdx-default`, `cdx-composer`. When omitted, `cld` passes
 `cld-default` and `cdx` passes `cdx-composer` as code-defined launcher defaults.
+
+**Forced tiers** (`--force-tier TIER`): `cld -b` and `cld -bq` pass the optional administrative override
+as the typed `force_tier` parameter to `bead_claim_prepare`. Supported tiers are `quick`, `gsd`, `solo`,
+`paul`, and `mcp`; the legacy `phase0-claim.py` path is not used by these launchers.
 
 `~/.local/bin/` must be in `$PATH`. The `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
 (only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).
