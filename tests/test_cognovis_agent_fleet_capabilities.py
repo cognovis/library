@@ -510,6 +510,7 @@ def test_unified_quick_routing_catalog_uses_direct_claim_preflight() -> None:
         for agent in catalog.get("library", {}).get("agents", [])
     }
 
+    assert "bead-claim-wrapper" not in agents
     orchestrator_requires = set(agents["bead-orchestrator"].get("requires", []))
     assert "agent:bead-claim-wrapper" not in orchestrator_requires
     assert "agent:bead-spec-reviewer" in orchestrator_requires
