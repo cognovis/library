@@ -862,6 +862,66 @@ class TestTopLevelSync:
             "skill:skill-unchanged"
         ]
 
+    def test_regression_sync_refreshes_stale_supervised_runtime(
+        self, tmp_path, capsys, monkeypatch
+    ):
+        import argparse
+        import library as library_cli
+
+        revision = "a" * 40
+        entry = {
+            "name": "cognovis-tools",
+            "type": "mcp",
+            "marketplace": "cognovis-core",
+            "source": (
+                "https://github.com/cognovis/library-core/blob/main/"
+                "mcp-servers/cognovis-tools/pyproject.toml"
+            ),
+            "source_commit": revision,
+            "cache_path": "mcp:cognovis-tools",
+            "install_target": "claude_code,codex,cursor",
+            "install_timestamp": "2026-07-14T00:00:00Z",
+            "checksum_sha256": "0" * 64,
+            "checksum_type": "file",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        (tmp_path / ".library.lock").write_text(yaml.dump({"installed": [entry]}))
+        monkeypatch.setattr(
+            library_cli,
+            "cmd_status_impl",
+            lambda **kwargs: {
+                "status": "ok",
+                "overall": "behind",
+                "entries": [
+                    {
+                        "name": "cognovis-tools",
+                        "primitive": "mcp",
+                        "upstream_status": "current",
+                        "runtime_status": "stale",
+                        "needs_refresh": True,
+                        "behind": False,
+                        "installed_sha": revision,
+                        "remote_sha": revision,
+                    }
+                ],
+            },
+        )
+        args = argparse.Namespace(
+            json=True,
+            dry_run=True,
+            force=False,
+            scope="project",
+            harness="all",
+        )
+
+        rc = library_cli.cmd_sync_all(args, tmp_path, catalog={})
+
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert data["refreshed"] == ["mcp:cognovis-tools"]
+        assert data["skipped"] == []
+
 
 # ---------------------------------------------------------------------------
 # AK7: Hook script smoke test

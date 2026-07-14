@@ -202,6 +202,74 @@ class TestCmdStatusImpl:
         assert e["behind"] is False, f"Expected behind=False: {e}"
         assert e["upstream_status"] == "current"
 
+    def test_regression_supervised_runtime_drift_is_reported(self, tmp_path):
+        from lib.status import cmd_status_impl
+
+        make_lockfile(tmp_path, source_commit=INSTALLED_SHA)
+        lockfile = yaml.safe_load((tmp_path / ".library.lock").read_text())
+        lockfile["installed"][0]["name"] = "cognovis-tools"
+        lockfile["installed"][0]["type"] = "mcp"
+        (tmp_path / ".library.lock").write_text(yaml.dump(lockfile))
+        catalog = {
+            "library": {
+                "mcp_servers": [
+                    {
+                        "name": "cognovis-tools",
+                        "supervised_local_service": {
+                            "health_check": {"command": "status", "args": []}
+                        },
+                    }
+                ]
+            }
+        }
+
+        with patch("lib.status.get_remote_sha", return_value=INSTALLED_SHA), patch(
+            "lib.installers.mcp_supervised_service.service_status",
+            return_value={
+                "state": "healthy",
+                "source_revision": "stale-revision",
+            },
+        ):
+            result = cmd_status_impl(catalog, "all", tmp_path, scope="project")
+
+        entry = result["entries"][0]
+        assert entry["upstream_status"] == "current"
+        assert entry["runtime_status"] == "stale"
+        assert entry["runtime_revision"] == "stale-revision"
+        assert entry["needs_refresh"] is True
+        assert result["overall"] == "behind"
+
+    def test_offline_status_does_not_probe_supervised_runtime(self, tmp_path):
+        from lib.status import cmd_status_impl
+
+        make_lockfile(tmp_path, source_commit=INSTALLED_SHA)
+        lockfile = yaml.safe_load((tmp_path / ".library.lock").read_text())
+        lockfile["installed"][0]["name"] = "cognovis-tools"
+        lockfile["installed"][0]["type"] = "mcp"
+        (tmp_path / ".library.lock").write_text(yaml.dump(lockfile))
+        catalog = {
+            "library": {
+                "mcp_servers": [
+                    {
+                        "name": "cognovis-tools",
+                        "supervised_local_service": {
+                            "health_check": {"command": "status", "args": []}
+                        },
+                    }
+                ]
+            }
+        }
+
+        with patch(
+            "lib.installers.mcp_supervised_service.service_status"
+        ) as service_status:
+            result = cmd_status_impl(
+                catalog, "all", tmp_path, scope="project", offline=True
+            )
+
+        service_status.assert_not_called()
+        assert result["entries"][0]["runtime_status"] == "unknown"
+
     def test_status_unknown_when_remote_unreachable(self, tmp_path):
         """status reports unknown when git ls-remote fails."""
         from lib.status import cmd_status_impl
