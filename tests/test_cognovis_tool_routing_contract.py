@@ -59,6 +59,9 @@ TYPED_BEAD_TOOLS = {
     "mcp__cognovis-tools__bead_dep_add",
     "mcp__cognovis-tools__bead_dep_remove",
     "mcp__cognovis-tools__bead_dolt_sync",
+    "mcp__cognovis-tools__session_close_record_handoff",
+    "mcp__cognovis-tools__bead_session_close_finalize",
+    "mcp__cognovis-tools__bead_session_close_finalize_status",
 }
 READ_ONLY_BEAD_TOOLS = {
     "mcp__cognovis-tools__bead_show",
@@ -66,6 +69,7 @@ READ_ONLY_BEAD_TOOLS = {
     "mcp__cognovis-tools__bead_list",
     "mcp__cognovis-tools__bead_search",
     "mcp__cognovis-tools__bead_repos",
+    "mcp__cognovis-tools__bead_session_close_finalize_status",
 }
 MUTATING_BEAD_TOOLS = TYPED_BEAD_TOOLS - READ_ONLY_BEAD_TOOLS
 
