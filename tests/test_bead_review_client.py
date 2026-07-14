@@ -26,6 +26,10 @@ def _ok(data: dict[str, Any]) -> dict[str, Any]:
     return {"status": "ok", "summary": "ok", "data": data, "errors": []}
 
 
+def _partial(data: dict[str, Any]) -> dict[str, Any]:
+    return {"status": "partial", "summary": "started", "data": data, "errors": []}
+
+
 def _result(verdict: str = "FACTORY_READY") -> str:
     payload = {
         "spec_verdict": verdict,
@@ -42,7 +46,14 @@ def test_execute_review_uses_direct_bd_boundaries_and_provider_dispatch(tmp_path
     async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         calls.append((name, arguments))
         if name == "agent_session_start":
-            return _ok({"result": _result(), "status": "completed"})
+            return _partial({"handle": "ags_review", "status": "created"})
+        if name == "agent_session_status":
+            return _ok(
+                {
+                    "status": "completed",
+                    "last_result": {"result": _result(), "status": "completed"},
+                }
+            )
         raise AssertionError(name)
 
     def load_bead(repo_dir: Path, bead_id: str) -> dict[str, Any]:
@@ -76,7 +87,10 @@ def test_execute_review_uses_direct_bd_boundaries_and_provider_dispatch(tmp_path
     )
 
     assert report == "Review passed."
-    assert [name for name, _ in calls] == ["agent_session_start"]
+    assert [name for name, _ in calls] == [
+        "agent_session_start",
+        "agent_session_status",
+    ]
     assert [kind for kind, *_ in bead_calls] == ["show", "write"]
     assert bead_calls[0][1:3] == (tmp_path.resolve(), "CL-safe")
     dispatch = calls[0][1]
@@ -84,6 +98,7 @@ def test_execute_review_uses_direct_bd_boundaries_and_provider_dispatch(tmp_path
     assert dispatch["adapter"] == dispatch["expected_adapter"] == "claude-agent"
     assert dispatch["provider"] == "claude"
     assert dispatch["network_access"] is False
+    assert dispatch["execution_mode"] == "background"
     assert dispatch["model"] == "opus"
     assert "BEGIN_BEAD_REVIEW_CONTEXT_UNTRUSTED_DATA" in dispatch["prompt"]
     assert '"classification":"untrusted"' in dispatch["prompt"]
@@ -111,7 +126,14 @@ def test_execute_review_fails_closed_before_metadata_write(
     async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         calls.append(name)
         if name == "agent_session_start":
-            return _ok({"result": agent_result})
+            return _partial({"handle": "ags_invalid", "status": "created"})
+        if name == "agent_session_status":
+            return _ok(
+                {
+                    "status": "completed",
+                    "last_result": {"result": agent_result, "status": "completed"},
+                }
+            )
         raise AssertionError("metadata write must not run")
 
     def fail_if_written(
@@ -134,7 +156,118 @@ def test_execute_review_fails_closed_before_metadata_write(
                 write_review=fail_if_written,
             )
         )
-    assert calls == ["agent_session_start"]
+    assert calls == ["agent_session_start", "agent_session_status"]
+
+
+def test_regression_clc_c35e_review_polling_fails_closed_on_terminal_error(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+
+    async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        calls.append(name)
+        if name == "agent_session_start":
+            return _partial({"handle": "ags_error", "status": "created"})
+        if name == "agent_session_status":
+            return _ok(
+                {
+                    "status": "error",
+                    "last_error": {
+                        "code": "PROVIDER_EXIT_NONZERO",
+                        "message": "provider failed",
+                    },
+                }
+            )
+        raise AssertionError(name)
+
+    request = client.ReviewRequest(
+        provider="claude",
+        adapter="claude-agent",
+        bead_id="CL-safe",
+        repo_dir=tmp_path,
+    )
+    with pytest.raises(client.ReviewClientError, match="provider failed"):
+        asyncio.run(
+            client.execute_review(
+                request,
+                call_tool,
+                load_bead=lambda _repo, _id: {"id": "CL-safe", "title": "Safe"},
+            )
+        )
+    assert calls == ["agent_session_start", "agent_session_status"]
+
+
+def test_regression_clc_c35e_review_poll_timeout_cancels_session(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+
+    async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        calls.append(name)
+        if name == "agent_session_start":
+            return _partial({"handle": "ags_timeout", "status": "created"})
+        if name == "agent_session_status":
+            return _ok({"status": "running", "last_error": None})
+        if name == "agent_session_cancel":
+            return _ok({"handle": "ags_timeout", "status": "canceled"})
+        raise AssertionError(name)
+
+    request = client.ReviewRequest(
+        provider="claude",
+        adapter="claude-agent",
+        bead_id="CL-safe",
+        repo_dir=tmp_path,
+        timeout_sec=-30,
+    )
+    with pytest.raises(client.ReviewClientError, match="session canceled"):
+        asyncio.run(
+            client.execute_review(
+                request,
+                call_tool,
+                load_bead=lambda _repo, _id: {"id": "CL-safe", "title": "Safe"},
+            )
+        )
+    assert calls == [
+        "agent_session_start",
+        "agent_session_status",
+        "agent_session_cancel",
+    ]
+
+
+def test_regression_clc_c35e_orphaned_review_cancels_provider(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+
+    async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        calls.append(name)
+        if name == "agent_session_start":
+            return _partial({"handle": "ags_orphaned", "status": "created"})
+        if name == "agent_session_status":
+            return _ok({"status": "orphaned", "last_error": None})
+        if name == "agent_session_cancel":
+            return _ok({"handle": "ags_orphaned", "status": "canceled"})
+        raise AssertionError(name)
+
+    request = client.ReviewRequest(
+        provider="claude",
+        adapter="claude-agent",
+        bead_id="CL-safe",
+        repo_dir=tmp_path,
+    )
+    with pytest.raises(client.ReviewClientError, match="orphaned and canceled"):
+        asyncio.run(
+            client.execute_review(
+                request,
+                call_tool,
+                load_bead=lambda _repo, _id: {"id": "CL-safe", "title": "Safe"},
+            )
+        )
+    assert calls == [
+        "agent_session_start",
+        "agent_session_status",
+        "agent_session_cancel",
+    ]
 
 
 def test_execute_review_propagates_direct_bd_failure(tmp_path: Path) -> None:

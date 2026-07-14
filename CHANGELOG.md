@@ -2,6 +2,7 @@
 
 ### Fixed
 
+- *(clc-c35e, agent sessions/catalog)* The shared bead-review client starts provider reviews in background mode, polls the durable handle to a terminal result, and cancels timed-out or orphaned sessions. The `cognovis-beads` catalog rename is now complete across active dependency declarations, `cdx` runtime discovery, dispatch helpers, and fleet tests, removing the remaining `skill:beads` references that broke dependency resolution.
 - *(clc-m4rc, audit)* Top-level Library audits now compare each bootstrap-installed `/library` skill surface and Python control plane with the running platform source, report legacy lock entries without `checksum_type` as actionable local drift, and retain agent capability frontmatter inside the checksum boundary. The recurring drift-summary path receives the same deterministic findings.
 
 ### Added

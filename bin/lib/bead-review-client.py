@@ -41,6 +41,9 @@ VERDICTS = frozenset(
 )
 MAX_CONTEXT_CHARS = 120_000
 MAX_FINDINGS_CHARS = 8_000
+POLL_INTERVAL_SEC = 0.25
+# Orphaned is deliberately terminal here: callers must fail closed and cancel it.
+ACTIVE_SESSION_STATUSES = frozenset({"created", "running"})
 
 ToolCaller = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 BeadLoader = Callable[[Path, str], dict[str, Any]]
@@ -77,6 +80,78 @@ def _require_ok(tool_name: str, envelope: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ReviewClientError(f"{tool_name} returned invalid data")
     return data
+
+
+def _require_started(envelope: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(envelope, dict) or envelope.get("status") not in {"ok", "partial"}:
+        return _require_ok("agent_session_start", envelope)
+    data = envelope.get("data")
+    if not isinstance(data, dict):
+        raise ReviewClientError("agent_session_start returned invalid data")
+    handle = data.get("handle")
+    if not isinstance(handle, str) or not handle.startswith("ags_"):
+        raise ReviewClientError("agent_session_start returned no pollable handle")
+    return data
+
+
+async def _poll_terminal_result(
+    call_tool: ToolCaller,
+    *,
+    handle: str,
+    workspace_dir: str,
+    timeout_sec: int,
+) -> dict[str, Any]:
+    deadline = asyncio.get_running_loop().time() + timeout_sec + 30
+    while True:
+        status_data = _require_ok(
+            "agent_session_status",
+            await call_tool(
+                "agent_session_status",
+                {"handle": handle, "workspace_dir": workspace_dir},
+            ),
+        )
+        status = str(status_data.get("status") or "")
+        if status == "completed":
+            result = status_data.get("last_result")
+            if not isinstance(result, dict):
+                raise ReviewClientError(
+                    "agent_session_status returned no persisted terminal result"
+                )
+            return result
+        if status == "orphaned":
+            _require_ok(
+                "agent_session_cancel",
+                await call_tool(
+                    "agent_session_cancel",
+                    {"handle": handle, "workspace_dir": workspace_dir},
+                ),
+            )
+            raise ReviewClientError("reviewer session was orphaned and canceled")
+        if status not in ACTIVE_SESSION_STATUSES:
+            error = status_data.get("last_error")
+            detail = ""
+            if isinstance(error, dict):
+                detail = str(error.get("message") or "")
+            suffix = f": {detail}" if detail else ""
+            raise ReviewClientError(f"reviewer session ended as {status or 'unknown'}{suffix}")
+        if asyncio.get_running_loop().time() >= deadline:
+            try:
+                _require_ok(
+                    "agent_session_cancel",
+                    await call_tool(
+                        "agent_session_cancel",
+                        {"handle": handle, "workspace_dir": workspace_dir},
+                    ),
+                )
+            except ReviewClientError as exc:
+                raise ReviewClientError(
+                    "timed out while polling reviewer session status; "
+                    f"cancellation failed: {exc}"
+                ) from exc
+            raise ReviewClientError(
+                "timed out while polling reviewer session status; session canceled"
+            )
+        await asyncio.sleep(POLL_INTERVAL_SEC)
 
 
 def _review_context(bead: dict[str, Any], expected_id: str) -> str:
@@ -281,14 +356,22 @@ async def execute_review(
         "slot": "spec_review",
         "timeout_sec": request.timeout_sec,
         "network_access": False,
+        "execution_mode": "background",
     }
     if request.model:
         session_args["model"] = request.model
     if request.reasoning_effort:
         session_args["reasoning_effort"] = request.reasoning_effort
-    session_data = _require_ok(
-        "agent_session_start", await call_tool("agent_session_start", session_args)
+    session_data = _require_started(
+        await call_tool("agent_session_start", session_args)
     )
+    if session_data.get("status") != "completed" or not session_data.get("result"):
+        session_data = await _poll_terminal_result(
+            call_tool,
+            handle=str(session_data["handle"]),
+            workspace_dir=str(repo_dir),
+            timeout_sec=request.timeout_sec,
+        )
     result = session_data.get("result")
     if not isinstance(result, str) or not result.strip():
         raise ReviewClientError("reviewer returned no inline result")

@@ -334,11 +334,11 @@ resolve_beads_runtime() {
     local repo_root="$1"
     local -a candidates=(
         "${BEADS_RUNTIME_DIR:-}"
-        "$repo_root/.agents/skills/beads"
-        "$repo_root/.claude/skills/beads"
-        "$repo_root/skills/beads"
-        "$HOME/.agents/skills/beads"
-        "$HOME/.claude/skills/beads"
+        "$repo_root/.agents/skills/cognovis-beads"
+        "$repo_root/.claude/skills/cognovis-beads"
+        "$repo_root/skills/cognovis-beads"
+        "$HOME/.agents/skills/cognovis-beads"
+        "$HOME/.claude/skills/cognovis-beads"
     )
 
     local candidate
@@ -351,7 +351,7 @@ resolve_beads_runtime() {
         fi
     done
 
-    echo "ERROR: skill:beads runtime not found; install the beads skill before cdx -b." >&2
+    echo "ERROR: skill:cognovis-beads runtime not found; install cognovis-beads before cdx -b." >&2
     return 1
 }
 

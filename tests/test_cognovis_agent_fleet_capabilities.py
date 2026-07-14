@@ -524,9 +524,9 @@ def test_unified_quick_routing_catalog_uses_direct_claim_preflight() -> None:
         skill["name"]: skill
         for skill in catalog.get("library", {}).get("skills", [])
     }
-    beads_description = skills["beads"]["description"]
-    assert "unified bead-orchestrator" in beads_description
-    assert "quick-fix agent" not in beads_description
+    beads_description = skills["cognovis-beads"]["description"]
+    assert "journaled Dolt sync overlay" in beads_description
+    assert "upstream bd owns normal tracker behavior" in beads_description
 
 
 # ---------------------------------------------------------------------------

@@ -1843,7 +1843,7 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/standards/SKILL.md
     requires:
     - standard:english-only
-    - skill:beads
+    - skill:cognovis-beads
     tags:
     - origin:original
     - tier:domain
@@ -2220,7 +2220,7 @@ library:
     - agent:feature-doc-updater
     - agent:bead-spec-reviewer
     - agent:bead-context
-    - skill:beads
+    - skill:cognovis-beads
     - skill:plan
     - skill:impl
     - skill:compound
@@ -2258,7 +2258,7 @@ library:
       Never spawns Claude agents or runs claude --print.
     source: https://github.com/cognovis/library-core/blob/main/agents/codex.md
     requires:
-    - skill:beads
+    - skill:cognovis-beads
     tags:
     - origin:original
     - tier:core
@@ -2506,7 +2506,7 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/agents/review-agent.md
     requires:
     - skill:inject-standards
-    - skill:beads
+    - skill:cognovis-beads
     tags:
     - origin:original
     - tier:domain
@@ -2624,7 +2624,7 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/agents/verification-agent.md
     requires:
     - skill:inject-standards
-    - skill:beads
+    - skill:cognovis-beads
     tags:
     - origin:original
     - tier:domain
@@ -2641,7 +2641,7 @@ library:
       Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.'
     source: https://github.com/cognovis/library-core/blob/main/agents/wave-monitor.md
     requires:
-    - skill:beads
+    - skill:cognovis-beads
     tags:
     - origin:original
     - tier:domain
@@ -2664,7 +2664,7 @@ library:
     - agent:bead-orchestrator
     - agent:quick-fix
     - skill:scenario-generator
-    - skill:beads
+    - skill:cognovis-beads
     - skill:bead-reviewer
     - skill:plan
     - skill:spec-developer
@@ -4129,7 +4129,7 @@ library:
     requires:
     - agent:codex
     - agent:review-agent
-    - skill:beads
+    - skill:cognovis-beads
     - skill:session-close
     tags:
     - origin:original

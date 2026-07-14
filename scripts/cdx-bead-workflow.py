@@ -122,7 +122,9 @@ def _resolve_beads_runtime(repo_root: Path) -> Path:
         path = Path(candidate).expanduser().resolve()
         if (path / "scripts").is_dir():
             return path
-    raise RuntimeError("skill:beads runtime not found; install via /library use beads")
+    raise RuntimeError(
+        "skill:cognovis-beads runtime not found; install via /library use cognovis-beads"
+    )
 
 
 def _run_capture(
