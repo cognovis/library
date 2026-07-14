@@ -85,7 +85,8 @@ EXPECTED_SUSSDORFF_SKILLS = {
 
 # Expected cognovis agents
 EXPECTED_COGNOVIS_AGENTS = {
-    "bead-orchestrator", "ci-monitor", "constraint-checker",
+    "bead-claim-wrapper", "bead-orchestrator", "bead-spec-reviewer", "ci-monitor",
+    "constraint-checker",
     "doc-changelog-updater", "feature-doc-updater", "holdout-validator", "implementer",
     "integration-test-runner", "learning-extractor", "pester-test-engineer",
     "plan-reviewer", "playwright-tester", "prd-generator", "quick-fix", "researcher",
@@ -159,6 +160,23 @@ def test_cognovis_agents_registered():
     _, agents, _, _ = get_registered_names(library)
     missing = EXPECTED_COGNOVIS_AGENTS - agents
     assert not missing, f"Missing cognovis agents in library.yaml: {sorted(missing)}"
+
+
+def test_regression_bead_orchestrator_installs_spec_reviewer():
+    """The full Bead Claim preflight agent must ship with its orchestrator."""
+    agents = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("agents", [])
+    }
+
+    assert "bead-spec-reviewer" in agents
+    assert "bead-claim-wrapper" in agents
+    assert "agent:bead-spec-reviewer" in agents["bead-orchestrator"].get(
+        "requires", []
+    )
+    assert "agent:bead-claim-wrapper" in agents["bead-orchestrator"].get(
+        "requires", []
+    )
 
 
 def test_sussdorff_agents_registered():

@@ -2194,6 +2194,23 @@ library:
     tags:
     - origin:original
     - tier:domain
+  - name: bead-claim-wrapper
+    description: Thin harness leaf for the canonical Bead Claim prepare and commit
+      operations. Calls typed cognovis-tools tools, captures the local Git baseline,
+      and relays structured results without deciding routing or reviewing repository
+      content. Use only when bead-orchestrator dispatches a prepare or commit boundary
+      step.
+    source: https://github.com/cognovis/library-core/blob/main/agents/bead-claim-wrapper.md
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+        plane: dev
+    tags:
+    - origin:original
+    - tier:domain
+    requires:
+    - mcp:cognovis-tools
   - name: bead-context
     description: Read-only subagent that locates the primary files, tests, symbols,
       and graph neighbors relevant to a bead. Calls the deterministic context provider
@@ -2209,29 +2226,46 @@ library:
     tags:
     - origin:original
     - tier:domain
+  - name: bead-spec-reviewer
+    description: Repository-aware, read-only reviewer for Bead Claim. Validate whether
+      a bead is implementable against the assigned worktree, project standards, ADRs,
+      source, and tests, then return structured preflight evidence. Use only when dispatched
+      by bead-orchestrator after bead_claim_prepare.
+    source: https://github.com/cognovis/library-core/blob/main/agents/bead-spec-reviewer.md
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+        plane: dev
+    tags:
+    - origin:original
+    - tier:domain
+    requires:
+    - standard:english-only
   - name: bead-orchestrator
-    description: 'Autonomous orchestrator for single-bead implementation. Runs Phase
-      0-16: sizing/claim, context, implementation (Sonnet), review (Opus, 1 fix cycle),
-      Codex adversarial, verification (Opus VETO), MoC, UAT, constraints, changelog,
-      session-close. Does NOT close beads — session-close handles closing after merge+push.'
+    description: 'Autonomous orchestrator for single-bead implementation. Runs Bead
+      Claim then the resolved quick or full workflow: prepare, repository preflight,
+      atomic claim, implementation, review, verification, MoC, UAT where required,
+      constraints, changelog, and session-close. Does NOT close beads — session-close
+      handles closing after merge+push.'
     source: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
     requires:
-    - mcp:cognovis-tools
     - agent:verification-agent
     - agent:review-agent
     - agent:fix-agent
     - agent:judge-default
     - agent:doc-changelog-updater
     - agent:feature-doc-updater
-    - agent:quick-fix
+    - agent:bead-claim-wrapper
+    - agent:bead-spec-reviewer
     - agent:bead-context
-    - skill:bead-reviewer
     - skill:beads
     - skill:plan
     - skill:impl
     - skill:compound
     - skill:inject-standards
     - mcp:open-brain
+    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core

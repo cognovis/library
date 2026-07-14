@@ -28,7 +28,12 @@ PRIMITIVE_CONTENT_TYPES: dict[str, set[str]] = {
     "standard": {"standard", "standards"},
     "guardrail": {"guardrail", "guardrails", "hook", "hooks"},
     "mcp": {"mcp", "mcp_server", "mcp_servers"},
-    "model-standard": {"model-standard", "model_standard", "model-standards", "model_standards"},
+    "model-standard": {
+        "model-standard",
+        "model_standard",
+        "model-standards",
+        "model_standards",
+    },
     "agent-base": {
         "agent-base",
         "agent_base",
@@ -146,7 +151,9 @@ def match_catalogs(
     )
 
     top_score = matches[0]["score"] if matches else 0
-    selected = [match for match in matches if match["score"] == top_score] if matches else []
+    selected = (
+        [match for match in matches if match["score"] == top_score] if matches else []
+    )
     selection_kind = "none"
     if len(selected) == 1:
         selection_kind = "top"
@@ -172,7 +179,9 @@ def match_catalogs(
     }
 
 
-def iter_source_entries(catalog_data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+def iter_source_entries(
+    catalog_data: dict[str, Any],
+) -> list[tuple[str, dict[str, Any]]]:
     """Return all registered source providers with their registry name."""
     entries: list[tuple[str, dict[str, Any]]] = []
     entries.extend(("catalogs", entry) for entry in get_catalogs(catalog_data))
@@ -226,10 +235,14 @@ def catalog_sync_plan(
             primitive_type=primitive_filter,
         )
         source_results.append(source_result)
-        for primitive_name, entries in source_result.get("entries_by_primitive", {}).items():
+        for primitive_name, entries in source_result.get(
+            "entries_by_primitive", {}
+        ).items():
             generated_by_primitive.setdefault(primitive_name, []).extend(entries)
 
-    missing_sources = sorted(selected_names - {result["name"] for result in source_results})
+    missing_sources = sorted(
+        selected_names - {result["name"] for result in source_results}
+    )
     if missing_sources:
         raise CatalogError(f"Unknown source catalog(s): {', '.join(missing_sources)}")
 
@@ -308,7 +321,9 @@ def represent_null(representer: Any, data: None) -> Any:
     return representer.represent_scalar("tag:yaml.org,2002:null", "null")
 
 
-def apply_inventory_plan(catalog_data: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
+def apply_inventory_plan(
+    catalog_data: dict[str, Any], plan: dict[str, Any]
+) -> dict[str, Any]:
     """Return catalog data with generated entries replacing matching source entries."""
     updated = deepcopy(catalog_data)
     updated.setdefault("library", {})
@@ -319,7 +334,9 @@ def apply_inventory_plan(catalog_data: dict[str, Any], plan: dict[str, Any]) -> 
         if not source_entry:
             continue
         for primitive_name in source_result.get("entries_by_primitive", {}):
-            source_entries_by_primitive.setdefault(primitive_name, []).append(source_entry)
+            source_entries_by_primitive.setdefault(primitive_name, []).append(
+                source_entry
+            )
 
     generated: dict[str, list[dict[str, Any]]] = {}
     for entry in plan.get("entries", []):
@@ -405,7 +422,9 @@ def merge_generated_entries(
     return merged_entries, matched_existing_ids
 
 
-def merge_catalog_entry(existing_entry: dict[str, Any], generated_entry: dict[str, Any]) -> dict[str, Any]:
+def merge_catalog_entry(
+    existing_entry: dict[str, Any], generated_entry: dict[str, Any]
+) -> dict[str, Any]:
     """Return a refreshed catalog row while preserving curated metadata."""
     merged = deepcopy(existing_entry)
     for key, value in generated_entry.items():
@@ -413,7 +432,10 @@ def merge_catalog_entry(existing_entry: dict[str, Any], generated_entry: dict[st
 
     if "tags" in existing_entry:
         merged["tags"] = deepcopy(existing_entry["tags"])
-    if "requires" in existing_entry:
+    if entry_is_inventory_generated(existing_entry):
+        if "requires" not in generated_entry:
+            merged.pop("requires", None)
+    elif "requires" in existing_entry:
         merged["requires"] = deepcopy(existing_entry["requires"])
 
     existing_metadata = existing_entry.get("metadata")
@@ -443,7 +465,9 @@ def deep_merge(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
 def entry_is_inventory_generated(entry: dict[str, Any]) -> bool:
     """Return True for rows previously written by convention-scan."""
     metadata = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
-    library_meta = metadata.get("library") if isinstance(metadata.get("library"), dict) else {}
+    library_meta = (
+        metadata.get("library") if isinstance(metadata.get("library"), dict) else {}
+    )
     return str(library_meta.get("inventory") or "") == "convention-scan"
 
 
@@ -573,7 +597,9 @@ def scan_standard_artifacts(standards_root: Path) -> list[Path]:
     )
 
     for child in sorted(standards_root.iterdir()):
-        if not child.is_dir() or any(part in IGNORED_PATH_PARTS for part in child.parts):
+        if not child.is_dir() or any(
+            part in IGNORED_PATH_PARTS for part in child.parts
+        ):
             continue
         if (child / "_triggers.yml").exists():
             artifacts.append(child)
@@ -606,16 +632,20 @@ def artifact_entry(
     if is_directory and not relative_path.endswith("/"):
         relative_path = f"{relative_path}/"
 
+    library_metadata = {
+        "source_catalog": source_entry.get("name", ""),
+        "inventory": "convention-scan",
+    }
+    if primitive_name in {"skill", "agent", "standard"}:
+        library_metadata["plane"] = "dev"
+
     entry: dict[str, Any] = {
         "name": name,
         "description": collapse_description(description),
-        "source": source_url(source_entry, relative_path, root, is_directory=is_directory),
-        "metadata": {
-            "library": {
-                "source_catalog": source_entry.get("name", ""),
-                "inventory": "convention-scan",
-            }
-        },
+        "source": source_url(
+            source_entry, relative_path, root, is_directory=is_directory
+        ),
+        "metadata": {"library": library_metadata},
     }
 
     tags = frontmatter.get("tags")
@@ -627,9 +657,7 @@ def artifact_entry(
     requires = frontmatter.get("requires")
     if isinstance(requires, list):
         typed_requires = [
-            str(item)
-            for item in requires
-            if isinstance(item, str) and ":" in item
+            str(item) for item in requires if isinstance(item, str) and ":" in item
         ]
         if typed_requires:
             entry["requires"] = typed_requires
@@ -641,7 +669,9 @@ def artifact_entry(
     return entry
 
 
-def default_artifact_tags(source_entry: dict[str, Any], primitive_name: str, path: Path) -> list[str]:
+def default_artifact_tags(
+    source_entry: dict[str, Any], primitive_name: str, path: Path
+) -> list[str]:
     """Return conservative tags for convention-scanned entries without tags."""
     tags: list[str] = []
     if str(source_entry.get("owner") or "") == "cognovis":
@@ -649,7 +679,9 @@ def default_artifact_tags(source_entry: dict[str, Any], primitive_name: str, pat
     if primitive_name in {"skill", "agent", "standard"}:
         tags.append("tier:domain")
     if primitive_name == "standard":
-        tags.append("category:standard-bundle" if path.is_dir() else "category:standard")
+        tags.append(
+            "category:standard-bundle" if path.is_dir() else "category:standard"
+        )
     return tags or ["inventory:convention-scan"]
 
 
@@ -691,7 +723,9 @@ def read_markdown_metadata(path: Path) -> tuple[dict[str, Any], str]:
     return frontmatter, heading
 
 
-def catalog_artifact_name(primitive_name: str, path: Path, frontmatter: dict[str, Any]) -> str:
+def catalog_artifact_name(
+    primitive_name: str, path: Path, frontmatter: dict[str, Any]
+) -> str:
     """Return the catalog name for a scanned artifact."""
     if primitive_name == "agent":
         return path.stem
@@ -742,7 +776,9 @@ def entry_belongs_to_sources(
 ) -> bool:
     """Return True if an existing catalog entry is owned by selected sources."""
     metadata = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
-    library_meta = metadata.get("library") if isinstance(metadata.get("library"), dict) else {}
+    library_meta = (
+        metadata.get("library") if isinstance(metadata.get("library"), dict) else {}
+    )
     if str(library_meta.get("source_catalog") or "") in source_names:
         return True
 
