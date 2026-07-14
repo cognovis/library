@@ -38,6 +38,7 @@ project_tooling:
       ensure: {}            # key/value pairs to enforce
       remove: []            # field names to delete
     hook_name: string       # for git_hook: git hook name (post-commit, pre-commit, etc.)
+    chain_existing: bool    # for git_hook: move a foreign hook to <hook_name>.local and chain it
     section_markers:        # for file_section/gitignore_patch: delimiter comments
       begin: string
       end: string
@@ -50,7 +51,7 @@ project_tooling:
 |-------|-------------|
 | `file` | Copies a file from library source to project target. Content-based comparison. |
 | `file_section` | Replaces a delimited section within an existing file. Uses `section_markers`. (not yet implemented in runtime) |
-| `git_hook` | Copies a shell script to `.git/hooks/<hook_name>` and sets executable bit. |
+| `git_hook` | Copies a shell script to the effective Git hooks directory and sets executable bit. The runtime honors `core.hooksPath` via `git rev-parse --git-path hooks`. |
 | `gitignore_patch` | Appends or replaces a section in `.gitignore`. Uses `section_markers`. (not yet implemented in runtime) |
 | `json_field_enforce` | Reads a JSON file, sets `fields.ensure` keys, removes `fields.remove` keys. |
 
@@ -83,6 +84,18 @@ conditions:
 | `replace_section` | Replace content between `section_markers.begin` / `.end` in target. |
 | `repair_fields` | For `json_field_enforce`: apply `ensure`/`remove` operations, skip if no change. |
 
+### git_hook chaining
+
+`chain_existing: true` is an opt-in contract for managed hook wrappers that know how
+to invoke a preserved local hook. When enabled, the sync runtime treats the canonical
+source hook's marker line as proof that a target hook is already managed. A foreign
+hook at the same target is moved aside once to `<hook_name>.local`; later syncs update
+or skip the managed wrapper without nesting, re-moving, or duplicating the sidecar.
+
+The wrapper owns composition. The sync runtime only preserves the foreign hook and
+installs the canonical wrapper. The wrapper must replay Git hook stdin and positional
+arguments to the sidecar if its own checks pass.
+
 ## How the runtime works
 
 `scripts/sync_project_tooling.py` is the runtime. It is called by the SessionStart hook
@@ -108,6 +121,20 @@ If the library is not found, the script exits 0 (non-fatal — not every machine
 
 **Idempotency:** Every sync strategy is designed to be a no-op when the target already matches
 the desired state. Running the script twice produces the same result.
+
+**Git hooks path:** For `git_hook` entries, the runtime asks Git for the effective
+hooks directory. If `core.hooksPath` redirects hooks to a custom directory, the hook is
+installed there. If Git cannot resolve or write that hooks directory, sync reports an
+error instead of silently installing into an unused `.git/hooks` path.
+
+## Security threat model for client-side hooks
+
+Managed Git hooks are cooperative client-side defense-in-depth controls. They cannot
+prevent `git push --no-verify`, direct edits to the hooks directory, or bypasses by an
+agent/user with write access to the checkout. The gitleaks pre-push hook is still useful
+because it catches accidental secret pushes early, but it is not the sole enforcement
+layer. The independent cognovis-core session-close scan tracked as clc-i5ld is a
+separate defense that does not rely on the local pre-push hook being honored.
 
 ### Running manually
 
@@ -177,12 +204,33 @@ in the SessionStart hook (which is kept for now as a safety net during migration
 Installs a `post-commit` hook that runs `bd export` after every commit, keeping the
 beads database in sync with git history automatically.
 
+### 4. gitleaks-pre-push-hook — outgoing secret scan
+
+```yaml
+- name: gitleaks-pre-push-hook
+  target_kind: git_hook
+  target_path: .git/hooks/pre-push
+  hook_name: pre-push
+  source: prime/hooks/pre-push.sh
+  chain_existing: true
+  conditions:
+    - dir_exists: .beads
+    - command_available: git
+  sync_strategy: overwrite_if_source_newer
+```
+
+Installs a managed `pre-push` wrapper that scans bounded outgoing commit ranges with
+`gitleaks git --log-opts=<range>` before allowing the push. If a foreign `pre-push`
+hook already exists, the sync runtime preserves it once as `pre-push.local`; the
+managed wrapper runs gitleaks first and invokes the sidecar exactly once only after the
+scan succeeds.
+
 ## Adding a new target
 
 1. Create the source file in the library (if `target_kind` requires one — `file`, `git_hook`, etc.).
 2. Add an entry to `library.yaml` under `project_tooling:` following the schema.
-3. Run `python3 scripts/validate-library.py` to confirm the schema is satisfied.
-4. Run `python3 -m pytest tests/test_project_tooling.py -v` to verify existing tests still pass.
+3. Run `uv run python scripts/validate-library.py` to confirm the schema is satisfied.
+4. Run `uv run python -m pytest tests/test_project_tooling.py -v` to verify existing tests still pass.
 5. Add a test case in `tests/test_project_tooling.py` for your new entry if it has non-trivial
    behavior (new conditions, new sync strategy, new target_kind).
 6. Commit with the `feat(CL-xxx):` prefix for the relevant bead.

@@ -167,6 +167,36 @@ def test_schema_accepts_canonical_sources_section() -> None:
     _assert_valid(data, "canonical sources")
 
 
+def test_schema_accepts_project_tooling_chain_existing_contract() -> None:
+    """The project_tooling information model accepts chain_existing for git hooks."""
+    data = _minimal_catalog()
+    data["project_tooling"] = [
+        {
+            "name": "gitleaks-pre-push-hook",
+            "description": "Installs the managed gitleaks pre-push hook.",
+            "target_kind": "git_hook",
+            "target_path": ".git/hooks/pre-push",
+            "hook_name": "pre-push",
+            "source": "prime/hooks/pre-push.sh",
+            "chain_existing": True,
+        }
+    ]
+
+    _assert_valid(data, "project_tooling chain_existing contract")
+
+
+def test_library_yaml_declares_managed_pre_push_hook() -> None:
+    """The checked-in catalog declares the managed chain-safe pre-push hook."""
+    data = yaml.safe_load(LIBRARY_PATH.read_text())
+    entry = next(item for item in data["project_tooling"] if item["name"] == "gitleaks-pre-push-hook")
+
+    assert entry["target_kind"] == "git_hook"
+    assert entry["target_path"] == ".git/hooks/pre-push"
+    assert entry["hook_name"] == "pre-push"
+    assert entry["source"] == "prime/hooks/pre-push.sh"
+    assert entry["chain_existing"] is True
+
+
 def test_loader_reads_canonical_primitive_sections() -> None:
     """Runtime lookup reads the canonical library.* primitive sections."""
     data = _minimal_catalog(

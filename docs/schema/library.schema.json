@@ -1898,6 +1898,11 @@
           "description": "For git_hook target_kind: the git hook name (e.g. post-commit, pre-commit, pre-push).",
           "type": "string"
         },
+        "chain_existing": {
+          "description": "For git_hook target_kind: when true, preserve a pre-existing non-managed hook as <hook_name>.local and let the managed wrapper chain it. Default false.",
+          "type": "boolean",
+          "default": false
+        },
         "section_markers": {
           "description": "For file_section and gitignore_patch target_kinds: begin/end comment markers that delimit the managed section.",
           "type": "object",

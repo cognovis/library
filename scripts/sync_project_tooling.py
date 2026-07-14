@@ -41,6 +41,8 @@ _SEARCH_PATHS = [
     Path.home() / "cognovis-library",
 ]
 
+_CHAIN_EXISTING_MARKER = b"# managed-by: cognovis-library chain_existing (CL-rkww)"
+
 
 def find_library_root() -> Path | None:
     """Find the cognovis-library root directory.
@@ -70,35 +72,30 @@ def find_project_root() -> Path:
 
 
 def resolve_hooks_dir(project_root: Path) -> Path | None:
-    """Resolve the real git hooks directory, handling worktrees where .git is a file.
+    """Resolve the effective git hooks directory for project_root.
 
-    In a git worktree, .git is a plain file (not a directory) pointing to the
-    worktree-specific gitdir.  We must install hooks into the *common* git dir
-    (the main worktree's .git/hooks/) so they apply to every worktree.
-
-    Returns the resolved hooks Path, or None if project_root is not a git repo.
+    `git rev-parse --git-path hooks` honors core.hooksPath and worktree-specific
+    gitdir layouts. Returns the resolved hooks Path, or None if Git cannot
+    resolve an effective hooks directory for project_root.
     """
-    git_path = project_root / ".git"
-    if not git_path.exists():
-        return None
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"],
+            ["git", "rev-parse", "--git-path", "hooks"],
             capture_output=True,
             text=True,
             cwd=str(project_root),
         )
         if result.returncode == 0:
-            common_dir = result.stdout.strip()
-            # common_dir may be absolute or relative to project_root
-            common_path = Path(common_dir)
-            if not common_path.is_absolute():
-                common_path = (project_root / common_path).resolve()
-            return common_path / "hooks"
+            hooks_dir = result.stdout.strip()
+            if not hooks_dir:
+                return None
+            hooks_path = Path(hooks_dir)
+            if not hooks_path.is_absolute():
+                hooks_path = (project_root / hooks_path).resolve()
+            return hooks_path
     except (OSError, subprocess.SubprocessError):
         pass
-    # Fallback: direct .git/hooks (works for regular repos)
-    return project_root / ".git" / "hooks"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -189,9 +186,9 @@ def sync_git_hook(
 ) -> str:
     """Handle target_kind=git_hook.
 
-    Writes the hook file to the common git hooks directory and makes it executable.
-    In worktrees, .git is a file — hooks are always installed in the main worktree's
-    .git/hooks/ (the git common dir) so they apply to every worktree.
+    Writes the hook file to the effective git hooks directory and makes it executable.
+    When chain_existing is true, a non-managed hook at the target path is moved
+    aside once to <hook_name>.local before installing the managed wrapper.
     Returns: 'synced', 'skipped', or 'error:<msg>'
     """
     source_rel = entry.get("source")
@@ -205,25 +202,77 @@ def sync_git_hook(
     # Resolve the real hooks directory, handling worktrees where .git is a file.
     hooks_dir = resolve_hooks_dir(project_root)
     if hooks_dir is None:
-        return "error:not a git repository (no .git found)"
+        return "error:cannot resolve effective git hooks directory"
 
     # Derive hook filename from the target_path basename and place it in hooks_dir.
-    hook_name = Path(entry["target_path"]).name
+    hook_name = entry.get("hook_name") or Path(entry["target_path"]).name
     target_path = hooks_dir / hook_name
-    target_path.parent.mkdir(parents=True, exist_ok=True)
 
     source_content = source_path.read_bytes()
     strategy = entry.get("sync_strategy", "overwrite_if_source_newer")
+    chain_existing = bool(entry.get("chain_existing", False))
 
-    if strategy != "overwrite_always" and target_path.is_file():
-        existing = target_path.read_bytes()
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return f"error:cannot create hooks directory {target_path.parent}: {exc}"
+
+    if not target_path.parent.is_dir():
+        return f"error:hooks path is not a directory: {target_path.parent}"
+
+    if chain_existing:
+        if _CHAIN_EXISTING_MARKER not in source_content:
+            return "error:chain_existing hook source missing managed marker"
+        status = _prepare_chained_hook_target(target_path, hook_name)
+        if status.startswith("error:"):
+            return status
+
+    if strategy != "overwrite_always" and (target_path.exists() or target_path.is_symlink()):
+        try:
+            existing = target_path.read_bytes()
+        except OSError as exc:
+            return f"error:cannot read existing hook {target_path}: {exc}"
         if existing == source_content:
-            # Still ensure executable bit is set
-            _ensure_executable(target_path)
+            try:
+                _ensure_executable(target_path)
+            except OSError as exc:
+                return f"error:cannot chmod hook {target_path}: {exc}"
             return "skipped"
 
-    target_path.write_bytes(source_content)
-    _ensure_executable(target_path)
+    try:
+        target_path.write_bytes(source_content)
+        _ensure_executable(target_path)
+    except OSError as exc:
+        return f"error:cannot write hook {target_path}: {exc}"
+
+    return "synced"
+
+
+def _prepare_chained_hook_target(target_path: Path, hook_name: str) -> str:
+    """Move a foreign hook aside once so a managed wrapper can chain it."""
+    if not (target_path.exists() or target_path.is_symlink()):
+        return "skipped"
+
+    try:
+        existing = target_path.read_bytes()
+    except OSError as exc:
+        return f"error:cannot read existing hook {target_path}: {exc}"
+
+    if _CHAIN_EXISTING_MARKER in existing:
+        return "skipped"
+
+    sidecar_path = target_path.with_name(f"{hook_name}.local")
+    if sidecar_path.exists() or sidecar_path.is_symlink():
+        return (
+            "error:foreign hook exists at target and preserved sidecar already exists: "
+            f"{target_path} -> {sidecar_path}"
+        )
+
+    try:
+        target_path.rename(sidecar_path)
+    except OSError as exc:
+        return f"error:cannot preserve existing hook {target_path}: {exc}"
+
     return "synced"
 
 
