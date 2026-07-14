@@ -17,7 +17,9 @@ SCHEMA_PATH = REPO_ROOT / "docs" / "schema" / "library.schema.json"
 LIBRARY_PATH = REPO_ROOT / "library.yaml"
 
 
-def run_library(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+def run_library(
+    *args: str, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run library.py and return the completed process."""
     return subprocess.run(
         [sys.executable, str(LIBRARY_PY), *args],
@@ -160,7 +162,9 @@ def test_catalog_sync_scans_only_top_level_skill_dirs(tmp_path: Path) -> None:
     (real_skill / "skill.md").write_text(
         "---\nname: real-skill\ndescription: Real lowercase skill.\n---\n# Real Skill\n"
     )
-    fixture_skill = source_root / "skills" / "owner" / "tests" / "fixtures" / "skills" / "my-skill"
+    fixture_skill = (
+        source_root / "skills" / "owner" / "tests" / "fixtures" / "skills" / "my-skill"
+    )
     fixture_skill.mkdir(parents=True)
     (fixture_skill / "SKILL.md").write_text(
         "---\nname: my-skill\ndescription: Fixture skill.\n---\n# Fixture Skill\n"
@@ -183,7 +187,9 @@ def test_catalog_sync_scans_only_top_level_skill_dirs(tmp_path: Path) -> None:
     assert data["entries"][0]["source"].endswith("/skills/real-skill/skill.md")
 
 
-def test_catalog_sync_uses_agent_file_stem_over_frontmatter_name(tmp_path: Path) -> None:
+def test_catalog_sync_uses_agent_file_stem_over_frontmatter_name(
+    tmp_path: Path,
+) -> None:
     source_root = tmp_path / "source"
     agent_dir = source_root / "agents"
     agent_dir.mkdir(parents=True)
@@ -286,6 +292,58 @@ def test_catalog_sync_write_refreshes_generated_entries(tmp_path: Path) -> None:
     assert names == ["python-uv"]
 
 
+def test_regression_catalog_sync_refreshes_generated_agent_dependencies(
+    tmp_path: Path,
+) -> None:
+    """Generated requires must not stay stale when an agent contract changes."""
+    source_root = tmp_path / "source"
+    agents_dir = source_root / "agents"
+    agents_dir.mkdir(parents=True)
+    (agents_dir / "bead-orchestrator.md").write_text(
+        "---\nname: bead-orchestrator\ndescription: Orchestrates beads.\n"
+        "requires:\n  - agent:bead-spec-reviewer\n---\n# Bead Orchestrator\n"
+    )
+    (agents_dir / "bead-spec-reviewer.md").write_text(
+        "---\nname: bead-spec-reviewer\ndescription: Reviews bead specs.\n"
+        "---\n# Bead Spec Reviewer\n"
+    )
+    catalog = (
+        minimal_library(source_root)
+        .replace("        - standards", "        - standards\n        - agents", 1)
+        .replace(
+            "  agents: []",
+            "  agents:\n"
+            "    - name: bead-orchestrator\n"
+            "      description: Stale orchestrator.\n"
+            "      source: https://github.com/example/core/blob/main/agents/bead-orchestrator.md\n"
+            "      requires:\n"
+            "        - agent:bead-context\n"
+            "      metadata:\n"
+            "        library:\n"
+            "          source_catalog: test-core\n"
+            "          inventory: convention-scan",
+        )
+    )
+    (tmp_path / "library.yaml").write_text(catalog)
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=agent",
+        "--write",
+        "--json",
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0, result.stderr
+    refreshed = yaml.safe_load((tmp_path / "library.yaml").read_text())
+    agents = {entry["name"]: entry for entry in refreshed["library"]["agents"]}
+    assert set(agents) == {"bead-orchestrator", "bead-spec-reviewer"}
+    assert agents["bead-spec-reviewer"]["metadata"]["library"]["plane"] == "dev"
+    assert agents["bead-orchestrator"]["requires"] == ["agent:bead-spec-reviewer"]
+
+
 def test_catalog_sync_write_preserves_curated_source_entries(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     standards_dir = source_root / "standards"
@@ -326,11 +384,15 @@ def test_catalog_sync_write_preserves_curated_source_entries(tmp_path: Path) -> 
     assert by_name["curated-standard"]["tags"] == ["curated"]
 
 
-def test_catalog_sync_write_does_not_add_name_collision_against_kept_entries(tmp_path: Path) -> None:
+def test_catalog_sync_write_does_not_add_name_collision_against_kept_entries(
+    tmp_path: Path,
+) -> None:
     source_root = tmp_path / "source"
     standards_dir = source_root / "standards"
     standards_dir.mkdir(parents=True)
-    (standards_dir / "agentic-primitives.md").write_text("# Source Agentic Primitives\n")
+    (standards_dir / "agentic-primitives.md").write_text(
+        "# Source Agentic Primitives\n"
+    )
     catalog = minimal_library(source_root).replace(
         "    - name: old-python-uv\n"
         "      description: Old generated entry.\n"
@@ -359,7 +421,10 @@ def test_catalog_sync_write_does_not_add_name_collision_against_kept_entries(tmp
     standards = refreshed["library"]["standards"]
 
     assert [entry["name"] for entry in standards] == ["agentic-primitives"]
-    assert standards[0]["source"] == "https://github.com/example/platform/blob/main/standards/agentic-primitives.md"
+    assert (
+        standards[0]["source"]
+        == "https://github.com/example/platform/blob/main/standards/agentic-primitives.md"
+    )
 
 
 def test_catalog_sync_scans_standard_bundles_and_leaf_standards(tmp_path: Path) -> None:
@@ -392,7 +457,9 @@ def test_catalog_sync_scans_standard_bundles_and_leaf_standards(tmp_path: Path) 
     assert "README" not in by_name
 
 
-def test_catalog_sync_write_preserves_remote_only_marketplace_entries(tmp_path: Path) -> None:
+def test_catalog_sync_write_preserves_remote_only_marketplace_entries(
+    tmp_path: Path,
+) -> None:
     source_root = tmp_path / "source"
     skill_dir = source_root / "skills" / "local-skill"
     skill_dir.mkdir(parents=True)
@@ -446,7 +513,9 @@ library:
 """
     (tmp_path / "library.yaml").write_text(catalog)
 
-    result = run_library("catalog", "sync", "--primitive-type=skill", "--write", "--json", cwd=tmp_path)
+    result = run_library(
+        "catalog", "sync", "--primitive-type=skill", "--write", "--json", cwd=tmp_path
+    )
     assert result.returncode == 0, result.stderr
     refreshed = yaml.safe_load((tmp_path / "library.yaml").read_text())
     names = {entry["name"] for entry in refreshed["library"]["skills"]}
