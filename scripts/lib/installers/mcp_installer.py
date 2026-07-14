@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,14 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
 _WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "antigravity", "cursor"]
 # Full set for an "all" install: writable configs plus URL-only (manual) harnesses.
 _ALL_MCP_HARNESSES = _WRITABLE_MCP_HARNESSES + ["claude_ai", "claude_ios"]
+
+
+@dataclass(frozen=True)
+class McpDeployCheckout:
+    """Immutable identity of the clean checkout selected for deployment."""
+
+    path: Path
+    source_revision: str | None
 
 
 def _snapshot_config(path: Path) -> str | None:
@@ -275,7 +284,7 @@ def ensure_mcp_deploy_clone(
     mcp_subdir: str,
     deploy_path: Path,
     dry_run: bool = False,
-) -> Path:
+) -> McpDeployCheckout:
     """Clone or update the MCP server source repo to the deploy path and verify launchability.
 
     This implements the ADR-0002 deploy-clone model for MCP servers: the source repo is
@@ -286,10 +295,10 @@ def ensure_mcp_deploy_clone(
         clone_url: Git clone URL for the source repo.
         mcp_subdir: Path within the repo to the MCP server (must contain pyproject.toml).
         deploy_path: Local filesystem path where the repo is cloned.
-        dry_run: If True, skip cloning and return deploy_path without mutation.
+        dry_run: If True, skip cloning and return the planned path without mutation.
 
     Returns:
-        deploy_path (same as input) on success.
+        The deploy path and its exact checked-out source revision on success.
 
     Raises:
         InstallError: When the clone fails, or when mcp_subdir/pyproject.toml is missing
@@ -297,11 +306,12 @@ def ensure_mcp_deploy_clone(
     """
     if dry_run:
         # Dry-run: report the planned clone without touching the filesystem
-        return deploy_path
+        return McpDeployCheckout(path=deploy_path, source_revision=None)
 
     # If the deploy path already has a .git dir, update in place instead of cloning
     git_dir = deploy_path / ".git"
     if git_dir.is_dir():
+        _ensure_deploy_checkout_clean(deploy_path)
         # Repo already present — pull latest
         result = subprocess.run(
             ["git", "-C", str(deploy_path), "pull", "--ff-only", "--quiet"],
@@ -342,7 +352,50 @@ def ensure_mcp_deploy_clone(
             f"No harness registration will be written."
         )
 
-    return deploy_path
+    return McpDeployCheckout(
+        path=deploy_path,
+        source_revision=verify_deploy_checkout(deploy_path),
+    )
+
+
+def _ensure_deploy_checkout_clean(deploy_path: Path) -> None:
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(deploy_path),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise InstallError(f"Cannot inspect MCP deploy checkout at {deploy_path}: {detail}")
+    if result.stdout.strip():
+        raise InstallError(
+            f"MCP deploy checkout at {deploy_path} is not clean; refusing to deploy "
+            "a runtime whose source revision cannot be reproduced."
+        )
+
+
+def verify_deploy_checkout(deploy_path: Path) -> str:
+    """Return HEAD for a clean deploy checkout, failing closed on ambiguity."""
+    _ensure_deploy_checkout_clean(deploy_path)
+    result = subprocess.run(
+        ["git", "-C", str(deploy_path), "rev-parse", "--verify", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    revision = result.stdout.strip()
+    if result.returncode != 0 or not re.fullmatch(r"[0-9a-fA-F]{40,64}", revision):
+        detail = result.stderr.strip() or revision or "no revision returned"
+        raise InstallError(
+            f"Cannot resolve the exact MCP deploy revision at {deploy_path}: {detail}"
+        )
+    return revision.lower()
 
 
 def install_mcp(
@@ -368,15 +421,23 @@ def install_mcp(
     marketplace = resolve_marketplace(catalog, entry)
     supervised = entry.get("supervised_local_service")
     project_path = None
+    deploy_revision: str | None = None
 
     clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, mcp_name)
     if clone_url and deploy_path:
-        deploy_path = ensure_mcp_deploy_clone(
+        checkout = ensure_mcp_deploy_clone(
             clone_url=clone_url,
             mcp_subdir=mcp_subdir or "",
             deploy_path=deploy_path,
             dry_run=dry_run,
         )
+        if isinstance(checkout, McpDeployCheckout):
+            deploy_path = checkout.path
+            deploy_revision = checkout.source_revision
+        else:
+            # Compatibility for third-party installer wrappers that still
+            # return the pre-identity Path result.
+            deploy_path = checkout
         project_path = _project_path_from_deploy(deploy_path, mcp_subdir)
 
     harnesses = _selected_mcp_harnesses(entry, harness)
@@ -494,7 +555,12 @@ def install_mcp(
             snapshots.setdefault(path, _snapshot_config(path))
 
         if supervised and project_path and not rollback_stdio:
-            service_info = ensure_supervised_service(entry, project_path, dry_run=False)
+            service_info = ensure_supervised_service(
+                entry,
+                project_path,
+                expected_revision=deploy_revision,
+                dry_run=False,
+            )
 
         install_block = entry.get("install", {}) or {}
         mcp_block = install_block.get("mcp", {}) or {}
@@ -532,7 +598,9 @@ def install_mcp(
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         lock_data = load_lockfile(lockfile_path)
         source_str = entry.get("source") or f"mcp:{mcp_name}"
-        source_commit = _resolve_source_commit(mcp_name, entry.get("source"))
+        source_commit = deploy_revision or _resolve_source_commit(
+            mcp_name, entry.get("source")
+        )
         lockfile_entry = make_entry(
             name=mcp_name,
             primitive_type="mcp",
@@ -560,6 +628,7 @@ def install_mcp(
                 "installed_harnesses": installed_harnesses,
                 "retired_registrations_removed": retired_registrations_removed,
                 "deploy_path": str(deploy_path) if deploy_path else None,
+                "source_revision": deploy_revision,
                 "service": service_info,
                 "transport": "stdio" if rollback_stdio else "http",
             },

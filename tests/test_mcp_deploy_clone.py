@@ -4,9 +4,9 @@ test_mcp_deploy_clone.py — Regression tests for MCP server deploy-clone-before
 (CL-4av7).
 
 Tests:
-1. ensure_mcp_deploy_clone returns deploy_path when subdir has pyproject.toml
+1. ensure_mcp_deploy_clone returns a clean checkout identity when launchable
 2. ensure_mcp_deploy_clone raises InstallError when subdir missing pyproject.toml
-3. ensure_mcp_deploy_clone in dry_run mode returns path without cloning
+3. ensure_mcp_deploy_clone in dry_run mode returns a planned checkout identity
 4. ensure_mcp_deploy_clone raises InstallError when git clone fails
 5. install_mcp does not write registration when clone fails (no dangling registration)
 6. install_mcp writes registration after successful ensure_mcp_deploy_clone
@@ -34,6 +34,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from lib.errors import InstallError  # noqa: E402
 from lib.installers.mcp_installer import (  # noqa: E402
+    McpDeployCheckout,
     _derive_deploy_path,
     _project_path_from_deploy,
     ensure_mcp_deploy_clone,
@@ -41,11 +42,14 @@ from lib.installers.mcp_installer import (  # noqa: E402
 )
 
 
+REVISION = "a" * 40
+
+
 class TestEnsureMcpDeployClone:
     """Unit tests for ensure_mcp_deploy_clone helper."""
 
     def test_returns_deploy_path_when_subdir_has_pyproject(self, tmp_path):
-        """ensure_mcp_deploy_clone returns deploy_path when repo+subdir already present."""
+        """The deploy result binds a clean checkout path to its exact revision."""
         deploy_path = tmp_path / "cognovis-library-core"
         subdir = deploy_path / "mcp-servers" / "cognovis-tools"
         subdir.mkdir(parents=True)
@@ -54,14 +58,22 @@ class TestEnsureMcpDeployClone:
         (deploy_path / ".git").mkdir()
 
         with patch("subprocess.run") as run:
-            run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            run.side_effect = [
+                MagicMock(returncode=0, stdout="", stderr=""),
+                MagicMock(returncode=0, stdout="", stderr=""),
+                MagicMock(returncode=0, stdout="", stderr=""),
+                MagicMock(returncode=0, stdout=f"{REVISION}\n", stderr=""),
+            ]
             result = ensure_mcp_deploy_clone(
                 clone_url="https://github.com/cognovis/library-core.git",
                 mcp_subdir="mcp-servers/cognovis-tools",
                 deploy_path=deploy_path,
                 dry_run=False,
             )
-        assert result == deploy_path
+        assert result == McpDeployCheckout(
+            path=deploy_path,
+            source_revision=REVISION,
+        )
 
     def test_update_failure_refuses_stale_existing_clone(self, tmp_path):
         deploy_path = tmp_path / "cognovis-library-core"
@@ -71,11 +83,14 @@ class TestEnsureMcpDeployClone:
         (deploy_path / ".git").mkdir()
 
         with patch("subprocess.run") as run:
-            run.return_value = MagicMock(
-                returncode=1,
-                stdout="",
-                stderr="local changes would be overwritten",
-            )
+            run.side_effect = [
+                MagicMock(returncode=0, stdout="", stderr=""),
+                MagicMock(
+                    returncode=1,
+                    stdout="",
+                    stderr="local changes would be overwritten",
+                ),
+            ]
             with pytest.raises(InstallError, match="potentially stale runtime"):
                 ensure_mcp_deploy_clone(
                     clone_url="https://github.com/cognovis/library-core.git",
@@ -102,7 +117,7 @@ class TestEnsureMcpDeployClone:
                 )
 
     def test_dry_run_returns_path_without_cloning(self, tmp_path):
-        """ensure_mcp_deploy_clone in dry-run mode returns the deploy_path without cloning."""
+        """Dry-run returns a planned path without inventing a revision."""
         deploy_path = tmp_path / "cognovis-library-core"
         # deploy_path does NOT exist — dry-run must not clone
 
@@ -112,7 +127,7 @@ class TestEnsureMcpDeployClone:
             deploy_path=deploy_path,
             dry_run=True,
         )
-        assert result == deploy_path
+        assert result == McpDeployCheckout(path=deploy_path, source_revision=None)
         assert not deploy_path.exists()  # no clone happened
 
     def test_raises_install_error_on_clone_failure(self, tmp_path):

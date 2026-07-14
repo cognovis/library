@@ -353,6 +353,38 @@ def test_service_before_registration(mock_clone, tmp_env):
     assert claude["mcpServers"]["cognovis-tools"]["url"] == HTTP_URL
 
 
+def test_regression_restart_rejects_stale_runtime_revision(
+    tmp_env: dict[str, object],
+) -> None:
+    from lib.installers.mcp_supervised_service import ensure_supervised_service
+
+    entry = tmp_env["catalog"]["library"]["mcp_servers"][0]
+    with patch(
+        "lib.installers.mcp_supervised_service.service_status",
+        side_effect=[
+            {
+                "state": "healthy",
+                "instance_id": "instance-a",
+                "source_revision": "old-revision",
+            },
+            {
+                "state": "healthy",
+                "instance_id": "instance-b",
+                "source_revision": "stale-revision",
+            },
+        ],
+    ), patch(
+        "lib.installers.mcp_supervised_service.run_argv_command",
+        return_value=MagicMock(returncode=0, stdout="", stderr=""),
+    ):
+        with pytest.raises(InstallError, match="expected source revision"):
+            ensure_supervised_service(
+                entry,
+                tmp_env["project_path"],
+                expected_revision="expected-revision",
+            )
+
+
 @patch("lib.installers.mcp_installer.ensure_mcp_deploy_clone")
 def test_service_failure_writes_no_registration(mock_clone, tmp_env):
     mock_clone.return_value = tmp_env["deploy_path"]
