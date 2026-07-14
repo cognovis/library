@@ -2155,8 +2155,18 @@ def main(argv: list[str] | None = None) -> int:
 
     # Top-level status (cross-primitive, no clone)
     if args.primitive == "status":
+        try:
+            catalog_root = _resolve_catalog_root()
+            catalog = load_catalog(catalog_root)
+        except LibraryError as exc:
+            use_json = getattr(args, "json", False)
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
         repo_root = _resolve_lifecycle_project_root(args)
-        return cmd_status(args, repo_root, {})
+        return cmd_status(args, repo_root, catalog)
 
     # Top-level installed (cross-primitive, no catalog required unless diffing)
     if args.primitive == "installed":
