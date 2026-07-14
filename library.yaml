@@ -1794,6 +1794,7 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
     requires:
     - skill:cognovis-beads
+    - skill:worktree-cleanup
     tags:
     - origin:original
     - tier:core
