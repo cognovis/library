@@ -3859,10 +3859,12 @@ library:
           snippet:
             type: http
             url: http://127.0.0.1:8765/mcp
+            timeout: 3900000
         codex:
           config_path: ~/.codex/config.toml
           snippet:
             url: http://127.0.0.1:8765/mcp
+            tool_timeout_sec: 3900.0
         cursor:
           config_path: ~/.cursor/mcp.json
           snippet:

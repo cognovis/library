@@ -396,8 +396,15 @@ def test_library_yaml_declares_three_exact_http_snippets():
         item for item in library["library"]["mcp_servers"] if item["name"] == "cognovis-tools"
     )
     snippets = entry["install"]["mcp"]
-    assert snippets["claude_code"]["snippet"] == {"type": "http", "url": HTTP_URL}
-    assert snippets["codex"]["snippet"] == {"url": HTTP_URL}
+    assert snippets["claude_code"]["snippet"] == {
+        "type": "http",
+        "url": HTTP_URL,
+        "timeout": 3_900_000,
+    }
+    assert snippets["codex"]["snippet"] == {
+        "url": HTTP_URL,
+        "tool_timeout_sec": 3_900.0,
+    }
     assert snippets["cursor"]["snippet"] == {"type": "http", "url": HTTP_URL}
     assert set(snippets) == {"claude_code", "codex", "cursor"}
     assert entry["capabilities"]["stateless"] is False
