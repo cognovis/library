@@ -239,11 +239,66 @@ class TestInstallMcp(unittest.TestCase):
         )
         url = "http://127.0.0.1:8765/mcp"
         snippets = entry["install"]["mcp"]
-        self.assertEqual(snippets["claude_code"]["snippet"], {"type": "http", "url": url})
-        self.assertEqual(snippets["codex"]["snippet"], {"url": url})
+        self.assertEqual(
+            snippets["claude_code"]["snippet"],
+            {"type": "http", "url": url, "timeout": 3_900_000},
+        )
+        self.assertEqual(
+            snippets["codex"]["snippet"],
+            {"url": url, "tool_timeout_sec": 3_900.0},
+        )
         self.assertEqual(snippets["cursor"]["snippet"], {"type": "http", "url": url})
         self.assertEqual(set(snippets), {"claude_code", "codex", "cursor"})
         self.assertIn("supervised_local_service", entry)
+
+    def test_cognovis_tools_refresh_restores_client_timeouts(self):
+        origin = "library:mcp:cognovis-tools"
+        url = "http://127.0.0.1:8765/mcp"
+
+        self.claude_settings.parent.mkdir(parents=True, exist_ok=True)
+        self.claude_settings.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "cognovis-tools": {
+                            "type": "http",
+                            "url": url,
+                            "_origin": origin,
+                        }
+                    }
+                }
+            )
+        )
+        self.codex_config.parent.mkdir(parents=True, exist_ok=True)
+        self.codex_config.write_text(
+            '[mcp_servers.cognovis-tools]\n'
+            f'url = "{url}"\n'
+            f'_origin = "{origin}"\n'
+        )
+
+        claude_result = run_install_mcp(
+            "cognovis-tools", "--harness", "claude_code", env_overrides=self.env
+        )
+        codex_result = run_install_mcp(
+            "cognovis-tools", "--harness", "codex", env_overrides=self.env
+        )
+
+        self.assertEqual(claude_result.returncode, 0, claude_result.stderr)
+        self.assertEqual(codex_result.returncode, 0, codex_result.stderr)
+        claude = json.loads(self.claude_settings.read_text())
+        self.assertEqual(
+            claude["mcpServers"]["cognovis-tools"]["timeout"], 3_900_000
+        )
+        try:
+            import tomllib
+        except ImportError:
+            self.skipTest("tomllib required (Python 3.11+)")
+        with self.codex_config.open("rb") as config_file:
+            codex = tomllib.load(config_file)
+        self.assertEqual(
+            codex["mcp_servers"]["cognovis-tools"]["tool_timeout_sec"],
+            3_900.0,
+        )
 
     def test_cognovis_tools_does_not_declare_retired_harness(self):
         result = run_install_mcp(
