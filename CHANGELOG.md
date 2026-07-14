@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- *(CL-vwth, Library CLI)* Library MCP sync now owns its Python runtime dependencies through PEP 723, including `tomlkit`, and every user-facing invocation activates that environment with `uv run --script`. Harness installer exceptions retain their concrete cause instead of collapsing to a generic non-zero result. Related harness regressions found by the full suite were fixed inline: agent-base project discovery stops at Git boundaries, catalog coverage reflects the disabled `op-credentials` skill and the approved Polaris source, and personal-migration evidence is hermetic.
 - *(CL-fxeb, CI/catalog)* Restore the scheduled source-URL liveness gate by removing two catalog entries whose upstream primitives were intentionally retired, and retry transient GitHub API 5xx responses with bounded backoff while permanent 4xx failures still fail fast.
 - *(CL-6n0a, cld/cdx)* Route-profile authority is now parameter-only in `bin/cld` and `bin/cdx`: explicit
   `--route-profile` values and launcher defaults are passed to Phase 0 as CLI parameters, while inherited

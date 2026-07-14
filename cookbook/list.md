@@ -18,10 +18,10 @@ For machine-readable output, use the CLI directly:
 
 ```bash
 # List skills in JSON (for agent processing):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill list --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py skill list --json
 
 # List standards as human-readable table:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard list
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py standard list
 ```
 
 The CLI reads `library.yaml` and returns stable JSON. Use the steps below when

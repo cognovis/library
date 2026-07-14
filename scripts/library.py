@@ -1,9 +1,19 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "jsonschema>=4.0",
+#     "mcp>=1.27.1,<2",
+#     "pyyaml>=6.0",
+#     "ruamel.yaml>=0.18",
+#     "tomlkit>=0.13",
+# ]
+# ///
 """
 library.py — Deterministic library engine CLI.
 
 Canonical command grammar:
-  python3 scripts/library.py <primitive> <verb> [name-or-query] [options]
+  uv run --script scripts/library.py <primitive> <verb> [name-or-query] [options]
 
 Supported primitives: skill, agent, prompt, script, standard, guardrail, mcp,
                       model-standard, agent-base, workflow
@@ -27,14 +37,14 @@ Exit codes:
   5  (reserved for future use)
 
 Usage examples:
-  python3 scripts/library.py skill list
-  python3 scripts/library.py skill list --json
-  python3 scripts/library.py standard use english-only --scope global
-  python3 scripts/library.py skill use dolt --dry-run --json
-  python3 scripts/library.py skill use dolt --symlink --json
-  python3 scripts/library.py search firecrawl
-  python3 scripts/library.py catalog match --primitive-type=standard --topics=python,uv --writable-only
-  python3 scripts/library.py installed --diff-catalog
+  uv run --script scripts/library.py skill list
+  uv run --script scripts/library.py skill list --json
+  uv run --script scripts/library.py standard use english-only --scope global
+  uv run --script scripts/library.py skill use dolt --dry-run --json
+  uv run --script scripts/library.py skill use dolt --symlink --json
+  uv run --script scripts/library.py search firecrawl
+  uv run --script scripts/library.py catalog match --primitive-type=standard --topics=python,uv --writable-only
+  uv run --script scripts/library.py installed --diff-catalog
 """
 
 from __future__ import annotations
@@ -89,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="library.py",
         description=(
             "Deterministic library engine — manages skills, agents, standards, and more.\n\n"
-            "Canonical grammar: python3 scripts/library.py <primitive> <verb> [name] [options]\n\n"
+            "Canonical grammar: uv run --script scripts/library.py <primitive> <verb> [name] [options]\n\n"
             f"Supported primitives: {', '.join(VALID_PRIMITIVES)}\n"
             f"Supported verbs: {', '.join(VALID_VERBS)}"
         ),

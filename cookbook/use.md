@@ -21,16 +21,16 @@ For all installs, prefer the deterministic CLI:
 
 ```bash
 # Preview planned writes without mutation:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --dry-run --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --dry-run --json
 
 # Real install (any primitive):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --json
 
 # Real install with global scope:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --scope global --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --scope global --json
 
 # Install with specific harness (agent / prompt / model-standard / agent-base):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py agent use <name> --harness claude_code --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py agent use <name> --harness claude_code --json
 ```
 
 The CLI handles the three-layer cache model, symlink creation, Claude bridge,

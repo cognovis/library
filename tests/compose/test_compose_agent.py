@@ -13,9 +13,9 @@ Tests:
   7. Layer separators are present in composed output
 
 Run with:
-    python3 -m pytest tests/compose/test_compose_agent.py -v
+    uv run pytest tests/compose/test_compose_agent.py -v
   or:
-    python3 tests/compose/test_compose_agent.py
+    uv run tests/compose/test_compose_agent.py
 """
 
 import os
@@ -23,6 +23,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -212,14 +214,31 @@ def test_compose_accepts_legacy_agent_base_extends(tmp_path):
     print("PASS test_compose_accepts_legacy_agent_base_extends")
 
 
-def test_compose_finds_legacy_global_agent_base_dir(tmp_path):
+@pytest.mark.parametrize("git_marker_kind", ["directory", "worktree_file"])
+def test_compose_finds_legacy_global_agent_base_dir(tmp_path, git_marker_kind):
     """Composer finds a Layer 1 base when only ~/.agents/golden-prompts exists."""
+    ancestor = tmp_path / "ancestor"
+    ancestor_base_dir = ancestor / ".agents" / "agent-bases"
+    ancestor_base_dir.mkdir(parents=True)
+    (ancestor_base_dir / "cognovis-base.md").write_text(
+        "---\nname: cognovis-base\n---\n\nANCESTOR_AGENT_BASE_MARKER\n"
+    )
+
+    repo = ancestor / "repo"
+    repo.mkdir()
+    git_marker = repo / ".git"
+    if git_marker_kind == "directory":
+        git_marker.mkdir()
+    else:
+        git_marker.write_text("gitdir: /tmp/test-git-dir\n")
+
     home = tmp_path / "home"
     legacy_dir = home / ".agents" / "golden-prompts"
     legacy_dir.mkdir(parents=True)
     fixture_base = FIXTURES_DIR / "base-cognovis-base.md"
     (legacy_dir / "cognovis-base.md").write_text(fixture_base.read_text())
-    agent_file = FIXTURES_DIR / "agent-with-base.md"
+    agent_file = repo / "agent-with-base.md"
+    agent_file.write_text((FIXTURES_DIR / "agent-with-base.md").read_text())
 
     rc, stdout, stderr = run_compose(
         agent_file,
@@ -230,6 +249,7 @@ def test_compose_finds_legacy_global_agent_base_dir(tmp_path):
     assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout, (
         f"Layer 1 marker not found from legacy global dir.\nstdout: {stdout}\nstderr: {stderr}"
     )
+    assert "ANCESTOR_AGENT_BASE_MARKER" not in stdout
     assert (
         "DeprecationWarning: agent_base 'auto' resolved "
         "from legacy golden-prompts directory"

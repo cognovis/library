@@ -41,36 +41,36 @@ decisions, and fallback behavior when the CLI is unavailable.
 
 ## CLI Delegation
 
-**For deterministic operations, call `python3 scripts/library.py` directly:**
+**For deterministic operations, call `uv run --script scripts/library.py` directly:**
 
 ```bash
 # List all skills in JSON (machine-readable):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill list --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py skill list --json
 
 # Dry-run install of a skill (preview without mutation):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --dry-run --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --dry-run --json
 
 # Install a standard to global scope:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope global
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope global
 
 # Search across all primitives:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
 
 # Check upstream status for all installed entries (no clone):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py status --json
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py status --offline --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py status --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py status --offline --json
 
 # See what is installed across project and global scopes:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
 
 # Detect local drift across all primitives (exit 2 if drift):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py audit --drift-only --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py audit --drift-only --json
 
 # Sync all installed entries reported behind by status, dry-run first:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync
 ```
 
 **The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
@@ -146,11 +146,11 @@ home or scratch directories from being reported as project installs.
 Examples:
 
 ```bash
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --scope project --primitive skill
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --project /path/to/project
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --scope project --primitive skill
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --project /path/to/project
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog --json
 ```
 
 The `precedence` column is `active` for the entry the harness should load.

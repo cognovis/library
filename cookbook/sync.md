@@ -9,10 +9,10 @@ clones with the same `.library.lock` end up with identical installed content.
 
 ```bash
 # Preview sync plan:
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run --json
 
 # Real sync (re-pulls all entries recorded in .library.lock):
-python3 <LIBRARY_SKILL_DIR>/scripts/library.py sync --json
+uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync --json
 ```
 
 The CLI's
