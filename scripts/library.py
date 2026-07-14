@@ -1577,7 +1577,7 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
             return exc.exit_code
 
     # Compute combined overall
-    if any_behind or any(e.get("behind") for e in all_entries):
+    if any_behind or any(e.get("needs_refresh", e.get("behind")) for e in all_entries):
         overall = "behind"
     elif all(e.get("upstream_status") == "current" for e in all_entries) and all_entries:
         overall = "current"
@@ -1600,13 +1600,22 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
         if overall == "current":
             print(f"Status: ALL CURRENT ({len(all_entries)} entries)")
         elif overall == "behind":
-            behind_count = sum(1 for e in all_entries if e.get("behind"))
+            behind_count = sum(
+                1 for e in all_entries if e.get("needs_refresh", e.get("behind"))
+            )
             print(f"Status: BEHIND ({behind_count}/{len(all_entries)} entries need update)")
             for e in all_entries:
                 if e.get("behind"):
                     installed = e.get("installed_sha", "?")[:8]
                     remote = str(e.get("remote_sha", "?"))[:8]
                     print(f"  BEHIND: {e['primitive']}:{e['name']} ({installed} -> {remote})")
+                elif e.get("needs_refresh"):
+                    installed = str(e.get("installed_sha", "?"))[:8]
+                    runtime = str(e.get("runtime_revision") or "missing")[:8]
+                    print(
+                        f"  RUNTIME: {e['primitive']}:{e['name']} "
+                        f"({runtime} != {installed}; {e.get('runtime_status', 'unknown')})"
+                    )
         else:
             print(f"Status: UNKNOWN ({len(all_entries)} entries checked)")
         for warning in warnings:
@@ -1764,8 +1773,9 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     """Handle: sync [--force] [--dry-run] [--scope=...] [--json]
 
     Top-level sync that iterates ALL primitives across all scopes.
-    By default refreshes only entries where upstream_status == 'behind'.
-    With --force, re-installs all entries regardless.
+    By default refreshes entries whose upstream source is behind or whose
+    supervised runtime does not match the installed revision. With --force,
+    re-installs all entries regardless.
     """
     use_json = getattr(args, "json", False)
     dry_run = getattr(args, "dry_run", False)
@@ -1831,8 +1841,11 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
 
                 status_entry = status_by_key.get(key, {})
                 upstream_status = status_entry.get("upstream_status", "unknown")
-                should_refresh = force or upstream_status == "behind"
-                if should_refresh and not force:
+                runtime_needs_refresh = bool(status_entry.get("needs_refresh"))
+                should_refresh = (
+                    force or upstream_status == "behind" or runtime_needs_refresh
+                )
+                if upstream_status == "behind" and not force and not runtime_needs_refresh:
                     path_changed = _entry_source_path_changed(
                         entry=entry,
                         remote_sha=status_entry.get("remote_sha"),

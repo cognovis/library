@@ -13,6 +13,7 @@ from typing import Any
 from ..errors import InstallError
 
 _HEALTHY_STATE = "healthy"
+_SOURCE_REVISION_ENV = "COGNOVIS_TOOLS_SOURCE_REVISION"
 
 
 def expand_argv(command_block: dict[str, Any]) -> list[str]:
@@ -65,15 +66,20 @@ def run_argv_command(
     *,
     check: bool = False,
     timeout: int = 120,
+    env_overrides: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a catalog argv_command."""
     argv = expand_argv(command_block)
+    env = None
+    if env_overrides:
+        env = {**os.environ, **env_overrides}
     return subprocess.run(
         argv,
         capture_output=True,
         text=True,
         check=check,
         timeout=timeout,
+        env=env,
     )
 
 
@@ -108,6 +114,7 @@ def ensure_supervised_service(
     entry: dict[str, Any],
     project_path: Path,
     *,
+    expected_revision: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Install or restart the supervised service and verify health before registration."""
@@ -124,10 +131,16 @@ def ensure_supervised_service(
         }
 
     current = service_status(service["health_check"])
+    previous_instance_id = current.get("instance_id")
     previous_version = current.get("version")
+    runtime_env = (
+        {_SOURCE_REVISION_ENV: expected_revision} if expected_revision else None
+    )
 
     if current.get("state") == _HEALTHY_STATE:
-        restart = run_argv_command(service["restart"], check=False)
+        restart = run_argv_command(
+            service["restart"], check=False, env_overrides=runtime_env
+        )
         if restart.returncode != 0:
             raise InstallError(
                 "Supervised MCP service restart failed before registration: "
@@ -135,7 +148,9 @@ def ensure_supervised_service(
             )
         action = "restart"
     else:
-        install = run_argv_command(service["install"], check=False)
+        install = run_argv_command(
+            service["install"], check=False, env_overrides=runtime_env
+        )
         if install.returncode != 0:
             _attempt_service_fallback(service, uninstall=True)
             raise InstallError(
@@ -152,9 +167,25 @@ def ensure_supervised_service(
             f"{action}: {after.get('message') or after.get('stderr') or 'unknown error'}"
         )
 
-    if action == "restart" and previous_version and after.get("version") == previous_version:
+    if action == "restart":
+        after_instance_id = after.get("instance_id")
+        restart_advanced = (
+            after_instance_id != previous_instance_id
+            if previous_instance_id and after_instance_id
+            else not previous_version or after.get("version") != previous_version
+        )
+        if not restart_advanced:
+            _attempt_service_fallback(service, uninstall=False)
+            raise InstallError(
+                "Supervised MCP service restart did not advance the instance identity."
+            )
+
+    if expected_revision and after.get("source_revision") != expected_revision:
+        _attempt_service_fallback(service, uninstall=action == "install")
+        actual_revision = after.get("source_revision") or "missing"
         raise InstallError(
-            "Supervised MCP service restart did not advance the version sentinel."
+            "Supervised MCP service did not load the expected source revision "
+            f"{expected_revision}; runtime reported {actual_revision}."
         )
 
     return {
@@ -162,6 +193,9 @@ def ensure_supervised_service(
         "project_path": str(project_path),
         "url": service["url"],
         "version": after.get("version"),
+        "package_version": after.get("package_version"),
+        "instance_id": after.get("instance_id"),
+        "source_revision": after.get("source_revision"),
         "state": after.get("state"),
     }
 

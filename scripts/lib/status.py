@@ -11,9 +11,54 @@ import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
+from .catalog import get_entries
 from .lockfile import find_lockfile, load_lockfile
 from .primitives import get_primitive
 from .source import get_local_commit_sha, parse_source
+
+
+def _catalog_entries_by_name(catalog: dict, primitive: str) -> dict[str, dict]:
+    try:
+        return {
+            str(entry.get("name", "")): entry
+            for entry in get_entries(catalog, primitive)
+            if entry.get("name")
+        }
+    except (KeyError, TypeError):
+        return {}
+
+
+def _supervised_runtime_status(
+    catalog_entry: dict | None,
+    installed_revision: str,
+    *,
+    offline: bool,
+) -> tuple[str, str | None, str | None]:
+    supervised = (catalog_entry or {}).get("supervised_local_service")
+    if not supervised:
+        return "not_applicable", None, None
+    if offline:
+        return "unknown", None, None
+
+    health_check = supervised.get("health_check")
+    if not health_check:
+        return "unknown", None, "catalog entry is missing health_check"
+    try:
+        from .installers.mcp_supervised_service import service_status
+
+        status = service_status(health_check)
+    except Exception as exc:
+        return "unknown", None, str(exc)
+
+    runtime_revision = status.get("source_revision")
+    if status.get("state") != "healthy":
+        error = status.get("message") or status.get("stderr") or "service is not healthy"
+        return "unhealthy", runtime_revision, str(error)
+    if not runtime_revision:
+        return "missing", None, "healthy runtime did not report source_revision"
+    if runtime_revision == installed_revision:
+        return "current", runtime_revision, None
+    return "stale", runtime_revision, None
 
 
 def get_remote_sha(
@@ -155,6 +200,7 @@ def cmd_status_impl(
     result_entries = []
     any_behind = False
     any_unknown = False
+    mcp_catalog_entries = _catalog_entries_by_name(catalog, "mcp")
 
     for entry in entries:
         entry_name = entry.get("name", "")
@@ -217,7 +263,24 @@ def cmd_status_impl(
             upstream_status = "unknown"
             any_unknown = True
 
-        result_entries.append({
+        runtime_status = "not_applicable"
+        runtime_revision = None
+        runtime_error = None
+        if entry_type == "mcp":
+            runtime_status, runtime_revision, runtime_error = _supervised_runtime_status(
+                mcp_catalog_entries.get(entry_name),
+                installed_sha,
+                offline=offline,
+            )
+        runtime_needs_refresh = (
+            not offline
+            and runtime_status in {"stale", "missing", "unhealthy", "unknown"}
+        )
+        needs_refresh = behind or runtime_needs_refresh
+        if runtime_needs_refresh:
+            any_behind = True
+
+        result_entry = {
             "name": entry_name,
             "primitive": entry_type,
             "scope": scope,
@@ -225,7 +288,13 @@ def cmd_status_impl(
             "remote_sha": remote_sha,
             "upstream_status": upstream_status,
             "behind": behind,
-        })
+            "runtime_status": runtime_status,
+            "runtime_revision": runtime_revision,
+            "needs_refresh": needs_refresh,
+        }
+        if runtime_error:
+            result_entry["runtime_error"] = runtime_error
+        result_entries.append(result_entry)
 
     # Compute overall
     if any_behind:
