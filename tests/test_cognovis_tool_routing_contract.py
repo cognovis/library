@@ -69,7 +69,6 @@ READ_ONLY_BEAD_TOOLS = {
     "mcp__cognovis-tools__bead_list",
     "mcp__cognovis-tools__bead_search",
     "mcp__cognovis-tools__bead_repos",
-    "mcp__cognovis-tools__bead_session_close_finalize_status",
 }
 MUTATING_BEAD_TOOLS = TYPED_BEAD_TOOLS - READ_ONLY_BEAD_TOOLS
 
