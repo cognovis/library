@@ -109,8 +109,9 @@ results. Extract to a Python script and have the skill call it.
 remains the deterministic backing implementation; the MCP tool wraps it
 with a typed schema, server-side argument validation, and a stable JSON
 envelope visible to the model as a first-class tool. Use this projection
-when the same Script is invoked from many call sites and the agent
-currently re-derives its invocation from skill prose. The mapping between
+when the same Script is invoked from many call sites, the server owns a
+material contract beyond wrapping a stable public CLI, and callers would
+otherwise re-derive the invocation from skill prose. The mapping between
 typed tool and backing Script lives in the server, not in `library.yaml` —
 MCP's `tools/list` is the runtime source of truth.
 

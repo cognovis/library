@@ -55,11 +55,9 @@ Is it project-specific or cross-cutting context supplementing global skills?
 Is it a capability provider accessed via the MCP protocol?
  └─ YES → Which species (see [ADR-0007](adr/library-tool-surface-mcp.md))?
            ├─ First-party LIBRARY-TOOL-SURFACE — typed invocation over Library
-           │   CLIs (bd, git, gh) and Library Scripts. Choose when flag-guessing
-           │   on a high-frequency CLI is a recurring failure mode, or when a
-           │   dangerous agent needs a path to graduate to `Bash` denied.
-           │   The "prefer CLI + Skill" rule does NOT apply — the server IS the
-           │   skill's invocation channel.
+           │   operations and Scripts. Choose only when the server owns a real
+           │   invariant or access path unavailable from a stable CLI + Skill.
+           │   Flag mistakes alone do not justify a daemon and duplicate wrapper.
            └─ Third-party EXTERNAL-CAPABILITY — remote data, encrypted formats,
               vendor APIs. Does the target harness have shell access?
                 ├─ YES (Claude Code / Codex CLI) → If a CLI already covers the

@@ -162,7 +162,7 @@ Before returning your final result, create a structured debrief documenting what
   - Implementation: `read_files`, `edit_files`, `run_shell`
   - Research: `read_files`, `search_web`
   - SearXNG-only research: `search_searxng`, `use_skills`
-  - Orchestration: `spawn_subagents`, `manage_beads`
+  - Orchestration: `spawn_subagents`, `run_shell`, `use_skills`
 
 **model** (optional)
 - Prefer a requirement block resolved by `models.yaml`

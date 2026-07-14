@@ -1,7 +1,7 @@
 ---
 adr: "0007"
 title: "Library tool surface as a second species of MCP server"
-status: proposed
+status: accepted
 date: 2026-05-27
 bead: "CL-ugwe"
 deciders:
@@ -15,9 +15,9 @@ related_adrs: ["0002", "0005", "0006"]
 
 ## Status
 
-Proposed. Decisions describe the architectural split and the catalog delta only;
-the `cognovis-tools` server implementation and the `capabilities.yaml`
-migration are sequenced as follow-up beads (see Consequences).
+Accepted with the 2026-07 Bead-family retirement amendment below. The
+`library-tool-surface` species remains valid, but recurring CLI flag mistakes
+alone are no longer sufficient justification for an MCP wrapper.
 
 ## Context
 
@@ -369,6 +369,54 @@ tracker) reassigns `effort-classifier` and `wave-monitor` from `manage_beads` to
 `read_beads`. The least-privilege concern is only fully closed once both beads
 ship; until `clc-zbj4` lands, those two agents remain on `manage_beads` and still
 receive the full mutating set.
+
+## Amendment (clc-jzu5, 2026-07-14): Retire the Bead MCP family
+
+The `cognovis-tools` `bead_*` family and the `manage_beads` / `read_beads`
+capabilities are retired. Bead reads and mutations use the stable public `bd`
+CLI directly. Deterministic routing, claiming, review-cache writing, closing,
+and Dolt synchronization remain in scripts or Session Close handlers where
+they are pipeline behavior rather than agent-facing decisions.
+
+This amendment reverses the Bead-specific parts of Decisions 1, 3, and the
+Phase 2/6/7 migration sequence. It does not retire `cognovis-tools` or the
+`library-tool-surface` species. The server retains provider-session, Git, log,
+release, and closed-registry execution families that own contracts beyond a
+thin Beads CLI wrapper.
+
+The deciding evidence was operational rather than hypothetical:
+
+1. Every human and any process outside the selected harness could invoke `bd`
+   directly, so the MCP wrapper was not a system-wide trust boundary. Ignoring
+   the unimplemented Level-5 Bash-deny destination, its enforcement value was
+   local to callers that voluntarily chose the wrapper.
+2. The Bead tools still shelled out to `bd`, duplicating its public contract in
+   first-party Python and creating maintenance work whenever the CLI evolved.
+3. The shared HTTP daemon introduced liveness, version, configuration, and
+   correlated fleet-wide failure modes for operations that already had a
+   reliable stateless CLI path.
+4. Beads and its Dolt integration became materially more stable, reducing the
+   original flag-guessing and recovery benefit while the wrapper's code, test,
+   token, and deployment costs remained.
+5. Deterministic steps such as `bd dolt commit/pull/push` and Session Close
+   finalization are better owned by deterministic handlers than presented to a
+   model as typed choices.
+
+The revised decision rule is therefore: prefer CLI plus Skill for a stable
+public CLI when MCP would only validate arguments and call that CLI. A
+first-party MCP surface requires an independently valuable invariant such as an
+atomic protocol, unavoidable shared concurrency boundary, provider-neutral
+lifecycle, or an access path not otherwise available to supported harnesses.
+
+Retirement is intentionally complete rather than a compatibility period:
+
+- the server publishes zero tool names beginning with `bead_`;
+- `capabilities.yaml` contains neither `manage_beads` nor `read_beads`;
+- launchers, agents, skills, workflows, review clients, and Session Close use
+  direct `bd` or deterministic direct-bd helpers;
+- the DCG pack no longer blocks or redirects real `bd` commands; and
+- the factory-ready author check remains as a content hook/script instead of a
+  Bead MCP wrapper.
 
 ## Cross-References
 

@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["mcp>=1.27.1,<2"]
 # ///
-"""Run an isolated bead-spec review through the cognovis-tools MCP gateway."""
+"""Run an isolated bead-spec review with direct bd and the provider gateway."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -42,6 +43,8 @@ MAX_CONTEXT_CHARS = 120_000
 MAX_FINDINGS_CHARS = 8_000
 
 ToolCaller = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+BeadLoader = Callable[[Path, str], dict[str, Any]]
+ReviewWriter = Callable[[Path, str, dict[str, str]], None]
 
 
 class ReviewClientError(RuntimeError):
@@ -117,6 +120,60 @@ def _reviewer_skill_path() -> str:
     return str(next((path for path in candidates if path.is_file()), candidates[0]))
 
 
+def _load_live_bead(repo_dir: Path, bead_id: str) -> dict[str, Any]:
+    result = subprocess.run(
+        [os.environ.get("BD_BIN", "bd"), "show", bead_id, "--json"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "bd show failed"
+        raise ReviewClientError(f"could not load {bead_id}: {detail}")
+    try:
+        payload = json.loads(result.stdout, strict=False)
+    except json.JSONDecodeError as exc:
+        raise ReviewClientError(f"bd show returned invalid JSON for {bead_id}") from exc
+    bead = payload[0] if isinstance(payload, list) and payload else payload
+    if not isinstance(bead, dict):
+        raise ReviewClientError(f"bd show returned no bead for {bead_id}")
+    return bead
+
+
+def _write_review_cache(
+    repo_dir: Path,
+    bead_id: str,
+    verdict: dict[str, str],
+) -> None:
+    script = Path(_reviewer_skill_path()).parent / "scripts" / "write_review_cache.py"
+    if not script.is_file():
+        raise ReviewClientError(f"review cache writer is unavailable: {script}")
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            str(script),
+            bead_id,
+            "--spec-verdict",
+            verdict["spec_verdict"],
+            "--verdict",
+            verdict["verdict"],
+            "--findings-summary",
+            verdict["findings_summary"],
+            "--reviewer-skill-path",
+            _reviewer_skill_path(),
+        ],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "review cache write failed"
+        raise ReviewClientError(detail)
+
+
 def _bead_repo_dir(workspace: Path) -> Path:
     """Resolve a linked worktree to the canonical checkout known to the gateway."""
     try:
@@ -150,7 +207,7 @@ def _build_prompt(bead_id: str, context: str) -> str:
 
 This is a specification/readiness review only. Do not implement, edit files, create a
 worktree, run session-close, or review an implementation diff. You have no MCP tools;
-the parent gateway owns all bead reads and metadata writes. Use the bead-reviewer
+the parent client owns all bead reads and metadata writes through bd. Use the bead-reviewer
 guidance at {_reviewer_skill_path()} when it is available. Otherwise assess clear
 intent, bounded scope, testable acceptance criteria, explicit Means of Compliance,
 concrete context pointers, dependency correctness, and autonomous readiness.
@@ -198,19 +255,19 @@ def _parse_result(result: str) -> tuple[str, dict[str, str]]:
     return report, normalized
 
 
-async def execute_review(request: ReviewRequest, call_tool: ToolCaller) -> str:
+async def execute_review(
+    request: ReviewRequest,
+    call_tool: ToolCaller,
+    *,
+    load_bead: BeadLoader = _load_live_bead,
+    write_review: ReviewWriter = _write_review_cache,
+) -> str:
     repo_dir = request.repo_dir.resolve()
     if not repo_dir.is_dir():
         raise ReviewClientError(f"repository directory does not exist: {repo_dir}")
 
     bead_repo = _bead_repo_dir(repo_dir)
-    bead_data = _require_ok(
-        "bead_show",
-        await call_tool(
-            "bead_show",
-            {"bead_id": request.bead_id, "repo": str(bead_repo), "full": True},
-        ),
-    )
+    bead_data = load_bead(bead_repo, request.bead_id)
     context = _review_context(bead_data, request.bead_id)
     session_args: dict[str, Any] = {
         "role": "reviewer",
@@ -236,19 +293,7 @@ async def execute_review(request: ReviewRequest, call_tool: ToolCaller) -> str:
     if not isinstance(result, str) or not result.strip():
         raise ReviewClientError("reviewer returned no inline result")
     report, verdict = _parse_result(result)
-    _require_ok(
-        "bead_review_write",
-        await call_tool(
-            "bead_review_write",
-            {
-                "bead_id": request.bead_id,
-                "spec_verdict": verdict["spec_verdict"],
-                "verdict": verdict["verdict"],
-                "findings_summary": verdict["findings_summary"],
-                "repo": str(bead_repo),
-            },
-        ),
-    )
+    write_review(bead_repo, request.bead_id, verdict)
     return report
 
 

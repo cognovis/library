@@ -72,30 +72,33 @@ The `mcp_server_entry.species` field in `library.yaml` is the discriminator
 
 ### Species 2: `library-tool-surface`
 
-**Definition.** A first-party MCP server published by the Library to act as
-the typed invocation surface over Library-owned CLIs (`bd`, `git`, `gh`) and
-Library Scripts. Its purpose is to encode the correct invocation of
-high-frequency tools so the model cannot get flags wrong by guessing.
+**Definition.** A first-party MCP server published by the Library to provide a
+typed invocation boundary for Library-owned operations and Scripts. It is
+justified only when the server owns a material contract that cannot be obtained
+as reliably from an existing stable CLI plus a Skill.
 
 **When to choose it.** Use a library-tool-surface server when:
 
-- A CLI is invoked by skills/agents across the fleet and flag-guessing is a
-  recurring failure mode (the `bd` and `git` case).
+- The server can enforce a real trust boundary, atomic protocol, shared
+  concurrency invariant, or provider-neutral lifecycle that direct callers
+  cannot bypass within the supported execution model.
 - A Library Script is invoked from many call sites with structured arguments
   and benefits from a typed contract instead of a shell recipe.
 - The dangerous-agent class (long-running, high-blast-radius) needs a path
   to graduate to `Bash` denied without losing the operations they perform
   today — see ADR-0007 Phase 7.
 
-**Decision rule.** The "prefer CLI + Skill" rule of the external species
-does NOT apply. A library-tool-surface server **is** the skill's invocation
-channel; the skill describes intent and result handling, the server encodes
-the correct call. Suggesting "use a CLI + skill instead" would be circular.
+**Decision rule.** Prefer an existing stable, public CLI plus a Skill when the
+MCP tool would only validate parameters and shell out to the same CLI. Repeated
+flag mistakes alone do not justify a daemon, correlated failure domain, and
+duplicate wrapper implementation. Choose a library-tool-surface server only
+when its typed boundary owns an independently valuable invariant or provides an
+access path unavailable to the supported harnesses.
 
 **Backing implementation.** A library-tool-surface tool MUST be backed by:
 
 - a Library [Script](script.md) (Python, `json-envelope` output contract); OR
-- a closed enum of CLI verbs (e.g. `bd create`, `git merge`, `gh run watch`)
+- a closed enum of CLI verbs (e.g. `git merge`, `gh run watch`)
   invoked through a server-internal wrapper that validates arguments
   server-side.
 
@@ -112,6 +115,11 @@ to a `Bash` tool and forfeits the safety properties that justify the
 species. Adding a new `script_id` is a catalog edit, not a runtime decision.
 
 **Counter-examples.**
+- Do NOT wrap a stable CLI such as `bd` solely to avoid teaching its public
+  commands. Keep deterministic lifecycle plumbing in scripts or handlers and
+  let agents use the CLI through a focused Skill.
+- Do NOT expose commit/pull/push or similar deterministic pipeline steps as
+  agent-facing tools merely because they can be typed.
 - Do NOT add a typed tool that accepts an arbitrary `path` or `command`
   argument. That re-creates `Bash` with extra steps.
 - Do NOT skip server-side schema validation. The point of the species is
@@ -125,7 +133,7 @@ species. Adding a new `script_id` is a catalog edit, not a runtime decision.
 
 | MCP Server | Why it is library-tool-surface |
 |-----------|-------------------------------|
-| `cognovis-tools` (planned) | First-party server exposing `bead.*`, `git.*`, and `library.exec` as typed verbs. Backs the existing `beads` skill, `session-close` handlers, and Library Script catalog. Eliminates flag-guessing failures and lays the structural foundation for L5 graduation of dangerous agents. |
+| `cognovis-tools` | First-party server for provider-session, Git, log, release, and closed-registry Script operations. Its retired `bead_*` family is the counter-example that established the stable-CLI rule above; Beads uses direct `bd`. |
 
 ---
 
