@@ -412,13 +412,12 @@ def compose(
 
 
 def _find_proj_root(agent_file: Path) -> Path:
-    """Walk up from agent_file to find a directory containing .agents/.
-
-    Falls back to the agent file's directory if not found.
-    """
+    """Find the nearest project marker without walking beyond a Git checkout."""
     current = agent_file.parent
     while current != current.parent:
         if (current / ".agents").is_dir():
+            return current
+        if (current / ".git").exists():
             return current
         current = current.parent
     return agent_file.parent

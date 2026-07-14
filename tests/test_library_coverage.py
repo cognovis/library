@@ -16,9 +16,9 @@ Tests:
   10. check-coverage.py script exists and is executable
 
 Run with:
-    python3 -m pytest tests/test_library_coverage.py -v
+    uv run pytest tests/test_library_coverage.py -v
   or:
-    python3 tests/test_library_coverage.py
+    uv run tests/test_library_coverage.py
 """
 
 import json
@@ -65,7 +65,7 @@ EXPECTED_COGNOVIS_SKILLS = {
     "brand-forge", "bug-triage", "claude-md-pruner", "cmux", "cmux-browser", "cmux-markdown",
     "codex", "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
     "infra-principles", "inject-standards", "mail-send",
-    "nbj-audit", "op-credentials", "pencil", "people-query", "playwright-cli",
+    "nbj-audit", "pencil", "people-query", "playwright-cli",
     "plugin-management", "portless", "project-context", "project-health", "project-setup",
     "prompt-refiner", "spec-developer", "standards", "summarize",
     "sync-standards", "system-prompt-audit", "token-cost", "ui-cli", "vision", "vision-author",
@@ -115,6 +115,7 @@ ALLOWED_SOURCE_REPOS = (
     "sussdorff/library-core",
     "sussdorff/open-brain",
     "cognovis/samurai-skills",
+    "cognovis/polaris",
 )
 
 ALLOWED_DEPENDENCY_PREFIXES = (

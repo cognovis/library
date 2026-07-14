@@ -29,7 +29,7 @@ class NotFoundError(LibraryError):
     def __init__(self, name: str, primitive: str) -> None:
         super().__init__(
             f"No {primitive} named '{name}' found in catalog. "
-            f"Run: python3 scripts/library.py {primitive} list",
+            f"Run: uv run --script scripts/library.py {primitive} list",
             exit_code=EXIT_NOT_FOUND,
         )
         self.name = name
