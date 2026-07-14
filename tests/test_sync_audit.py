@@ -314,8 +314,8 @@ class TestAuditDriftOnly:
         assert result.returncode == 2, \
             f"Expected exit 2 for drift status, got {result.returncode}"
 
-    def test_audit_legacy_file_entry_is_unknown_not_drift(self, project_dir):
-        """AK2: entries without checksum_type (legacy) report status 'unknown', not 'drift'."""
+    def test_audit_legacy_file_entry_requires_checksum_migration(self, project_dir):
+        """Legacy entries without checksum_type are actionable drift, never silently clean."""
         from lib.sync_audit import cmd_audit_impl
         from lib.lockfile import find_lockfile, load_lockfile, save_lockfile, upsert_entry
 
@@ -344,10 +344,54 @@ class TestAuditDriftOnly:
         entries = result.get("entries", [])
         assert len(entries) == 1
         entry = entries[0]
-        assert entry.get("status") == "unknown", \
-            f"Legacy entry without checksum_type should be 'unknown', got: {entry.get('status')}"
-        assert entry.get("drift") is False, \
-            f"Legacy entry should not be marked as drift, got: {entry.get('drift')}"
+        assert result.get("status") == "drift"
+        assert entry.get("status") == "drift"
+        assert entry.get("drift") is True
+        assert entry.get("drift_kind") == "local"
+        assert entry.get("reason") == "legacy_checksum_type_missing"
+
+
+class TestAuditLibraryBootstrap:
+    """The bootstrap-installed Library skill participates in top-level audit."""
+
+    def test_clean_bootstrap_skill_matches_platform_source(self, project_dir, tmp_path, monkeypatch):
+        import lib.sync_audit as sync_audit
+
+        source = tmp_path / "platform"
+        installed = tmp_path / "home" / ".agents" / "skills" / "library"
+        source.mkdir()
+        installed.mkdir(parents=True)
+        (source / "SKILL.md").write_text("# Library\n")
+        (installed / "SKILL.md").write_text("# Library\n")
+        monkeypatch.setattr(sync_audit, "_PLATFORM_ROOT", source)
+        monkeypatch.setattr(sync_audit, "_library_skill_targets", lambda: (installed,))
+
+        result = sync_audit.cmd_audit_impl({}, "all", project_dir, skip_upstream=True)
+
+        assert result["status"] == "clean"
+        assert result["entries"] == []
+
+    def test_diverged_bootstrap_skill_reports_both_paths(self, project_dir, tmp_path, monkeypatch):
+        import lib.sync_audit as sync_audit
+
+        source = tmp_path / "platform"
+        installed = tmp_path / "home" / ".agents" / "skills" / "library"
+        source.mkdir()
+        installed.mkdir(parents=True)
+        (source / "SKILL.md").write_text("# Canonical Library\n")
+        (installed / "SKILL.md").write_text("# Diverged Library\n")
+        monkeypatch.setattr(sync_audit, "_PLATFORM_ROOT", source)
+        monkeypatch.setattr(sync_audit, "_library_skill_targets", lambda: (installed,))
+
+        result = sync_audit.cmd_audit_impl({}, "all", project_dir, skip_upstream=True)
+
+        assert result["status"] == "drift"
+        entry = result["entries"][0]
+        assert entry["name"] == "library"
+        assert entry["primitive"] == "skill"
+        assert entry["source_path"] == str(source / "SKILL.md")
+        assert entry["install_target"] == str(installed / "SKILL.md")
+        assert entry["reason"] == "library_bootstrap_content_mismatch"
 
 
 # ---------------------------------------------------------------------------
