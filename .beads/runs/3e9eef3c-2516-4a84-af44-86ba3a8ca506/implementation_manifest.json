@@ -1,0 +1,205 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-rkww",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "done",
+      "summary": "Matching managed checkouts receive an executable pre-push hook through project_tooling, and repeated synchronization is idempotent.",
+      "changed_files": [
+        "library.yaml",
+        "prime/hooks/pre-push.sh",
+        "scripts/sync_project_tooling.py",
+        "tests/test_project_tooling.py"
+      ],
+      "evidence_refs": [
+        "tests/test_project_tooling.py::test_sync_runtime_git_hook",
+        "tests/test_project_tooling.py::test_sync_runtime_idempotent",
+        "command:project_tooling_script_runner"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "done",
+      "summary": "Existing foreign pre-push hooks are moved aside once under the marker-guarded chain_existing contract, then invoked exactly once with replayed stdin and original positional arguments after a passing scan.",
+      "changed_files": [
+        "prime/hooks/pre-push.sh",
+        "scripts/sync_project_tooling.py",
+        "tests/test_pre_push_hook.py",
+        "tests/test_project_tooling.py"
+      ],
+      "evidence_refs": [
+        "tests/test_project_tooling.py::test_sync_runtime_git_hook_chain_existing_preserves_foreign_hook_once",
+        "tests/test_pre_push_hook.py::test_pre_push_scans_clean_range_then_chains_with_replayed_stdin_and_args",
+        "command:direct_function_harness"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "done",
+      "summary": "Scanner findings, missing scanner/setup paths, and real secret-bearing outgoing ranges block push; clean outgoing ranges proceed.",
+      "changed_files": [
+        "prime/hooks/pre-push.sh",
+        "tests/test_pre_push_hook.py"
+      ],
+      "evidence_refs": [
+        "tests/test_pre_push_hook.py::test_pre_push_blocks_finding_before_chained_hook_runs",
+        "tests/test_pre_push_hook.py::test_pre_push_fails_closed_without_gitleaks",
+        "command:real_gitleaks_secret_fixture",
+        "command:real_gitleaks_clean_fixture"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "done",
+      "summary": "Pre-push stdin parsing handles new branches, deletion-only refs, zero SHA values, empty stdin, and malformed input with bounded ranges and fail-closed errors.",
+      "changed_files": [
+        "prime/hooks/pre-push.sh",
+        "tests/test_pre_push_hook.py"
+      ],
+      "evidence_refs": [
+        "tests/test_pre_push_hook.py::test_pre_push_handles_new_branch_deletion_and_empty_stdin_bounds",
+        "tests/test_pre_push_hook.py::test_pre_push_fails_closed_on_malformed_input_without_chaining",
+        "command:direct_function_harness"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "done",
+      "summary": "library.yaml schema and validator coverage accept the chain_existing field and the new pre-push entry without regressing other project_tooling entries.",
+      "changed_files": [
+        "docs/schema/library.schema.json",
+        "library.yaml",
+        "tests/test_library_yaml_information_model.py",
+        "tests/test_project_tooling.py"
+      ],
+      "evidence_refs": [
+        "tests/test_library_yaml_information_model.py::test_schema_accepts_project_tooling_chain_existing_contract",
+        "tests/test_library_yaml_information_model.py::test_library_yaml_declares_managed_pre_push_hook",
+        "tests/test_project_tooling.py::test_git_hook_chain_existing_field",
+        "command:validate_library",
+        "command:project_tooling_script_runner"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "done",
+      "summary": "Git hook installation resolves the effective hooks directory through git rev-parse --git-path hooks, honoring core.hooksPath and returning explicit error statuses when resolution or writes fail.",
+      "changed_files": [
+        "scripts/sync_project_tooling.py",
+        "tests/test_project_tooling.py"
+      ],
+      "evidence_refs": [
+        "tests/test_project_tooling.py::test_sync_runtime_git_hook_honors_core_hooks_path",
+        "command:project_tooling_script_runner"
+      ]
+    },
+    {
+      "id": "AC7",
+      "status": "done",
+      "summary": "Repeated syncs against a checkout with a pre-existing foreign hook do not re-move, nest, or duplicate the preserved sidecar.",
+      "changed_files": [
+        "scripts/sync_project_tooling.py",
+        "tests/test_project_tooling.py"
+      ],
+      "evidence_refs": [
+        "tests/test_project_tooling.py::test_sync_runtime_git_hook_chain_existing_preserves_foreign_hook_once",
+        "command:project_tooling_script_runner"
+      ]
+    },
+    {
+      "id": "AC8",
+      "status": "done",
+      "summary": "When neither timeout nor gtimeout is available, the hook fails closed with an explicit runtime-bounding error.",
+      "changed_files": [
+        "prime/hooks/pre-push.sh",
+        "tests/test_pre_push_hook.py"
+      ],
+      "evidence_refs": [
+        "tests/test_pre_push_hook.py::test_pre_push_fails_closed_without_timeout_or_gtimeout",
+        "command:direct_function_harness"
+      ]
+    },
+    {
+      "id": "AC9",
+      "status": "done",
+      "summary": "The hook header and project-tooling documentation state the cooperative client-side threat model and its relationship to the independent clc-i5ld defense.",
+      "changed_files": [
+        "docs/project-tooling.md",
+        "prime/hooks/pre-push.sh"
+      ],
+      "evidence_refs": [
+        "prime/hooks/pre-push.sh header",
+        "docs/project-tooling.md#security-threat-model-for-client-side-hooks"
+      ]
+    }
+  ],
+  "changed_files": [
+    "docs/project-tooling.md",
+    "docs/schema/library.schema.json",
+    "library.yaml",
+    "prime/hooks/pre-push.sh",
+    "scripts/sync_project_tooling.py",
+    "tests/test_library_yaml_information_model.py",
+    "tests/test_pre_push_hook.py",
+    "tests/test_project_tooling.py",
+    ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/implementation_manifest.json",
+    ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/evidence_ledger.json"
+  ],
+  "commits": [
+    {
+      "sha": "80677f6",
+      "message": "test(CL-rkww): red - cover managed pre-push hook contract"
+    },
+    {
+      "sha": "d2d8124",
+      "message": "feat(CL-rkww): green - install chain-safe gitleaks pre-push hook"
+    }
+  ],
+  "tests": [
+    {
+      "name": "project_tooling script runner",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python tests/test_project_tooling.py",
+      "status": "passed"
+    },
+    {
+      "name": "library information model and pre-push direct function harness",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python - <<'PY' ... PY",
+      "status": "passed"
+    },
+    {
+      "name": "library validator",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python scripts/validate-library.py",
+      "status": "passed"
+    },
+    {
+      "name": "pre-push shell syntax",
+      "command": "bash -n prime/hooks/pre-push.sh",
+      "status": "passed"
+    },
+    {
+      "name": "real gitleaks secret fixture",
+      "command": "local temporary repo with an AGE-shaped sentinel detected by default gitleaks rules and prime/hooks/pre-push.sh",
+      "status": "passed"
+    },
+    {
+      "name": "real gitleaks clean fixture",
+      "command": "local temporary repo with clean fixture text and prime/hooks/pre-push.sh",
+      "status": "passed"
+    }
+  ],
+  "external_resources": [],
+  "scope_changes": [],
+  "downstream_impacts": [
+    "Matching beads-enabled managed checkouts with git available will receive a managed pre-push hook at their effective hooks path.",
+    "Existing foreign pre-push hooks in matching checkouts will be preserved as pre-push.local once and chained only after a successful gitleaks scan.",
+    "Checkouts without timeout or gtimeout on PATH will block non-empty push scans until a bounded runtime command is available."
+  ],
+  "evidence_refs": {
+    "project_tooling_script_runner": ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/evidence_ledger.json#project_tooling_script_runner",
+    "direct_function_harness": ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/evidence_ledger.json#direct_function_harness",
+    "validate_library": ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/evidence_ledger.json#validate_library",
+    "real_gitleaks_secret_fixture": ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/evidence_ledger.json#real_gitleaks_secret_fixture",
+    "real_gitleaks_clean_fixture": ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/evidence_ledger.json#real_gitleaks_clean_fixture"
+  }
+}

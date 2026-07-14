@@ -1,0 +1,147 @@
+{
+  "contract_version": "1",
+  "bead_id": "CL-rkww",
+  "commands": [
+    {
+      "id": "red_project_tooling",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python tests/test_project_tooling.py",
+      "purpose": "RED gate for project_tooling schema/runtime behavior before production changes.",
+      "exit_code": 1,
+      "observed_result": "22 passed, 3 failed. Failures showed chain_existing was rejected by schema, core.hooksPath was not honored, and foreign pre-push sidecar preservation was absent."
+    },
+    {
+      "id": "red_information_model",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python - <<'PY' ... direct runner for tests/test_library_yaml_information_model.py ... PY",
+      "purpose": "RED gate for information-model/schema coverage before production changes.",
+      "exit_code": 1,
+      "observed_result": "8 passed, 2 failed. Failures were StopIteration for missing gitleaks-pre-push-hook library entry and schema rejection of chain_existing."
+    },
+    {
+      "id": "red_hook_runner",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python - <<'PY' ... direct runner for tests/test_pre_push_hook.py ... PY",
+      "purpose": "RED gate for the pre-push hook runtime contract before creating the hook source.",
+      "exit_code": 1,
+      "observed_result": "0 passed, 6 failed. Every failure was FileNotFoundError for prime/hooks/pre-push.sh."
+    },
+    {
+      "id": "pytest_project_env",
+      "command": "UV_CACHE_DIR=.uv-cache uv run python -m pytest tests/test_project_tooling.py tests/test_library_yaml_information_model.py tests/test_pre_push_hook.py -q",
+      "purpose": "Attempt the requested scoped pytest command in the project uv environment.",
+      "exit_code": 1,
+      "observed_result": "The project uv environment did not have pytest installed: No module named pytest."
+    },
+    {
+      "id": "pytest_transient_deps",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --with pytest --with pyyaml --with jsonschema python -m pytest tests/test_project_tooling.py tests/test_library_yaml_information_model.py tests/test_pre_push_hook.py -q",
+      "purpose": "Retry scoped pytest with transient dependencies through uv.",
+      "exit_code": 2,
+      "observed_result": "Network access was unavailable, so uv could not fetch pytest from PyPI."
+    },
+    {
+      "id": "project_tooling_script_runner",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python tests/test_project_tooling.py",
+      "purpose": "Run the in-repo project_tooling test runner without requiring pytest.",
+      "exit_code": 0,
+      "observed_result": "25 passed, 0 failed."
+    },
+    {
+      "id": "direct_function_harness",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python - <<'PY' ... importlib.util direct runner for tests/test_library_yaml_information_model.py and tests/test_pre_push_hook.py ... PY",
+      "purpose": "Run pytest-style test functions for the library information model and managed pre-push hook without requiring pytest.",
+      "exit_code": 0,
+      "observed_result": "10 library information model tests and 6 pre-push hook tests passed."
+    },
+    {
+      "id": "validate_library",
+      "command": "UV_CACHE_DIR=.uv-cache uv run --no-sync python scripts/validate-library.py",
+      "purpose": "Validate library.yaml against docs/schema/library.schema.json.",
+      "exit_code": 0,
+      "observed_result": "PASS: library.yaml is valid against docs/schema/library.schema.json."
+    },
+    {
+      "id": "pre_push_shell_syntax",
+      "command": "bash -n prime/hooks/pre-push.sh",
+      "purpose": "Check the managed pre-push hook shell syntax.",
+      "exit_code": 0,
+      "observed_result": "No syntax errors reported."
+    },
+    {
+      "id": "pre_push_shellcheck",
+      "command": "shellcheck prime/hooks/pre-push.sh",
+      "purpose": "Run shellcheck on the managed pre-push hook.",
+      "exit_code": 0,
+      "observed_result": "No shellcheck findings."
+    },
+    {
+      "id": "gitleaks_help",
+      "command": "command -v gitleaks; gitleaks git --help | sed -n '1,180p'; git rev-parse --help 2>/dev/null | sed -n '1,80p'",
+      "purpose": "Verify local gitleaks git supports --log-opts and inspect git rev-parse help locally.",
+      "exit_code": 0,
+      "observed_result": "gitleaks was found at /opt/homebrew/bin/gitleaks; help output includes gitleaks git usage and --log-opts string."
+    },
+    {
+      "id": "real_gitleaks_secret_fixture",
+      "command": "tmp=$(mktemp -d /private/tmp/cl-rkww-gitleaks.XXXXXX); cd \"$tmp\" || exit 1; git init >/dev/null; git config core.hooksPath .git/hooks; git config user.email test@example.test; git config user.name 'Test User'; git commit --allow-empty -m base >/dev/null; base=$(git rev-parse HEAD); printf '%s\\n' '<AGE-shaped sentinel redacted from ledger>' > secret.txt; git add secret.txt; git commit -m 'add secret' >/dev/null; head=$(git rev-parse HEAD); mkdir -p .git/hooks; cp -f /Users/malte/code/library/meta/.claude/worktrees/bead-CL-rkww/prime/hooks/pre-push.sh .git/hooks/pre-push; chmod +x .git/hooks/pre-push; printf 'refs/heads/main %s refs/heads/main %s\\n' \"$head\" \"$base\" | .git/hooks/pre-push origin url; rc=$?; printf 'hook_exit=%s\\nrepo=%s\\n' \"$rc\" \"$tmp\"; exit 0",
+      "purpose": "Prove a secret-bearing outgoing range blocks push with the real gitleaks binary and default rules.",
+      "exit_code": 0,
+      "observed_result": "gitleaks reported leaks found: 2 and the hook printed hook_exit=2."
+    },
+    {
+      "id": "real_gitleaks_clean_fixture",
+      "command": "tmp=$(mktemp -d /private/tmp/cl-rkww-gitleaks-clean.XXXXXX); cd \"$tmp\" || exit 1; git init >/dev/null; git config core.hooksPath .git/hooks; git config user.email test@example.test; git config user.name 'Test User'; git commit --allow-empty -m base >/dev/null; base=$(git rev-parse HEAD); printf '%s\\n' 'hello clean world' > clean.txt; git add clean.txt; git commit -m 'add clean file' >/dev/null; head=$(git rev-parse HEAD); mkdir -p .git/hooks; cp -f /Users/malte/code/library/meta/.claude/worktrees/bead-CL-rkww/prime/hooks/pre-push.sh .git/hooks/pre-push; chmod +x .git/hooks/pre-push; printf 'refs/heads/main %s refs/heads/main %s\\n' \"$head\" \"$base\" | .git/hooks/pre-push origin url; rc=$?; printf 'hook_exit=%s\\nrepo=%s\\n' \"$rc\" \"$tmp\"; exit 0",
+      "purpose": "Prove a clean outgoing range proceeds with the real gitleaks binary.",
+      "exit_code": 0,
+      "observed_result": "gitleaks reported no leaks found and the hook printed hook_exit=0."
+    },
+    {
+      "id": "metrics_insert_attempt",
+      "command": "BEADS_RUNTIME=/Users/malte/.agents/skills/beads UV_CACHE_DIR=.uv-cache uv run --no-sync python - <<'PY' ... insert_agent_call(... exit_code=0) ... PY",
+      "purpose": "Attempt the required p5-impl metrics insert for run_id 3e9eef3c-2516-4a84-af44-86ba3a8ca506.",
+      "exit_code": 1,
+      "observed_result": "sqlite3.OperationalError: attempt to write a readonly database. The canonical metrics DB is outside the workspace write sandbox."
+    },
+    {
+      "id": "branch_range_pre_push_check",
+      "command": "printf 'refs/heads/worktree-bead-CL-rkww <HEAD> refs/heads/worktree-bead-CL-rkww b9a51a768f42e4d8266c54589f0b4a4fc24ef006\\n' | prime/hooks/pre-push.sh origin git@github.com:cognovis/library.git",
+      "purpose": "Check whether the current local branch range is pushable through the new pre-push hook.",
+      "exit_code": 2,
+      "observed_result": "The hook scanned 7 commits, reported leaks found: 2, and blocked the range because earlier local evidence commits contained a secret-shaped sentinel before it was redacted from HEAD."
+    }
+  ],
+  "skipped_checks": [
+    {
+      "check": "Scoped pytest through uv project environment",
+      "reason": "pytest is not installed in the project uv environment."
+    },
+    {
+      "check": "Scoped pytest with uv transient dependencies",
+      "reason": "Network access is restricted and uv could not fetch pytest from PyPI. Equivalent function-level coverage was run through the repository script runner and a direct uv-run Python harness."
+    },
+    {
+      "check": "Full repository test suite",
+      "reason": "Not run per bead conciseness constraint; only tests for changed files and the new hook behavior were run."
+    },
+    {
+      "check": "Cleanup of disposable real-gitleaks smoke repositories under /private/tmp",
+      "reason": "The destructive-command guard blocked a dynamic rm -rf cleanup trap. The smoke repositories were left under /private/tmp and recorded by path in command output."
+    },
+    {
+      "check": "Successful canonical metrics insert through insert_agent_call",
+      "reason": "The metrics helper attempted to write the canonical metrics database under the beads runtime state, but that database is read-only under the current workspace-write sandbox. A db_path override would write to a different database without the canonical bead_runs row, so it would not satisfy the intended run metrics record."
+    },
+    {
+      "check": "Push to remote",
+      "reason": "Not attempted. The new pre-push hook correctly blocks the current local branch range because older local evidence commits contain a secret-shaped sentinel. Attempts to rewrite/squash those local evidence commits with git reset --soft and commit-tree/update-ref were blocked by sandbox write restrictions on the shared gitdir."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/implementation_manifest.json",
+      "description": "Implementation manifest for CL-rkww."
+    },
+    {
+      "path": ".beads/runs/3e9eef3c-2516-4a84-af44-86ba3a8ca506/evidence_ledger.json",
+      "description": "Evidence ledger for CL-rkww."
+    }
+  ]
+}
