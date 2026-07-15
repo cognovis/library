@@ -36,6 +36,16 @@ def test_models_yaml_validates_against_schema() -> None:
     data = _load_yaml(MODELS_YAML)
     _assert_valid(data, _load_json(MODELS_SCHEMA), "models.yaml")
 
+
+def test_runtime_model_registry_has_distinct_capability_namespace_and_variants() -> None:
+    data = _load_yaml(MODELS_YAML)
+    by_id = {model["id"]: model for model in data["models"]}
+
+    assert data["runtime_registry_version"]
+    assert {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"} <= set(by_id)
+    assert by_id["gpt-5.6-sol"]["suitability_capabilities"] != by_id["gpt-5.6-terra"]["suitability_capabilities"]
+    assert all("capabilities" not in model for model in data["models"])
+
     model_ids = [model["id"] for model in data["models"]]
     assert len(model_ids) == len(set(model_ids))
     assert {"claude-code", "codex"} <= {model["harness"] for model in data["models"]}

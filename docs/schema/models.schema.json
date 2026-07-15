@@ -3,12 +3,16 @@
   "$id": "https://github.com/cognovis/cognovis-library/docs/schema/models.schema.json",
   "title": "Library Agent Model Registry",
   "type": "object",
-  "required": ["version", "models"],
+  "required": ["version", "runtime_registry_version", "models"],
   "additionalProperties": false,
   "properties": {
     "version": {
       "type": "integer",
       "minimum": 1
+    },
+    "runtime_registry_version": {
+      "type": "string",
+      "minLength": 1
     },
     "models": {
       "type": "array",
@@ -18,6 +22,13 @@
         "required": [
           "id",
           "harness",
+          "family",
+          "provider",
+          "adapter",
+          "runtime_model",
+          "suitability_capabilities",
+          "quality_rank",
+          "cost_rank",
           "tier",
           "reasoning_levels",
           "context",
@@ -34,6 +45,29 @@
             "type": "string",
             "enum": ["claude-code", "codex", "opencode", "pi"]
           },
+          "family": {
+            "type": "string",
+            "enum": ["claude", "openai", "cursor"]
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["claude", "codex", "cursor"]
+          },
+          "adapter": {
+            "type": "string",
+            "enum": ["claude-agent", "claude-exec", "claude-impl", "codex-exec", "codex-impl", "cursor-composer", "cursor-impl"]
+          },
+          "runtime_model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "suitability_capabilities": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "uniqueItems": true
+          },
+          "quality_rank": {"type": "integer", "minimum": 0},
+          "cost_rank": {"type": "integer", "minimum": 0},
           "tier": {
             "type": "string",
             "enum": ["economy", "standard", "premium", "frontier"]

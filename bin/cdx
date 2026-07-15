@@ -787,41 +787,26 @@ if [[ -n "$bead_review_id" ]]; then
         exit 1
     fi
 
-    local bead_review_model=""
-    local bead_review_model_requested=false
-    local -a review_model_args=()
     local index=1
     while (( index <= ${#codex_args[@]} )); do
         case "${codex_args[index]}" in
             -m|--model)
-                bead_review_model_requested=true
-                (( index++ ))
-                bead_review_model="${codex_args[index]:-}"
+                echo "ERROR: -br resolves its reviewer from capabilities; --model is not accepted" >&2
+                exit 2
                 ;;
             -m=*|--model=*)
-                bead_review_model_requested=true
-                bead_review_model="${codex_args[index]#*=}"
+                echo "ERROR: -br resolves its reviewer from capabilities; --model is not accepted" >&2
+                exit 2
                 ;;
         esac
         (( index++ ))
     done
-    if ${bead_review_model_requested} && [[ -z "$bead_review_model" ]]; then
-        echo "ERROR: --model requires a value" >&2
-        exit 2
-    fi
-    if [[ -n "$bead_review_model" ]]; then
-        review_model_args=(--model "$bead_review_model")
-    else
-        review_model_args=()
-    fi
 
     export CLD_BEAD_LINE=cdx
     if "${BEAD_REVIEW_CLIENT}" \
-        --provider codex \
-        --adapter codex-exec \
         --bead-id "$bead_review_id" \
         --repo-dir "$PWD" \
-        "${review_model_args[@]}"; then
+        --lead-family openai; then
         review_exit=0
     else
         review_exit=$?

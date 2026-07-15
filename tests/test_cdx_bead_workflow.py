@@ -927,22 +927,22 @@ def test_cdx_bead_review_delegates_to_shared_client(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert argv[argv.index("--provider") + 1] == "codex"
-    assert argv[argv.index("--adapter") + 1] == "codex-exec"
+    assert argv[argv.index("--lead-family") + 1] == "openai"
+    assert "--provider" not in argv
+    assert "--adapter" not in argv
     assert argv[argv.index("--bead-id") + 1] == "CL-smoke"
     assert "--bead-dangerous-full-auto" not in argv
     assert "-C" not in argv
     assert not git_log.exists()
 
 
-def test_cdx_bead_review_preserves_model_override(tmp_path: Path) -> None:
+def test_cdx_bead_review_rejects_model_override(tmp_path: Path) -> None:
     result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
         _run_cdx_launcher(tmp_path, ["-br", "CL-smoke", "--model", "gpt-test"])
     )
-    assert result.returncode == 0, result.stderr
-    assert called_file.exists()
-    argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert argv[argv.index("--model") + 1] == "gpt-test"
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "resolves its reviewer from capabilities" in result.stderr
 
 
 def test_cdx_bead_review_rejects_missing_model_value(tmp_path: Path) -> None:
@@ -951,7 +951,7 @@ def test_cdx_bead_review_rejects_missing_model_value(tmp_path: Path) -> None:
     )
     assert result.returncode == 2
     assert not called_file.exists()
-    assert "--model requires a value" in result.stderr
+    assert "resolves its reviewer from capabilities" in result.stderr
 
 
 @pytest.mark.parametrize(
@@ -1249,8 +1249,9 @@ def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Pat
     assert "no full cmux-review equivalent" not in result.stderr
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     env = json.loads(env_file.read_text(encoding="utf-8"))
-    assert argv[argv.index("--provider") + 1] == "codex"
-    assert argv[argv.index("--adapter") + 1] == "codex-exec"
+    assert argv[argv.index("--lead-family") + 1] == "openai"
+    assert "--provider" not in argv
+    assert "--adapter" not in argv
     assert argv[argv.index("--bead-id") + 1] == "CL-smoke"
     assert "-C" not in argv
     assert "--coordinator-workspace" not in argv

@@ -462,7 +462,7 @@ def test_cld_invalid_callback_or_review_arguments_fail_before_harness(
     assert message in result.stderr
 
 
-def test_cld_bead_review_defaults_to_opus_and_shared_client(tmp_path: Path) -> None:
+def test_cld_bead_review_uses_capability_routed_shared_client(tmp_path: Path) -> None:
     result, argv_file, _prompt_file, called_file, bd_log = _run_cld(
         tmp_path, ["-br", "CL-smoke"]
     )
@@ -471,28 +471,26 @@ def test_cld_bead_review_defaults_to_opus_and_shared_client(tmp_path: Path) -> N
     assert called_file.exists()
     assert "CLD_BEAD_LINE=cld" in result.stdout
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert _argv_flag_value(argv, "--provider") == "claude"
-    assert _argv_flag_value(argv, "--adapter") == "claude-agent"
+    assert _argv_flag_value(argv, "--lead-family") == "claude"
     assert _argv_flag_value(argv, "--bead-id") == "CL-smoke"
-    assert _argv_flag_value(argv, "--model") == "opus"
+    assert "--model" not in argv
+    assert "--provider" not in argv
+    assert "--adapter" not in argv
     assert "--worktree" not in argv
     assert "--agent" not in argv
     bd_calls = [json.loads(line) for line in bd_log.read_text(encoding="utf-8").splitlines()]
     assert not any(call[:1] == ["dolt"] for call in bd_calls)
 
 
-def test_cld_bead_review_honors_explicit_model_override(tmp_path: Path) -> None:
+def test_cld_bead_review_rejects_explicit_model_override(tmp_path: Path) -> None:
     result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
         tmp_path,
         ["-br", "CL-smoke", "--model", "sonnet"],
     )
 
-    assert result.returncode == 0, result.stderr
-    assert called_file.exists()
-    argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert "--model" in argv
-    assert "sonnet" in argv
-    assert "opus" not in argv
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "resolves its reviewer from capabilities" in result.stderr
 
 
 def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) -> None:
@@ -513,7 +511,7 @@ def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) 
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
-    assert _argv_flag_value(argv, "--provider") == "claude"
+    assert _argv_flag_value(argv, "--lead-family") == "claude"
 
 
 def test_cld_resume_flag_continues_to_forward_to_claude(tmp_path: Path) -> None:

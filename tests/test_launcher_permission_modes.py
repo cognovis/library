@@ -98,28 +98,28 @@ def _flag_value(argv: list[str], flag: str) -> str | None:
 
 
 def test_review_delegates_to_shared_client_without_invoking_claude(tmp_path: Path) -> None:
-    result, claude_argv, review_argv, _ = _run_cld(
-        tmp_path, ["-br", "CL-safe", "--model", "sonnet"]
-    )
+    result, claude_argv, review_argv, _ = _run_cld(tmp_path, ["-br", "CL-safe"])
 
     assert result.returncode == 0, result.stderr
     assert not claude_argv.exists()
     argv = json.loads(review_argv.read_text(encoding="utf-8"))
-    assert _flag_value(argv, "--provider") == "claude"
-    assert _flag_value(argv, "--adapter") == "claude-agent"
+    assert _flag_value(argv, "--lead-family") == "claude"
     assert _flag_value(argv, "--bead-id") == "CL-safe"
     assert _flag_value(argv, "--repo-dir") == str(tmp_path)
-    assert _flag_value(argv, "--model") == "sonnet"
+    assert "--model" not in argv
+    assert "--provider" not in argv
+    assert "--adapter" not in argv
     assert "--tools" not in argv
     assert "--allowedTools" not in argv
     assert "--dangerously-skip-permissions" not in argv
 
 
-def test_review_defaults_to_opus(tmp_path: Path) -> None:
+def test_review_does_not_pin_a_concrete_model(tmp_path: Path) -> None:
     result, _, review_argv, _ = _run_cld(tmp_path, ["-br", "CL-safe"])
     assert result.returncode == 0, result.stderr
     argv = json.loads(review_argv.read_text(encoding="utf-8"))
-    assert _flag_value(argv, "--model") == "opus"
+    assert "--model" not in argv
+    assert _flag_value(argv, "--lead-family") == "claude"
 
 
 def test_review_rejects_permission_bypass(tmp_path: Path) -> None:
