@@ -12,7 +12,7 @@ Tests:
   AK3:
     5. library.yaml bead-orchestrator entry has one Markdown source
     6. library.yaml session-close entry has one Markdown source
-    7. library.yaml wave-orchestrator entry has one Markdown source
+    7. retired agents do not require source-shape coverage
     8. library.yaml still passes schema validation after sources migration
   AK4:
     9. install-hook.py accepts --harness flag
@@ -270,17 +270,6 @@ def test_session_close_uses_single_source():
     assert "sources" not in entry, "session-close should not use dual sources"
     assert entry["source"].endswith("/agents/session-close.md")
     print("PASS test_session_close_uses_single_source")
-
-
-def test_wave_orchestrator_uses_single_source():
-    """library.yaml wave-orchestrator entry uses one Markdown source."""
-    library = load_library()
-    entry = _find_agent_entry(library, "wave-orchestrator")
-    assert entry is not None, "wave-orchestrator not found in library.yaml agents"
-    assert "source" in entry, f"wave-orchestrator should use source:, found: {list(entry.keys())}"
-    assert "sources" not in entry, "wave-orchestrator should not use dual sources"
-    assert entry["source"].endswith("/agents/wave-orchestrator.md")
-    print("PASS test_wave_orchestrator_uses_single_source")
 
 
 def test_library_yaml_still_valid_after_sources_migration():

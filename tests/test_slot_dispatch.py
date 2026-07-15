@@ -5,7 +5,7 @@ AC coverage:
   AC4: Backward compatibility: legacy route_decision.impl_model fallback when execution_plan absent
   AC5: cdx-composer fixture proves Phase 5 and repair/fix slots both route to cursor-impl
   AC6: cld-default and cdx-default fixtures preserve current behavior
-  AC7: Phase Progress marker format remains compatible with wave-monitor
+  AC7: Phase Progress marker format remains stable for telemetry consumers
 """
 
 from __future__ import annotations
@@ -248,7 +248,7 @@ class TestCurrentBehaviorPreserved:
 
 
 class TestPhaseProgressMarkerFormat:
-    """AC7: Phase Progress markers unchanged and parseable by wave-monitor."""
+    """AC7: Phase Progress markers remain stable and machine-parseable."""
 
     _MARKER_RE = re.compile(
         r"^phase: \d+ \| name: \w+ \| status: \w+",

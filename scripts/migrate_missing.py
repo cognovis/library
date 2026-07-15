@@ -27,13 +27,13 @@ from pathlib import Path
 BEADS_WORKFLOW_SKILLS = [
     "bd-release-notes", "bead-metrics", "compound",
     "factory-check", "impl", "intake", "plan", "refactor-note", "retro",
-    "review-conventions", "wave-orchestrator", "workplan",
+    "review-conventions", "workplan",
 ]
 
 BEADS_WORKFLOW_AGENTS = [
     "bead-orchestrator.md", "changelog-updater.md", "doc-changelog-updater.md",
     "feature-doc-updater.md", "plan-reviewer.md", "quick-fix.md",
-    "review-agent.md", "verification-agent.md", "wave-monitor.md", "wave-orchestrator.md",
+    "review-agent.md", "verification-agent.md",
 ]
 
 BEADS_WORKFLOW_HOOKS = [
@@ -42,7 +42,7 @@ BEADS_WORKFLOW_HOOKS = [
 ]
 
 CODEX_TOML_BRIDGES = [
-    "bead-orchestrator.toml", "session-close.toml", "wave-orchestrator.toml",
+    "bead-orchestrator.toml", "session-close.toml",
 ]
 
 # (source_relative_to_claude_code_plugins, destination_filename_in_agents_standards)

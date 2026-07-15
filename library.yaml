@@ -1091,6 +1091,36 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: cmux-bead-dispatch
+    description: 'use when: the active long-running agent in cmux must implement
+      one or more explicit beads with one fresh surface per bead and dependency-safe
+      advancement. NOT for: dispatch outside cmux, one session for multiple beads,
+      or durable unattended scheduling.'
+    source: https://github.com/cognovis/library-core/blob/main/skills/cmux-bead-dispatch/SKILL.md
+    requires:
+    - skill:cmux
+    - skill:cmux-workspace
+    - skill:cognovis-beads
+    - agent:judge-default
+    - standard:judge-layer
+    - standard:english-only
+    - standard:no-emoji
+    scripts:
+    - path: skills/cmux-bead-dispatch/scripts/cmux_bead_dispatch.py
+      role: helper
+      entrypoint: true
+      language: python
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+        plane: dev
+        gascity:
+          exportable: false
   - name: cmux-browser
     description: End-user browser automation with cmux. Use when you need to open
       sites, interact with pages, wait for state changes, and extract data from cmux
@@ -1121,6 +1151,24 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: cmux-workspace
+    description: 'use when: scoping cmux automation to the invoking terminal current
+      workspace, panes, surfaces, sidebar state, or socket. NOT for: browser page
+      interaction or broad cmux command discovery.'
+    source: https://github.com/cognovis/library-core/blob/main/skills/cmux-workspace/SKILL.md
+    requires:
+    - standard:english-only
+    - standard:no-emoji
+    tags:
+    - origin:original
+    - tier:core
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+        plane: dev
+        gascity:
+          exportable: false
   - name: code-navigator
     description: 'use when: navigating source code by symbol — find where a function/class
       is defined (smart_search), see the structural skeleton of a file (smart_outline),
@@ -2022,21 +2070,6 @@ library:
     tags:
     - origin:original
     - tier:domain
-  - name: wave-dispatch
-    description: Preserve wave-orchestrator operational references after handler
-      migration. Use when reading wave recovery, monitoring, integration-verification,
-      or learnings docs; not for installing runtime scripts.
-    source: https://github.com/cognovis/library-core/blob/main/skills/wave-dispatch/SKILL.md
-    requires:
-    - standard:english-only
-    tags:
-    - origin:original
-    - tier:core
-    - workflow:beads
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
   - name: workplan
     description: Triage the beads backlog into keep, fold, weed, move, and cluster
       decisions. Use when reviewing stale work, planning the next batch, or running
@@ -2132,7 +2165,7 @@ library:
       Runs four sequential role reviews on opus, does a canonical-catalog pre-check,
       writes a design doc, and returns a COUNCIL_BLOCKED verdict. Use PROACTIVELY
       before implementing a bead with design decisions — boundaries, state machines,
-      API contracts, shared scopes. Spawned per-bead by wave-orchestrator Phase 1.5.
+      API contracts, and shared scopes. Spawned per-bead by the implementation workflow.
       Triggers on "architecture review", "design review for a bead", "architecture
       council".
     source: https://github.com/cognovis/library-core/blob/main/agents/architecture-reviewer.md
@@ -2626,60 +2659,6 @@ library:
     requires:
     - skill:inject-standards
     - skill:cognovis-beads
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
-  - name: wave-monitor
-    description: 'Long-lived Haiku subagent that polls wave completion status on behalf
-      of the wave-orchestrator. Runs wave-completion.py every 60 seconds using bash
-      sleep, keeping the parent Agent() call blocked (parked) for the entire monitoring
-      window. Returns a structured JSON verdict when the wave reaches a terminal state.
-      Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.'
-    source: https://github.com/cognovis/library-core/blob/main/agents/wave-monitor.md
-    requires:
-    - skill:cognovis-beads
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
-  - name: wave-orchestrator
-    description: Orchestrate dependency-aware implementation of multiple beads in
-      waves. Use when implementing a whole feature area (eUeberweisung, eArztbrief,
-      Medistar adapter), dispatching multiple beads at once, or running parallel cld
-      -b sessions. MUST USE when user says "wave", "parallel beads", "implement all
-      beads for X", "start the beads", or references implementing more than 2 beads
-      at once. Also triggers on "cmux dispatch", "multi-bead", "wave orchestrator".
-    source: https://github.com/cognovis/library-core/blob/main/agents/wave-orchestrator.md
-    requires:
-    - agent:wave-monitor
-    - agent:architecture-reviewer
-    - agent:bead-orchestrator
-    - agent:quick-fix
-    - skill:scenario-generator
-    - skill:cognovis-beads
-    - skill:bead-reviewer
-    - skill:plan
-    - skill:spec-developer
-    handlers:
-    - wave-orchestrator-scripts/_load_hyphen_module.py
-    - wave-orchestrator-scripts/arch-signal-detect.py
-    - wave-orchestrator-scripts/wave-classify.py
-    - wave-orchestrator-scripts/wave-completion.py
-    - wave-orchestrator-scripts/wave-dispatch.py
-    - wave-orchestrator-scripts/wave-lock.py
-    - wave-orchestrator-scripts/wave-preflight.py
-    - wave-orchestrator-scripts/wave-retire.py
-    - wave-orchestrator-scripts/wave-status.py
-    - wave-orchestrator-scripts/wave_helpers.py
     tags:
     - origin:original
     - tier:domain

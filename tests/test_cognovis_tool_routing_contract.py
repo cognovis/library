@@ -22,8 +22,6 @@ BEAD_CONSUMERS = {
     "bead-author",
     "bead-orchestrator",
     "session-close",
-    "wave-monitor",
-    "wave-orchestrator",
 }
 
 

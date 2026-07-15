@@ -1311,52 +1311,44 @@ class TestValidateLibrary:
 
 
 # ---------------------------------------------------------------------------
-# AK31: wave-orchestrator end-to-end resolver smoke (against real catalog)
+# cmux-bead-dispatch end-to-end resolver smoke (against real catalog)
 # ---------------------------------------------------------------------------
 
-class TestWaveOrchestratorE2E:
-    def test_wave_orchestrator_resolver_resolves_all_deps(self):
-        """AK31: resolver resolves wave-orchestrator's full dep tree from real catalog."""
+class TestCmuxBeadDispatchE2E:
+    def test_resolver_resolves_dispatch_dependencies(self):
         import sys as _sys
         _sys.path.insert(0, str(REPO_ROOT / "scripts"))
         from lib.catalog import load_catalog, find_repo_root
         from lib.resolver import resolve_requires
         repo_root = find_repo_root(REPO_ROOT)
         catalog = load_catalog(repo_root)
-        order = resolve_requires(catalog, "agent", "wave-orchestrator", repo_root, "global")
+        order = resolve_requires(catalog, "skill", "cmux-bead-dispatch", repo_root, "global")
         names = [name for _, name in order]
-        # The 5 required deps must appear in install order
-        assert "wave-monitor" in names, f"wave-monitor not in order: {names}"
-        assert "bead-orchestrator" in names, f"bead-orchestrator not in order: {names}"
-        assert "quick-fix" in names, f"quick-fix not in order: {names}"
-        assert "bead-reviewer" in names, f"bead-reviewer not in order: {names}"
-        # wave-orchestrator itself must be last
-        assert names[-1] == "wave-orchestrator", f"wave-orchestrator should be last: {names}"
+        assert "cmux" in names
+        assert "cmux-workspace" in names
+        assert "cognovis-beads" in names
+        assert "judge-default" in names
+        assert names[-1] == "cmux-bead-dispatch"
 
-    def test_wave_orchestrator_dry_run_exits_zero(self):
-        """AK31: dry-run install of wave-orchestrator exits 0."""
+    def test_dry_run_install_exits_zero(self):
         result = run_library(
-            "agent", "use", "wave-orchestrator", "--dry-run", "--json",
+            "skill", "use", "cmux-bead-dispatch", "--dry-run", "--json",
             "--scope", "global",
             cwd=REPO_ROOT,
         )
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
-    def test_wave_orchestrator_has_requires_in_catalog(self):
-        """AK31: library.yaml wave-orchestrator entry has requires list."""
+    def test_dispatch_has_requires_in_catalog(self):
         import sys as _sys
         _sys.path.insert(0, str(REPO_ROOT / "scripts"))
         from lib.catalog import load_catalog, find_repo_root, lookup_entry
         repo_root = find_repo_root(REPO_ROOT)
         catalog = load_catalog(repo_root)
-        entry = lookup_entry(catalog, "agent", "wave-orchestrator")
+        entry = lookup_entry(catalog, "skill", "cmux-bead-dispatch")
         requires = entry.get("requires") or []
-        assert len(requires) >= 4, f"Expected >= 4 requires, got {requires}"
-        primitives_names = requires
-        assert "agent:wave-monitor" in primitives_names
-        assert "agent:bead-orchestrator" in primitives_names
-        assert "agent:quick-fix" in primitives_names
-        assert "skill:bead-reviewer" in primitives_names
+        assert "skill:cmux-workspace" in requires
+        assert "skill:cognovis-beads" in requires
+        assert "agent:judge-default" in requires
 
 
 # ---------------------------------------------------------------------------

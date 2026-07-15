@@ -21,11 +21,9 @@ DEFAULT_PATHS = [
     Path.home() / ".agents" / "skills" / "beads" / "SKILL.md",
     Path.home() / ".agents" / "skills" / "session-close" / "SKILL.md",
     Path.home() / ".agents" / "skills" / "bead-reviewer" / "SKILL.md",
-    Path.home() / ".agents" / "skills" / "wave-dispatch" / "SKILL.md",
     Path.home() / ".claude" / "agents" / "bead-orchestrator.md",
     Path.home() / ".claude" / "agents" / "quick-fix.md",
     Path.home() / ".claude" / "agents" / "session-close.md",
-    Path.home() / ".claude" / "agents" / "wave-orchestrator.md",
 ]
 
 
