@@ -1,7 +1,15 @@
-version: 1
+version: 2
+runtime_registry_version: cognovis-models-2026-07-15
 models:
   - id: haiku
     harness: claude-code
+    family: claude
+    provider: claude
+    adapter: claude-agent
+    runtime_model: haiku
+    suitability_capabilities: [fast-turnaround]
+    quality_rank: 50
+    cost_rank: 10
     tier: economy
     reasoning_levels: [low, medium]
     default_reasoning: medium
@@ -12,6 +20,13 @@ models:
       output: 5.0
   - id: sonnet
     harness: claude-code
+    family: claude
+    provider: claude
+    adapter: claude-agent
+    runtime_model: sonnet
+    suitability_capabilities: [implementation, repository-analysis, spec-review]
+    quality_rank: 80
+    cost_rank: 50
     tier: standard
     reasoning_levels: [low, medium, high, xhigh]
     default_reasoning: high
@@ -22,6 +37,13 @@ models:
       output: 15.0
   - id: opus
     harness: claude-code
+    family: claude
+    provider: claude
+    adapter: claude-agent
+    runtime_model: opus
+    suitability_capabilities: [architecture-review, long-context, repository-analysis, spec-review]
+    quality_rank: 100
+    cost_rank: 100
     tier: premium
     reasoning_levels: [medium, high, xhigh]
     default_reasoning: high
@@ -32,6 +54,13 @@ models:
       output: 75.0
   - id: gpt-5.4-mini
     harness: codex
+    family: openai
+    provider: codex
+    adapter: codex-exec
+    runtime_model: gpt-5.4-mini
+    suitability_capabilities: [fast-turnaround, repository-analysis]
+    quality_rank: 55
+    cost_rank: 15
     tier: economy
     reasoning_levels: [low, medium, high]
     default_reasoning: medium
@@ -42,6 +71,13 @@ models:
       output: 1.6
   - id: gpt-5.4
     harness: codex
+    family: openai
+    provider: codex
+    adapter: codex-exec
+    runtime_model: gpt-5.4
+    suitability_capabilities: [implementation, repository-analysis, spec-review]
+    quality_rank: 75
+    cost_rank: 45
     tier: standard
     reasoning_levels: [low, medium, high, xhigh]
     default_reasoning: high
@@ -52,6 +88,13 @@ models:
       output: 8.0
   - id: gpt-5.5
     harness: codex
+    family: openai
+    provider: codex
+    adapter: codex-exec
+    runtime_model: gpt-5.5
+    suitability_capabilities: [architecture-review, implementation, repository-analysis, spec-review]
+    quality_rank: 90
+    cost_rank: 75
     tier: premium
     reasoning_levels: [low, medium, high, xhigh]
     default_reasoning: high
@@ -60,3 +103,48 @@ models:
     cost:
       input: 8.0
       output: 32.0
+  - id: gpt-5.6-sol
+    harness: codex
+    family: openai
+    provider: codex
+    adapter: codex-exec
+    runtime_model: gpt-5.6-sol
+    suitability_capabilities: [architecture-review, long-context, repository-analysis, spec-review]
+    quality_rank: 100
+    cost_rank: 90
+    tier: frontier
+    reasoning_levels: [high, xhigh]
+    default_reasoning: high
+    context: large
+    vision: true
+    cost: {input: 10.0, output: 40.0}
+  - id: gpt-5.6-terra
+    harness: codex
+    family: openai
+    provider: codex
+    adapter: codex-impl
+    runtime_model: gpt-5.6-terra
+    suitability_capabilities: [implementation, repository-analysis, test-execution]
+    quality_rank: 90
+    cost_rank: 60
+    tier: premium
+    reasoning_levels: [medium, high, xhigh]
+    default_reasoning: high
+    context: large
+    vision: true
+    cost: {input: 6.0, output: 24.0}
+  - id: gpt-5.6-luna
+    harness: codex
+    family: openai
+    provider: codex
+    adapter: codex-exec
+    runtime_model: gpt-5.6-luna
+    suitability_capabilities: [fast-turnaround, repository-analysis, spec-review]
+    quality_rank: 75
+    cost_rank: 20
+    tier: standard
+    reasoning_levels: [medium, high]
+    default_reasoning: medium
+    context: large
+    vision: true
+    cost: {input: 2.5, output: 10.0}

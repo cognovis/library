@@ -141,7 +141,7 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 (refuses if ID has children)
     -bq, --bead-quick ID        Launch bead-orchestrator with strict quick workflow
     -br, --bead-review ID       Fresh-context critical bead-spec/readiness review
-                                (uses bead-reviewer skill; defaults to --model opus)
+                                (uses opposite-family capability routing)
     -bp, --plan-label LABEL     Launch with /plan --label LABEL
          --coordinator-workspace workspace:<n>
                                 Coordinator callback workspace ref (requires surface)
@@ -437,22 +437,20 @@ if [[ -n "$bead_review_id" ]]; then
 
     bead_review_id=$(_expand_bead_id "$bead_review_id")
     local bead_review_short=$(_bead_short "$bead_review_id")
-    local bead_review_model="opus"
     local index=1
     while (( index <= ${#claude_args[@]} )); do
         case "${claude_args[index]}" in
             --model)
-                (( index++ ))
-                bead_review_model="${claude_args[index]:-}"
+                echo "ERROR: -br resolves its reviewer from capabilities; --model is not accepted" >&2
+                exit 2
                 ;;
-            --model=*) bead_review_model="${claude_args[index]#--model=}" ;;
+            --model=*)
+                echo "ERROR: -br resolves its reviewer from capabilities; --model is not accepted" >&2
+                exit 2
+                ;;
         esac
         (( index++ ))
     done
-    if [[ -z "$bead_review_model" ]]; then
-        echo "ERROR: --model requires a value" >&2
-        exit 2
-    fi
 
     export CLD_BEAD_LINE=cld
     printf '\033]1;%s\033\\' "${bead_review_id}-review"
@@ -460,11 +458,9 @@ if [[ -n "$bead_review_id" ]]; then
     _cmux_rename "${bead_review_short}-review"
 
     "${BEAD_REVIEW_CLIENT}" \
-        --provider claude \
-        --adapter claude-agent \
         --bead-id "$bead_review_id" \
         --repo-dir "$PWD" \
-        --model "$bead_review_model"
+        --lead-family claude
     local review_exit=$?
     if _has_coordinator_callback && command -v cmux &>/dev/null; then
         cmux trigger-flash --surface "$coordinator_surface" 2>/dev/null || true
