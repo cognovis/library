@@ -761,6 +761,42 @@ class TestWorkflowListAndSync:
 # ---------------------------------------------------------------------------
 
 class TestMcpUse:
+    def test_mcp_use_defaults_to_global_lockfile(self, project_dir, tmp_path):
+        result = run_library(
+            "mcp", "use", "test-mcp-server", "--dry-run", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(tmp_path / "settings.json"),
+            },
+        )
+
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        lockfile_changes = data.get("lockfile_changes", [])
+        assert lockfile_changes == [
+            {
+                "path": str(tmp_path / "home" / ".config" / "library" / "global.lock"),
+                "operation": "upsert",
+                "entry": "test-mcp-server",
+            }
+        ]
+
+    def test_mcp_use_rejects_project_scope_before_mutation(self, project_dir, tmp_path):
+        claude_settings = tmp_path / "settings.json"
+        result = run_library(
+            "mcp", "use", "test-mcp-server", "--scope", "project", "--json",
+            cwd=project_dir,
+            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+        )
+
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "user-global" in data["message"]
+        assert not claude_settings.exists()
+        assert not (project_dir / ".library.lock").exists()
+
     def test_mcp_use_exits_zero(self, project_dir, tmp_path):
         # mcp needs target config files — point to temp files
         claude_settings = tmp_path / "settings.json"
@@ -812,6 +848,46 @@ class TestMcpUse:
 # ---------------------------------------------------------------------------
 
 class TestMcpRemove:
+    def test_mcp_remove_defaults_to_global_lockfile(self, project_dir, tmp_path):
+        result = run_library(
+            "mcp", "remove", "test-mcp-server", "--dry-run", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(tmp_path / "settings.json"),
+            },
+        )
+
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        lockfile_ops = [
+            operation
+            for operation in data.get("operations", [])
+            if operation.get("operation") == "remove_lockfile_entry"
+        ]
+        assert lockfile_ops == [
+            {
+                "operation": "remove_lockfile_entry",
+                "path": str(tmp_path / "home" / ".config" / "library" / "global.lock"),
+                "details": "remove 'test-mcp-server'",
+            }
+        ]
+
+    def test_mcp_remove_rejects_project_scope_before_mutation(self, project_dir, tmp_path):
+        claude_settings = tmp_path / "settings.json"
+        result = run_library(
+            "mcp", "remove", "test-mcp-server", "--scope", "project", "--json",
+            cwd=project_dir,
+            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+        )
+
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "user-global" in data["message"]
+        assert not claude_settings.exists()
+        assert not (project_dir / ".library.lock").exists()
+
     def test_mcp_remove_exits_zero(self, project_dir, tmp_path):
         claude_settings = tmp_path / "settings.json"
         run_library(
