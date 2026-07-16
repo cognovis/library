@@ -787,7 +787,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--scope", "project", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
 
         assert result.returncode != 0
@@ -803,7 +806,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
@@ -812,7 +818,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert "not yet implemented" not in result.stdout
         assert "not yet implemented" not in result.stderr
@@ -822,7 +831,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert "Run: python3 scripts/install-mcp.py" not in result.stdout
         assert "Run: python3 scripts/install-mcp.py" not in result.stderr
@@ -832,7 +844,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         if result.returncode == 0:
             lockfile = project_dir / ".library.lock"
@@ -891,7 +906,10 @@ class TestMcpRemove:
         result = run_library(
             "mcp", "remove", "test-mcp-server", "--scope", "project", "--dry-run", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
 
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
@@ -904,6 +922,21 @@ class TestMcpRemove:
                 "details": "remove legacy project lock record 'test-mcp-server'",
             }
         ]
+        assert not claude_settings.exists()
+
+        cleanup = run_library(
+            "mcp", "remove", "test-mcp-server", "--scope", "project", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
+        )
+        assert cleanup.returncode == 0, (
+            f"stdout={cleanup.stdout}\nstderr={cleanup.stderr}"
+        )
+        lock_data = yaml.safe_load((project_dir / ".library.lock").read_text())
+        assert lock_data["installed"] == []
         assert not claude_settings.exists()
 
     def test_regression_mcp_project_sync_is_rejected(self, project_dir):
@@ -936,7 +969,10 @@ class TestMcpRemove:
         run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         result = run_library(
             "mcp", "remove", "test-mcp-server", "--json",

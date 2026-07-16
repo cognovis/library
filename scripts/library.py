@@ -184,7 +184,10 @@ def build_parser() -> argparse.ArgumentParser:
             "--scope",
             choices=["project", "global"],
             default=None,
-            help="Scope (MCP defaults to global; other primitives default to project)",
+            help=(
+                "Scope (MCP defaults to global; MCP project scope removes only a "
+                "legacy lock record; other primitives default to project)"
+            ),
         )
         remove_p.add_argument(
             "--target-project",
@@ -1301,14 +1304,10 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
 
-    try:
-        scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
-    except LibraryError as exc:
-        if use_json:
-            print_json(error_result(str(exc), exc.exit_code))
-        else:
-            print(f"Error: {exc}", file=sys.stderr)
-        return exc.exit_code
+    if primitive == "mcp":
+        scope = explicit_scope or "global"
+    else:
+        scope = explicit_scope or "project"
 
     try:
         result = _dispatch_remove(primitive, catalog, name, repo_root, scope, dry_run, harness)
@@ -1379,7 +1378,16 @@ def _dispatch_remove(
         return remove_simple_file(catalog=catalog, primitive_name="workflow", name=name,
                                   repo_root=repo_root, scope=scope, dry_run=dry_run)
     elif primitive == "mcp":
-        from lib.installers.mcp_installer import remove_mcp
+        from lib.installers.mcp_installer import (
+            remove_mcp,
+            remove_project_mcp_lock_record,
+        )
+        if scope == "project":
+            return remove_project_mcp_lock_record(
+                name=name,
+                repo_root=repo_root,
+                dry_run=dry_run,
+            )
         import os
         env_overrides: dict = {}
         for key in ["CLAUDE_SETTINGS_FILE", "CODEX_CONFIG_FILE", "OPENCODE_CONFIG_FILE"]:
