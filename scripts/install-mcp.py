@@ -272,23 +272,26 @@ def _matches_legacy_descriptor(
     existing: Any, legacy_descriptors: list[dict]
 ) -> bool:
     """Match one complete declared legacy descriptor."""
-    return any(_matches_descriptor(existing, descriptor) for descriptor in legacy_descriptors)
+    return any(
+        _matches_descriptor(existing, descriptor) for descriptor in legacy_descriptors
+    )
 
 
 def _matches_descriptor(existing: Any, expected: dict) -> bool:
     """Match a provenance-less descriptor exactly, excluding only `_origin`."""
     if not hasattr(existing, "get") or existing.get("_origin") is not None:
         return False
-    return _plain_descriptor(existing) == _plain_descriptor(expected)
+    existing_without_origin = {
+        key: value for key, value in existing.items() if str(key) != "_origin"
+    }
+    return _plain_descriptor(existing_without_origin) == _plain_descriptor(expected)
 
 
 def _plain_descriptor(value: Any) -> Any:
     """Convert JSON and tomlkit values into comparable plain Python values."""
     if hasattr(value, "items"):
         return {
-            str(key): _plain_descriptor(item)
-            for key, item in value.items()
-            if str(key) != "_origin"
+            str(key): _plain_descriptor(item) for key, item in value.items()
         }
     if isinstance(value, (list, tuple)):
         return [_plain_descriptor(item) for item in value]
