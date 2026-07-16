@@ -205,16 +205,14 @@ def test_cld_bead_modes_without_callback_do_not_inject_callback_contract(
     assert "trigger-flash" not in prompt
 
 
-# Guards CL-sl3j: both launcher modes must enter the one canonical orchestrator,
-# while the prompt preserves the strict auto/quick Bead Claim distinction.
 @pytest.mark.parametrize(
-    ("flag", "requested_workflow"),
+    ("flag", "execution_mode"),
     [("-b", "auto"), ("-bq", "quick")],
 )
-def test_regression_cld_bead_modes_forward_requested_workflow(
+def test_cld_bead_modes_invoke_implementation_loop_directly(
     tmp_path: Path,
     flag: str,
-    requested_workflow: str,
+    execution_mode: str,
 ) -> None:
     result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
         tmp_path,
@@ -225,106 +223,27 @@ def test_regression_cld_bead_modes_forward_requested_workflow(
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert _argv_flag_value(argv, "--agent") == "bead-orchestrator"
-    assert f"requested_workflow={requested_workflow}" in prompt
-    if requested_workflow == "quick":
-        assert "requested_workflow=auto" not in prompt
-        assert "do not fall back to full" in prompt
+    assert _argv_flag_value(argv, "--agent") is None
+    assert "bead-implementation-loop" in prompt
+    assert f"execution_mode={execution_mode}" in prompt
+    assert "canonical Session Close" in prompt
+    if execution_mode == "quick":
+        assert "unconditional explicit Quick" in prompt
 
 
-# Force-tier must reach the direct claim preflight symmetrically.
-@pytest.mark.parametrize("flag", ["-b", "-bq"])
-def test_cld_bead_modes_forward_force_tier_to_direct_preflight(
-    tmp_path: Path,
-    flag: str,
-) -> None:
-    result, _argv_file, prompt_file, called_file, _bd_log = _run_cld(
-        tmp_path,
-        [flag, "CL-smoke", "--force-tier", "mcp"],
-    )
+def test_cld_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
+    source = CLD_BIN.read_text(encoding="utf-8")
 
-    assert result.returncode == 0, result.stderr
-    assert called_file.exists()
-    prompt = prompt_file.read_text(encoding="utf-8")
-    assert "force_tier=mcp" in prompt
-    assert "phase0-claim.py" in prompt
-    assert "bead_claim_prepare" not in prompt
-    assert "takes precedence over requested_workflow" in prompt
-
-
-def test_regression_cld_help_distinguishes_forced_quick_from_strict_bq(
-    tmp_path: Path,
-) -> None:
-    result, _argv_file, _prompt_file, _called_file, _bd_log = _run_cld(
-        tmp_path,
-        ["--help"],
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "quick, gsd, paul, mcp" in result.stdout
-    assert "solo" not in result.stdout
-    assert "quick is an eligibility override, unlike strict -bq" in result.stdout
-
-
-@pytest.mark.parametrize("force_tier", ["solo", "infra"])
-def test_regression_cld_rejects_unsupported_force_tier_before_launch(
-    tmp_path: Path,
-    force_tier: str,
-) -> None:
-    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(
-        tmp_path,
-        ["-b", "CL-smoke", "--force-tier", force_tier],
-    )
-
-    assert result.returncode == 2
-    assert f"invalid force tier '{force_tier}'" in result.stderr
-    assert not called_file.exists()
-
-
-@pytest.mark.parametrize("flag", ["-b", "-bq"])
-def test_cld_bead_modes_default_route_profile_is_parameter_only_with_ambient_env(
-    tmp_path: Path,
-    flag: str,
-) -> None:
-    result, _argv_file, prompt_file, called_file, _bd_log = _run_cld(
-        tmp_path,
-        [flag, "CL-smoke"],
-        env_overrides={"CLD_ROUTE_PROFILE": "evil-profile"},
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert called_file.exists()
-    assert "CLD_ROUTE_PROFILE=\n" in result.stdout
-    assert "CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
-    prompt = prompt_file.read_text(encoding="utf-8")
-    assert "Route profile: cld-default" in prompt
-    assert "route_profile=cld-default" in prompt
-    assert "phase0-claim.py" in prompt
-    assert "bead_claim_prepare" not in prompt
-    assert "evil-profile" not in prompt
-
-
-@pytest.mark.parametrize("flag", ["-b", "-bq"])
-def test_cld_bead_modes_explicit_route_profile_is_parameter_only_with_ambient_env(
-    tmp_path: Path,
-    flag: str,
-) -> None:
-    result, _argv_file, prompt_file, called_file, _bd_log = _run_cld(
-        tmp_path,
-        [flag, "CL-smoke", "--route-profile", "custom-profile"],
-        env_overrides={"CLD_ROUTE_PROFILE": "evil-profile"},
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert called_file.exists()
-    assert "CLD_ROUTE_PROFILE=\n" in result.stdout
-    assert "CLD_ROUTE_PROFILE=evil-profile" not in result.stdout
-    prompt = prompt_file.read_text(encoding="utf-8")
-    assert "Route profile: custom-profile" in prompt
-    assert "route_profile=custom-profile" in prompt
-    assert "phase0-claim.py" in prompt
-    assert "bead_claim_prepare" not in prompt
-    assert "evil-profile" not in prompt
+    for banned in (
+        "phase0-claim.py",
+        "requested_workflow",
+        "route_profile",
+        "force_tier",
+        'claude_args+=("--agent" "bead-orchestrator")',
+        "codex-impl",
+        "codex-exec",
+    ):
+        assert banned not in source
 
 
 @pytest.mark.parametrize("flag", ["-b", "-bq"])

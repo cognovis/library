@@ -868,6 +868,48 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
 
 
 @pytest.mark.parametrize(
+    ("args", "execution_mode"),
+    [
+        (["-b", "CL-smoke", "--exec"], "auto"),
+        (["-bq", "CL-smoke"], "quick"),
+    ],
+)
+def test_cdx_bead_modes_invoke_implementation_loop_directly(
+    tmp_path: Path,
+    args: list[str],
+    execution_mode: str,
+) -> None:
+    result, _argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "bead-implementation-loop" in prompt
+    assert f"execution_mode={execution_mode}" in prompt
+    assert "canonical Session Close" in prompt
+    if execution_mode == "quick":
+        assert "unconditional explicit Quick" in prompt
+
+
+def test_cdx_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
+    source = _CDX_BIN.read_text(encoding="utf-8")
+
+    for banned in (
+        "phase0-claim.py",
+        "resolve_slot_dispatch.py",
+        "route_profile",
+        "cursor-impl.py",
+        "codex-impl.py",
+        "codex-exec.py",
+        "claude-impl.py",
+    ):
+        assert banned not in source
+
+
+@pytest.mark.parametrize(
     "args",
     [
         ["-b", "CL-smoke", "--exec"],
