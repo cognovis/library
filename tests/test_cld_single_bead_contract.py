@@ -67,7 +67,8 @@ def _write_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
         "if len(args) >= 2 and args[0] == 'show':\n"
         "    bead_id = args[1]\n"
         "    if '--children' in args:\n"
-        "        print(json.dumps({bead_id: []}))\n"
+        "        count = int(os.environ.get('BD_CHILD_COUNT', '0'))\n"
+        "        print(json.dumps({bead_id: [{'id': f'{bead_id}.{index + 1}'} for index in range(count)]}))\n"
         "    else:\n"
         "        print(json.dumps([{'id': bead_id, 'status': os.environ.get('BD_STATUS', 'open')}]))\n"
         "    raise SystemExit(0)\n"
@@ -244,6 +245,34 @@ def test_cld_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
         "codex-exec",
     ):
         assert banned not in source
+
+
+@pytest.mark.parametrize("flag", ["-b", "-bq"])
+def test_cld_bead_modes_reject_parent_before_git_or_harness(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    git_called = tmp_path / "git-called"
+    _write_executable(
+        tmp_path / "git",
+        "#!/bin/sh\n"
+        "touch \"$GIT_CALLED_FILE\"\n"
+        "exit 0\n",
+    )
+
+    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-parent"],
+        env_overrides={
+            "BD_CHILD_COUNT": "1",
+            "GIT_CALLED_FILE": str(git_called),
+        },
+    )
+
+    assert result.returncode == 2
+    assert "has 1 children" in result.stderr
+    assert not git_called.exists()
+    assert not called_file.exists()
 
 
 @pytest.mark.parametrize("flag", ["-b", "-bq"])
