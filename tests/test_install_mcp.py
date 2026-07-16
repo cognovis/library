@@ -263,6 +263,24 @@ class TestInstallMcp(unittest.TestCase):
                 self.assertEqual(action, "skipped_manual")
                 self.assertEqual(updated, config)
 
+    def test_nested_origin_field_remains_part_of_exact_descriptor(self):
+        module = load_install_mcp_module()
+        snippet = {"command": "example", "env": {"MODE": "safe"}}
+        existing = {
+            "command": "example",
+            "env": {"MODE": "safe", "_origin": "nested-value"},
+        }
+
+        _, action = module._merge_json_map(
+            {"mcpServers": {"example": existing}},
+            "mcpServers",
+            "example",
+            snippet,
+            "library:mcp:example",
+        )
+
+        self.assertEqual(action, "skipped_manual")
+
     def test_toml_adoption_requires_exact_full_descriptor(self):
         import tomlkit
 
