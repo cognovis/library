@@ -419,8 +419,10 @@ class TestCmdStatusImpl:
         monkeypatch.setattr("lib.installers.mcp_installer._import_install_mcp", lambda: object())
         monkeypatch.setattr("lib.installers.mcp_installer._install_to_harness", lambda *args, **kwargs: 0)
         monkeypatch.setattr("lib.installers.mcp_installer.get_remote_sha", lambda *args, **kwargs: INSTALLED_SHA)
+        from lib import lockfile
+        monkeypatch.setattr(lockfile, "GLOBAL_LOCKFILE", tmp_path / ".library-global.lock")
 
-        install_result = install_mcp(catalog, "open-brain", tmp_path, scope="project")
+        install_result = install_mcp(catalog, "open-brain", tmp_path, scope="global")
         assert install_result["status"] == "ok"
 
         mock_result = MagicMock()
@@ -428,7 +430,7 @@ class TestCmdStatusImpl:
         mock_result.stdout = f"{INSTALLED_SHA}\trefs/heads/main\n"
 
         with patch("subprocess.run", return_value=mock_result):
-            result = cmd_status_impl({}, "all", tmp_path, scope="project")
+            result = cmd_status_impl({}, "all", tmp_path, scope="global")
 
         entries = result["entries"]
         assert len(entries) == 1

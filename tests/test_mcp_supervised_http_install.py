@@ -35,6 +35,13 @@ HTTP_URL = "http://127.0.0.1:8765/mcp"
 PROJECT_SUFFIX = "mcp-servers/cognovis-tools"
 
 
+@pytest.fixture(autouse=True)
+def isolate_global_lockfile(tmp_path, monkeypatch):
+    from lib import lockfile
+
+    monkeypatch.setattr(lockfile, "GLOBAL_LOCKFILE", tmp_path / ".library-global.lock")
+
+
 def test_remove_dispatch_reports_handler_failure() -> None:
     handler = MagicMock(side_effect=SystemExit(2))
     module = MagicMock(install_claude_code=handler)
