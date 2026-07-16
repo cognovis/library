@@ -183,7 +183,8 @@ def build_parser() -> argparse.ArgumentParser:
         remove_p.add_argument(
             "--scope",
             choices=["project", "global"],
-            default="project",
+            default=None,
+            help="Scope (MCP defaults to global; other primitives default to project)",
         )
         remove_p.add_argument(
             "--target-project",
@@ -483,6 +484,25 @@ def _resolve_default_scope(catalog: dict, primitive: str, name: str) -> str:
         return "project"
 
 
+def _resolve_command_scope(
+    catalog: dict,
+    primitive: str,
+    name: str,
+    explicit_scope: str | None,
+) -> str:
+    """Resolve public CLI scope while enforcing primitive filesystem invariants."""
+    if primitive == "mcp":
+        if explicit_scope == "project":
+            raise LibraryError(
+                "MCP registrations are user-global and cannot use project scope. "
+                "Omit --scope or pass --scope global."
+            )
+        return "global"
+    if explicit_scope is not None:
+        return explicit_scope
+    return _resolve_default_scope(catalog, primitive, name)
+
+
 def _check_harness_support(entry: dict, harness: str) -> str | None:
     """Return an error message when the entry rejects the target harness."""
     harness_map = {
@@ -545,11 +565,14 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
 
-    # Resolve scope: explicit --scope takes priority; otherwise use catalog entry's default_scope
-    if explicit_scope is not None:
-        scope = explicit_scope
-    else:
-        scope = _resolve_default_scope(catalog, primitive, name)
+    try:
+        scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
 
     # Guard: check harness_support on the main entry BEFORE installing any dependencies.
     # This prevents partial mutations (dep installs) when the requested entry itself
@@ -1266,7 +1289,7 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     use_json = getattr(args, "json", False)
     dry_run = getattr(args, "dry_run", False)
     name = getattr(args, "name", None)
-    scope = getattr(args, "scope", "project")
+    explicit_scope = getattr(args, "scope", None)
     harness = getattr(args, "harness", "claude_code")
     primitive = args.primitive
 
@@ -1277,6 +1300,15 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         else:
             print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
+
+    try:
+        scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
 
     try:
         result = _dispatch_remove(primitive, catalog, name, repo_root, scope, dry_run, harness)
