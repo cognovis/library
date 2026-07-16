@@ -174,6 +174,15 @@ def build_parser() -> argparse.ArgumentParser:
             default="all",
             help="Target harness (default: all)",
         )
+        use_p.add_argument(
+            "--target",
+            type=Path,
+            default=None,
+            help=(
+                "Override the deploy target file (runtime-config only). "
+                "Use to compose to a temp path instead of the live config."
+            ),
+        )
 
         # remove
         remove_p = verb_sub.add_parser("remove", help="Remove an installed entry")
@@ -1018,6 +1027,8 @@ def _dispatch_use(
         return _use_simple_file(args, repo_root, catalog, "agent-base", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "workflow":
         return _use_simple_file(args, repo_root, catalog, "workflow", name, scope, dry_run, use_json, harness, install_mode)
+    elif primitive == "runtime-config":
+        return _use_runtime_config(args, repo_root, catalog, name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "mcp":
         return _use_mcp(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
     elif primitive == "guardrail":
@@ -1166,6 +1177,45 @@ def _use_simple_file(
             dry_run=dry_run,
             harness=harness,
             install_mode=install_mode,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
+def _use_runtime_config(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    name: str,
+    scope: str,
+    dry_run: bool,
+    use_json: bool,
+    harness: str,
+    install_mode: str,
+) -> int:
+    """Compose and deploy a runtime-config (base + global overlay)."""
+    from lib.runtime_config import install_runtime_config
+
+    target_override = getattr(args, "target", None)
+    try:
+        result = install_runtime_config(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+            install_mode=install_mode,
+            target_override=Path(target_override) if target_override else None,
         )
         if use_json:
             print_json(result)

@@ -232,6 +232,9 @@ def _entry_source(entry: dict) -> str:
     """Extract a display-friendly source string from a catalog entry."""
     if entry.get("source"):
         return entry["source"]
+    # runtime-config entries carry base/global_overlay instead of a single source.
+    if entry.get("base"):
+        return entry["base"]
     if isinstance(entry.get("sources"), dict):
         sources = entry["sources"]
         return sources.get("claude") or sources.get("codex") or "(multi-source)"

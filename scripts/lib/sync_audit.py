@@ -285,6 +285,10 @@ def reinstall_entry(
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
+    elif entry_type == "runtime-config":
+        from .runtime_config import install_runtime_config
+        install_runtime_config(catalog=catalog, name=entry_name, repo_root=repo_root,
+                               scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "mcp":
         from .installers.mcp_installer import install_mcp
         install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
@@ -420,7 +424,7 @@ def cmd_audit_impl(
             _install_p = _entry_path(install_target_str, repo_root) if install_target_str else None
             if (
                 _install_p is not None
-                and _install_p.suffix in (".js", ".md", ".py", ".toml")
+                and _install_p.suffix in (".js", ".md", ".py", ".toml", ".yml", ".yaml")
                 and not _install_p.exists()
                 and not _install_p.is_symlink()
             ):
