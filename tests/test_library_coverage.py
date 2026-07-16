@@ -68,7 +68,7 @@ EXPECTED_COGNOVIS_SKILLS = {
     "nbj-audit", "people-query", "playwright-cli",
     "plugin-management", "portless", "project-context", "project-health", "project-setup",
     "prompt-refiner", "spec-developer", "standards", "summarize",
-    "sync-standards", "system-prompt-audit", "token-cost", "ui-cli", "vision", "vision-author",
+    "sync-standards", "token-cost", "ui-cli", "vision", "vision-author",
 }
 
 # Expected platform-owned skills

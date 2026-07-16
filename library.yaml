@@ -2029,22 +2029,6 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
-  - name: system-prompt-audit
-    description: Audit Anthropic system prompt changes against the local baseline
-      and review custom prompts for compatibility. Use when checking for new Claude
-      versions, "run system prompt audit", "audit system prompts", or "check for prompt
-      updates".
-    source: https://github.com/cognovis/library-core/blob/main/skills/system-prompt-audit/SKILL.md
-    requires:
-    - standard:english-only
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
   - name: token-cost
     description: Measure static context token overhead for agent sessions. Use when
       auditing context window usage, checking skill/agent/conventions token costs,

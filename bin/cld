@@ -199,52 +199,6 @@ if ${verbose}; then
     claude_args=("--verbose" "${claude_args[@]}")
 fi
 
-# ── System Prompt Injection ──────────────────────────────────────
-source "${0:A:h}/lib/cld-system-prompt.zsh"
-
-_sp_registry_dir="${0:A:h}/../system-prompts"
-_sp_registry="${_sp_registry_dir}/registry.yml"
-
-if [[ -f "$_sp_registry" ]]; then
-    _sp_result=$(_cld_resolve_system_prompt "$_sp_registry" "${PWD}")
-    if [[ -n "$_sp_result" ]]; then
-        # Wire format: "file:<relative-path> mode:<replace|append>"
-        # Assumes no spaces in the filename (all paths are relative to registry dir)
-        _sp_file="${_sp_result#file:}"
-        _sp_file="${_sp_file% mode:*}"
-        _sp_mode="${_sp_result##* mode:}"
-        _sp_path="${_sp_registry_dir}/${_sp_file}"
-        # Resolve to absolute path using python3 (portable; realpath -m is GNU-only)
-        _sp_path_real=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$_sp_path" 2>/dev/null || echo "$_sp_path")
-        _sp_registry_dir_real=$(python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$_sp_registry_dir" 2>/dev/null || echo "$_sp_registry_dir")
-
-        if [[ "$_sp_path_real" != "${_sp_registry_dir_real}/"* ]]; then
-            echo "[cld] ERROR: System prompt file path escapes registry dir: $_sp_file" >&2
-            # Skip injection — refuse path traversal attempt
-        elif [[ ! -f "$_sp_path_real" ]]; then
-            echo "[cld] ERROR: System prompt file not found: $_sp_path_real" >&2
-            # Skip injection — continue without system prompt flag
-        else
-            _sp_path="$_sp_path_real"
-            if [[ "$_sp_mode" == "replace" ]]; then
-                claude_args=("--system-prompt-file" "$_sp_path" "${claude_args[@]}")
-            elif [[ "$_sp_mode" == "append" ]]; then
-                claude_args=("--append-system-prompt-file" "$_sp_path" "${claude_args[@]}")
-            else
-                echo "[cld] ERROR: Unknown system prompt mode: $_sp_mode (expected: replace or append)" >&2
-            fi
-
-            if [[ "$_sp_mode" == "replace" || "$_sp_mode" == "append" ]] && [[ "${CLD_DEBUG:-}" == "1" ]]; then
-                echo "[cld] System prompt: ${_sp_file} (mode: ${_sp_mode})" >&2
-            fi
-        fi
-    else
-        if [[ "${CLD_DEBUG:-}" == "1" ]]; then
-            echo "[cld] System prompt: none (no match, no default)" >&2
-        fi
-    fi
-fi
-
 # ── Auto-expand short bead IDs ──────────────────────────────────
 # e.g. "oms3" → "mira-oms3" when issue_prefix is "mira"
 if [[ -n "$bead_id$bead_quick_id$bead_review_id" && -z "${BD_BIN}" ]]; then
