@@ -218,9 +218,11 @@ The script exercises built-in test mode, manual stdin injection, automated pytes
 3. Test hooks before deploying (manual + `--test` flag)
 4. Fail secure -- `exit 2` on errors in blocking hooks (PreToolUse, Stop); `exit 0` fail-open in non-blocking hooks (PostToolUse, SessionStart, etc.) — see § Exit codes
 5. Keep hooks fast (< 1 second). WHY: Hooks run synchronously; slow hooks degrade the interactive experience.
-6. Use UV for dependency isolation. WHY: Avoids conflicts with project dependencies.
-7. Log decisions for audit trails
-8. Commit hook scripts to git for team sharing
+6. Keep lifecycle-wide and high-frequency hook entrypoints on the Python standard library where practical. WHY: Import and environment startup cost is paid on every matching event.
+7. When a third-party dependency is justified, isolate it with UV and measure the complete hook against the <1 second budget. WHY: Dependency isolation prevents project conflicts but does not remove startup latency.
+8. Serialize structured hook input with `json.dumps`, never `str()`. WHY: `tool_input` may be any JSON value and must retain valid JSON semantics.
+9. Log decisions for audit trails
+10. Commit hook scripts to git for team sharing
 
 ## Do NOT
 
@@ -234,6 +236,8 @@ The script exercises built-in test mode, manual stdin injection, automated pytes
   WHY: An untested blocking hook can lock out all tool use, requiring manual settings.json editing to recover.
 - Do NOT put slow operations (network calls, large file scans) in PreToolUse hooks
   WHY: PreToolUse runs before every tool call. A 2-second hook on every edit destroys productivity.
+- Do NOT add third-party imports to lifecycle-wide capture or observability hooks without a measured need
+  WHY: PostToolUse and similar broad matchers may execute for every tool call. A standard-library entrypoint avoids repeated environment and import overhead; external formatters or scoped project hooks remain valid when their matcher and latency budget justify them.
 - Do NOT hardcode absolute paths in hook scripts meant for team sharing
   WHY: Breaks on other machines. Use relative paths from project root or `$HOME`.
 
