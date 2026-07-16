@@ -1,7 +1,12 @@
 ## [Unreleased]
 
+### Changed
+
+- *(clc-z9wp, cld/cdx)* `-b` and `-bq` now converge on the installed single-bead implementation loop. Explicit `-bq` means unconditional Quick for every executable leaf, without effort classification, route profiles, forced-tier overrides, or logical impl/exec adapter selection; the launched harness implements natively and reserves the neutral agent-session gateway for opposite-family review.
+
 ### Fixed
 
+- *(clc-z9wp, Library catalog)* Register the new `bead-implementation-loop` skill as a cross-harness global primitive so Library installation materializes the canonical `.agents` copy and Claude/Cursor bridges instead of refreshing only a pre-existing Codex-local copy. Catalog coverage now includes the loop and drops the already-retired `pencil` expectation.
 - *(CL-yum0, MCP installer)* MCP registrations and their authoritative lock records are now consistently user-global: `mcp use` and `mcp remove` default to `~/.config/library/global.lock`; project-scoped use/sync and lower-level registration mutations are rejected, while explicit project-scoped remove provides lock-only cleanup for legacy records. Non-MCP removal retains its historical project default regardless of catalog install hints. Existing provenance-less harness entries are adopted only on an exact full-descriptor match to the canonical or a declared legacy descriptor; foreign or non-identical entries remain untouched.
 - *(clc-c35e, agent sessions/catalog)* The shared bead-review client starts provider reviews in background mode, polls the durable handle to a terminal result, and cancels timed-out or orphaned sessions. The `cognovis-beads` catalog rename is now complete across active dependency declarations, `cdx` runtime discovery, dispatch helpers, and fleet tests, removing the remaining `skill:beads` references that broke dependency resolution.
 - *(clc-m4rc, audit)* Top-level Library audits now compare each bootstrap-installed `/library` skill surface and Python control plane with the running platform source, report legacy lock entries without `checksum_type` as actionable local drift, and retain agent capability frontmatter inside the checksum boundary. The recurring drift-summary path receives the same deterministic findings.
