@@ -45,6 +45,13 @@ from lib.installers.mcp_installer import (  # noqa: E402
 REVISION = "a" * 40
 
 
+@pytest.fixture(autouse=True)
+def isolate_global_lockfile(tmp_path, monkeypatch):
+    from lib import lockfile
+
+    monkeypatch.setattr(lockfile, "GLOBAL_LOCKFILE", tmp_path / ".library-global.lock")
+
+
 class TestEnsureMcpDeployClone:
     """Unit tests for ensure_mcp_deploy_clone helper."""
 

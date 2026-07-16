@@ -57,6 +57,16 @@ class McpDeployCheckout:
     source_revision: str | None
 
 
+def require_global_mcp_scope(scope: str, operation: str) -> None:
+    """Reject MCP registration mutations that claim project ownership."""
+    if scope != "global":
+        raise InstallError(
+            f"Cannot {operation} a project-scoped MCP registration because harness "
+            "configuration is user-global. Use `library mcp remove <name> --scope "
+            "project` only to clean a legacy project lock record."
+        )
+
+
 def _snapshot_config(path: Path) -> str | None:
     if path.is_file():
         return path.read_text()
@@ -402,7 +412,7 @@ def install_mcp(
     catalog: dict,
     name: str,
     repo_root: Path,
-    scope: str = "project",
+    scope: str = "global",
     dry_run: bool = False,
     harness: str = "all",
     env_overrides: dict | None = None,
@@ -416,6 +426,7 @@ def install_mcp(
     HTTP registrations are written. Any service or harness failure restores prior config
     snapshots and rolls back to the preserved stdio descriptor when available.
     """
+    require_global_mcp_scope(scope, "install or sync")
     entry = lookup_entry(catalog, "mcp", name)
     mcp_name = entry.get("name", name)
     marketplace = resolve_marketplace(catalog, entry)
@@ -786,12 +797,13 @@ def remove_mcp(
     catalog: dict,
     name: str,
     repo_root: Path,
-    scope: str = "project",
+    scope: str = "global",
     dry_run: bool = False,
     harness: str = "all",
     env_overrides: dict | None = None,
 ) -> dict[str, Any]:
     """Remove an MCP server and any owned supervised service state."""
+    require_global_mcp_scope(scope, "remove")
     entry = lookup_entry(catalog, "mcp", name)
     mcp_name = entry.get("name", name)
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
@@ -861,6 +873,38 @@ def remove_mcp(
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+
+def remove_project_mcp_lock_record(
+    name: str,
+    repo_root: Path,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Remove one legacy project MCP lock record without touching global state."""
+    lockfile_path = find_lockfile(repo_root, global_scope=False)
+    operation = {
+        "operation": "remove_lockfile_entry",
+        "path": str(lockfile_path),
+        "details": f"remove legacy project lock record '{name}'",
+    }
+    if dry_run:
+        return dry_run_result(
+            [operation],
+            summary=f"Would remove legacy project MCP lock record '{name}'",
+        )
+
+    lock_data = load_lockfile(lockfile_path)
+    removed = remove_entry(lock_data, name, primitive_type="mcp")
+    if removed:
+        save_lockfile(lockfile_path, lock_data)
+    return success(
+        data={"name": name, "lockfile": str(lockfile_path), "removed": removed},
+        message=(
+            f"Legacy project MCP lock record '{name}' removed."
+            if removed
+            else f"No legacy project MCP lock record '{name}' was present."
+        ),
+    )
 
 
 def _install_to_harness(mod, name: str, block: dict, harness: str, dry_run: bool) -> int:

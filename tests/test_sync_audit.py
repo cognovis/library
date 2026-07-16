@@ -989,6 +989,7 @@ class TestTopLevelSync:
     def test_mcp_sync_preserves_actionable_installer_error(
         self, tmp_path, monkeypatch
     ):
+        from lib import lockfile
         from lib.errors import InstallError
         from lib.sync_audit import cmd_sync_impl
 
@@ -997,7 +998,9 @@ class TestTopLevelSync:
             "type": "mcp",
             "marketplace": "cognovis-core",
         }
-        (tmp_path / ".library.lock").write_text(
+        global_lock = tmp_path / ".library-global.lock"
+        monkeypatch.setattr(lockfile, "GLOBAL_LOCKFILE", global_lock)
+        global_lock.write_text(
             yaml.safe_dump({"installed": [entry]}), encoding="utf-8"
         )
         monkeypatch.setattr(
@@ -1014,7 +1017,7 @@ class TestTopLevelSync:
             catalog={},
             primitive="mcp",
             repo_root=tmp_path,
-            scope="project",
+            scope="global",
             harness="codex",
         )
 

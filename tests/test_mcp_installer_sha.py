@@ -20,6 +20,13 @@ SOURCE_URL = "https://github.com/sussdorff/open-brain/blob/main/mcp.yaml"
 REMOTE_SHA = "abc123def456abc123def456abc123def456abc123def456abc123def456ab12"
 
 
+@pytest.fixture(autouse=True)
+def isolate_global_lockfile(tmp_path, monkeypatch):
+    from lib import lockfile
+
+    monkeypatch.setattr(lockfile, "GLOBAL_LOCKFILE", tmp_path / ".library-global.lock")
+
+
 def make_catalog(source: str | None) -> dict:
     entry = {
         "name": "open-brain",
@@ -70,7 +77,7 @@ def _patch_harness_helpers(monkeypatch):
 
 
 def _read_lockfile_source_commit(project_root: Path) -> str:
-    lockfile = yaml.safe_load((project_root / ".library.lock").read_text())
+    lockfile = yaml.safe_load((project_root / ".library-global.lock").read_text())
     return lockfile["installed"][0]["source_commit"]
 
 
@@ -81,7 +88,7 @@ def test_install_captures_remote_sha(tmp_path, monkeypatch):
     remote_sha = Mock(return_value=REMOTE_SHA)
     monkeypatch.setattr("lib.installers.mcp_installer.get_remote_sha", remote_sha)
 
-    result = install_mcp(make_catalog(SOURCE_URL), "open-brain", tmp_path, scope="project")
+    result = install_mcp(make_catalog(SOURCE_URL), "open-brain", tmp_path, scope="global")
 
     assert result["status"] == "ok"
     assert _read_lockfile_source_commit(tmp_path) == REMOTE_SHA
@@ -94,7 +101,7 @@ def test_install_handles_remote_sha_failure(tmp_path, monkeypatch, capsys):
     _patch_harness_helpers(monkeypatch)
     monkeypatch.setattr("lib.installers.mcp_installer.get_remote_sha", Mock(return_value=None))
 
-    result = install_mcp(make_catalog(SOURCE_URL), "open-brain", tmp_path, scope="project")
+    result = install_mcp(make_catalog(SOURCE_URL), "open-brain", tmp_path, scope="global")
 
     captured = capsys.readouterr()
     assert result["status"] == "ok"
@@ -109,7 +116,7 @@ def test_install_without_source_field_records_local(tmp_path, monkeypatch):
     remote_sha = Mock(return_value=REMOTE_SHA)
     monkeypatch.setattr("lib.installers.mcp_installer.get_remote_sha", remote_sha)
 
-    result = install_mcp(make_catalog(None), "open-brain", tmp_path, scope="project")
+    result = install_mcp(make_catalog(None), "open-brain", tmp_path, scope="global")
 
     assert result["status"] == "ok"
     assert _read_lockfile_source_commit(tmp_path) == "local"
@@ -146,7 +153,7 @@ def test_regression_supervised_deploy_uses_one_clean_expected_revision(
         make_supervised_catalog(),
         "cognovis-tools",
         tmp_path,
-        scope="project",
+        scope="global",
         harness="claude_code",
         env_overrides={"CLAUDE_SETTINGS_FILE": str(tmp_path / "claude.json")},
     )

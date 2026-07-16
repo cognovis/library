@@ -125,7 +125,10 @@ Agent with Codex routing:
 Simple-file primitives (`prompt`, `script`, `model-standard`, `agent-base`, `workflow`) use the same envelope with
 their resolved single target file in `target_paths`.
 
-MCP and guardrail installers use global harness config files as targets. They always report the global
-paths regardless of `--scope project` or `--target-project`, because the underlying install helpers
-(`install-mcp.py`, `install-hook.py`) write to global harness config only. Env-var overrides are honored:
-`CLAUDE_SETTINGS_FILE`, `CODEX_CONFIG_FILE`, `CODEX_HOOKS_FILE`, `OPENCODE_CONFIG_FILE`.
+MCP and guardrail installers use global harness config files as targets. MCP use and remove operations
+also use the global lockfile by default; explicit `--scope global` is equivalent. Project-scoped MCP use
+and sync are rejected before a dry-run envelope or mutation is produced. `mcp remove --scope project`
+instead emits a lock-only cleanup operation for a legacy project record and never reports a harness or
+service mutation. Guardrail scope behavior remains unchanged.
+Env-var overrides are honored: `CLAUDE_SETTINGS_FILE`, `CODEX_CONFIG_FILE`, `CODEX_HOOKS_FILE`,
+`OPENCODE_CONFIG_FILE`.

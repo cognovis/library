@@ -3798,3 +3798,111 @@ class TestStandardInstallCategoryMirror:
             f"Expected drift_kind='both' when both upstream and path drift fire, "
             f"got: {fake_audit_entry['drift_kind']}"
         )
+
+
+class TestMcpInstallerDefaultScope:
+    @staticmethod
+    def _catalog() -> dict:
+        return {
+            "library": {
+                "mcp_servers": [
+                    {
+                        "name": "test-mcp",
+                        "description": "MCP scope fixture",
+                        "install": {
+                            "mcp": {
+                                "claude_code": {
+                                    "snippet": {
+                                        "type": "http",
+                                        "url": "https://example.invalid/mcp",
+                                    }
+                                }
+                            }
+                        },
+                    }
+                ]
+            }
+        }
+
+    def test_install_mcp_defaults_to_global_lockfile(self, tmp_path, monkeypatch):
+        from lib import lockfile
+        from lib.installers.mcp_installer import install_mcp
+
+        global_lock = tmp_path / "home" / ".config" / "library" / "global.lock"
+        monkeypatch.setattr(lockfile, "GLOBAL_LOCKFILE", global_lock)
+
+        result = install_mcp(
+            self._catalog(),
+            "test-mcp",
+            tmp_path / "project",
+            dry_run=True,
+            harness="claude_code",
+        )
+
+        assert result["lockfile_changes"] == [
+            {
+                "path": str(global_lock),
+                "operation": "upsert",
+                "entry": "test-mcp",
+            }
+        ]
+
+    def test_remove_mcp_defaults_to_global_lockfile(self, tmp_path, monkeypatch):
+        from lib import lockfile
+        from lib.installers.mcp_installer import remove_mcp
+
+        global_lock = tmp_path / "home" / ".config" / "library" / "global.lock"
+        monkeypatch.setattr(lockfile, "GLOBAL_LOCKFILE", global_lock)
+
+        result = remove_mcp(
+            self._catalog(),
+            "test-mcp",
+            tmp_path / "project",
+            dry_run=True,
+            harness="claude_code",
+        )
+
+        lockfile_ops = [
+            operation
+            for operation in result["operations"]
+            if operation.get("operation") == "remove_lockfile_entry"
+        ]
+        assert lockfile_ops == [
+            {
+                "operation": "remove_lockfile_entry",
+                "path": str(global_lock),
+                "details": "remove 'test-mcp'",
+            }
+        ]
+
+
+class TestMcpInstallerScopeInvariant:
+    @staticmethod
+    def _catalog() -> dict:
+        return TestMcpInstallerDefaultScope._catalog()
+
+    def test_fix_cl_yum0_install_rejects_project_scope(self, tmp_path):
+        from lib.errors import InstallError
+        from lib.installers.mcp_installer import install_mcp
+
+        with pytest.raises(InstallError, match="project-scoped MCP registration"):
+            install_mcp(
+                self._catalog(),
+                "test-mcp",
+                tmp_path,
+                scope="project",
+                dry_run=True,
+            )
+
+    def test_fix_cl_yum0_remove_rejects_project_scope(self, tmp_path):
+        from lib.errors import InstallError
+        from lib.installers.mcp_installer import remove_mcp
+
+        with pytest.raises(InstallError, match="project-scoped MCP registration"):
+            remove_mcp(
+                self._catalog(),
+                "test-mcp",
+                tmp_path,
+                scope="project",
+                dry_run=True,
+            )

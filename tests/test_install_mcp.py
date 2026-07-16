@@ -18,6 +18,7 @@ Run with:
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import subprocess
 import sys
@@ -28,6 +29,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 INSTALL_MCP = REPO_ROOT / "scripts" / "install-mcp.py"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+
+def load_install_mcp_module():
+    """Load the hyphenated installer script for focused merge-helper tests."""
+    spec = importlib.util.spec_from_file_location("install_mcp", INSTALL_MCP)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 def run_install_mcp(*args: str, env_overrides: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """Invoke install-mcp.py with optional env overrides."""
@@ -198,6 +208,109 @@ class TestInstallMcp(unittest.TestCase):
         self.assertIn("refusing to overwrite", result.stderr)
         data = json.loads(self.claude_settings.read_text())
         self.assertEqual(data["mcpServers"]["open-brain"]["command"], "user-custom-bin")
+
+    def test_adopts_exact_provenance_less_canonical_json_descriptor(self):
+        module = load_install_mcp_module()
+        snippet = {"type": "http", "url": "https://example.test/mcp"}
+        config = {"mcpServers": {"example": dict(snippet)}}
+
+        updated, action = module._merge_json_map(
+            config, "mcpServers", "example", snippet, "library:mcp:example"
+        )
+
+        self.assertEqual(action, "adopted")
+        self.assertEqual(
+            updated["mcpServers"]["example"]["_origin"], "library:mcp:example"
+        )
+
+    def test_adopts_exact_declared_legacy_json_descriptor(self):
+        module = load_install_mcp_module()
+        legacy = {"command": "legacy-server", "args": ["serve"], "type": "stdio"}
+        config = {"mcpServers": {"example": dict(legacy)}}
+
+        updated, action = module._merge_json_map(
+            config,
+            "mcpServers",
+            "example",
+            {"type": "http", "url": "https://example.test/mcp"},
+            "library:mcp:example",
+            [legacy],
+        )
+
+        self.assertEqual(action, "adopted")
+        self.assertEqual(updated["mcpServers"]["example"]["type"], "http")
+
+    def test_refuses_non_exact_provenance_less_json_descriptors(self):
+        module = load_install_mcp_module()
+        snippet = {"type": "http", "url": "https://example.test/mcp"}
+        cases = {
+            "extra": {**snippet, "timeout": 5},
+            "missing": {"url": snippet["url"]},
+            "changed_type": {**snippet, "type": "stdio"},
+            "foreign_origin": {**snippet, "_origin": "foreign:owner"},
+        }
+
+        for label, existing in cases.items():
+            with self.subTest(label=label):
+                config = {"mcpServers": {"example": existing}}
+                updated, action = module._merge_json_map(
+                    config,
+                    "mcpServers",
+                    "example",
+                    snippet,
+                    "library:mcp:example",
+                )
+                self.assertEqual(action, "skipped_manual")
+                self.assertEqual(updated, config)
+
+    def test_nested_origin_field_remains_part_of_exact_descriptor(self):
+        module = load_install_mcp_module()
+        snippet = {"command": "example", "env": {"MODE": "safe"}}
+        existing = {
+            "command": "example",
+            "env": {"MODE": "safe", "_origin": "nested-value"},
+        }
+
+        _, action = module._merge_json_map(
+            {"mcpServers": {"example": existing}},
+            "mcpServers",
+            "example",
+            snippet,
+            "library:mcp:example",
+        )
+
+        self.assertEqual(action, "skipped_manual")
+
+    def test_toml_adoption_requires_exact_full_descriptor(self):
+        import tomlkit
+
+        module = load_install_mcp_module()
+        snippet = {"url": "https://example.test/mcp", "tool_timeout_sec": 30.0}
+
+        exact = tomlkit.parse(
+            '[mcp_servers.example]\nurl = "https://example.test/mcp"\ntool_timeout_sec = 30.0\n'
+        )
+        updated, action = module._merge_toml_table(
+            exact, "mcp_servers", "example", snippet, "library:mcp:example"
+        )
+        self.assertEqual(action, "adopted")
+        self.assertEqual(
+            updated["mcp_servers"]["example"]["_origin"], "library:mcp:example"
+        )
+
+        mismatches = [
+            '[mcp_servers.example]\nurl = "https://example.test/mcp"\ntool_timeout_sec = 30.0\nextra = true\n',
+            '[mcp_servers.example]\nurl = "https://example.test/mcp"\n',
+            '[mcp_servers.example]\nurl = "https://example.test/mcp"\ntool_timeout_sec = "30"\n',
+            '[mcp_servers.example]\nurl = "https://example.test/mcp"\ntool_timeout_sec = 30.0\n_origin = "foreign:owner"\n',
+        ]
+        for text in mismatches:
+            with self.subTest(text=text):
+                doc = tomlkit.parse(text)
+                _, action = module._merge_toml_table(
+                    doc, "mcp_servers", "example", snippet, "library:mcp:example"
+                )
+                self.assertEqual(action, "skipped_manual")
 
     # --- AK D7: --harness not declared by entry emits WARN ---
 

@@ -761,13 +761,55 @@ class TestWorkflowListAndSync:
 # ---------------------------------------------------------------------------
 
 class TestMcpUse:
+    def test_mcp_use_defaults_to_global_lockfile(self, project_dir, tmp_path):
+        result = run_library(
+            "mcp", "use", "test-mcp-server", "--dry-run", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(tmp_path / "settings.json"),
+            },
+        )
+
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        lockfile_changes = data.get("lockfile_changes", [])
+        assert lockfile_changes == [
+            {
+                "path": str(tmp_path / "home" / ".config" / "library" / "global.lock"),
+                "operation": "upsert",
+                "entry": "test-mcp-server",
+            }
+        ]
+
+    def test_mcp_use_rejects_project_scope_before_mutation(self, project_dir, tmp_path):
+        claude_settings = tmp_path / "settings.json"
+        result = run_library(
+            "mcp", "use", "test-mcp-server", "--scope", "project", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
+        )
+
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "user-global" in data["message"]
+        assert not claude_settings.exists()
+        assert not (project_dir / ".library.lock").exists()
+
     def test_mcp_use_exits_zero(self, project_dir, tmp_path):
         # mcp needs target config files — point to temp files
         claude_settings = tmp_path / "settings.json"
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
@@ -776,7 +818,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert "not yet implemented" not in result.stdout
         assert "not yet implemented" not in result.stderr
@@ -786,7 +831,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert "Run: python3 scripts/install-mcp.py" not in result.stdout
         assert "Run: python3 scripts/install-mcp.py" not in result.stderr
@@ -796,7 +844,10 @@ class TestMcpUse:
         result = run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         if result.returncode == 0:
             lockfile = project_dir / ".library.lock"
@@ -812,17 +863,124 @@ class TestMcpUse:
 # ---------------------------------------------------------------------------
 
 class TestMcpRemove:
+    def test_mcp_remove_defaults_to_global_lockfile(self, project_dir, tmp_path):
+        result = run_library(
+            "mcp", "remove", "test-mcp-server", "--dry-run", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(tmp_path / "settings.json"),
+            },
+        )
+
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        lockfile_ops = [
+            operation
+            for operation in data.get("operations", [])
+            if operation.get("operation") == "remove_lockfile_entry"
+        ]
+        assert lockfile_ops == [
+            {
+                "operation": "remove_lockfile_entry",
+                "path": str(tmp_path / "home" / ".config" / "library" / "global.lock"),
+                "details": "remove 'test-mcp-server'",
+            }
+        ]
+
+    def test_regression_mcp_project_remove_is_lock_only_cleanup(self, project_dir, tmp_path):
+        (project_dir / ".library.lock").write_text(
+            yaml.safe_dump(
+                {
+                    "installed": [
+                        {
+                            "name": "test-mcp-server",
+                            "type": "mcp",
+                            "install_target": "global MCP harness config",
+                        }
+                    ]
+                }
+            )
+        )
+        claude_settings = tmp_path / "settings.json"
+        result = run_library(
+            "mcp", "remove", "test-mcp-server", "--scope", "project", "--dry-run", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
+        )
+
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["status"] == "dry-run"
+        assert data["operations"] == [
+            {
+                "operation": "remove_lockfile_entry",
+                "path": str(project_dir / ".library.lock"),
+                "details": "remove legacy project lock record 'test-mcp-server'",
+            }
+        ]
+        assert not claude_settings.exists()
+
+        cleanup = run_library(
+            "mcp", "remove", "test-mcp-server", "--scope", "project", "--json",
+            cwd=project_dir,
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
+        )
+        assert cleanup.returncode == 0, (
+            f"stdout={cleanup.stdout}\nstderr={cleanup.stderr}"
+        )
+        lock_data = yaml.safe_load((project_dir / ".library.lock").read_text())
+        assert lock_data["installed"] == []
+        assert not claude_settings.exists()
+
+    def test_regression_mcp_project_sync_is_rejected(self, project_dir):
+        (project_dir / ".library.lock").write_text(
+            yaml.safe_dump(
+                {
+                    "installed": [
+                        {
+                            "name": "test-mcp-server",
+                            "type": "mcp",
+                            "install_target": "global MCP harness config",
+                        }
+                    ]
+                }
+            )
+        )
+
+        result = run_library(
+            "mcp", "sync", "test-mcp-server", "--scope", "project", "--dry-run", "--json",
+            cwd=project_dir,
+        )
+
+        assert result.returncode != 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "error"
+        assert "project-scoped MCP registration" in data["message"]
+
     def test_mcp_remove_exits_zero(self, project_dir, tmp_path):
         claude_settings = tmp_path / "settings.json"
         run_library(
             "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         result = run_library(
             "mcp", "remove", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
@@ -1526,6 +1684,30 @@ class TestDefaultScopeFromCatalog:
         assert lockfile_path == str(project_dir_with_default_scope / ".library.lock"), (
             f"--scope project should override default_scope global, got: {lockfile_path}"
         )
+
+    def test_regression_non_mcp_remove_defaults_to_project(
+        self, project_dir_with_default_scope
+    ):
+        """A catalog install default must not change historical remove semantics."""
+        result = run_library(
+            "standard", "remove", "global-standard", "--dry-run", "--json",
+            cwd=project_dir_with_default_scope,
+        )
+
+        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        data = json.loads(result.stdout)
+        lockfile_ops = [
+            operation
+            for operation in data.get("operations", [])
+            if operation.get("operation") == "remove_lockfile_entry"
+        ]
+        assert lockfile_ops == [
+            {
+                "operation": "remove_lockfile_entry",
+                "path": str(project_dir_with_default_scope / ".library.lock"),
+                "details": "remove 'global-standard'",
+            }
+        ]
 
 
 if __name__ == "__main__":

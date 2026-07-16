@@ -156,7 +156,9 @@ def _merge_json_map(
         container[name] = new_entry
         return config, "refreshed"
 
-    if _matches_legacy_descriptor(existing, legacy_descriptors or []):
+    if _matches_descriptor(existing, snippet) or _matches_legacy_descriptor(
+        existing, legacy_descriptors or []
+    ):
         container[name] = new_entry
         return config, "adopted"
 
@@ -247,7 +249,9 @@ def _merge_toml_table(
                 existing[key] = value
             existing["_origin"] = origin
             return doc, "refreshed"
-        if _matches_legacy_descriptor(existing, legacy_descriptors or []):
+        if _matches_descriptor(existing, snippet) or _matches_legacy_descriptor(
+            existing, legacy_descriptors or []
+        ):
             for key in list(existing.keys()):
                 del existing[key]
             for key, value in snippet.items():
@@ -267,18 +271,33 @@ def _merge_toml_table(
 def _matches_legacy_descriptor(
     existing: Any, legacy_descriptors: list[dict]
 ) -> bool:
-    """Match an exact known legacy command without adopting foreign entries."""
+    """Match one complete declared legacy descriptor."""
+    return any(
+        _matches_descriptor(existing, descriptor) for descriptor in legacy_descriptors
+    )
+
+
+def _matches_descriptor(existing: Any, expected: dict) -> bool:
+    """Match a provenance-less descriptor exactly, excluding only `_origin`."""
     if not hasattr(existing, "get") or existing.get("_origin") is not None:
         return False
-    existing_command = existing.get("command")
-    existing_args = list(existing.get("args") or [])
-    for descriptor in legacy_descriptors:
-        if (
-            existing_command == descriptor.get("command")
-            and existing_args == list(descriptor.get("args") or [])
-        ):
-            return True
-    return False
+    existing_without_origin = {
+        key: value for key, value in existing.items() if str(key) != "_origin"
+    }
+    return _plain_descriptor(existing_without_origin) == _plain_descriptor(expected)
+
+
+def _plain_descriptor(value: Any) -> Any:
+    """Convert JSON and tomlkit values into comparable plain Python values."""
+    if hasattr(value, "items"):
+        return {
+            str(key): _plain_descriptor(item) for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_plain_descriptor(item) for item in value]
+    if hasattr(value, "unwrap"):
+        return _plain_descriptor(value.unwrap())
+    return value
 
 
 def _remove_toml_table(

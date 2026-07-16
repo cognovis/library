@@ -201,6 +201,11 @@ def cmd_sync_impl(
     else:
         entries = list(installed)
 
+    if scope == "project" and any(entry.get("type") == "mcp" for entry in entries):
+        from .installers.mcp_installer import require_global_mcp_scope
+
+        require_global_mcp_scope(scope, "sync")
+
     if dry_run:
         ops = []
         for entry in entries:

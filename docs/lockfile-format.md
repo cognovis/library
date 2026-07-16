@@ -3,7 +3,7 @@
 > **Status**: NORMATIVE — this document is the authoritative format specification for the
 > `.library.lock` file used by the cognovis-library tooling.
 >
-> **Bead**: CL-t21 / CL-yx2 | **Epic**: CL-36o | **Last updated**: 2026-05-12
+> **Bead**: CL-t21 / CL-yx2 / CL-yum0 | **Epic**: CL-36o | **Last updated**: 2026-07-16
 >
 > **Applies to**: `/library <primitive> use`, `/library <primitive> remove`,
 > `/library sync`, `/library audit`, and any tooling that installs or manages library items.
@@ -12,8 +12,9 @@
 
 ## Overview
 
-`.library.lock` is a project-local YAML file that records every item installed by
-`/library <primitive> use`. It provides:
+Library lockfiles record every item installed by `/library <primitive> use`. Most
+primitives may use either the project or global lockfile; MCP registrations are
+always user-global and therefore exist only in the global lockfile. They provide:
 
 - **Reproducibility**: any clone of the project can restore the exact set of installed
   items by running `/library sync` (which reads the lockfile, not the catalog).
@@ -47,7 +48,7 @@ manifest. It should NOT be gitignored.
 ### Global lockfile (new — ADR-0003)
 
 `~/.config/library/global.lock` records globally installed items (installed with
-`/library <primitive> use <name> --global`):
+`/library <primitive> use <name> --global`) and every MCP registration:
 
 ```
 ~/.config/library/
@@ -57,6 +58,25 @@ manifest. It should NOT be gitignored.
 The global lockfile uses the same schema as the per-project lockfile. It is NOT committed
 to version control — it is a user-local file managed by `library` tooling. The path
 `~/.config/library/` follows the XDG Base Directory specification for user configuration.
+
+### MCP scope and ownership
+
+`library mcp use <name>` and `library mcp remove <name>` default to global scope.
+`--scope global` remains accepted for explicit automation. Project-scoped MCP use and
+sync are rejected before any harness configuration or lockfile mutation. Explicit
+`library mcp remove <name> --scope project` is a migration-only exception: it removes
+only the matching legacy project lock record and never unregisters a harness, stops a
+service, or changes global state. This matches the actual ownership boundary: supported
+MCP harness registrations are stored in user-global config files, so their authoritative
+lock records live in `~/.config/library/global.lock`.
+
+During migration, a provenance-less harness registration may be adopted only when its
+complete normalized descriptor exactly matches the catalog's current snippet or one
+explicitly declared legacy descriptor. Normalization excludes only `_origin`; extra,
+missing, or changed fields and entries with foreign provenance are never overwritten.
+Lower-level MCP install and removal functions reject project scope. Removing a stale
+historical MCP record from a project lockfile must use the explicit lock-only CLI path,
+because ordinary MCP removal also unregisters the global service.
 
 ---
 
