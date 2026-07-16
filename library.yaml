@@ -1462,7 +1462,6 @@ library:
     source: https://github.com/cognovis/library-core/blob/main/skills/gui-review/SKILL.md
     requires:
     - skill:playwright-cli
-    - skill:pencil
     tags:
     - origin:original
     - tier:domain
@@ -1609,21 +1608,6 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
-  - name: pencil
-    description: Design UI screens and components in Pencil .pen files via MCP tools.
-      Use when creating designs, editing .pen files, or working with design systems.
-      Triggers on pencil, pen file, design system, design screen, components.pen.
-    source: https://github.com/cognovis/library-core/blob/main/skills/pencil/SKILL.md
-    requires:
-    - standard:english-only
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
   - name: people-query
     description: Query open-brain people-aware MCP tools to find discussions, stale
       contacts, and mentions for a named person.
@@ -3928,24 +3912,6 @@ library:
             args:
             - '@playwright/mcp@latest'
             - --extension
-  - name: pencil
-    description: Stateful design editor for .pen files — encrypted file format requires
-      MCP; tools include batch_design, get_editor_state, export_nodes; installed in
-      Codex CLI and Claude Desktop
-    coding_strategy: mcp
-    capabilities:
-      stateless: false
-      streaming: false
-      auth: none
-    install:
-      mcp:
-        codex:
-          config_path: ~/.codex/config.toml
-          snippet:
-            command: ~/.pencil/mcp/cursor/out/mcp-server-darwin-arm64
-            args:
-            - --app
-            - cursor
   - name: lsp
     description: Stateful Language Server Protocol bridge — exposes LSP hover, go-to-definition,
       completions, and diagnostics as MCP tools; stateful LSP sessions require persistent
