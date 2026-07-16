@@ -80,6 +80,18 @@ def compose_runtime_config(base_text: str, overlay_text: str) -> str:
 
     overlay = yaml.load(overlay_text) if overlay_text and overlay_text.strip() else None
     if overlay is not None:
+        # The overlay must carry ONLY global-only sections that are absent from
+        # the base. A top-level key present in both would silently clobber the
+        # routing baseline (e.g. an accidental route_profiles section in the
+        # overlay), so reject the collision loudly instead of merging it.
+        collisions = sorted(key for key in overlay if key in base)
+        if collisions:
+            raise InstallError(
+                "runtime-config overlay collides with base on top-level "
+                f"section(s): {', '.join(collisions)}. The overlay must contain "
+                "only global-only sections absent from the base; move shared "
+                "sections into the base source instead."
+            )
         for key in overlay:
             base[key] = overlay[key]
 

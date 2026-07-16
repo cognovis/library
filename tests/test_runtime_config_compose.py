@@ -156,9 +156,16 @@ def test_compose_carries_opus_no_sonnet_routing():
 
 
 def test_compose_is_idempotent():
-    """AC1: composing the composed output again yields identical bytes."""
+    """AC1: composing the same inputs is deterministic (identical bytes).
+
+    True idempotency of `library sync` = same base + overlay -> same deployed
+    file every run (also exercised end-to-end by test_deploy_and_idempotent_resync).
+    We do NOT re-feed the composed output as a new base: the overlay's global-only
+    sections would then collide with the (now merged) base, which compose rejects
+    by design (see test_compose_rejects_base_overlay_section_collision).
+    """
     out1 = compose_runtime_config(BASE_YAML, OVERLAY_YAML)
-    out2 = compose_runtime_config(out1, OVERLAY_YAML)
+    out2 = compose_runtime_config(BASE_YAML, OVERLAY_YAML)
     assert out1 == out2
 
 
@@ -174,6 +181,21 @@ def test_compose_reconciles_adapter_to_active_context():
     out = compose_runtime_config(BASE_YAML, OVERLAY_YAML)
     assert "adapter: active-context" in out
     assert "mcp-smoke" not in out
+
+
+def test_compose_rejects_base_overlay_section_collision():
+    """AC2: an overlay that shares a top-level section with the base is rejected.
+
+    The overlay must carry only global-only sections. A colliding section (here
+    'route_profiles', which also exists in the base) would silently clobber the
+    routing baseline, so compose must raise a clear error instead of merging it.
+    """
+    from lib.errors import InstallError
+
+    colliding_overlay = OVERLAY_YAML + "\nroute_profiles:\n  rogue:\n    slots: {}\n"
+    with pytest.raises(InstallError) as exc:
+        compose_runtime_config(BASE_YAML, colliding_overlay)
+    assert "route_profiles" in str(exc.value)
 
 
 # --------------------------------------------------------------------------
