@@ -961,6 +961,24 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: bead-implementation-loop
+    description: Implement one executable bead through the active harness, neutral
+      opposite-family review, Means of Compliance, and canonical Session Close.
+    source: https://github.com/cognovis/library-core/blob/main/skills/bead-implementation-loop/SKILL.md
+    requires:
+    - standard:english-only
+    - skill:inject-standards
+    - skill:cognovis-beads
+    - skill:session-close
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+        plane: dev
   - name: bead-metrics
     description: 'Query per-bead token cost metrics from the local agent metrics database.
       Shows cost table, impl:review ratios, most expensive beads, cost trend over
