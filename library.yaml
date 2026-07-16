@@ -945,6 +945,23 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
+  - name: bead-authoring-loop
+    description: Close bead create and substantive update work through author-check,
+      live review, repair, and digest-bound readiness.
+    source: https://github.com/cognovis/library-core/blob/main/skills/bead-authoring-loop/SKILL.md
+    requires:
+    - standard:english-only
+    - skill:bead-reviewer
+    - mcp:cognovis-tools
+    tags:
+    - origin:original
+    - tier:core
+    - workflow:beads
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+        plane: dev
   - name: bead-metrics
     description: 'Query per-bead token cost metrics from the local agent metrics database.
       Shows cost table, impl:review ratios, most expensive beads, cost trend over
@@ -1488,14 +1505,15 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: intake
-    description: Route raw transcripts, lists, bug reports, or epic-scale goals into
-      inline direct-bd creation with duplicate checks, HITL approval, and
-      deterministic author checks. Use when turning notes into beads, filing transcript
-      work, or starting intake.
+    description: Route raw transcripts, lists, bug reports, or goal-scale requests
+      into reviewed beads, ask only for decision-bearing boundary choices, and hand
+      ready execution requests to the single-bead implementation entry path. Use when
+      turning notes into beads, filing work, or starting intake.
     source: https://github.com/cognovis/library-core/blob/main/skills/intake/SKILL.md
     requires:
     - standard:english-only
     - skill:bug-triage
+    - skill:bead-authoring-loop
     tags:
     - origin:original
     - tier:core
