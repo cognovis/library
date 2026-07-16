@@ -234,7 +234,7 @@ class TestRouteProfilesSchema:
         assert slots["fix_loop"]["reasoning_effort"] == "high"
         assert slots["review"]["model"] == "claude-opus-4-8"
         assert slots["review"]["harness"] == "claude"
-        assert slots["session_close"]["model"] == "sonnet"
+        assert slots["session_close"]["model"] == "opus"
 
     def test_cdx_default_full_implementation_values(self, config: dict) -> None:
         impl = config["route_profiles"]["cdx-default"]["slots"]["full"]["implementation"]
