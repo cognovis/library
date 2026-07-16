@@ -72,14 +72,15 @@ class TestAdapterDispatch:
         assert "adapter" in slot
         assert slot["adapter"] in mod.VALID_ADAPTERS
 
-    def test_cld_default_implementation_adapter_is_codex_impl(self) -> None:
+    def test_cld_default_implementation_adapter_is_codex_exec(self) -> None:
         mod = _load_resolve_module()
         config = _load_config(_USER_GLOBAL_CONFIG)
         ep = _make_execution_plan("cld-default", config)
         dispatch = mod.resolve_impl_dispatch(
-            ep, "full", "implementation", fallback_impl_model="gpt-5.5"
+            ep, "full", "implementation", fallback_impl_model="gpt-5.6-sol"
         )
-        assert dispatch["adapter"] == "codex-impl"
+        # CL-3gdz retired codex-impl; cld-default now routes codex slots via codex-exec.
+        assert dispatch["adapter"] == "codex-exec"
         assert dispatch["source"] == "slot"
 
     def test_cdx_default_implementation_adapter_is_claude_agent(self) -> None:
@@ -121,9 +122,10 @@ class TestLegacyFallback:
     def test_dispatch_uses_legacy_when_execution_plan_none(self) -> None:
         mod = _load_resolve_module()
         dispatch = mod.resolve_impl_dispatch(
-            None, "full", "implementation", fallback_impl_model="gpt-5.5"
+            None, "full", "implementation", fallback_impl_model="gpt-5.6-sol"
         )
-        assert dispatch["adapter"] == "codex-impl"
+        # CL-3gdz: legacy codex/gpt impl_models normalize to codex-exec.
+        assert dispatch["adapter"] == "codex-exec"
         assert dispatch["source"] == "legacy"
 
     def test_legacy_claude_maps_to_claude_agent(self) -> None:
@@ -134,20 +136,22 @@ class TestLegacyFallback:
         assert dispatch["adapter"] == "claude-agent"
         assert dispatch["source"] == "legacy"
 
-    def test_legacy_gpt_maps_to_codex_impl(self) -> None:
+    def test_legacy_gpt_maps_to_codex_exec(self) -> None:
         mod = _load_resolve_module()
         dispatch = mod.resolve_impl_dispatch(
             None, "quick", "implementation", fallback_impl_model="gpt-5.4-mini"
         )
-        assert dispatch["adapter"] == "codex-impl"
+        # CL-3gdz: gpt-family legacy impl_models normalize to codex-exec.
+        assert dispatch["adapter"] == "codex-exec"
         assert dispatch["source"] == "legacy"
 
-    def test_legacy_codex_maps_to_codex_impl(self) -> None:
+    def test_legacy_codex_maps_to_codex_exec(self) -> None:
         mod = _load_resolve_module()
         dispatch = mod.resolve_impl_dispatch(
             None, "full", "implementation", fallback_impl_model="codex"
         )
-        assert dispatch["adapter"] == "codex-impl"
+        # CL-3gdz: the "codex" legacy impl_model normalizes to codex-exec.
+        assert dispatch["adapter"] == "codex-exec"
         assert dispatch["source"] == "legacy"
 
     def test_legacy_unknown_model_raises(self) -> None:
@@ -212,17 +216,19 @@ class TestCurrentBehaviorPreserved:
             return _load_config(_USER_GLOBAL_CONFIG)
         return _load_config(_COGNOVIS_CONFIG)
 
-    def test_cld_default_full_implementation_is_codex_impl(self, config: dict) -> None:
+    def test_cld_default_full_implementation_is_codex_exec(self, config: dict) -> None:
+        # CL-3gdz retired codex-impl -> codex-exec (gpt-5.6-sol) for cld-default.
         impl = config["route_profiles"]["cld-default"]["slots"]["full"]["implementation"]
-        assert impl["adapter"] == "codex-impl"
+        assert impl["adapter"] == "codex-exec"
         assert impl["harness"] == "codex"
-        assert impl["model"] == "gpt-5.5"
+        assert impl["model"] == "gpt-5.6-sol"
 
-    def test_cld_default_quick_implementation_is_codex_impl(self, config: dict) -> None:
+    def test_cld_default_quick_implementation_is_codex_exec(self, config: dict) -> None:
+        # CL-3gdz retired codex-impl -> codex-exec (gpt-5.6-sol) for cld-default.
         impl = config["route_profiles"]["cld-default"]["slots"]["quick"]["implementation"]
-        assert impl["adapter"] == "codex-impl"
+        assert impl["adapter"] == "codex-exec"
         assert impl["harness"] == "codex"
-        assert impl["model"] == "gpt-5.5"
+        assert impl["model"] == "gpt-5.6-sol"
         assert impl["reasoning_effort"] == "medium"
 
     def test_cld_default_regression_fix_is_claude_agent(self, config: dict) -> None:
@@ -311,9 +317,10 @@ class TestSlotDispatchErrorPropagation:
     def test_absent_execution_plan_uses_legacy_fallback(self) -> None:
         """AC3: no execution_plan => legacy fallback, no SlotDispatchError."""
         mod = _load_resolve_module()
-        dispatch = mod.resolve_impl_dispatch(None, "full", "implementation", fallback_impl_model="gpt-5.5")
+        dispatch = mod.resolve_impl_dispatch(None, "full", "implementation", fallback_impl_model="gpt-5.6-sol")
         assert dispatch["source"] == "legacy"
-        assert dispatch["adapter"] == "codex-impl"
+        # CL-3gdz: legacy codex/gpt fallback normalizes to codex-exec.
+        assert dispatch["adapter"] == "codex-exec"
 
     def test_slot_dispatch_error_contains_slot_name(self) -> None:
         """AC5: SlotDispatchError message identifies the missing slot name."""
