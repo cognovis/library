@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- *(clc-z9wp, cld/cdx)* `-b` and `-bq` now converge on the installed single-bead implementation loop. Explicit `-bq` means unconditional Quick for every executable leaf, without effort classification, route profiles, forced-tier overrides, or logical impl/exec adapter selection; the launched harness implements natively and reserves the neutral agent-session gateway for opposite-family review.
+
 ### Fixed
 
 - *(CL-yum0, MCP installer)* MCP registrations and their authoritative lock records are now consistently user-global: `mcp use` and `mcp remove` default to `~/.config/library/global.lock`; project-scoped use/sync and lower-level registration mutations are rejected, while explicit project-scoped remove provides lock-only cleanup for legacy records. Non-MCP removal retains its historical project default regardless of catalog install hints. Existing provenance-less harness entries are adopted only on an exact full-descriptor match to the canonical or a declared legacy descriptor; foreign or non-identical entries remain untouched.
