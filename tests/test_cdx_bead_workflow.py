@@ -1233,7 +1233,7 @@ def test_cdx_bead_modes_with_callback_inject_contract_and_consume_flags(
     assert "cmux trigger-flash --surface surface:33" in prompt
     assert "blocking question" in prompt
     assert "terminal state" in prompt
-    assert "Phase 16" in prompt
+    assert "Session Close" in prompt
     assert "Normal progress updates are NOT intervention events and must NOT trigger the callback." in prompt
 
 

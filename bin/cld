@@ -8,16 +8,13 @@
 #   --skip-perms    → translates to --dangerously-skip-permissions (overrides default auto mode)
 #   -v, --verbose   → enable verbose mode (reasoning traces + token counts)
 #   -c, --caveman   → enable caveman mode for this session (exports CAVEMAN_MODE=1)
-#   -b, --bead ID   → launch with bead orchestrator for the given bead ID
+#   -b, --bead ID   → launch the implementation loop for the given bead ID
 #                     (refuses if ID has children)
-#   -bq, --bead-quick ID → launch bead orchestrator with strict quick workflow
+#   -bq, --bead-quick ID → launch the implementation loop in explicit Quick mode
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #   -bp, --plan-label LABEL → launch with /plan --label LABEL as initial prompt
-#   --route-profile NAME → select named route profile for direct claim preflight
-#   --force-tier TIER → force routing tier for direct claim preflight
-#                          profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
 set -uo pipefail
 
@@ -41,8 +38,6 @@ bead_quick_id=""
 bead_review_id=""
 coordinator_workspace=""
 coordinator_surface=""
-route_profile=""
-force_tier=""
 plan_label=""
 show_help=false
 claude_args=()
@@ -107,25 +102,12 @@ while (( $# > 0 )); do
             echo "Use cld -b <bead-id> to implement exactly one bead." >&2
             exit 2
             ;;
-        --route-profile)
-            route_profile="$2"
-            shift 2
-            ;;
-        --force-tier)
-            force_tier="$2"
-            shift 2
-            ;;
         *)
             claude_args+=("$1")
             shift
             ;;
     esac
 done
-
-unset CLD_ROUTE_PROFILE
-if [[ -z "$route_profile" ]]; then
-    route_profile="cld-default"
-fi
 
 # ── Help: print wrapper flags, then fall through to claude --help ─
 if ${show_help}; then
@@ -137,9 +119,9 @@ Usage: cld [wrapper-flags] [claude-args...]
 Wrapper flags (consumed by cld, not passed to claude):
 
   Bead workflows:
-    -b,  --bead ID              Launch bead-orchestrator for single bead
+    -b,  --bead ID              Launch the implementation loop for one bead
                                 (refuses if ID has children)
-    -bq, --bead-quick ID        Launch bead-orchestrator with strict quick workflow
+    -bq, --bead-quick ID        Launch unconditional explicit Quick mode
     -br, --bead-review ID       Fresh-context critical bead-spec/readiness review
                                 (uses opposite-family capability routing)
     -bp, --plan-label LABEL     Launch with /plan --label LABEL
@@ -147,11 +129,6 @@ Wrapper flags (consumed by cld, not passed to claude):
                                 Coordinator callback workspace ref (requires surface)
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
-         --route-profile NAME    Select named route profile for direct claim preflight
-         --force-tier TIER       Force the routing tier (quick, gsd, paul, mcp)
-                                (passed to the direct claim preflight)
-                                quick is an eligibility override, unlike strict -bq
-                                Profiles: cld-default (default for -b/-bq), cld-composer, cdx-default, cdx-composer
 
   Session:
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
@@ -167,11 +144,6 @@ fi
 
 if [[ -n "$bead_review_id" && ( -n "$bead_id" || -n "$bead_quick_id" ) ]]; then
     echo "ERROR: -br/--bead-review is mutually exclusive with -b/--bead and -bq/--bead-quick" >&2
-    exit 2
-fi
-
-if [[ -n "$force_tier" && ! "$force_tier" =~ ^(quick|gsd|paul|mcp)$ ]]; then
-    echo "ERROR: invalid force tier '$force_tier' (expected quick, gsd, paul, or mcp)" >&2
     exit 2
 fi
 
@@ -212,12 +184,6 @@ fi
 if ${verbose}; then
     claude_args=("--verbose" "${claude_args[@]}")
 fi
-
-# ── Orchestrator config pre-flight ───────────────────────────────
-# Self-heal the global ~/.agents/orchestrator-config.yml from the canonical
-# catalog source so it never silently drifts (CL-0w6e follow-up).
-source "${0:A:h}/lib/orchestrator-config-sync.zsh"
-_sync_orchestrator_config
 
 # ── System Prompt Injection ──────────────────────────────────────
 source "${0:A:h}/lib/cld-system-prompt.zsh"
@@ -395,8 +361,8 @@ ${coordinator_workspace} / ${coordinator_surface}. Best-effort signaling contrac
 - On terminal state, run:
   cmux trigger-flash --surface ${coordinator_surface}
   then keep the COMPLETE terminal report visible in this pane.
-- Implementation terminal state includes successful OR failed completion of Phase 16
-  session-close. Carry this callback contract into the Phase 16 session-close handoff
+- Implementation terminal state includes successful OR failed completion of canonical
+  Session Close. Carry this callback contract into the Session Close handoff
   so the terminal signal fires there.
 - Normal progress updates are NOT intervention events and must NOT trigger the callback.
 - If cmux is unavailable, skip the flash (best-effort) but still keep the report visible.
@@ -472,10 +438,7 @@ if [[ -n "$bead_id" ]]; then
     bead_id=$(_expand_bead_id "$bead_id")
     local bead_short=$(_bead_short "$bead_id")
 
-    # Export CLD_BEAD_LINE=cld so the bead-orchestrator agent resolves
-    # impl/reviewer models from perspective_policy.cld in
-    # .agents/orchestrator-config.yml. Symmetric to cdx's CLD_BEAD_LINE=cdx
-    # export for the cdx-line entry points.
+    # Identify the active harness for the shared implementation-loop contract.
     export CLD_BEAD_LINE=cld
 
     if ! _bead_exists "$bead_id"; then
@@ -512,9 +475,8 @@ if [[ -n "$bead_id" ]]; then
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_id}"
     claude_args+=("--worktree" "$worktree_name")
-    claude_args+=("--agent" "bead-orchestrator")
     # ── Force full plugin registry in the worktree session ────────
-    # CCP-9xy: guarantees core:session-close is spawnable at Phase 16 handoff,
+    # Guarantee the canonical Session Close owner is available at handoff,
     # even if a project-level .claude/settings overrides setting-sources.
     claude_args+=("--setting-sources" "user,project,local")
 
@@ -530,19 +492,10 @@ if [[ -n "$bead_id" ]]; then
         bead_ns="${bead_prefix}-${bead_num}"
     fi
 
-    # Enter the canonical orchestrator with automatic quick/full profile selection.
-    local prompt="Bead ID: $bead_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=auto. Pass requested_workflow=auto to the phase0-claim.py direct-bd preflight. Continue through the resolved quick or full profile and session-close without stopping after an intermediate phase."
+    local prompt="Bead ID: $bead_id. Invoke the installed bead-implementation-loop skill directly with execution_mode=auto. Keep this Claude session as the active harness, use its native Core subagent for implementation and repairs, and use the provider-neutral gateway only for opposite-family review. After CLEAN and applicable Means of Compliance evidence, invoke the canonical Session Close owner; do not reproduce delivery mechanics inline."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
-    fi
-
-    if [[ -n "$route_profile" ]]; then
-        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to phase0-claim.py)."
-    fi
-
-    if [[ -n "$force_tier" ]]; then
-        prompt+=" Force tier: $force_tier (pass force_tier=$force_tier to phase0-claim.py). This explicit administrative override takes precedence over requested_workflow."
     fi
 
     if _has_coordinator_callback; then
@@ -558,9 +511,7 @@ if [[ -n "$bead_quick_id" ]]; then
     bead_quick_id=$(_expand_bead_id "$bead_quick_id")
     local bead_quick_short=$(_bead_short "$bead_quick_id")
 
-    # Export CLD_BEAD_LINE=cld so bead-orchestrator resolves the quick profile
-    # from perspective_policy.cld. Symmetric to cdx -bq's CLD_BEAD_LINE=cdx
-    # export.
+    # Identify the active harness for the shared implementation-loop contract.
     export CLD_BEAD_LINE=cld
 
     if ! _bead_exists "$bead_quick_id"; then
@@ -587,9 +538,8 @@ if [[ -n "$bead_quick_id" ]]; then
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_quick_id}"
     claude_args+=("--worktree" "$worktree_name")
-    claude_args+=("--agent" "bead-orchestrator")
     # ── Force full plugin registry in the worktree session ────────
-    # CCP-9xy: guarantees core:session-close is spawnable at closeout,
+    # Guarantee the canonical Session Close owner is available at handoff,
     # even if a project-level .claude/settings overrides setting-sources.
     claude_args+=("--setting-sources" "user,project,local")
 
@@ -605,20 +555,10 @@ if [[ -n "$bead_quick_id" ]]; then
         bead_ns="${bead_prefix}-${bead_num}"
     fi
 
-    # Enter the canonical orchestrator with a strict quick request. Ineligibility
-    # is terminal before claim; it must never silently fall back to full.
-    local prompt="Bead ID: $bead_quick_id. Execute the canonical bead orchestration workflow end-to-end with requested_workflow=quick. Pass requested_workflow=quick to the phase0-claim.py direct-bd preflight. If strict quick is ineligible, stop before claim and do not fall back to full. If eligible, continue through the resolved quick profile and session-close without stopping after an intermediate phase."
+    local prompt="Bead ID: $bead_quick_id. Invoke the installed bead-implementation-loop skill directly with execution_mode=quick. This is unconditional explicit Quick for every executable leaf; do not run preliminary review or optional startup ceremony. Keep this Claude session as the active harness, use its native Core subagent for implementation and repairs, and use the provider-neutral gateway only for opposite-family review. After CLEAN and applicable Means of Compliance evidence, invoke the canonical Session Close owner; do not reproduce delivery mechanics inline."
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
-    fi
-
-    if [[ -n "$route_profile" ]]; then
-        prompt+=" Route profile: $route_profile (pass route_profile=$route_profile to phase0-claim.py)."
-    fi
-
-    if [[ -n "$force_tier" ]]; then
-        prompt+=" Force tier: $force_tier (pass force_tier=$force_tier to phase0-claim.py). This explicit administrative override takes precedence over requested_workflow."
     fi
 
     if _has_coordinator_callback; then
