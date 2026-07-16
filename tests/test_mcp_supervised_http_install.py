@@ -520,7 +520,7 @@ def test_known_legacy_stdio_descriptors_are_adopted(mock_clone, tmp_env):
     )
     codex_path.parent.mkdir(parents=True, exist_ok=True)
     codex_path.write_text(
-        '[mcp_servers.cognovis-tools]\ncommand = "sh"\nargs = ["-c", "legacy-cognovis-tools"]\n',
+        '[mcp_servers.cognovis-tools]\ntype = "stdio"\ncommand = "sh"\nargs = ["-c", "legacy-cognovis-tools"]\n',
         encoding="utf-8",
     )
 
