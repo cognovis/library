@@ -177,6 +177,12 @@ def _is_wrapper_agent(path: Path) -> bool:
     return path.name.startswith("phase") and path.name.endswith("-wrapper.md")
 
 
+def _assert_optional_model_mapping(name: str, frontmatter: dict) -> None:
+    """Validate an explicit model while allowing harness-level model selection."""
+    if "model" in frontmatter:
+        assert isinstance(frontmatter["model"], dict), f"{name} model is not a mapping"
+
+
 def test_cognovis_agents_are_capability_first() -> None:
     """Every first-party agent uses capability declarations after CL-2yp."""
     for path in sorted(AGENTS_DIR.glob("*.md")):
@@ -185,7 +191,7 @@ def test_cognovis_agents_are_capability_first() -> None:
             assert frontmatter.get("agent_base") == "auto", (
                 f"{path.name} missing agent_base: auto"
             )
-            assert isinstance(frontmatter.get("model"), dict), f"{path.name} model is not a mapping"
+            _assert_optional_model_mapping(path.name, frontmatter)
             assert "model_standards" not in frontmatter, (
                 f"{path.name} still has model_standards"
             )
@@ -195,6 +201,16 @@ def test_cognovis_agents_are_capability_first() -> None:
             assert path.name in _ALLOWED_SOURCE_TOOL_BOUNDARY_AGENTS, (
                 f"{path.name} has an unapproved source-level tools boundary"
             )
+
+
+def test_regression_capability_first_agent_may_inherit_model() -> None:
+    """CL-e7dg: capability-first agents may leave model selection to the harness."""
+    _assert_optional_model_mapping(
+        "inherited-model.md",
+        {"agent_base": "auto", "capabilities": ["read_files"]},
+    )
+    with pytest.raises(AssertionError, match="model is not a mapping"):
+        _assert_optional_model_mapping("invalid-model.md", {"model": "opus"})
 
 
 def test_cognovis_agents_have_no_stale_codex_subagent_claims() -> None:
