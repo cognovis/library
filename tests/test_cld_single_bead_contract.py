@@ -230,16 +230,22 @@ def test_cld_bead_modes_invoke_implementation_loop_directly(
     assert "canonical Session Close" in prompt
     if execution_mode == "quick":
         assert "unconditional explicit Quick" in prompt
+        # CL-3gdz: -bq forces the quick tier unconditionally, bypassing the
+        # size/effort eligibility gate.
+        assert "force_tier=quick" in prompt
 
 
 def test_cld_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
     source = CLD_BIN.read_text(encoding="utf-8")
 
+    # CL-3gdz: force_tier is no longer banned — -bq now forces the quick tier
+    # (force_tier=quick) to bypass the size/effort eligibility gate. It is a tier
+    # declaration, not orchestrator routing authority, so it stays out of this
+    # ban list while phase0/route_profile/adapter routing remain forbidden.
     for banned in (
         "phase0-claim.py",
         "requested_workflow",
         "route_profile",
-        "force_tier",
         'claude_args+=("--agent" "bead-orchestrator")',
         "codex-impl",
         "codex-exec",
