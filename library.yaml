@@ -1369,6 +1369,7 @@ library:
     requires:
     - standard:english-only
     - standard:no-emoji
+    - standard:fhir-ig-authoring
     tags:
     - origin:original
     - tier:domain
@@ -3056,6 +3057,32 @@ library:
     - tier:domain
     - category:standard
     - fhir
+  - name: fhir-ig-authoring
+    description: Architecture boundaries and minimal modeling conventions for reusable
+      FHIR implementation guides.
+    source: https://github.com/cognovis/library-core/blob/main/standards/fhir-ig-authoring/fhir-ig-authoring.md
+    tier: domain
+    default_scope: ask
+    metadata:
+      library:
+        plane: dev
+        steward: cognovis-core
+        product_counterpart:
+          repo: fhir-praxis-de
+          path: input/fsh/extensions/
+          primitive_type: other
+          notes: Exact profile names, canonical URLs, resource contexts, and release
+            history remain authoritative in the product IG repository.
+        gascity:
+          exportable: false
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+    tags:
+    - origin:original
+    - tier:domain
+    - category:standard
+    - fhir
+    - implementation-guide
   - name: fhir-sql-patterns
     description: SQL patterns for querying FHIR-shaped relational data without widening
       joins or creating N+1 lookups.
