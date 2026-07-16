@@ -952,7 +952,6 @@ library:
     requires:
     - standard:english-only
     - skill:bead-reviewer
-    - mcp:cognovis-tools
     tags:
     - origin:original
     - tier:core
