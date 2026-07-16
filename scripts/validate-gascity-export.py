@@ -136,13 +136,14 @@ def _iter_entries(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         "model-standard": "model-standard",
         "agent-base": "agent-base",
         "workflow": "workflow",
+        "runtime-config": "runtime-config",
     }
     entries: list[tuple[str, dict[str, Any]]] = []
     for primitive_name in all_primitive_names():
         primitive = get_primitive(primitive_name)
         if primitive is None:
             continue
-        section_label = section_labels[primitive.name]
+        section_label = section_labels.get(primitive.name, primitive.name)
         for entry in resolve_yaml_section(data, primitive):
             entries.append((section_label, entry))
 

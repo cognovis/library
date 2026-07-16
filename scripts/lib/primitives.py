@@ -118,6 +118,19 @@ PRIMITIVES: list[PrimitiveInfo] = [
         description="Deterministic orchestration specs stored as Claude workflow JavaScript",
         install_subdir="workflows",
     ),
+    PrimitiveInfo(
+        name="runtime-config",
+        yaml_section="library.runtime_configs",
+        yaml_key="library/runtime_configs",
+        legacy_yaml_keys=[],
+        description=(
+            "Composed runtime configuration deployed to a single target file "
+            "(e.g. ~/.agents/orchestrator-config.yml). Generated from a routing "
+            "base plus a global-only overlay via section-level merge."
+        ),
+        aliases=["runtime_config"],
+        install_subdir="runtime-configs",
+    ),
 ]
 
 # Lookup tables

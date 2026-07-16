@@ -37,6 +37,9 @@ default_dirs:
   workflows:
   - default: .claude/workflows/
   - global: ~/.claude/workflows/
+  runtime_configs:
+  - default: .agents/
+  - global: ~/.agents/
 tag_vocabulary:
 - tag: judge-layer
   description: Artifacts that ship as part of the judge-layer family.
@@ -139,6 +142,7 @@ sources:
     - model_standards
     - agent_bases
     - workflows
+    - runtime_configs
     scope:
       topics:
       - team
@@ -4176,6 +4180,23 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: manual
+  runtime_configs:
+  - name: orchestrator-config
+    description: 'Composed global orchestrator-config.yml — routing baseline (model
+      tiers, perspective_policy, route_profiles; opus routing, active-context adapters)
+      merged with the global-only overlay (bead_claim/effort_classifier). Deployed to
+      ~/.agents/orchestrator-config.yml by library sync; drift-audited by library audit.'
+    base: https://github.com/cognovis/library-core/blob/main/runtime-configs/orchestrator-config.base.yml
+    global_overlay: https://github.com/cognovis/library-core/blob/main/runtime-configs/orchestrator-config.global-overlay.yml
+    deploy_filename: orchestrator-config.yml
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+    version: 2026.07.16
+    tags:
+    - origin:original
+    - tier:core
 project_tooling:
 - name: beads-prime
   description: bd workflow primer — auto-synced from cognovis-library at SessionStart.
