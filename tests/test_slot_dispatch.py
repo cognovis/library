@@ -5,34 +5,30 @@ AC coverage:
   AC4: Backward compatibility: legacy route_decision.impl_model fallback when execution_plan absent
   AC5: cdx-composer fixture proves Phase 5 and repair/fix slots both route to cursor-impl
   AC6: cld-default and cdx-default fixtures preserve current behavior
-  AC7: Phase Progress marker format remains stable for telemetry consumers
+  CL-e7dg: legacy agent names delegate lifecycle ownership to the native loop
 """
 
 from __future__ import annotations
 
 import importlib.util
-import re
+import os
 from pathlib import Path
 
 import pytest
 import yaml
 
 
-def _find_library_root() -> Path:
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if parent.name == "meta" and (parent / "bin" / "cld").exists():
-            return parent.parent
-    return Path("/nonexistent/library")
-
-
-_LIBRARY_ROOT = _find_library_root()
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_COGNOVIS_ROOT = (
+    Path(os.environ["COGNOVIS_CORE"]).expanduser()
+    if os.environ.get("COGNOVIS_CORE")
+    else _REPO_ROOT.parent / "cognovis-core"
+)
 _RESOLVE_SCRIPT = (
-    _LIBRARY_ROOT / "cognovis-core" / "skills" / "beads" / "scripts" / "resolve_slot_dispatch.py"
+    _COGNOVIS_ROOT / "skills" / "cognovis-beads" / "scripts" / "resolve_slot_dispatch.py"
 )
 _USER_GLOBAL_CONFIG = Path.home() / ".agents" / "orchestrator-config.yml"
-_COGNOVIS_CONFIG = _LIBRARY_ROOT / "cognovis-core" / ".agents" / "orchestrator-config.yml"
-_COGNOVIS_ROOT = _LIBRARY_ROOT / "cognovis-core"
+_COGNOVIS_CONFIG = _COGNOVIS_ROOT / ".agents" / "orchestrator-config.yml"
 _BEAD_ORCH_PATH = _COGNOVIS_ROOT / "agents" / "bead-orchestrator.md"
 
 
@@ -247,68 +243,34 @@ class TestCurrentBehaviorPreserved:
         assert impl["model"] == "haiku"
 
 
-class TestPhaseProgressMarkerFormat:
-    """AC7: Phase Progress markers remain stable and machine-parseable."""
+class TestNativeLoopCompatibilityRedirects:
+    """CL-e7dg: legacy agent names delegate lifecycle ownership to the native loop."""
 
-    _MARKER_RE = re.compile(
-        r"^phase: \d+ \| name: \w+ \| status: \w+",
-        re.MULTILINE,
-    )
+    @staticmethod
+    def _source(name: str) -> tuple[dict, str]:
+        path = _COGNOVIS_ROOT / "agents" / f"{name}.md"
+        if not path.exists():
+            pytest.skip(f"{name}.md not found at {path}")
+        content = path.read_text(encoding="utf-8")
+        frontmatter = yaml.safe_load(content.split("---", 2)[1]) or {}
+        return frontmatter, content
 
-    def test_bead_orchestrator_contains_phase_progress_header(self) -> None:
-        if not _BEAD_ORCH_PATH.exists():
-            pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
-        content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
-        assert "### Phase Progress" in content
+    def test_regression_bead_orchestrator_delegates_to_native_loop(self) -> None:
+        frontmatter, content = self._source("bead-orchestrator")
+        assert frontmatter.get("requires") == ["skill:bead-implementation-loop"]
+        assert "STATUS: DEPRECATED COMPATIBILITY REDIRECT" in content
+        assert "Invoke `bead-implementation-loop` exactly once" in content
+        assert "### Phase Progress" not in content
+        assert "resolve_slot_dispatch.py" not in content
 
-    def test_bead_orchestrator_phase_progress_marker_format_valid(self) -> None:
-        if not _BEAD_ORCH_PATH.exists():
-            pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
-        content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
-        markers = self._MARKER_RE.findall(content)
-        assert len(markers) > 0, "bead-orchestrator.md must contain Phase Progress markers"
-
-    def test_phase_progress_p5_impl_marker_present(self) -> None:
-        if not _BEAD_ORCH_PATH.exists():
-            pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
-        content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
-        assert "phase: 5 | name: p5_impl | status: in_progress | iteration:" in content
-
-    def test_phase_progress_p5_review_marker_present(self) -> None:
-        if not _BEAD_ORCH_PATH.exists():
-            pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
-        content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
-        assert "phase: 5 | name: p5_review | status: in_progress | iteration:" in content
-
-    def test_phase_progress_route_decision_format_unchanged(self) -> None:
-        if not _BEAD_ORCH_PATH.exists():
-            pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
-        content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
-        assert "phase: 0 | name: route_decision | status: complete | route:" in content
-
-    def test_no_new_phase_progress_marker_formats_introduced(self) -> None:
-        """Marker format must stay: 'phase: N | name: X | status: Y'.
-
-        Template lines (containing angle brackets like '<N>') are skipped since
-        they are documentation examples, not live emitted markers.
-        """
-        if not _BEAD_ORCH_PATH.exists():
-            pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
-        content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
-        # Check lines immediately after ### Phase Progress markers.
-        # Skip template lines (those containing angle brackets — they are examples).
-        lines = content.splitlines()
-        checked = 0
-        for i, line in enumerate(lines):
-            if line.strip() == "### Phase Progress" and i + 1 < len(lines):
-                next_line = lines[i + 1].strip()
-                if next_line and "<" not in next_line and ">" not in next_line:
-                    assert re.match(r"^phase: \d+ \|", next_line), (
-                        f"Phase Progress line at {i + 2} has non-canonical format: {next_line!r}"
-                    )
-                    checked += 1
-        # Ensure we actually checked at least some real markers (not all were templates)
-        assert checked > 0, "No non-template Phase Progress markers found"
+    def test_regression_quick_fix_delegates_quick_mode_to_native_loop(self) -> None:
+        frontmatter, content = self._source("quick-fix")
+        assert frontmatter.get("requires") == ["skill:bead-implementation-loop"]
+        assert "STATUS: DEPRECATED COMPATIBILITY REDIRECT" in content
+        assert "Invoke `bead-implementation-loop` exactly once" in content
+        assert "the bead ID and `quick` mode" in content
+        assert "Spawn `bead-orchestrator` once" not in content
+        assert "resolve_slot_dispatch.py" not in content
 
 
 class TestSlotDispatchErrorPropagation:
@@ -367,26 +329,8 @@ class TestSlotDispatchErrorPropagation:
         assert "full" in str(exc_info.value)
 
     def test_no_blanket_stderr_suppression_in_bead_orchestrator(self) -> None:
-        """AC4: bead-orchestrator call sites do not suppress resolve_slot_dispatch errors when EXECUTION_PLAN is set."""
+        """The compatibility redirect does not retain legacy slot dispatch calls."""
         if not _BEAD_ORCH_PATH.exists():
             pytest.skip(f"bead-orchestrator.md not found at {_BEAD_ORCH_PATH}")
         content = _BEAD_ORCH_PATH.read_text(encoding="utf-8")
-        lines = content.splitlines()
-        for i, line in enumerate(lines):
-            if "resolve_slot_dispatch.py" in line and "EXECUTION_PLAN=" in line:
-                assert "2>/dev/null" not in line, (
-                    f"Line {i + 1} in bead-orchestrator.md blanket-suppresses stderr on "
-                    f"resolve_slot_dispatch.py call with EXECUTION_PLAN: {line.strip()!r}"
-                )
-
-    def test_quick_fix_compatibility_redirect_owns_no_slot_dispatch(self) -> None:
-        """CL-sl3j: the compatibility agent delegates instead of resolving slots."""
-        _QF_PATH = _COGNOVIS_ROOT / "agents" / "quick-fix.md"
-        if not _QF_PATH.exists():
-            pytest.skip(f"quick-fix.md not found at {_QF_PATH}")
-        content = _QF_PATH.read_text(encoding="utf-8")
-        assert "DEPRECATED COMPATIBILITY ADAPTER" in content
-        assert "Spawn `bead-orchestrator` once" in content
-        assert "requested_workflow=quick" in content
         assert "resolve_slot_dispatch.py" not in content
-        assert "## LEAF_DISPATCH" not in content
