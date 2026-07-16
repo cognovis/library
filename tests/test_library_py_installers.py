@@ -3874,3 +3874,35 @@ class TestMcpInstallerDefaultScope:
                 "details": "remove 'test-mcp'",
             }
         ]
+
+
+class TestMcpInstallerScopeInvariant:
+    @staticmethod
+    def _catalog() -> dict:
+        return TestMcpInstallerDefaultScope._catalog()
+
+    def test_fix_cl_yum0_install_rejects_project_scope(self, tmp_path):
+        from lib.errors import InstallError
+        from lib.installers.mcp_installer import install_mcp
+
+        with pytest.raises(InstallError, match="project-scoped MCP registration"):
+            install_mcp(
+                self._catalog(),
+                "test-mcp",
+                tmp_path,
+                scope="project",
+                dry_run=True,
+            )
+
+    def test_fix_cl_yum0_remove_rejects_project_scope(self, tmp_path):
+        from lib.errors import InstallError
+        from lib.installers.mcp_installer import remove_mcp
+
+        with pytest.raises(InstallError, match="project-scoped MCP registration"):
+            remove_mcp(
+                self._catalog(),
+                "test-mcp",
+                tmp_path,
+                scope="project",
+                dry_run=True,
+            )
