@@ -2,6 +2,7 @@
 
 ### Fixed
 
+- *(CL-yum0, MCP installer)* MCP registrations and their authoritative lock records are now consistently user-global: `mcp use` and `mcp remove` default to `~/.config/library/global.lock` and reject project scope before mutation. Existing provenance-less harness entries are adopted only on an exact full-descriptor match to the canonical or a declared legacy descriptor; foreign or non-identical entries remain untouched.
 - *(clc-c35e, agent sessions/catalog)* The shared bead-review client starts provider reviews in background mode, polls the durable handle to a terminal result, and cancels timed-out or orphaned sessions. The `cognovis-beads` catalog rename is now complete across active dependency declarations, `cdx` runtime discovery, dispatch helpers, and fleet tests, removing the remaining `skill:beads` references that broke dependency resolution.
 - *(clc-m4rc, audit)* Top-level Library audits now compare each bootstrap-installed `/library` skill surface and Python control plane with the running platform source, report legacy lock entries without `checksum_type` as actionable local drift, and retain agent capability frontmatter inside the checksum boundary. The recurring drift-summary path receives the same deterministic findings.
 
