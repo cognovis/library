@@ -170,14 +170,14 @@ def test_review_propagates_client_failure_and_still_flashes(tmp_path: Path) -> N
 
 
 @pytest.mark.parametrize(
-    ("args", "agent"),
+    ("args", "execution_mode"),
     [
-        (["-b", "CL-safe"], "bead-orchestrator"),
-        (["-bq", "CL-safe"], "bead-orchestrator"),
+        (["-b", "CL-safe"], "auto"),
+        (["-bq", "CL-safe"], "quick"),
     ],
 )
 def test_implementer_modes_keep_auto_permissions_and_worktree(
-    tmp_path: Path, args: list[str], agent: str
+    tmp_path: Path, args: list[str], execution_mode: str
 ) -> None:
     result, claude_argv, review_argv, _ = _run_cld(tmp_path, args)
     assert result.returncode == 0, result.stderr
@@ -185,7 +185,11 @@ def test_implementer_modes_keep_auto_permissions_and_worktree(
     argv = json.loads(claude_argv.read_text(encoding="utf-8"))
     assert _flag_value(argv, "--permission-mode") == "auto"
     assert _flag_value(argv, "--worktree") == "bead-CL-safe"
-    assert _flag_value(argv, "--agent") == agent
+    assert _flag_value(argv, "--agent") is None
+    prompt = argv[-1]
+    assert "bead-implementation-loop" in prompt
+    assert f"execution_mode={execution_mode}" in prompt
+    assert "canonical Session Close" in prompt
 
 
 def test_plain_launcher_only_bypasses_permissions_on_explicit_request(tmp_path: Path) -> None:

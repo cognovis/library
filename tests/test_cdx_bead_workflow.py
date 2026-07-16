@@ -57,7 +57,10 @@ def _write_launcher_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
         "    f.write(json.dumps(args) + '\\n')\n"
         "if len(args) >= 2 and args[0] == 'show':\n"
         "    bead_id = args[1]\n"
-        "    if '--json' in args:\n"
+        "    if '--children' in args:\n"
+        "        count = int(os.environ.get('BD_CHILD_COUNT', '0'))\n"
+        "        print(json.dumps({bead_id: [{'id': f'{bead_id}.{index + 1}'} for index in range(count)]}))\n"
+        "    elif '--json' in args:\n"
         "        payload_json = os.environ.get('BD_PAYLOAD_JSON', '')\n"
         "        payload = json.loads(payload_json) if payload_json else [\n"
         "            {'id': bead_id, 'status': 'open', 'title': 'Smoke bead'}\n"
@@ -200,6 +203,7 @@ def _run_cdx_launcher(
     compact_context_script: Path | None = None,
     with_uv: bool = True,
     bead_payload: object | None = None,
+    env_overrides: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path, Path, Path, Path]:
     codex_mock, argv_file, prompt_file, called_file, env_file = _write_codex_capture(tmp_path)
     review_client = _write_review_client_capture(tmp_path)
@@ -235,6 +239,8 @@ def _run_cdx_launcher(
     env["CLD_COMPACT_OUTPUT"] = "0"
     if bead_payload is not None:
         env["BD_PAYLOAD_JSON"] = json.dumps(bead_payload)
+    if env_overrides:
+        env.update(env_overrides)
     if with_uv:
         env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
     else:
@@ -868,6 +874,71 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
 
 
 @pytest.mark.parametrize(
+    ("args", "execution_mode"),
+    [
+        (["-b", "CL-smoke", "--exec"], "auto"),
+        (["-bq", "CL-smoke"], "quick"),
+    ],
+)
+def test_cdx_bead_modes_invoke_implementation_loop_directly(
+    tmp_path: Path,
+    args: list[str],
+    execution_mode: str,
+) -> None:
+    result, _argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "bead-implementation-loop" in prompt
+    assert f"execution_mode={execution_mode}" in prompt
+    assert "canonical Session Close" in prompt
+    if execution_mode == "quick":
+        assert "unconditional explicit Quick" in prompt
+
+
+def test_cdx_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
+    source = _CDX_BIN.read_text(encoding="utf-8")
+
+    for banned in (
+        "phase0-claim.py",
+        "resolve_slot_dispatch.py",
+        "route_profile",
+        "cursor-impl.py",
+        "codex-impl.py",
+        "codex-exec.py",
+        "claude-impl.py",
+    ):
+        assert banned not in source
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-b", "CL-parent", "--exec"],
+        ["-bq", "CL-parent"],
+    ],
+)
+def test_cdx_bead_modes_reject_parent_before_git_or_harness(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, git_log = _run_cdx_launcher(
+        tmp_path,
+        args,
+        env_overrides={"BD_CHILD_COUNT": "1"},
+    )
+
+    assert result.returncode == 2
+    assert "has 1 children" in result.stderr
+    assert not git_log.exists()
+    assert not called_file.exists()
+
+
+@pytest.mark.parametrize(
     "args",
     [
         ["-b", "CL-smoke", "--exec"],
@@ -1191,7 +1262,7 @@ def test_cdx_bead_modes_with_callback_inject_contract_and_consume_flags(
     assert "cmux trigger-flash --surface surface:33" in prompt
     assert "blocking question" in prompt
     assert "terminal state" in prompt
-    assert "Phase 16" in prompt
+    assert "Session Close" in prompt
     assert "Normal progress updates are NOT intervention events and must NOT trigger the callback." in prompt
 
 
