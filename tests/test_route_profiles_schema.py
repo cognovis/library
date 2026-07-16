@@ -214,21 +214,25 @@ class TestRouteProfilesSchema:
     # ── AC4: built-in profiles bind the expected adapter/model values ─────
 
     def test_cld_default_full_implementation_values(self, config: dict) -> None:
+        # CL-3gdz: codex-impl retired -> codex-exec; implementer -> gpt-5.6-sol.
         impl = config["route_profiles"]["cld-default"]["slots"]["full"]["implementation"]
-        assert impl["adapter"] == "codex-impl"
-        assert impl["model"] == "gpt-5.5"
+        assert impl["adapter"] == "codex-exec"
+        assert impl["model"] == "gpt-5.6-sol"
         assert impl["harness"] == "codex"
 
     def test_cld_default_quick_implementation_values(self, config: dict) -> None:
+        # CL-3gdz: codex-impl retired -> codex-exec; implementer -> gpt-5.6-sol.
         impl = config["route_profiles"]["cld-default"]["slots"]["quick"]["implementation"]
-        assert impl["adapter"] == "codex-impl"
-        assert impl["model"] == "gpt-5.5"
+        assert impl["adapter"] == "codex-exec"
+        assert impl["model"] == "gpt-5.6-sol"
         assert impl["reasoning_effort"] == "medium"
         assert impl["harness"] == "codex"
 
     def test_cld_default_quick_slot_values(self, config: dict) -> None:
+        # CL-3gdz: implementation -> gpt-5.6-sol; fix_loop keeps gpt-5.5 (valid
+        # under codex-exec).
         slots = config["route_profiles"]["cld-default"]["slots"]["quick"]
-        assert slots["implementation"]["model"] == "gpt-5.5"
+        assert slots["implementation"]["model"] == "gpt-5.6-sol"
         assert slots["implementation"]["reasoning_effort"] == "medium"
         assert slots["fix_loop"]["model"] == "gpt-5.5"
         assert slots["fix_loop"]["reasoning_effort"] == "high"
