@@ -1395,6 +1395,34 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
+  - name: fhir-ig-development
+    description: >-
+      use when: authoring, consolidating, validating, or preparing publication of
+      FHIR Implementation Guide artifacts with FSH/SUSHI and IG Publisher. NOT for:
+      mapping application data into installed profiles or Aidbox-specific server
+      debugging. boundary: owns the provider-neutral IG source workflow and publication
+      evidence while neighboring skills own emitters and server-specific validation.
+    source: https://github.com/cognovis/library-core/blob/main/skills/fhir-ig-development/SKILL.md
+    requires:
+    - standard:english-only
+    - standard:no-emoji
+    - standard:fhir-ig-authoring
+    - standard:judge-layer
+    - skill:fhir-emission
+    - skill:aidbox-ig-development
+    tags:
+    - origin:original
+    - tier:domain
+    - fhir
+    - implementation-guide
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+        plane: dev
+        steward: cognovis-core
+        gascity:
+          exportable: false
   - name: file-inspect
     description: Analyze changed files in a git branch — list modified/added/deleted
       files, categorize by type (scripts/manifests/docs/other), detect embedded version
@@ -3086,10 +3114,11 @@ library:
         steward: cognovis-core
         product_counterpart:
           repo: fhir-praxis-de
-          path: input/fsh/extensions/
+          path: input/fsh/
           primitive_type: other
-          notes: Exact profile names, canonical URLs, resource contexts, and release
-            history remain authoritative in the product IG repository.
+          notes: Exact profiles, extensions, terminology artifacts, canonical URLs,
+            resource contexts, and release history remain authoritative in the product
+            IG repository.
         gascity:
           exportable: false
         source_catalog: cognovis-library-core
