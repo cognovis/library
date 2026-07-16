@@ -518,6 +518,16 @@ if [[ -n "$bead_quick_id" ]]; then
         _abort_missing_bead "$bead_quick_id" "Claude"
     fi
 
+    # Refuse direct-child containers before sync or worktree creation.
+    local _quick_child_count
+    _quick_child_count=$(_bead_child_count "$bead_quick_id")
+    if [[ "$_quick_child_count" -gt 0 ]]; then
+        echo -e "\033[0;31m✗ ${bead_quick_id} has ${_quick_child_count} children.\033[0m" >&2
+        echo "  Quick mode requires an executable leaf bead." >&2
+        echo "  To work on a single child, use its own ID with cld -bq." >&2
+        exit 2
+    fi
+
     # ── Claim gate: refuse if bead is already in_progress or closed ──
     local _QF_STATUS
     _QF_STATUS=$(_bead_status "$bead_quick_id" || echo "")

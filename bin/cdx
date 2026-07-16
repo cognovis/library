@@ -107,6 +107,22 @@ fetch_bead_context() {
     return 2
 }
 
+fetch_bead_child_count() {
+    local bead_id="$1"
+    local children_json
+
+    children_json=$("${BD_BIN}" show "${bead_id}" --children --json 2>/dev/null) || return 1
+    printf '%s' "$children_json" | BEAD_ID="$bead_id" uv run python -c '
+import json
+import os
+import sys
+
+payload = json.load(sys.stdin)
+children = payload.get(os.environ["BEAD_ID"], []) if isinstance(payload, dict) else []
+print(len(children) if isinstance(children, list) else 0)
+' 2>/dev/null
+}
+
 format_untrusted_bead_context() {
     local bead_context="$1"
 
@@ -479,6 +495,17 @@ launch_bead_implementation_loop() {
         return "$fetch_status"
     }
     bead_context="$(format_untrusted_bead_context "$bead_context")"
+
+    local child_count
+    child_count="$(fetch_bead_child_count "$active_bead")" || {
+        echo "ERROR: failed to inspect children for ${active_bead}." >&2
+        return 2
+    }
+    if (( child_count > 0 )); then
+        echo "ERROR: ${active_bead} has ${child_count} children." >&2
+        echo "Bead implementation mode requires an executable leaf; launch one direct child instead." >&2
+        return 2
+    fi
 
     export CLD_BEAD_LINE=cdx
     export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
