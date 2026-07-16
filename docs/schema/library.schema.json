@@ -2071,8 +2071,14 @@
           "type": "string",
           "minLength": 1
         },
+        "format": {
+          "description": "Source format. 'yaml' (default) composes base + global_overlay via section merge. 'markdown' deploys the base source verbatim (no parse, no overlay) — used for always-on instruction files like AGENTS.md.",
+          "type": "string",
+          "enum": ["yaml", "markdown"],
+          "default": "yaml"
+        },
         "global_overlay": {
-          "description": "Optional GitHub URL or local path to the global-only overlay source file. Its top-level sections are merged over the base for the deployed global config (e.g. bead_claim/effort_classifier).",
+          "description": "Optional GitHub URL or local path to the global-only overlay source file. Its top-level sections are merged over the base for the deployed global config (e.g. bead_claim/effort_classifier). Only valid for format 'yaml'.",
           "type": "string"
         },
         "deploy_filename": {

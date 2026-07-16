@@ -4181,6 +4181,23 @@ library:
     tags:
     - origin:original
     - tier:core
+  - name: agents-md
+    description: 'Global cross-harness AGENTS.md — always-on provider-neutral agent
+      rules (worktree discipline, english-only, 1Password ban, uv tooling, confirmation
+      gates, beads). Deployed verbatim to ~/.agents/AGENTS.md by library sync (also
+      chains to ~/.codex/AGENTS.md via symlink); drift-audited by library audit.
+      Machine/repo-specific content lives in each repo''s own AGENTS/CLAUDE files.'
+    base: https://github.com/cognovis/library-core/blob/main/runtime-configs/AGENTS.md
+    format: markdown
+    deploy_filename: AGENTS.md
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+    version: 2026.07.16
+    tags:
+    - origin:original
+    - tier:core
 project_tooling:
 - name: beads-prime
   description: bd workflow primer — auto-synced from cognovis-library at SessionStart.

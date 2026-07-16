@@ -170,9 +170,35 @@ def compose_for_entry(
     """Fetch sources and compose the runtime-config for an entry.
 
     Returns ``(composed_text, base_commit, overlay_commit)``.
+
+    ``format: markdown`` deploys the base source verbatim (no YAML parse, no
+    overlay) — used for always-on instruction files such as AGENTS.md. The
+    default ``format: yaml`` composes base + global_overlay via section merge.
     """
     base_text, base_commit = _read_source_text(entry.get("base", ""), "base")
-    overlay_source = entry.get("global_overlay", "")
+    # Normalize case/whitespace and reject unknown formats defensively — the
+    # schema enum guards catalog loads, but compose_for_entry is also called
+    # directly (tests, tools) with hand-built entries that skip schema validation.
+    fmt = (entry.get("format") or "yaml").strip().lower()
+    if fmt not in ("yaml", "markdown"):
+        raise InstallError(
+            f"runtime-config '{entry.get('name')}' has unknown format '{fmt}' "
+            "(expected 'yaml' or 'markdown')."
+        )
+    # Treat a whitespace-only overlay as absent (consistent for both formats).
+    overlay_source = (entry.get("global_overlay") or "").strip()
+
+    if fmt == "markdown":
+        if overlay_source:
+            raise InstallError(
+                f"runtime-config '{entry.get('name')}' uses format 'markdown', "
+                "which does not support a 'global_overlay' (markdown is deployed "
+                "verbatim from a single base source). Remove the overlay or use "
+                "format 'yaml'."
+            )
+        # Deploy the base source verbatim.
+        return base_text, base_commit, "none"
+
     if overlay_source:
         overlay_text, overlay_commit = _read_source_text(overlay_source, "global_overlay")
     else:

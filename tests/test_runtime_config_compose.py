@@ -307,3 +307,185 @@ def test_generic_sync_reinstall_dispatches_runtime_config(catalog, tmp_path):
     resolved = tmp_path / ".agents" / "orchestrator-config.yml"
     assert resolved.is_file()
     assert "bead_claim" in resolved.read_text()
+
+
+# --------------------------------------------------------------------------
+# markdown format (verbatim passthrough) — AGENTS.md distribution (clc-e1t2)
+# --------------------------------------------------------------------------
+
+from lib.errors import InstallError  # noqa: E402
+
+AGENTS_MD = """# Always-on Cross-Harness Agent Rules
+
+- Rule one: worktrees below ~/code/.worktrees.
+- Rule two: english-only source.
+
+## A YAML-looking block that must survive verbatim
+
+```yaml
+model_tiers:
+  known_models: [opus, sonnet]
+```
+"""
+
+
+@pytest.fixture
+def md_source(tmp_path):
+    src = tmp_path / "AGENTS.md"
+    src.write_text(AGENTS_MD, encoding="utf-8")
+    return src
+
+
+@pytest.fixture
+def md_catalog(tmp_path, md_source):
+    return {
+        "default_dirs": {
+            "runtime_configs": [
+                {"default": ".agents/"},
+                {"global": "~/.agents/"},
+            ],
+        },
+        "library": {
+            "runtime_configs": [
+                {
+                    "name": "agents-md",
+                    "description": "Global cross-harness AGENTS.md.",
+                    "base": str(md_source),
+                    "format": "markdown",
+                    "deploy_filename": "AGENTS.md",
+                }
+            ]
+        },
+    }
+
+
+def test_markdown_deploys_verbatim(md_catalog, md_source, tmp_path):
+    """AC1: format=markdown deploys the base source byte-identical (no YAML round-trip)."""
+    target = tmp_path / "deployed-AGENTS.md"
+    r = install_runtime_config(
+        md_catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    assert r["status"] == "ok"
+    assert target.read_text() == md_source.read_text()
+
+
+def test_markdown_idempotent_resync(md_catalog, tmp_path):
+    target = tmp_path / "deployed-AGENTS.md"
+    r1 = install_runtime_config(
+        md_catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    first = target.read_text()
+    r2 = install_runtime_config(
+        md_catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    assert target.read_text() == first
+    assert r2["data"]["content_sha256"] == r1["data"]["content_sha256"]
+
+
+def test_markdown_rejects_overlay(tmp_path, md_source):
+    """A markdown entry with a global_overlay is rejected with a clear error."""
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [{
+            "name": "agents-md",
+            "description": "invalid: markdown with overlay",
+            "base": str(md_source),
+            "format": "markdown",
+            "global_overlay": str(md_source),
+            "deploy_filename": "AGENTS.md",
+        }]},
+    }
+    target = tmp_path / "deployed-AGENTS.md"
+    with pytest.raises(InstallError, match="does not support"):
+        install_runtime_config(
+            catalog, "agents-md", repo_root=tmp_path,
+            scope="project", target_override=target,
+        )
+
+
+def test_markdown_audit_clean_then_drift(md_catalog, tmp_path):
+    target = tmp_path / "deployed-AGENTS.md"
+    install_runtime_config(
+        md_catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    clean = audit_runtime_config(
+        md_catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    assert clean["status"] == "clean"
+    assert clean["drift"] is False
+
+    target.write_text(target.read_text() + "\n- rogue rule\n")
+    drift = audit_runtime_config(
+        md_catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    assert drift["drift"] is True
+    assert drift["status"] == "drift"
+
+
+def test_markdown_format_is_case_insensitive(tmp_path, md_source):
+    """`format: MARKDOWN` is normalized and still deploys verbatim (no YAML parse)."""
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [{
+            "name": "agents-md",
+            "description": "uppercase format",
+            "base": str(md_source),
+            "format": "MARKDOWN",
+            "deploy_filename": "AGENTS.md",
+        }]},
+    }
+    target = tmp_path / "deployed-AGENTS.md"
+    r = install_runtime_config(
+        catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    assert r["status"] == "ok"
+    assert target.read_text() == md_source.read_text()
+
+
+def test_unknown_format_is_rejected(tmp_path, md_source):
+    """An unknown format value fails loudly instead of silently falling to YAML."""
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [{
+            "name": "agents-md",
+            "description": "bogus format",
+            "base": str(md_source),
+            "format": "bogus",
+            "deploy_filename": "AGENTS.md",
+        }]},
+    }
+    target = tmp_path / "deployed-AGENTS.md"
+    with pytest.raises(InstallError, match="unknown format"):
+        install_runtime_config(
+            catalog, "agents-md", repo_root=tmp_path,
+            scope="project", target_override=target,
+        )
+
+
+def test_markdown_whitespace_overlay_treated_as_absent(tmp_path, md_source):
+    """A whitespace-only global_overlay is treated as absent (not a rejected overlay)."""
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [{
+            "name": "agents-md",
+            "description": "whitespace overlay",
+            "base": str(md_source),
+            "format": "markdown",
+            "global_overlay": "   ",
+            "deploy_filename": "AGENTS.md",
+        }]},
+    }
+    target = tmp_path / "deployed-AGENTS.md"
+    r = install_runtime_config(
+        catalog, "agents-md", repo_root=tmp_path,
+        scope="project", target_override=target,
+    )
+    assert r["status"] == "ok"
+    assert target.read_text() == md_source.read_text()
