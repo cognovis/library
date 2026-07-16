@@ -977,7 +977,10 @@ class TestMcpRemove:
         result = run_library(
             "mcp", "remove", "test-mcp-server", "--json",
             cwd=project_dir,
-            env={"CLAUDE_SETTINGS_FILE": str(claude_settings)},
+            env={
+                "HOME": str(tmp_path / "home"),
+                "CLAUDE_SETTINGS_FILE": str(claude_settings),
+            },
         )
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
