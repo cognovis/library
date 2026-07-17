@@ -67,7 +67,7 @@ EXPECTED_COGNOVIS_SKILLS = {
     "infra-principles", "inject-standards", "mail-send",
     "nbj-audit", "people-query", "playwright-cli",
     "plugin-management", "portless", "project-context", "project-health", "project-setup",
-    "prompt-refiner", "spec-developer", "standards", "summarize",
+    "spec-developer", "standards", "summarize",
     "sync-standards", "token-cost", "ui-cli", "vision", "vision-author",
 }
 
