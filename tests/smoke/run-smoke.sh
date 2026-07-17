@@ -1522,8 +1522,8 @@ smoke_library_core() {
         return
     fi
 
-    # Check 5 specific skills exist and content matches source
-    local skills=("dolt" "cmux" "council" "prompt-refiner" "inject-standards")
+    # Check 4 specific skills exist and content matches source
+    local skills=("dolt" "cmux" "council" "inject-standards")
     for skill in "${skills[@]}"; do
         local dest="${library_core}/.claude/skills/${skill}/SKILL.md"
         if [[ -f "${dest}" ]]; then

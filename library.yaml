@@ -1766,24 +1766,6 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
         plane: dev
-  - name: prompt-refiner
-    description: Refine raw, unstructured, or dictated user input into a structured
-      prompt via HeyPresto MCP, then EXECUTE the refined prompt immediately. Use when
-      the user provides messy dictated text, vague task descriptions, or says "expand
-      prompt", "refine prompt", "use heypresto", "prompt verbessern". Also triggers
-      on "Expand Prompt." at the start of a message followed by stream-of-consciousness
-      text. Do NOT use for simple direct questions or already-clear prompts.
-    source: https://github.com/cognovis/library-core/blob/main/skills/prompt-refiner/SKILL.md
-    requires:
-    - standard:english-only
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
   - name: python-dev
     description: Develop Python CLI tools — project scaffold, CLI entry points, packaging,
       PyPI release, config resolution. Use when writing Python, creating a CLI tool,
