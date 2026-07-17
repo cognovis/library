@@ -728,6 +728,18 @@ library:
     - origin:personal
     - tier:core
     - workflow:memory
+  - name: adversarial-review
+    description: Provider-neutral adversarial code review over the Agent Client Protocol
+      via acpx. Resolves an opposite-family reviewer and returns a typed review gate.
+    source: https://github.com/cognovis/library-core/blob/main/skills/adversarial-review/SKILL.md
+    tags:
+    - origin:original
+    - tier:domain
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: convention-scan
+        plane: dev
   - name: aidbox
     description: Aidbox FHIR platform by Health Samurai. Use for FHIR REST API, search,
       transactions, bundles, access policies, subscriptions, custom resources, terminology,
@@ -1229,32 +1241,10 @@ library:
         inventory: convention-scan
         plane: dev
     version: 0.1.0
-  - name: codex
-    description: 'OpenAI Codex CLI wrapper — three modes. Code review: independent
-      diff review via codex review with pass/fail gate. Challenge: adversarial mode
-      that tries to break your code. Consult: ask codex anything with session continuity
-      for follow-ups. The "200 IQ autistic developer" second opinion. Use when asked
-      to "codex review", "codex challenge", "ask codex", "second opinion", or "consult
-      codex".'
-    source: https://github.com/cognovis/library-core/blob/main/skills/codex/SKILL.md
-    requires:
-    - standard:tool-standards
-    - standard:english-only
-    - standard:no-emoji
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
   - name: codex-guide
-    description: Answer documentation questions about OpenAI Codex CLI — subcommands,
-      flags, config.toml, sandbox modes, profiles, subagents (TOML in ~/.codex/agents/,
-      built-ins default/worker/explorer, spawn_agents_on_csv, max_threads/max_depth),
-      skills, and MCP integration. Triggers on "Does Codex...", "Can I configure Codex...",
-      "How do I... in Codex". Does NOT run Codex — refer to codex-rescue for execution.
+    description: Answer documentation questions about OpenAI Codex CLI, including
+      subcommands, config.toml, sandbox modes, profiles, subagents, skills, and MCP
+      integration. Does not run Codex; use acpx for cross-harness execution.
     source: https://github.com/cognovis/library-core/blob/main/skills/codex-guide/SKILL.md
     tags:
     - origin:original
@@ -2301,24 +2291,6 @@ library:
       library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
-        plane: dev
-  - name: codex
-    description: Thin native-workflow leaf that delegates implementation (mode=impl,
-      codex-impl.py) or adversarial review (mode=review, codex-exec.py) to the external
-      Codex CLI and relays structured JSON. Spawned by workflows via agent({agentType:"codex"}).
-      Runs as a cheap Claude relay; the Codex model arrives in the prompt as IMPL_MODEL.
-      Never spawns Claude agents or runs claude --print.
-    source: https://github.com/cognovis/library-core/blob/main/agents/codex.md
-    requires:
-    - skill:cognovis-beads
-    tags:
-    - origin:original
-    - tier:core
-    - workflow:beads
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: manual
         plane: dev
   - name: constraint-checker
     description: 'Verifies SLOs, security defaults, and performance constraints against
