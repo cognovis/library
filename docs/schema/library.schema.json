@@ -2085,6 +2085,18 @@
           "description": "Optional override for the deployed filename within the resolved default_dirs.runtime_configs directory. Defaults to <name>.yml.",
           "type": "string"
         },
+        "deploy_dir": {
+          "description": "Optional per-entry deploy directory override (scope-map list, same shape as default_dirs) used when the target must differ from default_dirs.runtime_configs (e.g. ~/.claude/ instead of ~/.agents/). The active scope's entry wins.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "default": {"type": "string"},
+              "global": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
         "runtime_requirements": {
           "$ref": "#/$defs/runtime_requirements"
         },

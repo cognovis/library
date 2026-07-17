@@ -4180,6 +4180,26 @@ library:
     tags:
     - origin:original
     - tier:core
+  - name: claude-md-global
+    description: 'Global Claude Code CLAUDE.md — fleet-wide Claude-Code-specific
+      configuration (safety checks, session close, web/doc/SSH routing, rules.d
+      reference; imports AGENTS.md). Deployed verbatim to ~/.claude/CLAUDE.md by
+      library sync via a deploy_dir override; drift-audited by library audit.
+      Library-owned — not tracked in the sussdorff/claude repo.'
+    base: https://github.com/cognovis/library-core/blob/main/runtime-configs/CLAUDE.md
+    format: markdown
+    deploy_filename: CLAUDE.md
+    deploy_dir:
+    - default: .claude/
+    - global: ~/.claude/
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+    version: 2026.07.17
+    tags:
+    - origin:original
+    - tier:core
 project_tooling:
 - name: beads-prime
   description: bd workflow primer — auto-synced from cognovis-library at SessionStart.

@@ -30,6 +30,7 @@ from lib.runtime_config import (  # noqa: E402
     audit_runtime_config,
     compose_runtime_config,
     install_runtime_config,
+    resolve_target_path,
 )
 
 
@@ -489,3 +490,90 @@ def test_markdown_whitespace_overlay_treated_as_absent(tmp_path, md_source):
     )
     assert r["status"] == "ok"
     assert target.read_text() == md_source.read_text()
+
+
+# --------------------------------------------------------------------------
+# deploy_dir override — CLAUDE.md distribution to ~/.claude/ (clc-cywc)
+# --------------------------------------------------------------------------
+
+def _claude_md_entry():
+    return {
+        "name": "claude-md-global",
+        "description": "Global CLAUDE.md",
+        "base": "unused-in-path-resolution",
+        "format": "markdown",
+        "deploy_filename": "CLAUDE.md",
+        "deploy_dir": [{"default": ".claude/"}, {"global": "~/.claude/"}],
+    }
+
+
+def test_deploy_dir_override_global_targets_home_claude(tmp_path):
+    """deploy_dir global mapping resolves to ~/.claude/, not the ~/.agents/ default."""
+    entry = _claude_md_entry()
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [entry]},
+    }
+    target = resolve_target_path(catalog, entry, scope="global", repo_root=tmp_path)
+    assert target == Path.home() / ".claude" / "CLAUDE.md"
+
+
+def test_deploy_dir_override_project_is_repo_relative(tmp_path):
+    """deploy_dir default (project) mapping resolves relative to the repo root."""
+    entry = _claude_md_entry()
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [entry]},
+    }
+    target = resolve_target_path(catalog, entry, scope="project", repo_root=tmp_path)
+    assert target == tmp_path / ".claude" / "CLAUDE.md"
+
+
+def test_deploy_dir_missing_scope_raises(tmp_path):
+    """A deploy_dir without the active scope's key fails loudly."""
+    entry = {
+        "name": "claude-md-global",
+        "deploy_filename": "CLAUDE.md",
+        "deploy_dir": [{"default": ".claude/"}],  # no 'global'
+    }
+    catalog = {"default_dirs": {"runtime_configs": []}, "library": {"runtime_configs": [entry]}}
+    with pytest.raises(InstallError, match="no 'global'"):
+        resolve_target_path(catalog, entry, scope="global", repo_root=tmp_path)
+
+
+def test_no_deploy_dir_still_uses_default_dirs(tmp_path):
+    """An entry without deploy_dir resolves via default_dirs.runtime_configs (unchanged)."""
+    entry = {"name": "agents-md", "deploy_filename": "AGENTS.md"}
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [entry]},
+    }
+    target = resolve_target_path(catalog, entry, scope="global", repo_root=tmp_path)
+    assert target == Path.home() / ".agents" / "AGENTS.md"
+
+
+def test_deploy_dir_end_to_end_install(tmp_path, md_source):
+    """install via deploy_dir (no target_override) writes to the resolved dir verbatim.
+
+    Uses project scope with an absolute deploy_dir so both the lockfile and the
+    deploy target stay under tmp_path (hermetic — never touches real global state).
+    """
+    fake_claude = tmp_path / "fake" / ".claude"
+    entry = {
+        "name": "claude-md-global",
+        "description": "Global CLAUDE.md",
+        "base": str(md_source),
+        "format": "markdown",
+        "deploy_filename": "CLAUDE.md",
+        "deploy_dir": [{"default": str(fake_claude)}],
+    }
+    catalog = {
+        "default_dirs": {"runtime_configs": [{"default": ".agents/"}, {"global": "~/.agents/"}]},
+        "library": {"runtime_configs": [entry]},
+    }
+    r = install_runtime_config(catalog, "claude-md-global", repo_root=tmp_path, scope="project")
+    assert r["status"] == "ok"
+    deployed = fake_claude / "CLAUDE.md"
+    assert deployed.read_text() == md_source.read_text()
+    audit = audit_runtime_config(catalog, "claude-md-global", repo_root=tmp_path, scope="project")
+    assert audit["status"] == "clean"

@@ -38,7 +38,7 @@ from .lockfile import (
     upsert_entry,
 )
 from .output import dry_run_result, success
-from .paths import resolve_install_paths
+from .paths import expand_path, resolve_install_paths
 from .primitives import get_primitive
 from .source import parse_source, resolve_marketplace
 
@@ -143,9 +143,16 @@ def resolve_target_path(
 ) -> Path:
     """Resolve the deploy target file for a runtime-config entry.
 
-    The target directory comes from ``default_dirs.runtime_configs`` for the
-    given scope; the filename is the entry's ``deploy_filename`` or ``<name>.yml``.
+    The target directory comes from the entry's ``deploy_dir`` override when
+    present, else from ``default_dirs.runtime_configs`` for the given scope; the
+    filename is the entry's ``deploy_filename`` or ``<name>.yml``.
     """
+    filename = entry.get("deploy_filename") or f"{entry.get('name')}.yml"
+
+    override = entry.get("deploy_dir")
+    if override:
+        return _resolve_deploy_dir(override, scope, repo_root, entry) / filename
+
     prim = get_primitive(PRIMITIVE_NAME)
     if prim is None:  # pragma: no cover - registry always has the primitive
         raise InstallError("runtime-config primitive is not registered.")
@@ -159,8 +166,38 @@ def resolve_target_path(
             f"default_dirs.runtime_configs in library.yaml."
         )
 
-    filename = entry.get("deploy_filename") or f"{entry.get('name')}.yml"
     return canonical_base / filename
+
+
+def _resolve_deploy_dir(
+    deploy_dir: Any,
+    scope: str,
+    repo_root: Path,
+    entry: dict[str, Any],
+) -> Path:
+    """Resolve a per-entry ``deploy_dir`` override to a directory Path.
+
+    ``deploy_dir`` is a scope-map list with the same shape as ``default_dirs``
+    (e.g. ``[{"default": ".claude/"}, {"global": "~/.claude/"}]``). The FIRST
+    list item carrying the active scope's key wins; ``~/``/``/``/relative
+    expansion matches default_dirs. Deploy paths come from the trusted, versioned
+    catalog, so (like default_dirs) they are not sandboxed against traversal.
+    """
+    if not isinstance(deploy_dir, list):
+        raise InstallError(
+            f"runtime-config '{entry.get('name')}' deploy_dir must be a list of "
+            "scope maps (e.g. [{'global': '~/.claude/'}])."
+        )
+    scope_key = "global" if scope == "global" else "default"
+    home = Path.home()
+    root = repo_root or Path.cwd()
+    for item in deploy_dir:
+        if isinstance(item, dict) and scope_key in item:
+            return expand_path(item[scope_key], home, root)
+    raise InstallError(
+        f"runtime-config '{entry.get('name')}' deploy_dir has no '{scope_key}' "
+        f"entry for scope '{scope}'."
+    )
 
 
 def compose_for_entry(

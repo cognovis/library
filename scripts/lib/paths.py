@@ -95,3 +95,12 @@ def _expand_path(raw: str, home: Path, root: Path) -> Path:
         return Path(raw)
     # Relative path — resolve against repo root
     return root / raw
+
+
+def expand_path(raw: str, home: Path, root: Path) -> Path:
+    """Public wrapper around the default_dirs path expansion.
+
+    Reused by per-entry deploy-dir overrides so they resolve identically to
+    ``default_dirs`` (``~/`` -> home, ``/`` -> absolute, else repo-root-relative).
+    """
+    return _expand_path(raw, home, root)
