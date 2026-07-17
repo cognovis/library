@@ -133,7 +133,7 @@ def _resolve_plugin_prefixed_body_refs(
 ) -> list[tuple[str, str, str, bool]]:
     """Resolve plugin-prefixed subagent_type refs against a registry.
 
-    Plugin-prefixed means the value contains a colon, e.g. ``codex:codex-rescue``.
+    Plugin-prefixed means the value contains a colon, e.g. ``example:reviewer``.
     Plain refs (no colon) are skipped and not included in the returned list.
 
     *plugin_registry* maps namespace strings (e.g. ``"codex"``) to sets of known
@@ -553,21 +553,21 @@ def test_unified_quick_routing_catalog_uses_direct_claim_preflight() -> None:
 def test_body_ref_extractor_finds_plugin_prefixed_refs() -> None:
     """Extractor returns plugin-prefixed refs and skips prose placeholders."""
     text = (
-        'Agent(subagent_type="codex:codex-rescue", prompt="...")\n'
+        'Agent(subagent_type="example:reviewer", prompt="...")\n'
         'Agent(subagent_type="general-purpose", prompt="do the thing")\n'
         '- **Claude**: Uses `Agent(subagent_type="...", prompt="...")` for docs.\n'
     )
     refs = _extract_body_subagent_type_refs(text)
-    assert "codex:codex-rescue" in refs
+    assert "example:reviewer" in refs
     assert "general-purpose" in refs
     assert "..." not in refs
 
 
 def test_plugin_ref_resolver_resolves_known_ref() -> None:
     """Resolver returns resolved=True when the agent name is in the namespace registry."""
-    registry = {"codex": {"codex-rescue", "other-agent"}}
-    results = _resolve_plugin_prefixed_body_refs(["codex:codex-rescue"], registry)
-    assert results == [("codex:codex-rescue", "codex", "codex-rescue", True)]
+    registry = {"example": {"reviewer", "other-agent"}}
+    results = _resolve_plugin_prefixed_body_refs(["example:reviewer"], registry)
+    assert results == [("example:reviewer", "example", "reviewer", True)]
 
 
 def test_plugin_ref_resolver_reports_unresolved_ref() -> None:
@@ -663,9 +663,7 @@ _INSTALLED_CODEX_AGENTS = Path.home() / ".codex" / "agents"
 # When a new codex:* body ref is added that lives in a marketplace cache (not
 # installed via `library use sync-codex-agents`), append the name here.
 # Documented as intentional in docs/audit/library-go-live-2026-05-15.md.
-_CODEX_RUNTIME_BUILTINS: frozenset[str] = frozenset({
-    "codex-rescue",  # canonical Codex escape-hatch agent; invoked via codex: prefix
-})
+_CODEX_RUNTIME_BUILTINS: frozenset[str] = frozenset()
 
 
 @pytest.mark.skipif(
