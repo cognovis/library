@@ -2168,6 +2168,30 @@ library:
         inventory: manual
         plane: dev
   agents:
+  - name: acpx-runner
+    description: Thin economy-tier relay leaf that dispatches one prompt to an external
+      ACP agent (codex, kimi, grok-build, gemini, cursor, ...) through the acpx CLI
+      and relays a structured execution-result envelope. Use for cross-family delegation
+      — implementation on Grok, critical review by GPT/Codex, design proposals from
+      Kimi — observable live like a native subagent. Preflight enforces version-pinned
+      adapter commands from acpx config (codex is pin-required). Multi-turn via
+      SESSION=<name>; one-off exec otherwise.
+    source: https://github.com/cognovis/library-core/blob/main/agents/acpx-runner.md
+    requires: []
+    metadata:
+      library:
+        source_catalog: cognovis-library-core
+        inventory: manual
+        plane: dev
+        runtime_requirements:
+          binaries:
+          - acpx
+          - uv
+        gascity:
+          exportable: false
+    tags:
+    - origin:original
+    - tier:core
   - name: architecture-reviewer
     description: Deep architecture-council review of a single bead before implementation.
       Runs four sequential role reviews on opus, does a canonical-catalog pre-check,
