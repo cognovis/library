@@ -989,7 +989,8 @@ def test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass(
     assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
 
 
-def test_cdx_bead_review_delegates_to_shared_client(tmp_path: Path) -> None:
+def test_cdx_bead_review_dispatches_through_acpx_runner(tmp_path: Path) -> None:
+    """ADR-0009: -br owns no dispatch client; the session routes the reviewer."""
     result, argv_file, _prompt_file, called_file, _env_file, _bd_log, git_log = _run_cdx_launcher(
         tmp_path,
         ["-br", "CL-smoke"],
@@ -998,10 +999,13 @@ def test_cdx_bead_review_delegates_to_shared_client(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert argv[argv.index("--lead-family") + 1] == "openai"
+    prompt = argv[-1]
+    assert "LEAD_FAMILY=openai" in prompt
+    assert "acpx-runner" in prompt
+    assert "CONTRACT=review_gate_v1" in prompt
+    assert "CL-smoke" in prompt
     assert "--provider" not in argv
     assert "--adapter" not in argv
-    assert argv[argv.index("--bead-id") + 1] == "CL-smoke"
     assert "--bead-dangerous-full-auto" not in argv
     assert "-C" not in argv
     assert not git_log.exists()
@@ -1320,10 +1324,11 @@ def test_cdx_bead_review_is_fresh_context_spec_review_not_cld_stub(tmp_path: Pat
     assert "no full cmux-review equivalent" not in result.stderr
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     env = json.loads(env_file.read_text(encoding="utf-8"))
-    assert argv[argv.index("--lead-family") + 1] == "openai"
+    assert "LEAD_FAMILY=openai" in argv[-1]
+    assert "acpx-runner" in argv[-1]
     assert "--provider" not in argv
     assert "--adapter" not in argv
-    assert argv[argv.index("--bead-id") + 1] == "CL-smoke"
+    assert "CL-smoke" in argv[-1]
     assert "-C" not in argv
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv

@@ -34,7 +34,8 @@ def _run_cld(
         tmp_path / "claude",
         f"#!{sys.executable}\n"
         "import json, os, pathlib, sys\n"
-        "pathlib.Path(os.environ['CLAUDE_ARGV']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n",
+        "pathlib.Path(os.environ['CLAUDE_ARGV']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
+        f"raise SystemExit({review_exit})\n",
     )
     review = _write_executable(
         tmp_path / "review-client",
@@ -97,29 +98,31 @@ def _flag_value(argv: list[str], flag: str) -> str | None:
     return None
 
 
-def test_review_delegates_to_shared_client_without_invoking_claude(tmp_path: Path) -> None:
-    result, claude_argv, review_argv, _ = _run_cld(tmp_path, ["-br", "CL-safe"])
+def test_review_runs_in_a_claude_session_that_dispatches_through_acpx_runner(
+    tmp_path: Path,
+) -> None:
+    """ADR-0009: -br has no dispatch client of its own; it hands the review to a
+    session that routes the foreign reviewer through acpx-runner."""
+    result, claude_argv, _, _ = _run_cld(tmp_path, ["-br", "CL-safe"])
 
     assert result.returncode == 0, result.stderr
-    assert not claude_argv.exists()
-    argv = json.loads(review_argv.read_text(encoding="utf-8"))
-    assert _flag_value(argv, "--lead-family") == "claude"
-    assert _flag_value(argv, "--bead-id") == "CL-safe"
-    assert _flag_value(argv, "--repo-dir") == str(tmp_path)
-    assert "--model" not in argv
-    assert "--provider" not in argv
-    assert "--adapter" not in argv
-    assert "--tools" not in argv
-    assert "--allowedTools" not in argv
-    assert "--dangerously-skip-permissions" not in argv
+    argv = json.loads(claude_argv.read_text(encoding="utf-8"))
+    prompt = argv[-1]
+    assert "CL-safe" in prompt
+    assert "acpx-runner" in prompt
+    assert "ROLE=review" in prompt
+    assert "LEAD_FAMILY=claude" in prompt
+    assert "CONTRACT=review_gate_v1" in prompt
+    assert str(tmp_path) in prompt
 
 
 def test_review_does_not_pin_a_concrete_model(tmp_path: Path) -> None:
-    result, _, review_argv, _ = _run_cld(tmp_path, ["-br", "CL-safe"])
+    """The reviewer model comes from the routing standard, never from the launcher."""
+    result, claude_argv, _, _ = _run_cld(tmp_path, ["-br", "CL-safe"])
     assert result.returncode == 0, result.stderr
-    argv = json.loads(review_argv.read_text(encoding="utf-8"))
+    argv = json.loads(claude_argv.read_text(encoding="utf-8"))
     assert "--model" not in argv
-    assert _flag_value(argv, "--lead-family") == "claude"
+    assert not any(item.startswith("--model=") for item in argv)
 
 
 def test_review_rejects_permission_bypass(tmp_path: Path) -> None:
@@ -150,7 +153,7 @@ def test_review_flashes_coordinator_after_shared_client_returns(tmp_path: Path) 
     assert ["trigger-flash", "--surface", "surface:33"] in calls
 
 
-def test_review_propagates_client_failure_and_still_flashes(tmp_path: Path) -> None:
+def test_review_propagates_session_failure_and_still_flashes(tmp_path: Path) -> None:
     result, _, _, cmux_log = _run_cld(
         tmp_path,
         [

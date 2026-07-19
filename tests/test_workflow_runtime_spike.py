@@ -105,10 +105,26 @@ def _write_spike_spec(tmp_path: Path, name: str, opts: dict[str, object]) -> Pat
 
 
 def _load_route_profiles() -> dict[str, object]:
-    if not ROUTE_PROFILE_CONFIG.exists():
-        pytest.skip(f"Route profile config not found: {ROUTE_PROFILE_CONFIG}")
-    data = yaml.safe_load(ROUTE_PROFILE_CONFIG.read_text(encoding="utf-8")) or {}
-    return data.get("route_profiles", {})
+    """Slot-target fixture for the runtime's routing plumbing.
+
+    This used to read `route_profiles` from the installed orchestrator config.
+    ADR-0009 removed that section (model routing is no longer config-driven), so
+    the data now lives here: the runtime feature under test is the slot_target
+    lookup itself, not the config format that once fed it.
+    """
+    return {
+        "cdx-default": {
+            "slots": {
+                "full": {
+                    "implementation": {
+                        "adapter": "claude-agent",
+                        "harness": "claude",
+                        "model": "opus",
+                    }
+                }
+            }
+        }
+    }
 
 
 def test_spine_constraint_checker_detects_banned_operations() -> None:

@@ -63,7 +63,7 @@ def get_registered_names(library_data):
 EXPECTED_COGNOVIS_SKILLS = {
     "angebotserstellung", "bead-implementation-loop", "cognovis-beads", "billing-reviewer", "binary-explorer",
     "brand-forge", "bug-triage", "claude-md-pruner", "cmux", "cmux-browser", "cmux-markdown",
-    "adversarial-review", "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
+    "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
     "infra-principles", "inject-standards", "mail-send",
     "nbj-audit", "people-query", "playwright-cli",
     "plugin-management", "portless", "project-context", "project-health", "project-setup",
@@ -87,7 +87,7 @@ EXPECTED_SUSSDORFF_SKILLS = {
 EXPECTED_COGNOVIS_AGENTS = {
     "bead-orchestrator", "bead-spec-reviewer", "ci-monitor",
     "constraint-checker",
-    "doc-changelog-updater", "feature-doc-updater", "holdout-validator", "implementer",
+    "doc-changelog-updater", "feature-doc-updater", "holdout-validator",
     "integration-test-runner", "learning-extractor", "pester-test-engineer",
     "plan-reviewer", "playwright-tester", "prd-generator", "quick-fix", "researcher",
     "review-agent", "session-close", "test-author", "uat-validator",
