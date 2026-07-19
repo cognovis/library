@@ -68,7 +68,27 @@ class TestInstallMcp(unittest.TestCase):
             "OPENCODE_CONFIG_FILE": str(self.opencode_config),
             "GEMINI_SETTINGS_FILE": str(self.gemini_settings),
             "CURSOR_MCP_FILE": str(self.cursor_config),
+            # MCP installs default to global scope, and the lockfile they write
+            # is derived from HOME. Isolating only the harness config files let
+            # these tests rewrite entries in the operator's real
+            # ~/.config/library/global.lock (CL-t71i).
+            "HOME": self.tmp,
+            # The deploy clone is fetched over https, and its credential helper
+            # lives in the operator's global git config. Isolating HOME hides
+            # that config, so point git back at it explicitly.
+            "GIT_CONFIG_GLOBAL": str(Path.home() / ".gitconfig"),
         }
+        # The MCP deploy clone is also derived from HOME
+        # (mcp_installer.ensure_mcp_deploy_clone). Isolating HOME would send it
+        # to an empty directory and force a real network clone, so reuse the
+        # existing checkout. This leaves one residual coupling to operator state
+        # -- deliberate and visible, rather than the silent lockfile writes it
+        # replaces.
+        real_deploy_root = Path.home() / ".local" / "share" / "library" / "mcp-servers"
+        if real_deploy_root.is_dir():
+            link_parent = Path(self.tmp) / ".local" / "share" / "library"
+            link_parent.mkdir(parents=True, exist_ok=True)
+            (link_parent / "mcp-servers").symlink_to(real_deploy_root)
 
     def tearDown(self) -> None:
         import shutil
@@ -364,6 +384,11 @@ class TestInstallMcp(unittest.TestCase):
         self.assertEqual(set(snippets), {"claude_code", "codex", "cursor"})
         self.assertIn("supervised_local_service", entry)
 
+    @unittest.skipUnless(
+        os.environ.get("LIBRARY_TEST_ALLOW_NETWORK") == "1",
+        "needs a network git fetch of the MCP deploy clone with the operator's "
+        "credentials; set LIBRARY_TEST_ALLOW_NETWORK=1 to run it (CL-t71i)",
+    )
     def test_cognovis_tools_refresh_restores_client_timeouts(self):
         origin = "library:mcp:cognovis-tools"
         url = "http://127.0.0.1:8765/mcp"
@@ -413,6 +438,11 @@ class TestInstallMcp(unittest.TestCase):
             3_900.0,
         )
 
+    @unittest.skipUnless(
+        os.environ.get("LIBRARY_TEST_ALLOW_NETWORK") == "1",
+        "needs a network git fetch of the MCP deploy clone with the operator's "
+        "credentials; set LIBRARY_TEST_ALLOW_NETWORK=1 to run it (CL-t71i)",
+    )
     def test_cognovis_tools_does_not_declare_retired_harness(self):
         result = run_install_mcp(
             "cognovis-tools", "--harness", "antigravity", env_overrides=self.env
