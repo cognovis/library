@@ -255,11 +255,15 @@ class AgentValidator:
                 "Add these for better auto-delegation"
             )
 
-        # Check for vague language
-        vague_words = ["helps", "stuff", "things", "agent"]
-        if any(word in desc.lower() for word in vague_words):
+        # Check for vague language. "agent" used to be on this list, which made
+        # the check fire on nearly every well-written description -- the word is
+        # unavoidable when describing an agent that talks to other agents -- and
+        # the message did not even name it, so the warning was unactionable.
+        vague_words = ["helps", "stuff", "things"]
+        found = sorted({word for word in vague_words if word in desc.lower()})
+        if found:
             self.warnings.append(
-                "Description contains vague words (helps, stuff, things). "
+                f"Description contains vague words ({', '.join(found)}). "
                 "Be more specific about agent's purpose"
             )
 
