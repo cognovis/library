@@ -728,18 +728,6 @@ library:
     - origin:personal
     - tier:core
     - workflow:memory
-  - name: adversarial-review
-    description: Provider-neutral adversarial code review over the Agent Client Protocol
-      via acpx. Resolves an opposite-family reviewer and returns a typed review gate.
-    source: https://github.com/cognovis/library-core/blob/main/skills/adversarial-review/SKILL.md
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
   - name: aidbox
     description: Aidbox FHIR platform by Health Samurai. Use for FHIR REST API, search,
       transactions, bundles, access policies, subscriptions, custom resources, terminology,
@@ -2395,20 +2383,6 @@ library:
       never modifies code. Information barrier: must NOT access tests/unit/ source
       or implementation chat history.'
     source: https://github.com/cognovis/library-core/blob/main/agents/holdout-validator.md
-    tags:
-    - origin:original
-    - tier:domain
-    metadata:
-      library:
-        source_catalog: cognovis-library-core
-        inventory: convention-scan
-        plane: dev
-  - name: implementer
-    description: 'Develops production code to make existing failing unit tests pass
-      (Green phase of TDD). Use proactively after test-author completes the Red phase.
-      Reads test files only; information barrier: must NOT access tests/holdout/ or
-      bead description.'
-    source: https://github.com/cognovis/library-core/blob/main/agents/implementer.md
     tags:
     - origin:original
     - tier:domain

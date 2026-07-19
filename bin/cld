@@ -26,7 +26,6 @@ if [[ -z "${CLAUDE_BIN}" ]]; then
 fi
 
 BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
-BEAD_REVIEW_CLIENT="${CLD_BEAD_REVIEW_CLIENT:-${0:A:h}/lib/bead-review-client.py}"
 
 # ── Parse wrapper flags ──────────────────────────────────────────
 
@@ -364,11 +363,6 @@ if [[ -n "$bead_review_id" ]]; then
         echo "ERROR: --skip-perms is incompatible with the isolated -br workflow" >&2
         exit 2
     fi
-    if [[ ! -x "$BEAD_REVIEW_CLIENT" ]]; then
-        echo "ERROR: shared bead review client is not executable: $BEAD_REVIEW_CLIENT" >&2
-        exit 1
-    fi
-
     bead_review_id=$(_expand_bead_id "$bead_review_id")
     local bead_review_short=$(_bead_short "$bead_review_id")
     local index=1
@@ -391,10 +385,14 @@ if [[ -n "$bead_review_id" ]]; then
     printf '\033]2;%s\033\\' "cld-review: $bead_review_id"
     _cmux_rename "${bead_review_short}-review"
 
-    "${BEAD_REVIEW_CLIENT}" \
-        --bead-id "$bead_review_id" \
-        --repo-dir "$PWD" \
-        --lead-family claude
+    # ADR-0009: no dispatch client of our own. A normal Claude session runs the
+    # review skill and dispatches the foreign reviewer through acpx-runner,
+    # which owns the opposite-family invariant.
+    claude "${claude_args[@]}" \
+        "Bead ID: $bead_review_id. Invoke the installed bead-review skill for this bead in $PWD. \
+Dispatch the reviewer through the acpx-runner agent with ROLE=review, LEAD_FAMILY=claude, \
+CONTRACT=review_gate_v1, and the agent/model/reasoning preferred by the model-routing standard. \
+Report the typed gate; do not implement or repair anything."
     local review_exit=$?
     if _has_coordinator_callback && command -v cmux &>/dev/null; then
         cmux trigger-flash --surface "$coordinator_surface" 2>/dev/null || true
