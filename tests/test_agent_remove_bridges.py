@@ -220,3 +220,84 @@ def test_already_absent_bridge_is_reported_not_fatal(project: Path, monkeypatch)
 
     assert result["status"] == "ok"
     assert any("already absent" in item for item in result["data"]["skipped_bridges"])
+
+
+# -- clc-9e4x: containment must be decided on canonical paths ----------------
+
+
+def test_traversal_out_of_a_managed_root_is_refused(tmp_path: Path):
+    """The lockfile is operator-editable, so a lexical check was arbitrary
+    file deletion driven by file content."""
+    from lib.installers.agent import _recorded_bridge_targets
+
+    root = tmp_path / "home" / ".claude" / "agents"
+    root.mkdir(parents=True)
+    victim = tmp_path / "home" / "victim.txt"
+    victim.write_text("do not delete\n", encoding="utf-8")
+
+    entry = {"bridge_symlinks": [f"{root / '..' / '..' / 'victim.txt'} -> cache"]}
+    removable, skipped = _recorded_bridge_targets(entry, [root], tmp_path)
+
+    assert removable == []
+    assert any("outside managed" in item for item in skipped)
+    assert victim.exists()
+
+
+def test_symlinked_parent_cannot_escape_a_managed_root(tmp_path: Path):
+    real_root = tmp_path / "real" / "agents"
+    real_root.mkdir(parents=True)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    precious = elsewhere / "precious.toml"
+    precious.write_text("keep\n", encoding="utf-8")
+    (real_root / "linked").symlink_to(elsewhere)
+
+    from lib.installers.agent import _recorded_bridge_targets
+
+    entry = {"bridge_symlinks": [f"{real_root / 'linked' / 'precious.toml'} -> cache"]}
+    removable, skipped = _recorded_bridge_targets(entry, [real_root], tmp_path)
+
+    assert removable == []
+    assert any("outside managed" in item for item in skipped)
+    assert precious.exists()
+
+
+def test_a_real_bridge_symlink_is_still_removable(tmp_path: Path):
+    """The link itself is judged and deleted, never its destination."""
+    from lib.installers.agent import _recorded_bridge_targets
+
+    root = tmp_path / "agents"
+    root.mkdir()
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    target = cache / "agent.toml"
+    target.write_text("payload\n", encoding="utf-8")
+    bridge = root / "agent.toml"
+    bridge.symlink_to(target)
+
+    entry = {"bridge_symlinks": [f"{bridge} -> {target}"]}
+    removable, skipped = _recorded_bridge_targets(entry, [root], tmp_path)
+
+    assert removable == [bridge]
+    assert skipped == []
+    # The cache destination must not be what gets returned for deletion.
+    assert removable[0] != target
+
+
+def test_no_op_remove_does_not_create_a_lockfile(tmp_path: Path, monkeypatch):
+    """An honest error report must not itself be a state change."""
+    from lib.installers.agent import remove_agent
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    monkeypatch.setattr(
+        "lib.installers.agent._resolve_agent_base",
+        lambda catalog, prim, scope, repo_root, harness: repo_root / ".claude" / "agents",
+    )
+    lockfile_path = project / ".library.lock"
+    assert not lockfile_path.exists()
+
+    result = remove_agent(CATALOG, "never-installed", repo_root=project, scope="project")
+
+    assert result["status"] == "error"
+    assert not lockfile_path.exists(), "a no-op removal created a lockfile"

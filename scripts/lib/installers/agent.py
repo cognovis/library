@@ -628,9 +628,25 @@ def _recorded_bridge_targets(
     A path outside every allowed root is never deleted: an operator may have
     pointed a bridge somewhere of their own, and this function is not entitled
     to guess.
+
+    Containment is decided on canonicalized paths. A lexical `is_relative_to`
+    check accepted `<managed>/agents/../../victim.txt` and any path reaching
+    outside through a symlinked parent, which the caller then deleted -- the
+    lockfile is operator-editable, so this was arbitrary file deletion driven by
+    file content (clc-9e4x).
+
+    The *link itself* is compared and returned, never its destination: a bridge
+    is a symlink into the library cache, and resolving through it would test the
+    wrong file and delete the wrong one.
     """
     removable: list[Path] = []
     skipped: list[str] = []
+    canonical_roots = []
+    for root in allowed_roots:
+        try:
+            canonical_roots.append(root.resolve())
+        except OSError:
+            continue
     for bridge in (lock_entry or {}).get("bridge_symlinks", []) or []:
         raw_target = str(bridge).split(" -> ", 1)[0].strip()
         if not raw_target:
@@ -638,13 +654,20 @@ def _recorded_bridge_targets(
         path = Path(raw_target.rstrip("/"))
         if not path.is_absolute():
             path = repo_root / path
-        if not any(path.is_relative_to(root) for root in allowed_roots):
+        # Canonicalize the parent, keep the final component as-is, so a symlink
+        # bridge is judged and deleted as the link rather than as its target.
+        try:
+            canonical = path.parent.resolve() / path.name
+        except OSError:
+            skipped.append(f"{path} (unresolvable path)")
+            continue
+        if not any(canonical.is_relative_to(root) for root in canonical_roots):
             skipped.append(f"{path} (outside managed agent directories)")
             continue
-        if not (path.exists() or path.is_symlink()):
+        if not (canonical.exists() or canonical.is_symlink()):
             skipped.append(f"{path} (already absent)")
             continue
-        removable.append(path)
+        removable.append(canonical)
     return removable, skipped
 
 
@@ -785,17 +808,23 @@ def remove_agent(
 
     lock_data = load_lockfile(lockfile_path)
     entry_removed = remove_entry(lock_data, name, primitive_type="agent")
-    save_lockfile(lockfile_path, lock_data)
 
     if not entry_removed and not removed_files:
-        # Reporting success here sends the operator away believing the state
-        # changed. The most common cause is a scope mismatch: `remove` defaults
-        # to project scope while the entry is installed globally.
+        # Nothing was removed, so nothing is written: saving here created a
+        # `.library.lock` containing `installed: []` in a project that had none,
+        # which made an honest error report a state change of its own
+        # (clc-9e4x).
+        #
+        # Reporting success here would additionally send the operator away
+        # believing the state changed. The most common cause is a scope
+        # mismatch: `remove` defaults to project scope while the entry is
+        # installed globally.
         return error_result(
             f"Agent '{name}' is not installed in scope '{scope}' "
             f"(lockfile {lockfile_path}); nothing was removed."
         )
 
+    save_lockfile(lockfile_path, lock_data)
     return success(
         data={
             "name": name,
