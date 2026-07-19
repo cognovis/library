@@ -22,8 +22,35 @@ from .errors import LockfileError
 # Default lockfile name at project root
 LOCKFILE_NAME = ".library.lock"
 
-# Global lockfile path (XDG-compliant)
-GLOBAL_LOCKFILE = Path.home() / ".config" / "library" / "global.lock"
+# Global lockfile path (XDG-compliant).
+#
+# Resolved at import for callers that read the constant directly, but
+# `find_lockfile()` re-resolves from the current HOME whenever this still holds
+# the import-time default. A test isolating itself with
+# `monkeypatch.setenv("HOME", tmp_path)` runs *after* this module is imported, so
+# a constant frozen at import silently sends global-scope installs into the
+# operator's real lockfile (CL-t71i: a pytest fixture entry was found in
+# ~/.config/library/global.lock, dated 2026-07-17, pointing at a long-deleted
+# tmpdir). Tests that patch this attribute directly still win -- see
+# `_global_lockfile_path()`.
+def _default_global_lockfile() -> Path:
+    return Path.home() / ".config" / "library" / "global.lock"
+
+
+GLOBAL_LOCKFILE = _default_global_lockfile()
+_IMPORT_TIME_GLOBAL_LOCKFILE = GLOBAL_LOCKFILE
+
+
+def _global_lockfile_path() -> Path:
+    """Return the global lockfile path, honoring HOME changes made after import.
+
+    An explicit override of the module attribute takes precedence: several test
+    modules monkeypatch `lockfile.GLOBAL_LOCKFILE` to redirect writes, and that
+    intent must not be overruled by re-resolving from the environment.
+    """
+    if GLOBAL_LOCKFILE != _IMPORT_TIME_GLOBAL_LOCKFILE:
+        return GLOBAL_LOCKFILE
+    return _default_global_lockfile()
 
 LEGACY_PRIMITIVE_TYPES = {
     "golden-prompt": "agent-base",
@@ -79,7 +106,7 @@ def find_lockfile(
         Path to the lockfile (may not exist yet).
     """
     if global_scope:
-        return GLOBAL_LOCKFILE
+        return _global_lockfile_path()
     root = project_root or Path.cwd()
     return root / LOCKFILE_NAME
 

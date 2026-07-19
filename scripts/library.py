@@ -1993,8 +1993,22 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
                     if not use_json:
                         print(f"  ERROR: {entry.get('name')}: {exc}", file=sys.stderr)
 
-    unknown_skipped = len(skipped_by_status["unknown"])
-    if unknown_skipped:
+    # An entry whose source and install target are both gone is not an upstream
+    # question -- it is unresolvable. Folding it into the generic warning is how
+    # a stray test fixture survived months of syncs while reading like a network
+    # problem (CL-t71i).
+    unresolvable, still_unknown = _classify_unknown_entries(
+        skipped_by_status["unknown"], installed
+    )
+    for label, source, target in unresolvable:
+        primitive, _, entry_name = label.partition(":")
+        warnings.append(
+            f"unresolvable entry {label}: neither its source ({source}) nor its "
+            f"install target ({target}) exists. Remove it with "
+            f"`library {primitive} remove {entry_name} --scope global`."
+        )
+    unknown_skipped = len(still_unknown)
+    if still_unknown:
         warnings.append(
             f"skipped {unknown_skipped} entries with unknown upstream status; "
             "use --force to refresh them"
@@ -2037,6 +2051,36 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     if all_failed:
         return EXIT_FAILURE
     return 0
+
+
+def _classify_unknown_entries(
+    unknown_labels: list[str],
+    installed: list[dict],
+) -> tuple[list[tuple[str, str, str]], list[str]]:
+    """Split unknown-status labels into unresolvable and genuinely unknown.
+
+    Unresolvable means both the recorded source and the recorded install target
+    are absolute paths that no longer exist -- the entry describes an install
+    that cannot be refreshed, repaired, or reasoned about, and the operator can
+    only remove it. Anything else stays 'unknown upstream status', which is a
+    statement about the remote, not about the entry.
+    """
+    by_label = {
+        f"{item.get('type', '')}:{item.get('name', '')}": item for item in installed
+    }
+    unresolvable: list[tuple[str, str, str]] = []
+    still_unknown: list[str] = []
+    for label in unknown_labels:
+        entry = by_label.get(label, {})
+        source = str(entry.get("source") or "")
+        target = str(entry.get("install_target") or "")
+        source_gone = source.startswith("/") and not Path(source).exists()
+        target_gone = target.startswith("/") and not Path(target).exists()
+        if source_gone and target_gone:
+            unresolvable.append((label, source, target))
+        else:
+            still_unknown.append(label)
+    return unresolvable, still_unknown
 
 
 def _entry_source_path_changed(
