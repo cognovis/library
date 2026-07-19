@@ -388,7 +388,7 @@ if [[ -n "$bead_review_id" ]]; then
     # ADR-0009: no dispatch client of our own. A normal Claude session runs the
     # review skill and dispatches the foreign reviewer through acpx-runner,
     # which owns the opposite-family invariant.
-    claude "${claude_args[@]}" \
+    "${CLAUDE_BIN}" "${claude_args[@]}" \
         "Bead ID: $bead_review_id. Invoke the installed bead-review skill for this bead in $PWD. \
 Dispatch the reviewer through the acpx-runner agent with ROLE=review, LEAD_FAMILY=claude, \
 CONTRACT=review_gate_v1, and the agent/model/reasoning preferred by the model-routing standard. \

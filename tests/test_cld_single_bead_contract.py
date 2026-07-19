@@ -416,7 +416,8 @@ def test_cld_invalid_callback_or_review_arguments_fail_before_harness(
     assert message in result.stderr
 
 
-def test_cld_bead_review_uses_capability_routed_shared_client(tmp_path: Path) -> None:
+def test_cld_bead_review_dispatches_through_acpx_runner(tmp_path: Path) -> None:
+    """ADR-0009: -br owns no dispatch client; the session routes the reviewer."""
     result, argv_file, _prompt_file, called_file, bd_log = _run_cld(
         tmp_path, ["-br", "CL-smoke"]
     )
@@ -425,8 +426,12 @@ def test_cld_bead_review_uses_capability_routed_shared_client(tmp_path: Path) ->
     assert called_file.exists()
     assert "CLD_BEAD_LINE=cld" in result.stdout
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    assert _argv_flag_value(argv, "--lead-family") == "claude"
-    assert _argv_flag_value(argv, "--bead-id") == "CL-smoke"
+    prompt = argv[-1]
+    assert "CL-smoke" in prompt
+    assert "acpx-runner" in prompt
+    assert "LEAD_FAMILY=claude" in prompt
+    assert "CONTRACT=review_gate_v1" in prompt
+    # The reviewer model comes from the routing standard, not the launcher.
     assert "--model" not in argv
     assert "--provider" not in argv
     assert "--adapter" not in argv
@@ -465,7 +470,7 @@ def test_cld_bead_review_callback_uses_review_terminal_contract(tmp_path: Path) 
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     assert "--coordinator-workspace" not in argv
     assert "--coordinator-surface" not in argv
-    assert _argv_flag_value(argv, "--lead-family") == "claude"
+    assert "LEAD_FAMILY=claude" in argv[-1]
 
 
 def test_cld_resume_flag_continues_to_forward_to_claude(tmp_path: Path) -> None:

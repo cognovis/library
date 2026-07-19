@@ -611,6 +611,43 @@ def _is_safe_agent_name(name: str) -> bool:
     return parts == (name,) and not any(part == ".." for part in parts)
 
 
+def _recorded_bridge_targets(
+    lock_entry: dict | None,
+    allowed_roots: list[Path],
+    repo_root: Path,
+) -> tuple[list[Path], list[str]]:
+    """Split lockfile-recorded bridge paths into removable and skipped.
+
+    The lockfile records what was actually installed, including harness bridges
+    that the conventional path computation does not reproduce (a Codex `.toml`
+    beside a Claude `.md`). Removing only the conventional paths orphans those
+    bridges, and because the lockfile entry disappears with the removal, nothing
+    records the leftover afterwards -- it is invisible to `audit` and to a
+    second `remove` while the harness still offers the agent.
+
+    A path outside every allowed root is never deleted: an operator may have
+    pointed a bridge somewhere of their own, and this function is not entitled
+    to guess.
+    """
+    removable: list[Path] = []
+    skipped: list[str] = []
+    for bridge in (lock_entry or {}).get("bridge_symlinks", []) or []:
+        raw_target = str(bridge).split(" -> ", 1)[0].strip()
+        if not raw_target:
+            continue
+        path = Path(raw_target.rstrip("/"))
+        if not path.is_absolute():
+            path = repo_root / path
+        if not any(path.is_relative_to(root) for root in allowed_roots):
+            skipped.append(f"{path} (outside managed agent directories)")
+            continue
+        if not (path.exists() or path.is_symlink()):
+            skipped.append(f"{path} (already absent)")
+            continue
+        removable.append(path)
+    return removable, skipped
+
+
 def remove_agent(
     catalog: dict,
     name: str,
@@ -665,6 +702,18 @@ def remove_agent(
         canonical_base = _resolve_agent_base(catalog, prim, scope, repo_root, harness)
         harness_targets = [canonical_base / f"{name}{extension}"]
 
+    # Every managed agent directory, regardless of the requested harness: a
+    # bridge recorded in the lockfile belongs to this install even when the
+    # caller only asked about one harness.
+    allowed_roots = [
+        _resolve_agent_base(catalog, prim, scope, repo_root, h)
+        for h in ("claude_code", "codex", "opencode")
+    ]
+    lock_entry = get_entry(load_lockfile(lockfile_path), name, primitive_type="agent")
+    bridge_targets, skipped_bridges = _recorded_bridge_targets(
+        lock_entry, allowed_roots, repo_root
+    )
+
     if dry_run:
         # Preview every harness target this remove would attempt to delete,
         # regardless of current existence. This mirrors install_agent's dry-run
@@ -682,6 +731,20 @@ def remove_agent(
                 "operation": "delete",
                 "path": str(handler_root),
                 "details": f"remove {handler_root}",
+            })
+        # The plan must list what the real removal deletes, or the preview is
+        # not a preview.
+        for bridge_path in bridge_targets:
+            ops.append({
+                "operation": "delete",
+                "path": str(bridge_path),
+                "details": f"remove lockfile-recorded bridge {bridge_path}",
+            })
+        for skipped in skipped_bridges:
+            ops.append({
+                "operation": "skip",
+                "path": skipped.split(" (")[0],
+                "details": f"leave bridge alone: {skipped}",
             })
         ops.append({
             "operation": "remove_lockfile_entry",
@@ -709,12 +772,36 @@ def remove_agent(
             handler_root.unlink()
             removed_files.append(str(handler_root))
 
+    for bridge_path in bridge_targets:
+        if bridge_path.is_symlink():
+            bridge_path.unlink()
+            removed_files.append(str(bridge_path))
+        elif bridge_path.is_dir():
+            shutil.rmtree(str(bridge_path))
+            removed_files.append(str(bridge_path))
+        elif bridge_path.exists():
+            bridge_path.unlink()
+            removed_files.append(str(bridge_path))
+
     lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name, primitive_type="agent")
+    entry_removed = remove_entry(lock_data, name, primitive_type="agent")
     save_lockfile(lockfile_path, lock_data)
 
+    if not entry_removed and not removed_files:
+        # Reporting success here sends the operator away believing the state
+        # changed. The most common cause is a scope mismatch: `remove` defaults
+        # to project scope while the entry is installed globally.
+        return error_result(
+            f"Agent '{name}' is not installed in scope '{scope}' "
+            f"(lockfile {lockfile_path}); nothing was removed."
+        )
+
     return success(
-        data={"name": name, "removed_files": removed_files},
+        data={
+            "name": name,
+            "removed_files": removed_files,
+            "skipped_bridges": skipped_bridges,
+        },
         message=f"Agent '{name}' removed.",
     )
 
