@@ -44,18 +44,49 @@ def expected_skill_files() -> list[tuple[str, str]]:
     return sorted(expected)
 
 
+def classify_gh_failure(stderr: str) -> str:
+    """Return 'absent' when gh reports the artefact missing, else 'unavailable'.
+
+    These tests assert the *published* state of another repository, which no
+    local check can substitute -- so the assertion stays. What was wrong is that
+    any non-zero `gh` exit was reported as a missing artefact: a rate limit, an
+    expired token, a DNS hiccup and a genuine 404 were indistinguishable, and all
+    four failed the suite. A run that is red once and green on retry teaches the
+    reader to re-run instead of read, which is how a real 404 here would
+    eventually be waved through as "the flaky one" (CL-rnus).
+    """
+    haystack = stderr.lower()
+    if "not found" in haystack or "http 404" in haystack:
+        return "absent"
+    return "unavailable"
+
+
 def gh_api(path: str) -> dict:
-    """Call gh api and return parsed JSON."""
-    result = subprocess.run(
-        ["gh", "api", f"repos/{REPO}/contents/{path}"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise FileNotFoundError(
-            f"gh api failed for {path}: {result.stderr.strip()}"
+    """Call gh api and return parsed JSON.
+
+    Fails only when the artefact is genuinely absent; skips when the check could
+    not be performed, carrying gh's own message so a permanently broken setup is
+    not mistaken for a transient one.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{REPO}/contents/{path}"],
+            capture_output=True,
+            text=True,
         )
-    return json.loads(result.stdout)
+    except OSError as exc:  # gh not installed or not executable
+        pytest.skip(f"cannot verify {path}: gh is unavailable ({exc})")
+
+    if result.returncode != 0:
+        detail = result.stderr.strip()
+        if classify_gh_failure(detail) == "absent":
+            raise FileNotFoundError(f"gh api reports {path} is absent: {detail}")
+        pytest.skip(f"cannot verify {path}: {detail or 'gh api failed with no message'}")
+
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        pytest.skip(f"cannot verify {path}: gh returned unparsable output ({exc})")
 
 
 def decode_content(api_response: dict) -> str:
