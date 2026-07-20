@@ -124,3 +124,93 @@ def test_agent_without_declared_handlers_is_not_flagged(tmp_path: Path):
 def test_non_agent_entries_are_ignored(tmp_path: Path):
     entry = {"name": "needs-handler", "type": "skill", "install_target": str(tmp_path / "x")}
     assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+
+
+# -- CL-8a7z: completeness, not merely non-emptiness -------------------------
+
+
+def _rotted(tmp_path: Path, keep: tuple[str, ...]) -> tuple[dict, Path]:
+    """Build an install whose handler dir kept only `keep` plus a leftover."""
+    agents = tmp_path / "agents"
+    handlers = agents / "needs-handler-handlers"
+    handlers.mkdir(parents=True)
+    cache = tmp_path / "cache" / "handler-assets" / "needs-handler-handlers"
+    cache.mkdir(parents=True)
+    for name in ("run.sh", "helper.sh", "lib/util.sh"):
+        target = cache / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("#!/bin/sh\n", encoding="utf-8")
+    (handlers / "unrelated.txt").write_text("leftover\n", encoding="utf-8")
+    for name in keep:
+        target = handlers / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("#!/bin/sh\n", encoding="utf-8")
+    entry = {
+        "name": "needs-handler",
+        "type": "agent",
+        "install_target": str(agents / "needs-handler.md"),
+        "bridge_symlinks": [f"{handlers} -> {cache}"],
+    }
+    return entry, handlers
+
+
+def test_a_directory_holding_only_a_leftover_is_reported(tmp_path: Path):
+    """The false negative: non-empty is not the same as intact."""
+    entry, handlers = _rotted(tmp_path, keep=())
+
+    issue = _check_missing_agent_handlers(entry, CATALOG, "global")
+
+    assert issue is not None
+    missing = {Path(p).name for p in issue["missing"]}
+    assert missing == {"run.sh", "helper.sh", "util.sh"}
+    assert (handlers / "unrelated.txt").exists()
+
+
+def test_one_missing_handler_file_is_reported(tmp_path: Path):
+    entry, _ = _rotted(tmp_path, keep=("run.sh", "lib/util.sh"))
+
+    issue = _check_missing_agent_handlers(entry, CATALOG, "global")
+
+    assert issue is not None
+    assert [Path(p).name for p in issue["missing"]] == ["helper.sh"]
+    assert "helper.sh" in issue["repair_hint"]
+
+
+def test_a_complete_handler_tree_is_clean(tmp_path: Path):
+    entry, _ = _rotted(tmp_path, keep=("run.sh", "helper.sh", "lib/util.sh"))
+
+    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+
+
+def test_an_entry_without_recorded_targets_is_not_accused(tmp_path: Path):
+    """A record predating handler tracking cannot be judged, so it is not judged."""
+    entry, _ = _rotted(tmp_path, keep=())
+    entry["bridge_symlinks"] = []
+
+    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+
+
+def test_a_vanished_cache_is_not_treated_as_rot(tmp_path: Path):
+    entry, _ = _rotted(tmp_path, keep=())
+    entry["bridge_symlinks"] = [
+        f"{tmp_path / 'agents' / 'needs-handler-handlers'} -> {tmp_path / 'gone'}"
+    ]
+
+    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+
+
+# -- CL-8a7z: the default scope must match where agents look -----------------
+
+
+@pytest.mark.parametrize("name", ["acpx-runner", "ci-monitor", "release", "learning-extractor"])
+def test_handler_agents_default_to_global_scope(name: str):
+    """Project scope installs into <project>/.claude/agents, which these agents
+    do not probe; without a declared default they landed there."""
+    import yaml
+
+    catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text(encoding="utf-8"))
+    entry = next(
+        item for item in catalog["library"]["agents"] if item.get("name") == name
+    )
+    assert entry.get("handlers"), f"{name} is expected to carry handlers"
+    assert entry.get("default_scope") == "global"
