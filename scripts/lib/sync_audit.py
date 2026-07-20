@@ -13,6 +13,7 @@ from typing import Any
 
 import yaml
 
+from .catalog import get_catalog_identity, get_entries, normalize_catalog_identity
 from .errors import EXIT_NOT_FOUND, LibraryError
 from .installers.standard import _parse_standard_category
 from .lockfile import (
@@ -319,7 +320,13 @@ def cmd_audit_impl(
       - drift_kind (present when status="drift"):
         - "local":    installed files differ from lockfile content_sha
         - "upstream": catalog source has moved beyond lockfile source_commit
-        - "both":     both local-tamper and upstream-behind
+        - "catalog":  the producing catalog no longer lists the entry
+        - "both":     more than one drift dimension applies
+      - catalog_status:
+        - "current":      entry is still listed by its producing catalog
+        - "orphaned":     producing catalog matches but no longer lists it
+        - "foreign":      entry belongs to a different catalog
+        - "undetermined": legacy entry or audited catalog has no identity
 
     With drift_only=True, only entries with status="drift" are included in output.
 
@@ -501,7 +508,17 @@ def cmd_audit_impl(
         # Upstream-drift check: did the catalog source move beyond what's pinned
         # in the lockfile? This is independent of local-tamper drift.
         entry_type = entry.get("type", "")
-        upstream_status = upstream_by_key.get((entry_name, entry_type), "unknown")
+        catalog_provenance = _classify_catalog_provenance(
+            entry,
+            catalog,
+            scope,
+        )
+        catalog_checks_apply = catalog_provenance["catalog_status"] != "foreign"
+        upstream_status = (
+            upstream_by_key.get((entry_name, entry_type), "unknown")
+            if catalog_checks_apply
+            else "unknown"
+        )
         upstream_behind = upstream_status == "behind"
 
         audit_entry = {
@@ -545,7 +562,12 @@ def cmd_audit_impl(
         # When path drift co-occurs with upstream drift, upgrade drift_kind to "both"
         # so that the user can see there are two separate issues. setdefault() is wrong
         # here: it silently discards the path-drift signal when "upstream" is already set.
-        if _check_standard_path_drift(entry, catalog, repo_root, scope):
+        if catalog_checks_apply and _check_standard_path_drift(
+            entry,
+            catalog,
+            repo_root,
+            scope,
+        ):
             audit_entry["drift"] = True
             audit_entry["status"] = "drift"
             any_drift = True
@@ -558,7 +580,11 @@ def cmd_audit_impl(
         # the failure only surfaces when the agent runs. ci-monitor and release
         # were both installed without their handlers, and nothing reported it
         # (CL-b6oy).
-        handler_issue = _check_missing_agent_handlers(entry, catalog, scope)
+        handler_issue = (
+            _check_missing_agent_handlers(entry, catalog, scope)
+            if catalog_checks_apply
+            else None
+        )
         if handler_issue:
             audit_entry["missing_handlers"] = handler_issue["missing"]
             audit_entry["repair_hint"] = handler_issue["repair_hint"]
@@ -569,6 +595,14 @@ def cmd_audit_impl(
                 audit_entry["drift_kind"] = "both"
             else:
                 audit_entry.setdefault("drift_kind", "local")
+
+        audit_entry.update(catalog_provenance)
+        if catalog_provenance["catalog_status"] == "orphaned":
+            already_drifted = audit_entry.get("drift") is True
+            audit_entry["drift"] = True
+            audit_entry["status"] = "drift"
+            audit_entry["drift_kind"] = "both" if already_drifted else "catalog"
+            any_drift = True
 
         audit_entries.append(audit_entry)
 
@@ -588,13 +622,60 @@ def _catalog_entry_for(entry: dict, catalog: dict) -> dict | None:
     name = entry.get("name", "")
     if not primitive or not name:
         return None
-    plural = f"{primitive}s" if not primitive.endswith("s") else primitive
-    library = catalog.get("library", {}) or {}
-    for key in (plural, primitive):
-        for candidate in library.get(key, []) or []:
-            if isinstance(candidate, dict) and candidate.get("name") == name:
-                return candidate
+    try:
+        candidates = get_entries(catalog, primitive)
+    except Exception:
+        return None
+    for candidate in candidates:
+        if isinstance(candidate, dict) and candidate.get("name") == name:
+            return candidate
     return None
+
+
+def _classify_catalog_provenance(
+    entry: dict[str, Any],
+    catalog: dict[str, Any],
+    scope: str,
+) -> dict[str, Any]:
+    """Classify a lock entry against the catalog being audited."""
+    recorded_identity = entry.get("catalog_identity")
+    current_identity = get_catalog_identity(catalog)
+    result: dict[str, Any] = {
+        "catalog_identity": recorded_identity,
+        "audited_catalog_identity": current_identity,
+    }
+    if not isinstance(recorded_identity, str) or not recorded_identity.strip():
+        result.update({
+            "catalog_status": "undetermined",
+            "catalog_reason": "catalog_identity_missing",
+        })
+        return result
+    if current_identity is None:
+        result.update({
+            "catalog_status": "undetermined",
+            "catalog_reason": "audited_catalog_identity_unavailable",
+        })
+        return result
+
+    recorded_identity = normalize_catalog_identity(recorded_identity)
+    if recorded_identity != current_identity:
+        result["catalog_identity"] = recorded_identity
+        result["catalog_status"] = "foreign"
+        return result
+    if _catalog_entry_for(entry, catalog) is not None:
+        result["catalog_identity"] = recorded_identity
+        result["catalog_status"] = "current"
+        return result
+
+    primitive = str(entry.get("type") or "item")
+    name = str(entry.get("name") or "")
+    result.update({
+        "catalog_identity": recorded_identity,
+        "catalog_status": "orphaned",
+        "catalog_reason": "catalog_entry_missing",
+        "removal_command": f"library {primitive} remove {name} --scope {scope}",
+    })
+    return result
 
 
 def _check_missing_agent_handlers(

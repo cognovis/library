@@ -25,7 +25,7 @@ from ..cache import (
     materialize_cache,
     plan_cache_writes,
 )
-from ..catalog import lookup_entry
+from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError, NotFoundError, SourceError
 from ..lockfile import (
     compute_directory_hash,
@@ -247,6 +247,7 @@ def install_skill(
         lockfile_entry = make_entry(
             name=skill_name,
             primitive_type="skill",
+            catalog_identity=get_catalog_identity(catalog),
             marketplace=marketplace,
             source=source_str,
             source_commit=source_commit,

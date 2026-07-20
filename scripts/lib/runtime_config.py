@@ -28,7 +28,7 @@ from typing import Any, Optional
 
 from ruamel.yaml import YAML
 
-from .catalog import lookup_entry
+from .catalog import get_catalog_identity, lookup_entry
 from .errors import InstallError
 from .lockfile import (
     find_lockfile,
@@ -314,6 +314,7 @@ def install_runtime_config(
     lockfile_entry = make_entry(
         name=item_name,
         primitive_type=PRIMITIVE_NAME,
+        catalog_identity=get_catalog_identity(catalog),
         marketplace=marketplace,
         source=entry.get("base", ""),
         source_commit=base_commit,

@@ -116,6 +116,16 @@ def test_valid_entry_with_new_fields():
     print("PASS test_valid_entry_with_new_fields")
 
 
+def test_catalog_identity_is_valid_and_survives_legacy_compatibility():
+    """New identity is accepted while legacy entries remain schema-valid."""
+    schema = load_lockfile_schema()
+    current = minimal_valid_entry(
+        catalog_identity="https://github.com/cognovis/library"
+    )
+    assert_valid(lockfile_with(current), schema, "entry with catalog identity")
+    assert_valid(lockfile_with(minimal_valid_entry()), schema, "legacy entry")
+
+
 def test_entry_without_marketplace_fails():
     """Entry without marketplace fails validation."""
     schema = load_lockfile_schema()
@@ -254,6 +264,7 @@ ALL_TESTS = [
     test_requires_marketplace,
     test_requires_cache_path,
     test_valid_entry_with_new_fields,
+    test_catalog_identity_is_valid_and_survives_legacy_compatibility,
     test_entry_without_marketplace_fails,
     test_entry_without_cache_path_fails,
     test_marketplace_must_be_nonempty_string,

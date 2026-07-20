@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..cache import compute_cache_path
-from ..catalog import lookup_entry
+from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError, SourceError
 from ..lockfile import (
     compute_checksum,
@@ -220,6 +220,7 @@ def install_simple_file(
         lockfile_entry = make_entry(
             name=item_name,
             primitive_type=primitive_name,
+            catalog_identity=get_catalog_identity(catalog),
             marketplace=marketplace,
             source=source_str,
             source_commit=source_commit,

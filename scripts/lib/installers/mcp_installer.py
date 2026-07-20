@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..catalog import lookup_entry
+from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError
 from ..lockfile import (
     find_lockfile,
@@ -615,6 +615,7 @@ def install_mcp(
         lockfile_entry = make_entry(
             name=mcp_name,
             primitive_type="mcp",
+            catalog_identity=get_catalog_identity(catalog),
             marketplace=marketplace,
             source=source_str,
             source_commit=source_commit,

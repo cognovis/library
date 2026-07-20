@@ -23,7 +23,7 @@ from ..cache import (
     materialize_vendor_copy,
     plan_cache_writes,
 )
-from ..catalog import lookup_entry
+from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError, SourceError
 from ..lockfile import (
     compute_checksum,
@@ -214,6 +214,7 @@ def install_standard(
             lockfile_entry = make_entry(
                 name=standard_name,
                 primitive_type="standard",
+                catalog_identity=get_catalog_identity(catalog),
                 marketplace=marketplace,
                 source=source_str,
                 source_commit=source_commit,
@@ -233,6 +234,7 @@ def install_standard(
             lockfile_entry = make_entry(
                 name=standard_name,
                 primitive_type="standard",
+                catalog_identity=get_catalog_identity(catalog),
                 marketplace=marketplace,
                 source=source_str,
                 source_commit=source_commit,

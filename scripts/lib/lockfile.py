@@ -282,6 +282,7 @@ def make_entry(
     *,
     name: str,
     primitive_type: str,
+    catalog_identity: str | None = None,
     marketplace: str,
     source: str,
     source_commit: str,
@@ -299,6 +300,8 @@ def make_entry(
     Args:
         name: Item name.
         primitive_type: 'skill', 'agent', 'prompt', 'guardrail'.
+        catalog_identity: Stable identity of the catalog that produced the entry.
+            ``None`` is reserved for legacy or unbound in-memory callers.
         marketplace: Source marketplace identifier.
         source: Source URL or local path.
         source_commit: Git commit SHA or 'local'.
@@ -314,7 +317,7 @@ def make_entry(
     Returns:
         Complete entry dict.
     """
-    return {
+    entry = {
         "name": name,
         "type": canonical_lockfile_type(primitive_type),
         "marketplace": marketplace,
@@ -330,3 +333,6 @@ def make_entry(
         "license": license_id,
         "bridge_symlinks": bridge_symlinks or [],
     }
+    if catalog_identity:
+        entry["catalog_identity"] = catalog_identity
+    return entry

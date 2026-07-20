@@ -1543,9 +1543,14 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
                 for e in drift_entries:
                     kind = e.get("drift_kind", "?")
                     print(f"  DRIFT [{kind}]: {e['primitive']}:{e['name']}")
+                    if e.get("catalog_status") == "orphaned":
+                        _print_catalog_provenance_issue(e)
                     _print_agent_frontmatter_issue(e)
             else:
                 print(f"Audit: {status}")
+            for e in entries:
+                if e.get("catalog_status") == "undetermined":
+                    _print_catalog_provenance_issue(e)
         # Exit 2 if drift detected, 0 if clean
         return EXIT_DRIFT if result.get("status") == "drift" else 0
     except LibraryError as exc:
@@ -1619,11 +1624,32 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path | None, catalog: dic
             print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(all_entries)} entries")
             for e in drift_entries:
                 print(f"  DRIFT: {e['primitive']}:{e['name']}")
+                if e.get("catalog_status") == "orphaned":
+                    _print_catalog_provenance_issue(e)
                 _print_agent_frontmatter_issue(e)
+        for e in all_entries:
+            if e.get("catalog_status") == "undetermined":
+                _print_catalog_provenance_issue(e)
         for warning in warnings:
             print(f"Warning: {warning}")
 
     return EXIT_DRIFT if any_drift else 0
+
+
+def _print_catalog_provenance_issue(entry: dict) -> None:
+    """Print actionable catalog provenance audit context."""
+    catalog_status = entry.get("catalog_status")
+    if catalog_status == "orphaned":
+        print(
+            f"    ORPHANED from {entry.get('catalog_identity', 'unknown')}: "
+            "entry is no longer listed by its catalog"
+        )
+        print(f"    remove: {entry.get('removal_command', '')}")
+    elif catalog_status == "undetermined":
+        print(
+            f"  UNDETERMINED: {entry.get('primitive', 'item')}:{entry.get('name', '')} "
+            "has no usable catalog identity; not classified as orphaned"
+        )
 
 
 def _print_agent_frontmatter_issue(entry: dict) -> None:
