@@ -409,8 +409,21 @@ def _handler_install_target(
     agent_name: str,
     handler_path: Path,
 ) -> Path:
-    """Return the harness-native install target for a private handler asset."""
-    return agent_base / f"{agent_name}-handlers" / handler_path
+    """Return the harness-native install target for a private handler asset.
+
+    Handler sources resolve relative to the agent markdown's directory, while the
+    install target always sits under `<agent_name>-handlers/`. The cognovis-core
+    convention keeps handler sources in `agents/<name>-handlers/`, so declaring
+    that directory installed to `<name>-handlers/<name>-handlers/...` -- a path
+    no agent resolves. Strip the leading component when it already names the
+    handler root, so a flat source layout and a `<name>-handlers/` source layout
+    land in the same place (CL-b6oy).
+    """
+    handler_root = f"{agent_name}-handlers"
+    parts = handler_path.parts
+    if parts and parts[0] == handler_root:
+        handler_path = Path(*parts[1:])
+    return agent_base / handler_root / handler_path
 
 
 def _copy_handler_asset(source_path: Path, install_target: Path) -> None:

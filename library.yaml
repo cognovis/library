@@ -2157,6 +2157,8 @@ library:
         plane: dev
   agents:
   - name: acpx-runner
+    handlers:
+    - acpx-runner-handlers
     description: Thin economy-tier relay leaf that dispatches one prompt to an external
       ACP agent (codex, kimi, grok-build, gemini, cursor, ...) through the acpx CLI
       and relays a structured execution-result envelope. Use for cross-family delegation
@@ -2289,6 +2291,8 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: ci-monitor
+    handlers:
+    - ci-monitor-handlers
     description: Watches GitHub Actions CI pipeline for a specific pushed commit.
       Spawned by session-close after git push. Blocks silently until pipeline completes.
       Handles parallel session-closes by filtering on commit SHA. Returns a single
@@ -2421,6 +2425,8 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: learning-extractor
+    handlers:
+    - learning-extractor-handlers
     description: Extracts durable learnings from Claude Code conversation histories
       and saves structured observations to open-brain memory. Use when session feedback
       or repeated user corrections should improve skills, standards, or agents.
@@ -2556,6 +2562,8 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: release
+    handlers:
+    - release-handlers
     description: 'Cuts a deliberate versioned release. session-close defers all release
       materialization (changelog, VERSION bump, tag); this agent runs git-cliff once,
       bumps the version, commits chore(release), creates an annotated tag, and pushes

@@ -554,6 +554,22 @@ def cmd_audit_impl(
             else:
                 audit_entry.setdefault("drift_kind", "local")
 
+        # An agent that resolves a handler at runtime is broken without it, and
+        # the failure only surfaces when the agent runs. ci-monitor and release
+        # were both installed without their handlers, and nothing reported it
+        # (CL-b6oy).
+        handler_issue = _check_missing_agent_handlers(entry, catalog, scope)
+        if handler_issue:
+            audit_entry["missing_handlers"] = handler_issue["missing"]
+            audit_entry["repair_hint"] = handler_issue["repair_hint"]
+            audit_entry["drift"] = True
+            audit_entry["status"] = "drift"
+            any_drift = True
+            if audit_entry.get("drift_kind") == "upstream":
+                audit_entry["drift_kind"] = "both"
+            else:
+                audit_entry.setdefault("drift_kind", "local")
+
         audit_entries.append(audit_entry)
 
     # Apply drift_only filter: exclude non-drifted entries
@@ -563,6 +579,56 @@ def cmd_audit_impl(
     return {
         "status": "drift" if any_drift else "clean",
         "entries": audit_entries,
+    }
+
+
+def _catalog_entry_for(entry: dict, catalog: dict) -> dict | None:
+    """Return the catalog entry matching an installed lockfile entry, or None."""
+    primitive = entry.get("type", "")
+    name = entry.get("name", "")
+    if not primitive or not name:
+        return None
+    plural = f"{primitive}s" if not primitive.endswith("s") else primitive
+    library = catalog.get("library", {}) or {}
+    for key in (plural, primitive):
+        for candidate in library.get(key, []) or []:
+            if isinstance(candidate, dict) and candidate.get("name") == name:
+                return candidate
+    return None
+
+
+def _check_missing_agent_handlers(
+    entry: dict,
+    catalog: dict,
+    scope: str,
+) -> dict[str, Any] | None:
+    """Report handler assets an installed agent declares but does not have.
+
+    The agent markdown resolves these paths at runtime, so a missing handler is
+    a broken agent that looks installed.
+    """
+    if entry.get("type") != "agent":
+        return None
+    catalog_entry = _catalog_entry_for(entry, catalog)
+    if not catalog_entry:
+        return None
+    declared = catalog_entry.get("handlers") or []
+    if not declared:
+        return None
+    install_target = entry.get("install_target", "")
+    if not install_target:
+        return None
+    name = entry.get("name", "")
+    handler_root = Path(install_target).parent / f"{name}-handlers"
+    if handler_root.is_dir() and any(handler_root.iterdir()):
+        return None
+    return {
+        "missing": [str(handler_root)],
+        "repair_hint": (
+            f"Agent '{name}' declares handler assets but {handler_root} is missing or "
+            f"empty; the agent resolves that path at runtime. Reinstall with "
+            f"`library agent use {name} --scope {scope}`."
+        ),
     }
 
 
