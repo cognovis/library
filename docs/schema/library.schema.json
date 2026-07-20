@@ -9,6 +9,11 @@
     "library"
   ],
   "properties": {
+    "catalog_identity": {
+      "description": "Stable identity of the catalog that writes lockfile entries. Prefer the canonical repository URL; loaders normalize GitHub SSH and HTTPS forms before comparison.",
+      "type": "string",
+      "minLength": 1
+    },
     "default_dirs": {
       "description": "Default installation directories per primitive type and harness.",
       "type": "object",

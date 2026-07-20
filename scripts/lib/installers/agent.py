@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..cache import compute_cache_path, materialize_cache, plan_cache_writes
-from ..catalog import lookup_entry
+from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError, NotFoundError, SourceError
 from ..lockfile import (
     compute_checksum,
@@ -305,6 +305,7 @@ def install_agent(
     lockfile_entry = make_entry(
         name=agent_name,
         primitive_type="agent",
+        catalog_identity=get_catalog_identity(catalog),
         marketplace=marketplace,
         source=primary["source"],
         source_commit=primary["source_commit"],

@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..catalog import lookup_entry
+from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError
 from ..lockfile import (
     find_lockfile,
@@ -147,6 +147,7 @@ def install_guardrail(
     lockfile_entry = make_entry(
         name=guardrail_name,
         primitive_type="guardrail",
+        catalog_identity=get_catalog_identity(catalog),
         marketplace=marketplace,
         source=source_str,
         source_commit="local",

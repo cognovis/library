@@ -20,8 +20,8 @@ always user-global and therefore exist only in the global lockfile. They provide
   items by running `/library sync` (which reads the lockfile, not the catalog).
 - **Drift detection**: `/library audit` compares the `content_sha256`/`checksum_sha256` stored at install
   time against the current on-disk file to identify modifications made outside the Library.
-- **Audit trail**: every entry records the source URL, commit SHA, license, and install
-  timestamp for security and compliance review.
+- **Audit trail**: every new entry records the producing catalog identity, source URL,
+  commit SHA, license, and install timestamp for security and compliance review.
 
 ---
 
@@ -90,6 +90,7 @@ The file is YAML. The top-level key is `installed`, containing an ordered list o
 installed:
   - name: dolt
     type: skill
+    catalog_identity: https://github.com/cognovis/library
     marketplace: cognovis-core
     source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
     source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456ab12
@@ -110,6 +111,7 @@ installed:
 installed:
   - name: dolt
     type: skill
+    catalog_identity: https://github.com/cognovis/library
     marketplace: cognovis-core
     source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
     source_commit: abc123def456abc123def456abc123def456abc123def456abc123def456ab12
@@ -191,6 +193,7 @@ installed:
 |-------|----------|------|-------------|
 | `name` | YES | string | Unique item name. Must match the catalog entry in `library.yaml`. |
 | `type` | YES | string | `skill`, `agent`, `prompt`, `guardrail`, `standard`, `model-standard`, `agent-base`, or `mcp`. |
+| `catalog_identity` | New entries | string | Stable identity of the catalog that produced the install, normally its canonical repository URL. Entries created before this field existed remain valid and audit as `undetermined`. |
 | `marketplace` | YES | string | Name of the source marketplace from `library.yaml` `sources.marketplaces`. Use `local` for local-path sources, `unknown` for unrecognized sources. |
 | `source` | YES | string | GitHub browser URL or local path used for the install. |
 | `source_commit` | YES | string | Git commit SHA of the source repo at install time. Use `local` for non-git sources. |
@@ -309,6 +312,11 @@ For each entry in `installed`:
 3. For `file` entries: recompute the SHA-256 of the primary artifact.
 4. For entries without `checksum_type`: report `unknown` — do not report as drift.
 5. Compare against `checksum_sha256`. Report `clean`, `drift`, or `unknown` per entry.
+6. Compare `catalog_identity` with the audited catalog. A matching identity whose
+   catalog no longer lists the entry is `orphaned` and includes the exact
+   `library {primitive} remove {name} --scope {scope}` command. A different
+   identity is `foreign` and is not reported as orphaned. A legacy entry without
+   identity is informationally `undetermined` and is never accused of being orphaned.
 
 Use `--drift-only` to filter output to only drifted entries and exit with code 2.
 The top-level `audit` command (no primitive prefix) checks all primitives in one pass.
@@ -335,6 +343,7 @@ The `overall` field in the JSON result is `behind` if any entry is behind, other
 installed:
   - name: researcher
     type: skill
+    catalog_identity: https://github.com/cognovis/library
     marketplace: disler
     source: https://github.com/disler/claude-code-hooks-mastery/blob/main/.claude/skills/researcher/SKILL.md
     source_commit: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
@@ -349,6 +358,7 @@ installed:
 
   - name: dolt
     type: skill
+    catalog_identity: https://github.com/cognovis/library
     marketplace: local
     source: /Users/malte/code/cognovis-library-core/skills/dolt/SKILL.md
     source_commit: local

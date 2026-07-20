@@ -42,6 +42,11 @@
           "type": "string",
           "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "mcp"]
         },
+        "catalog_identity": {
+          "description": "Stable identity of the library catalog that produced this install, normally its canonical repository URL. Optional only for legacy entries created before catalog provenance was recorded.",
+          "type": "string",
+          "minLength": 1
+        },
         "marketplace": {
           "description": "Name of the source-provider marketplace entry in library.yaml.marketplaces. Identifies which marketplace this item was fetched from. Use 'local' for local-path sources and 'unknown' for sources that cannot be matched to a registered marketplace.",
           "type": "string",

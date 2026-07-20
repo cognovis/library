@@ -51,8 +51,9 @@ def entry(
     source_commit: str = PROJECT_SHA,
     source: str = "/tmp/source/SKILL.md",
     timestamp: str = "2026-05-15T08:00:00Z",
+    catalog_identity: str | None = None,
 ) -> dict:
-    return {
+    lock_entry = {
         "name": name,
         "type": primitive,
         "marketplace": "local",
@@ -66,6 +67,9 @@ def entry(
         "license": "unknown",
         "bridge_symlinks": [],
     }
+    if catalog_identity is not None:
+        lock_entry["catalog_identity"] = catalog_identity
+    return lock_entry
 
 
 def write_minimal_catalog(project: Path) -> None:
@@ -343,7 +347,13 @@ def test_status_audit_and_sync_run_outside_catalog_checkout(tmp_path: Path):
     cwd.mkdir()
     write_lockfile(
         home / ".config" / "library" / "global.lock",
-        [entry("global-only", source_commit="local")],
+        [
+            entry(
+                "global-only",
+                source_commit="local",
+                catalog_identity="https://github.com/example/foreign-catalog",
+            )
+        ],
     )
 
     status = run_library("status", "--offline", "--json", cwd=cwd, home=home)
@@ -359,6 +369,8 @@ def test_status_audit_and_sync_run_outside_catalog_checkout(tmp_path: Path):
     assert [(item["scope"], item["name"]) for item in audit_data["entries"]] == [
         ("global", "global-only")
     ]
+    assert audit_data["entries"][0]["catalog_status"] == "foreign"
+    assert audit_data["status"] == "clean"
 
     sync = run_library("sync", "--dry-run", "--json", cwd=cwd, home=home)
     assert sync.returncode == 0, sync.stderr

@@ -4,9 +4,11 @@ catalog.py — Load library.yaml, source registries, primitive mapping, entry lo
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse, urlunparse
 
 try:
     import yaml
@@ -56,6 +58,61 @@ SOURCE_REGISTRIES: tuple[SourceRegistryInfo, ...] = (
 )
 
 
+_RUNTIME_CATALOG_IDENTITY = "_library_catalog_identity"
+
+
+def normalize_catalog_identity(value: str) -> str:
+    """Return a stable, credential-free catalog identity string."""
+    identity = value.strip().rstrip("/")
+    if identity.startswith("git@github.com:"):
+        identity = f"https://github.com/{identity.removeprefix('git@github.com:')}"
+    elif identity.startswith("ssh://git@github.com/"):
+        identity = f"https://github.com/{identity.removeprefix('ssh://git@github.com/')}"
+
+    parsed = urlparse(identity)
+    if parsed.scheme in {"http", "https"} and parsed.hostname:
+        host = parsed.hostname.lower()
+        port = f":{parsed.port}" if parsed.port else ""
+        path = parsed.path.rstrip("/")
+        if path.endswith(".git"):
+            path = path[:-4]
+        identity = urlunparse((parsed.scheme.lower(), f"{host}{port}", path, "", "", ""))
+    elif identity.endswith(".git"):
+        identity = identity[:-4]
+    return identity
+
+
+def get_catalog_identity(data: dict[str, Any]) -> str | None:
+    """Return the provenance identity bound to a parsed catalog.
+
+    Catalogs loaded from disk carry a runtime identity derived by
+    :func:`load_catalog`. Direct in-memory callers can declare
+    ``catalog_identity``. Unbound in-memory catalogs return ``None`` so audit
+    treats their installs as legacy provenance rather than inventing identity.
+    """
+    declared = data.get(_RUNTIME_CATALOG_IDENTITY) or data.get("catalog_identity")
+    if isinstance(declared, str) and declared.strip():
+        return normalize_catalog_identity(declared)
+
+    return None
+
+
+def _catalog_identity_from_root(repo_root: Path) -> str:
+    """Resolve catalog identity from its Git origin, then its file URI."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        result = None
+    if result is not None and result.returncode == 0 and result.stdout.strip():
+        return normalize_catalog_identity(result.stdout)
+    return (repo_root.resolve() / "library.yaml").as_uri()
+
+
 def find_repo_root(start: Optional[Path] = None) -> Path:
     """Walk up from start (or cwd) to find the repo root (directory containing library.yaml)."""
     current = (start or Path.cwd()).resolve()
@@ -100,6 +157,17 @@ def load_catalog(repo_root: Optional[Path] = None) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise CatalogError("library.yaml must be a YAML mapping at the top level.")
+
+    declared_identity = data.get("catalog_identity")
+    if declared_identity is not None and (
+        not isinstance(declared_identity, str) or not declared_identity.strip()
+    ):
+        raise CatalogError("catalog_identity must be a non-empty string when present.")
+    data[_RUNTIME_CATALOG_IDENTITY] = (
+        normalize_catalog_identity(declared_identity)
+        if declared_identity
+        else _catalog_identity_from_root(repo_root)
+    )
 
     return data
 
