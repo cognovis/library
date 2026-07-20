@@ -2157,6 +2157,7 @@ library:
         plane: dev
   agents:
   - name: acpx-runner
+    default_scope: global
     handlers:
     - acpx-runner-handlers
     description: Thin economy-tier relay leaf that dispatches one prompt to an external
@@ -2291,6 +2292,7 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: ci-monitor
+    default_scope: global
     handlers:
     - ci-monitor-handlers
     description: Watches GitHub Actions CI pipeline for a specific pushed commit.
@@ -2425,6 +2427,7 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: learning-extractor
+    default_scope: global
     handlers:
     - learning-extractor-handlers
     description: Extracts durable learnings from Claude Code conversation histories
@@ -2562,6 +2565,7 @@ library:
         source_catalog: cognovis-library-core
         inventory: convention-scan
   - name: release
+    default_scope: global
     handlers:
     - release-handlers
     description: 'Cuts a deliberate versioned release. session-close defers all release

@@ -604,8 +604,14 @@ def _check_missing_agent_handlers(
 ) -> dict[str, Any] | None:
     """Report handler assets an installed agent declares but does not have.
 
-    The agent markdown resolves these paths at runtime, so a missing handler is
-    a broken agent that looks installed.
+    The agent markdown resolves these paths at runtime, so a missing handler is a
+    broken agent that looks installed.
+
+    Completeness is judged against the Layer-B cache the lockfile points at, not
+    against "the directory has something in it". A directory holding only an
+    unrelated leftover used to pass while the handler scripts were gone -- a
+    false negative on exactly the partial rot this check exists to catch
+    (CL-8a7z).
     """
     if entry.get("type") != "agent":
         return None
@@ -620,16 +626,64 @@ def _check_missing_agent_handlers(
         return None
     name = entry.get("name", "")
     handler_root = Path(install_target).parent / f"{name}-handlers"
-    if handler_root.is_dir() and any(handler_root.iterdir()):
+
+    if not handler_root.is_dir() or not any(handler_root.iterdir()):
+        return {
+            "missing": [str(handler_root)],
+            "repair_hint": (
+                f"Agent '{name}' declares handler assets but {handler_root} is missing or "
+                f"empty; the agent resolves that path at runtime. Reinstall with "
+                f"`library agent use {name} --scope {scope}`."
+            ),
+        }
+
+    missing_files = _missing_recorded_handler_files(entry, handler_root)
+    if not missing_files:
         return None
     return {
-        "missing": [str(handler_root)],
+        "missing": missing_files,
         "repair_hint": (
-            f"Agent '{name}' declares handler assets but {handler_root} is missing or "
-            f"empty; the agent resolves that path at runtime. Reinstall with "
+            f"Agent '{name}' is missing handler files that were installed with it: "
+            f"{', '.join(missing_files)}. Reinstall with "
             f"`library agent use {name} --scope {scope}`."
         ),
     }
+
+
+def _missing_recorded_handler_files(entry: dict, handler_root: Path) -> list[str]:
+    """Return handler files recorded for this install that are absent on disk.
+
+    The lockfile records each handler target as `<install path> -> <cache path>`,
+    and the cache holds the exact tree that was installed. Comparing against it
+    catches a directory that survived while its contents did not.
+
+    An entry recorded before handler targets were tracked, or whose cache is
+    gone, yields nothing: this check reports rot it can prove, and does not
+    accuse history it cannot inspect.
+    """
+    missing: list[str] = []
+    for bridge in entry.get("bridge_symlinks", []) or []:
+        raw = str(bridge)
+        if " -> " not in raw:
+            continue
+        target_str, _, cache_str = raw.partition(" -> ")
+        target = Path(target_str.strip().rstrip("/"))
+        cache = Path(cache_str.strip().rstrip("/"))
+        try:
+            if not target.is_relative_to(handler_root) and target != handler_root:
+                continue
+        except ValueError:
+            continue
+        if not cache.is_dir():
+            continue
+        for cached_file in sorted(cache.rglob("*")):
+            if not cached_file.is_file():
+                continue
+            relative = cached_file.relative_to(cache)
+            installed = target / relative
+            if not installed.exists():
+                missing.append(str(installed))
+    return missing
 
 
 def _find_primary_artifact(cache_dir: Path, name: str) -> Path | None:
