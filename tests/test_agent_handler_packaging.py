@@ -202,10 +202,17 @@ def test_a_vanished_cache_is_not_treated_as_rot(tmp_path: Path):
 # -- CL-8a7z: the default scope must match where agents look -----------------
 
 
-@pytest.mark.parametrize("name", ["acpx-runner", "ci-monitor", "release", "learning-extractor"])
+@pytest.mark.parametrize("name", ["ci-monitor", "release", "learning-extractor"])
 def test_handler_agents_default_to_global_scope(name: str):
     """Project scope installs into <project>/.claude/agents, which these agents
-    do not probe; without a declared default they landed there."""
+    do not probe; without a declared default they landed there.
+
+    `acpx-runner` was dropped from this list when the agent was removed from the
+    catalog (clc-ex88 in library-core): a relay subagent can fabricate the
+    envelope it is supposed to relay, so cross-model dispatch now calls
+    acpx-dispatch.py directly. Its handler directory outlived the agent and
+    currently has no distribution vehicle, tracked as clc-j4pf.
+    """
     import yaml
 
     catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text(encoding="utf-8"))
