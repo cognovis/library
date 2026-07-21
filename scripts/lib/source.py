@@ -8,6 +8,7 @@ GitHub repos, and computing source commit SHAs.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -308,6 +309,51 @@ def _url_matches_marketplace(source_url: str, marketplace_url: str) -> bool:
     # Strip .git suffix for comparison
     mp = marketplace_url.rstrip("/").rstrip(".git")
     return source_url.startswith(mp)
+
+
+def clone_github_repo(clone_url: str, branch: Optional[str] = None) -> Path:
+    """Shallow-clone `clone_url` into a fresh temp dir, falling back to SSH.
+
+    Returns the temp directory. The caller owns it and must clean it up.
+
+    The SSH fallback exists because the cognovis remotes are private and HTTPS
+    has no credentials. It has to start from an empty directory: git creates and
+    partially populates the target before it fails, so retrying into the same
+    path made git refuse with "already exists and is not an empty directory" --
+    which masked the real HTTPS error and meant the fallback could never
+    succeed. That broke every GitHub-sourced install (CL-k33k).
+
+    Raises SourceError naming both failures when neither transport works.
+    """
+    tmp = Path(tempfile.mkdtemp())
+
+    def _clone(url: str) -> subprocess.CompletedProcess:
+        cmd = ["git", "clone", "--quiet", "--depth", "1"]
+        if branch:
+            cmd += ["--branch", branch]
+        cmd += [url, str(tmp)]
+        return subprocess.run(cmd, capture_output=True, text=True)
+
+    result = _clone(clone_url)
+    if result.returncode == 0:
+        return tmp
+
+    https_error = result.stderr.strip()
+    # Reset the target: the failed attempt left it non-empty.
+    shutil.rmtree(str(tmp), ignore_errors=True)
+    tmp.mkdir(parents=True, exist_ok=True)
+
+    ssh_url = clone_url.replace("https://github.com/", "git@github.com:")
+    result = _clone(ssh_url)
+    if result.returncode == 0:
+        return tmp
+
+    ssh_error = result.stderr.strip()
+    shutil.rmtree(str(tmp), ignore_errors=True)
+    raise SourceError(
+        f"Failed to clone {clone_url} over https ({https_error}) "
+        f"and {ssh_url} over ssh ({ssh_error})"
+    )
 
 
 def get_local_commit_sha(path: Path) -> str:

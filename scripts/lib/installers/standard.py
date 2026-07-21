@@ -37,7 +37,12 @@ from ..lockfile import (
 from ..output import blocked_result, dry_run_result, success
 from ..paths import resolve_install_paths
 from ..primitives import get_primitive
-from ..source import get_local_commit_sha, parse_source, resolve_marketplace
+from ..source import (
+    clone_github_repo,
+    get_local_commit_sha,
+    parse_source,
+    resolve_marketplace,
+)
 
 
 def _parse_standard_category(file_path: str) -> tuple[str, str] | tuple[None, None]:
@@ -296,23 +301,11 @@ def _fetch_standard_source(
         return local, commit, None
 
     if parsed.is_github():
-        tmp = Path(tempfile.mkdtemp())
         clone_url = parsed.clone_url or ""
-        result = subprocess.run(
-            ["git", "clone", "--quiet", "--depth", "1", clone_url, str(tmp)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            ssh_url = clone_url.replace("https://github.com/", "git@github.com:")
-            result = subprocess.run(
-                ["git", "clone", "--quiet", "--depth", "1", ssh_url, str(tmp)],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                shutil.rmtree(str(tmp), ignore_errors=True)
-                raise InstallError(f"Failed to clone {clone_url}: {result.stderr.strip()}")
+        try:
+            tmp = clone_github_repo(clone_url)
+        except SourceError as exc:
+            raise InstallError(str(exc)) from exc
 
         sha_result = subprocess.run(
             ["git", "rev-parse", "HEAD"],

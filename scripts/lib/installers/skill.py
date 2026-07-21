@@ -41,6 +41,7 @@ from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 from ..source import (
     ParsedSource,
+    clone_github_repo,
     get_local_commit_sha,
     parse_source,
     resolve_marketplace,
@@ -338,35 +339,11 @@ def _fetch_source_dir(
         return source_dir, commit, None
 
     if parsed.is_github():
-        tmp = Path(tempfile.mkdtemp())
-
         clone_url = parsed.clone_url or ""
-        clone_cmd = ["git", "clone", "--quiet", "--depth", "1"]
-        if parsed.branch:
-            clone_cmd.extend(["--branch", parsed.branch])
-        clone_cmd.extend([clone_url, str(tmp)])
-
-        result = subprocess.run(
-            clone_cmd,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            ssh_url = clone_url.replace("https://github.com/", "git@github.com:")
-            ssh_cmd = ["git", "clone", "--quiet", "--depth", "1"]
-            if parsed.branch:
-                ssh_cmd.extend(["--branch", parsed.branch])
-            ssh_cmd.extend([ssh_url, str(tmp)])
-            result = subprocess.run(
-                ssh_cmd,
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                shutil.rmtree(str(tmp), ignore_errors=True)
-                raise InstallError(
-                    f"Failed to clone {clone_url}: {result.stderr.strip()}"
-                )
+        try:
+            tmp = clone_github_repo(clone_url, parsed.branch)
+        except SourceError as exc:
+            raise InstallError(str(exc)) from exc
 
         # Get commit SHA
         sha_result = subprocess.run(
