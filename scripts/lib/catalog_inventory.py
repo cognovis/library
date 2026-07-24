@@ -551,7 +551,11 @@ def scan_primitive(
             if skill_file is not None
         )
     elif primitive_name == "agent":
-        files = sorted((root / "agents").glob("**/*.md"))
+        # Private handler directories may contain README files and tests. Agent
+        # profiles are the top-level Markdown files in the canonical agents
+        # directory; recursively scanning would publish handler documentation as
+        # an invalid agent entry.
+        files = sorted((root / "agents").glob("*.md"))
     elif primitive_name == "prompt":
         files = sorted((root / "prompts").glob("**/*.md"))
     elif primitive_name == "standard":
