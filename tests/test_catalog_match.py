@@ -216,6 +216,36 @@ def test_catalog_sync_uses_agent_file_stem_over_frontmatter_name(
     assert data["entries"][0]["name"] == "playwright-tester"
 
 
+def test_catalog_sync_projects_agent_handlers_and_standard_dependencies(
+    tmp_path: Path,
+) -> None:
+    """Convention-scanned agents deliver their private runtime dependencies."""
+    source_root = tmp_path / "source"
+    agent_dir = source_root / "agents"
+    handlers_dir = agent_dir / "diff-risk-classifier-handlers"
+    handlers_dir.mkdir(parents=True)
+    (handlers_dir / "diff_risk.py").write_text("print('detector')\n")
+    (agent_dir / "diff-risk-classifier.md").write_text(
+        "---\nname: diff-risk-classifier\ndescription: Classifies diff risk.\n"
+        "requires_standards:\n  - seam-contract\nrequires:\n  - agent:review-gates\n"
+        "---\n# Diff Risk Classifier\n"
+    )
+    catalog = minimal_library(source_root).replace(
+        "        - standards\n        - skills\n",
+        "        - standards\n        - skills\n        - agents\n",
+    )
+    (tmp_path / "library.yaml").write_text(catalog)
+
+    result = run_library(
+        "catalog", "sync", "--source=test-core", "--primitive-type=agent", "--json", cwd=tmp_path
+    )
+
+    assert result.returncode == 0, result.stderr
+    entry = json.loads(result.stdout)["entries"][0]
+    assert entry["handlers"] == ["agents/diff-risk-classifier-handlers"]
+    assert entry["requires"] == ["agent:review-gates", "standard:seam-contract"]
+
+
 def test_catalog_sync_scans_legacy_agent_base_source_directory(tmp_path: Path) -> None:
     """Inventory sync maps current agent-base catalog entries from golden-prompts sources."""
     source_root = tmp_path / "source"

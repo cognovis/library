@@ -659,8 +659,24 @@ def artifact_entry(
         typed_requires = [
             str(item) for item in requires if isinstance(item, str) and ":" in item
         ]
-        if typed_requires:
-            entry["requires"] = typed_requires
+    else:
+        typed_requires = []
+
+    if primitive_name == "agent":
+        required_standards = frontmatter.get("requires_standards")
+        if isinstance(required_standards, list):
+            typed_requires.extend(
+                f"standard:{name}"
+                for item in required_standards
+                if (name := str(item).strip())
+            )
+
+        handler_dir = path.parent / f"{path.stem}-handlers"
+        if handler_dir.is_dir():
+            entry["handlers"] = [handler_dir.relative_to(root).as_posix()]
+
+    if typed_requires:
+        entry["requires"] = sorted(set(typed_requires))
 
     version = frontmatter.get("version")
     if version is not None:
