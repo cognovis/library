@@ -200,7 +200,7 @@ def install_agent(
         source_file, source_commit, temp_root = _fetch_agent_source(parsed, agent_name)
         try:
             handler_assets = _validate_handler_assets(
-                source_file.parent,
+                temp_root or source_file.parent,
                 handler_paths,
                 agent_name,
             )
@@ -428,6 +428,9 @@ def _handler_install_target(
     """
     handler_root = f"{agent_name}-handlers"
     parts = handler_path.parts
+    if len(parts) > 1 and parts[0] == "agents" and parts[1] == handler_root:
+        handler_path = Path(*parts[1:])
+        parts = handler_path.parts
     if parts and parts[0] == handler_root:
         handler_path = Path(*parts[1:])
     return agent_base / handler_root / handler_path
