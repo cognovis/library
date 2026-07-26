@@ -38,6 +38,9 @@ SUPPORTED_PRIMITIVES = [
     "model-standard",
     "agent-base",
     "workflow",
+    "pi-extension",
+    "pi-profile",
+    "just-module",
 ]
 
 
@@ -129,6 +132,28 @@ def test_workflow_primitive_metadata_and_inventory_aliases():
     assert primitive.yaml_key == "library/workflows"
     assert primitive.install_subdir == "workflows"
     assert source_accepts_primitive({"content_types": ["workflows"]}, "workflow")
+
+
+@pytest.mark.parametrize(
+    ("name", "yaml_key", "install_subdir", "content_type"),
+    [
+        ("pi-extension", "library/pi_extensions", "pi-extensions", "pi_extensions"),
+        ("pi-profile", "library/pi_profiles", "pi-profiles", "pi_profiles"),
+        ("just-module", "library/just_modules", "just-modules", "just_modules"),
+    ],
+)
+def test_project_native_primitive_metadata_and_inventory(
+    name: str, yaml_key: str, install_subdir: str, content_type: str
+):
+    """Project-native bridge types participate in catalog discovery."""
+    from lib.catalog_inventory import source_accepts_primitive
+    from lib.primitives import get_primitive
+
+    primitive = get_primitive(name)
+    assert primitive is not None
+    assert primitive.yaml_key == yaml_key
+    assert primitive.install_subdir == install_subdir
+    assert source_accepts_primitive({"content_types": [content_type]}, name)
 
 
 # ---------------------------------------------------------------------------

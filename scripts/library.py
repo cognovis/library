@@ -510,6 +510,12 @@ def _resolve_command_scope(
                 "Omit --scope or pass --scope global."
             )
         return "global"
+    if primitive in {"pi-extension", "pi-profile", "just-module"}:
+        if explicit_scope == "global":
+            raise LibraryError(
+                f"{primitive} is project-only and cannot use global scope."
+            )
+        return "project"
     if explicit_scope is not None:
         return explicit_scope
     return _resolve_default_scope(catalog, primitive, name)
@@ -724,6 +730,17 @@ def _install_with_deps(
     # earlier dependencies in install_order have already been installed. Check
     # every entry up front so the dependency graph install is all-or-nothing.
     for dep_prim, dep_name in install_order:
+        if dep_prim in {"pi-extension", "pi-profile", "just-module"}:
+            from lib.installers.project_native import require_project_native_request
+
+            try:
+                require_project_native_request(dep_prim, dep_name, scope)
+            except LibraryError as exc:
+                if use_json:
+                    print_json(error_result(str(exc), exc.exit_code))
+                else:
+                    print(f"Error: {exc}", file=sys.stderr)
+                return exc.exit_code
         try:
             dep_entry = lookup_entry(catalog, dep_prim, dep_name, fuzzy=False)
         except LibraryError:
@@ -1027,6 +1044,10 @@ def _dispatch_use(
         return _use_simple_file(args, repo_root, catalog, "agent-base", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "workflow":
         return _use_simple_file(args, repo_root, catalog, "workflow", name, scope, dry_run, use_json, harness, install_mode)
+    elif primitive in {"pi-extension", "pi-profile", "just-module"}:
+        return _use_project_native(
+            repo_root, catalog, primitive, name, scope, dry_run, use_json, install_mode
+        )
     elif primitive == "runtime-config":
         return _use_runtime_config(args, repo_root, catalog, name, scope, dry_run, use_json, harness, install_mode)
     elif primitive == "mcp":
@@ -1176,6 +1197,42 @@ def _use_simple_file(
             scope=scope,
             dry_run=dry_run,
             harness=harness,
+            install_mode=install_mode,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
+def _use_project_native(
+    repo_root: Path,
+    catalog: dict,
+    primitive: str,
+    name: str,
+    scope: str,
+    dry_run: bool,
+    use_json: bool,
+    install_mode: str,
+) -> int:
+    """Install one project-only Pi or Just artifact."""
+    from lib.installers.project_native import install_project_native_file
+
+    try:
+        result = install_project_native_file(
+            catalog=catalog,
+            primitive=primitive,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
             install_mode=install_mode,
         )
         if use_json:
@@ -1355,8 +1412,19 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         return EXIT_FAILURE
 
     if primitive == "mcp":
+        # Project scope is a migration-only lock-record cleanup for MCP.
         scope = explicit_scope or "global"
+    elif primitive in {"pi-extension", "pi-profile", "just-module"}:
+        try:
+            scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
+        except LibraryError as exc:
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
     else:
+        # Preserve historical remove semantics regardless of catalog default_scope.
         scope = explicit_scope or "project"
 
     try:
@@ -1427,6 +1495,16 @@ def _dispatch_remove(
         from lib.installers.simple_file import remove_simple_file
         return remove_simple_file(catalog=catalog, primitive_name="workflow", name=name,
                                   repo_root=repo_root, scope=scope, dry_run=dry_run)
+    elif primitive in {"pi-extension", "pi-profile", "just-module"}:
+        from lib.installers.project_native import remove_project_native_file
+
+        return remove_project_native_file(
+            primitive=primitive,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     elif primitive == "mcp":
         from lib.installers.mcp_installer import (
             remove_mcp,

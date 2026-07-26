@@ -30,9 +30,9 @@ Primitive-scoped commands use the primitive name before the verb:
 /library <primitive> <verb> [name-or-query]
 ```
 
-Valid primitive names are singular: `skill`, `agent`, `prompt`, `script`,
-`standard`, `guardrail`, `mcp`, `model-standard`, `agent-base`, and
-`workflow`.
+Valid primitive names are singular. The temporary project-native bridge adds
+`pi-extension`, `pi-profile`, and `just-module` for artifacts that Open Skills
+does not model.
 
 The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
 filtering, dependency resolution, and install/update behavior live in
@@ -75,7 +75,7 @@ uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync
 
 **The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
 all primitive types (skill, agent, prompt, script, standard, guardrail, mcp, model-standard,
-agent-base, workflow). Dependency resolution, lockfile writes, and harness selection are all
+agent-base, workflow, pi-extension, pi-profile, just-module). Dependency resolution, lockfile writes, and harness selection are all
 handled by the CLI — do NOT implement these manually.
 
 **Developing the CLI** (modifying `scripts/library.py` or `scripts/lib/*.py`):

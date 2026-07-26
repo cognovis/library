@@ -123,6 +123,24 @@
           },
           "default": []
         },
+        "pi_extensions": {
+          "description": "Catalog of project-only Pi extension files.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/project_native_entry"},
+          "default": []
+        },
+        "pi_profiles": {
+          "description": "Catalog of project-only Pi profile files.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/project_native_entry"},
+          "default": []
+        },
+        "just_modules": {
+          "description": "Catalog of project-only Just recipe modules.",
+          "type": "array",
+          "items": {"$ref": "#/$defs/project_native_entry"},
+          "default": []
+        },
         "runtime_configs": {
           "description": "Catalog of composed runtime-config entries. Each entry is generated (not copied) by composing a routing base with a global-only overlay via section-level merge, and deployed to a single target file such as ~/.agents/orchestrator-config.yml.",
           "type": "array",
@@ -326,6 +344,9 @@
               "agent_bases",
               "workflows",
               "runtime_configs",
+              "pi_extensions",
+              "pi_profiles",
+              "just_modules",
               "project_tooling",
               "plugins"
             ]
@@ -409,7 +430,7 @@
     "typed_dependency": {
       "description": "A typed dependency reference using 'type:name' format. Types per ADR-0004 Decision 2 plus later primitive additions.",
       "type": "string",
-      "pattern": "^(skill|agent|prompt|standard|hook|mcp|script|model-standard|agent-base):.+$",
+      "pattern": "^(skill|agent|prompt|standard|hook|mcp|script|model-standard|agent-base|pi-extension|pi-profile|just-module):.+$",
       "examples": [
         "skill:firecrawl",
         "agent:video-processor",
@@ -962,6 +983,9 @@
               "agent_bases",
               "workflows",
               "runtime_configs",
+              "pi_extensions",
+              "pi_profiles",
+              "just_modules",
               "project_tooling",
               "plugins"
             ]
@@ -2122,6 +2146,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "project_native_entry": {
+      "description": "A project-only harness-native file whose source extension is preserved at a fixed target below .agents/.",
+      "allOf": [
+        {"$ref": "#/$defs/base_entry"},
+        {"$ref": "#/$defs/marketplace_ref"}
+      ]
     },
     "workflow_entry": {
       "description": "A deterministic workflow orchestration spec. Installed to .claude/workflows/<name>.js (project) or ~/.claude/workflows/<name>.js (global).",
