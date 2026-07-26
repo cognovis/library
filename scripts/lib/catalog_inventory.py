@@ -41,6 +41,9 @@ PRIMITIVE_CONTENT_TYPES: dict[str, set[str]] = {
         "agent_bases",
     },
     "workflow": {"workflow", "workflows"},
+    "pi-extension": {"pi-extension", "pi_extension", "pi-extensions", "pi_extensions"},
+    "pi-profile": {"pi-profile", "pi_profile", "pi-profiles", "pi_profiles"},
+    "just-module": {"just-module", "just_module", "just-modules", "just_modules"},
 }
 
 CONTENT_TYPE_PRIMITIVES: dict[str, str] = {

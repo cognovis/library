@@ -192,7 +192,7 @@ installed:
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
 | `name` | YES | string | Unique item name. Must match the catalog entry in `library.yaml`. |
-| `type` | YES | string | `skill`, `agent`, `prompt`, `guardrail`, `standard`, `model-standard`, `agent-base`, or `mcp`. |
+| `type` | YES | string | Registered primitive type, including project-native `pi-extension`, `pi-profile`, and `just-module` bridge entries. |
 | `catalog_identity` | New entries | string | Stable identity of the catalog that produced the install, normally its canonical repository URL. Entries created before this field existed remain valid and audit as `undetermined`. |
 | `marketplace` | YES | string | Name of the source marketplace from `library.yaml` `sources.marketplaces`. Use `local` for local-path sources, `unknown` for unrecognized sources. |
 | `source` | YES | string | GitHub browser URL or local path used for the install. |

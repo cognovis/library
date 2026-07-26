@@ -40,7 +40,7 @@
         "type": {
           "description": "Primitive type of the installed item.",
           "type": "string",
-          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "mcp"]
+          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "mcp"]
         },
         "catalog_identity": {
           "description": "Stable identity of the library catalog that produced this install, normally its canonical repository URL. Optional only for legacy entries created before catalog provenance was recorded.",

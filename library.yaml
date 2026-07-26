@@ -41,6 +41,12 @@ default_dirs:
   runtime_configs:
     - default: .agents/
     - global: ~/.agents/
+  pi_extensions:
+    - default: .agents/pi/extensions/
+  pi_profiles:
+    - default: .agents/pi/profiles/
+  just_modules:
+    - default: .agents/just/
 tag_vocabulary:
   - tag: judge-layer
     description: Artifacts that ship as part of the judge-layer family.

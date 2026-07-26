@@ -286,6 +286,17 @@ def reinstall_entry(
         from .installers.simple_file import install_simple_file
         install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
+    elif entry_type in {"pi-extension", "pi-profile", "just-module"}:
+        from .installers.project_native import install_project_native_file
+
+        install_project_native_file(
+            catalog=catalog,
+            primitive=entry_type,
+            name=entry_name,
+            repo_root=repo_root,
+            scope=scope,
+            install_mode=install_mode,
+        )
     elif entry_type == "runtime-config":
         from .runtime_config import install_runtime_config
         install_runtime_config(catalog=catalog, name=entry_name, repo_root=repo_root,
@@ -425,13 +436,13 @@ def cmd_audit_impl(
             entry_status = "drift"
         elif checksum_type == "file":
             # For file-type: check single file.
-            # Detect missing install target first: a lockfile path that ends with
-            # a known single-file extension (*.js, *.md, *.py, *.toml) that does
-            # not exist is explicitly drift, not "unknown".
+            # Detect a missing file target first. Project-native primitives
+            # preserve arbitrary source extensions, so any non-empty suffix is
+            # sufficient evidence that this lock record targets a file.
             _install_p = _entry_path(install_target_str, repo_root) if install_target_str else None
             if (
                 _install_p is not None
-                and _install_p.suffix in (".js", ".md", ".py", ".toml", ".yml", ".yaml")
+                and bool(_install_p.suffix)
                 and not _install_p.exists()
                 and not _install_p.is_symlink()
             ):
