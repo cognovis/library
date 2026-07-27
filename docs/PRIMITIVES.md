@@ -120,7 +120,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 11 | [Agent Base (Agent Base Prompt)](primitives/agent-base.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition into agent system prompt | install-time composition into agent system prompt | partial | unverified | unverified | details |
 | 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
 | 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | n/a | details |
-| 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files only | files only | Pi-native | unverified | unverified | project-only; Open Skills stays authoritative for methods |
+| 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files and extension bundles | files and directories | Pi-native | verified | verified | project-only; Open Skills stays authoritative for methods |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
