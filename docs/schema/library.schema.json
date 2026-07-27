@@ -2148,10 +2148,26 @@
       "additionalProperties": false
     },
     "project_native_entry": {
-      "description": "A project-only harness-native file whose source extension is preserved at a fixed target below .agents/.",
+      "description": "A project-only harness-native file or Pi extension bundle installed at a fixed target below .agents/.",
       "allOf": [
         {"$ref": "#/$defs/base_entry"},
-        {"$ref": "#/$defs/marketplace_ref"}
+        {"$ref": "#/$defs/marketplace_ref"},
+        {
+          "type": "object",
+          "properties": {
+            "bundle": {
+              "description": "Install the complete source directory. Supported only for pi-extension entries.",
+              "type": "boolean",
+              "default": false
+            },
+            "entrypoint": {
+              "description": "Entrypoint filename required inside a bundled Pi extension.",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+              "default": "index.ts"
+            }
+          }
+        }
       ]
     },
     "workflow_entry": {
