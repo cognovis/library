@@ -95,6 +95,36 @@ def test_library_yaml_passes_validator():
     print("PASS test_library_yaml_passes_validator")
 
 
+def test_markitdown_uses_official_versioned_mcp():
+    """MarkItDown registrations launch Microsoft's versioned MCP package via uvx."""
+    with LIBRARY_PATH.open() as f:
+        data = yaml.safe_load(f)
+
+    entries = {
+        entry["name"]: entry for entry in data["library"]["mcp_servers"]
+    }
+    markitdown = entries["markitdown"]
+
+    assert markitdown["source"].startswith(
+        "https://github.com/microsoft/markitdown/"
+    )
+    assert markitdown["coding_strategy"] == "mcp"
+    assert markitdown["capabilities"]["auth"] == "none"
+
+    harnesses = markitdown["install"]["mcp"]
+    assert set(harnesses) == {"claude_code", "codex", "cursor"}
+    for block in harnesses.values():
+        snippet = block["snippet"]
+        assert snippet["command"] == "uvx"
+        assert snippet["args"] == [
+            "--python",
+            "3.12",
+            "--from",
+            "markitdown-mcp==0.0.1a4",
+            "markitdown-mcp",
+        ]
+
+
 def test_mcp_servers_section_accepted():
     """mcp_servers list accepted by schema."""
     schema = load_schema()
@@ -345,6 +375,7 @@ def test_mcp_servers_is_array_not_object():
 
 ALL_TESTS = [
     test_library_yaml_passes_validator,
+    test_markitdown_uses_official_versioned_mcp,
     test_mcp_servers_section_accepted,
     test_mcp_server_requires_name,
     test_mcp_server_requires_description,
