@@ -89,6 +89,68 @@ def test_schema_accepts_catalog_routing_metadata(tmp_path: Path) -> None:
     assert_valid(data)
 
 
+def test_generated_merge_preserves_unrelated_category_and_bundle_description() -> None:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog_inventory import merge_catalog_entry
+
+    prompt_source = "https://github.com/example/core/blob/main/prompts/example.md"
+    merged_prompt = merge_catalog_entry(
+        {
+            "name": "example",
+            "description": "Example prompt.",
+            "source": prompt_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+            "tags": ["origin:original", "category:command"],
+        },
+        {
+            "name": "example",
+            "description": "Example prompt.",
+            "source": prompt_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+            "tags": ["origin:original"],
+        },
+    )
+    assert merged_prompt["tags"] == ["origin:original", "category:command"]
+
+    bundle_source = "https://github.com/example/core/tree/main/standards/python/"
+    merged_bundle = merge_catalog_entry(
+        {
+            "name": "python",
+            "description": "Python standards.",
+            "source": bundle_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+        },
+        {
+            "name": "python",
+            "description": "standard from test-core: python",
+            "source": bundle_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+            "tags": ["category:standard-bundle"],
+        },
+    )
+    assert merged_bundle["description"] == "Python standards."
+
+
 def test_library_yaml_sources_have_routing_metadata() -> None:
     data = yaml.safe_load(LIBRARY_PATH.read_text())
     by_name = {
@@ -467,24 +529,74 @@ def test_catalog_sync_scans_standard_bundles_and_leaf_standards(tmp_path: Path) 
     leaf_group.mkdir(parents=True)
     (leaf_group / "README.md").write_text("# Judge Layer README\n")
     (leaf_group / "action-proposal.md").write_text("# Action Proposal\n")
+    folder_form = source_root / "standards" / "python-cli-patterns"
+    folder_form.mkdir(parents=True)
+    (folder_form / "python-cli-patterns.md").write_text(
+        "---\ndomain: python-cli-patterns\ndescription: Python CLI patterns.\n---\n"
+        "# Python CLI Patterns\n"
+    )
+    (folder_form / "config-resolution.md").write_text("# Config Resolution\n")
     (source_root / "standards" / "root-standard.md").write_text("# Root Standard\n")
-    (tmp_path / "library.yaml").write_text(minimal_library(source_root))
+    catalog = yaml.safe_load(minimal_library(source_root))
+    catalog["library"]["standards"] = [
+        {
+            "name": "python-cli-patterns",
+            "description": "Previously scanned as one file.",
+            "source": (
+                "https://github.com/example/core/blob/main/"
+                "standards/python-cli-patterns/python-cli-patterns.md"
+            ),
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+            "tags": [
+                "origin:original",
+                "tier:domain",
+                "category:standard",
+                "curated-extra",
+            ],
+        }
+    ]
+    (tmp_path / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
 
     result = run_library(
         "catalog",
         "sync",
         "--source=test-core",
         "--primitive-type=standard",
+        "--write",
         "--json",
         cwd=tmp_path,
     )
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
-    by_name = {entry["name"]: entry for entry in data["entries"]}
+    refreshed = yaml.safe_load((tmp_path / "library.yaml").read_text())
+    by_name = {
+        entry["name"] for entry in refreshed["library"]["standards"]
+    }
 
-    assert set(by_name) == {"action-proposal", "root-standard", "workflow"}
-    assert by_name["workflow"]["source"].endswith("/tree/main/standards/workflow/")
-    assert "README" not in by_name
+    assert by_name == {
+        "action-proposal",
+        "python-cli-patterns",
+        "root-standard",
+        "workflow",
+    }
+    entries = {
+        entry["name"]: entry for entry in refreshed["library"]["standards"]
+    }
+    assert entries["python-cli-patterns"]["source"].endswith(
+        "/tree/main/standards/python-cli-patterns/"
+    )
+    assert "category:standard-bundle" in entries["python-cli-patterns"]["tags"]
+    assert "category:standard" not in entries["python-cli-patterns"]["tags"]
+    assert "curated-extra" in entries["python-cli-patterns"]["tags"]
+    assert entries["workflow"]["source"].endswith("/tree/main/standards/workflow/")
+    assert "config-resolution" not in entries
+    assert "README" not in entries
+    assert data["status"] == "ok"
 
 
 def test_catalog_sync_write_preserves_remote_only_marketplace_entries(
