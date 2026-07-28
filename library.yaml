@@ -2557,7 +2557,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: agents
-      description: Subagent Debrief Return Contract
+      description: Subagent authoring contracts — the debrief return format, prompt-cache-friendly system prompts, and the tool boundary matrix per agent role.
       source: https://github.com/cognovis/library-core/tree/main/standards/agents/
       tier: domain
       default_scope: ask
@@ -2631,7 +2631,7 @@ library:
         - tier:domain
         - category:standard
     - name: dev-tools
-      description: ast-grep (sg) Reference
+      description: Agent tooling conventions — tool selection and command substitutions, file-reading thresholds, hook exit codes, and subagent discipline.
       source: https://github.com/cognovis/library-core/tree/main/standards/dev-tools/
       tier: domain
       default_scope: ask
@@ -2730,7 +2730,7 @@ library:
         - fhir
         - sql
     - name: flet
-      description: 'Standard: Flet Playwright Accessibility Mode'
+      description: 'Flet application conventions — the web mode launch pattern and the Playwright accessibility mode used to drive a Flet UI from tests.'
       source: https://github.com/cognovis/library-core/tree/main/standards/flet/
       tier: domain
       default_scope: ask
@@ -2744,7 +2744,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: frontend
-      description: 'Standard: Frontend Dev Feedback Loop'
+      description: 'Frontend conventions — the dev feedback loop, Next.js App Router structure, and the view impact check before a UI change ships.'
       source: https://github.com/cognovis/library-core/tree/main/standards/frontend/
       tier: domain
       default_scope: ask
@@ -2758,7 +2758,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: git
-      description: Git Commit Convention
+      description: Git conventions — commit message structure, allowed types, and scope naming for conventional commits.
       source: https://github.com/cognovis/library-core/tree/main/standards/git/
       tier: domain
       default_scope: ask
@@ -2772,7 +2772,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: healthcare
-      description: Healthcare Clinical UX Style Guide
+      description: Healthcare domain conventions — clinical UX style, privacy and security control areas, and choosing between ICD-10-GM, ICD-10-CM, and ICD-11.
       source: https://github.com/cognovis/library-core/tree/main/standards/healthcare/
       tier: domain
       default_scope: ask
@@ -2882,7 +2882,7 @@ library:
         - tier:domain
         - category:standard
     - name: powershell
-      description: PowerShell Style Convention
+      description: PowerShell conventions — cmdlet naming, parameter style, and script structure.
       source: https://github.com/cognovis/library-core/tree/main/standards/powershell/
       tier: domain
       default_scope: ask
@@ -2896,7 +2896,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: project
-      description: 'Standard: Centralized Configuration'
+      description: 'Project infrastructure conventions — centralized configuration, macOS launchd agents, and the infrastructure-first team workflow.'
       source: https://github.com/cognovis/library-core/tree/main/standards/project/
       tier: domain
       default_scope: ask
@@ -2910,7 +2910,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: python
-      description: Python CLI Patterns
+      description: Python language conventions — style, Python 3.14 patterns, dependency injection for system calls, fail-closed security defaults, and third-party SDK compatibility.
       source: https://github.com/cognovis/library-core/tree/main/standards/python/
       tier: domain
       default_scope: ask
@@ -2952,7 +2952,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: release
-      description: Release & Changelog Standard
+      description: Release conventions — changelog generation, version stamping, and the tag-driven release flow.
       source: https://github.com/cognovis/library-core/tree/main/standards/release/
       tier: domain
       default_scope: ask
@@ -3016,7 +3016,7 @@ library:
         - tier:domain
         - category:standard-bundle
     - name: security
-      description: Content Isolation Pattern
+      description: Security conventions for agent flows — capability isolation when untrusted external content enters an unattended pipeline.
       source: https://github.com/cognovis/library-core/tree/main/standards/security/
       tier: domain
       default_scope: ask
@@ -3030,7 +3030,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: skills
-      description: Skill Development Patterns
+      description: Skill authoring conventions — development patterns, the quality standard, token budget tiers, and the upstream watchdog pattern for vendored skills.
       source: https://github.com/cognovis/library-core/tree/main/standards/skills/
       tier: domain
       default_scope: ask
@@ -3140,7 +3140,7 @@ library:
         - healthcare
         - security
     - name: workflow
-      description: 'Agent Patterns: How Agents Collaborate in the Workflow'
+      description: 'The shared development workflow — bead specification and hygiene, review and verification discipline, engineering practice, and the agent collaboration patterns that run them.'
       source: https://github.com/cognovis/library-core/tree/main/standards/workflow/
       tier: domain
       default_scope: ask
@@ -3154,7 +3154,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: writing
-      description: Brand Usage Standard
+      description: Writing conventions — brand and product name usage in user-facing text and documentation.
       source: https://github.com/cognovis/library-core/tree/main/standards/writing/
       tier: domain
       default_scope: ask

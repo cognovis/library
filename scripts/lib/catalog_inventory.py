@@ -8,6 +8,7 @@ hard-coding repository names in callers.
 from __future__ import annotations
 
 import io
+import sys
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -437,37 +438,21 @@ def merge_catalog_entry(
         if entry_is_inventory_generated(existing_entry):
             generated_tags = list(generated_entry.get("tags") or [])
             existing_tags = list(existing_entry.get("tags") or [])
-            standard_category_tags = {
-                "category:standard",
-                "category:standard-bundle",
-            }
-            replaces_standard_category = bool(
-                standard_category_tags.intersection(generated_tags)
+            # The scan owns the category: namespace. Whenever it emits any
+            # category tag, every existing one is stale — a reclassified
+            # artifact (single file -> bundle, skill -> agent) must not keep
+            # both labels. Other curated tags survive.
+            generated_owns_category = any(
+                str(tag).startswith("category:") for tag in generated_tags
             )
             merged["tags"] = generated_tags + [
                 tag
                 for tag in existing_tags
                 if tag not in generated_tags
-                and not (
-                    replaces_standard_category and tag in standard_category_tags
-                )
+                and not (generated_owns_category and str(tag).startswith("category:"))
             ]
         else:
             merged["tags"] = deepcopy(existing_entry["tags"])
-    generated_library_metadata = (
-        generated_entry.get("metadata", {}).get("library", {})
-        if isinstance(generated_entry.get("metadata"), dict)
-        else {}
-    )
-    generated_description_fallback = (
-        f"standard from {generated_library_metadata.get('source_catalog', '')}: "
-        f"{generated_entry.get('name', '')}"
-    )
-    if (
-        generated_entry.get("description") == generated_description_fallback
-        and existing_entry.get("description")
-    ):
-        merged["description"] = existing_entry["description"]
     if entry_is_inventory_generated(existing_entry):
         if "requires" not in generated_entry:
             merged.pop("requires", None)
@@ -662,11 +647,22 @@ def artifact_entry(
     """Build a library.yaml entry from a scanned artifact."""
     frontmatter, heading = read_markdown_metadata(path)
     name = str(catalog_artifact_name(primitive_name, path, frontmatter))
-    description = str(
-        frontmatter.get("description")
-        or heading
-        or f"{primitive_name} from {source_entry.get('name', 'source')}: {name}"
-    )
+    described = frontmatter.get("description") or heading
+    if described:
+        description = str(described)
+    else:
+        # No description source in the marketplace. Say so instead of letting a
+        # generic placeholder land in library.yaml unnoticed: a bundle needs
+        # <name>.md or README.md with a frontmatter description, and the
+        # catalog must never become the source for what it projects.
+        description = (
+            f"{primitive_name} from {source_entry.get('name', 'source')}: {name}"
+        )
+        print(
+            f"[catalog] {primitive_name} '{name}' has no description source"
+            f" ({path}); add a frontmatter description to its entry file",
+            file=sys.stderr,
+        )
     relative_path = path.relative_to(root).as_posix()
     is_directory = path.is_dir()
     if is_directory and not relative_path.endswith("/"):

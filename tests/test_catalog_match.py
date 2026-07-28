@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import jsonschema
+import pytest
 import yaml
 
 
@@ -89,66 +90,97 @@ def test_schema_accepts_catalog_routing_metadata(tmp_path: Path) -> None:
     assert_valid(data)
 
 
-def test_generated_merge_preserves_unrelated_category_and_bundle_description() -> None:
+def _generated_entry(**overrides: object) -> dict:
+    entry = {
+        "name": "example",
+        "description": "Example prompt.",
+        "source": "https://github.com/example/core/blob/main/prompts/example.md",
+        "metadata": {
+            "library": {
+                "source_catalog": "test-core",
+                "inventory": "convention-scan",
+            }
+        },
+    }
+    entry.update(overrides)
+    return entry
+
+
+def test_generated_merge_keeps_curated_tags_outside_the_category_namespace() -> None:
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     from lib.catalog_inventory import merge_catalog_entry
 
-    prompt_source = "https://github.com/example/core/blob/main/prompts/example.md"
-    merged_prompt = merge_catalog_entry(
-        {
-            "name": "example",
-            "description": "Example prompt.",
-            "source": prompt_source,
-            "metadata": {
-                "library": {
-                    "source_catalog": "test-core",
-                    "inventory": "convention-scan",
-                }
-            },
-            "tags": ["origin:original", "category:command"],
-        },
-        {
-            "name": "example",
-            "description": "Example prompt.",
-            "source": prompt_source,
-            "metadata": {
-                "library": {
-                    "source_catalog": "test-core",
-                    "inventory": "convention-scan",
-                }
-            },
-            "tags": ["origin:original"],
-        },
+    merged = merge_catalog_entry(
+        _generated_entry(tags=["origin:original", "tier:core", "category:command"]),
+        _generated_entry(tags=["origin:original"]),
     )
-    assert merged_prompt["tags"] == ["origin:original", "category:command"]
+
+    assert merged["tags"] == ["origin:original", "tier:core", "category:command"]
+
+
+def test_generated_merge_replaces_every_stale_category_tag() -> None:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog_inventory import merge_catalog_entry
+
+    merged = merge_catalog_entry(
+        _generated_entry(tags=["origin:original", "category:standard"]),
+        _generated_entry(tags=["category:standard-bundle"]),
+    )
+    assert merged["tags"] == ["category:standard-bundle", "origin:original"]
+
+    # The rule is not standard-specific: any reclassification drops the old label.
+    reclassified = merge_catalog_entry(
+        _generated_entry(tags=["category:skill", "tier:core"]),
+        _generated_entry(tags=["category:agent"]),
+    )
+    assert reclassified["tags"] == ["category:agent", "tier:core"]
+
+
+def test_generated_merge_does_not_resurrect_a_stale_description() -> None:
+    """library.yaml is a projection: the marketplace owns every description.
+
+    Regression guard for clc-pmoy. A preservation heuristic here restored the
+    description already in library.yaml whenever the scan produced the generic
+    fallback, which re-pinned the stale `python` bundle description that
+    clc-jw1t had removed.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog_inventory import merge_catalog_entry
 
     bundle_source = "https://github.com/example/core/tree/main/standards/python/"
-    merged_bundle = merge_catalog_entry(
-        {
-            "name": "python",
-            "description": "Python standards.",
-            "source": bundle_source,
-            "metadata": {
-                "library": {
-                    "source_catalog": "test-core",
-                    "inventory": "convention-scan",
-                }
-            },
-        },
-        {
-            "name": "python",
-            "description": "standard from test-core: python",
-            "source": bundle_source,
-            "metadata": {
-                "library": {
-                    "source_catalog": "test-core",
-                    "inventory": "convention-scan",
-                }
-            },
-            "tags": ["category:standard-bundle"],
-        },
+    merged = merge_catalog_entry(
+        _generated_entry(
+            name="python",
+            description="Python CLI Patterns",
+            source=bundle_source,
+            tags=["category:standard-bundle"],
+        ),
+        _generated_entry(
+            name="python",
+            description="standard from test-core: python",
+            source=bundle_source,
+            tags=["category:standard-bundle"],
+        ),
     )
-    assert merged_bundle["description"] == "Python standards."
+
+    assert merged["description"] == "standard from test-core: python"
+
+
+def test_scan_warns_when_a_standard_has_no_description_source(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog_inventory import artifact_entry
+
+    bundle = tmp_path / "standards" / "orphan"
+    bundle.mkdir(parents=True)
+    (bundle / "_triggers.yml").write_text("files: {}\n")
+    (bundle / "topic.md").write_text("# Some Topic\n")
+
+    entry = artifact_entry(tmp_path, {"name": "test-core"}, "standard", bundle)
+
+    assert entry["description"] == "standard from test-core: orphan"
+    assert "no description source" in capsys.readouterr().err
 
 
 def test_library_yaml_sources_have_routing_metadata() -> None:
