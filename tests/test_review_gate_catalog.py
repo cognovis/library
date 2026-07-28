@@ -31,6 +31,6 @@ def test_review_gate_bundle_is_installable_from_catalog():
         "agents/review-gates-handlers"
     ]
     assert "standard:seam-contract" in agents["seam-contract-reviewer"]["requires"]
-    assert standards["seam-contract"]["source"].endswith(
-        "/standards/seam-contract/seam-contract.md"
-    )
+    seam_contract = standards["seam-contract"]
+    assert seam_contract["source"].endswith("/tree/main/standards/seam-contract/")
+    assert "category:standard-bundle" in seam_contract["tags"]

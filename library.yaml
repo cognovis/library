@@ -2542,18 +2542,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: manual
           plane: dev
-    - name: action-proposal
-      description: Action Proposal
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/action-proposal.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
     - name: adr-location
       description: ADR Location Standard
       source: https://github.com/cognovis/library-core/blob/main/standards/adr-location.md
@@ -2584,7 +2572,7 @@ library:
           plane: dev
     - name: ai-provenance
       description: Provenance metadata requirements for AI-generated and rules-generated system outputs.
-      source: https://github.com/cognovis/library-core/blob/main/standards/ai-provenance/ai-provenance.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/ai-provenance/
       tier: domain
       default_scope: ask
       metadata:
@@ -2603,7 +2591,7 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - healthcare
         - ai
     - name: classification
@@ -2620,7 +2608,7 @@ library:
         - category:standard
     - name: completeness-gate
       description: Runtime completeness gate contract for stream-review opt-in repositories.
-      source: https://github.com/cognovis/library-core/blob/main/standards/completeness-gate/completeness-gate.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/completeness-gate/
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -2629,46 +2617,10 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
-    - name: config-resolution
-      description: Config Resolution
-      source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/config-resolution.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
+        - category:standard-bundle
     - name: context-pointers
       description: Context Pointers — Canonical Schema
       source: https://github.com/cognovis/library-core/blob/main/standards/beads/context-pointers.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
-    - name: decision-brief
-      description: Decision Brief
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/decision-brief.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
-    - name: decision-gate
-      description: Human Decision Gate
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/decision-gate.md
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -2692,18 +2644,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: distribution-packaging
-      description: Distribution and Packaging
-      source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/distribution-packaging.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
     - name: execution-result-envelope
       description: Execution-Result Envelope Contract
       source: https://github.com/cognovis/library-core/blob/main/standards/execution-result-envelope.md
@@ -2720,7 +2660,7 @@ library:
           plane: dev
     - name: fhir-ig-authoring
       description: Architecture boundaries and minimal modeling conventions for reusable FHIR implementation guides.
-      source: https://github.com/cognovis/library-core/blob/main/standards/fhir-ig-authoring/fhir-ig-authoring.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/fhir-ig-authoring/
       tier: domain
       default_scope: ask
       metadata:
@@ -2739,12 +2679,12 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - fhir
         - implementation-guide
     - name: fhir-query-naming
       description: Naming conventions for query helpers that return FHIR resource types and resource-scoped properties.
-      source: https://github.com/cognovis/library-core/blob/main/standards/fhir-query-naming/fhir-query-naming.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/fhir-query-naming/
       tier: domain
       default_scope: ask
       metadata:
@@ -2763,11 +2703,11 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - fhir
     - name: fhir-sql-patterns
       description: SQL patterns for querying FHIR-shaped relational data without widening joins or creating N+1 lookups.
-      source: https://github.com/cognovis/library-core/blob/main/standards/fhir-sql-patterns/fhir-sql-patterns.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/fhir-sql-patterns/
       tier: domain
       default_scope: ask
       metadata:
@@ -2786,7 +2726,7 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - fhir
         - sql
     - name: flet
@@ -2864,69 +2804,21 @@ library:
         - origin:original
         - tier:domain
         - category:standard
-    - name: judge-eval-suite
-      description: Judge Eval Suite
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/judge-eval-suite.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
     - name: judge-layer
       description: Shared judge-layer contracts for action proposals, outcomes, provenance labels, mandates, decision gates, and judge evaluation suites.
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/judge-layer.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/judge-layer/
       tier: domain
       default_scope: ask
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - judge-layer
       metadata:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: judge-outcomes
-      description: Judge Outcomes
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/judge-outcomes.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
-    - name: mandate-schema
-      description: Mandate Schema
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/mandate-schema.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
-    - name: mcp-tool-policy-manifest
-      description: Deterministic MCP tool policy manifest for cognovis-tools call_tool authorization.
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/mcp-tool-policy-manifest.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
     - name: model-routing
       description: Model Routing Standard
       source: https://github.com/cognovis/library-core/blob/main/standards/dispatch/model-routing.md
@@ -2941,7 +2833,7 @@ library:
         - category:standard
     - name: no-mock-data
       description: Production code uses real data boundaries and seed fixtures instead of hardcoded mock responses.
-      source: https://github.com/cognovis/library-core/blob/main/standards/no-mock-data/no-mock-data.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/no-mock-data/
       tier: domain
       default_scope: ask
       metadata:
@@ -2960,7 +2852,7 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - project
         - testing
     - name: open-brain-http-client
@@ -3017,32 +2909,8 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: project-scaffold
-      description: Project Scaffold
-      source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/project-scaffold.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
-    - name: provenance-labels
-      description: Provenance Labels
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/provenance-labels.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
     - name: python
-      description: Python CLI Patterns
+      description: Dependency Injection fuer System-Calls
       source: https://github.com/cognovis/library-core/tree/main/standards/python/
       tier: domain
       default_scope: ask
@@ -3057,13 +2925,13 @@ library:
           plane: dev
     - name: python-cli-patterns
       description: Python CLI tool conventions — project structure, versioning, PyPI distribution, config resolution, update hints, packaging.
-      source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/python-cli-patterns.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/python-cli-patterns/
       tier: domain
       default_scope: ask
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -3137,7 +3005,7 @@ library:
           plane: dev
     - name: seam-contract
       description: Conventions for any state, event, or readiness signal that crosses a repository or component boundary.
-      source: https://github.com/cognovis/library-core/blob/main/standards/seam-contract/seam-contract.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/seam-contract/
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -3146,7 +3014,7 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
     - name: security
       description: Content Isolation Pattern
       source: https://github.com/cognovis/library-core/tree/main/standards/security/
@@ -3177,7 +3045,7 @@ library:
           plane: dev
     - name: sql-safety
       description: SQL query construction rules for safe filtering, casting, aggregation, and generated query maintenance.
-      source: https://github.com/cognovis/library-core/blob/main/standards/sql-safety/sql-safety.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/sql-safety/
       tier: domain
       default_scope: ask
       metadata:
@@ -3196,12 +3064,12 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - healthcare
         - sql
     - name: sse-first
       description: Server-Sent Events are the default browser realtime transport for one-way server-to-client state updates.
-      source: https://github.com/cognovis/library-core/blob/main/standards/sse-first/sse-first.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/sse-first/
       tier: domain
       default_scope: ask
       metadata:
@@ -3220,24 +3088,12 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - frontend
         - realtime
-    - name: stop-taxonomy
-      description: Stop Taxonomy and Operational Risk
-      source: https://github.com/cognovis/library-core/blob/main/standards/judge-layer/stop-taxonomy.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
     - name: tdd-api-contracts
       description: API contract testing conventions for endpoint status, shape, fields, errors, and environment-independent base URLs.
-      source: https://github.com/cognovis/library-core/blob/main/standards/tdd-api-contracts/tdd-api-contracts.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/tdd-api-contracts/
       tier: domain
       default_scope: ask
       metadata:
@@ -3256,12 +3112,12 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - api
         - testing
     - name: tenant-isolation
       description: Tenant-scoped data access rules for reads, writes, aggregates, and ownership checks.
-      source: https://github.com/cognovis/library-core/blob/main/standards/tenant-isolation/tenant-isolation.md
+      source: https://github.com/cognovis/library-core/tree/main/standards/tenant-isolation/
       tier: domain
       default_scope: ask
       metadata:
@@ -3280,33 +3136,9 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - category:standard
+        - category:standard-bundle
         - healthcare
         - security
-    - name: update-and-ux
-      description: Update Hints and UX Conventions
-      source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/update-and-ux.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
-    - name: versioning-release
-      description: Versioning and Release
-      source: https://github.com/cognovis/library-core/blob/main/standards/python-cli-patterns/versioning-release.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
     - name: workflow
       description: 'Agent Patterns: How Agents Collaborate in the Workflow'
       source: https://github.com/cognovis/library-core/tree/main/standards/workflow/

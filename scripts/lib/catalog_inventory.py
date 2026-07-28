@@ -434,7 +434,16 @@ def merge_catalog_entry(
         merged[key] = value
 
     if "tags" in existing_entry:
-        merged["tags"] = deepcopy(existing_entry["tags"])
+        if entry_is_inventory_generated(existing_entry):
+            generated_tags = list(generated_entry.get("tags") or [])
+            existing_tags = list(existing_entry.get("tags") or [])
+            merged["tags"] = generated_tags + [
+                tag
+                for tag in existing_tags
+                if tag not in generated_tags and not str(tag).startswith("category:")
+            ]
+        else:
+            merged["tags"] = deepcopy(existing_entry["tags"])
     if entry_is_inventory_generated(existing_entry):
         if "requires" not in generated_entry:
             merged.pop("requires", None)
@@ -608,7 +617,7 @@ def scan_standard_artifacts(standards_root: Path) -> list[Path]:
             part in IGNORED_PATH_PARTS for part in child.parts
         ):
             continue
-        if (child / "_triggers.yml").exists():
+        if (child / "_triggers.yml").exists() or (child / f"{child.name}.md").exists():
             artifacts.append(child)
             continue
         artifacts.extend(
