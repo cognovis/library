@@ -3567,6 +3567,49 @@ library:
               args:
                 - -y
                 - lsp-mcp-server
+    - name: markitdown
+      description: Official Microsoft MarkItDown MCP server for converting trusted local and remote documents to Markdown with all supported format dependencies
+      source: https://github.com/microsoft/markitdown/blob/main/packages/markitdown-mcp/README.md
+      species: external-capability
+      coding_strategy: mcp
+      capabilities:
+        stateless: true
+        streaming: false
+        auth: none
+      install:
+        mcp:
+          claude_code:
+            config_path: ~/.claude.json
+            snippet:
+              type: stdio
+              command: uvx
+              args:
+                - --python
+                - '3.12'
+                - --from
+                - markitdown-mcp==0.0.1a4
+                - markitdown-mcp
+          codex:
+            config_path: ~/.codex/config.toml
+            snippet:
+              command: uvx
+              args:
+                - --python
+                - '3.12'
+                - --from
+                - markitdown-mcp==0.0.1a4
+                - markitdown-mcp
+          cursor:
+            config_path: ~/.cursor/mcp.json
+            snippet:
+              type: stdio
+              command: uvx
+              args:
+                - --python
+                - '3.12'
+                - --from
+                - markitdown-mcp==0.0.1a4
+                - markitdown-mcp
     - name: filesystem
       description: Filesystem read/write access for Claude Desktop — required because Claude Desktop has no shell access; stateless per-call file operations via npx @modelcontextprotocol/server-filesystem
       coding_strategy: mcp
@@ -3802,7 +3845,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-      version: 2026.07.16
+      version: 2026.07.28
       tags:
         - origin:original
         - tier:core

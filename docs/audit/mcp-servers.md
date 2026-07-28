@@ -15,7 +15,7 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 |---|--------|---------|-----------|---------|-----------------|----------------|
 | 1 | `open-brain` | Codex (`~/.codex/config.toml`) | yes | partial (hooks only; no on-demand CLI) | **yes** | Ship both: hooks cover automatic capture; build `ob` CLI for on-demand queries; keep MCP for claude.ai/iOS |
 | 2 | `searxng` | Codex | yes | partial (`crwl`) | no | Build CLI wrapper (`srx`), then convert; drop MCP |
-| 3 | `markitdown` | Codex | yes | **yes** (`markitdown` binary) | no | Convert to CLI+Skill, drop MCP |
+| 3 | `markitdown` | Codex, Claude Code, Cursor | yes | **yes** (`markitdown` binary) | no | Use Microsoft's official `markitdown-mcp`; retire the private Node wrapper |
 | 4 | `playwright` | Codex | no (browser sessions) | yes (`playwright-cli`) | no | Keep MCP (stateful browser sessions) |
 | 5 | `executive-circle` | Codex | yes | no | **yes** | Ship both: build CLI wrapper for coding harnesses; keep MCP for claude.ai/iOS |
 | 6 | `pencil` | Codex + Claude Desktop | no (editor state, encrypted files) | no | no | Keep MCP (stateful, encrypted .pen format) |
@@ -77,22 +77,30 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 
 ### 3. `markitdown`
 
-**Harness:** Codex CLI, node stdio MCP (`~/code/ai/markitdown-mcp/server.mjs`).
+**Harness:** Codex CLI, Claude Code, and Cursor via Microsoft's official
+`markitdown-mcp` stdio server.
 
-**Capabilities:** `markitdown_convert` (file path), `markitdown_convert_url` — document-to-markdown conversion.
+**Capabilities:** `convert_to_markdown` accepts trusted `file:`, `http:`,
+`https:`, and `data:` URIs.
 
 **Stateless:** Yes.
 
-**Has CLI:** Yes — `/opt/homebrew/Caskroom/miniconda/base/bin/markitdown` binary exists.
+**Has CLI:** Yes. The official MCP distribution installs MarkItDown with all
+optional format dependencies.
 
 **Mobile-relevant:** No.
 
-**Recommendation:** Convert to CLI + Skill. The binary is already present. A one-line skill wrapper is sufficient.
+**Superseding decision (2026-07-28):** Keep document conversion on MCP because
+the fleet-wide document-routing policy already uses a typed MCP contract. Use
+Microsoft's official package instead of maintaining the private Node wrapper.
+Install through `uv` so PDF support does not depend on the Conda base
+environment.
 
 **Migration plan:**
-1. Create or extend a skill (e.g., `dev-tools:markitdown`) that calls `markitdown <path>` or `markitdown <url>`.
-2. Remove `markitdown` from `~/.codex/config.toml`.
-3. Decommission `~/code/ai/markitdown-mcp/` (or archive it).
+1. Install the versioned `markitdown-mcp` package through `uv`.
+2. Register the official stdio server in Codex, Claude Code, and Cursor.
+3. Smoke-test `convert_to_markdown` with a local PDF.
+4. Remove `~/code/ai/markitdown-mcp/`.
 
 ---
 
@@ -271,11 +279,11 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 
 ## ACTION LIST
 
-### Immediate: Drop MCP, CLI already exists
+### Immediate: Use the official upstream MCP distribution
 
-| Server | Action | CLI to use | Skill to create/extend |
-|--------|--------|------------|------------------------|
-| `markitdown` | Remove from `~/.codex/config.toml`; decommission `~/code/ai/markitdown-mcp/` | `markitdown` binary | `dev-tools:markitdown` |
+| Server | Action | Runtime package | Skill to create/extend |
+|--------|--------|-----------------|------------------------|
+| `markitdown` | Register Microsoft `markitdown-mcp` through `uv`; decommission `~/code/ai/markitdown-mcp/` | `markitdown-mcp==0.0.1a4` | None |
 
 ### Short-term: Build CLI wrapper, then convert
 
@@ -320,7 +328,7 @@ The goal is to identify which servers should be replaced by CLI + Skill pairs, w
 
 The following implementation beads should be created from this audit:
 
-1. **Convert `markitdown` to CLI+Skill** — build `dev-tools:markitdown` skill, drop MCP
+1. **Replace private MarkItDown MCP** — register Microsoft's official package and remove the local Node wrapper
 2. **Build `searxng` CLI wrapper** (`srx`) and `dev-tools:web-search` skill, drop MCP
 3. **Investigate `heypresto`** — determine CLI viability, build if feasible
 4. **Build `executive-circle` CLI** (`ec`) for coding harnesses
