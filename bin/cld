@@ -5,7 +5,8 @@
 #        cld -h | --help        Show wrapper flag help, then fall through to claude --help
 #
 # Wrapper flags (not passed to claude):
-#   --skip-perms    → translates to --dangerously-skip-permissions (overrides default auto mode)
+#   --skip-perms    → deprecated no-op; --dangerously-skip-permissions is the default
+#   --safe          → opt back into interactive permission prompts (--permission-mode auto)
 #   -v, --verbose   → enable verbose mode (reasoning traces + token counts)
 #   -c, --caveman   → enable caveman mode for this session (exports CAVEMAN_MODE=1)
 #   -b, --bead ID   → launch the implementation loop for the given bead ID
@@ -31,6 +32,7 @@ BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
 
 caveman=false
 skip_perms=false
+safe_perms=false
 verbose=false
 bead_id=""
 bead_quick_id=""
@@ -54,6 +56,10 @@ while (( $# > 0 )); do
             ;;
         --skip-perms)
             skip_perms=true
+            shift
+            ;;
+        --safe|--ask-perms)
+            safe_perms=true
             shift
             ;;
         -v|--verbose)
@@ -146,7 +152,8 @@ Wrapper flags (consumed by cld, not passed to claude):
   Session:
     -c,  --caveman              Enable caveman mode (CAVEMAN_MODE=1)
     -v,  --verbose              Pass --verbose to claude
-         --skip-perms           Use --dangerously-skip-permissions
+         --safe                 Interactive permission prompts (--permission-mode auto)
+         --skip-perms           Deprecated no-op; bypass is the default
     -h,  --help                 Show this help, then claude --help
 
 ────────────────────────────────────────────────────────────
@@ -180,10 +187,10 @@ if ${caveman}; then
     export CAVEMAN_MODE=1
 fi
 
-# Build final claude args — default to Claude permission auto unless explicitly bypassed
-if ${skip_perms}; then
-    echo -e "\033[0;33mWARNING: --skip-perms selected; forwarding --dangerously-skip-permissions to claude.\033[0m" >&2
-    claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
+# Build final claude args — bypass by default; the dcg PreToolUse guard packs stay
+# active regardless of permission mode and remain the hard stop for dangerous commands.
+if ${safe_perms}; then
+    claude_args=("--permission-mode" "auto" "${claude_args[@]}")
 elif [[ -n "$bead_review_id" ]]; then
     # dontAsk, not plan: --permission-mode plan was found (via multiple
     # independent live probes, CL-9knh) to categorically block MCP tool
@@ -191,7 +198,7 @@ elif [[ -n "$bead_review_id" ]]; then
     # honors --allowedTools/--disallowedTools without that blanket block.
     claude_args=("--permission-mode" "dontAsk" "${claude_args[@]}")
 else
-    claude_args=("--permission-mode" "auto" "${claude_args[@]}")
+    claude_args=("--dangerously-skip-permissions" "${claude_args[@]}")
 fi
 
 if ${verbose}; then
