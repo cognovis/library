@@ -89,6 +89,68 @@ def test_schema_accepts_catalog_routing_metadata(tmp_path: Path) -> None:
     assert_valid(data)
 
 
+def test_generated_merge_preserves_unrelated_category_and_bundle_description() -> None:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog_inventory import merge_catalog_entry
+
+    prompt_source = "https://github.com/example/core/blob/main/prompts/example.md"
+    merged_prompt = merge_catalog_entry(
+        {
+            "name": "example",
+            "description": "Example prompt.",
+            "source": prompt_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+            "tags": ["origin:original", "category:command"],
+        },
+        {
+            "name": "example",
+            "description": "Example prompt.",
+            "source": prompt_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+            "tags": ["origin:original"],
+        },
+    )
+    assert merged_prompt["tags"] == ["origin:original", "category:command"]
+
+    bundle_source = "https://github.com/example/core/tree/main/standards/python/"
+    merged_bundle = merge_catalog_entry(
+        {
+            "name": "python",
+            "description": "Python standards.",
+            "source": bundle_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+        },
+        {
+            "name": "python",
+            "description": "standard from test-core: python",
+            "source": bundle_source,
+            "metadata": {
+                "library": {
+                    "source_catalog": "test-core",
+                    "inventory": "convention-scan",
+                }
+            },
+            "tags": ["category:standard-bundle"],
+        },
+    )
+    assert merged_bundle["description"] == "Python standards."
+
+
 def test_library_yaml_sources_have_routing_metadata() -> None:
     data = yaml.safe_load(LIBRARY_PATH.read_text())
     by_name = {

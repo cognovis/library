@@ -437,13 +437,37 @@ def merge_catalog_entry(
         if entry_is_inventory_generated(existing_entry):
             generated_tags = list(generated_entry.get("tags") or [])
             existing_tags = list(existing_entry.get("tags") or [])
+            standard_category_tags = {
+                "category:standard",
+                "category:standard-bundle",
+            }
+            replaces_standard_category = bool(
+                standard_category_tags.intersection(generated_tags)
+            )
             merged["tags"] = generated_tags + [
                 tag
                 for tag in existing_tags
-                if tag not in generated_tags and not str(tag).startswith("category:")
+                if tag not in generated_tags
+                and not (
+                    replaces_standard_category and tag in standard_category_tags
+                )
             ]
         else:
             merged["tags"] = deepcopy(existing_entry["tags"])
+    generated_library_metadata = (
+        generated_entry.get("metadata", {}).get("library", {})
+        if isinstance(generated_entry.get("metadata"), dict)
+        else {}
+    )
+    generated_description_fallback = (
+        f"standard from {generated_library_metadata.get('source_catalog', '')}: "
+        f"{generated_entry.get('name', '')}"
+    )
+    if (
+        generated_entry.get("description") == generated_description_fallback
+        and existing_entry.get("description")
+    ):
+        merged["description"] = existing_entry["description"]
     if entry_is_inventory_generated(existing_entry):
         if "requires" not in generated_entry:
             merged.pop("requires", None)
@@ -723,7 +747,6 @@ def read_markdown_metadata(path: Path) -> tuple[dict[str, Any], str]:
         candidates = [
             path / f"{path.name}.md",
             path / "README.md",
-            *sorted(path.glob("*.md")),
         ]
         for candidate in candidates:
             if candidate.exists():

@@ -2910,7 +2910,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: python
-      description: Dependency Injection fuer System-Calls
+      description: Python CLI Patterns
       source: https://github.com/cognovis/library-core/tree/main/standards/python/
       tier: domain
       default_scope: ask
