@@ -179,14 +179,20 @@ def test_review_propagates_session_failure_and_still_flashes(tmp_path: Path) -> 
         (["-bq", "CL-safe"], "quick"),
     ],
 )
-def test_implementer_modes_keep_auto_permissions_and_worktree(
+def test_implementer_modes_bypass_permissions_and_keep_the_worktree(
     tmp_path: Path, args: list[str], execution_mode: str
 ) -> None:
+    """CL-i4wm: implementer modes inherit the bypass default, not `auto`.
+
+    `execution_mode=auto` names the implementation loop's execution mode; it is
+    unrelated to Claude's permission mode, which is bypassed here.
+    """
     result, claude_argv, review_argv, _ = _run_cld(tmp_path, args)
     assert result.returncode == 0, result.stderr
     assert not review_argv.exists()
     argv = json.loads(claude_argv.read_text(encoding="utf-8"))
-    assert _flag_value(argv, "--permission-mode") == "auto"
+    assert "--dangerously-skip-permissions" in argv
+    assert _flag_value(argv, "--permission-mode") is None
     assert _flag_value(argv, "--worktree") == "bead-CL-safe"
     assert _flag_value(argv, "--agent") is None
     prompt = argv[-1]
@@ -195,14 +201,52 @@ def test_implementer_modes_keep_auto_permissions_and_worktree(
     assert "canonical Session Close" in prompt
 
 
-def test_plain_launcher_only_bypasses_permissions_on_explicit_request(tmp_path: Path) -> None:
-    safe, safe_argv, _, _ = _run_cld(tmp_path, ["hello"])
-    assert safe.returncode == 0
-    assert _flag_value(json.loads(safe_argv.read_text()), "--permission-mode") == "auto"
+def test_plain_launcher_bypasses_permissions_by_default(tmp_path: Path) -> None:
+    """CL-i4wm: bypass is the default; the launcher no longer overrides the
+    `bypassPermissions` defaultMode already set in the harness settings. The dcg
+    PreToolUse guard packs run regardless of permission mode and stay the hard
+    stop for destructive commands."""
+    result, claude_argv, _, _ = _run_cld(tmp_path, ["hello"])
 
-    other = tmp_path / "other"
-    other.mkdir()
-    dangerous, dangerous_argv, _, _ = _run_cld(other, ["--skip-perms", "hello"])
-    assert dangerous.returncode == 0
-    assert "--dangerously-skip-permissions" in json.loads(dangerous_argv.read_text())
-    assert "WARNING" in dangerous.stderr
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(claude_argv.read_text(encoding="utf-8"))
+    assert "--dangerously-skip-permissions" in argv
+    assert _flag_value(argv, "--permission-mode") is None
+
+
+def test_safe_flag_opts_back_into_interactive_permissions(tmp_path: Path) -> None:
+    for flag in ("--safe", "--ask-perms"):
+        run_dir = tmp_path / flag.lstrip("-")
+        run_dir.mkdir()
+        result, claude_argv, _, _ = _run_cld(run_dir, [flag, "hello"])
+
+        assert result.returncode == 0, result.stderr
+        argv = json.loads(claude_argv.read_text(encoding="utf-8"))
+        assert _flag_value(argv, "--permission-mode") == "auto", flag
+        assert "--dangerously-skip-permissions" not in argv, flag
+
+
+def test_skip_perms_is_a_deprecated_no_op(tmp_path: Path) -> None:
+    """The flag survives for muscle memory; it must not change what is sent."""
+    plain_dir = tmp_path / "plain"
+    plain_dir.mkdir()
+    _, plain_argv, _, _ = _run_cld(plain_dir, ["hello"])
+
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    legacy, legacy_argv, _, _ = _run_cld(legacy_dir, ["--skip-perms", "hello"])
+
+    assert legacy.returncode == 0, legacy.stderr
+    assert json.loads(legacy_argv.read_text()) == json.loads(plain_argv.read_text())
+    assert "WARNING" not in legacy.stderr
+
+
+def test_reviewer_mode_keeps_dontask_rather_than_bypassing(tmp_path: Path) -> None:
+    """CL-9knh: the isolated reviewer needs MCP tools, which `plan` blocks and
+    `dontAsk` allows. Bypass-by-default must not reach this branch."""
+    result, claude_argv, _, _ = _run_cld(tmp_path, ["-br", "CL-safe"])
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(claude_argv.read_text(encoding="utf-8"))
+    assert _flag_value(argv, "--permission-mode") == "dontAsk"
+    assert "--dangerously-skip-permissions" not in argv
