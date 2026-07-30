@@ -698,15 +698,15 @@ def artifact_entry(
     else:
         typed_requires = []
 
-    if primitive_name == "agent":
-        required_standards = frontmatter.get("requires_standards")
-        if isinstance(required_standards, list):
-            typed_requires.extend(
-                f"standard:{name}"
-                for item in required_standards
-                if (name := str(item).strip())
-            )
+    required_standards = frontmatter.get("requires_standards")
+    if isinstance(required_standards, list):
+        typed_requires.extend(
+            f"standard:{name}"
+            for item in required_standards
+            if (name := str(item).strip())
+        )
 
+    if primitive_name == "agent":
         handler_dir = path.parent / f"{path.stem}-handlers"
         if handler_dir.is_dir():
             entry["handlers"] = [handler_dir.relative_to(root).as_posix()]
