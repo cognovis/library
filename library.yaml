@@ -1084,6 +1084,18 @@ library:
           inventory: convention-scan
           plane: dev
       version: 0.1.0
+    - name: context-discovery
+      description: 'use when: a reviewer, planner, or ad-hoc session needs the bounded repository/ADR context bead-implementation-loop uses for gate admission, without opening a Bead. NOT for: loop admission, ADR selectors, or writing loop state. boundary: read-only, on-demand route to the shared context provider.'
+      source: https://github.com/cognovis/library-core/blob/main/skills/context-discovery/SKILL.md
+      tags:
+        - beads
+        - adr
+        - context-provider
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: codex-guide
       description: Answer documentation questions about OpenAI Codex CLI, including subcommands, config.toml, sandbox modes, profiles, subagents, skills, and MCP integration. Does not run Codex; use acpx for cross-harness execution.
       source: https://github.com/cognovis/library-core/blob/main/skills/codex-guide/SKILL.md
