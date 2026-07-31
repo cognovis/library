@@ -88,7 +88,7 @@ EXPECTED_COGNOVIS_AGENTS = {
     "bead-orchestrator", "bead-spec-reviewer", "ci-monitor",
     "constraint-checker",
     "doc-changelog-updater", "feature-doc-updater", "holdout-validator",
-    "integration-test-runner", "learning-extractor", "pester-test-engineer",
+    "learning-extractor", "pester-test-engineer",
     "plan-reviewer", "playwright-tester", "prd-generator", "quick-fix", "researcher",
     "review-agent", "session-close", "test-author", "uat-validator",
     "verification-agent",
@@ -96,6 +96,19 @@ EXPECTED_COGNOVIS_AGENTS = {
 
 # Expected sussdorff agents
 EXPECTED_SUSSDORFF_AGENTS: set[str] = set()
+
+RETIRED_COGNOVIS_AGENTS = {
+    "integration-test-runner",
+    "test-engineer",
+}
+
+PRESERVED_COGNOVIS_AGENTS = {
+    "doc-changelog-updater",
+    "pester-test-engineer",
+    "plan-reviewer",
+}
+
+PRESERVED_COGNOVIS_SKILLS = {"spellcheck-test-engineer"}
 
 # Expected prompts (commands only)
 EXPECTED_PROMPTS = {
@@ -161,6 +174,16 @@ def test_cognovis_agents_registered():
     _, agents, _, _ = get_registered_names(library)
     missing = EXPECTED_COGNOVIS_AGENTS - agents
     assert not missing, f"Missing cognovis agents in library.yaml: {sorted(missing)}"
+
+
+def test_retired_agent_catalog_disposition_is_exact_name_aware():
+    """Only the two retired exact agent names leave the install catalog."""
+    library = load_library()
+    skills, agents, _, _ = get_registered_names(library)
+
+    assert RETIRED_COGNOVIS_AGENTS.isdisjoint(agents)
+    assert PRESERVED_COGNOVIS_AGENTS <= agents
+    assert PRESERVED_COGNOVIS_SKILLS <= skills
 
 
 def test_regression_bead_orchestrator_installs_spec_reviewer():

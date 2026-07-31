@@ -1540,7 +1540,7 @@ smoke_library_core() {
     done
 
     # Check agents exist
-    local agents=("researcher" "session-close" "test-engineer")
+    local agents=("researcher" "session-close" "plan-reviewer" "doc-changelog-updater" "pester-test-engineer")
     for agent in "${agents[@]}"; do
         if [[ -f "${library_core}/.claude/agents/${agent}.md" ]]; then
             pass "library-core/agent-exists: ${agent}.md"

@@ -2146,19 +2146,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: integration-test-runner
-      description: Autonomous agent that analyzes code changes, determines appropriate test targets, and executes integration tests to validate user-facing behavior.
-      source: https://github.com/cognovis/library-core/blob/main/agents/integration-test-runner.md
-      requires:
-        - mcp:open-brain
-      tags:
-        - origin:original
-        - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: judge-default
       description: Use when a side-effecting actor submits an Action Proposal and needs a pre-action authorization decision before returning ALLOW, BLOCK, REVISE, or ESCALATE.
       source: https://github.com/cognovis/library-core/blob/main/agents/judge-default.md
@@ -2350,19 +2337,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-        - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: test-engineer
-      description: 'Framework-agnostic test engineer that writes, reviews, and executes unit tests. Detects the project''s test framework automatically and applies appropriate patterns. Use PROACTIVELY when user requests: write unit tests, review test code, identify redundant tests, run tests, fix test failures, or analyze test results. MUST BE USED for all unit testing tasks.'
-      source: https://github.com/cognovis/library-core/blob/main/agents/test-engineer.md
-      requires:
-        - mcp:open-brain
-      tags:
-        - origin:original
         - tier:domain
       metadata:
         library:
