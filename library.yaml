@@ -1381,22 +1381,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: impl
-      description: Implement plan autonomously with DoD verification
-      source: https://github.com/cognovis/library-core/blob/main/skills/impl/SKILL.md
-      requires:
-        - skill:bead-reviewer
-        - skill:plan
-        - standard:english-only
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: infra-principles
       description: Infrastructure engineering principles for server work, deployments, and multi-agent collaboration. Use when working on servers, deploying services, writing deployment scripts, or coordinating parallel agent edits. Triggers on infrastructure, deploy, server, IaC, multi-agent, parallel edits.
       source: https://github.com/cognovis/library-core/blob/main/skills/infra-principles/SKILL.md
@@ -1487,27 +1471,44 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: parallelize
+      description: Which of these beads can we start at the same time? Answers with dependency, file-region and refactoring evidence rather than with bd ready. User-invoked only.
+      source: https://github.com/cognovis/library-core/blob/main/skills/parallelize/SKILL.md
+      requires:
+        - standard:english-only
+        - standard:no-emoji
+      scripts:
+        - path: scripts/collect-beads.py
+          role: helper
+          entrypoint: false
+          language: python
+          output_contract: json-envelope
+      tags:
+        - origin:original
+        - tier:domain
+        - beads
+        - refactoring
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          plane: dev
+          steward: cognovis-core
+          harness_support:
+            claude_code: supported
+            codex: supported
+          runtime_requirements:
+            binaries:
+              - bd
+              - uv
+          gascity:
+            exportable: false
     - name: people-query
       description: Query open-brain people-aware MCP tools to find discussions, stale contacts, and mentions for a named person.
       source: https://github.com/cognovis/library-core/blob/main/skills/people-query/SKILL.md
       tags:
         - origin:original
         - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: plan
-      description: Generate implementation plan with context, review, decisions, and test strategy
-      source: https://github.com/cognovis/library-core/blob/main/skills/plan/SKILL.md
-      requires:
-        - agent:plan-reviewer
-        - standard:english-only
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -3644,6 +3645,16 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
       version: 2026.05.15
+      tags:
+        - origin:original
+    - name: cognovis-runtime
+      description: Shared working context for runtime roles that answer a request inside a harness (Fusion workers, fuser and opinion agents, provider-backed roles). States that beads owns issue state and open-brain owns durable memory, that claims are cited as file:line, and that source is English. Carries no enforcement rules, which differ per harness, and says nothing about the harness running it.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-runtime.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+      version: 2026.07.31
       tags:
         - origin:original
   workflows:
