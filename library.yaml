@@ -1495,6 +1495,38 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: parallelize
+      description: Which of these beads can we start at the same time? Answers with dependency, file-region and refactoring evidence rather than with bd ready. User-invoked only.
+      source: https://github.com/cognovis/library-core/blob/main/skills/parallelize/SKILL.md
+      requires:
+        - standard:english-only
+        - standard:no-emoji
+      scripts:
+        - path: scripts/collect-beads.py
+          role: helper
+          entrypoint: false
+          language: python
+          output_contract: json-envelope
+      tags:
+        - origin:original
+        - tier:domain
+        - beads
+        - refactoring
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          plane: dev
+          steward: cognovis-core
+          harness_support:
+            claude: supported
+            codex: supported
+          runtime_requirements:
+            binaries:
+              - bd
+              - uv
+          gascity:
+            exportable: false
     - name: people-query
       description: Query open-brain people-aware MCP tools to find discussions, stale contacts, and mentions for a named person.
       source: https://github.com/cognovis/library-core/blob/main/skills/people-query/SKILL.md
