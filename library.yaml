@@ -925,13 +925,12 @@ library:
           inventory: convention-scan
           plane: dev
     - name: bead-implementation-loop
-      description: Implement one executable bead through the active harness, neutral opposite-family review, Means of Compliance, and canonical Session Close
+      description: Compatibility entry that routes one executable Bead to the Bead Loop Implementer without duplicating TDD, review, Means of Compliance, commit, worktree, or Session Close ownership.
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-implementation-loop/SKILL.md
       requires:
-        - skill:acpx-dispatch
+        - agent:bead-loop-implementer
         - skill:bead-execution-loop
         - skill:cognovis-beads
-        - skill:inject-standards
         - skill:session-close
         - standard:executive-pack
         - standard:english-only

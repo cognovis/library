@@ -12,10 +12,9 @@ def test_lean_review_loop_bundle_is_installable_from_catalog():
 
     requires = set(skills["bead-implementation-loop"]["requires"])
     assert requires == {
-        "skill:acpx-dispatch",
+        "agent:bead-loop-implementer",
         "skill:bead-execution-loop",
         "skill:cognovis-beads",
-        "skill:inject-standards",
         "skill:session-close",
         "standard:executive-pack",
         "standard:english-only",
