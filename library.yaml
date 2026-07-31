@@ -1519,7 +1519,7 @@ library:
           plane: dev
           steward: cognovis-core
           harness_support:
-            claude: supported
+            claude_code: supported
             codex: supported
           runtime_requirements:
             binaries:
