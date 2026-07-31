@@ -2068,6 +2068,8 @@ library:
       description: Deliver exactly one Bead in exactly one worktree through the shared Bead Execution Loop and exactly one Session Close.
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-loop-implementer.md
       requires:
+        - agent:plan-reviewer
+        - agent:doc-changelog-updater
         - skill:bead-execution-loop
         - skill:cognovis-beads
         - skill:session-close

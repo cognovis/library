@@ -43,6 +43,7 @@ def test_delivery_dependencies_preserve_ownership_boundaries() -> None:
     lead = set(_entry(catalog, "agents", "bead-lead")["requires"])
 
     assert {"skill:bead-execution-loop", "skill:session-close"} <= single
+    assert {"agent:plan-reviewer", "agent:doc-changelog-updater"} <= single
     assert {"skill:bead-execution-loop", "skill:session-close"} <= pack
     assert lead == {
         "agent:bead-loop-implementer",
