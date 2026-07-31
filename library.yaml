@@ -2182,7 +2182,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: plan-reviewer
-      description: Independent reviewer for implementation plans. Provides a second perspective on plans, identifying missing requirements, edge cases, and technical concerns. Appends structured review to plan files. Read-only for codebase — can only edit plan documents.
+      description: Optional read-only advisor for a bead implementation lead. Challenges the live capability and implementation plan after context admission and before executor dispatch, returning READY, REFINE, or HUMAN_DECISION without editing files.
       source: https://github.com/cognovis/library-core/blob/main/agents/plan-reviewer.md
       tags:
         - origin:original

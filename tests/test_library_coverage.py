@@ -203,6 +203,23 @@ def test_doc_changelog_updater_catalog_matches_conditional_loop_role():
     assert updater["requires"] == ["skill:inject-standards"]
 
 
+def test_plan_reviewer_catalog_matches_read_only_advisor_role():
+    """The retained plan advisor must not advertise plan-file mutation."""
+    agents = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("agents", [])
+    }
+    reviewer = agents["plan-reviewer"]
+
+    assert reviewer["description"] == (
+        "Optional read-only advisor for a bead implementation lead. Challenges "
+        "the live capability and implementation plan after context admission and "
+        "before executor dispatch, returning READY, REFINE, or HUMAN_DECISION "
+        "without editing files."
+    )
+    assert "requires" not in reviewer
+
+
 def test_regression_bead_orchestrator_installs_spec_reviewer():
     """The full Bead Claim preflight agent must ship with its orchestrator."""
     agents = {
