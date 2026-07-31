@@ -1389,22 +1389,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: impl
-      description: Implement plan autonomously with DoD verification
-      source: https://github.com/cognovis/library-core/blob/main/skills/impl/SKILL.md
-      requires:
-        - skill:bead-reviewer
-        - skill:plan
-        - standard:english-only
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: infra-principles
       description: Infrastructure engineering principles for server work, deployments, and multi-agent collaboration. Use when working on servers, deploying services, writing deployment scripts, or coordinating parallel agent edits. Triggers on infrastructure, deploy, server, IaC, multi-agent, parallel edits.
       source: https://github.com/cognovis/library-core/blob/main/skills/infra-principles/SKILL.md
@@ -1533,21 +1517,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: plan
-      description: Generate implementation plan with context, review, decisions, and test strategy
-      source: https://github.com/cognovis/library-core/blob/main/skills/plan/SKILL.md
-      requires:
-        - agent:plan-reviewer
-        - standard:english-only
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
       metadata:
         library:
           source_catalog: cognovis-library-core
