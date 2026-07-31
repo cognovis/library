@@ -90,6 +90,134 @@ def _bundle_project(tmp_path: Path) -> Path:
     return project
 
 
+def _mixed_dependency_project(tmp_path: Path) -> Path:
+    project = tmp_path / "mixed-consumer"
+    sources = tmp_path / "mixed-sources"
+    skill_source = sources / "helper"
+    project.mkdir()
+    skill_source.mkdir(parents=True)
+    (skill_source / "SKILL.md").write_text(
+        "---\nname: helper\ndescription: Mixed dependency fixture.\n---\n"
+    )
+    (sources / "workbench.just").write_text("workbench:\n    @echo mixed-ready\n")
+    catalog = {
+        "default_dirs": {
+            "skills": [
+                {"default": ".agents/skills/"},
+                {"claude_bridge": ".claude/skills/"},
+            ]
+        },
+        "library": {
+            "skills": [{"name": "helper", "source": str(skill_source)}],
+            "just_modules": [
+                {
+                    "name": "workbench",
+                    "source": str(sources / "workbench.just"),
+                    "requires": ["skill:helper"],
+                }
+            ],
+        },
+    }
+    (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+    return project
+
+
+def test_canonical_fusion_dry_run_resolves_complete_closure_without_mutation(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "fusion-consumer"
+    project.mkdir()
+    initialized = subprocess.run(
+        ["git", "init", "--quiet"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+    )
+    assert initialized.returncode == 0, initialized.stderr
+    before = sorted(path.relative_to(project) for path in project.rglob("*"))
+
+    result = _run(
+        project,
+        "just-module",
+        "use",
+        "fusion-harness",
+        "--dry-run",
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "dry-run"
+    assert payload["dependency_order"] == [
+        "pi-extension:acpx-workbench",
+        "pi-profile:pi-workbench",
+        "just-module:pi-workbench",
+        "pi-extension:fusion-harness",
+        "pi-profile:fusion-workhorse",
+        "pi-profile:fusion-sota",
+        "just-module:fusion-harness",
+    ]
+    assert {
+        Path(path).relative_to(project).as_posix()
+        for path in payload["target_paths"]
+    } == {
+        ".agents/pi/extensions/acpx-workbench",
+        ".agents/pi/extensions/fusion-harness",
+        ".agents/pi/profiles/pi-workbench.json",
+        ".agents/pi/profiles/fusion-workhorse.json",
+        ".agents/pi/profiles/fusion-sota.json",
+        ".agents/just/pi-workbench.just",
+        ".agents/just/fusion-harness.just",
+    }
+    assert sorted(path.relative_to(project) for path in project.rglob("*")) == before
+    assert not (project / "library.yaml").exists()
+    assert not (project / "Justfile").exists()
+
+
+def test_project_native_dry_run_resolves_fuzzy_root_name_like_apply(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+
+    planned = _run(project, "just-module", "use", "workb", "--dry-run")
+    assert planned.returncode == 0, planned.stderr or planned.stdout
+    assert json.loads(planned.stdout)["dependency_order"][-1] == (
+        "just-module:workbench"
+    )
+    assert not (project / ".agents").exists()
+
+    installed = _run(project, "just-module", "use", "workb")
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    assert (project / ".agents/just/workbench.just").is_file()
+
+
+def test_project_native_dry_run_and_apply_support_mixed_dependencies(
+    tmp_path: Path,
+) -> None:
+    project = _mixed_dependency_project(tmp_path)
+
+    planned = _run(project, "just-module", "use", "workbench", "--dry-run")
+    assert planned.returncode == 0, planned.stderr or planned.stdout
+    payload = json.loads(planned.stdout)
+    assert payload["dependency_order"] == [
+        "skill:helper",
+        "just-module:workbench",
+    ]
+    assert {
+        Path(path).relative_to(project).as_posix()
+        for path in payload["target_paths"]
+    } >= {
+        ".agents/skills/helper",
+        ".agents/just/workbench.just",
+    }
+    assert not (project / ".agents").exists()
+    assert not (project / ".library.lock").exists()
+
+    installed = _run(project, "just-module", "use", "workbench")
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    assert (project / ".agents/skills/helper/SKILL.md").is_file()
+    assert (project / ".agents/just/workbench.just").is_file()
+
+
 def test_project_native_dependency_lifecycle_and_just_import(tmp_path: Path) -> None:
     project = _project(tmp_path)
     justfile = project / "Justfile"
