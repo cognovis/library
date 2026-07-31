@@ -50,10 +50,13 @@ Usage examples:
 from __future__ import annotations
 
 import argparse
+import io
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 
 # Make `lib` importable when running as a script
@@ -998,6 +1001,7 @@ def _dispatch_use(
     dry_run: bool,
     use_json: bool,
     install_mode: str = "vendor",
+    resolve_project_native_dependencies: bool = True,
 ) -> int:
     """Dispatch to the correct primitive installer."""
     entry = lookup_entry(catalog, primitive, name, fuzzy=True)
@@ -1046,7 +1050,17 @@ def _dispatch_use(
         return _use_simple_file(args, repo_root, catalog, "workflow", name, scope, dry_run, use_json, harness, install_mode)
     elif primitive in {"pi-extension", "pi-profile", "just-module"}:
         return _use_project_native(
-            repo_root, catalog, primitive, name, scope, dry_run, use_json, install_mode
+            args,
+            repo_root,
+            catalog,
+            primitive,
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+            resolve_dependencies=resolve_project_native_dependencies,
         )
     elif primitive == "runtime-config":
         return _use_runtime_config(args, repo_root, catalog, name, scope, dry_run, use_json, harness, install_mode)
@@ -1213,6 +1227,7 @@ def _use_simple_file(
 
 
 def _use_project_native(
+    args: argparse.Namespace,
     repo_root: Path,
     catalog: dict,
     primitive: str,
@@ -1220,39 +1235,54 @@ def _use_project_native(
     scope: str,
     dry_run: bool,
     use_json: bool,
+    harness: str,
     install_mode: str,
+    *,
+    resolve_dependencies: bool = True,
 ) -> int:
     """Install one project-only Pi or Just artifact."""
     from lib.installers.project_native import install_project_native_file
     from lib.resolver import resolve_requires
 
     try:
-        if dry_run:
+        if dry_run and resolve_dependencies:
+            main_entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+            resolved_name = main_entry.get("name", name)
             install_order = resolve_requires(
-                catalog, primitive, name, repo_root, scope
+                catalog, primitive, resolved_name, repo_root, scope
             )
             operations: list[dict] = []
             target_paths: list[str] = []
             lockfile_changes: list[dict] = []
             for dependency_primitive, dependency_name in install_order:
-                if dependency_primitive not in {
-                    "pi-extension",
-                    "pi-profile",
-                    "just-module",
-                }:
-                    raise LibraryError(
-                        "Project-native dry-run dependencies must use "
-                        "pi-extension, pi-profile, or just-module types."
+                captured_stdout = io.StringIO()
+                with redirect_stdout(captured_stdout):
+                    dependency_exit = _dispatch_use(
+                        args,
+                        repo_root,
+                        catalog,
+                        dependency_primitive,
+                        dependency_name,
+                        scope,
+                        harness,
+                        True,
+                        True,
+                        install_mode,
+                        resolve_project_native_dependencies=False,
                     )
-                dependency_result = install_project_native_file(
-                    catalog=catalog,
-                    primitive=dependency_primitive,
-                    name=dependency_name,
-                    repo_root=repo_root,
-                    scope=scope,
-                    dry_run=True,
-                    install_mode=install_mode,
-                )
+                try:
+                    dependency_result = json.loads(captured_stdout.getvalue())
+                except json.JSONDecodeError as exc:
+                    raise LibraryError(
+                        f"Invalid dry-run result for "
+                        f"{dependency_primitive}:{dependency_name}."
+                    ) from exc
+                if dependency_exit != 0:
+                    if use_json:
+                        print_json(dependency_result)
+                    else:
+                        _print_human_result(dependency_result)
+                    return dependency_exit
                 operations.extend(dependency_result.get("operations", []))
                 target_paths.extend(dependency_result.get("target_paths", []))
                 lockfile_changes.extend(
@@ -1261,7 +1291,7 @@ def _use_project_native(
             result = dry_run_result(
                 operations,
                 summary=(
-                    f"Would install {primitive} '{name}' and "
+                    f"Would install {primitive} '{resolved_name}' and "
                     f"{len(install_order) - 1} required dependencies"
                 ),
                 target_paths=target_paths,
@@ -1281,7 +1311,7 @@ def _use_project_native(
                 name=name,
                 repo_root=repo_root,
                 scope=scope,
-                dry_run=False,
+                dry_run=dry_run,
                 install_mode=install_mode,
             )
         if use_json:
