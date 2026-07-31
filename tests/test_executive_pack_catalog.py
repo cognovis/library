@@ -64,6 +64,7 @@ def test_all_new_dependencies_resolve() -> None:
             ("skill", "skills"),
             ("agent", "agents"),
             ("standard", "standards"),
+            ("mcp", "mcp_servers"),
         )
     }
 
@@ -72,6 +73,7 @@ def test_all_new_dependencies_resolve() -> None:
             if entry["name"] not in {
                 "bead-execution-loop",
                 "bead-implementation-loop",
+                "parallelize",
                 "cohesive-bead-chain",
                 "bead-implementer",
                 "bead-change-reviewer",
