@@ -932,9 +932,6 @@ library:
         - skill:cognovis-beads
         - skill:inject-standards
         - skill:session-close
-        - agent:diff-risk-classifier
-        - agent:review-gates
-        - agent:seam-contract-reviewer
         - standard:english-only
       tags:
         - origin:original
@@ -2267,47 +2264,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: review-gates
-      description: Provider-neutral runner for the shift-left review gates — diff/scope risk classification, seam/security/decision gates, contract conformance, and commit-bound gate evidence. Any orchestrator (Sol/GPT, Codex, Opus) invokes the same deterministic handler scripts.
-      source: https://github.com/cognovis/library-core/blob/main/agents/review-gates.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-      handlers:
-        - agents/review-gates-handlers
-    - name: seam-contract-reviewer
-      description: Pre-implementation review lens for a cross-repo seam. Requires the seam-contract standard, runs the deterministic seam gate, and blocks a seam change that lacks an accepted contract. Provider-neutral (Sol/GPT, Codex, or Opus can run it).
-      source: https://github.com/cognovis/library-core/blob/main/agents/seam-contract-reviewer.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-      requires:
-        - standard:seam-contract
-    - name: session-close
-      description: 'Closes a coding session through exactly four durable states: ship, finalize, analyze, cleanup.'
-      source: https://github.com/cognovis/library-core/blob/main/agents/session-close.md
-      requires:
-        - mcp:cognovis-tools
-        - mcp:open-brain
-        - skill:session-close
-      tags:
-        - origin:original
-        - tier:core
       metadata:
         library:
           source_catalog: cognovis-library-core

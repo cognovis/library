@@ -11,7 +11,7 @@ Tests:
     4. sources map with only codex key is valid
   AK3:
     5. library.yaml bead-orchestrator entry has one Markdown source
-    6. library.yaml session-close entry has one Markdown source
+    6. library.yaml session-close skill entry has one Markdown source
     7. retired agents do not require source-shape coverage
     8. library.yaml still passes schema validation after sources migration
   AK4:
@@ -243,8 +243,8 @@ def test_agent_entry_sources_codex_only():
 # ---------------------------------------------------------------------------
 
 
-def _find_agent_entry(library: dict, name: str) -> dict | None:
-    for entry in library.get("library", {}).get("agents", []):
+def _find_entry(library: dict, section: str, name: str) -> dict | None:
+    for entry in library.get("library", {}).get(section, []):
         if entry.get("name") == name:
             return entry
     return None
@@ -253,7 +253,7 @@ def _find_agent_entry(library: dict, name: str) -> dict | None:
 def test_bead_orchestrator_uses_single_source():
     """library.yaml bead-orchestrator entry uses one Markdown source."""
     library = load_library()
-    entry = _find_agent_entry(library, "bead-orchestrator")
+    entry = _find_entry(library, "agents", "bead-orchestrator")
     assert entry is not None, "bead-orchestrator not found in library.yaml agents"
     assert "source" in entry, f"bead-orchestrator should use source:, found: {list(entry.keys())}"
     assert "sources" not in entry, "bead-orchestrator should not use dual sources"
@@ -261,14 +261,14 @@ def test_bead_orchestrator_uses_single_source():
     print("PASS test_bead_orchestrator_uses_single_source")
 
 
-def test_session_close_uses_single_source():
-    """library.yaml session-close entry uses one Markdown source."""
+def test_session_close_skill_uses_single_source():
+    """library.yaml session-close skill entry uses one Markdown source."""
     library = load_library()
-    entry = _find_agent_entry(library, "session-close")
-    assert entry is not None, "session-close not found in library.yaml agents"
+    entry = _find_entry(library, "skills", "session-close")
+    assert entry is not None, "session-close not found in library.yaml skills"
     assert "source" in entry, f"session-close should use source:, found: {list(entry.keys())}"
     assert "sources" not in entry, "session-close should not use dual sources"
-    assert entry["source"].endswith("/agents/session-close.md")
+    assert entry["source"].endswith("/skills/session-close/SKILL.md")
     print("PASS test_session_close_uses_single_source")
 
 

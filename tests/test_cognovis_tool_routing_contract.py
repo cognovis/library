@@ -21,7 +21,6 @@ BUILD_AGENT = REPO_ROOT / "scripts" / "build-agent.py"
 BEAD_CONSUMERS = {
     "bead-author",
     "bead-orchestrator",
-    "session-close",
 }
 
 

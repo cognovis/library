@@ -90,7 +90,7 @@ EXPECTED_COGNOVIS_AGENTS = {
     "doc-changelog-updater", "feature-doc-updater", "holdout-validator",
     "learning-extractor", "pester-test-engineer",
     "plan-reviewer", "playwright-tester", "prd-generator", "quick-fix", "researcher",
-    "review-agent", "session-close", "test-author", "uat-validator",
+    "review-agent", "test-author", "uat-validator",
     "verification-agent",
 }
 
