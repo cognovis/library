@@ -3619,6 +3619,16 @@ library:
       version: 2026.05.15
       tags:
         - origin:original
+    - name: cognovis-runtime
+      description: Shared working context for runtime roles that answer a request inside a harness (Fusion workers, fuser and opinion agents, provider-backed roles). States that beads owns issue state and open-brain owns durable memory, that claims are cited as file:line, and that source is English. Carries no enforcement rules, which differ per harness, and says nothing about the harness running it.
+      source: https://github.com/cognovis/library-core/blob/main/agent-bases/cognovis-runtime.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+      version: 2026.07.31
+      tags:
+        - origin:original
   workflows:
     - name: bead-review
       description: End-to-end bead spec review workflow. Runs bead-reviewer against a bead ID and surfaces findings with a structured verdict. Use when reviewing a bead before orchestration or auditing spec quality.
