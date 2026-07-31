@@ -34,7 +34,9 @@ def _entry(catalog: dict, kind: str, name: str) -> dict:
     return next(entry for entry in catalog["library"][kind] if entry["name"] == name)
 
 
-def test_catalog_resolves_loop_to_owned_dispatcher_bundle(tmp_path: Path) -> None:
+def test_catalog_resolves_legacy_loop_through_the_owned_worker_bundle(
+    tmp_path: Path,
+) -> None:
     catalog = _catalog()
     dispatch = _entry(catalog, "skills", "acpx-dispatch")
     loop = _entry(catalog, "skills", "bead-implementation-loop")
@@ -43,7 +45,7 @@ def test_catalog_resolves_loop_to_owned_dispatcher_bundle(tmp_path: Path) -> Non
         "https://github.com/cognovis/library-core/blob/main/"
         "skills/acpx-dispatch/SKILL.md"
     )
-    assert loop["requires"][0] == "skill:acpx-dispatch"
+    assert loop["requires"][0] == "agent:bead-loop-implementer"
     assert dispatch["requires"] == [
         "agent:judge-default",
         "standard:english-only",
@@ -64,6 +66,7 @@ def test_catalog_resolves_loop_to_owned_dispatcher_bundle(tmp_path: Path) -> Non
         "bead-implementation-loop",
         tmp_path,
     )
+    assert ("agent", "bead-loop-implementer") in install_order
     assert ("skill", "acpx-dispatch") in install_order
 
 

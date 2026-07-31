@@ -925,14 +925,42 @@ library:
           inventory: convention-scan
           plane: dev
     - name: bead-implementation-loop
-      description: Implement one executable bead through the active harness, neutral opposite-family review, Means of Compliance, and canonical Session Close
+      description: Compatibility entry that routes one executable Bead to the Bead Loop Implementer without duplicating TDD, review, Means of Compliance, commit, worktree, or Session Close ownership.
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-implementation-loop/SKILL.md
       requires:
-        - skill:acpx-dispatch
+        - agent:bead-loop-implementer
+        - skill:bead-execution-loop
         - skill:cognovis-beads
-        - skill:inject-standards
         - skill:session-close
+        - standard:executive-pack
         - standard:english-only
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: bead-execution-loop
+      description: Execute one admitted bead through RED/GREEN implementation, opposite-family repair review, focused Means of Compliance, and one bead commit without owning a worktree or Session Close.
+      source: https://github.com/cognovis/library-core/blob/main/skills/bead-execution-loop/SKILL.md
+      requires:
+        - agent:bead-implementer
+        - agent:bead-change-reviewer
+        - skill:acpx-dispatch
+        - standard:executive-pack
+        - standard:workflow
+        - standard:model-routing
+        - standard:english-only
+        - standard:no-emoji
+      scripts:
+        - path: skills/bead-execution-loop/scripts/execution_contract.py
+          role: entrypoint
+          entrypoint: true
+          language: python
+          output_contract: json-envelope
       tags:
         - origin:original
         - tier:core
@@ -1184,8 +1212,11 @@ library:
         - tier:domain
       requires:
         - agent:cohesive-bead-chain-orchestrator
+        - agent:executive-pack-agent
         - agent:judge-default
+        - skill:bead-execution-loop
         - standard:english-only
+        - standard:executive-pack
         - standard:judge-layer
         - standard:no-emoji
     - name: collmex-cli
@@ -1469,9 +1500,13 @@ library:
           inventory: convention-scan
           plane: dev
     - name: parallelize
-      description: Which of these beads can we start at the same time? Answers with dependency, file-region and refactoring evidence rather than with bd ready. User-invoked only.
+      description: Independently reload explicit cross-repository Beads and propose repository-scoped Executive Packs with dependency, symbol-region, TDD-seam, and human-gate evidence. User-invoked and read-only.
       source: https://github.com/cognovis/library-core/blob/main/skills/parallelize/SKILL.md
       requires:
+        - agent:plan-reviewer
+        - skill:cognovis-beads
+        - mcp:lsp
+        - standard:executive-pack
         - standard:english-only
         - standard:no-emoji
       scripts:
@@ -1995,6 +2030,89 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: bead-implementer
+      description: Implement one admitted bead in an assigned worktree through vertical TDD slices while remaining hot for repair rounds.
+      source: https://github.com/cognovis/library-core/blob/main/agents/bead-implementer.md
+      requires:
+        - standard:executive-pack
+        - standard:workflow
+        - standard:english-only
+        - standard:no-emoji
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: bead-change-reviewer
+      description: Cold opposite-family reviewer for one bead candidate, kept hot only across that bead's repair rounds.
+      source: https://github.com/cognovis/library-core/blob/main/agents/bead-change-reviewer.md
+      requires:
+        - standard:executive-pack
+        - standard:model-routing
+        - standard:english-only
+        - standard:no-emoji
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:review
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: bead-loop-implementer
+      description: Deliver exactly one Bead in exactly one worktree through the shared Bead Execution Loop and exactly one Session Close.
+      source: https://github.com/cognovis/library-core/blob/main/agents/bead-loop-implementer.md
+      requires:
+        - agent:plan-reviewer
+        - agent:doc-changelog-updater
+        - skill:bead-execution-loop
+        - skill:cognovis-beads
+        - skill:session-close
+        - standard:executive-pack
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: bead-lead
+      description: Cheap dependency-only coordinator over explicit Beads, launching one Bead Loop Implementer per ready Bead without source or pack analysis.
+      source: https://github.com/cognovis/library-core/blob/main/agents/bead-lead.md
+      requires:
+        - agent:bead-loop-implementer
+        - skill:cognovis-beads
+        - skill:cmux-bead-dispatch
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: bead-fleet-lead
+      description: Deprecated compatibility redirect to the cheap dependency-only Bead Lead.
+      source: https://github.com/cognovis/library-core/blob/main/agents/bead-fleet-lead.md
+      requires:
+        - agent:bead-lead
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: bead-orchestrator
       description: 'Deprecated compatibility redirect to the installed bead implementation loop'
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
@@ -2037,7 +2155,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: cohesive-bead-chain-orchestrator
-      description: Execute a classifier-approved chain of two to four small dependent beads in one worktree with bounded cross-provider adversarial review. Use only when invoked by the cohesive-bead-chain skill with an eligible policy envelope.
+      description: Compatibility redirect that delivers an eligible repository-local chain as one Executive Pack.
       source: https://github.com/cognovis/library-core/blob/main/agents/cohesive-bead-chain-orchestrator.md
       metadata:
         library:
@@ -2048,8 +2166,28 @@ library:
         - origin:original
         - tier:domain
       requires:
+        - agent:executive-pack-agent
+    - name: executive-pack-agent
+      description: Persistent cmux-pane orchestrator for one repository-scoped Executive Pack, one worktree, and one Session Close.
+      source: https://github.com/cognovis/library-core/blob/main/agents/executive-pack-agent.md
+      requires:
+        - agent:doc-changelog-updater
+        - agent:plan-reviewer
+        - skill:acpx-dispatch
+        - skill:bead-execution-loop
         - skill:cognovis-beads
         - skill:session-close
+        - standard:executive-pack
+        - standard:model-routing
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: constraint-checker
       description: 'Verifies SLOs, security defaults, and performance constraints against a built artifact. Use proactively after holdout validation to check non-functional requirements. Read-only and execute-only: never modifies code. Information barrier: sees only artifact and constraint definitions.'
       source: https://github.com/cognovis/library-core/blob/main/agents/constraint-checker.md
@@ -2334,6 +2472,26 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: topic-agent
+      default_scope: global
+      handlers:
+        - agents/topic-agent-handlers
+      description: Persistent cmux-workspace coordinator for human-approved cross-repository Executive Packs and one content-level Topic Finalize.
+      source: https://github.com/cognovis/library-core/blob/main/agents/topic-agent.md
+      requires:
+        - agent:executive-pack-agent
+        - skill:cmux
+        - skill:cmux-workspace
+        - standard:executive-pack
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
   prompts:
     - name: compact-reference
       description: Compact reference file(s) using validation-driven workflow (single file or whole skill)
@@ -2353,6 +2511,20 @@ library:
       tags:
         - origin:original
         - tier:domain
+        - category:command
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: topic
+      description: Launch a human-approved complex Topic as one cmux workspace with one persistent pane per Executive Pack.
+      source: https://github.com/cognovis/library-core/blob/main/prompts/topic.md
+      requires:
+        - agent:topic-agent
+      tags:
+        - origin:original
+        - tier:core
         - category:command
       metadata:
         library:
@@ -3146,6 +3318,21 @@ library:
         - origin:original
         - tier:domain
         - category:standard-bundle
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: executive-pack
+      description: Ownership boundaries for one-Bead delivery, repository-scoped Executive Packs, and cross-repository Topic finalization.
+      source: https://github.com/cognovis/library-core/blob/main/standards/executive-pack/executive-pack.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+        - workflow:beads
       metadata:
         library:
           source_catalog: cognovis-library-core
