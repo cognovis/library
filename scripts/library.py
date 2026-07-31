@@ -1224,17 +1224,66 @@ def _use_project_native(
 ) -> int:
     """Install one project-only Pi or Just artifact."""
     from lib.installers.project_native import install_project_native_file
+    from lib.resolver import resolve_requires
 
     try:
-        result = install_project_native_file(
-            catalog=catalog,
-            primitive=primitive,
-            name=name,
-            repo_root=repo_root,
-            scope=scope,
-            dry_run=dry_run,
-            install_mode=install_mode,
-        )
+        if dry_run:
+            install_order = resolve_requires(
+                catalog, primitive, name, repo_root, scope
+            )
+            operations: list[dict] = []
+            target_paths: list[str] = []
+            lockfile_changes: list[dict] = []
+            for dependency_primitive, dependency_name in install_order:
+                if dependency_primitive not in {
+                    "pi-extension",
+                    "pi-profile",
+                    "just-module",
+                }:
+                    raise LibraryError(
+                        "Project-native dry-run dependencies must use "
+                        "pi-extension, pi-profile, or just-module types."
+                    )
+                dependency_result = install_project_native_file(
+                    catalog=catalog,
+                    primitive=dependency_primitive,
+                    name=dependency_name,
+                    repo_root=repo_root,
+                    scope=scope,
+                    dry_run=True,
+                    install_mode=install_mode,
+                )
+                operations.extend(dependency_result.get("operations", []))
+                target_paths.extend(dependency_result.get("target_paths", []))
+                lockfile_changes.extend(
+                    dependency_result.get("lockfile_changes", [])
+                )
+            result = dry_run_result(
+                operations,
+                summary=(
+                    f"Would install {primitive} '{name}' and "
+                    f"{len(install_order) - 1} required dependencies"
+                ),
+                target_paths=target_paths,
+                harness_routing=None,
+                conflict_policy="overwrite",
+                lockfile_changes=lockfile_changes,
+                requires_user_confirmation=False,
+            )
+            result["dependency_order"] = [
+                f"{dependency_primitive}:{dependency_name}"
+                for dependency_primitive, dependency_name in install_order
+            ]
+        else:
+            result = install_project_native_file(
+                catalog=catalog,
+                primitive=primitive,
+                name=name,
+                repo_root=repo_root,
+                scope=scope,
+                dry_run=False,
+                install_mode=install_mode,
+            )
         if use_json:
             print_json(result)
         else:

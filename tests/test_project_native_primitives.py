@@ -90,6 +90,57 @@ def _bundle_project(tmp_path: Path) -> Path:
     return project
 
 
+def test_canonical_fusion_dry_run_resolves_complete_closure_without_mutation(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "fusion-consumer"
+    project.mkdir()
+    initialized = subprocess.run(
+        ["git", "init", "--quiet"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+    )
+    assert initialized.returncode == 0, initialized.stderr
+    before = sorted(path.relative_to(project) for path in project.rglob("*"))
+
+    result = _run(
+        project,
+        "just-module",
+        "use",
+        "fusion-harness",
+        "--dry-run",
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "dry-run"
+    assert payload["dependency_order"] == [
+        "pi-extension:acpx-workbench",
+        "pi-profile:pi-workbench",
+        "just-module:pi-workbench",
+        "pi-extension:fusion-harness",
+        "pi-profile:fusion-workhorse",
+        "pi-profile:fusion-sota",
+        "just-module:fusion-harness",
+    ]
+    assert {
+        Path(path).relative_to(project).as_posix()
+        for path in payload["target_paths"]
+    } == {
+        ".agents/pi/extensions/acpx-workbench",
+        ".agents/pi/extensions/fusion-harness",
+        ".agents/pi/profiles/pi-workbench.json",
+        ".agents/pi/profiles/fusion-workhorse.json",
+        ".agents/pi/profiles/fusion-sota.json",
+        ".agents/just/pi-workbench.just",
+        ".agents/just/fusion-harness.just",
+    }
+    assert sorted(path.relative_to(project) for path in project.rglob("*")) == before
+    assert not (project / "library.yaml").exists()
+    assert not (project / "Justfile").exists()
+
+
 def test_project_native_dependency_lifecycle_and_just_import(tmp_path: Path) -> None:
     project = _project(tmp_path)
     justfile = project / "Justfile"

@@ -173,6 +173,35 @@ sources:
       tags:
         - first-party
         - team
+    - name: cognovis-pi
+      source: https://github.com/cognovis/cognovis-pi
+      description: Cognovis Pi extensions, profiles, and repository-local Just modules.
+      visibility: private
+      owner: cognovis
+      audience: team
+      local_path: /Users/malte/code/library/cognovis-pi
+      writable: true
+      content_types:
+        - pi_extensions
+        - pi_profiles
+        - just_modules
+      scope:
+        topics:
+          - team
+          - pi
+          - fusion
+          - workbench
+        excludes:
+          - personal
+      skeleton:
+        pi:
+          - extensions/
+          - profiles/
+          - just/
+      notes: First-party source for project-local Pi workbenches and Fusion harness tooling.
+      tags:
+        - first-party
+        - team
   marketplaces:
     - name: anthropic-official
       source: https://github.com/anthropics
@@ -3666,6 +3695,115 @@ library:
           inventory: convention-scan
       tags:
         - origin:original
+  pi_extensions:
+    - name: acpx-workbench
+      description: Self-contained observable clean-room Pi provider and launcher bundle.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/acpx-workbench
+      bundle: true
+      entrypoint: index.ts
+      version: 2.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - workbench
+    - name: fusion-harness
+      description: Cognovis Fusion Harness with ACPX-backed model roles.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-harness
+      bundle: true
+      entrypoint: fusion-harness.ts
+      license: MIT
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - fusion
+        - adversarial
+  pi_profiles:
+    - name: pi-workbench
+      description: Hash-pinned clean-room workbench profile and provider policy.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/pi-workbench.json
+      requires:
+        - pi-extension:acpx-workbench
+      version: 2.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - workbench
+    - name: fusion-workhorse
+      description: Cost-conscious Fusion architect, builder, reviewer, and validator roles.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-workhorse.json
+      requires:
+        - pi-profile:pi-workbench
+        - pi-extension:fusion-harness
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - fusion
+        - workhorse
+    - name: fusion-sota
+      description: Strongest configured Fusion architect, builder, reviewer, and validator roles.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-sota.json
+      requires:
+        - pi-profile:pi-workbench
+        - pi-extension:fusion-harness
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - fusion
+        - sota
+  just_modules:
+    - name: pi-workbench
+      description: Repository-local workbench, session, and sessions operator recipes.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/just/pi-workbench.just
+      requires:
+        - pi-profile:pi-workbench
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - just
+        - workbench
+    - name: fusion-harness
+      description: Repository-local Fusion workhorse and SOTA operator recipes.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/just/fusion-harness.just
+      requires:
+        - just-module:pi-workbench
+        - pi-profile:fusion-workhorse
+        - pi-profile:fusion-sota
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - just
+        - fusion
   runtime_configs:
     - name: orchestrator-config
       description: 'Composed global orchestrator-config.yml — routing baseline (model tiers, perspective_policy, route_profiles; opus routing, active-context adapters) merged with the global-only overlay (bead_claim/effort_classifier). Deployed to ~/.agents/orchestrator-config.yml by library sync; drift-audited by library audit.'
