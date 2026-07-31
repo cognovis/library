@@ -272,6 +272,68 @@ def test_project_native_dependency_lifecycle_and_just_import(tmp_path: Path) -> 
     assert not (project / ".agents/just/Justfile").exists()
 
 
+def test_just_module_bootstraps_missing_root_justfile(tmp_path: Path) -> None:
+    """A project without a root justfile still gets a runnable entry point.
+
+    `just` only discovers a justfile in the invocation directory or a parent,
+    so the generated .agents/just/Justfile is unreachable on its own.
+    """
+    project = _project(tmp_path)
+    (project / "Justfile").unlink()
+
+    installed = _run(project, "just-module", "use", "workbench")
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    root = project / "Justfile"
+    assert root.is_file()
+    assert "import? '.agents/just/Justfile'" in root.read_text()
+
+    if shutil.which("just"):
+        listed = subprocess.run(
+            ["just", "--list"], cwd=project, capture_output=True, text=True
+        )
+        assert listed.returncode == 0, listed.stderr
+        assert "workbench" in listed.stdout
+
+        # Recipes are written against repository-root-relative paths, so the
+        # working directory must be the repository root, not .agents/just.
+        (project / ".agents/just/workbench.just").write_text(
+            "workbench:\n    @pwd\n"
+        )
+        ran = subprocess.run(
+            ["just", "workbench"], cwd=project, capture_output=True, text=True
+        )
+        assert ran.returncode == 0, ran.stderr
+        assert ran.stdout.strip() == str(project.resolve())
+
+    removed = _run(project, "just-module", "remove", "workbench")
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    assert not root.exists()
+
+
+def test_just_module_preserves_hand_written_root_justfile(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    root = project / "Justfile"
+    root.write_text("set positional-arguments\n\nbuild:\n    @echo building\n")
+
+    installed = _run(project, "just-module", "use", "workbench")
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    text = root.read_text()
+    assert "build:\n    @echo building\n" in text
+    assert "import? '.agents/just/Justfile'" in text
+    assert text.count("import?") == 1
+
+    # Re-installing must not stack duplicate managed blocks.
+    again = _run(project, "just-module", "use", "workbench")
+    assert again.returncode == 0, again.stderr or again.stdout
+    assert root.read_text() == text
+
+    removed = _run(project, "just-module", "remove", "workbench")
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    survivor = root.read_text()
+    assert "build:\n    @echo building\n" in survivor
+    assert "import?" not in survivor
+
+
 def test_pi_extension_bundle_lifecycle(tmp_path: Path) -> None:
     project = _bundle_project(tmp_path)
     target = project / ".agents/pi/extensions/workbench"

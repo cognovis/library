@@ -32,6 +32,19 @@ PROJECT_NATIVE_TARGETS = {
 }
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+# `just` only discovers a justfile in the invocation directory or one of its
+# parents, and it resolves recipe-relative paths against the directory holding
+# the *root* justfile. A generated aggregator that lives under .agents/just/ is
+# therefore never found from the repository root, and even when passed via
+# --justfile it runs with .agents/just/ as the working directory, which breaks
+# the repository-root-relative paths every just-module recipe is written
+# against. The aggregator stays where it is (Library owns that file) and a
+# managed import block in the root justfile provides the entry point.
+JUST_ROOT_BLOCK_BEGIN = "# >>> library:just-modules >>>"
+JUST_ROOT_BLOCK_END = "# <<< library:just-modules <<<"
+_ROOT_JUSTFILE_NAMES = ("justfile", "Justfile", ".justfile", "JUSTFILE")
+_DEFAULT_ROOT_JUSTFILE = "Justfile"
+
 
 def require_project_native_request(primitive: str, name: str, scope: str) -> None:
     """Reject unsupported scope or unsafe names before filesystem mutation."""
@@ -97,6 +110,106 @@ def _remove_target(target: Path) -> None:
         shutil.rmtree(str(target))
 
 
+def _aggregator_import_path() -> str:
+    """Return the root-justfile import path for the generated aggregator."""
+    return (PROJECT_NATIVE_TARGETS["just-module"] / "Justfile").as_posix()
+
+
+def find_root_justfile(repo_root: Path) -> Path | None:
+    """Return the existing root justfile, honouring every name `just` accepts."""
+    root = repo_root.resolve()
+    for name in _ROOT_JUSTFILE_NAMES:
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _managed_block() -> str:
+    # `import?` keeps the root justfile valid when the aggregator is absent,
+    # which is the state right after the last just-module is removed.
+    return (
+        f"{JUST_ROOT_BLOCK_BEGIN}\n"
+        "# Managed by Library. Edits inside this block are overwritten.\n"
+        f"import? '{_aggregator_import_path()}'\n"
+        f"{JUST_ROOT_BLOCK_END}\n"
+    )
+
+
+def _imports_aggregator(text: str) -> bool:
+    """Report whether a justfile already imports the generated aggregator."""
+    pattern = re.compile(
+        r"^\s*import\??\s+['\"](?:\./)?"
+        + re.escape(_aggregator_import_path())
+        + r"['\"]",
+        re.MULTILINE,
+    )
+    return bool(pattern.search(text))
+
+
+def _strip_managed_block(text: str) -> str:
+    """Drop the managed import block, leaving hand-written content untouched."""
+    lines = text.splitlines(keepends=True)
+    kept: list[str] = []
+    inside = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == JUST_ROOT_BLOCK_BEGIN:
+            inside = True
+            continue
+        if stripped == JUST_ROOT_BLOCK_END:
+            inside = False
+            continue
+        if not inside:
+            kept.append(line)
+    return "".join(kept)
+
+
+def _write_root_justfile_entrypoint(repo_root: Path, has_modules: bool) -> None:
+    """Keep the root justfile's managed import block in sync with the lockfile.
+
+    Without this the aggregator is unreachable: `just <recipe>` from the
+    repository root fails with "no justfile found".
+    """
+    root = repo_root.resolve()
+    existing = find_root_justfile(root)
+    target = existing if existing is not None else root / _DEFAULT_ROOT_JUSTFILE
+    if target.resolve().parent != root:
+        raise InstallError(f"Refusing to write root justfile outside {root}.")
+
+    current = existing.read_text() if existing is not None else ""
+    remainder = _strip_managed_block(current)
+
+    if not has_modules:
+        if existing is None:
+            return
+        if current == remainder:
+            return
+        if remainder.strip():
+            existing.write_text(remainder)
+        else:
+            existing.unlink()
+        return
+
+    # A hand-maintained import already wires the aggregator up: leave the file
+    # byte-identical rather than adding a duplicate import.
+    if _imports_aggregator(remainder):
+        if current != remainder:
+            existing.write_text(remainder)  # type: ignore[union-attr]
+        return
+
+    if not remainder.strip():
+        target.write_text(_managed_block())
+        return
+    if remainder.endswith("\n\n"):
+        separator = ""
+    elif remainder.endswith("\n"):
+        separator = "\n"
+    else:
+        separator = "\n\n"
+    target.write_text(remainder + separator + _managed_block())
+
+
 def _write_just_aggregator(repo_root: Path, lock_data: dict[str, Any]) -> None:
     root = repo_root.resolve()
     base = (root / PROJECT_NATIVE_TARGETS["just-module"]).resolve()
@@ -116,6 +229,7 @@ def _write_just_aggregator(repo_root: Path, lock_data: dict[str, Any]) -> None:
     if not imports:
         if aggregator.exists():
             aggregator.unlink()
+        _write_root_justfile_entrypoint(root, has_modules=False)
         return
     base.mkdir(parents=True, exist_ok=True)
     aggregator.write_text(
@@ -123,6 +237,7 @@ def _write_just_aggregator(repo_root: Path, lock_data: dict[str, Any]) -> None:
         + "\n".join(sorted(imports))
         + "\n"
     )
+    _write_root_justfile_entrypoint(root, has_modules=True)
 
 
 def install_project_native_file(
@@ -181,7 +296,18 @@ def install_project_native_file(
                                 / "Justfile"
                             ),
                             "details": f"include Just module '{item_name}'",
-                        }
+                        },
+                        {
+                            "operation": "write_just_root_entrypoint",
+                            "path": str(
+                                find_root_justfile(repo_root)
+                                or repo_root / _DEFAULT_ROOT_JUSTFILE
+                            ),
+                            "details": (
+                                "add managed import of "
+                                f"{_aggregator_import_path()} to the root justfile"
+                            ),
+                        },
                     ]
                     if primitive == "just-module"
                     else []
