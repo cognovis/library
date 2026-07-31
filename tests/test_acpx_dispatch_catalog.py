@@ -51,10 +51,12 @@ def test_catalog_resolves_loop_to_owned_dispatcher_bundle(tmp_path: Path) -> Non
         "standard:model-routing",
         "standard:no-emoji",
     ]
+    # ADR-0009 withdrew the durable-state module and moved the review contract to
+    # bead-implementation-loop, which ships its scripts by convention scan. The
+    # dispatcher declares exactly one script; declaring the other two would make a
+    # fresh install fetch files that no longer exist.
     assert [script["path"] for script in dispatch["scripts"]] == [
         "skills/acpx-dispatch/scripts/acpx-dispatch.py",
-        "skills/acpx-dispatch/scripts/dispatch_state.py",
-        "skills/acpx-dispatch/scripts/review_contract.py",
     ]
     install_order = resolve_requires(
         catalog,
@@ -112,14 +114,18 @@ def test_catalog_backed_cli_install_vendors_runnable_dispatcher(
     assert json.loads(install.stdout)["status"] == "ok"
     installed = project / ".agents" / "skills" / "acpx-dispatch"
     assert (installed / "SKILL.md").is_file()
-    assert (installed / "scripts" / "dispatch_state.py").is_file()
-    assert (installed / "scripts" / "review_contract.py").is_file()
+    assert not (installed / "scripts" / "dispatch_state.py").exists()
+    assert not (installed / "scripts" / "review_contract.py").exists()
 
-    capabilities = subprocess.run(
+    # The capability handshake was withdrawn with the flag contract it guarded
+    # (ADR-0009). What an installed copy must still prove is that it parses its
+    # own CLI and names the artifact flags the caller is required to supply; a
+    # copy that does not will exit non-zero and write no verdict.
+    usage = subprocess.run(
         [
             sys.executable,
             str(installed / "scripts" / "acpx-dispatch.py"),
-            "--print-capabilities",
+            "--help",
         ],
         cwd=project,
         env=environment,
@@ -127,7 +133,6 @@ def test_catalog_backed_cli_install_vendors_runnable_dispatcher(
         text=True,
         check=False,
     )
-    assert capabilities.returncode == 0, capabilities.stderr
-    payload = json.loads(capabilities.stdout)
-    assert payload["interface_version"] == 2
-    assert "review-subject-v1" in payload["capabilities"]
+    assert usage.returncode == 0, usage.stderr
+    assert "--evidence-file" in usage.stdout
+    assert "--verdict-file" in usage.stdout
