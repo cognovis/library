@@ -831,6 +831,40 @@ library:
         - origin:third-party
         - tier:project
         - domain:fhir
+    - name: acpx-dispatch
+      description: 'use when: resolving or invoking ACPX for cross-model implementation, review, consultation, or durable dispatch control. NOT for: provider/model preference decisions or raw provider CLI execution. boundary: owns the deterministic ACPX transport and interface contract; model-routing owns route selection.'
+      source: https://github.com/cognovis/library-core/blob/main/skills/acpx-dispatch/SKILL.md
+      requires:
+        - agent:judge-default
+        - standard:english-only
+        - standard:judge-layer
+        - standard:model-routing
+        - standard:no-emoji
+      scripts:
+        - path: skills/acpx-dispatch/scripts/acpx-dispatch.py
+          role: entrypoint
+          entrypoint: true
+          language: python
+          output_contract: json-envelope
+        - path: skills/acpx-dispatch/scripts/dispatch_state.py
+          role: helper
+          entrypoint: false
+          language: python
+        - path: skills/acpx-dispatch/scripts/review_contract.py
+          role: validator
+          entrypoint: false
+          language: python
+      tags:
+        - origin:original
+        - tier:core
+        - workflow:dispatch
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+          gascity:
+            exportable: false
     - name: adr-gap
       description: 'Audit a repo for ADR hoist debt and pre-trinity packages. Triggers on: adr gap, hoist debt, adr audit, pre-trinity packages, architecture drift.'
       source: https://github.com/cognovis/library-core/blob/main/skills/adr-gap/SKILL.md
@@ -902,6 +936,7 @@ library:
       description: Implement one executable bead through the active harness, neutral opposite-family review, Means of Compliance, and canonical Session Close
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-implementation-loop/SKILL.md
       requires:
+        - skill:acpx-dispatch
         - skill:cognovis-beads
         - skill:inject-standards
         - skill:session-close
@@ -1460,6 +1495,38 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: parallelize
+      description: Which of these beads can we start at the same time? Answers with dependency, file-region and refactoring evidence rather than with bd ready. User-invoked only.
+      source: https://github.com/cognovis/library-core/blob/main/skills/parallelize/SKILL.md
+      requires:
+        - standard:english-only
+        - standard:no-emoji
+      scripts:
+        - path: scripts/collect-beads.py
+          role: helper
+          entrypoint: false
+          language: python
+          output_contract: json-envelope
+      tags:
+        - origin:original
+        - tier:domain
+        - beads
+        - refactoring
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          plane: dev
+          steward: cognovis-core
+          harness_support:
+            claude: supported
+            codex: supported
+          runtime_requirements:
+            binaries:
+              - bd
+              - uv
+          gascity:
+            exportable: false
     - name: people-query
       description: Query open-brain people-aware MCP tools to find discussions, stale contacts, and mentions for a named person.
       source: https://github.com/cognovis/library-core/blob/main/skills/people-query/SKILL.md
