@@ -2075,10 +2075,9 @@ library:
       handlers:
         - agents/diff-risk-classifier-handlers
     - name: doc-changelog-updater
-      description: Analyzes branch changes and updates documentation and changelog files. Use PROACTIVELY after implementing features or when user requests documentation updates or changelog entries. Detects changes in current branch via git diff, identifies which documentation files need updates, and adds properly formatted changelog entries. MUST BE USED when user asks to "update documentation", "add changelog entry", "document changes", or after feature implementation is complete.
+      description: Updates documentation before the bead implementation loop's single final review, only for explicit documentation work or a material user-visible, API, configuration, deployment, operator-workflow, or developer-workflow change.
       source: https://github.com/cognovis/library-core/blob/main/agents/doc-changelog-updater.md
       requires:
-        - mcp:open-brain
         - skill:inject-standards
       tags:
         - origin:original
