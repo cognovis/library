@@ -1,7 +1,8 @@
 ---
 name: library
-description: Private skill distribution system. Use when the user wants to install, use, add, push, remove, sync, list, or search for skills, agents, prompts, or workflows from their private library catalog. Triggers on /library commands or mentions of library, skill distribution, or agentic management.
-argument-hint: "[command or prompt] [name or details]"
+description: Explicitly invoked interface for installing, using, adding, pushing, removing, syncing, listing, or searching private Library primitives.
+argument-hint: "<primitive|search|installed|status|audit|sync|catalog> [verb] [name-or-query] [options]"
+disable-model-invocation: true
 ---
 
 # The Library
@@ -38,6 +39,39 @@ The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
 filtering, dependency resolution, and install/update behavior live in
 `scripts/library.py`. Keep this skill focused on dispatch rules, user-facing
 decisions, and fallback behavior when the CLI is unavailable.
+
+## Invocation Guidance
+
+When invoked without arguments:
+
+1. Run the canonical help command:
+
+   ```bash
+   uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py --help
+   ```
+
+2. Derive the available values from that output instead of maintaining another
+   static command inventory. Present a concise overview of:
+   - primitive names;
+   - primitive verbs;
+   - global commands;
+   - common options; and
+   - representative examples assembled from the current grammar.
+3. Also mention the guided `install`, `add`, and `push` workflows documented in
+   this skill, because they require user decisions rather than direct CLI
+   delegation.
+4. Do not mutate state. End by asking which operation the user wants to run.
+
+When the invocation is incomplete:
+
+1. Identify the next missing required value.
+2. Read the relevant CLI `--help`, show only the valid choices for that value,
+   and ask for it. Do not ask again for values already supplied.
+3. Do not execute the operation until all required values are known.
+
+When the invocation is complete, delegate it to the canonical CLI as described
+below. For a mutating CLI operation, show the supported dry-run preview first
+unless the user has explicitly asked to skip the preview.
 
 ## CLI Delegation
 
