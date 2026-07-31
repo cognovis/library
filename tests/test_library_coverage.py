@@ -186,6 +186,23 @@ def test_retired_agent_catalog_disposition_is_exact_name_aware():
     assert PRESERVED_COGNOVIS_SKILLS <= skills
 
 
+def test_doc_changelog_updater_catalog_matches_conditional_loop_role():
+    """The retained updater must not advertise its retired proactive contract."""
+    agents = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("agents", [])
+    }
+    updater = agents["doc-changelog-updater"]
+
+    assert updater["description"] == (
+        "Updates documentation before the bead implementation loop's single final "
+        "review, only for explicit documentation work or a material user-visible, "
+        "API, configuration, deployment, operator-workflow, or developer-workflow "
+        "change."
+    )
+    assert updater["requires"] == ["skill:inject-standards"]
+
+
 def test_regression_bead_orchestrator_installs_spec_reviewer():
     """The full Bead Claim preflight agent must ship with its orchestrator."""
     agents = {
