@@ -1,4 +1,4 @@
-"""Delivery contract for the shift-left review-gate bundle."""
+"""Delivery contract for the lean bead implementation loop bundle."""
 from pathlib import Path
 
 import yaml
@@ -6,31 +6,20 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _by_name(entries):
-    return {entry["name"]: entry for entry in entries}
-
-
-def test_review_gate_bundle_is_installable_from_catalog():
+def test_lean_review_loop_bundle_is_installable_from_catalog():
     catalog = yaml.safe_load((ROOT / "library.yaml").read_text(encoding="utf-8"))["library"]
-    skills = _by_name(catalog["skills"])
-    agents = _by_name(catalog["agents"])
-    standards = _by_name(catalog["standards"])
+    skills = {entry["name"]: entry for entry in catalog["skills"]}
 
     requires = set(skills["bead-implementation-loop"]["requires"])
-    assert {
+    assert requires == {
+        "skill:acpx-dispatch",
+        "skill:cognovis-beads",
         "skill:inject-standards",
         "skill:session-close",
+        "standard:english-only",
+    }
+    assert not {
         "agent:diff-risk-classifier",
         "agent:review-gates",
         "agent:seam-contract-reviewer",
-    } <= requires
-    assert agents["diff-risk-classifier"]["handlers"] == [
-        "agents/diff-risk-classifier-handlers"
-    ]
-    assert agents["review-gates"]["handlers"] == [
-        "agents/review-gates-handlers"
-    ]
-    assert "standard:seam-contract" in agents["seam-contract-reviewer"]["requires"]
-    seam_contract = standards["seam-contract"]
-    assert seam_contract["source"].endswith("/tree/main/standards/seam-contract/")
-    assert "category:standard-bundle" in seam_contract["tags"]
+    } & requires

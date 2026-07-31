@@ -533,7 +533,7 @@ def test_unified_quick_routing_catalog_uses_direct_claim_preflight() -> None:
     assert "agent:quick-fix" not in orchestrator_requires
 
     quick_fix = agents["quick-fix"]
-    assert quick_fix.get("requires") == ["agent:bead-orchestrator"]
+    assert quick_fix.get("requires") == ["skill:bead-implementation-loop"]
     assert "Deprecated compatibility redirect" in quick_fix["description"]
 
     skills = {
@@ -541,8 +541,8 @@ def test_unified_quick_routing_catalog_uses_direct_claim_preflight() -> None:
         for skill in catalog.get("library", {}).get("skills", [])
     }
     beads_description = skills["cognovis-beads"]["description"]
-    assert "journaled Dolt sync overlay" in beads_description
-    assert "upstream bd owns normal tracker behavior" in beads_description
+    assert "Cognovis journaled Dolt sync" in beads_description
+    assert "Beads and bd own tracker behavior" in beads_description
 
 
 # ---------------------------------------------------------------------------
