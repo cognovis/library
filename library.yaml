@@ -832,7 +832,7 @@ library:
         - tier:project
         - domain:fhir
     - name: acpx-dispatch
-      description: 'use when: resolving or invoking ACPX for cross-model implementation, review, consultation, or durable dispatch control. NOT for: provider/model preference decisions or raw provider CLI execution. boundary: owns the deterministic ACPX transport and interface contract; model-routing owns route selection.'
+      description: 'use when: resolving or invoking ACPX for cross-model implementation, review, or consultation. NOT for: provider/model preference decisions, review policy, or raw provider CLI execution. boundary: owns the ACPX transport and final-answer extraction; model-routing owns route selection and the calling skill owns review policy.'
       source: https://github.com/cognovis/library-core/blob/main/skills/acpx-dispatch/SKILL.md
       requires:
         - agent:judge-default
@@ -846,14 +846,6 @@ library:
           entrypoint: true
           language: python
           output_contract: json-envelope
-        - path: skills/acpx-dispatch/scripts/dispatch_state.py
-          role: helper
-          entrypoint: false
-          language: python
-        - path: skills/acpx-dispatch/scripts/review_contract.py
-          role: validator
-          entrypoint: false
-          language: python
       tags:
         - origin:original
         - tier:core
