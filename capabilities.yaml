@@ -141,6 +141,12 @@ capabilities:
     codex:
       skills: [mail-send]
       sandbox_mode: workspace-write
+  - name: ask_user
+    description: Ask the human a structured multiple-choice question and block on the answer. Claude-only; Codex has no equivalent tool.
+    claude:
+      tools: [AskUserQuestion]
+    codex:
+      sandbox_mode: read-only
   - name: workflow
     description: Run named Claude Code workflows via the Workflow tool. Claude-only; no Codex equivalent.
     claude:
