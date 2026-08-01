@@ -1661,6 +1661,7 @@ def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             print_json(result)
         else:
             _print_human_result(result)
+            _print_synced_source_commits(result)
         return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
     except LibraryError as exc:
         if use_json:
@@ -1668,6 +1669,21 @@ def cmd_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
+
+
+def _print_synced_source_commits(result: dict) -> None:
+    """List each synced entry with the commit it was actually built from.
+
+    Sources are cloned from their catalog remote, so a local checkout that is
+    ahead of that remote syncs the older published content while still
+    reporting success. Printing the resolved commit is what makes that visible
+    instead of leaving the caller with an unexplained stale install.
+    """
+    entries = (result.get("data") or {}).get("synced_entries") or []
+    for entry in entries:
+        commit = entry.get("source_commit")
+        label = f"{entry.get('type', '?')}:{entry.get('name', '?')}"
+        print(f"  {label} @ {commit[:8] if commit else 'unknown'}")
 
 
 def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:

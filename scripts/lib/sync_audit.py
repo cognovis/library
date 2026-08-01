@@ -221,24 +221,47 @@ def cmd_sync_impl(
         )
 
     synced = []
+    synced_entries = []
     failed = []
     for entry in entries:
         entry_name = entry.get("name", "")
         entry_type = entry.get("type", "")
         try:
-            reinstall_entry(catalog, entry, repo_root, scope, harness)
+            result = reinstall_entry(catalog, entry, repo_root, scope, harness)
             synced.append(f"{entry_type}:{entry_name}")
+            # Report the commit each entry was actually built from. Sources are
+            # cloned from their catalog remote, so a local checkout that is
+            # ahead of that remote syncs the older published content while
+            # still reporting success. Surfacing the commit is what lets a
+            # caller notice that their unpushed work was not deployed.
+            synced_entries.append({
+                "name": entry_name,
+                "type": entry_type,
+                "source_commit": _resolved_source_commit(result),
+            })
         except Exception as exc:
             failed.append({"name": entry_name, "type": entry_type, "error": str(exc)})
 
     return success(
         data={
             "synced": synced,
+            "synced_entries": synced_entries,
             "failed": failed,
             "total": len(entries),
         },
         message=f"Synced {len(synced)}/{len(entries)} entries.",
     )
+
+
+def _resolved_source_commit(result: Any) -> str | None:
+    """Return the source commit an installer reported, when it reported one."""
+    if not isinstance(result, dict):
+        return None
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return None
+    commit = data.get("source_commit")
+    return commit if isinstance(commit, str) and commit else None
 
 
 def reinstall_entry(
@@ -247,49 +270,49 @@ def reinstall_entry(
     repo_root: Path,
     scope: str,
     harness: str,
-) -> None:
-    """Re-install a single lockfile entry."""
+) -> dict[str, Any] | None:
+    """Re-install a single lockfile entry and return the installer result."""
     entry_name = entry.get("name", "")
     entry_type = entry.get("type", "")
     install_mode = entry.get("install_mode", "vendor")
 
     if entry_type == "skill":
         from .installers.skill import install_skill
-        install_skill(
+        return install_skill(
             catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, install_mode=install_mode
         )
     elif entry_type == "agent":
         from .installers.agent import install_agent
-        install_agent(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
+        return install_agent(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
     elif entry_type == "prompt":
         from .installers.simple_file import install_simple_file
-        install_simple_file(catalog=catalog, primitive_name="prompt", name=entry_name,
+        return install_simple_file(catalog=catalog, primitive_name="prompt", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "script":
         from .installers.simple_file import install_simple_file
-        install_simple_file(catalog=catalog, primitive_name="script", name=entry_name,
+        return install_simple_file(catalog=catalog, primitive_name="script", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "standard":
         from .installers.standard import install_standard
-        install_standard(
+        return install_standard(
             catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, install_mode=install_mode
         )
     elif entry_type == "model-standard":
         from .installers.simple_file import install_simple_file
-        install_simple_file(catalog=catalog, primitive_name="model-standard", name=entry_name,
+        return install_simple_file(catalog=catalog, primitive_name="model-standard", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "agent-base":
         from .installers.simple_file import install_simple_file
-        install_simple_file(catalog=catalog, primitive_name="agent-base", name=entry_name,
+        return install_simple_file(catalog=catalog, primitive_name="agent-base", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "workflow":
         from .installers.simple_file import install_simple_file
-        install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
+        return install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type in {"pi-extension", "pi-profile", "just-module"}:
         from .installers.project_native import install_project_native_file
 
-        install_project_native_file(
+        return install_project_native_file(
             catalog=catalog,
             primitive=entry_type,
             name=entry_name,
@@ -299,15 +322,16 @@ def reinstall_entry(
         )
     elif entry_type == "runtime-config":
         from .runtime_config import install_runtime_config
-        install_runtime_config(catalog=catalog, name=entry_name, repo_root=repo_root,
+        return install_runtime_config(catalog=catalog, name=entry_name, repo_root=repo_root,
                                scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "mcp":
         from .installers.mcp_installer import install_mcp
-        install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
+        return install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
     elif entry_type == "guardrail":
         from .installers.guardrail_installer import install_guardrail
-        install_guardrail(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
+        return install_guardrail(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
     # Unknown types are silently skipped
+    return None
 
 
 def cmd_audit_impl(

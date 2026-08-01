@@ -1298,3 +1298,50 @@ class TestWorkflowAuditMissingFile:
         assert wf_entry.get("status") in ("missing", "drift"), (
             f"Expected status='missing' or 'drift' when .js file deleted, got {wf_entry.get('status')!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Sync provenance: which commit did each entry actually come from?
+# ---------------------------------------------------------------------------
+
+class TestSyncReportsSourceCommit:
+    """Sync must name the commit it built from.
+
+    Entry sources are cloned from their catalog remote, so a local checkout that
+    is ahead of that remote gets the older published content while sync still
+    prints a success line. Without the resolved commit in the output there is
+    nothing to distinguish that from a real refresh.
+    """
+
+    def test_human_output_lists_each_entry_with_its_commit(self, project_dir):
+        install = run_library("skill", "use", "test-skill", cwd=project_dir)
+        assert install.returncode == 0, install.stderr
+
+        sync = run_library("skill", "sync", cwd=project_dir)
+        assert sync.returncode == 0, sync.stderr
+        assert "skill:test-skill @ " in sync.stdout, sync.stdout
+
+    def test_json_output_carries_the_resolved_source_commit(self, project_dir):
+        install = run_library("skill", "use", "test-skill", cwd=project_dir)
+        assert install.returncode == 0, install.stderr
+
+        sync = run_library("skill", "sync", "--json", cwd=project_dir)
+        assert sync.returncode == 0, sync.stderr
+
+        entries = json.loads(sync.stdout)["data"]["synced_entries"]
+        assert [entry["name"] for entry in entries] == ["test-skill"]
+        assert entries[0]["type"] == "skill"
+        assert "source_commit" in entries[0]
+
+    def test_reinstall_entry_returns_the_installer_result(self, project_dir):
+        from lib.sync_audit import reinstall_entry
+
+        install = run_library("skill", "use", "test-skill", cwd=project_dir)
+        assert install.returncode == 0, install.stderr
+
+        catalog = yaml.safe_load((project_dir / "library.yaml").read_text())
+        entry = {"name": "test-skill", "type": "skill", "install_mode": "vendor"}
+        result = reinstall_entry(catalog, entry, project_dir, "project", "all")
+
+        assert isinstance(result, dict)
+        assert result.get("status") == "ok"

@@ -787,6 +787,22 @@ def _parse_harness_arg(value: str) -> list[str]:
     raise argparse.ArgumentTypeError(f"Unsupported harness: {value}")
 
 
+def _parse_output_dir_arg(value: str) -> Path:
+    """Reject a blank output directory instead of silently writing to the CWD.
+
+    `Path("")` normalizes to `Path(".")`, so an unset shell variable expanded
+    into `--output-dir "$DIR"` used to scatter built artifacts across whatever
+    directory the caller happened to be in — typically a checkout, where they
+    then look like tracked files.
+    """
+    if not value.strip():
+        raise argparse.ArgumentTypeError(
+            "--output-dir must name a directory; an empty value would write the "
+            "built artifacts into the current working directory."
+        )
+    return Path(value).expanduser()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Build Claude/Codex agent artifacts from one Markdown source.",
@@ -800,7 +816,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--output-dir",
-        type=Path,
+        type=_parse_output_dir_arg,
         required=True,
         help="Directory where built artifacts are written.",
     )

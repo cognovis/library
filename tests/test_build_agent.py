@@ -698,3 +698,91 @@ def test_build_agent_scopes_agent_session_tools_to_declared_capability(
     }
     granted = tools & _AGENT_SESSION_TOOLS
     assert granted == (_AGENT_SESSION_TOOLS if enabled else set())
+
+
+def test_blank_output_dir_is_rejected_instead_of_writing_to_cwd(tmp_path: Path) -> None:
+    """An empty --output-dir must fail, not scatter artifacts into the CWD.
+
+    `Path("")` normalizes to `Path(".")`, so an unset shell variable expanded
+    into `--output-dir "$DIR"` silently wrote the built agent next to whatever
+    the caller was working in — inside a checkout, that looks like new tracked
+    files nobody asked for.
+    """
+    source = write_unified_source(tmp_path)
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(BUILD_AGENT),
+            "--harness=claude",
+            "--output-dir",
+            "",
+            str(source),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(workdir),
+    )
+
+    assert result.returncode != 0, result.stdout
+    assert "--output-dir" in result.stderr
+    assert list(workdir.iterdir()) == []
+
+
+def write_ask_user_source(tmp_path: Path, *, enabled: bool) -> Path:
+    source = tmp_path / "gate-agent.md"
+    capability = "  - ask_user\n" if enabled else ""
+    source.write_text(
+        "---\n"
+        "name: gate-agent\n"
+        "description: Fixture agent that must ask a human before it writes.\n"
+        "model: sonnet\n"
+        "capabilities:\n"
+        "  - read_files\n"
+        f"{capability}"
+        "agent_base: auto\n"
+        "---\n\n"
+        "# Gate Agent\n\nFixture body for the human approval gate.\n"
+    )
+    return source
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_ask_user_capability_grants_the_claude_question_tool(
+    tmp_path: Path, enabled: bool
+) -> None:
+    """AskUserQuestion is granted exactly when ask_user is declared.
+
+    Agents that own a human approval gate previously could not be granted the
+    tool at all: no capability in the registry mapped to it, and the built tool
+    grant is the agent's behavioral permission boundary.
+    """
+    source = write_ask_user_source(tmp_path, enabled=enabled)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet"])
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 0, result.stderr
+    built = (output_dir / "gate-agent.md").read_text()
+    frontmatter = yaml.safe_load(built.split("---", 2)[1]) or {}
+    tools = {
+        tool.strip()
+        for tool in str(frontmatter.get("tools", "")).split(",")
+        if tool.strip()
+    }
+    assert ("AskUserQuestion" in tools) is enabled
+
+
+def test_ask_user_capability_does_not_widen_the_codex_sandbox(tmp_path: Path) -> None:
+    """ask_user has no Codex tool, so it must not change a Codex build."""
+    module = load_build_agent_module()
+    capability = module.load_capabilities_registry().get("ask_user")
+
+    assert capability is not None, "ask_user capability missing"
+    assert capability["claude"]["tools"] == ["AskUserQuestion"]
+    assert capability["codex"]["sandbox_mode"] == "read-only"
+    assert "tools" not in capability["codex"]
