@@ -50,8 +50,25 @@ models:
     context: large
     vision: true
     cost:
-      input: 15.0
-      output: 75.0
+      input: 5.0
+      output: 25.0
+  - id: fable
+    harness: claude-code
+    family: claude
+    provider: claude
+    adapter: claude-agent
+    runtime_model: fable
+    suitability_capabilities: [architecture-review, long-context, repository-analysis, spec-review]
+    quality_rank: 110
+    cost_rank: 95
+    tier: frontier
+    reasoning_levels: [low, medium, high, xhigh]
+    default_reasoning: high
+    context: large
+    vision: true
+    cost:
+      input: 10.0
+      output: 50.0
   - id: gpt-5.4-mini
     harness: codex
     family: openai
@@ -86,23 +103,6 @@ models:
     cost:
       input: 2.0
       output: 8.0
-  - id: gpt-5.5
-    harness: codex
-    family: openai
-    provider: codex
-    adapter: codex-exec
-    runtime_model: gpt-5.5
-    suitability_capabilities: [architecture-review, implementation, repository-analysis, spec-review]
-    quality_rank: 90
-    cost_rank: 75
-    tier: premium
-    reasoning_levels: [low, medium, high, xhigh]
-    default_reasoning: high
-    context: large
-    vision: true
-    cost:
-      input: 8.0
-      output: 32.0
   - id: gpt-5.6-sol
     harness: codex
     family: openai
