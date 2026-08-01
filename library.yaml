@@ -909,21 +909,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: bead-authoring-loop
-      description: Close bead create and substantive update work through author-check, live review, repair, and digest-bound readiness
-      source: https://github.com/cognovis/library-core/blob/main/skills/bead-authoring-loop/SKILL.md
-      requires:
-        - standard:english-only
-        - skill:bead-reviewer
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: bead-implementation-loop
       description: Compatibility entry that routes one executable Bead to the Bead Loop Implementer without duplicating TDD, review, Means of Compliance, commit, worktree, or Session Close ownership.
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-implementation-loop/SKILL.md
@@ -1443,7 +1428,6 @@ library:
         - skill:bead-implementation-loop
         - skill:bug-triage
         - standard:english-only
-        - skill:bead-authoring-loop
       tags:
         - origin:original
         - tier:core
