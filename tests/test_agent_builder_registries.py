@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -15,6 +16,7 @@ MODELS_YAML = REPO_ROOT / "models.yaml"
 CAPABILITIES_YAML = REPO_ROOT / "capabilities.yaml"
 MODELS_SCHEMA = REPO_ROOT / "docs" / "schema" / "models.schema.json"
 CAPABILITIES_SCHEMA = REPO_ROOT / "docs" / "schema" / "capabilities.schema.json"
+BUILD_AGENT = REPO_ROOT / "scripts" / "build-agent.py"
 
 
 def _load_yaml(path: Path) -> dict:
@@ -75,3 +77,41 @@ def test_capabilities_yaml_validates_against_schema() -> None:
         "refine_prompts",
         "browser",
     } <= set(capability_names)
+
+
+def _resolve_against_real_registry(requirements: dict) -> tuple[str, str | None] | None:
+    """Resolve a requirement block through build-agent.py against the live registry."""
+    spec = importlib.util.spec_from_file_location("build_agent_registry_probe", BUILD_AGENT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    registry = _load_yaml(MODELS_YAML)["models"]
+    return module.resolve_model(requirements, "claude", registry)
+
+
+def test_claude_code_resolves_a_frontier_reviewer() -> None:
+    """A frontier quality-first requirement resolves to the Claude frontier model."""
+    resolved = _resolve_against_real_registry(
+        {
+            "tier": "frontier",
+            "reasoning": "high",
+            "context": "large",
+            "cost_priority": "quality-first",
+        }
+    )
+    assert resolved is not None
+    assert resolved[0] == "fable"
+
+
+def test_claude_code_premium_still_resolves_to_opus() -> None:
+    """Adding a frontier entry keeps every premium claude-code requirement on opus."""
+    resolved = _resolve_against_real_registry(
+        {
+            "tier": "premium",
+            "reasoning": "high",
+            "context": "large",
+            "cost_priority": "balanced",
+        }
+    )
+    assert resolved is not None
+    assert resolved[0] == "opus"
