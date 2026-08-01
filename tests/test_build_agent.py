@@ -477,6 +477,24 @@ def test_build_agent_rejects_resolved_model_without_standard(tmp_path: Path) -> 
     assert not (output_dir / "plain-agent.md").exists()
 
 
+def test_build_agent_rejects_a_model_standard_with_an_empty_body(tmp_path: Path) -> None:
+    """A standard that resolves but carries no body is dropped just as silently."""
+    source = write_source_without_codex_override(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = make_model_standards(tmp_path, [])
+    (model_standards_dir / "sonnet.md").write_text(
+        "---\nname: sonnet\nmodel_id: sonnet\n---\n\n"
+    )
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 1
+    assert "sonnet" in result.stderr
+    assert "empty body" in result.stderr
+    assert not (output_dir / "plain-agent.md").exists()
+
+
 def test_build_agent_allows_an_agent_that_resolves_no_model(tmp_path: Path) -> None:
     """The standard guard stays silent when no model is resolved at all."""
     source = write_model_free_source(tmp_path)

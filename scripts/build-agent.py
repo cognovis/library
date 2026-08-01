@@ -682,12 +682,14 @@ def _require_model_standard(
     harness: str,
     model_standards_dir: str | None,
 ) -> None:
-    """Fail the build when the resolved model has no Layer 3 model standard.
+    """Fail the build when the resolved model contributes no Layer 3 standard.
 
     The composer skips a missing standard silently, so without this guard an
     agent whose model gained no standard yet builds into a thinner artifact with
-    no diagnostic. Resolution mirrors the composer exactly — same override, same
-    project root — so the guard and the composition can never disagree.
+    no diagnostic. The guard mirrors both composer conditions — the same
+    resolution (same override, same project root) and the same non-empty-body
+    requirement — because a standard that resolves but carries no body is
+    dropped just as silently as one that does not exist at all.
     """
     model = frontmatter.get("model")
     if not isinstance(model, str) or not model or model == "inherit":
@@ -695,8 +697,16 @@ def _require_model_standard(
 
     override = model_standards_dir or os.environ.get("MODEL_STANDARDS_DIR")
     proj_root = compose_module._find_proj_root(rendered_source)  # noqa: SLF001
-    if compose_module.resolve_layer3(model, proj_root, override_dir=override):
+    std_path = compose_module.resolve_layer3(model, proj_root, override_dir=override)
+    if std_path is not None and compose_module.extract_body(std_path):
         return
+
+    if std_path is not None:
+        raise BuildAgentError(
+            f"Model standard for resolved model '{model}' (harness '{harness}') "
+            f"has an empty body: {std_path}. The composer drops an empty standard, "
+            f"so the artifact would carry no Layer 3."
+        )
 
     searched = override or "the agent-local and global model-standards directories"
     raise BuildAgentError(
