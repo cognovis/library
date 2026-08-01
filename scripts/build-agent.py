@@ -675,6 +675,37 @@ def emit_codex_toml(
     return "\n".join(lines)
 
 
+def _require_model_standard(
+    compose_module: Any,
+    frontmatter: dict[str, Any],
+    rendered_source: Path,
+    harness: str,
+    model_standards_dir: str | None,
+) -> None:
+    """Fail the build when the resolved model has no Layer 3 model standard.
+
+    The composer skips a missing standard silently, so without this guard an
+    agent whose model gained no standard yet builds into a thinner artifact with
+    no diagnostic. Resolution mirrors the composer exactly — same override, same
+    project root — so the guard and the composition can never disagree.
+    """
+    model = frontmatter.get("model")
+    if not isinstance(model, str) or not model or model == "inherit":
+        return
+
+    override = model_standards_dir or os.environ.get("MODEL_STANDARDS_DIR")
+    proj_root = compose_module._find_proj_root(rendered_source)  # noqa: SLF001
+    if compose_module.resolve_layer3(model, proj_root, override_dir=override):
+        return
+
+    searched = override or "the agent-local and global model-standards directories"
+    raise BuildAgentError(
+        f"No model standard found for resolved model '{model}' "
+        f"(harness '{harness}'). Searched: {searched}. "
+        f"Add a model-standards/{model}.md entry before building this agent."
+    )
+
+
 def build_agent(
     source: Path,
     output_dir: Path,
@@ -705,6 +736,13 @@ def build_agent(
         with TemporaryDirectory() as tmp:
             rendered_source = Path(tmp) / f"{name}.md"
             rendered_source.write_text(rendered, encoding="utf-8")
+            _require_model_standard(
+                compose_module,
+                frontmatter,
+                rendered_source,
+                harness,
+                model_standards_dir,
+            )
             try:
                 composed = compose_module.compose(
                     agent_file=rendered_source,

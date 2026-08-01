@@ -128,6 +128,10 @@ def test_pair_loop_reviewer_regression_builds_read_only_codex_artifact(tmp_path:
     output_dir = tmp_path / "out"
     model_standards_dir = tmp_path / "model-standards"
     model_standards_dir.mkdir()
+    (model_standards_dir / "gpt-5.4.md").write_text(
+        "---\nname: gpt-5.4\nmodel_id: gpt-5.4\n---\n\nGPT-5.4 model standard fixture.\n",
+        encoding="utf-8",
+    )
     result = subprocess.run(
         [
             sys.executable,

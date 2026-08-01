@@ -3669,6 +3669,16 @@ library:
             snippet:
               url: https://www.heypresto.ai/mcp
   model_standards:
+    - name: fable
+      description: 'Model-standard for Claude Fable — frontier-tier judgment, evidence discipline, and cost-aware escalation. Applied to agents that declare model: fable (or a claude-fable-* id).'
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/fable.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+      tags:
+        - origin:original
+      version: 2026.08.01
     - name: gpt-5.4
       description: Model-standard for GPT-5.4 in Codex agents — direct execution and concise verification discipline.
       source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.4.md
@@ -3699,6 +3709,36 @@ library:
       version: 2026.05.15
       tags:
         - origin:original
+    - name: gpt-5.6-luna
+      description: Model-standard for GPT-5.6 Luna in Codex agents — fast turnaround on scoped analysis and spec review with explicit escalation.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.6-luna.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+      tags:
+        - origin:original
+      version: 2026.08.01
+    - name: gpt-5.6-sol
+      description: Model-standard for GPT-5.6 Sol in Codex agents — frontier reasoning for architecture, long-context analysis, and adversarial review.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.6-sol.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+      tags:
+        - origin:original
+      version: 2026.08.01
+    - name: gpt-5.6-terra
+      description: Model-standard for GPT-5.6 Terra in Codex agents — implementation execution, test-driven verification, and scoped change discipline.
+      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.6-terra.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+      tags:
+        - origin:original
+      version: 2026.08.01
     - name: haiku
       description: 'Model-standard for Claude Haiku — avoid under-scoping multi-step plans, no terse-skip on verification steps. Applied to agents that declare model: haiku (or a claude-haiku-* id).'
       source: https://github.com/cognovis/library-core/blob/main/model-standards/haiku.md
