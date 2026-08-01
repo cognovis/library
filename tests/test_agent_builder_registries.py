@@ -115,3 +115,28 @@ def test_claude_code_premium_still_resolves_to_opus() -> None:
     )
     assert resolved is not None
     assert resolved[0] == "opus"
+
+
+def test_claude_code_cheapest_premium_resolves_to_opus() -> None:
+    """A cost-led premium requirement picks opus, never the frontier model."""
+    resolved = _resolve_against_real_registry(
+        {
+            "tier": "premium",
+            "reasoning": "high",
+            "context": "large",
+            "cost_priority": "cheapest",
+        }
+    )
+    assert resolved is not None
+    assert resolved[0] == "opus"
+
+
+def test_codex_premium_tier_holds_only_the_current_generation() -> None:
+    """No superseded codex model sits at the premium tier it can never win."""
+    models = _load_yaml(MODELS_YAML)["models"]
+    premium = {
+        model["id"]
+        for model in models
+        if model["harness"] == "codex" and model["tier"] == "premium"
+    }
+    assert premium == {"gpt-5.6-terra"}
