@@ -157,6 +157,20 @@ def write_escape_hatch_source(tmp_path: Path) -> Path:
     return source
 
 
+def write_model_free_source(tmp_path: Path) -> Path:
+    source = tmp_path / "model-free-agent.md"
+    source.write_text(
+        "---\n"
+        "name: model-free-agent\n"
+        "description: Model-free agent description.\n"
+        "tools: Read\n"
+        "agent_base: auto\n"
+        "---\n\n"
+        "# Model Free Agent\n\nShared body.\n"
+    )
+    return source
+
+
 def write_unknown_capability_source(tmp_path: Path) -> Path:
     source = tmp_path / "unknown-capability-agent.md"
     source.write_text(
@@ -247,8 +261,7 @@ def test_build_agent_emits_claude_md_and_codex_toml(tmp_path: Path) -> None:
     source = write_unified_source(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = tmp_path / "model-standards"
-    model_standards_dir.mkdir()
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
 
@@ -303,8 +316,7 @@ def test_build_agent_derives_codex_defaults_without_override(tmp_path: Path) -> 
     source = write_source_without_codex_override(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = tmp_path / "model-standards"
-    model_standards_dir.mkdir()
+    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.4"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="codex")
 
@@ -350,8 +362,7 @@ def test_pair_loop_read_only_constraints_override_run_shell_codex_sandbox(
     source = write_pair_loop_reviewer_source(tmp_path, include_constraints=True)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = tmp_path / "model-standards"
-    model_standards_dir.mkdir()
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
 
@@ -377,8 +388,7 @@ def test_run_shell_without_pair_loop_constraints_keeps_workspace_write(
     source = write_pair_loop_reviewer_source(tmp_path, include_constraints=False)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = tmp_path / "model-standards"
-    model_standards_dir.mkdir()
+    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.4"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="codex")
 
@@ -453,6 +463,51 @@ def test_build_agent_rejects_model_requirements_with_no_match(tmp_path: Path) ->
     assert "No model in models.yaml matches harness" in result.stderr
 
 
+def test_build_agent_rejects_resolved_model_without_standard(tmp_path: Path) -> None:
+    """A resolved model with no Layer 3 standard fails instead of thinning the artifact."""
+    source = write_source_without_codex_override(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.4"])
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 1
+    assert "sonnet" in result.stderr
+    assert not (output_dir / "plain-agent.md").exists()
+
+
+def test_build_agent_rejects_a_model_standard_with_an_empty_body(tmp_path: Path) -> None:
+    """A standard that resolves but carries no body is dropped just as silently."""
+    source = write_source_without_codex_override(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = make_model_standards(tmp_path, [])
+    (model_standards_dir / "sonnet.md").write_text(
+        "---\nname: sonnet\nmodel_id: sonnet\n---\n\n"
+    )
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 1
+    assert "sonnet" in result.stderr
+    assert "empty body" in result.stderr
+    assert not (output_dir / "plain-agent.md").exists()
+
+
+def test_build_agent_allows_an_agent_that_resolves_no_model(tmp_path: Path) -> None:
+    """The standard guard stays silent when no model is resolved at all."""
+    source = write_model_free_source(tmp_path)
+    output_dir = tmp_path / "out"
+    agent_bases_dir = make_agent_bases(tmp_path)
+    model_standards_dir = make_model_standards(tmp_path, [])
+
+    result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
+
+    assert result.returncode == 0, result.stderr
+    assert (output_dir / "model-free-agent.md").exists()
+
+
 def test_build_agent_rejects_unclosed_directives(tmp_path: Path) -> None:
     """Unclosed harness directive blocks fail loudly."""
     source = write_unified_source(
@@ -475,8 +530,7 @@ def test_build_agent_is_idempotent(tmp_path: Path) -> None:
     source = write_unified_source(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = tmp_path / "model-standards"
-    model_standards_dir.mkdir()
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
 
     first = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
     assert first.returncode == 0, first.stderr
@@ -499,8 +553,7 @@ def test_library_agent_use_builds_single_source_for_both_harnesses(tmp_path: Pat
     """agent use --harness all builds Claude and Codex artifacts from one source."""
     source = write_unified_source(tmp_path)
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = tmp_path / "model-standards"
-    model_standards_dir.mkdir()
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
     project = tmp_path / "project"
     project.mkdir()
     (project / "library.yaml").write_text(
@@ -631,8 +684,7 @@ def test_build_agent_scopes_agent_session_tools_to_declared_capability(
     source = write_manage_agent_sessions_source(tmp_path, enabled=enabled)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = tmp_path / "model-standards"
-    model_standards_dir.mkdir()
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
 
