@@ -65,7 +65,15 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 TOOL_ROOT = SCRIPT_DIR.parent
 
-from lib.catalog import find_repo_root, get_entries, load_catalog, lookup_entry, search_all
+from lib.catalog import (
+    find_repo_root,
+    get_catalog_identity,
+    get_entries,
+    load_catalog,
+    lookup_entry,
+    normalize_catalog_identity,
+    search_all,
+)
 from lib.errors import (
     EXIT_AMBIGUOUS,
     EXIT_DEPENDENCY_MISSING,
@@ -2068,6 +2076,68 @@ def cmd_catalog_sync(args: argparse.Namespace, catalog_root: Path, catalog: dict
     return 0
 
 
+def _missing_sync_dependencies(
+    catalog: dict,
+    installed: list[dict],
+    repo_root: Path,
+    scope: str,
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Return materialization gaps and non-fatal catalog reconciliation warnings."""
+    from lib.resolver import is_already_installed, resolve_requires
+
+    current_identity = get_catalog_identity(catalog)
+    missing: list[tuple[str, str]] = []
+    warnings: list[str] = []
+    seen: set[tuple[str, str]] = set()
+
+    for entry in installed:
+        primitive = str(entry.get("type") or "")
+        name = str(entry.get("name") or "")
+        if not primitive or not name:
+            continue
+
+        recorded_identity = entry.get("catalog_identity")
+        if (
+            isinstance(recorded_identity, str)
+            and current_identity is not None
+            and normalize_catalog_identity(recorded_identity) != current_identity
+        ):
+            continue
+
+        try:
+            lookup_entry(catalog, primitive, name, fuzzy=False)
+        except LibraryError:
+            # Foreign and retired legacy entries cannot safely acquire dependencies
+            # from the catalog currently driving this sync.
+            continue
+
+        root = (primitive, name)
+        try:
+            install_order = resolve_requires(
+                catalog, primitive, name, repo_root, scope
+            )
+        except LibraryError as exc:
+            warnings.append(
+                f"could not reconcile dependencies for {primitive}:{name}: {exc}"
+            )
+            continue
+
+        for dependency in install_order:
+            if dependency == root or dependency in seen:
+                continue
+            seen.add(dependency)
+            dependency_primitive, dependency_name = dependency
+            if not is_already_installed(
+                dependency_name,
+                repo_root,
+                scope,
+                dependency_primitive,
+            ):
+                missing.append(dependency)
+
+    return missing, warnings
+
+
 def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
     """Handle: sync [--force] [--dry-run] [--scope=...] [--json]
 
@@ -2085,6 +2155,7 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     scopes_to_check = _scopes_to_check(scope)
 
     all_refreshed = []
+    all_reconciled_dependencies = []
     all_skipped = []
     all_failed = []
     skipped_by_status: dict[str, list[str]] = {
@@ -2131,6 +2202,47 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
             lockfile_path = find_lockfile(repo_root, global_scope=(s == "global"))
             lock_data = load_lockfile(lockfile_path)
             installed = lock_data.get("installed", [])
+
+            sync_root = repo_root or Path.cwd()
+            missing_dependencies, reconciliation_warnings = (
+                _missing_sync_dependencies(catalog, installed, sync_root, s)
+            )
+            warnings.extend(reconciliation_warnings)
+
+            locked_by_key = {
+                (entry.get("type"), entry.get("name")): entry for entry in installed
+            }
+            for dependency_type, dependency_name in missing_dependencies:
+                dependency_label = f"{dependency_type}:{dependency_name}"
+                if dry_run:
+                    all_reconciled_dependencies.append(dependency_label)
+                    continue
+                locked_dependency = locked_by_key.get(
+                    (dependency_type, dependency_name), {}
+                )
+                try:
+                    reinstall_entry(
+                        catalog,
+                        {
+                            "name": dependency_name,
+                            "type": dependency_type,
+                            "install_mode": locked_dependency.get(
+                                "install_mode", "vendor"
+                            ),
+                        },
+                        sync_root,
+                        s,
+                        harness,
+                    )
+                    all_reconciled_dependencies.append(dependency_label)
+                except Exception as exc:
+                    all_failed.append({
+                        "name": dependency_name,
+                        "type": dependency_type,
+                        "error": str(exc),
+                    })
+                    if not use_json:
+                        print(f"  ERROR: {dependency_name}: {exc}", file=sys.stderr)
 
             for entry in installed:
                 entry_name = entry.get("name", "")
@@ -2216,6 +2328,7 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     result = {
         "status": "dry-run" if dry_run else "ok",
         "refreshed": all_refreshed,
+        "reconciled_dependencies": all_reconciled_dependencies,
         "skipped": all_skipped,
         "skipped_by_status": skipped_by_status,
         "unknown_skipped": unknown_skipped,
@@ -2228,7 +2341,8 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
 
     if dry_run:
         result["summary"] = (
-            f"Would refresh {len(all_refreshed)} entries, "
+            f"Would reconcile {len(all_reconciled_dependencies)} dependencies, "
+            f"refresh {len(all_refreshed)} entries, and "
             f"skip {len(all_skipped)} entries not reported behind"
         )
 
@@ -2237,13 +2351,18 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
     else:
         if dry_run:
             print(f"Dry-run: {result['summary']}")
+            for label in all_reconciled_dependencies:
+                print(f"  [would-install-dependency] {label}")
             for label in all_refreshed:
                 print(f"  [would-refresh] {label}")
             for status_name, labels in skipped_by_status.items():
                 for label in labels:
                     print(f"  [skip-{status_name}] {label}")
         else:
-            print(f"Synced: {len(all_refreshed)} refreshed, {len(all_skipped)} skipped (not behind)")
+            print(
+                f"Synced: {len(all_reconciled_dependencies)} dependencies reconciled, "
+                f"{len(all_refreshed)} refreshed, {len(all_skipped)} skipped (not behind)"
+            )
         for warning in warnings:
             print(f"Warning: {warning}")
 

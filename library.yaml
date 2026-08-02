@@ -3942,6 +3942,21 @@ library:
         - cognovis
         - pi
         - workbench
+    - name: fusion-context
+      description: Shared read-only Beads and Open Brain context boundary for Fusion children.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-context
+      bundle: true
+      entrypoint: index.ts
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - fusion
+        - context
     - name: fusion-harness
       description: Cognovis Fusion Harness with ACPX-backed model roles.
       source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-harness
@@ -3978,6 +3993,7 @@ library:
       source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-workhorse.json
       requires:
         - pi-profile:pi-workbench
+        - pi-extension:fusion-context
         - pi-extension:fusion-harness
       version: 1.0.0
       metadata:
@@ -3994,6 +4010,7 @@ library:
       source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-sota.json
       requires:
         - pi-profile:pi-workbench
+        - pi-extension:fusion-context
         - pi-extension:fusion-harness
       version: 1.0.0
       metadata:

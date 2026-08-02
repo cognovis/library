@@ -151,6 +151,7 @@ def test_canonical_fusion_dry_run_resolves_complete_closure_without_mutation(
         "pi-extension:acpx-workbench",
         "pi-profile:pi-workbench",
         "just-module:pi-workbench",
+        "pi-extension:fusion-context",
         "pi-extension:fusion-harness",
         "pi-profile:fusion-workhorse",
         "pi-profile:fusion-sota",
@@ -161,6 +162,7 @@ def test_canonical_fusion_dry_run_resolves_complete_closure_without_mutation(
         for path in payload["target_paths"]
     } == {
         ".agents/pi/extensions/acpx-workbench",
+        ".agents/pi/extensions/fusion-context",
         ".agents/pi/extensions/fusion-harness",
         ".agents/pi/profiles/pi-workbench.json",
         ".agents/pi/profiles/fusion-workhorse.json",
@@ -216,6 +218,48 @@ def test_project_native_dry_run_and_apply_support_mixed_dependencies(
     assert installed.returncode == 0, installed.stderr or installed.stdout
     assert (project / ".agents/skills/helper/SKILL.md").is_file()
     assert (project / ".agents/just/workbench.just").is_file()
+
+
+def test_sync_reconciles_missing_project_native_dependencies(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    initialized = subprocess.run(
+        ["git", "init", "--quiet"], cwd=project, capture_output=True, text=True
+    )
+    assert initialized.returncode == 0, initialized.stderr
+    installed = _run(project, "just-module", "use", "workbench")
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+
+    lock_path = project / ".library.lock"
+    lock = yaml.safe_load(lock_path.read_text())
+    lock["installed"] = [
+        entry
+        for entry in lock["installed"]
+        if entry["type"] != "pi-extension"
+    ]
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False))
+    (project / ".agents/pi/extensions/workbench.ts").unlink()
+
+    planned = _run(project, "sync", "--scope", "project", "--dry-run")
+    assert planned.returncode == 0, planned.stderr or planned.stdout
+    assert json.loads(planned.stdout)["reconciled_dependencies"] == [
+        "pi-extension:workbench"
+    ]
+    assert not (project / ".agents/pi/extensions/workbench.ts").exists()
+    assert all(
+        entry["type"] != "pi-extension"
+        for entry in yaml.safe_load(lock_path.read_text())["installed"]
+    )
+
+    synced = _run(project, "sync", "--scope", "project")
+    assert synced.returncode == 0, synced.stderr or synced.stdout
+    payload = json.loads(synced.stdout)
+    assert payload["reconciled_dependencies"] == ["pi-extension:workbench"]
+    assert (project / ".agents/pi/extensions/workbench.ts").is_file()
+    repaired_lock = yaml.safe_load(lock_path.read_text())
+    assert any(
+        entry["type"] == "pi-extension" and entry["name"] == "workbench"
+        for entry in repaired_lock["installed"]
+    )
 
 
 def test_project_native_dependency_lifecycle_and_just_import(tmp_path: Path) -> None:
