@@ -47,3 +47,31 @@ def test_install_sh_links_library_and_platform_forges(tmp_path: Path) -> None:
             installed = skill_root / name
             assert installed.is_symlink(), f"{installed} was not created as a symlink"
             assert installed.resolve() == expected_target.resolve()
+
+
+def test_existing_non_symlink_target_is_preserved_without_backup(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    occupied = home / ".agents" / "skills" / "library"
+    occupied.mkdir(parents=True)
+    marker = occupied / "local-content.txt"
+    marker.write_text("keep me")
+
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["XDG_DATA_HOME"] = str(tmp_path / "xdg-data")
+
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "install.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert occupied.is_dir()
+    assert not occupied.is_symlink()
+    assert marker.read_text() == "keep me"
+    assert not occupied.with_name("library.bak").exists()

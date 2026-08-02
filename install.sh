@@ -30,23 +30,22 @@ _realpath() {
     python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"
 }
 
-# Idempotent symlink helper: ln -sfn with backup of non-symlink targets
+# Idempotent symlink helper that refuses to replace non-symlink targets.
 _link() {
     local src="$1" dest="$2"
     local target
     target="$(_realpath "$src")"
 
-    if [[ -L "$dest" ]]; then
+    if test -L "$dest"; then
         local current
         current="$(readlink "$dest")"
-        if [[ "$current" == "$target" ]]; then
+        if test "$current" = "$target"; then
             echo "  ok    $dest"
             return 0
         fi
-    elif [[ -e "$dest" ]]; then
-        local backup="${dest}.bak"
-        echo "  back  $dest -> $backup (was regular file)"
-        mv "$dest" "$backup"
+    elif test -e "$dest"; then
+        echo "  error $dest exists and is not a symlink; move it explicitly before retrying" >&2
+        return 1
     fi
 
     mkdir -p "$(dirname "$dest")"
