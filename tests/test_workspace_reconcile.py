@@ -166,6 +166,20 @@ def test_scope_mismatch_fails_before_reconciliation() -> None:
         resolve_workspace_closure(catalog, workspace, Path.cwd(), "project")
 
 
+def test_project_closure_treats_global_scoped_dependency_as_prerequisite() -> None:
+    catalog = _catalog()
+    catalog["library"]["standards"][0]["default_scope"] = "global"
+    workspace = resolve_workspace(catalog, "team-core:python-cli")
+
+    closure = resolve_workspace_closure(catalog, workspace, Path.cwd(), "project")
+
+    assert closure.artifacts == (("skill", "python-dev"), ("skill", "python-test"))
+    assert closure.prerequisites == (
+        ("standard", "python"),
+        ("mcp", "test-service"),
+    )
+
+
 def test_plan_recomputes_shared_ownership_from_all_roots() -> None:
     catalog = _catalog()
     workspace = resolve_workspace(catalog, "team-core:python-cli")

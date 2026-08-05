@@ -1623,6 +1623,7 @@ library:
     - name: python-dev
       description: Develop Python CLI tools — project scaffold, CLI entry points, packaging, PyPI release, config resolution. Use when writing Python, creating a CLI tool, setting up pyproject.toml, working with argparse or click, structuring a new Python project, adding uv tool support, or any Python development context that is not test-focused. Triggers on write python, python tool, python cli, build cli, argparse, click, pyproject.toml, uv tool, src layout, hatchling, pypi, calver.
       source: https://github.com/cognovis/library-core/blob/main/skills/python-dev/SKILL.md
+      version: 1.0.0
       requires:
         - standard:python-cli-patterns
         - standard:english-only
@@ -1638,6 +1639,7 @@ library:
     - name: python-test
       description: Test Python CLI tools — pytest layout, click.testing.CliRunner, argparse invocation, fixtures, coverage. Use when writing Python tests, running pytest, mocking subprocess for key_command, testing a CLI entry point, or any Python test context. Triggers on pytest, uv run pytest, test python, test cli, CliRunner, conftest, test fixture python, click testing, capsys, monkeypatch.
       source: https://github.com/cognovis/library-core/blob/main/skills/python-test/SKILL.md
+      version: 1.0.0
       requires:
         - standard:python-cli-patterns
         - standard:english-only
@@ -4097,6 +4099,25 @@ library:
       tags:
         - origin:original
         - tier:core
+  workspaces:
+    - name: python-cli
+      description: Shared development and testing baseline for Python CLI repositories.
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml
+      schema_version: 1
+      version: 0.1.0
+      status: experimental
+      roots:
+        - type: skill
+          name: python-dev
+          constraint: ">=1.0.0,<2.0.0"
+        - type: skill
+          name: python-test
+          constraint: ">=1.0.0,<2.0.0"
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          source_commit: 7372336f5804142cb76ba9b9585439f20a4d6b81
 project_tooling:
   - name: beads-prime
     description: bd workflow primer — auto-synced from cognovis-library at SessionStart. bd prime emits its content. Fleet policy, not per-project customization.

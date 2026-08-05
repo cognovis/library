@@ -186,8 +186,9 @@ project lock cannot claim ownership of a global artifact, and a global lock
 cannot claim ownership of a project artifact. Cross-scope artifact dependency
 declarations fail before mutation.
 
-Typed dependencies whose primitive contract is intrinsically global, including
-`mcp:`, are global prerequisite assertions when reached from a project root.
+Typed dependencies whose primitive contract or catalog entry is explicitly
+global, including `mcp:` and entries with `default_scope: global`, are global
+prerequisite assertions when reached from a project root.
 They never create a project ownership edge or an artifact receipt. The project
 lock records them as non-owning prerequisite assertions with the requesting root,
 identity, and constraint so status and CI can reproduce the requirement. The

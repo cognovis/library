@@ -291,6 +291,17 @@ def resolve_workspace_closure(
         primitive = str(root["type"])
         name = str(root["name"])
         member_entry = _assert_same_catalog_member(catalog, workspace, primitive, name)
+        root_scope = member_entry.get("default_scope")
+        if primitive in INTRINSICALLY_GLOBAL_TYPES and scope == "project":
+            raise LibraryError(
+                f"Workspace scope project conflicts with intrinsically global root "
+                f"{primitive}:{name}"
+            )
+        if root_scope in {"project", "global"} and root_scope != scope:
+            raise LibraryError(
+                f"Workspace scope {scope} conflicts with {primitive}:{name} "
+                f"default_scope {root_scope}"
+            )
         constraint = root.get("constraint")
         if constraint is not None:
             version = member_entry.get("version")
@@ -303,11 +314,6 @@ def resolve_workspace_closure(
                 )
         closure = resolve_requires(catalog, primitive, name, repo_root, scope)
         for member in closure:
-            if scope == "project" and member[0] in INTRINSICALLY_GLOBAL_TYPES:
-                if member not in seen_prerequisites:
-                    prerequisites.append(member)
-                    seen_prerequisites.add(member)
-                continue
             member_catalog_entry = next(
                 (
                     entry
@@ -317,6 +323,13 @@ def resolve_workspace_closure(
                 {},
             )
             declared_scope = member_catalog_entry.get("default_scope")
+            if scope == "project" and (
+                member[0] in INTRINSICALLY_GLOBAL_TYPES or declared_scope == "global"
+            ):
+                if member not in seen_prerequisites:
+                    prerequisites.append(member)
+                    seen_prerequisites.add(member)
+                continue
             if declared_scope in {"project", "global"} and declared_scope != scope:
                 raise LibraryError(
                     f"Workspace scope {scope} conflicts with {member[0]}:{member[1]} "

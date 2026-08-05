@@ -2930,6 +2930,20 @@ def _print_workspace_result(result: dict, *, json_mode: bool) -> None:
             print(f"  {key}:")
             for value in values:
                 print(f"    - {value}")
+    workspaces = result.get("workspaces")
+    if workspaces:
+        print("  workspaces:")
+        for workspace in workspaces:
+            print(
+                f"    - {workspace['reference']} "
+                f"({workspace['version']}, {workspace['status']})"
+            )
+    for key in ("closure", "prerequisites", "owners", "deleted"):
+        values = result.get(key)
+        if values:
+            print(f"  {key}:")
+            for value in values:
+                print(f"    - {value}")
 
 
 def _workspace_definition_commit(catalog: dict, workspace) -> str:

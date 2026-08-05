@@ -13,6 +13,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 LIBRARY_PY = REPO_ROOT / "scripts" / "library.py"
 
 
+def test_platform_catalog_publishes_operational_python_cli_workspace() -> None:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+    from lib.workspace import resolve_workspace, resolve_workspace_closure
+
+    catalog = load_catalog(REPO_ROOT)
+
+    workspace = resolve_workspace(catalog, "cognovis-library-core:python-cli")
+    closure = resolve_workspace_closure(catalog, workspace, REPO_ROOT, "project")
+
+    assert workspace.version == "0.1.0"
+    assert set(closure.artifacts) == {
+        ("skill", "python-dev"),
+        ("skill", "python-test"),
+        ("standard", "python-cli-patterns"),
+    }
+    assert set(closure.prerequisites) == {
+        ("standard", "english-only"),
+        ("standard", "no-emoji"),
+    }
+
+
 def _run(project: Path, home: Path, *args: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["HOME"] = str(home)

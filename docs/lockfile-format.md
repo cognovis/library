@@ -476,10 +476,11 @@ the lock record was written.
 - General `library sync` remains conservative and non-pruning while reading and
   refreshing schema v2 receipts.
 
-Global-only primitive types such as MCP are prerequisite assertions when reached
-from a project root. They are checked against the global lock before project
-mutation and recorded as non-owning project-lock assertions, but never become
-project receipts or project ownership edges.
+Global-only primitive types such as MCP and catalog entries declared with
+`default_scope: global` are prerequisite assertions when reached from a project
+root. They are checked against the global lock before project mutation and
+recorded as non-owning project-lock assertions, but never become project receipts
+or project ownership edges.
 
 Ownership-derived prune requires a verified, clean receipt. Explicit named
 primitive removal is separate user consent and may remove the ownerless named
