@@ -236,6 +236,8 @@ def install_simple_file(
             content_sha256=checksum,
             install_mode=install_mode,
             license_id=entry.get("license", "unknown"),
+            scope=scope,
+            version=str(entry.get("version")) if entry.get("version") is not None else None,
         )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         lock_data = load_lockfile(lockfile_path)

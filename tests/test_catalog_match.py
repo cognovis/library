@@ -249,6 +249,48 @@ def test_catalog_sync_dry_run_scans_local_inventory(tmp_path: Path) -> None:
     assert data["entries"][0]["name"] == "python-uv"
 
 
+def test_catalog_sync_projects_workspace_manifest_without_install_payload(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "source"
+    workspaces_dir = source_root / "workspaces"
+    workspaces_dir.mkdir(parents=True)
+    (workspaces_dir / "python-cli.yaml").write_text(
+        "schema_version: 1\n"
+        "name: python-cli\n"
+        "version: 1.0.0\n"
+        "description: Python CLI development capability.\n"
+        "status: experimental\n"
+        "roots:\n"
+        "  - type: skill\n"
+        "    name: python-dev\n"
+        "  - type: skill\n"
+        "    name: python-test\n"
+    )
+    catalog_data = yaml.safe_load(minimal_library(source_root))
+    catalog_data["sources"]["catalogs"][0]["content_types"].append("workspaces")
+    (tmp_path / "library.yaml").write_text(yaml.safe_dump(catalog_data))
+
+    result = run_library(
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=workspace",
+        "--json",
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0, result.stderr
+    entry = json.loads(result.stdout)["entries"][0]
+    assert entry["name"] == "python-cli"
+    assert entry["roots"] == [
+        {"type": "skill", "name": "python-dev"},
+        {"type": "skill", "name": "python-test"},
+    ]
+    assert entry["source"].endswith("/workspaces/python-cli.yaml")
+    assert entry["metadata"]["library"]["source_catalog"] == "test-core"
+
+
 def test_catalog_sync_scans_only_top_level_skill_dirs(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     real_skill = source_root / "skills" / "real-skill"
@@ -331,7 +373,12 @@ def test_catalog_sync_projects_agent_handlers_and_standard_dependencies(
     (tmp_path / "library.yaml").write_text(catalog)
 
     result = run_library(
-        "catalog", "sync", "--source=test-core", "--primitive-type=agent", "--json", cwd=tmp_path
+        "catalog",
+        "sync",
+        "--source=test-core",
+        "--primitive-type=agent",
+        "--json",
+        cwd=tmp_path,
     )
 
     assert result.returncode == 0, result.stderr
@@ -606,9 +653,7 @@ def test_catalog_sync_scans_standard_bundles_and_leaf_standards(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
     refreshed = yaml.safe_load((tmp_path / "library.yaml").read_text())
-    by_name = {
-        entry["name"] for entry in refreshed["library"]["standards"]
-    }
+    by_name = {entry["name"] for entry in refreshed["library"]["standards"]}
 
     assert by_name == {
         "action-proposal",
@@ -616,9 +661,7 @@ def test_catalog_sync_scans_standard_bundles_and_leaf_standards(tmp_path: Path) 
         "root-standard",
         "workflow",
     }
-    entries = {
-        entry["name"]: entry for entry in refreshed["library"]["standards"]
-    }
+    entries = {entry["name"]: entry for entry in refreshed["library"]["standards"]}
     assert entries["python-cli-patterns"]["source"].endswith(
         "/tree/main/standards/python-cli-patterns/"
     )

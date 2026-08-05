@@ -28,7 +28,10 @@ from typing import Any
 try:
     import yaml
 except ImportError:
-    print("[sync_project_tooling] SKIP: PyYAML not installed. Run: pip install PyYAML", file=sys.stderr)
+    print(
+        "[sync_project_tooling] SKIP: PyYAML not installed. Run: pip install PyYAML",
+        file=sys.stderr,
+    )
     sys.exit(0)
 
 
@@ -102,6 +105,7 @@ def resolve_hooks_dir(project_root: Path) -> Path | None:
 # Condition evaluation
 # ---------------------------------------------------------------------------
 
+
 def evaluate_condition(condition: dict[str, str], project_root: Path) -> bool:
     """Evaluate a single tooling condition dict (exactly one key).
 
@@ -141,6 +145,7 @@ def evaluate_conditions(conditions: list[dict[str, str]], project_root: Path) ->
 # ---------------------------------------------------------------------------
 # Sync strategies
 # ---------------------------------------------------------------------------
+
 
 def sync_file(
     entry: dict[str, Any],
@@ -227,7 +232,9 @@ def sync_git_hook(
         if status.startswith("error:"):
             return status
 
-    if strategy != "overwrite_always" and (target_path.exists() or target_path.is_symlink()):
+    if strategy != "overwrite_always" and (
+        target_path.exists() or target_path.is_symlink()
+    ):
         try:
             existing = target_path.read_bytes()
         except OSError as exc:
@@ -370,6 +377,7 @@ def sync_gitignore_patch(
 # Entry dispatcher
 # ---------------------------------------------------------------------------
 
+
 def apply_entry(
     entry: dict[str, Any],
     library_root: Path,
@@ -409,6 +417,7 @@ def apply_entry(
 # ---------------------------------------------------------------------------
 # Public API (also callable from tests)
 # ---------------------------------------------------------------------------
+
 
 def sync_entries(
     entries: list[dict[str, Any]],
@@ -476,9 +485,40 @@ def load_entries(library_root: Path) -> list[dict[str, Any]]:
     return data.get("project_tooling", [])
 
 
+def manager_inventory(
+    entries: list[dict[str, Any]], project_root: Path, profile: str
+) -> list[dict[str, str]]:
+    """Return every canonical target path this legacy writer may mutate."""
+    inventory: list[dict[str, str]] = []
+    for entry in entries:
+        profiles = entry.get("profiles") or []
+        if profiles and profile not in profiles:
+            continue
+        if entry.get("target_kind") == "git_hook":
+            hooks_dir = resolve_hooks_dir(project_root)
+            hook_name = entry.get("hook_name")
+            if hooks_dir is None or not hook_name:
+                continue
+            target = hooks_dir / str(hook_name)
+        else:
+            raw_target = entry.get("target_path")
+            if not raw_target:
+                continue
+            target = project_root / str(raw_target)
+        inventory.append(
+            {
+                "path": str(target.resolve()),
+                "manager": "project-tooling",
+                "entry": str(entry.get("name") or ""),
+            }
+        )
+    return sorted(inventory, key=lambda item: (item["path"], item["entry"]))
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     import argparse
@@ -497,7 +537,8 @@ def main() -> int:
         help="cognovis-library root directory (default: auto-detected via COGNOVIS_LIBRARY env or well-known paths)",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Print one line per entry processed",
     )
@@ -506,6 +547,11 @@ def main() -> int:
         choices=["consumer", "marketplace"],
         default="consumer",
         help="Project profile for profile-scoped tooling entries (default: consumer)",
+    )
+    parser.add_argument(
+        "--inventory-json",
+        action="store_true",
+        help="Print the read-only external-manager inventory and do not sync",
     )
     args = parser.parse_args()
 
@@ -531,7 +577,15 @@ def main() -> int:
 
     if not entries:
         if args.verbose:
-            print("[sync_project_tooling] No project_tooling entries found in library.yaml")
+            print(
+                "[sync_project_tooling] No project_tooling entries found in library.yaml"
+            )
+        return 0
+
+    if args.inventory_json:
+        print(
+            json.dumps(manager_inventory(entries, project_root, args.profile), indent=2)
+        )
         return 0
 
     summary = sync_entries(

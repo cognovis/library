@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cognovis/library/docs/schema/workspace.schema.json",
+  "title": "Library Workspace Manifest",
+  "description": "Schema v1 for a metadata-only, same-catalog Library desired-state root.",
+  "type": "object",
+  "required": ["schema_version", "name", "version", "description", "roots"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "description": {"type": "string", "minLength": 1},
+    "status": {
+      "type": "string",
+      "enum": ["experimental", "stable", "deprecated"],
+      "default": "experimental"
+    },
+    "standing_context_fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "source": {"type": "string", "minLength": 1},
+    "metadata": {"type": "object"},
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
+    "roots": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/root"}
+    }
+  },
+  "$defs": {
+    "root": {
+      "type": "object",
+      "required": ["type", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "skill",
+            "agent",
+            "prompt",
+            "script",
+            "standard",
+            "guardrail",
+            "mcp",
+            "model-standard",
+            "agent-base",
+            "workflow",
+            "pi-extension",
+            "pi-profile",
+            "just-module",
+            "runtime-config"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "constraint": {
+          "type": "string",
+          "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+        }
+      }
+    }
+  }
+}

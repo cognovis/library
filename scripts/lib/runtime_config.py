@@ -42,7 +42,6 @@ from .paths import expand_path, resolve_install_paths
 from .primitives import get_primitive
 from .source import parse_source, resolve_marketplace
 
-
 PRIMITIVE_NAME = "runtime-config"
 
 
@@ -325,6 +324,8 @@ def install_runtime_config(
         checksum_type="file",
         install_mode="vendor",
         license_id=entry.get("license", "unknown"),
+        scope=scope,
+        version=str(entry.get("version")) if entry.get("version") is not None else None,
     )
     # Record the overlay provenance so status/debugging can see both inputs.
     lockfile_entry["overlay_source"] = entry.get("global_overlay", "")

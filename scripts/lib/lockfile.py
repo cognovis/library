@@ -18,9 +18,9 @@ except ImportError as exc:
 
 from .errors import LockfileError
 
-
 # Default lockfile name at project root
 LOCKFILE_NAME = ".library.lock"
+
 
 # Global lockfile path (XDG-compliant).
 #
@@ -52,9 +52,287 @@ def _global_lockfile_path() -> Path:
         return GLOBAL_LOCKFILE
     return _default_global_lockfile()
 
+
 LEGACY_PRIMITIVE_TYPES = {
     "golden-prompt": "agent-base",
 }
+
+LOCKFILE_SCHEMA_VERSION = 2
+
+
+def root_id(primitive_type: str, name: str) -> str:
+    """Return the stable identity for one direct artifact root."""
+    return f"{canonical_lockfile_type(primitive_type)}:{name}"
+
+
+def _empty_v2_lock() -> dict[str, Any]:
+    """Return a new in-memory v2 lock with the compatibility projection."""
+    return {
+        "schema_version": LOCKFILE_SCHEMA_VERSION,
+        "migration": {"prune_ack_required": False},
+        "requested_roots": [],
+        "receipts": [],
+        "prerequisites": [],
+        "installed": [],
+    }
+
+
+def _entry_scope(entry: dict[str, Any], fallback_scope: str) -> str:
+    """Return explicit install scope without inferring it from absolute paths."""
+    scope = str(entry.get("scope") or fallback_scope)
+    if scope not in {"project", "global"}:
+        raise LockfileError(f"Invalid lockfile entry scope {scope!r}")
+    return scope
+
+
+def _requested_root_from_entry(
+    entry: dict[str, Any], *, fallback_scope: str
+) -> dict[str, Any]:
+    primitive_type = str(canonical_lockfile_type(entry.get("type")) or "")
+    result: dict[str, Any] = {
+        "id": root_id(primitive_type, str(entry.get("name") or "")),
+        "type": primitive_type,
+        "name": str(entry.get("name") or ""),
+        "scope": _entry_scope(entry, fallback_scope),
+        "catalog_identity": str(entry.get("catalog_identity") or "unknown"),
+        "resolved_version": str(entry.get("version") or "legacy"),
+        "definition_commit": str(entry.get("source_commit") or "legacy"),
+    }
+    return result
+
+
+def _initial_targets(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build an exact target inventory when materialized content is available."""
+    if entry.get("type") in {"guardrail", "mcp", "runtime-config"}:
+        return []
+    target = str(entry.get("install_target") or "").rstrip("/")
+    if not target:
+        return []
+    target_path = Path(target).expanduser()
+    items: list[dict[str, Any]] = []
+    if target_path.is_symlink():
+        items.append(
+            {
+                "path": target,
+                "kind": "symlink",
+                "link_target": str(target_path.readlink()),
+            }
+        )
+    elif target_path.is_file():
+        items.append(
+            {
+                "path": target,
+                "kind": "file",
+                "content_sha256": compute_checksum(target_path),
+            }
+        )
+    elif target_path.is_dir():
+        items.append({"path": str(target_path), "kind": "directory"})
+        for child in sorted(target_path.rglob("*")):
+            if child.is_symlink():
+                items.append(
+                    {
+                        "path": str(child),
+                        "kind": "symlink",
+                        "link_target": str(child.readlink()),
+                    }
+                )
+            elif child.is_dir():
+                items.append({"path": str(child), "kind": "directory"})
+            elif child.is_file():
+                items.append(
+                    {
+                        "path": str(child),
+                        "kind": "file",
+                        "content_sha256": compute_checksum(child),
+                    }
+                )
+    else:
+        kind = "directory" if entry.get("checksum_type") == "directory" else "file"
+        item: dict[str, Any] = {"path": target, "kind": kind}
+        if kind == "file" and entry.get("content_sha256"):
+            item["content_sha256"] = entry["content_sha256"]
+        items.append(item)
+
+    for bridge in entry.get("bridge_symlinks") or []:
+        raw_path, separator, raw_target = str(bridge).partition(" -> ")
+        if separator and raw_path.strip() and raw_target.strip():
+            bridge_path = Path(raw_path.strip()).expanduser()
+            if any(item.get("path") == str(bridge_path) for item in items):
+                continue
+            if bridge_path.is_symlink():
+                items.append(
+                    {
+                        "path": str(bridge_path),
+                        "kind": "symlink",
+                        "link_target": str(bridge_path.readlink()),
+                    }
+                )
+            elif bridge_path.is_file():
+                items.append(
+                    {
+                        "path": str(bridge_path),
+                        "kind": "file",
+                        "content_sha256": compute_checksum(bridge_path),
+                    }
+                )
+                handler_root_name = f"{entry.get('name', '')}-handlers"
+                handler_root = next(
+                    (
+                        ancestor
+                        for ancestor in bridge_path.parents
+                        if ancestor.name == handler_root_name
+                    ),
+                    None,
+                )
+                if handler_root is not None:
+                    directory = bridge_path.parent
+                    while directory.is_relative_to(handler_root):
+                        if not any(
+                            item.get("path") == str(directory) for item in items
+                        ):
+                            items.append({"path": str(directory), "kind": "directory"})
+                        if directory == handler_root:
+                            break
+                        directory = directory.parent
+            elif bridge_path.is_dir():
+                items.append({"path": str(bridge_path), "kind": "directory"})
+                for child in sorted(bridge_path.rglob("*")):
+                    if child.is_symlink():
+                        items.append(
+                            {
+                                "path": str(child),
+                                "kind": "symlink",
+                                "link_target": str(child.readlink()),
+                            }
+                        )
+                    elif child.is_dir():
+                        items.append({"path": str(child), "kind": "directory"})
+                    elif child.is_file():
+                        items.append(
+                            {
+                                "path": str(child),
+                                "kind": "file",
+                                "content_sha256": compute_checksum(child),
+                            }
+                        )
+    return items
+
+
+def _receipt_from_entry(
+    entry: dict[str, Any],
+    *,
+    fallback_scope: str,
+    verified: bool,
+    prune_blocked_reason: str | None,
+) -> dict[str, Any]:
+    """Convert the legacy-compatible install shape into a v2 receipt."""
+    primitive_type = str(canonical_lockfile_type(entry.get("type")) or "")
+    name = str(entry.get("name") or "")
+    receipt = dict(entry)
+    receipt.update(
+        {
+            "id": root_id(primitive_type, name),
+            "type": primitive_type,
+            "name": name,
+            "scope": _entry_scope(entry, fallback_scope),
+            "catalog_identity": str(entry.get("catalog_identity") or "unknown"),
+            "resolved_version": str(entry.get("version") or "legacy"),
+            "verified": verified,
+            "adopted": False,
+            "prune_blocked_reason": prune_blocked_reason,
+            "targets": _initial_targets(entry),
+            "owners_cache": [root_id(primitive_type, name)],
+        }
+    )
+    return receipt
+
+
+def _legacy_projection(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Return the deprecated installed entry derived from one receipt."""
+    excluded = {
+        "id",
+        "scope",
+        "resolved_version",
+        "verified",
+        "adopted",
+        "prune_blocked_reason",
+        "targets",
+        "owners_cache",
+    }
+    return {key: value for key, value in receipt.items() if key not in excluded}
+
+
+def migrate_lockfile_v2(data: dict[str, Any], *, scope: str = "project") -> bool:
+    """Normalize a legacy or partial lock to the authoritative v2 model."""
+    migrate_lockfile_primitive_types(data)
+    declared_version = data.get("schema_version")
+    if declared_version is not None and declared_version != LOCKFILE_SCHEMA_VERSION:
+        raise LockfileError(
+            f"Unsupported lockfile schema_version {declared_version!r}; "
+            f"this Library supports {LOCKFILE_SCHEMA_VERSION}"
+        )
+    if data.get("schema_version") == LOCKFILE_SCHEMA_VERSION:
+        changed = False
+        for key, default in (
+            ("requested_roots", []),
+            ("receipts", []),
+            ("prerequisites", []),
+        ):
+            if not isinstance(data.get(key), list):
+                data[key] = default
+                changed = True
+        if not isinstance(data.get("migration"), dict):
+            data["migration"] = {"prune_ack_required": False}
+            changed = True
+        if not isinstance(data.get("installed"), list):
+            data["installed"] = [
+                _legacy_projection(receipt)
+                for receipt in data["receipts"]
+                if isinstance(receipt, dict)
+            ]
+            changed = True
+        for collection in ("requested_roots", "receipts"):
+            for item in data[collection]:
+                if isinstance(item, dict) and item.get("scope") not in {
+                    "project",
+                    "global",
+                }:
+                    item["scope"] = scope
+                    changed = True
+        return changed
+
+    installed = data.get("installed")
+    if not isinstance(installed, list):
+        installed = []
+    receipts = [
+        _receipt_from_entry(
+            entry,
+            fallback_scope=scope,
+            verified=False,
+            prune_blocked_reason="legacy-unverified",
+        )
+        for entry in installed
+        if isinstance(entry, dict)
+    ]
+    data.clear()
+    data.update(
+        {
+            "schema_version": LOCKFILE_SCHEMA_VERSION,
+            "migration": {"prune_ack_required": bool(receipts)},
+            "requested_roots": [
+                _requested_root_from_entry(entry, fallback_scope=scope)
+                for entry in installed
+                if isinstance(entry, dict)
+            ],
+            "receipts": receipts,
+            "prerequisites": [],
+            "installed": [
+                dict(entry) for entry in installed if isinstance(entry, dict)
+            ],
+        }
+    )
+    return True
 
 
 def canonical_lockfile_type(primitive_type: str | None) -> str | None:
@@ -122,7 +400,7 @@ def load_lockfile(lockfile_path: Path) -> dict[str, Any]:
         LockfileError: If the file exists but is invalid YAML.
     """
     if not lockfile_path.exists():
-        return {"installed": []}
+        return _empty_v2_lock()
 
     try:
         with lockfile_path.open() as f:
@@ -131,14 +409,18 @@ def load_lockfile(lockfile_path: Path) -> dict[str, Any]:
         raise LockfileError(f"Invalid YAML in {lockfile_path}: {exc}") from exc
 
     if data is None:
-        return {"installed": []}
+        return _empty_v2_lock()
 
     if not isinstance(data, dict):
         raise LockfileError(f"{lockfile_path} must be a YAML mapping.")
 
-    if "installed" not in data:
-        data["installed"] = []
-    migrate_lockfile_primitive_types(data)
+    scope = (
+        "global"
+        if lockfile_path.expanduser().absolute()
+        == _global_lockfile_path().expanduser().absolute()
+        else "project"
+    )
+    migrate_lockfile_v2(data, scope=scope)
 
     return data
 
@@ -153,11 +435,19 @@ def save_lockfile(lockfile_path: Path, data: dict[str, Any]) -> None:
     Raises:
         LockfileError: On write failure.
     """
-    migrate_lockfile_primitive_types(data)
+    scope = (
+        "global"
+        if lockfile_path.expanduser().absolute()
+        == _global_lockfile_path().expanduser().absolute()
+        else "project"
+    )
+    migrate_lockfile_v2(data, scope=scope)
     try:
         lockfile_path.parent.mkdir(parents=True, exist_ok=True)
         with lockfile_path.open("w") as f:
-            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            yaml.dump(
+                data, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+            )
     except OSError as exc:
         raise LockfileError(f"Failed to write {lockfile_path}: {exc}") from exc
 
@@ -179,6 +469,8 @@ def upsert_entry(
     Returns:
         The updated data dict.
     """
+    entry_scope = _entry_scope(entry, "project")
+    migrate_lockfile_v2(data, scope=entry_scope)
     installed = data.setdefault("installed", [])
     name = entry["name"]
     primitive_type = canonical_lockfile_type(entry.get("type"))
@@ -187,9 +479,36 @@ def upsert_entry(
     for i, existing in enumerate(installed):
         if existing.get("name") == name and existing.get("type") == primitive_type:
             installed[i] = entry
-            return data
+            break
+    else:
+        installed.append(entry)
 
-    installed.append(entry)
+    direct_root = _requested_root_from_entry(entry, fallback_scope=entry_scope)
+    requested_roots = data.setdefault("requested_roots", [])
+    for index, existing_root in enumerate(requested_roots):
+        if existing_root.get("id") == direct_root["id"]:
+            requested_roots[index] = direct_root
+            break
+    else:
+        requested_roots.append(direct_root)
+
+    receipt = _receipt_from_entry(
+        entry,
+        fallback_scope=entry_scope,
+        verified=True,
+        prune_blocked_reason=None,
+    )
+    receipts = data.setdefault("receipts", [])
+    for index, existing_receipt in enumerate(receipts):
+        if existing_receipt.get("id") == receipt["id"]:
+            receipt["owners_cache"] = list(
+                existing_receipt.get("owners_cache") or receipt["owners_cache"]
+            )
+            receipt["adopted"] = bool(existing_receipt.get("adopted", False))
+            receipts[index] = receipt
+            break
+    else:
+        receipts.append(receipt)
     return data
 
 
@@ -206,17 +525,46 @@ def remove_entry(
     Returns:
         True if an entry was removed, False if name was not found.
     """
+    migrate_lockfile_v2(data)
     installed = data.get("installed", [])
     primitive_type = canonical_lockfile_type(primitive_type)
     original_len = len(installed)
+    matching_ids = {
+        root_id(str(e.get("type") or ""), str(e.get("name") or ""))
+        for e in installed
+        if e.get("name") == name
+        and (primitive_type is None or e.get("type") == primitive_type)
+    }
+    before_roots = len(data.get("requested_roots", []))
+    data["requested_roots"] = [
+        root
+        for root in data.get("requested_roots", [])
+        if root.get("id") not in matching_ids
+    ]
+    # Primitive removal is an explicit physical removal operation. Explanatory
+    # owners_cache data must never decide retention; the next Workspace plan
+    # recomputes reachability and reports the missing receipt as an addition.
+    retained_receipt_ids: set[str] = set()
     data["installed"] = [
-        e for e in installed
-        if not (
+        e
+        for e in installed
+        if root_id(str(e.get("type") or ""), str(e.get("name") or ""))
+        in retained_receipt_ids
+        or not (
             e.get("name") == name
             and (primitive_type is None or e.get("type") == primitive_type)
         )
     ]
-    return len(data["installed"]) < original_len
+    data["receipts"] = [
+        receipt
+        for receipt in data.get("receipts", [])
+        if receipt.get("id") not in matching_ids
+        or receipt.get("id") in retained_receipt_ids
+    ]
+    return (
+        len(data["installed"]) < original_len
+        or len(data["requested_roots"]) < before_roots
+    )
 
 
 def get_entry(
@@ -266,15 +614,17 @@ def compute_directory_hash(dir_path: Path) -> str:
         FileNotFoundError: If dir_path does not exist.
     """
     if not dir_path.exists():
-        raise FileNotFoundError(f"compute_directory_hash: path does not exist: {dir_path}")
+        raise FileNotFoundError(
+            f"compute_directory_hash: path does not exist: {dir_path}"
+        )
     h = hashlib.sha256()
     for f in sorted(dir_path.rglob("*")):
         if f.is_file():
             rel = f.relative_to(dir_path)
             h.update(str(rel).encode())
-            h.update(b"\0")          # separator
+            h.update(b"\0")  # separator
             h.update(compute_checksum(f).encode())
-            h.update(b"\0")          # separator
+            h.update(b"\0")  # separator
     return h.hexdigest()
 
 
@@ -294,6 +644,8 @@ def make_entry(
     checksum_type: str = "file",
     install_mode: str = "vendor",
     content_sha256: Optional[str] = None,
+    scope: str = "project",
+    version: str | None = None,
 ) -> dict[str, Any]:
     """Build a lockfile entry dict conforming to the lockfile schema.
 
@@ -332,7 +684,10 @@ def make_entry(
         "install_mode": install_mode,
         "license": license_id,
         "bridge_symlinks": bridge_symlinks or [],
+        "scope": scope,
     }
+    if version is not None:
+        entry["version"] = version
     if catalog_identity:
         entry["catalog_identity"] = catalog_identity
     return entry

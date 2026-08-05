@@ -397,6 +397,8 @@ def install_project_native_file(
                 checksum_type="directory" if bundle else "file",
                 install_mode=install_mode,
                 license_id=entry.get("license", "unknown"),
+                scope=scope,
+                version=str(entry.get("version")) if entry.get("version") is not None else None,
             ),
         )
         save_lockfile(lockfile_path, lock_data)

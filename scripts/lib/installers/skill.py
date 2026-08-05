@@ -260,6 +260,8 @@ def install_skill(
             install_mode=install_mode,
             license_id=entry.get("license", "unknown"),
             bridge_symlinks=bridge_symlink_strs,
+            scope=scope,
+            version=str(entry.get("version")) if entry.get("version") is not None else None,
         )
 
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))

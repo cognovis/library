@@ -123,6 +123,14 @@
           },
           "default": []
         },
+        "workspaces": {
+          "description": "Catalog of metadata-only Library Workspace manifests.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workspace_entry"
+          },
+          "default": []
+        },
         "pi_extensions": {
           "description": "Catalog of project-only Pi extension files.",
           "type": "array",
@@ -234,6 +242,29 @@
       },
       "default": []
     },
+    "workspace_policy": {
+      "description": "Selected-scope safety budgets for Workspace resolution.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "global": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_roots": {"type": "integer", "minimum": 1, "maximum": 5},
+            "max_receipts": {"type": "integer", "minimum": 1, "maximum": 15},
+            "max_standing_context_fraction": {"type": "number", "minimum": 0, "maximum": 0.01}
+          }
+        },
+        "project": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_receipts": {"type": "integer", "minimum": 1, "maximum": 30}
+          }
+        }
+      }
+    },
     "model_standards": {
       "description": "Deprecated compatibility alias for library.model_standards. New catalog files should use library.model_standards.",
       "type": "array",
@@ -344,6 +375,7 @@
               "agent_bases",
               "workflows",
               "runtime_configs",
+              "workspaces",
               "pi_extensions",
               "pi_profiles",
               "just_modules",
@@ -2146,6 +2178,49 @@
         }
       },
       "additionalProperties": false
+    },
+    "workspace_entry": {
+      "description": "A convention-scanned Workspace manifest plus source-catalog metadata.",
+      "type": "object",
+      "required": ["name", "description", "source", "schema_version", "version", "roots"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "description": {"type": "string", "minLength": 1},
+        "source": {"$ref": "#/$defs/source_ref"},
+        "schema_version": {"const": 1},
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+        },
+        "status": {"type": "string", "enum": ["experimental", "stable", "deprecated"]},
+        "standing_context_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "roots": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/workspace_root"}
+        },
+        "metadata": {"$ref": "#/$defs/entry_metadata"},
+        "tags": {"type": "array", "items": {"type": "string"}, "default": []}
+      }
+    },
+    "workspace_root": {
+      "type": "object",
+      "required": ["type", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["skill", "agent", "prompt", "script", "standard", "guardrail", "mcp", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "runtime-config"]
+        },
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
+        "constraint": {
+          "type": "string",
+          "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+        }
+      }
     },
     "project_native_entry": {
       "description": "A project-only harness-native file or Pi extension bundle installed at a fixed target below .agents/.",

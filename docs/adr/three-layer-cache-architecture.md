@@ -9,7 +9,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
-related_adrs: ["0002"]
+amended_by: ["0010"]
+related_adrs: ["0002", "0010"]
 ---
 
 # ADR-0003: Three-layer skill deployment + marketplace-symmetric primitives
@@ -17,6 +18,19 @@ related_adrs: ["0002"]
 ## Status
 
 Accepted on 2026-05-13 after two Codex Adversarial Review rounds.
+
+Amended by ADR-0010. The Source/Cache/Harness model, scoped lockfile locations,
+and cache-retention policy remain accepted. Decision 4's flat `installed:` data
+model is superseded by lockfile v2 requested roots and receipts; its deployment
+fields become receipt fields rather than disappearing.
+
+The title's "Harness Symlink" and the `upgrade`, `pin`, `edit`, `gc`, and `push`
+commands below record the 2026-05 design, not the released CLI. Canonical Layer-C
+content is now vendored by default, with symlinks used for harness bridges or an
+explicit development mode. The current deterministic grammar is
+`library <primitive> <verb>` with `list`, `use`, `remove`, `sync`, `search`, and
+`audit`; ADR-0010 adds the Workspace lifecycle. Historical lifecycle examples
+remain useful rationale but are not an operator reference.
 
 ## Context
 
@@ -260,6 +274,14 @@ the last N=3 unreferenced versions per (marketplace, name) for fast
 rollback.
 
 ### Decision 4: Lockfile — extend existing `.library.lock` (YAML), add global counterpart
+
+> **ADR-0010 amendment (2026-08-05):** The two lockfile locations and YAML
+> serialization remain unchanged. The additive `installed:` list described in
+> this decision is the legacy v1 representation. Lockfile v2 separates
+> universal `requested_roots` from materialized `receipts`, records per-file
+> digests, and treats cached owner edges as non-authoritative. Migration promotes
+> every legacy entry to an unverified, prune-blocked direct root. See ADR-0010
+> and `docs/lockfile-format.md` for the target schema and transition rules.
 
 ADR-0003 **extends** the existing normative `.library.lock` spec
 (`docs/lockfile-format.md`, `docs/schema/lockfile.schema.json`,

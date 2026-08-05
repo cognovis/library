@@ -8,7 +8,8 @@ deciders:
   - Malte Sussdorff
 supersedes: ["0001"]
 superseded_by: []
-related_adrs: ["0001"]
+amended_by: ["0010"]
+related_adrs: ["0001", "0010"]
 ---
 
 # ADR-0002: Library-core repos as canonical source; harness dirs as deployment targets; full marketplace removal
@@ -16,6 +17,14 @@ related_adrs: ["0001"]
 ## Status
 
 Accepted. **Supersedes ADR-0001.**
+
+Amended by ADR-0010. The source/deployment split and removal of the two Claude
+plugin marketplaces remain accepted. The planned hand-maintained bootstrap
+capability list for fleet-wide essentials is superseded by a small global
+Workspace. The irreducible Library engine and conversational entrypoint remain a
+bootstrap prerequisite; forge Skills move to `library-authoring`. Historical
+`/library use` examples below describe the conversational interface at the time;
+the deterministic CLI now uses `library <primitive> use <name>`.
 
 > **Terminology clarification (added 2026-05-12 in conjunction with
 > ADR-0003)**: The term *marketplace* in this ADR refers
@@ -108,8 +117,9 @@ Distribution moves entirely to `/library use` against
 `cognovis/library-core` (team artefacts) and `sussdorff/library-core`
 (personal artefacts). Fleet-wide essentials (`core`-equivalent,
 `beads-workflow`-equivalent, `infra`-equivalent) install via a
-single bootstrap script that calls `/library use` for the required
-artefact set on a new machine.
+small global Workspace under ADR-0010. The bootstrap script described by this
+ADR remains historical migration machinery rather than a second desired-state
+manifest.
 
 ### Decision 2: cld/cdx canonical home is `cognovis-library/bin/`
 

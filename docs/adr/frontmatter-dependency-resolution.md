@@ -8,7 +8,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
-related_adrs: ["0002", "0003"]
+amended_by: ["0010"]
+related_adrs: ["0002", "0003", "0010"]
 ---
 
 # ADR-0004: Frontmatter-driven dependency resolution + harness-neutral source layout for library primitives
@@ -16,6 +17,12 @@ related_adrs: ["0002", "0003"]
 ## Status
 
 Accepted.
+
+Amended by ADR-0010. Frontmatter remains authoritative for a primitive's
+dependencies and transitive installation remains idempotent. ADR-0010 adds
+universal requested-root ownership, fresh reachability resolution, and safe
+transitive removal. It also clarifies that Workspace is not the rejected bundle
+primitive from Decision 4.
 
 ## Context
 
@@ -80,6 +87,25 @@ A single contract that answers:
 - **How do we prevent drift between declaration and reality?**
 
 ## Decision
+
+### 2026-08-05 amendment: desired-state ownership completes the graph lifecycle
+
+ADR-0010 extends the dependency graph from additive installation to universal
+ownership-aware reconciliation:
+
+- every direct artifact primitive and Workspace request is a requested root;
+- materialized primitives receive individual receipts;
+- reachability is recomputed from all requested roots against fresh, complete,
+  catalog-pinned definitions before a receipt can become pruneable;
+- persisted edge or owner snapshots are audit-only and never authoritative; and
+- incompatible constraints for one materialization fail before mutation.
+- an intrinsically global dependency such as `mcp:` reached from a project root
+  is a prerequisite assertion against the global lock, not a project ownership
+  edge; a missing or incompatible prerequisite fails before project mutation.
+
+This amendment does not change where a primitive declares `requires:`. It changes
+how the resolved graph is retained and reconciled after roots or dependencies
+change.
 
 ### Decision 1: Frontmatter `requires:` is the authoritative declaration
 
@@ -159,15 +185,20 @@ agent itself, which `requires:` its 15 skills + 5 sibling agents.
 `/library use bead-orchestrator` from a clean polaris installs the
 full closure.
 
-If we ever need a non-agent, non-skill "bundle as such," we add a
-sentinel entry (e.g. an empty `agent:beads-workflow-meta`) whose only
-purpose is to carry the `requires:` array. The graph remains the
-single source of truth; bundles are syntactic sugar over the graph.
+Do not add a non-agent, non-skill sentinel merely to carry `requires:`. A strict
+dependency graph needs a real entrypoint primitive that owns the capability. A
+selection of independently meaningful capabilities belongs in a Workspace.
 
 Rationale: every additional primitive type increases schema surface,
 validator complexity, and resolver branching. The graph already
 expresses bundles without a new type. See "Alternatives Considered"
 for the rejected `library.bundles:` proposal.
+
+**ADR-0010 clarification:** Workspace does not reverse this decision. It is the
+metadata-only requested root for selectable desired-state composition and safe
+reconciliation. Strict functional composition remains in a real primitive's
+`requires:` graph. Package is retired as an unimplemented Library concept;
+external ecosystem packages remain distribution formats, not Library roots.
 
 ### Decision 5: `/library use` resolves transitively, idempotently
 
@@ -190,6 +221,13 @@ Updated `/library use <name>` semantics:
 Idempotency: each step checks "already installed and at the right
 version per lockfile" and skips if so. Force re-install: explicit
 flag `--reinstall`.
+
+**ADR-0010 amendment:** the full transitive closure is materialized as receipts,
+while only explicit user requests are recorded as requested roots. Dependency
+receipts do not silently become direct roots. The complete addition set must
+materialize before the requested root is committed, and shared receipts survive
+whenever another root still reaches them. Workspace pruning follows ADR-0010's
+explicit `--prune --apply` and fail-closed safety contract.
 
 ### Decision 6: Source repos use a harness-neutral top-level layout
 

@@ -47,6 +47,13 @@ default_dirs:
     - default: .agents/pi/profiles/
   just_modules:
     - default: .agents/just/
+workspace_policy:
+  global:
+    max_roots: 5
+    max_receipts: 15
+    max_standing_context_fraction: 0.01
+  project:
+    max_receipts: 30
 tag_vocabulary:
   - tag: judge-layer
     description: Artifacts that ship as part of the judge-layer family.
@@ -145,6 +152,7 @@ sources:
         - agent_bases
         - workflows
         - runtime_configs
+        - workspaces
       scope:
         topics:
           - team
@@ -1622,6 +1630,7 @@ library:
     - name: python-dev
       description: Develop Python CLI tools — project scaffold, CLI entry points, packaging, PyPI release, config resolution. Use when writing Python, creating a CLI tool, setting up pyproject.toml, working with argparse or click, structuring a new Python project, adding uv tool support, or any Python development context that is not test-focused. Triggers on write python, python tool, python cli, build cli, argparse, click, pyproject.toml, uv tool, src layout, hatchling, pypi, calver.
       source: https://github.com/cognovis/library-core/blob/main/skills/python-dev/SKILL.md
+      version: 1.0.0
       requires:
         - standard:python-cli-patterns
         - standard:english-only
@@ -1637,6 +1646,7 @@ library:
     - name: python-test
       description: Test Python CLI tools — pytest layout, click.testing.CliRunner, argparse invocation, fixtures, coverage. Use when writing Python tests, running pytest, mocking subprocess for key_command, testing a CLI entry point, or any Python test context. Triggers on pytest, uv run pytest, test python, test cli, CliRunner, conftest, test fixture python, click testing, capsys, monkeypatch.
       source: https://github.com/cognovis/library-core/blob/main/skills/python-test/SKILL.md
+      version: 1.0.0
       requires:
         - standard:python-cli-patterns
         - standard:english-only
@@ -3942,6 +3952,21 @@ library:
         - cognovis
         - pi
         - workbench
+    - name: fusion-context
+      description: Shared read-only Beads and Open Brain context boundary for Fusion children.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-context
+      bundle: true
+      entrypoint: index.ts
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - fusion
+        - context
     - name: fusion-harness
       description: Cognovis Fusion Harness with ACPX-backed model roles.
       source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-harness
@@ -3978,6 +4003,7 @@ library:
       source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-workhorse.json
       requires:
         - pi-profile:pi-workbench
+        - pi-extension:fusion-context
         - pi-extension:fusion-harness
       version: 1.0.0
       metadata:
@@ -3994,6 +4020,7 @@ library:
       source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-sota.json
       requires:
         - pi-profile:pi-workbench
+        - pi-extension:fusion-context
         - pi-extension:fusion-harness
       version: 1.0.0
       metadata:
@@ -4079,6 +4106,25 @@ library:
       tags:
         - origin:original
         - tier:core
+  workspaces:
+    - name: python-cli
+      description: Shared development and testing baseline for Python CLI repositories.
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml
+      schema_version: 1
+      version: 0.1.0
+      status: experimental
+      roots:
+        - type: skill
+          name: python-dev
+          constraint: ">=1.0.0,<2.0.0"
+        - type: skill
+          name: python-test
+          constraint: ">=1.0.0,<2.0.0"
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          source_commit: 2cdbfe648cbcc774daa30c88e03779afbb4abcfa
 project_tooling:
   - name: beads-prime
     description: bd workflow primer — auto-synced from cognovis-library at SessionStart. bd prime emits its content. Fleet policy, not per-project customization.

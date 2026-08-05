@@ -4,9 +4,60 @@ This repo (`cognovis/library`) is a fork of [`disler/the-library`](https://githu
 
 ## Goal
 
-One **catalog** (this repo) that distributes skills/agents/prompts/hooks/workflows
-across **multiple harnesses** (Claude Code, OpenAI Codex CLI, future: Pi) via a
-**per-repo on-demand pull** model — not deploy-all.
+One **platform and aggregate catalog index** (this repo) that resolves content
+from several catalog sources and distributes skills, agents, prompts, hooks,
+workflows, and project-native bridge artifacts across **multiple harnesses**
+(Claude Code, OpenAI Codex CLI, Pi, Cursor, and OpenCode where supported) via a
+**per-repo desired-state pull** model — not deploy-all.
+
+## Library Workspace control plane
+
+[ADR-0010](adr/workspace-desired-state-reconciliation.md) adds a desired-state
+control plane above artifact installation. A **Library Workspace** is a
+metadata-only catalog primitive that names typed requested roots for one project
+or the user-global lobby. It has no harness file of its own.
+
+The lockfile owns the deep behavior:
+
+```text
+requested roots (direct artifact primitives + Workspaces)
+                         |
+                         | fresh complete resolution
+                         v
+                 materialized receipts
+                         |
+                         | explicit --prune --apply
+                         v
+         clean + verified + ownerless receipts only
+```
+
+Ownership is universal rather than Workspace-private. A shared receipt survives
+while any requested root reaches it. Persisted owner edges explain a plan but
+never replace fresh resolution. Project and global closures are isolated in
+their existing lock scopes; a global Workspace can define the lobby only because
+all direct global Library roots share `~/.config/library/global.lock`.
+Intrinsically global dependencies such as MCP are checked as global-lock
+prerequisites for a project root. The project lock records the non-owning
+assertion, but it never becomes a project artifact receipt or ownership edge.
+
+Workspace selection is many-to-many. One project may register several
+orthogonal Workspaces, and one Workspace may be reused by many projects. A
+v1 Workspace contains only same-catalog artifact roots; nested Workspace and
+cross-catalog manifest roots are deferred. Cross-catalog composition registers
+several Workspaces directly in one scope. Composition is an unordered set union
+with no exclusion or override semantics. Strict functional coupling remains in
+primitive `requires:` metadata. The Library does not add a Package or generic
+bundle root between those two relationships.
+
+The evidence-backed initial cuts and repository mapping are documented in the
+[Workspace Portfolio Audit](research/workspace-portfolio-audit.md). In
+particular, `library/meta` directly composes `library-authoring` and
+`python-cli`. `fhir-ig-authoring` remains conditional on proving that at least
+two independent roots remain after its entrypoint `requires:` audit.
+
+Installation scope is separate from model-context scope. Workspace members keep
+their Skill, Standard, Agent, Hook, Workflow, or Script load semantics, so an
+installed lobby is not automatically resident in every prompt.
 
 ## The 4-layer Agentic Stack
 
@@ -34,9 +85,9 @@ differs. The `cdx` wrapper (bead `CL-tap`) parallels `cld`.
 
 1. **Build** — skills/agents live in their natural value-generating repo (no central
    monorepo enforced).
-2. **Catalog** — `/library <primitive> add <github-url>` registers a pointer in
-   `library.yaml`. Catalog is pointers-only, not content.
-3. **Distribute** — `/library <primitive> use <name>` pulls the referenced item into
+2. **Catalog** — a reviewed catalog change registers the source pointer and
+   metadata in `library.yaml`. Catalog is pointers-only, not content.
+3. **Distribute** — `library <primitive> use <name>` pulls the referenced item into
    the primitive's canonical location as a vendored copy by default. For skills,
    that is `.agents/skills/` project-local or `~/.agents/skills/` global, with a
    Claude bridge under `.claude/skills/` or `~/.claude/skills/`. Layer-B cache
@@ -44,8 +95,35 @@ differs. The `cdx` wrapper (bead `CL-tap`) parallels `cld`.
    repo pulls only what it needs.
 4. **Use** — invoked normally once in place. Same as any native skill/agent.
 
-Plus the return path: `/library <primitive> push <name>` sends local edits back upstream;
-`library sync` pulls latest for all installed items.
+A Workspace adds an optional desired-state route across stages 2 and 3:
+
+- a marketplace publishes a small versioned Workspace manifest containing typed
+  roots;
+- `library workspace list`, `show`, and `use <catalog>:<name> --dry-run` provide
+  discovery and a no-write first-contact plan;
+- `library workspace use <catalog>:<name>` registers that root and applies
+  additions;
+- `library workspace status` and `explain` expose the freshly resolved ownership
+  plan; and
+- `library workspace sync --prune --apply` can retire only exact, verified,
+  ownerless Library receipts. Ordinary `library sync` remains non-pruning.
+
+Migrated direct roots can be demoted in bulk to Workspace ownership through a
+lock-only plan-and-apply operation. It never deletes files; physical deletion
+remains a separate prune decision.
+
+The Workspace route replaces hand-maintained bootstrap capability lists,
+`consumer-projects.yml` primitive refresh lists, and new `project_tooling`
+distribution entries. The irreducible bootstrap still installs the Library
+engine and conversational entrypoint because they must exist before a Workspace
+can be resolved. Platform forge Skills move to `library-authoring` rather than
+remaining ambient bootstrap or lobby content. During migration the older
+managers remain protected owners; their files are never adopted or pruned
+implicitly.
+
+The return path is normal source development in the owning catalog repository,
+followed by review and publication. Deployed files are not pushed back as source.
+`library sync` refreshes installed roots conservatively.
 
 ### Project-self-contained installs
 
@@ -53,6 +131,7 @@ Consumer projects should commit the project-local `.agents/` tree:
 
 ```text
 <consumer-project>/
+├── .library.lock             # requested roots + receipts after lockfile v2
 ├── .agents/
 │   ├── skills/<name>/SKILL.md
 │   ├── standards/<name>/<name>.md
@@ -121,16 +200,22 @@ carry the old `~/.claude/scripts/` entry in their inherited environment. Open a 
 | `cognovis/library` (this) | Catalog. `/library` skill + `library.yaml` + `justfile`. Multi-harness extensions on top of disler/the-library. | Private |
 | `sussdorff/library-core` | Malte's personal agentic content (created in `CL-1rr`) | Private |
 | `cognovis/library-core` | Cognovis team-shared agentic content (created in `CL-1rr`) | Private |
+| `cognovis/cognovis-pi` | Pi extensions, runtime profiles, and repository-local Just bridge modules | Private |
 | `cognovis/library-public` (future) | Things to share externally | Public (later) |
 
 Third-party content (e.g. disler's, Anthropic's official, Adrian/ThadeNorigar's) stays at source
-and is referenced via the **marketplaces** category — never mirrored into our content repos.
+and is referenced through the source registry — never mirrored into our content repos.
 
-## Marketplaces
+## Catalog sources and external marketplaces
 
-A marketplace is just a GitHub org or repo that publishes one or more skills/agents.
-Registered via `library add-marketplace <github-url>`. Catalog entries can reference
-a marketplace instead of a direct source. Already-known candidates:
+A catalog source is a repository that publishes Library primitives or Workspace
+manifests. Historical documents call this a *source-provider marketplace*. An
+external harness marketplace is a different distribution mechanism and is not a
+Library ownership scope.
+
+External sources can be registered via `library add-marketplace <github-url>`.
+Catalog entries can reference a registered source instead of a direct URL.
+Already-known candidates:
 
 - `disler` — many public skill repos
 - `anthropics/claude-plugins-official` — Anthropic's curated directory
@@ -150,12 +235,15 @@ The Library's catalog + on-demand `/library <primitive> use <name>` is a better
 fit for that diversity. BMAD remains useful as a reference for skill/agent
 authoring patterns.
 
-## Why not Pi?
+## Pi relationship
 
-[Pi agent](https://pi.dev) (Mario Zechner) is a different layer entirely — it replaces
-Claude Code with a minimalist TypeScript runtime that exposes 25+ hook points. Our work
-is on the orthogonal axis: portable artifacts ON TOP OF mainstream tools. Pi could become
-a third installer target later (it implements its own skill loading); not in scope now.
+Pi is now an active harness and catalog source, not a deferred alternative.
+Portable Skills retain their own format where Pi supports them; Pi-specific
+extensions, profiles, and Just modules are explicit project-native bridge
+primitives from `cognovis/cognovis-pi`. They can be selected directly or through
+a Workspace, while their runtime profile semantics remain distinct from Workspace
+desired state. A Pi profile chooses how a Pi run executes; a Workspace chooses
+which Library-owned capabilities are present.
 
 ## Decision log (this session)
 
@@ -226,8 +314,9 @@ required.
 | **Guardrail / Hook** | `.claude/settings.json` `hooks` section (scripts in `.claude/hooks/`) + 15 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | TBD | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
 | **Standard** | Loaded by consuming skills/agents via `requires_standards` | `.agents/standards/<name>/` file convention | TBD | TBD | **Library-managed** — not an invocation primitive; installed as dependency content, never auto-injected |
 | **MCP-Server** | `mcpServers` in `.mcp.json` (or `--mcp-config`) | `mcp_servers` TOML in `~/.codex/config.toml` | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config syntax is not portable. The generic installer supports Claude Code, Codex, OpenCode, Antigravity-compatible JSON config, and Cursor. `cognovis-tools` intentionally declares only Claude Code, Codex, and Cursor Agent. |
-| **Plugin** | Bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | TBD | **Per-harness** — both harnesses now support plugins; bundle formats and install commands differ |
+| **Plugin** | External harness bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | TBD | **Per-harness** — both harnesses support their own plugin formats; this is not a Library Package or requested-root type |
 | **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
+| **Workspace** | Library CLI metadata; members project individually | Same | Same | Same | **Metadata-portable** — no harness artifact; resolved members inherit their own portability |
 
 **Reading the table:**
 - *Portable* means the same artifact file works across all harnesses that support the primitive.
@@ -249,6 +338,9 @@ tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRI
 | [ADR-0005](adr/library-plane-vocabulary.md) | Library catalog plane vocabulary and Gas City PackV2 projection boundaries | Accepted |
 | [ADR-0006](adr/workflow-primitive.md) | Workflow as a first-class Library primitive | Accepted |
 | [ADR-0007](adr/library-tool-surface-mcp.md) | Library tool surface as a second species of MCP server | Proposed |
+| [ADR-0008](adr/git-hook-chain-existing-composition.md) | Chain-safe composition for existing Git hooks | Accepted |
+| [ADR-0009](adr/intentional-release-lifecycle.md) | Intentional Library release lifecycle | Accepted |
+| [ADR-0010](adr/workspace-desired-state-reconciliation.md) | Universal Library ownership and Workspace desired-state reconciliation | Accepted; implementation tracked by CL-r7n6 |
 | [ADR: library.yaml information model](adr/library-yaml-information-model.md) | Root section ownership, primitive catalog nesting, and source registry nesting | Accepted |
 
 ## Open beads

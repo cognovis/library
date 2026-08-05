@@ -2,20 +2,17 @@ import os
 import subprocess
 from pathlib import Path
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PLATFORM_SKILLS = {
     "library": REPO_ROOT,
-    "skill-forge": REPO_ROOT / "skills" / "skill-forge",
-    "agent-forge": REPO_ROOT / "skills" / "agent-forge",
-    "standard-forge": REPO_ROOT / "skills" / "standard-forge",
-    "script-forge": REPO_ROOT / "skills" / "script-forge",
-    "hook-forge": REPO_ROOT / "skills" / "hook-forge",
 }
 
 
-def test_install_sh_links_library_and_platform_forges(tmp_path: Path) -> None:
+def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()
     (home / ".agents").mkdir()
@@ -47,3 +44,45 @@ def test_install_sh_links_library_and_platform_forges(tmp_path: Path) -> None:
             installed = skill_root / name
             assert installed.is_symlink(), f"{installed} was not created as a symlink"
             assert installed.resolve() == expected_target.resolve()
+        for forge in (
+            "skill-forge",
+            "agent-forge",
+            "standard-forge",
+            "script-forge",
+            "hook-forge",
+        ):
+            assert not (skill_root / forge).exists()
+
+    lock = yaml.safe_load((home / ".config" / "library" / "global.lock").read_text())
+    assert [root["id"] for root in lock["requested_roots"]] == ["skill:library"]
+    assert lock["receipts"][0]["bootstrap_owned"] is True
+
+
+def test_install_sh_adopts_exact_historical_forge_link_without_recreating_others(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    skill_root = home / ".agents" / "skills"
+    skill_root.mkdir(parents=True)
+    historical = skill_root / "skill-forge"
+    historical.symlink_to(REPO_ROOT / "skills" / "skill-forge")
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["XDG_DATA_HOME"] = str(tmp_path / "xdg-data")
+
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "install.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    lock = yaml.safe_load((home / ".config" / "library" / "global.lock").read_text())
+    assert {root["id"] for root in lock["requested_roots"]} == {
+        "skill:library",
+        "skill:skill-forge",
+    }
+    assert historical.is_symlink()
+    assert not (skill_root / "agent-forge").exists()

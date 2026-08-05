@@ -27,7 +27,7 @@ META_ROOT="$SCRIPT_DIR"
 
 # Portable realpath
 _realpath() {
-    python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"
+    uv run python -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"
 }
 
 # Idempotent symlink helper: ln -sfn with backup of non-symlink targets
@@ -36,14 +36,14 @@ _link() {
     local target
     target="$(_realpath "$src")"
 
-    if [[ -L "$dest" ]]; then
+    if test -L "$dest"; then
         local current
         current="$(readlink "$dest")"
-        if [[ "$current" == "$target" ]]; then
+        if test "$current" = "$target"; then
             echo "  ok    $dest"
             return 0
         fi
-    elif [[ -e "$dest" ]]; then
+    elif test -e "$dest"; then
         local backup="${dest}.bak"
         echo "  back  $dest -> $backup (was regular file)"
         mv "$dest" "$backup"
@@ -62,7 +62,7 @@ echo "Library bootstrap from: $META_ROOT"
 # When bin/library lands in this repo (planned per ADR-0004 Decision 8), the
 # block below activates and installs it to ~/.local/bin/library.
 
-if [[ -f "$META_ROOT/bin/library" ]]; then
+if test -f "$META_ROOT/bin/library"; then
     echo ""
     echo "Installing CLI:"
     LOCAL_BIN="${HOME}/.local/bin"
@@ -83,11 +83,6 @@ fi
 
 declare -a PLATFORM_SKILLS=(
     "library:${META_ROOT}"
-    "skill-forge:${META_ROOT}/skills/skill-forge"
-    "agent-forge:${META_ROOT}/skills/agent-forge"
-    "standard-forge:${META_ROOT}/skills/standard-forge"
-    "script-forge:${META_ROOT}/skills/script-forge"
-    "hook-forge:${META_ROOT}/skills/hook-forge"
 )
 
 declare -a HARNESS_SKILL_ROOTS=(
@@ -106,7 +101,7 @@ for entry in "${HARNESS_SKILL_ROOTS[@]}"; do
     skill_root="${entry#*:}"
     parent="$(dirname "$skill_root")"   # e.g. ~/.claude
 
-    if [[ ! -d "$parent" ]]; then
+    if ! test -d "$parent"; then
         echo "  skip  $harness (no $parent)"
         continue
     fi
@@ -115,7 +110,7 @@ for entry in "${HARNESS_SKILL_ROOTS[@]}"; do
         skill_name="${platform_skill%%:*}"
         src_dir="${platform_skill#*:}"
 
-        if [[ ! -d "$src_dir" ]]; then
+        if ! test -d "$src_dir"; then
             echo "  warn  $skill_name source missing at $src_dir"
             continue
         fi
@@ -125,7 +120,7 @@ for entry in "${HARNESS_SKILL_ROOTS[@]}"; do
     done
 done
 
-if [[ "$installed_any" -eq 0 ]]; then
+if test "$installed_any" -eq 0; then
     echo "  warn  No harnesses detected. Library content installed at $META_ROOT"
     echo "        but no slash-command entry points were created."
 fi
@@ -139,6 +134,11 @@ mkdir -p "$LIBRARY_HOME/skills" "$LIBRARY_HOME/agents" "$LIBRARY_HOME/prompts" "
 echo ""
 echo "Library cache home: $LIBRARY_HOME"
 
+# Record exact receipt-backed ownership for current bootstrap links. Historical
+# forge links are adopted only when they still point exactly at this checkout;
+# the bootstrap no longer creates them.
+uv run --script "$META_ROOT/scripts/register-bootstrap-receipts.py" --meta-root "$META_ROOT"
+
 # --- Phase 4: summary ------------------------------------------------------
 
 echo ""
@@ -146,7 +146,7 @@ echo "Done."
 echo ""
 echo "Next steps:"
 echo "  - In any harness: /library list"
-echo "  - Platform forges are installed globally: skill-forge, agent-forge, standard-forge, script-forge, hook-forge"
+echo "  - Optional forge skills belong in a project Workspace, not the global bootstrap"
 echo "  - To install a primitive transitively: /library use <name>"
 echo "  - To update the library itself: /library update library"
 echo ""

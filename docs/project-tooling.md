@@ -2,9 +2,42 @@
 
 **Bead:** CL-3fh
 
+> **Status: transitional.** ADR-0010 makes Workspace plus normal primitive
+> dependencies the sole Library desired-state mechanism. No new distributable
+> capability should be added to `project_tooling`. Existing entries remain
+> protected from Workspace adoption and pruning until their ownership has been
+> migrated and verified. The transition exports a read-only target inventory,
+> and each repository disables its legacy writer in the same change that
+> registers replacement roots.
+
+## Workspace transition
+
+`project_tooling` solved a real pre-Workspace problem, but its conditional
+SessionStart scan is a second desired-state engine without lockfile receipts.
+Its entry kinds now route as follows:
+
+| Existing concern | Target owner |
+|------------------|--------------|
+| Reusable Library file or Git hook | A normal primitive dependency selected directly or by a Workspace |
+| Beads primer and database-mode migration | The installed `bd` tool and its own migration contract |
+| Repository `.gitignore` policy | The repository or an explicit bootstrap operation, never ambient fleet mutation |
+| Foreign hook composition during migration | Protected legacy-manager state until a receipt-backed primitive takes ownership |
+
+Workspace manifests do not gain `conditions`, arbitrary file-copy, JSON-patch,
+or gitignore-patch fields. A file that cannot be represented by a real Library
+primitive remains project- or tool-owned.
+
+Before cutover, every existing target receives one recorded disposition:
+becomes a primitive, becomes project-owned and frozen with provenance, or is
+explicitly retired. Until then it remains a protected external-manager path and
+cannot be adopted, replaced, or pruned by Workspace reconciliation.
+
+The current row-by-row dispositions live in
+[Workspace legacy-writer inventory](migration/workspace-legacy-inventory.md).
+
 ## What it is and why it exists
 
-`project_tooling` is a top-level section in `library.yaml` that declares files, git hooks,
+In the released legacy implementation, `project_tooling` is a top-level section in `library.yaml` that declares files, git hooks,
 and JSON field patches to be automatically distributed into every matching project at
 SessionStart. It replaces the old hardcoded PRIME.md distribution block that lived in
 the beads SessionStart hook.
@@ -13,9 +46,9 @@ the beads SessionStart hook.
 config enforcement) required a new hardcoded block in `beads-session-start.zsh` — coupled,
 hard to audit, and not schema-validated.
 
-**With `project_tooling`:** Each target is a structured entry in `library.yaml`,
-schema-validated on every change, applied by a single runtime script, and easy to add
-without touching the hook script.
+**Historically with `project_tooling`:** Each target became a structured entry in
+`library.yaml`, schema-validated on every change and applied by one runtime script.
+That advantage no longer justifies adding targets to a second desired-state engine.
 
 ## Schema reference
 
@@ -140,10 +173,10 @@ separate defense that does not rely on the local pre-push hook being honored.
 
 ```bash
 # From the project directory where you want to apply tooling:
-python3 ~/code/cognovis-library/scripts/sync_project_tooling.py --verbose
+uv run python ~/code/cognovis-library/scripts/sync_project_tooling.py --verbose
 
 # With explicit roots:
-python3 /path/to/library/scripts/sync_project_tooling.py \
+uv run python /path/to/library/scripts/sync_project_tooling.py \
     --library-root /path/to/library \
     --project-root /path/to/project \
     --verbose
@@ -225,17 +258,23 @@ hook already exists, the sync runtime preserves it once as `pre-push.local`; the
 managed wrapper runs gitleaks first and invokes the sidecar exactly once only after the
 scan succeeds.
 
-## Adding a new target
+## Maintaining a legacy target
 
-1. Create the source file in the library (if `target_kind` requires one — `file`, `git_hook`, etc.).
-2. Add an entry to `library.yaml` under `project_tooling:` following the schema.
+Do not add a new capability here. The steps below are retained only for a
+required repair to an existing transitional entry before its migration:
+
+1. Confirm that the target already exists in `library.yaml` and that the repair
+   cannot wait for its ownership migration. Do not add a target.
+2. Repair only that existing source or entry; do not add a condition, strategy,
+   target kind, or second destination that broadens its responsibility.
 3. Run `uv run python scripts/validate-library.py` to confirm the schema is satisfied.
 4. Run `uv run python -m pytest tests/test_project_tooling.py -v` to verify existing tests still pass.
-5. Add a test case in `tests/test_project_tooling.py` for your new entry if it has non-trivial
-   behavior (new conditions, new sync strategy, new target_kind).
-6. Commit with the `feat(CL-xxx):` prefix for the relevant bead.
+5. Add or adjust a focused test only for the repaired existing behavior.
+6. Record the repair and its remaining migration owner in the relevant bead.
 
-The next SessionStart in any matching project will pick up the change automatically.
+This authoring flow applies only while the transitional manager exists. New
+capabilities must instead define a primitive dependency and, when the selection
+has an independent lifecycle, include it in a Workspace.
 
 ## Schema and test locations
 

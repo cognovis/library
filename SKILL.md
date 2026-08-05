@@ -19,7 +19,9 @@ A meta-skill for private-first distribution of agentics (skills, agents, prompts
 
 ## How It Works
 
-The Library is a catalog of references to your agentics. The `library.yaml` file points to where skills, agents, and prompts live (local filesystem or GitHub repos). Nothing is fetched until you ask for it.
+The Library is a catalog of references to your agentics. Committed `library.yaml`
+entries point to published HTTPS Git sources; development checkouts are not install
+registries. Nothing is fetched until you ask for it.
 
 **The `library.yaml` is a catalog, not a manifest.** Entries define what's *available* — not what gets installed. You pull specific items on demand with `/library <primitive> use <name>`.
 
@@ -127,23 +129,24 @@ silently-skipped-entry reporting.
 
 ## Consumer Project Updates
 
-Use `scripts/update-consumers.py` when a Library primitive change may affect
-project checkouts listed in `consumer-projects.yml`. This covers installed
-standards and repo-local runtime helper files that consumer projects need after
-a catalog publish.
+`consumer-projects.yml` and `scripts/update-consumers.py` are transitional legacy
+distribution mechanisms under ADR-0010. Do not add new consumers, primitives, or
+managed-file responsibilities. Once Workspace reconciliation is available, each
+consumer owns its direct and Workspace roots and uses Workspace status/sync instead.
 
-Run a dry-run first:
+Until a listed legacy consumer has migrated, the updater may still propagate its
+existing entries after a catalog publish. Run a dry-run first:
 
 ```bash
-python3 <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --json
-python3 <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer polaris --consumer mira --json
+uv run python <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --json
+uv run python <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer polaris --consumer mira --json
 ```
 
 If the dry-run reports planned changes and the user asked to propagate them,
 apply the selected consumers:
 
 ```bash
-python3 <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer <name> --apply --json
+uv run python <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer <name> --apply --json
 ```
 
 After `--apply`, inspect each target repo, run its smoke checks, then commit and
@@ -218,20 +221,23 @@ The cookbook does not document these operations since the CLI handles them deter
 
 ## Source Format
 
-The `source` field in `library.yaml` supports these formats (auto-detected):
+Committed `source` fields in `library.yaml` support these formats:
 
-- `/absolute/path/to/SKILL.md` — local filesystem
 - `https://github.com/org/repo/blob/main/path/to/SKILL.md` — GitHub browser URL
 - `https://raw.githubusercontent.com/org/repo/main/path/to/SKILL.md` — GitHub raw URL
 
-Both GitHub URL formats are supported. Parse org, repo, branch, and file path from the URL structure. For private repos, use SSH or `GITHUB_TOKEN` for auth automatically.
+Both GitHub URL formats are supported. Local filesystem sources are forbidden in
+committed catalogs because they bypass the source repository's review and CI path.
+Parse org, repo, branch, and file path from the URL structure. For private repos,
+use the configured GitHub authentication.
 
 **Important:** The source points to a specific file (SKILL.md, AGENT.md, or prompt file). We always pull the entire parent directory, not just the file.
 
 ## Source Parsing Rules
 
-**Local paths** start with `/` or `~`:
-- Use the path directly. Copy the parent directory of the referenced file.
+Historical v1 entries may contain local paths. The parser recognizes them only
+for compatibility, status, and migration; do not create a new catalog entry or
+refresh content from an unpublished development checkout.
 
 **GitHub browser URLs** match `https://github.com/<org>/<repo>/blob/<branch>/<path>`:
 - Parse: `org`, `repo`, `branch`, `file_path`

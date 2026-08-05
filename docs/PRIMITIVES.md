@@ -1,7 +1,7 @@
 # Agentic Primitives Glossary
 
 > v0 — source of truth for primitive definitions used across the cognovis-library multi-harness stack.
-> Last updated: 2026-05-24
+> Last updated: 2026-08-05
 >
 > **Claim labeling convention**: Every per-harness behavioral claim is labeled
 > **NORMATIVE** (verified against vendor docs / confirmed behavior) or
@@ -43,9 +43,14 @@ Must it fire regardless of what the model decides?
  └─ YES → GUARDRAIL / HOOK (runs outside the LLM loop)
  └─ NO  → Continue below.
 
-Is it a bundle of multiple primitives above?
- └─ YES → PACKAGE (installable unit containing skills/commands/agents/hooks/workflows)
-          → Register it in a MARKETPLACE if you want it discoverable
+Does it define the authoritative Library-managed environment for one project
+class or the global lobby, including safe retirement of obsolete members?
+ └─ YES → WORKSPACE (metadata-only desired-state root; no harness artifact)
+ └─ NO  → Continue below.
+
+Does one entrypoint primitive require other primitives in order to function?
+ └─ YES → Declare typed `requires:` dependencies on that entrypoint. Do not add
+          a Package or empty bundle sentinel.
  └─ NO  → Continue below.
 
 Is it project-specific or cross-cutting context supplementing global skills?
@@ -111,7 +116,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 3 | [Agent](primitives/agent.md) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | `.opencode/agents/*.md` (Markdown, same format as Claude Code) | details |
 | 3a | [Action Boundary](primitives/action-boundary.md) | partial — shared keys, primitive-native serialization | YAML frontmatter on skills/agents | YAML for skills, TOML for agents | n/a | unverified | unverified | metadata |
 | 4 | [Guardrail/Hook](primitives/guardrail-hook.md) | **NO** — event coverage diverges | 15 events | 8 events (PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | details |
-| 5 | [Package](primitives/package.md) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | details |
+| 5 | [Package](primitives/package.md) | **RETIRED Library concept** — external ecosystem packages remain distribution formats | n/a | n/a | n/a | n/a | n/a | retirement note |
 | 6 | [Marketplace](primitives/marketplace.md) | yes — distribution layer | yes | yes | yes | yes | yes | details |
 | 7 | [Standard](primitives/standard.md) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | n/a | details |
 | 8 | [MCP-Server](primitives/mcp-server.md) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | details |
@@ -121,6 +126,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
 | 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | n/a | details |
 | 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files and extension bundles | files and directories | Pi-native | verified | verified | project-only; Open Skills stays authoritative for methods |
+| 15 | [Workspace](primitives/workspace.md) | **YES** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | members inherit support | metadata-only desired-state root |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
@@ -219,14 +225,10 @@ Details: [Guardrail / Hook](primitives/guardrail-hook.md).
 
 ### 5. Package
 
-Details: [Package](primitives/package.md).
-
-> **Vocabulary note (2026-05-27).** This primitive was previously named
-> "Plugin." Renamed to "Package" to align with Pi's terminology
-> (`pi install`, `pi.dev/packages`) and npm/git native distribution
-> semantics. Historical ADRs and `library.yaml` may still use "plugin"
-> in code surfaces and key names; rename of those structural surfaces
-> is tracked separately and not part of this vocabulary change.
+Retired as a Library primitive. See the [Package retirement note](primitives/package.md).
+Use an entrypoint primitive's `requires:` closure for strict functional coupling
+and a Workspace for selectable desired-state composition. External ecosystem
+packages remain ordinary distribution formats.
 
 ### 6. Marketplace
 
@@ -269,6 +271,17 @@ spawn fresh-context model subagents. Distinct from **script** (#9 — runs no
 model) and **agent** (#3 — a single context window, not control flow over many).
 Established by [ADR-0006](adr/workflow-primitive.md).
 
+### 15. Workspace
+
+Details: [Workspace](primitives/workspace.md). A metadata-only requested root
+whose constitutive feature is ownership-aware desired-state reconciliation. It
+has no deployable artifact and can explicitly retire clean, ownerless receipts
+through ADR-0010's prune contract. A project may directly register several
+orthogonal Workspaces. Schema v1 keeps every manifest to same-catalog artifact
+roots and defers nested Workspace and cross-catalog manifest roots. The
+Workspace CLI implements discovery, validation, registration, status,
+explanation, sync, adoption, removal, and digest-bound pruning.
+
 
 ## Precedence and Name Collision Policy
 
@@ -309,11 +322,17 @@ violation — bug reports from that state will be untriageable.
 
 ### Uninstall completeness
 
-`/library remove` MUST remove the Claude bridge AND the canonical install AND
+`library <primitive> remove <name>` MUST remove the Claude bridge AND the canonical install AND
 the lockfile entry. The removal sequence: Claude bridge first, then canonical,
 then lockfile. The Layer-B cache (`~/.local/share/library/skills/...`) is
-garbage-collected separately by `/library prune-cache` once no lockfile entry
+garbage-collected separately once no lockfile receipt
 references it.
+
+Workspace reconciliation follows a stricter ownership protocol. Removing a
+Workspace unregisters only its requested root and prints the resulting plan.
+Physical receipt deletion requires `library workspace sync --prune --apply`,
+freshly resolved zero-owner proof, matching per-file digests, and an atomic
+post-prune lock write before target deletion. See ADR-0010.
 
 ### Admin override
 
@@ -331,6 +350,8 @@ Library treats managed skills as read-only and does not override them.
   navigation entrypoint and compatibility anchor map.
 - **Name Collision Policy**: `docs/policy/name-collision.md` (CL-b4o) — authoritative
   policy for collision handling, symlink lifecycle, and uninstall completeness.
+- **Workspace Desired State**: [ADR-0010](adr/workspace-desired-state-reconciliation.md)
+  — universal ownership, lockfile v2, scope isolation, and safe pruning.
 - **Audit doc** (`docs/audit/skills-origin.md`, CL-23z): This doc's taxonomy is used to
   classify the intent of every existing artifact. CL-23z inventory uses PRIMITIVES.md
   definitions to classify all 44 agents in scope.

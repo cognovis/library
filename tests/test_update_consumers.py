@@ -85,6 +85,13 @@ def test_dry_run_reports_missing_file_without_mutating_target(tmp_path: Path) ->
     assert result["status"] == "ok"
     assert result["mode"] == "dry-run"
     assert result["planned_changed_files"] == [str(target)]
+    assert result["manager_inventory"] == [
+        {
+            "path": str(target.resolve()),
+            "manager": "consumer-updater",
+            "consumer": "fixture",
+        }
+    ]
     assert not target.exists()
     assert calls
     assert "--dry-run" in calls[0]
@@ -96,7 +103,9 @@ def test_dry_run_reports_missing_file_without_mutating_target(tmp_path: Path) ->
     ]
 
 
-def test_apply_copies_changed_file_and_runs_sync_without_dry_run(tmp_path: Path) -> None:
+def test_apply_copies_changed_file_and_runs_sync_without_dry_run(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "consumer"
     root.mkdir()
     target = root / "scripts/refinement/check-seed-data-parity.py"
@@ -122,7 +131,9 @@ def test_apply_copies_changed_file_and_runs_sync_without_dry_run(tmp_path: Path)
     assert "--dry-run" not in calls[0]
 
 
-def test_missing_consumer_root_reports_error_without_running_sync(tmp_path: Path) -> None:
+def test_missing_consumer_root_reports_error_without_running_sync(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "source.py"
     source.write_text("new\n")
     missing_root = tmp_path / "missing"

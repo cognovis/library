@@ -1,402 +1,195 @@
-# The Library
+# The Library Platform
 
-A meta-skill for private-first distribution of agentics (skills, agents, and prompts) across agents, devices, and teams.
+The Library is a private-first platform for cataloging and distributing agentic
+capabilities across repositories, machines, teams, and coding harnesses.
 
-![The Library](images/10_meta_skill.svg)
+This repository owns the platform: the deterministic resolver and installers,
+schemas, launchers, primitive authoring tools, tests, and architecture documents.
+It also acts as the aggregate catalog index. Reusable Skills, Agents, Standards,
+and other catalog content normally live in separate marketplace repositories.
 
-## Who This Is For
+## What it solves
 
-If you're an engineer working on 10+ codebases with agents and you're building specialized private skills, agents, and prompts — this was made for you.
+Agentic capabilities tend to become duplicated, globally over-installed, and tied
+to one harness. The Library separates four concerns:
 
-If you work in one or two repos, you don't need this. If you install skills from the public internet without reviewing them, this isn't for you either.
+1. **Catalog** — which reviewed primitives and Workspace definitions are available.
+2. **Selection** — which direct primitives and Workspaces a project or the global
+   lobby intentionally requests.
+3. **Materialization** — which files and harness bridges the Library installs.
+4. **Loading** — when a Skill, Standard, Agent, Hook, or other primitive actually
+   enters a model or runtime context.
 
-The Library solves a specific problem: you've built powerful agentics scattered across repos, devices, and teams. They're duplicated, out of sync, and hard to coordinate. This gives you a single reference catalog to distribute them privately.
+The catalog stores published Git source pointers rather than copied catalog
+content. Project-local installs are vendored into canonical `.agents/` paths and
+recorded in `.library.lock`; harness-specific bridges are generated separately.
 
-## What It Is
+## Current platform and target architecture
 
-The Library is a single skill whose only job is to manage other skills. It's a catalog of references — local file paths and GitHub repo URLs — that point to where your agentics live. Nothing is copied or installed until you ask for it.
+The current deterministic engine supports additive install, remove, sync, search,
+status, installed-state inspection, and audit operations for the implemented
+primitive types. The `/library` Skill is the conversational interface over that
+engine; it is not the runtime itself.
 
-Think of it as a `package.json` for agent capabilities — but instead of packages, you're managing skills, agents, and prompts. Instead of a registry, you're pointing at your own private GitHub repos and local paths.
+[ADR-0010](docs/adr/workspace-desired-state-reconciliation.md) defines the accepted
+next state: a **Workspace** is a metadata-only desired-state root that selects a
+reviewed closure of ordinary Library primitives. A scope can register zero or more
+Workspaces, and Workspaces can compose other Workspaces in the same scope. Strict
+functional coupling remains in primitive `requires:` metadata.
 
-**This is a pure agent application.** There are no scripts, no CLIs, no dependencies, no build tools. The entire application is encoded in `SKILL.md` and a set of cookbook instructions that teach the agent exactly what to do. The agent IS the runtime. This matters because:
-
-- Any agent harness that reads skill files can run it (Claude Code, Pi, etc.)
-- You can modify behavior by editing markdown, not code
-- The skill can be extended, forked, and adapted instantly
-- An orchestrator agent can chain library commands without any tooling overhead
-
-## Why It Exists
-
-![The Problem: Skill Sprawl](images/26_problem_skill_sprawl.svg)
-
-As you build with AI agents, you accumulate skills, custom agents, and prompts — potentially hundreds of them. You need to:
-
-- **Reuse** them across projects without copy-pasting
-- **Distribute** them to your agents running on other devices (Mac mini, remote servers, cloud sandboxes)
-- **Share** them with your team without making everything public
-- **Keep them private** — these are specialized capabilities built for competitive edge
-- **Stay in sync** — one source of truth, not 10 stale copies
-
-![The Problem: Siloed Teams](images/32_problem_team_sharing.svg)
-
-Existing solutions don't fit:
-- **Global `~/.claude/*`** — exposes everything to every agent. Global is the opposite of specialized.
-- **Claude Code plugins** — requires marketplace infrastructure, manifests, and locks you into one platform.
-- **Single monorepo** — doesn't reflect reality. You build agentics in specific codebases for specific use cases.
-
-## How It Works
-
-![The Solution: The Library](images/27_solution_library_workflow.svg)
-
-### The Catalog (`library.yaml`)
-
-```yaml
-default_dirs:
-  skills:
-    - default: .agents/skills/
-    - global: ~/.agents/skills/
-    - claude_bridge: .claude/skills/
-    - global_claude_bridge: ~/.claude/skills/
-  agents:
-    - default: .claude/agents/
-    - global: ~/.claude/agents/
-  prompts:
-    - default: .claude/commands/
-    - global: ~/.claude/commands/
-
-library:
-  skills:
-    - name: my-skill
-      description: What this skill does
-      source: /Users/me/projects/tools/skills/my-skill/SKILL.md
-      requires: [agent:helper-agent]
-    - name: remote-skill
-      description: A skill from a private repo
-      source: https://github.com/myorg/private-skills/blob/main/skills/remote-skill/SKILL.md
-  agents: []
-  prompts: []
+```text
+direct primitive roots + Workspace roots
+                    |
+                    | complete dependency resolution
+                    v
+            materialized receipts
+                    |
+                    | explicit, provenance-bound prune
+                    v
+       verified + clean + ownerless targets only
 ```
 
-The catalog stores pointers, not copies. Skills live in their source repos. You pull on demand.
+Workspace support and lockfile schema v2 are tracked by bead `CL-r7n6`; the
+Workspace commands documented in ADR-0010 are therefore a target interface until
+that bead lands. The current CLI remains additive and non-pruning.
 
-### Source Formats
+The evidence-backed initial Workspace cuts and repository mapping live in the
+[Workspace Portfolio Audit](docs/research/workspace-portfolio-audit.md).
 
-| Format             | Example                                                            |
-| ------------------ | ------------------------------------------------------------------ |
-| Local filesystem   | `/absolute/path/to/SKILL.md`                                       |
-| GitHub browser URL | `https://github.com/org/repo/blob/main/path/to/SKILL.md`           |
-| GitHub raw URL     | `https://raw.githubusercontent.com/org/repo/main/path/to/SKILL.md` |
+## Repository roles
 
-The source points to a specific file. The system pulls the entire parent directory (skills include scripts, references, assets — not just the markdown file).
+| Repository | Responsibility |
+|------------|----------------|
+| `library/meta` (this repository) | Platform engine, schemas, launchers, forges, aggregate catalog index, and architecture |
+| `library/cognovis-core` | Shared Cognovis marketplace content |
+| `library/sussdorff-core` | Private personal and operations marketplace content |
+| `library/cognovis-pi` | Pi extensions, profiles, and project-native bridge modules |
 
-For private repos, authentication uses SSH keys or `GITHUB_TOKEN` automatically.
+A consumer repository registers only the primitives and Workspaces it needs. It
+commits project-local `.agents/` content and `.library.lock`. Marketplace
+repositories keep authored source primitives at top level and normally ignore
+their `.agents/` install targets.
 
-### Consumer vs Marketplace Repos
+One repository may use several orthogonal Workspaces. For example, the accepted
+portfolio maps `fhir-management` to both `fhir-ig-authoring` and `python-cli`, and
+maps `library/meta` to both `library-authoring` and `python-cli`. A Workspace is
+therefore neither a repository template nor a filesystem directory.
 
-`/library use` vendors real files into `.agents/` by default. Consumer projects should
-commit those files; marketplace/library-core repos keep `.agents/` ignored because their
-source content lives in top-level primitive directories.
+## Primitive model
 
-| Repo type | Project tooling profile | `.agents/` policy |
-|-----------|-------------------------|-------------------|
-| Consumer app repo | `consumer` | Commit `.agents/skills/`, `.agents/standards/`, `.agents/agents/`, `.agents/prompts/` |
-| Marketplace/library-core repo | `marketplace` | Ignore `.agents/` install targets |
+Use the [primitive decision tree](docs/PRIMITIVES.md) before adding a new concept.
+The important composition distinction is:
 
-Apply the profile from a project root with:
+- `requires:` means one primitive cannot function correctly without another.
+- Workspace roots select independently meaningful capabilities that should share
+  a desired-state lifecycle.
 
-```bash
-python3 <LIBRARY_SKILL_DIR>/scripts/sync_project_tooling.py --profile consumer --verbose
-```
-
-### Platform-Owned Primitive Forges
-
-Primitive forge skills live in this repository because they define the Library
-platform's own primitive contracts, templates, validators, and authoring rules.
-The platform-owned forges are `skill-forge`, `agent-forge`, `standard-forge`,
-`script-forge`, and `hook-forge` under `skills/`. `install.sh` installs these
-forges into each detected harness alongside the `library` skill so they are
-available on a fresh platform bootstrap.
-
-### Typed Dependencies
-
-Dependencies use typed references to avoid name collisions:
-
-```yaml
-requires: [skill:base-utils, agent:reviewer, prompt:task-router]
-```
-
-Dependencies are resolved and pulled first, recursively.
-
-## Prerequisites
-
-- **Claude Code** (or a compatible agent harness that reads `.claude/skills/` — e.g., Pi)
-- **git** — for cloning sources and syncing the catalog
-- **gh** (optional) — GitHub CLI for forking, cloning, and private repo access. Install: `brew install gh` or see [gh docs](https://cli.github.com)
-- **GitHub SSH key or `GITHUB_TOKEN`** — for accessing private repos (not needed if using `gh auth login`)
-- **just** (optional) — for justfile shortcuts. Install: `brew install just` or see [just docs](https://github.com/casey/just)
+The previously documented Library `Package` concept is retired. External npm,
+PyPI, Pi, and harness packages remain valid distribution formats, but Package is
+not a Library primitive or requested-root type.
 
 ## Installation
 
-This is a template repo. You fork it, clone it into your global skills directory, and it becomes a `/library` slash command available in every Claude Code session.
-
-### 1. Fork This Repo
-
-Fork to your own GitHub account (private repo recommended). This fork is your personal library catalog — you'll push catalog updates to it.
+From a platform checkout:
 
 ```bash
-# Using GitHub CLI
-gh repo fork disler/the-library --private --clone=false
+bash install.sh
 ```
 
-Or fork manually via the GitHub UI.
-
-### 2. Clone to Global Skills Directory
-
-Clone your fork into `~/.claude/skills/library`. This path is what makes `/library` available as a global slash command in Claude Code.
+The installer links only the irreducible Library conversational entrypoint into
+detected harness directories and records exact bootstrap receipts. Optional
+forge Skills belong in a project Workspace. The installer is idempotent. The deterministic engine can also be run
+directly from this repository:
 
 ```bash
-# Using git
-mkdir -p ~/.claude/skills/library
-git clone <your-fork-url> ~/.claude/skills/library
-
-# Or using GitHub CLI
-gh repo clone <yourname>/the-library ~/.claude/skills/library
+uv run --script scripts/library.py --help
 ```
 
-### 3. Configure
+The repository currently has no standalone `bin/library` executable. Until one is
+published, use `/library` inside a supported harness or invoke the engine through
+`uv run --script`.
 
-Open `~/.claude/skills/library/SKILL.md` and update the `## Variables` section with your fork URL. The agent reads these variables at runtime to know where to sync the catalog.
+## Current command surface
 
-```markdown
-# Before (template defaults)
-- **LIBRARY_REPO_URL**: `<your forked repo url>`
-
-# After (your values)
-- **LIBRARY_REPO_URL**: `https://github.com/yourname/the-library.git`
-```
-
-The other two variables (`LIBRARY_YAML_PATH` and `LIBRARY_SKILL_DIR`) are correct by default if you cloned to `~/.claude/skills/library/`.
-
-### 4. Verify
-
-Start a new Claude Code session anywhere. `/library skill list` should work and
-show an empty catalog.
-
-## Quick Start
-
-![Full Workflow](images/45_solution_full_workflow.svg)
-
-Here's the typical workflow: **build → catalog → distribute → use**.
-
-### Add a skill to the catalog
-
-You built a deploy skill in one of your repos. Register it:
-
-```
-/library skill add deploy from https://github.com/yourorg/infra-tools/blob/main/skills/deploy/SKILL.md
-```
-
-This adds a reference to `library.yaml` and pushes the update to your fork.
-
-### Use it in another project
-
-On another device, repo, or agent:
-
-```
-/library skill use deploy
-```
-
-This pulls the skill from the source repo into the canonical `.agents/skills/deploy`
-path and creates the Claude bridge at `.claude/skills/deploy`.
-
-Want it globally available on this machine?
-
-```
-/library skill use deploy install globally
-```
-
-### Push changes back
-
-You improved the skill locally. Push the update to the source repo:
-
-```
-/library skill push deploy
-```
-
-Now every device that runs `/library sync` gets the latest version.
-
-### Sync everything
-
-Pull the latest version of all installed items:
-
-```
-/library sync
-```
-
-## Commands
-
-| Command                              | What It Does                                               |
-| ------------------------------------ | ---------------------------------------------------------- |
-| `/library install`                   | First-time setup — fork, clone, configure                  |
-| `/library <primitive> add <details>` | Register a new entry in the catalog                        |
-| `/library <primitive> use <name>`    | Pull from source into local directory (install or refresh) |
-| `/library <primitive> push <name>`   | Push local changes back to the source                      |
-| `/library <primitive> remove <name>` | Remove from catalog and optionally delete local copy       |
-| `/library <primitive> list`          | Show catalog entries with install status                   |
-| `/library sync`                      | Re-pull all installed items from source                    |
-| `/library search <keyword>`          | Find entries by name or description                        |
-
-### Justfile Shortcuts
-
-The included `justfile` lets you run library commands from your terminal without an interactive Claude session.
+Primitive commands use singular primitive names:
 
 ```bash
-just list                  # List catalog
-just use my-skill          # Pull a skill
-just push my-skill         # Push changes back
-just add "name: foo, description: bar, source: /path/to/SKILL.md"
-just sync                  # Re-pull all installed items
-just search "keyword"
+uv run --script scripts/library.py skill list
+uv run --script scripts/library.py skill use python-dev --dry-run --json
+uv run --script scripts/library.py skill use python-dev
+uv run --script scripts/library.py standard use english-only --scope global
+uv run --script scripts/library.py installed --diff-catalog
+uv run --script scripts/library.py status --offline --json
+uv run --script scripts/library.py audit --drift-only --json
+uv run --script scripts/library.py sync --dry-run
 ```
 
-> **Note:** Justfile recipes use `--dangerously-skip-permissions` because the agent needs filesystem and git access to clone, copy, and push. Review the `justfile` if you want to modify this behavior.
+Run `uv run --script scripts/library.py --help` for the authoritative primitive and
+verb inventory. Guided catalog-authoring and source-publication flows remain in the
+`/library` Skill because they require user decisions; they are not deterministic CLI
+verbs.
 
-## cdx — Codex Launcher with Beads Workflow
+## Desired-state migration
 
-`cdx` is the Codex parallel to `cld`. It wraps the `codex` CLI with beads workflow integration,
-using prompt injection to pass bead context (since Codex has no `--bead` flag equivalent).
+Workspace reconciliation becomes the sole Library mechanism for reusable project
+or global baselines. Existing parallel mechanisms are transitional:
 
-### Install cdx
+- the ADR-0002 hand-maintained capability list becomes a deliberately small
+  global `engineering-lobby` Workspace; only the Library engine and its chat
+  entrypoint remain in the irreducible pre-Workspace bootstrap;
+- `consumer-projects.yml` and `scripts/update-consumers.py` retire after each
+  consumer owns equivalent direct or Workspace roots; and
+- `project_tooling` accepts no new capability-distribution responsibilities.
+
+Legacy targets remain protected external ownership until their replacement has
+been verified. Workspaces do not absorb arbitrary file-copy rules, JSON patches,
+secrets, customer facts, routing profiles, or repository-specific policy.
+
+## Launchers
+
+Canonical harness launchers live in `bin/`:
+
+| Launcher | Harness |
+|----------|---------|
+| `bin/cld` | Claude Code |
+| `bin/cdx` | Codex CLI |
+| `bin/agr` | Antigravity |
+| `bin/cra` | Cursor Agent |
+
+Install them with:
 
 ```bash
-# From this repo
-just install-cdx
-
-# Or manually
-cp scripts/cdx ~/.local/bin/cdx && chmod +x ~/.local/bin/cdx
+bash scripts/install-bin.sh
 ```
 
-Ensure `~/.local/bin` is in your `PATH`:
+Launcher architecture and Beads routing are documented in
+[Architecture](docs/ARCHITECTURE.md).
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"  # Add to ~/.zshrc or ~/.bashrc
-```
+## Documentation map
 
-### Usage
+- [Architecture](docs/ARCHITECTURE.md) — platform layers, repository boundaries,
+  install paths, and operational flow.
+- [Primitive glossary](docs/PRIMITIVES.md) — primitive contracts, portability, and
+  the selection decision tree.
+- [Workspace contract](docs/primitives/workspace.md) — Workspace semantics and
+  composition rules.
+- [Workspace reconciliation ADR](docs/adr/workspace-desired-state-reconciliation.md)
+  — accepted ownership, lockfile, prune, and transition decisions.
+- [Lockfile format](docs/lockfile-format.md) — current v1 format and planned v2
+  transition.
+- [Harness baseline](docs/harness-baseline.md) — what collaboration repositories
+  commit locally.
+- [Workspace Portfolio Audit](docs/research/workspace-portfolio-audit.md) — observed
+  repository families and recommended Workspace cuts.
 
-```bash
-# Plain Codex launch (full-auto by default)
-cdx
+## Design principles
 
-# Bead orchestrator mode — equivalent to cld -b <id>
-cdx -b <bead-id>
-just cdx <bead-id>
-
-# Quick-fix mode — equivalent to cld -bq <id>
-cdx -bq <bead-id>
-just cdx-quick <bead-id>
-
-# Provider-neutral bead-spec/readiness review through cognovis-tools
-cdx -br <bead-id>
-cld -br <bead-id>              # Claude reviewer, Opus by default
-just cdx-review <bead-id>
-
-# Coordinator callback — signal a cmux pane on blocking questions and session-close
-cdx -b <bead-id> --coordinator-workspace workspace:3 --coordinator-surface surface:5
-cld -b <bead-id> --coordinator-workspace workspace:3 --coordinator-surface surface:5
-
-# Full bypass for bead modes (opt-in only; prints stderr warning)
-cdx -b <bead-id> --bead-dangerous-full-auto
-```
-
-> **Permission defaults for bead modes:** `cdx -b` and `cdx -bq` use
-> `--sandbox workspace-write -c approval_policy="never"` by default. Pass
-> `--bead-dangerous-full-auto` only when you need Codex's full
-> `--dangerously-bypass-approvals-and-sandbox` behavior; this prints a visible
-> warning to stderr. `cdx -br` and `cld -br` instead delegate to the shared
-> cognovis-tools review client; permission-bypass flags are rejected for that path.
-> The plain `cdx` launch path is unaffected.
-
-### How It Works
-
-For `-b` and `-bq`, Codex has no `--bead` flag. `cdx` synthesizes bead context by:
-
-1. Calling `bd show <bead-id>` to fetch the full bead description and acceptance criteria
-2. Serializing the bead fields (title, description, AC, notes, labels, dependency titles) as a
-   validated, provenance-tagged JSON envelope wrapped in explicit untrusted-data delimiters, then
-   injecting it as an initial prompt to `codex exec`
-3. The bead-orchestrator skill is invoked by natural-language reference in the prompt
-
-For `-br`, both launchers call `bin/lib/bead-review-client.py`. The client reads the
-bead through cognovis-tools, starts a fresh role-scoped reviewer session, validates a
-typed terminal verdict, and writes `metadata.review` through cognovis-tools. The child
-reviewer receives no MCP surface; the parent client owns both typed tool calls.
-
-The envelope approach prevents bead-authored text from being interpreted as launcher instructions
-(prompt-injection isolation). `bin/cdx` fails closed with a non-zero exit on any malformed or
-oversized envelope rather than passing raw text through.
-
-```bash
-# Under the hood, cdx -b <id> is equivalent to:
-codex exec "Work on bead <id>. Use the bead-orchestrator skill. [validated JSON envelope injected here]"
-```
-
-See `docs/research/codex-prompts.md` for the full rationale and prompt-injection vs flag-dispatch
-analysis.
-
-### Justfile Targets
-
-| Target | Equivalent | Description |
-|--------|-----------|-------------|
-| `just install-cdx` | — | Install cdx to ~/.local/bin |
-| `just cdx <id>` | `cld -b <id>` | Bead orchestrator mode |
-| `just cdx-quick <id>` | `cld -bq <id>` | Quick-fix mode |
-| `just cdx-review <id>` | `cdx -br <id>` | Shared cognovis-tools bead-spec review (Codex reviewer) |
-
----
-
-## Architecture
-
-```
-~/.claude/skills/library/     # The Library skill (globally installed)
-    SKILL.md                  # Agent instructions — the brain
-    library.yaml              # Your catalog of references
-    cookbook/                  # Step-by-step guides for each command
-        install.md
-        add.md
-        use.md
-        push.md
-        remove.md
-        list.md
-        sync.md
-        search.md
-    justfile                  # CLI shorthand for all commands
-    README.md                 # This file
-```
-
-## Design Principles
-
-- **Private-first**: Built for your specialized, competitive-edge agentics. Not a public marketplace.
-- **Reference-based**: The catalog stores pointers, not copies. Skills live in their source repos.
-- **Pure agent**: No scripts, no build tools. The SKILL.md teaches the agent everything it needs to know.
-- **Agent-agnostic**: Default target is `.claude/skills/` but supports any directory for any agent harness.
-- **Catalog, not manifest**: Entries define what's available, not what's installed. Pull on demand.
-
-## The Agentic Stack
-
-![The Agentic Stack](images/03_agentic_stack.svg)
-
-| Layer           | Purpose                                        |
-| --------------- | ---------------------------------------------- |
-| **Skills**      | Raw capabilities — what an agent can do        |
-| **Agents**      | Scale + parallelism + specialization           |
-| **Prompts**     | Orchestration — coordinate skills and agents   |
-| **Justfile**    | Terminal access without an interactive session |
-| **The Library** | Distribution across devices, teams, and agents |
-
-## Master Agentic Coding
-> Prepare for the future of software engineering
-
-Agentic Engineering is a NEW SKILL for software engineers. And soon it will be a required skill for software engineers. Master it before the masses with [Tactical Agentic Coding](https://agenticengineer.com/tactical-agentic-coding?y=tlibms)
-
-Follow the [IndyDevDan YouTube channel](https://www.youtube.com/@indydevdan) to improve your agentic coding advantage.
+- **Private-first** — catalogs may point to private reviewed sources.
+- **Pull-based** — consumers select only what they need.
+- **Harness-aware** — canonical content is shared where possible; adapters own real
+  harness differences.
+- **Provenance-bound** — deletion authority comes only from exact Library receipts.
+- **Composable without overlays** — Workspace composition is set union and dependency
+  resolution, never order or last-writer-wins behavior.
+- **Repository-safe** — project data and policy remain project-owned unless they are
+  modeled as a real reusable Library primitive.

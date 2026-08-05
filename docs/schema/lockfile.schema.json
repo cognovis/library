@@ -2,12 +2,51 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/cognovis/cognovis-library/docs/schema/lockfile.schema.json",
   "title": "Library Lockfile Schema",
-  "description": "JSON Schema for .library.lock — the per-project lockfile recording every installed library item with its source provenance, checksum, and license.",
+  "description": "JSON Schema for .library.lock v2. Requested roots express intent; receipts record owned materializations. The installed array is a deprecated compatibility projection.",
   "type": "object",
-  "required": ["installed"],
+  "oneOf": [
+    {
+      "description": "Legacy v1 shape accepted for migration input.",
+      "required": ["installed"],
+      "not": {"required": ["schema_version"]}
+    },
+    {
+      "description": "Authoritative v2 ownership shape.",
+      "required": ["schema_version", "migration", "requested_roots", "receipts", "prerequisites", "installed"]
+    }
+  ],
   "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "migration": {
+      "type": "object",
+      "required": ["prune_ack_required"],
+      "additionalProperties": false,
+      "properties": {
+        "prune_ack_required": {"type": "boolean"}
+      }
+    },
+    "requested_roots": {
+      "description": "The operator's direct artifact and Workspace intent.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/requested_root"},
+      "default": []
+    },
+    "receipts": {
+      "description": "Materialized artifacts with ownership and exact target evidence.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/receipt"},
+      "default": []
+    },
+    "prerequisites": {
+      "description": "Non-owning external prerequisites such as MCP readiness checks.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/prerequisite"},
+      "default": []
+    },
     "installed": {
-      "description": "Ordered list of installed library items. Each entry records one canonical install (skills, agents, or prompts).",
+      "description": "Deprecated read compatibility projection derived from receipts.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/lockfile_entry"
@@ -17,6 +56,62 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "requested_root": {
+      "type": "object",
+      "required": ["id", "type", "name", "scope", "catalog_identity", "resolved_version", "definition_commit"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 3},
+        "type": {"type": "string", "enum": ["workspace", "skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "mcp", "runtime-config"]},
+        "name": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "enum": ["project", "global"]},
+        "catalog_identity": {"type": "string", "minLength": 1},
+        "catalog_name": {"type": "string", "minLength": 1},
+        "resolved_version": {"type": "string", "minLength": 1},
+        "definition_commit": {"type": "string", "minLength": 1},
+        "requested_ref": {"type": "string", "minLength": 1},
+        "roots": {"type": "array", "items": {"type": "string", "minLength": 3}, "uniqueItems": true}
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "required": ["id", "type", "name", "scope", "catalog_identity", "resolved_version", "verified", "adopted", "targets", "owners_cache"],
+      "properties": {
+        "id": {"type": "string", "minLength": 3},
+        "type": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "enum": ["project", "global"]},
+        "catalog_identity": {"type": "string", "minLength": 1},
+        "resolved_version": {"type": "string", "minLength": 1},
+        "verified": {"type": "boolean"},
+        "adopted": {"type": "boolean"},
+        "prune_blocked_reason": {"type": ["string", "null"]},
+        "targets": {"type": "array", "items": {"$ref": "#/$defs/target"}},
+        "owners_cache": {"type": "array", "items": {"type": "string", "minLength": 3}, "uniqueItems": true}
+      },
+      "additionalProperties": true
+    },
+    "target": {
+      "type": "object",
+      "required": ["path", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "enum": ["file", "directory", "symlink"]},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "link_target": {"type": "string", "minLength": 1}
+      }
+    },
+    "prerequisite": {
+      "type": "object",
+      "required": ["id", "kind", "status"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "enum": ["ready", "missing", "unknown"]}
+      }
+    },
     "lockfile_entry": {
       "description": "A single installed library item with full provenance metadata.",
       "type": "object",
@@ -40,7 +135,17 @@
         "type": {
           "description": "Primitive type of the installed item.",
           "type": "string",
-          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "mcp"]
+          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "mcp", "runtime-config"]
+        },
+        "scope": {
+          "description": "Explicit installation scope. Absolute project targets do not imply global scope.",
+          "type": "string",
+          "enum": ["project", "global"]
+        },
+        "version": {
+          "description": "Catalog artifact version resolved at install time when declared.",
+          "type": "string",
+          "minLength": 1
         },
         "catalog_identity": {
           "description": "Stable identity of the library catalog that produced this install, normally its canonical repository URL. Optional only for legacy entries created before catalog provenance was recorded.",

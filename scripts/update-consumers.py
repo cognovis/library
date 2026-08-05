@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Controlled updater for projects that consume Library-managed primitives."""
+
 from __future__ import annotations
 
 import argparse
@@ -49,7 +50,9 @@ def load_manifest(path: Path) -> dict[str, Any]:
         entries = consumer.get("library_entries", [])
         files = consumer.get("managed_files", [])
         if not isinstance(entries, list):
-            raise ValueError(f"{path}: consumers[{index}].library_entries must be a list")
+            raise ValueError(
+                f"{path}: consumers[{index}].library_entries must be a list"
+            )
         if not isinstance(files, list):
             raise ValueError(f"{path}: consumers[{index}].managed_files must be a list")
     return raw
@@ -91,10 +94,14 @@ def planned_file_action(
         )
         return action
     if not target.exists():
-        action.update({"status": "missing", "reason": "target_missing", "changed": True})
+        action.update(
+            {"status": "missing", "reason": "target_missing", "changed": True}
+        )
         return action
     if not target.is_file():
-        action.update({"status": "error", "reason": "target_not_file", "changed": False})
+        action.update(
+            {"status": "error", "reason": "target_not_file", "changed": False}
+        )
         return action
     if sha256_file(source) != sha256_file(target):
         action.update({"status": "stale", "reason": "content_diff", "changed": True})
@@ -161,7 +168,9 @@ def sync_entry(
         "stderr": "",
     }
     if not isinstance(primitive, str) or not isinstance(name, str):
-        action.update({"status": "error", "stderr": "entry requires primitive and name"})
+        action.update(
+            {"status": "error", "stderr": "entry requires primitive and name"}
+        )
         return action
 
     command = [
@@ -209,6 +218,7 @@ def update_consumer(
         "file_actions": [],
         "changed_files": [],
         "planned_changed_files": [],
+        "manager_inventory": [],
         "errors": [],
     }
 
@@ -251,6 +261,13 @@ def update_consumer(
         source = expand_path(source_raw, base=manifest_dir)
         target = root / target_raw
         action = planned_file_action(source=source, target=target, mode=mode)
+        report["manager_inventory"].append(
+            {
+                "path": str(target.resolve()),
+                "manager": "consumer-updater",
+                "consumer": consumer["name"],
+            }
+        )
         if apply:
             apply_file_action(action, mode=mode)
         report["file_actions"].append(action)
@@ -289,9 +306,12 @@ def run_update(
         "consumers": [],
         "changed_files": [],
         "planned_changed_files": [],
+        "manager_inventory": [],
         "errors": [],
     }
-    missing_names = sorted(selected - {consumer["name"] for consumer in manifest["consumers"]})
+    missing_names = sorted(
+        selected - {consumer["name"] for consumer in manifest["consumers"]}
+    )
     if missing_names:
         result["status"] = "error"
         result["errors"].append("unknown consumers: " + ", ".join(missing_names))
@@ -307,6 +327,7 @@ def run_update(
         result["consumers"].append(consumer_report)
         result["changed_files"].extend(consumer_report["changed_files"])
         result["planned_changed_files"].extend(consumer_report["planned_changed_files"])
+        result["manager_inventory"].extend(consumer_report["manager_inventory"])
         if consumer_report["status"] == "error":
             result["status"] = "error"
             result["errors"].extend(
@@ -343,7 +364,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--consumer", action="append", default=[])
     parser.add_argument("--library-cli", type=Path, default=DEFAULT_LIBRARY_CLI)
-    parser.add_argument("--apply", action="store_true", help="Mutate consumer working trees")
+    parser.add_argument(
+        "--apply", action="store_true", help="Mutate consumer working trees"
+    )
     parser.add_argument("--json", action="store_true", help="Print a JSON report")
     return parser
 

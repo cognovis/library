@@ -8,6 +8,7 @@ hard-coding repository names in callers.
 from __future__ import annotations
 
 import io
+import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -45,6 +46,7 @@ PRIMITIVE_CONTENT_TYPES: dict[str, set[str]] = {
     "pi-extension": {"pi-extension", "pi_extension", "pi-extensions", "pi_extensions"},
     "pi-profile": {"pi-profile", "pi_profile", "pi-profiles", "pi_profiles"},
     "just-module": {"just-module", "just_module", "just-modules", "just_modules"},
+    "workspace": {"workspace", "workspaces"},
 }
 
 CONTENT_TYPE_PRIMITIVES: dict[str, str] = {
@@ -61,6 +63,7 @@ SCAN_PRIMITIVES = {
     "model-standard",
     "agent-base",
     "workflow",
+    "workspace",
 }
 
 IGNORED_PATH_PARTS = {
@@ -563,6 +566,12 @@ def scan_primitive(
     primitive_name: str,
 ) -> list[dict[str, Any]]:
     """Scan one primitive kind under a local source checkout."""
+    if primitive_name == "workspace":
+        return [
+            workspace_entry(root, source_entry, path)
+            for path in sorted((root / "workspaces").glob("*.yaml"))
+            if not any(part in IGNORED_PATH_PARTS for part in path.parts)
+        ]
     if primitive_name == "skill":
         files = sorted(
             skill_file
@@ -598,6 +607,58 @@ def scan_primitive(
             continue
         entries.append(artifact_entry(root, source_entry, primitive_name, path))
     return entries
+
+
+def workspace_entry(
+    root: Path,
+    source_entry: dict[str, Any],
+    path: Path,
+) -> dict[str, Any]:
+    """Build a catalog row from a metadata-only Workspace manifest."""
+    try:
+        manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ValueError(f"Invalid Workspace manifest {path}: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise ValueError(f"Workspace manifest {path} must be a YAML mapping")
+
+    required = {"schema_version", "name", "version", "description", "roots"}
+    missing = sorted(required - set(manifest))
+    if missing:
+        raise ValueError(f"Workspace manifest {path} is missing: {', '.join(missing)}")
+
+    relative_path = path.relative_to(root).as_posix()
+    entry = deepcopy(manifest)
+    entry["source"] = source_url(source_entry, relative_path, root)
+    metadata = entry.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    library_metadata = metadata.get("library")
+    if not isinstance(library_metadata, dict):
+        library_metadata = {}
+    library_metadata.update(
+        {
+            "source_catalog": source_entry.get("name", ""),
+            "inventory": "convention-scan",
+            "source_commit": source_commit(root),
+        }
+    )
+    metadata["library"] = library_metadata
+    entry["metadata"] = metadata
+    return entry
+
+
+def source_commit(root: Path) -> str:
+    """Return the local source checkout pin used for inventory projection."""
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return "local-unversioned"
 
 
 def find_skill_file(skill_dir: Path) -> Path | None:

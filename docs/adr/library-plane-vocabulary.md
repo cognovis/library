@@ -8,7 +8,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
-related_adrs: ["0003", "0004"]
+amended_by: ["0010"]
+related_adrs: ["0003", "0004", "0010"]
 ---
 
 # ADR-0005: Library catalog plane vocabulary and Gas City PackV2 projection boundaries
@@ -38,6 +39,10 @@ This ADR fixes the vocabulary for the Library groundwork before schema and
 primitive refactors continue.
 
 ## Decision
+
+ADR-0010 adds Workspace to this vocabulary as a dev-plane, metadata-only
+desired-state root. It is catalog content stewarded by a marketplace but has no
+harness projection and is not a product-plane runtime workspace.
 
 ### Decision 1: Library/meta is the dev-plane installer, catalog, and compiler engine
 
@@ -137,6 +142,19 @@ Library scripts are Python-only and are cataloged under `library.scripts`.
 Scripts can be called by skills, agents, hooks, standards, tests, CI, and Gas
 City exports. A script is not a model-selected context primitive; it runs only
 when another primitive or runtime surface invokes it explicitly.
+
+### Decision 8: Workspace is a dev-plane lifecycle primitive
+
+Workspace definitions live in stewarded catalog sources and name typed Library
+roots for a reusable project or global baseline. One lock scope may register
+several Workspaces, and one Workspace may reference another in the same scope.
+The platform consumes the unordered union to reconcile lockfile ownership. The
+definition itself is never installed into a harness and is not a Gas City PackV2
+projection.
+
+"Workspace" in this ADR is explicitly qualified as **Library Workspace** when
+ambiguity is possible. It is unrelated to cmux workspaces, Git worktrees,
+repository directories, product runtime workspaces, or harness sessions.
 
 ## Rationale
 

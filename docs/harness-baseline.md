@@ -12,7 +12,30 @@ the repository and get the same rules, agents, commands, standards, and safe
 permissions. Personal credentials, machine-local overrides, and generated runtime
 state stay outside git.
 
+A Library Workspace selects reusable Library-owned parts of that baseline. It
+does not replace repository-owned `AGENTS.md`, permissions, product instructions,
+customer facts, or runtime configuration. A repository may register several
+orthogonal Workspaces; their union is recorded through one project lockfile.
+
 ## Baseline Checklist
+
+### Library desired state
+
+The table describes the lockfile v2 target accepted in ADR-0010. Until
+`CL-r7n6` lands, `.library.lock` remains the released v1 additive installed list
+and no Workspace command is available.
+
+**MUST be committed when the project uses Library-managed primitives:**
+
+| File | Purpose |
+|------|---------|
+| `.library.lock` | Universal direct and Workspace requested roots plus exact materialized receipts |
+
+Workspace manifests themselves remain versioned catalog content and are not
+copied into the consumer repository. A clone restores the selected roots through
+`library workspace sync --all --scope project` or conservative `library sync`.
+The project may add direct primitive roots that intentionally survive Workspace
+changes.
 
 ### .claude/ (Claude Code)
 
@@ -160,10 +183,16 @@ The same principles apply to all harnesses:
 | Cursor | `.cursor/` | `.cursorrules` / `CURSOR.md` | `.cursor/settings.local.json` |
 | Cross-harness | `.agents/` | `AGENTS.md` (shared) | - |
 
-As harnesses mature, the library distribution system (`/library use`) installs
+As harnesses mature, the library distribution system (`library <primitive> use`) installs
 into both project-local and user-global paths automatically. Keeping the
 project-local directories committed and secrets-free ensures the install state is
 reproducible for the whole team.
+
+In the target CLI contract, primitive operations use
+`library <primitive> use <name>`. Workspace operations add composition and
+ownership-aware lifecycle without changing the harness paths above. Installation
+scope is not context-load scope: each installed member retains its own trigger
+semantics.
 
 ## Reference Project: mira
 

@@ -38,6 +38,7 @@ try:
     import yaml
 except ImportError:
     import pytest
+
     pytest.skip("PyYAML not installed", allow_module_level=True)
 
 try:
@@ -45,6 +46,7 @@ try:
     from jsonschema import validate, ValidationError
 except ImportError:
     import pytest
+
     pytest.skip("jsonschema not installed", allow_module_level=True)
 
 # ---------------------------------------------------------------------------
@@ -84,7 +86,10 @@ def assert_valid(data: dict, schema: dict, label: str) -> None:
     validator = jsonschema.Draft202012Validator(schema)
     errors = list(validator.iter_errors(data))
     if errors:
-        msgs = "\n".join(f"  [{'/'.join(str(p) for p in e.absolute_path)}] {e.message}" for e in errors)
+        msgs = "\n".join(
+            f"  [{'/'.join(str(p) for p in e.absolute_path)}] {e.message}"
+            for e in errors
+        )
         raise AssertionError(f"Expected VALID for '{label}' but got errors:\n{msgs}")
 
 
@@ -116,14 +121,11 @@ def minimal_tooling_entry(**overrides) -> dict:
 # Test cases — Schema validation
 # ---------------------------------------------------------------------------
 
+
 def test_project_tooling_section_accepted():
     """A minimal project_tooling entry is accepted by schema."""
     schema = load_schema()
-    data = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry()
-        ]
-    })
+    data = minimal_library({"project_tooling": [minimal_tooling_entry()]})
     assert_valid(data, schema, "project_tooling with minimal valid entry")
     print("PASS test_project_tooling_section_accepted")
 
@@ -172,16 +174,22 @@ def test_target_kind_enum():
     """target_kind accepts only valid values; unknown is rejected."""
     schema = load_schema()
 
-    valid_kinds = ("file", "file_section", "git_hook", "gitignore_patch", "json_field_enforce")
+    valid_kinds = (
+        "file",
+        "file_section",
+        "git_hook",
+        "gitignore_patch",
+        "json_field_enforce",
+    )
     for kind in valid_kinds:
-        data = minimal_library({
-            "project_tooling": [minimal_tooling_entry(target_kind=kind)]
-        })
+        data = minimal_library(
+            {"project_tooling": [minimal_tooling_entry(target_kind=kind)]}
+        )
         assert_valid(data, schema, f"target_kind={kind}")
 
-    data_invalid = minimal_library({
-        "project_tooling": [minimal_tooling_entry(target_kind="unknown_kind")]
-    })
+    data_invalid = minimal_library(
+        {"project_tooling": [minimal_tooling_entry(target_kind="unknown_kind")]}
+    )
     assert_invalid(data_invalid, schema, "target_kind=unknown_kind (invalid)")
     print("PASS test_target_kind_enum")
 
@@ -198,14 +206,14 @@ def test_sync_strategy_enum():
         "repair_fields",
     )
     for strategy in valid_strategies:
-        data = minimal_library({
-            "project_tooling": [minimal_tooling_entry(sync_strategy=strategy)]
-        })
+        data = minimal_library(
+            {"project_tooling": [minimal_tooling_entry(sync_strategy=strategy)]}
+        )
         assert_valid(data, schema, f"sync_strategy={strategy}")
 
-    data_invalid = minimal_library({
-        "project_tooling": [minimal_tooling_entry(sync_strategy="clobber_always")]
-    })
+    data_invalid = minimal_library(
+        {"project_tooling": [minimal_tooling_entry(sync_strategy="clobber_always")]}
+    )
     assert_invalid(data_invalid, schema, "sync_strategy=clobber_always (invalid)")
     print("PASS test_sync_strategy_enum")
 
@@ -216,14 +224,14 @@ def test_conflict_policy_enum():
 
     valid_policies = ("canonical_wins", "user_wins", "warn_only")
     for policy in valid_policies:
-        data = minimal_library({
-            "project_tooling": [minimal_tooling_entry(conflict_policy=policy)]
-        })
+        data = minimal_library(
+            {"project_tooling": [minimal_tooling_entry(conflict_policy=policy)]}
+        )
         assert_valid(data, schema, f"conflict_policy={policy}")
 
-    data_invalid = minimal_library({
-        "project_tooling": [minimal_tooling_entry(conflict_policy="merge_it")]
-    })
+    data_invalid = minimal_library(
+        {"project_tooling": [minimal_tooling_entry(conflict_policy="merge_it")]}
+    )
     assert_invalid(data_invalid, schema, "conflict_policy=merge_it (invalid)")
     print("PASS test_conflict_policy_enum")
 
@@ -231,27 +239,37 @@ def test_conflict_policy_enum():
 def test_conditions_language():
     """conditions array with dir_exists/file_exists/command_available/env_set accepted; invalid key rejected."""
     schema = load_schema()
-    data = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(conditions=[
-                {"dir_exists": ".beads"},
-                {"file_exists": ".beads/metadata.json"},
-                {"command_available": "bd"},
-                {"env_set": "COGNOVIS_LIBRARY"},
-            ])
-        ]
-    })
+    data = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    conditions=[
+                        {"dir_exists": ".beads"},
+                        {"file_exists": ".beads/metadata.json"},
+                        {"command_available": "bd"},
+                        {"env_set": "COGNOVIS_LIBRARY"},
+                    ]
+                )
+            ]
+        }
+    )
     assert_valid(data, schema, "conditions with all valid condition types")
 
     # Invalid condition key (typo: file_exist instead of file_exists)
-    data_invalid = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(conditions=[
-                {"file_exist": ".beads/metadata.json"},
-            ])
-        ]
-    })
-    assert_invalid(data_invalid, schema, "conditions with invalid key 'file_exist' (typo)")
+    data_invalid = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    conditions=[
+                        {"file_exist": ".beads/metadata.json"},
+                    ]
+                )
+            ]
+        }
+    )
+    assert_invalid(
+        data_invalid, schema, "conditions with invalid key 'file_exist' (typo)"
+    )
     print("PASS test_conditions_language")
 
 
@@ -290,31 +308,37 @@ def test_json_field_enforce_fields():
     schema = load_schema()
 
     # With ensure and remove
-    data = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(
-                target_kind="json_field_enforce",
-                fields={
-                    "ensure": {"dolt_mode": "server"},
-                    "remove": ["database", "backend"],
-                },
-            )
-        ]
-    })
-    assert_valid(data, schema, "json_field_enforce with fields.ensure and fields.remove")
+    data = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    target_kind="json_field_enforce",
+                    fields={
+                        "ensure": {"dolt_mode": "server"},
+                        "remove": ["database", "backend"],
+                    },
+                )
+            ]
+        }
+    )
+    assert_valid(
+        data, schema, "json_field_enforce with fields.ensure and fields.remove"
+    )
 
     # Invalid: unknown property inside fields
-    data_invalid = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(
-                target_kind="json_field_enforce",
-                fields={
-                    "ensure": {"dolt_mode": "server"},
-                    "unknown_prop": "bad",
-                },
-            )
-        ]
-    })
+    data_invalid = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    target_kind="json_field_enforce",
+                    fields={
+                        "ensure": {"dolt_mode": "server"},
+                        "unknown_prop": "bad",
+                    },
+                )
+            ]
+        }
+    )
     assert_invalid(data_invalid, schema, "fields with unknown property (invalid)")
     print("PASS test_json_field_enforce_fields")
 
@@ -322,16 +346,18 @@ def test_json_field_enforce_fields():
 def test_project_tooling_profiles_field():
     """profiles accepts consumer and marketplace values."""
     schema = load_schema()
-    data = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(
-                target_kind="gitignore_patch",
-                target_path=".gitignore",
-                profiles=["consumer", "marketplace"],
-                fields={"remove_lines": [".agents/skills/"]},
-            )
-        ]
-    })
+    data = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    target_kind="gitignore_patch",
+                    target_path=".gitignore",
+                    profiles=["consumer", "marketplace"],
+                    fields={"remove_lines": [".agents/skills/"]},
+                )
+            ]
+        }
+    )
     assert_valid(data, schema, "project_tooling profiles")
     print("PASS test_project_tooling_profiles_field")
 
@@ -339,30 +365,34 @@ def test_project_tooling_profiles_field():
 def test_git_hook_chain_existing_field():
     """git_hook entries accept the opt-in chain_existing boolean field."""
     schema = load_schema()
-    data = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(
-                target_kind="git_hook",
-                target_path=".git/hooks/pre-push",
-                hook_name="pre-push",
-                source="prime/hooks/pre-push.sh",
-                chain_existing=True,
-            )
-        ]
-    })
+    data = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    target_kind="git_hook",
+                    target_path=".git/hooks/pre-push",
+                    hook_name="pre-push",
+                    source="prime/hooks/pre-push.sh",
+                    chain_existing=True,
+                )
+            ]
+        }
+    )
     assert_valid(data, schema, "git_hook with chain_existing=true")
 
-    data_invalid = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(
-                target_kind="git_hook",
-                target_path=".git/hooks/pre-push",
-                hook_name="pre-push",
-                source="prime/hooks/pre-push.sh",
-                chain_existing="yes",
-            )
-        ]
-    })
+    data_invalid = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    target_kind="git_hook",
+                    target_path=".git/hooks/pre-push",
+                    hook_name="pre-push",
+                    source="prime/hooks/pre-push.sh",
+                    chain_existing="yes",
+                )
+            ]
+        }
+    )
     assert_invalid(data_invalid, schema, "git_hook with non-boolean chain_existing")
     print("PASS test_git_hook_chain_existing_field")
 
@@ -370,18 +400,20 @@ def test_git_hook_chain_existing_field():
 def test_gitignore_patch_fields():
     """gitignore_patch fields ensure_lines/remove_lines validate."""
     schema = load_schema()
-    data = minimal_library({
-        "project_tooling": [
-            minimal_tooling_entry(
-                target_kind="gitignore_patch",
-                target_path=".gitignore",
-                fields={
-                    "remove_lines": [".agents/skills/"],
-                    "ensure_lines": [".claude/worktrees/"],
-                },
-            )
-        ]
-    })
+    data = minimal_library(
+        {
+            "project_tooling": [
+                minimal_tooling_entry(
+                    target_kind="gitignore_patch",
+                    target_path=".gitignore",
+                    fields={
+                        "remove_lines": [".agents/skills/"],
+                        "ensure_lines": [".claude/worktrees/"],
+                    },
+                )
+            ]
+        }
+    )
     assert_valid(data, schema, "gitignore_patch line fields")
     print("PASS test_gitignore_patch_fields")
 
@@ -389,30 +421,32 @@ def test_gitignore_patch_fields():
 def test_full_beads_prime_example():
     """The full beads-prime entry from the bead description validates cleanly."""
     schema = load_schema()
-    data = minimal_library({
-        "project_tooling": [
-            {
-                "name": "beads-prime",
-                "description": (
-                    "bd workflow primer — auto-synced from cognovis-library at SessionStart. "
-                    "bd prime emits its content. Fleet policy, not per-project customization."
-                ),
-                "target_kind": "file",
-                "target_path": ".beads/PRIME.md",
-                "source": "prime/PRIME.md",
-                "conditions": [
-                    {"dir_exists": ".beads"},
-                ],
-                "sync_strategy": "overwrite_if_source_newer",
-                "conflict_policy": "canonical_wins",
-                "consumed_by": {
-                    "tool": "bd",
-                    "command": "bd prime",
-                },
-                "tags": ["beads", "fleet-policy"],
-            }
-        ]
-    })
+    data = minimal_library(
+        {
+            "project_tooling": [
+                {
+                    "name": "beads-prime",
+                    "description": (
+                        "bd workflow primer — auto-synced from cognovis-library at SessionStart. "
+                        "bd prime emits its content. Fleet policy, not per-project customization."
+                    ),
+                    "target_kind": "file",
+                    "target_path": ".beads/PRIME.md",
+                    "source": "prime/PRIME.md",
+                    "conditions": [
+                        {"dir_exists": ".beads"},
+                    ],
+                    "sync_strategy": "overwrite_if_source_newer",
+                    "conflict_policy": "canonical_wins",
+                    "consumed_by": {
+                        "tool": "bd",
+                        "command": "bd prime",
+                    },
+                    "tags": ["beads", "fleet-policy"],
+                }
+            ]
+        }
+    )
     assert_valid(data, schema, "full beads-prime example")
     print("PASS test_full_beads_prime_example")
 
@@ -430,9 +464,11 @@ def test_library_yaml_has_project_tooling():
 # Test cases — Runtime (integration tests using temp dirs)
 # ---------------------------------------------------------------------------
 
+
 def _import_sync_script():
     """Dynamically import sync_project_tooling.py for integration tests."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location("sync_project_tooling", SYNC_SCRIPT)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -489,12 +525,16 @@ def test_sync_runtime_file_target():
             }
         ]
 
-        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        result = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
         assert result["synced"] >= 1, f"Expected at least 1 synced entry, got: {result}"
 
         target_file = project_root / ".beads" / "PRIME.md"
         assert target_file.exists(), "Target file was not created"
-        assert target_file.read_text() == source_content, "Target content does not match source"
+        assert target_file.read_text() == source_content, (
+            "Target content does not match source"
+        )
 
     print("PASS test_sync_runtime_file_target")
 
@@ -535,22 +575,35 @@ def test_sync_runtime_json_field_enforce():
                 "conflict_policy": "canonical_wins",
                 "fields": {
                     "ensure": {"dolt_mode": "server"},
-                    "remove": ["database", "backend", "dolt_server_port", "dolt_server_user"],
+                    "remove": [
+                        "database",
+                        "backend",
+                        "dolt_server_port",
+                        "dolt_server_user",
+                    ],
                 },
             }
         ]
 
-        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        result = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
         assert result["synced"] >= 1, f"Expected at least 1 synced entry, got: {result}"
 
         updated = json.loads(meta_file.read_text())
         assert updated["dolt_mode"] == "server", "dolt_mode was not set to server"
         assert "database" not in updated, "stale field 'database' was not removed"
         assert "backend" not in updated, "stale field 'backend' was not removed"
-        assert "dolt_server_port" not in updated, "stale field 'dolt_server_port' was not removed"
-        assert "dolt_server_user" not in updated, "stale field 'dolt_server_user' was not removed"
+        assert "dolt_server_port" not in updated, (
+            "stale field 'dolt_server_port' was not removed"
+        )
+        assert "dolt_server_user" not in updated, (
+            "stale field 'dolt_server_user' was not removed"
+        )
         # Non-stale fields preserved
-        assert updated.get("server_host") == "localhost", "non-stale field was incorrectly removed"
+        assert updated.get("server_host") == "localhost", (
+            "non-stale field was incorrectly removed"
+        )
 
     print("PASS test_sync_runtime_json_field_enforce")
 
@@ -558,6 +611,7 @@ def test_sync_runtime_json_field_enforce():
 def test_sync_runtime_git_hook():
     """sync_project_tooling.py: git_hook target writes executable hook and is idempotent."""
     import os
+
     sync = _import_sync_script()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -592,18 +646,28 @@ def test_sync_runtime_git_hook():
         ]
 
         # First run — should sync
-        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        result = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
         assert result["synced"] >= 1, f"Expected at least 1 synced entry, got: {result}"
 
         hook_path = project_root / ".git" / "hooks" / "post-commit"
         assert hook_path.exists(), "Hook file was not created"
-        assert hook_path.read_text() == hook_content, "Hook content does not match source"
+        assert hook_path.read_text() == hook_content, (
+            "Hook content does not match source"
+        )
         assert os.access(hook_path, os.X_OK), "Hook file is not executable"
 
         # Second run — idempotency: same result, content unchanged
-        result2 = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
-        assert hook_path.read_text() == hook_content, "Idempotency: hook content changed on second run"
-        assert os.access(hook_path, os.X_OK), "Hook file lost executable bit on second run"
+        result2 = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
+        assert hook_path.read_text() == hook_content, (
+            "Idempotency: hook content changed on second run"
+        )
+        assert os.access(hook_path, os.X_OK), (
+            "Hook file lost executable bit on second run"
+        )
 
     print("PASS test_sync_runtime_git_hook")
 
@@ -611,6 +675,7 @@ def test_sync_runtime_git_hook():
 def test_sync_runtime_git_hook_honors_core_hooks_path():
     """git_hook targets install into the effective hooks path from core.hooksPath."""
     import os
+
     sync = _import_sync_script()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -645,14 +710,18 @@ def test_sync_runtime_git_hook_honors_core_hooks_path():
             }
         ]
 
-        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        result = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
 
         hook_path = project_root / "managed-hooks" / "pre-push"
         default_hook_path = project_root / ".git" / "hooks" / "pre-push"
         assert result["synced"] == 1, result
         assert hook_path.read_text() == hook_content
         assert os.access(hook_path, os.X_OK), "Hook file is not executable"
-        assert not default_hook_path.exists(), "Hook was installed into the inactive default hooks path"
+        assert not default_hook_path.exists(), (
+            "Hook was installed into the inactive default hooks path"
+        )
 
     print("PASS test_sync_runtime_git_hook_honors_core_hooks_path")
 
@@ -698,9 +767,15 @@ def test_sync_runtime_git_hook_chain_existing_preserves_foreign_hook_once():
             }
         ]
 
-        first = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
-        second = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
-        third = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        first = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
+        second = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
+        third = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
 
         assert first["synced"] == 1, first
         assert second["skipped"] == 1, second
@@ -745,17 +820,23 @@ def test_sync_runtime_idempotent():
         ]
 
         # First run
-        result1 = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        result1 = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
         target_file = project_root / ".beads" / "PRIME.md"
         content_after_first = target_file.read_text()
 
         # Second run
-        result2 = sync.sync_entries(entries, library_root=lib_root, project_root=project_root)
+        result2 = sync.sync_entries(
+            entries, library_root=lib_root, project_root=project_root
+        )
         content_after_second = target_file.read_text()
 
         assert content_after_first == source_content, "First run: content mismatch"
         assert content_after_second == source_content, "Second run: content mismatch"
-        assert content_after_first == content_after_second, "Idempotency: content changed between runs"
+        assert content_after_first == content_after_second, (
+            "Idempotency: content changed between runs"
+        )
 
     print("PASS test_sync_runtime_idempotent")
 
@@ -801,7 +882,12 @@ def test_sync_runtime_gitignore_profile_consumer():
             }
         ]
 
-        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root, profile="consumer")
+        result = sync.sync_entries(
+            entries,
+            library_root=lib_root,
+            project_root=project_root,
+            profile="consumer",
+        )
         assert result["synced"] == 1, result
         lines = gitignore.read_text().splitlines()
         assert ".agents/skills/" not in lines
@@ -847,7 +933,12 @@ def test_sync_runtime_gitignore_profile_marketplace():
             }
         ]
 
-        result = sync.sync_entries(entries, library_root=lib_root, project_root=project_root, profile="marketplace")
+        result = sync.sync_entries(
+            entries,
+            library_root=lib_root,
+            project_root=project_root,
+            profile="marketplace",
+        )
         assert result["synced"] == 1, result
         lines = (project_root / ".gitignore").read_text().splitlines()
         for expected in [
@@ -861,6 +952,40 @@ def test_sync_runtime_gitignore_profile_marketplace():
             assert expected in lines
 
     print("PASS test_sync_runtime_gitignore_profile_marketplace")
+
+
+def test_manager_inventory_reports_exact_profile_targets():
+    sync = _import_sync_script()
+    with tempfile.TemporaryDirectory() as tmp:
+        project_root = Path(tmp) / "project"
+        project_root.mkdir()
+        subprocess.run(["git", "init", "-q", str(project_root)], check=True)
+        entries = [
+            {
+                "name": "profile-policy",
+                "target_kind": "gitignore_patch",
+                "target_path": ".gitignore",
+                "profiles": ["consumer"],
+            },
+            {
+                "name": "marketplace-only",
+                "target_kind": "file",
+                "target_path": ".agents/marketplace.md",
+                "profiles": ["marketplace"],
+            },
+        ]
+
+        inventory = sync.manager_inventory(entries, project_root, "consumer")
+
+        assert inventory == [
+            {
+                "path": str((project_root / ".gitignore").resolve()),
+                "manager": "project-tooling",
+                "entry": "profile-policy",
+            }
+        ]
+
+    print("PASS test_manager_inventory_reports_exact_profile_targets")
 
 
 # ---------------------------------------------------------------------------
@@ -893,6 +1018,7 @@ ALL_TESTS = [
     test_sync_runtime_idempotent,
     test_sync_runtime_gitignore_profile_consumer,
     test_sync_runtime_gitignore_profile_marketplace,
+    test_manager_inventory_reports_exact_profile_targets,
 ]
 
 

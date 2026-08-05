@@ -2,6 +2,7 @@
 title: "Normalize library.yaml section ownership"
 status: accepted
 date: 2026-05-14
+amended_by: ["0010"]
 ---
 
 # ADR: Normalize library.yaml section ownership
@@ -14,7 +15,8 @@ root level:
 - installer defaults: `default_dirs`
 - catalog vocabulary: `tag_vocabulary`
 - primitive catalog entries: `library.skills`, `library.agents`,
-  `library.prompts`, `library.scripts`, `library.standards`
+  `library.prompts`, `library.scripts`, `library.standards`, and
+  metadata-only `library.workspaces`
 - later primitive catalog entries: `guardrails`, `mcp_servers`,
   `model_standards`, `agent_bases`
 - source registries: `catalog`, `marketplaces`
@@ -40,6 +42,7 @@ and which were root-level exceptions.
 | `mcp_servers` | root | `library.mcp_servers` | primitive catalog | MCP installer, list/search, resolver |
 | `model_standards` | root | `library.model_standards` | primitive catalog | simple-file installer, agent composer inputs |
 | `agent_bases` | n/a | `library.agent_bases` | primitive catalog | simple-file installer, agent composer inputs |
+| `workspaces` | n/a | `library.workspaces` | desired-state primitive catalog | workspace schema validator, resolver, reconciler |
 | `catalog` | root | `sources.catalogs` | source registry | source provenance, docs, future source management |
 | `marketplaces` | root | `sources.marketplaces` | source registry | marketplace resolution, lockfile migration |
 | `project_tooling` | root | root | fleet policy | `scripts/sync_project_tooling.py` |
@@ -66,6 +69,7 @@ library:
   mcp_servers:
   model_standards:
   agent_bases:
+  workspaces:
 
 project_tooling:
 ```
@@ -73,6 +77,18 @@ project_tooling:
 All primitive catalog entries live under `library.*`. All source-provider
 registries live under `sources.*`. Root-level keys are reserved for document-wide
 policy or metadata that is not itself a primitive catalog.
+
+Per ADR-0010, `library.workspaces` is a deliberate exception to the usual
+artifact-bearing primitive shape: each entry points to a versioned metadata
+manifest and has no harness install target. It still belongs under `library.*`
+because it is cataloged, resolved, versioned, and operated through the Library
+primitive interface.
+
+ADR-0010 also freezes `project_tooling` as a transitional root section. It is
+not a second Workspace schema and accepts no new distributable capabilities.
+After its existing entries have moved to primitive dependencies, tool-owned
+migrations, or project ownership, the target information model removes the
+section entirely.
 
 ## Compatibility
 
@@ -100,7 +116,9 @@ New catalog edits should use only the canonical locations.
   primitive to `library/<section>`.
 - Source registry lookup becomes explicit through `sources.catalogs` and
   `sources.marketplaces`.
-- `project_tooling` remains root-level because it is fleet policy, not a
-  primitive catalog.
+- `project_tooling` remains readable only during its migration; Workspace is the
+  sole target-state Library baseline mechanism.
 - Future schema work should extend `library.*` for primitive types and
   `sources.*` for provider registries instead of adding unrelated root keys.
+- Workspace definitions extend `library.workspaces`; they do not introduce a
+  root-level `workspace`, `profiles`, or second runtime-configuration section.
