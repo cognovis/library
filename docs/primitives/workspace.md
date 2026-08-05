@@ -56,6 +56,16 @@ canonical identity for resolution and ownership. Status exits 0 when converged,
 2 for applicable changes, 3 for blocked or protected findings, and 1 when the
 operation itself fails.
 
+Workspace commands keep the current repository as the project target, but the
+repository's own `library.yaml` must not hide a Workspace published through the
+Library tool's consolidated catalog. The resolver first uses the current catalog
+when it can resolve every selected Workspace. Otherwise it falls back to the tool
+catalog only when that catalog resolves the complete selected Workspace set.
+Primitive commands continue to use the current repository catalog. This permits
+a catalog repository such as `cognovis-pi` to consume `library-authoring` without
+copying platform definitions into its own catalog or adding a machine-local
+source path.
+
 **Manifest.** Versioned identity, description, and 2-10 typed artifact roots
 with optional version constraints. A manifest references Skills, Standards,
 Agents, Workflows, and other artifact primitives from its own canonical catalog

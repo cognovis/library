@@ -4621,6 +4621,12 @@ def main(argv: list[str] | None = None) -> int:
             catalog_root = _resolve_catalog_root()
             repo_root = _resolve_target_root(args, catalog_root)
             catalog = load_catalog(catalog_root)
+            catalog = _select_workspace_catalog(
+                args,
+                repo_root=repo_root,
+                catalog_root=catalog_root,
+                catalog=catalog,
+            )
             return cmd_workspace(args, repo_root, catalog)
         except LibraryError as exc:
             if getattr(args, "json", False):
@@ -4687,6 +4693,90 @@ def _resolve_catalog_root() -> Path:
         return find_repo_root()
     except LibraryError:
         return find_repo_root(TOOL_ROOT)
+
+
+def _select_workspace_catalog(
+    args: argparse.Namespace,
+    *,
+    repo_root: Path,
+    catalog_root: Path,
+    catalog: dict,
+) -> dict:
+    """Use the tool catalog when a consumer catalog cannot resolve locked Workspaces.
+
+    Catalog repositories can also consume Workspaces. In that case their local
+    ``library.yaml`` remains authoritative for their own primitive commands, but
+    it must not hide Workspace definitions published through the Library tool's
+    consolidated catalog.
+    """
+    references = _workspace_references_for_command(args, repo_root)
+    verb = str(getattr(args, "verb", ""))
+    if not references and verb == "list" and get_entries(catalog, "workspace"):
+        return catalog
+    if references and all(
+        _workspace_reference_resolves(catalog, reference)
+        for reference in references
+    ):
+        return catalog
+
+    tool_catalog_root = find_repo_root(TOOL_ROOT)
+    if tool_catalog_root.resolve() == catalog_root.resolve():
+        return catalog
+    tool_catalog = load_catalog(tool_catalog_root)
+    if not references:
+        return tool_catalog if verb == "list" else catalog
+    if all(
+        _workspace_reference_resolves(tool_catalog, reference)
+        for reference in references
+    ):
+        return tool_catalog
+    return catalog
+
+
+def _workspace_reference_resolves(catalog: dict, reference: str) -> bool:
+    """Return whether one Workspace reference resolves in a catalog."""
+    from lib.workspace import resolve_workspace
+
+    try:
+        resolve_workspace(catalog, reference)
+    except LibraryError:
+        return False
+    return True
+
+
+def _workspace_references_for_command(
+    args: argparse.Namespace, repo_root: Path
+) -> list[str]:
+    """Return Workspace references needed to execute the selected command."""
+    verb = str(getattr(args, "verb", ""))
+    direct = getattr(args, "reference", None)
+    if verb == "validate" and direct and Path(str(direct)).expanduser().exists():
+        return []
+    if direct and verb in {
+        "show",
+        "validate",
+        "use",
+        "status",
+        "sync",
+        "adopt",
+        "remove",
+    }:
+        return [str(direct)]
+    if verb not in {"status", "sync", "explain"}:
+        return []
+
+    scope = str(getattr(args, "scope", "project"))
+    lock = load_lockfile(
+        find_lockfile(repo_root, global_scope=(scope == "global"))
+    )
+    references: list[str] = []
+    for root in lock.get("requested_roots", []):
+        if root.get("type") != "workspace":
+            continue
+        requested_ref = str(root.get("requested_ref") or "")
+        if requested_ref:
+            references.append(requested_ref)
+    return references
 
 
 def _scopes_to_check(scope: str) -> list[str]:

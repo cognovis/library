@@ -65,10 +65,16 @@ def test_source_bound_lookup_normalizes_missing_metadata_to_unbound() -> None:
 
 
 def _run(project: Path, home: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return _run_with_script(LIBRARY_PY, project, home, *args)
+
+
+def _run_with_script(
+    script: Path, project: Path, home: Path, *args: str
+) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["HOME"] = str(home)
     return subprocess.run(
-        [sys.executable, str(LIBRARY_PY), *args],
+        [sys.executable, str(script), *args],
         cwd=project,
         env=environment,
         capture_output=True,
@@ -789,6 +795,98 @@ def test_workspace_status_survives_project_relocation(tmp_path: Path) -> None:
     bridge = relocated / ".claude" / "skills" / "python-dev"
     assert bridge.readlink() == Path("../../.agents/skills/python-dev")
     assert bridge.resolve() == relocated / ".agents" / "skills" / "python-dev"
+
+
+def test_workspace_status_uses_tool_catalog_when_consumer_is_also_a_catalog(
+    tmp_path: Path,
+) -> None:
+    tool_root = tmp_path / "library-platform"
+    consumer = tmp_path / "consumer-catalog"
+    home = tmp_path / "home"
+    tool_root.mkdir()
+    consumer.mkdir()
+    home.mkdir()
+    _write_fixture(tool_root)
+    shutil.copytree(REPO_ROOT / "scripts", tool_root / "scripts")
+    tool_script = tool_root / "scripts" / "library.py"
+
+    used = _run_with_script(
+        tool_script,
+        tool_root,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--target-project",
+        str(consumer),
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+
+    (consumer / "library.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "catalog_identity": "https://github.com/example/consumer",
+                "library": {"pi_extensions": []},
+            },
+            sort_keys=False,
+        )
+    )
+    subprocess.run(["git", "init", "-q", str(consumer)], check=True)
+
+    status = _run_with_script(
+        tool_script,
+        consumer,
+        home,
+        "workspace",
+        "status",
+        "--all",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert status.returncode == 0, status.stderr or status.stdout
+    payload = json.loads(status.stdout)
+    assert payload["status"] == "converged"
+    assert payload["blockers"] == []
+
+    synced = _run_with_script(
+        tool_script,
+        consumer,
+        home,
+        "workspace",
+        "sync",
+        "--all",
+        "--scope",
+        "project",
+        "--json",
+    )
+    assert synced.returncode == 0, synced.stderr or synced.stdout
+    assert json.loads(synced.stdout).get("blockers", []) == []
+
+    removed = _run_with_script(
+        tool_script,
+        consumer,
+        home,
+        "workspace",
+        "remove",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--json",
+    )
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    final_lock = yaml.safe_load((consumer / ".library.lock").read_text())
+    assert final_lock["requested_roots"] == []
+    assert {item["id"] for item in final_lock["receipts"]} == {
+        "skill:python-dev",
+        "skill:python-test",
+    }
 
 
 def test_top_level_force_sync_preserves_workspace_requested_intent(
