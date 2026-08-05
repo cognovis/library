@@ -6,6 +6,10 @@
 
 ### Fixed
 
+- *(CL-hyp9, Workspace)* Workspace status, sync, and removal now fall back to the
+  Library tool's consolidated catalog when a consuming catalog repository cannot
+  resolve its locked Workspace roots. The consumer remains the project target;
+  its own `library.yaml` continues to govern ordinary primitive commands.
 - *(CL-r7n6, Workspace)* Workspace reconciliation now preserves source-catalog bindings through transitive installation and receipt verification, canonicalizes external-manager paths across symlinked ancestors, preflights status additions and adoption candidates, rechecks global prerequisites under the write lock, serializes receipt verification, and routes primitive removal through fresh ownership resolution. Exact verified inventory is removed transactionally, while shared, drifted, targetless-orphaned, unverified-orphaned, or foreign-managed content is retained.
 - *(clc-z9wp, Library catalog)* Register the new `bead-implementation-loop` skill as a cross-harness global primitive so Library installation materializes the canonical `.agents` copy and Claude/Cursor bridges instead of refreshing only a pre-existing Codex-local copy. Catalog coverage now includes the loop and drops the already-retired `pencil` expectation.
 - *(CL-yum0, MCP installer)* MCP registrations and their authoritative lock records are now consistently user-global: `mcp use` and `mcp remove` default to `~/.config/library/global.lock`; project-scoped use/sync and lower-level registration mutations are rejected, while explicit project-scoped remove provides lock-only cleanup for legacy records. Non-MCP removal retains its historical project default regardless of catalog install hints. Existing provenance-less harness entries are adopted only on an exact full-descriptor match to the canonical or a declared legacy descriptor; foreign or non-identical entries remain untouched.
