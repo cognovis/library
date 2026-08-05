@@ -37,19 +37,23 @@ never replace fresh resolution. Project and global closures are isolated in
 their existing lock scopes; a global Workspace can define the lobby only because
 all direct global Library roots share `~/.config/library/global.lock`.
 Intrinsically global dependencies such as MCP are checked as global-lock
-prerequisites for a project root; they never become project ownership edges.
+prerequisites for a project root. The project lock records the non-owning
+assertion, but it never becomes a project artifact receipt or ownership edge.
 
 Workspace selection is many-to-many. One project may register several
 orthogonal Workspaces, and one Workspace may be reused by many projects. A
-Workspace may reference another Workspace in the same scope; composition is an
-unordered set union with no override semantics. Strict functional coupling
-remains in primitive `requires:` metadata. The Library does not add a Package or
-generic bundle root between those two relationships.
+v1 Workspace contains only same-catalog artifact roots; nested Workspace and
+cross-catalog manifest roots are deferred. Cross-catalog composition registers
+several Workspaces directly in one scope. Composition is an unordered set union
+with no exclusion or override semantics. Strict functional coupling remains in
+primitive `requires:` metadata. The Library does not add a Package or generic
+bundle root between those two relationships.
 
 The evidence-backed initial cuts and repository mapping are documented in the
 [Workspace Portfolio Audit](research/workspace-portfolio-audit.md). In
-particular, `fhir-management` composes `fhir-ig-authoring` and `python-cli`, and
-`library/meta` composes `library-authoring` and `python-cli`.
+particular, `library/meta` directly composes `library-authoring` and
+`python-cli`. `fhir-ig-authoring` remains conditional on proving that at least
+two independent roots remain after its entrypoint `requires:` audit.
 
 Installation scope is separate from model-context scope. Workspace members keep
 their Skill, Standard, Agent, Hook, Workflow, or Script load semantics, so an
@@ -95,10 +99,18 @@ A Workspace adds an optional desired-state route across stages 2 and 3:
 
 - a marketplace publishes a small versioned Workspace manifest containing typed
   roots;
-- `library workspace use <name>` registers that root and applies additions;
-- `library workspace status` explains the freshly resolved plan; and
+- `library workspace list`, `show`, and `use <catalog>:<name> --dry-run` provide
+  discovery and a no-write first-contact plan;
+- `library workspace use <catalog>:<name>` registers that root and applies
+  additions;
+- `library workspace status` and `explain` expose the freshly resolved ownership
+  plan; and
 - `library workspace sync --prune --apply` can retire only exact, verified,
   ownerless Library receipts. Ordinary `library sync` remains non-pruning.
+
+Migrated direct roots can be demoted in bulk to Workspace ownership through a
+lock-only plan-and-apply operation. It never deletes files; physical deletion
+remains a separate prune decision.
 
 The Workspace route replaces hand-maintained bootstrap capability lists,
 `consumer-projects.yml` primitive refresh lists, and new `project_tooling`

@@ -4,7 +4,9 @@
 
 **Bead:** CL-r7n6
 
-**Status:** Architecture input, not an installation manifest
+**Implementation status:** platform contract implemented by `CL-r7n6`. Only the
+`python-cli` pilot is admitted for initial marketplace publication under
+`clc-tzn5`; the remaining portfolio entries stay evidence-gated candidates.
 
 ## Question
 
@@ -59,10 +61,10 @@ The observed repositories fall into overlapping capability families:
 | Evidence cluster | Repeated state | Architectural reading |
 |------------------|----------------|-----------------------|
 | 16 repositories under `cli-tools/` | All use `pyproject.toml` and `uv.lock`; only `ccu-cli` has the complete five-entry Python baseline | A `python-cli` Workspace is justified and exposes present drift in the other CLI repositories. |
-| Five FHIR repositories | Four locks contain the same seven-member IG closure; `fhir-management` adds Python CLI roots | A reusable FHIR authoring baseline is justified, but it composes with language/tooling Workspaces rather than absorbing them. |
+| Five FHIR repositories | Four locks contain the same seven-member IG closure; `fhir-management` adds Python CLI roots | Run a `requires:` audit first. If one IG entrypoint already owns that closure, use it directly; publish a Workspace only if at least two independent roots remain. |
 | `mira`, `polaris`, `mvz-reetfurt` | Large overlapping Bead/Fusion harness closures with different assurance levels | First create one atomic entrypoint dependency graph for the Bead harness; then expose standard and high-assurance Workspace baselines. Do not copy the current 29-56 lock entries into manifests by hand. |
 | `mira`, `polaris`, `cognovis-platform`, PVS adapters | Aidbox/FHIR capabilities recur, while product-specific agents and topology differ | A healthcare-application baseline is plausible. Product topology, customer credentials, and repository-specific agents stay project-owned. |
-| Proposal, invoice, mail, archive flows | Capabilities span `cognovis-core`, `sussdorff-core`, and `collmex-cli` | A customer-document Workspace is justified, preferably in a dedicated Cognovis operations repository rather than the global engineering lobby. |
+| Proposal, invoice, mail, archive flows | Capabilities span `cognovis-core`, `sussdorff-core`, and `collmex-cli`, but no dedicated operations consumer exists | Defer a customer-document Workspace until an operations repository and at least one additional consumer provide lock evidence and every entrypoint owns its strict dependencies. |
 | Public sites and infrastructure repos | Repeated work exists, but current locks contain little or no canonical Library state | Do not publish Workspaces yet. First extract stable primitives from the repeated work. |
 
 ### The current global lobby is not a useful baseline
@@ -86,8 +88,8 @@ independent long-term:
 
 - ADR-0002's hand-maintained bootstrap capability list is replaced by a global
   Workspace root. The Library engine and conversational entrypoint remain an
-  irreducible pre-Workspace bootstrap; the five forge Skills currently installed
-  by `install.sh` move to `library-authoring` instead of remaining ambient.
+  irreducible pre-Workspace bootstrap; the five forge Skills historically
+  installed by `install.sh` move to `library-authoring` instead of remaining ambient.
 - `consumer-projects.yml` plus `scripts/update-consumers.py` is replaced by each
   consumer's registered Workspaces and ordinary primitive roots. A file that cannot
   be represented as a primitive remains project-owned; it is not copied through a
@@ -103,33 +105,49 @@ independent long-term:
 
 ## Recommended Workspace portfolio
 
-### Adopt first
+### First implementation wave
 
 | Workspace | Catalog steward | Default scope | Apply to | Root shape |
 |-----------|-----------------|---------------|----------|------------|
-| `engineering-lobby` | `cognovis-core` | global | Developer machine | A minimal routing Standard plus genuinely universal engineering entrypoint Skills after their dependency closures are audited. No forges, domain, or customer capabilities. |
-| `python-cli` | `cognovis-core` | project | Active Python CLI repositories, `library/meta`, and `fhir-management` | `skill:python-dev` plus `skill:python-test`; their standards remain transitive dependencies. |
-| `library-authoring` | Library platform catalog | project | `library/meta`; optionally catalog repositories when they need the forge tools | Forge Skills plus primitive-placement Standards; composes `python-cli` where the repository also develops the Python engine. |
-| `fhir-ig-authoring` | `cognovis-core` | project | `fhir-praxis-de`, `fhir-dental-de`, `fhir-deidentification-de`, `fhir-terminology-de`, and `fhir-management` | Provider-neutral IG entrypoint plus only genuinely independent release/registry roots. Avoid duplicating its existing `requires:` closure. |
-| `customer-documents` | `sussdorff-core`, with qualified Cognovis roots | project | A dedicated private Cognovis operations repository | Proposal, brand, outgoing invoice, document lookup, mail archive, and reviewed mail-draft capabilities. Customer data and credentials are not members. |
+| `python-cli` | `cognovis-core` | project | Active Python CLI repositories, `library/meta`, and `fhir-management` | Exactly `skill:python-dev` plus `skill:python-test`; `python-cli-patterns` and other mandatory Standards remain transitive `requires:` dependencies. Keep the name only while the baseline is genuinely CLI-specific; otherwise rename it once to `python-repo` before publication. |
+| `library-authoring` | `cognovis-core` | project | `library/meta`; catalog repositories only while authoring Library content | Forge Skills plus primitive-placement Standards. It does not nest `python-cli`; `library/meta` registers both directly. The platform repository is a consumer, not the manifest steward. |
 
-The customer Workspace should not contain a Workspace per customer. Its reusable
-process applies across customers; customer-specific facts live in the operations
-repository, the document system, or Open Brain. A customer product repository may add
-a separate product or deployment Workspace when it genuinely shares implementation
-capabilities with other customer repositories.
+`python-cli` is the platform pilot because it has a small two-root boundary and a
+large potential consumer set. `library-authoring` follows after the current global
+forge links have an explicit ownership disposition. Publishing either Workspace
+still requires two committed consumer locks; the catalog may stage the manifest
+before that gate, but must label it experimental rather than generally available.
 
-Before `customer-documents` is publishable, `customer-invoice` must declare its strict
-runtime and primitive dependencies itself. A Workspace must not be used to make an
-otherwise incomplete Skill happen to work.
+### Conditional candidate
+
+| Workspace | Publish only when | Otherwise |
+|-----------|-------------------|-----------|
+| `fhir-ig-authoring` | A standalone-install audit leaves at least two independently meaningful roots beyond one provider-neutral IG entrypoint's `requires:` closure | Register the IG entrypoint Skill directly in each repository. An identical dependency closure is evidence for a strong entrypoint, not automatically for a Workspace. |
+
+### Deferred portfolio
+
+| Candidate | Preconditions to reconsider |
+|-----------|-----------------------------|
+| `engineering-lobby` | Enumerate at most five router or entrypoint roots and 15 receipts; prove the one-percent standing-context budget; write bootstrap receipts; ship collision preview, bulk adoption/replacement, and the chezmoi manager-inventory adapter; verify the routing Standard still enters the Beads flow during ordinary task work. |
+| `customer-documents` | Create the dedicated Cognovis operations repository; make `customer-invoice` declare its strict runtime and primitive dependencies; observe the same independent root selection in at least two committed locks; and prove cross-catalog composition through several direct Workspace registrations rather than v1 manifest roots. |
+| `engineering-standard` / `engineering-high-assurance` | Consolidate one atomic Bead-harness entrypoint graph. Assurance is a separately versioned policy Standard, not a second near-duplicate Workspace axis. Reconsider one `bead-harness` Workspace only after that graph exists. |
+| `healthcare-application` | Sharpen the authoring, emitting, querying, and runtime seam. If one entrypoint's `requires:` closure owns the result, keep it a direct root. |
+
+`practice-simulation` is not a deferred Workspace. Its current content is
+repository-owned product research; reopen the question only after independently
+reusable primitives exist. Website, infrastructure, Open Brain, and per-customer
+Workspaces remain rejected because repository names and current global usage do
+not establish a reusable desired-state boundary.
 
 ### Lobby and bootstrap boundary
 
 The Library cannot bootstrap itself through a Workspace. The pre-Workspace layer
 therefore contains only the engine and conversational Library entrypoint. The
-current installer also links `skill-forge`, `agent-forge`, `standard-forge`,
-`script-forge`, and `hook-forge` globally; those are authoring capabilities and
-belong in `library-authoring` for the repositories that maintain Library content.
+previous installer also linked `skill-forge`, `agent-forge`, `standard-forge`,
+`script-forge`, and `hook-forge` globally. The bootstrap now adopts exact
+historical links into receipts without recreating them; those authoring
+capabilities belong in `library-authoring` for repositories that maintain
+Library content.
 
 The lobby carries only cross-repository routing information and entrypoints. For
 Beads, the always-on contract should say when to enter the tracker flow and where
@@ -139,35 +157,33 @@ not enumerate every transitive Bead Agent or Standard. Before publishing the
 lobby, audit those entrypoint closures so selecting one root cannot pull the full
 high-assurance fleet unintentionally.
 
-### Extract a stable entrypoint first
+## Admission, size, and composition rules
 
-| Candidate Workspace | Why not yet |
-|---------------------|-------------|
-| `engineering-standard` / `engineering-high-assurance` | Polaris and Reetfurt prove the repeated closure, but the current state mixes entrypoint dependencies, Pi runtime profiles, scripts, and individually installed agents. Consolidate that graph before publishing the Workspace pair. |
-| `healthcare-application` | MIRA and Polaris share Aidbox/FHIR roots, but authoring, emitting, querying, and product-specific runtime concerns are still mixed. The seam must be sharpened first. |
-| `practice-simulation` | Reetfurt's role knowledge is valuable, but most of it is currently repository-owned product research rather than reusable Library primitives. |
-
-### Do not create yet
-
-Do not create `website`, `infrastructure`, `open-brain`, or per-customer Workspaces
-from repository names alone. Their present Library-owned closures are absent, too
-small, or dominated by project-specific state. A one-member alias is normally a
-direct root, not a Workspace.
-
-## Composition rules derived from the audit
-
-1. A lock scope may register zero or more Workspaces.
-2. A Workspace may reference another Workspace in the same scope. The nested
-   Workspace is a transitive node, not an additional direct request.
-3. Composition is set union plus dependency resolution. It has no order and no
-   override semantics.
-4. Cross-catalog roots are qualified. Same-catalog shorthand is allowed only when
-   resolution is unambiguous, and the resolved catalog identity is always locked.
-5. Cycles, incompatible version constraints, target collisions, and cross-scope
-   ownership fail before mutation.
-6. `requires:` expresses what one primitive needs to function. Workspace membership
-   expresses which independently meaningful capabilities a user wants together.
-7. A repo-specific file, secret, customer fact, runtime route, or deployment topology
-   is not made portable by listing it in a Workspace.
+1. A lock scope may register zero or more Workspaces directly. Schema v1 does not
+   allow a Workspace manifest to root another Workspace.
+2. A Workspace contains 2-10 independently meaningful, standalone-installable
+   roots from its own catalog and is evidenced in at least two committed consumer
+   locks. One-member aliases remain direct roots.
+3. Composition is set union plus dependency resolution. It has no order,
+   exclusions, overrides, or last-writer-wins behavior. Exclusion pressure forces
+   a split.
+4. Cross-catalog v1 composition uses several qualified direct registrations at
+   the scope boundary. Locks record canonical catalog identity; ambiguous bare
+   operator names fail with candidates.
+5. Project Workspaces may resolve at most 30 receipts. The lobby permits at most
+   five direct roots and 15 receipts and must remain within the configured
+   one-percent standing-context budget.
+6. A lobby root must be a router or entrypoint. Removing it should make the agent
+   unable to find where a capability lives, not remove the capability's complete
+   implementation from every repository.
+7. `requires:` expresses what one primitive needs to function. Workspace
+   membership expresses which independent capabilities a user wants to select
+   and retire together. Marketplace CI installs every direct root alone to enforce
+   that boundary.
+8. A repo-specific file, secret, customer fact, runtime route, or deployment
+   topology is not made portable by listing it in a Workspace.
+9. Every Workspace has one marketplace steward and an annual portfolio review.
+   Fewer than two registered consumers at two consecutive reviews retires it to
+   direct roots.
 
 These rules are incorporated into ADR-0010 and the Workspace primitive contract.

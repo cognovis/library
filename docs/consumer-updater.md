@@ -19,7 +19,8 @@ them deliberately.
 After lockfile v2 rollout, a consumer records its own desired state:
 
 ```text
-library workspace use <name> --scope project
+library workspace use <catalog>:<name> --scope project --dry-run
+library workspace use <catalog>:<name> --scope project
 library workspace status --all --scope project
 library workspace sync --all --scope project
 ```
@@ -33,9 +34,19 @@ removed:
 
 - make it a real Library primitive or a transitive dependency when it is
   reusable Library content; or
-- keep it project-owned when it is repository-specific.
+- keep it project-owned and frozen with a provenance marker when it is
+  repository-specific; or
+- retire it explicitly when no consumer still requires it.
+
+The updater exports a read-only target inventory in the manager-adapter shape.
+For each consumer, its updater entry is removed in the same reviewed change that
+registers replacement Workspace or direct roots. This prevents a two-writer
+state in which a retired updater recreates reconciler-managed files.
 
 Workspace must not become another arbitrary source-to-target copy manifest.
+
+The exact consumer targets and cutover gates are maintained in
+[Workspace legacy-writer inventory](migration/workspace-legacy-inventory.md).
 
 ## Legacy manifest
 

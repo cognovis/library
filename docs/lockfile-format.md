@@ -1,9 +1,8 @@
 # .library.lock Format
 
-> **Status**: TRANSITIONAL NORMATIVE — this document is the authoritative format
-> specification for `.library.lock`. Schema v2 is the accepted target from
-> ADR-0010; the schema v1 sections remain the current implementation until
-> `CL-r7n6` lands.
+> **Status**: NORMATIVE — this document is the authoritative format
+> specification for `.library.lock`. Schema v2 implements ADR-0010; schema v1
+> remains accepted only as conservative migration input.
 >
 > **Bead**: CL-t21 / CL-yx2 / CL-yum0 / CL-r7n6 | **Epic**: CL-36o | **Last updated**: 2026-08-05
 >
@@ -35,13 +34,13 @@ user-global and therefore exist only in the global lockfile. They provide:
 
 | Version | State | Top-level model | Deletion authority |
 |---------|-------|-----------------|--------------------|
-| v1 | Implemented legacy format | `installed:` flat list | Explicit primitive removal only; no desired-state prune |
-| v2 | Accepted target, implementation bead `CL-r7n6` | `requested_roots:` plus `receipts:` | Workspace prune only after fresh resolution and `--prune --apply` |
+| v1 | Legacy migration input | `installed:` flat list | Explicit primitive removal only; no desired-state prune |
+| v2 | Current write format | `requested_roots:` plus `receipts:` | Workspace prune only after fresh resolution and `--prune --apply` |
 
-Readers implementing new behavior must follow v2. Operators using the released
-CLI must follow the v1 sections until `CL-r7n6` ships the migration. The CLI must
-reject a lockfile schema newer than it supports rather than interpreting it as
-v1.
+Readers implementing new behavior must follow v2. The CLI migrates v1 in memory,
+promotes every legacy install to a direct root, and grants no deletion authority
+until receipts are verified. It rejects a schema newer than it supports rather
+than interpreting it as v1.
 
 ---
 
@@ -143,6 +142,13 @@ receipts:
         link_target: ../../.agents/skills/python-dev
     owners_cache:
       - workspace:python-cli
+
+prerequisites:
+  - id: mcp:example-server
+    scope: global
+    constraint: ">=1.0.0,<2.0.0"
+    requested_by:
+      - workspace:python-cli
 ```
 
 ### v2 requested root fields
@@ -159,14 +165,21 @@ receipts:
 | `definition_commit` | YES | Exact catalog or definition pin used for that resolution. |
 
 Direct artifact primitives and Workspaces use the same root model. Transitive
-dependencies and nested Workspaces are graph nodes, not implicit direct roots.
+artifact dependencies are graph nodes, not implicit direct roots.
 
 One lock scope may contain several Workspace requested roots. Their effective
-closure is an unordered union with all direct artifact roots. Nested Workspace
-definitions are captured in the pinned resolution/audit graph, while only the
-Workspaces explicitly selected by the user appear in `requested_roots`. A
-cross-catalog Workspace reference must be qualified in its manifest; every
-resolved node records canonical catalog identity regardless of shorthand.
+closure is an unordered union with all direct artifact roots. Workspace schema
+v1 rejects nested Workspace and cross-catalog manifest roots. Cross-catalog
+composition therefore appears as several qualified direct registrations. Every
+resolved node records canonical catalog identity regardless of the operator's
+display alias.
+
+### v2 prerequisite assertion fields
+
+`prerequisites` records intrinsically global dependencies reached from project
+roots. Each entry names its global identity, compatible constraint, and requesting
+roots. It is reproducibility and status evidence only: it has no project targets,
+never becomes a project receipt, and creates no project ownership edge.
 
 ### v2 receipt fields
 
@@ -208,15 +221,20 @@ Migration is conservative and one-way unless a backup is restored:
 
 1. Every v1 `installed:` entry becomes its own direct requested root.
 2. Its known install fields become a receipt and target inventory where possible.
-3. The receipt is marked `verified: false` and prune-blocked until a verifying
-   reinstall records per-file digests and exact link targets.
+3. The receipt is marked `verified: false` and prune-blocked until
+   `workspace sync --verify-receipts` records per-file digests and exact link
+   targets.
 4. `migration.prune_ack_required` is set. Additive Workspace operations remain
-   allowed, but the first `workspace sync --prune` is plan-only and emits a plan
-   digest. The guard clears only when a later
+   allowed, but the first `workspace sync --prune` is plan-only and emits a digest
+   of the exact prune set. The guard clears only when a later
    `--prune --apply --acknowledge-plan <digest>` supplies the exact unchanged
    digest.
 5. Migration never attributes an old entry to a Workspace, even when the current
    Workspace closure contains the same primitive.
+6. `workspace adopt <workspace> --from-direct --all-reachable` previews a
+   lock-only bulk demotion for migrated direct roots reached by that Workspace.
+   Applying the acknowledged plan removes only requested-root records and never
+   touches files.
 
 Unknown state is retained. It is never converted into deletion authority.
 
@@ -427,17 +445,28 @@ the lock record was written.
 
 ### Schema v2 Workspace lifecycle
 
-- `library workspace use` registers an idempotent requested root and applies
-  additions and updates only.
+- `library workspace list`, `show`, and `validate` provide discovery and the
+  marketplace-CI validation entrypoint. `use --dry-run` plans an unregistered
+  Workspace and reports collisions without mutation.
+- `library workspace use <catalog>:<name>` registers an idempotent requested root
+  and applies additions and updates only. Bare names are accepted only for one
+  configured candidate; the lock records canonical catalog identity.
 - `library workspace status` resolves all roots in the selected scope and emits
   a read-only plan with ownership reasons, drift, conflicts, adoption candidates,
-  missing global prerequisites, and prune candidates.
+  missing global prerequisites, and prune candidates. Exit 2 means changes are
+  pending, while exit 3 means protected or blocked findings.
+- `library workspace explain <type>:<name>` reports every direct root and
+  dependency path reaching one receipt.
 - `library workspace sync` refreshes additions and updates but does not prune by
-  default. `--prune` without `--apply` previews deletion. Physical deletion
+  default. `--verify-receipts` is the named verifying reinstall for migrated
+  receipts. `--prune` without `--apply` previews deletion. Physical deletion
   requires `--prune --apply` after a complete plan.
 - `library workspace adopt <workspace> <type>:<name> --definition-commit <pin>`
   records one exact-match existing member as adopted without creating a direct
   root.
+- `library workspace adopt <workspace> --from-direct
+  [<type>:<name>|--all-reachable]` previews and applies direct-root demotion. It
+  changes lock intent only and never deletes files.
 - `library workspace remove` unregisters the root and reports the resulting plan;
   it does not delete targets by itself and prints
   `library workspace sync --all --prune --apply --scope <scope>`.
@@ -449,7 +478,8 @@ the lock record was written.
 
 Global-only primitive types such as MCP are prerequisite assertions when reached
 from a project root. They are checked against the global lock before project
-mutation but never become project receipts or project ownership edges.
+mutation and recorded as non-owning project-lock assertions, but never become
+project receipts or project ownership edges.
 
 Ownership-derived prune requires a verified, clean receipt. Explicit named
 primitive removal is separate user consent and may remove the ownerless named

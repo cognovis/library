@@ -126,7 +126,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
 | 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | n/a | details |
 | 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files and extension bundles | files and directories | Pi-native | verified | verified | project-only; Open Skills stays authoritative for methods |
-| 15 | [Workspace](primitives/workspace.md) | **ACCEPTED TARGET** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | members inherit support | metadata-only desired-state root; implementation tracked by `CL-r7n6` |
+| 15 | [Workspace](primitives/workspace.md) | **YES** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | members inherit support | metadata-only desired-state root |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
@@ -275,11 +275,12 @@ Established by [ADR-0006](adr/workflow-primitive.md).
 
 Details: [Workspace](primitives/workspace.md). A metadata-only requested root
 whose constitutive feature is ownership-aware desired-state reconciliation. It
-has no deployable artifact, can compose other Workspaces in the same scope, and
-can explicitly retire clean, ownerless receipts through ADR-0010's prune
-contract. A project may register several orthogonal Workspaces. This is the
-accepted target contract; the released CLI does not expose it until `CL-r7n6`
-lands.
+has no deployable artifact and can explicitly retire clean, ownerless receipts
+through ADR-0010's prune contract. A project may directly register several
+orthogonal Workspaces. Schema v1 keeps every manifest to same-catalog artifact
+roots and defers nested Workspace and cross-catalog manifest roots. The
+Workspace CLI implements discovery, validation, registration, status,
+explanation, sync, adoption, removal, and digest-bound pruning.
 
 
 ## Precedence and Name Collision Policy

@@ -82,7 +82,7 @@ from lib.errors import (
     EXIT_NOT_FOUND,
     LibraryError,
 )
-from lib.lockfile import find_lockfile, load_lockfile
+from lib.lockfile import find_lockfile, load_lockfile, save_lockfile
 from lib.installed import cmd_installed_impl, format_installed_output
 from lib.output import (
     format_list_output,
@@ -144,6 +144,10 @@ def build_parser() -> argparse.ArgumentParser:
             help="Action to perform",
         )
 
+        if prim_name == "workspace":
+            _add_workspace_verbs(verb_sub)
+            continue
+
         # list
         list_p = verb_sub.add_parser("list", help="List catalog entries")
         list_p.add_argument("--json", action="store_true", help="Output JSON")
@@ -156,9 +160,13 @@ def build_parser() -> argparse.ArgumentParser:
 
         # use
         use_p = verb_sub.add_parser("use", help="Install a catalog entry")
-        use_p.add_argument("name", nargs="?", default=None, help="Entry name or keyword")
+        use_p.add_argument(
+            "name", nargs="?", default=None, help="Entry name or keyword"
+        )
         use_p.add_argument("--json", action="store_true", help="Output JSON")
-        use_p.add_argument("--dry-run", action="store_true", help="Show planned writes, no mutation")
+        use_p.add_argument(
+            "--dry-run", action="store_true", help="Show planned writes, no mutation"
+        )
         use_p.add_argument(
             "--symlink",
             action="store_true",
@@ -181,7 +189,14 @@ def build_parser() -> argparse.ArgumentParser:
         )
         use_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+            choices=[
+                "claude_code",
+                "codex",
+                "cursor",
+                "opencode",
+                "antigravity",
+                "all",
+            ],
             default="all",
             help="Target harness (default: all)",
         )
@@ -199,7 +214,9 @@ def build_parser() -> argparse.ArgumentParser:
         remove_p = verb_sub.add_parser("remove", help="Remove an installed entry")
         remove_p.add_argument("name", nargs="?", default=None, help="Entry name")
         remove_p.add_argument("--json", action="store_true", help="Output JSON")
-        remove_p.add_argument("--dry-run", action="store_true", help="Show planned removals")
+        remove_p.add_argument(
+            "--dry-run", action="store_true", help="Show planned removals"
+        )
         remove_p.add_argument(
             "--scope",
             choices=["project", "global"],
@@ -220,7 +237,14 @@ def build_parser() -> argparse.ArgumentParser:
         )
         remove_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+            choices=[
+                "claude_code",
+                "codex",
+                "cursor",
+                "opencode",
+                "antigravity",
+                "all",
+            ],
             default="claude_code",
             help="Target harness for harness-specific removals (default: claude_code)",
         )
@@ -231,8 +255,12 @@ def build_parser() -> argparse.ArgumentParser:
         search_p.add_argument("--json", action="store_true", help="Output JSON")
 
         # sync
-        sync_p = verb_sub.add_parser("sync", help="Re-pull installed entries from lockfile")
-        sync_p.add_argument("name", nargs="?", default=None, help="Installed entry name")
+        sync_p = verb_sub.add_parser(
+            "sync", help="Re-pull installed entries from lockfile"
+        )
+        sync_p.add_argument(
+            "name", nargs="?", default=None, help="Installed entry name"
+        )
         sync_p.add_argument("--json", action="store_true", help="Output JSON")
         sync_p.add_argument("--dry-run", action="store_true", help="Show planned syncs")
         sync_p.add_argument(
@@ -251,7 +279,14 @@ def build_parser() -> argparse.ArgumentParser:
         )
         sync_p.add_argument(
             "--harness",
-            choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+            choices=[
+                "claude_code",
+                "codex",
+                "cursor",
+                "opencode",
+                "antigravity",
+                "all",
+            ],
             default="all",
         )
 
@@ -392,8 +427,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sync all installed entries across primitives (skip if already current)",
     )
     top_sync_parser.add_argument("--json", action="store_true", help="Output JSON")
-    top_sync_parser.add_argument("--dry-run", action="store_true", help="Show planned syncs")
-    top_sync_parser.add_argument("--force", action="store_true", help="Re-install all, even if current")
+    top_sync_parser.add_argument(
+        "--dry-run", action="store_true", help="Show planned syncs"
+    )
+    top_sync_parser.add_argument(
+        "--force", action="store_true", help="Re-install all, even if current"
+    )
     top_sync_parser.add_argument(
         "--scope",
         choices=["project", "global", "both"],
@@ -475,6 +514,94 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_sync_parser.add_argument("--json", action="store_true", help="Output JSON")
 
     return parser
+
+
+def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
+    """Add the explicit metadata-only Workspace command surface."""
+    list_parser = verb_sub.add_parser("list", help="List Workspace definitions")
+    list_parser.add_argument(
+        "--scope", choices=["project", "global"], default="project"
+    )
+    list_parser.add_argument("--json", action="store_true")
+
+    show_parser = verb_sub.add_parser("show", help="Show one Workspace and its closure")
+    show_parser.add_argument("reference")
+    show_parser.add_argument(
+        "--scope", choices=["project", "global"], default="project"
+    )
+    show_parser.add_argument("--json", action="store_true")
+
+    validate_parser = verb_sub.add_parser(
+        "validate", help="Validate a manifest or catalog reference"
+    )
+    validate_parser.add_argument("reference")
+    validate_parser.add_argument("--json", action="store_true")
+
+    use_parser = verb_sub.add_parser("use", help="Register and materialize a Workspace")
+    use_parser.add_argument("reference")
+    use_parser.add_argument("--scope", choices=["project", "global"], required=True)
+    use_parser.add_argument("--target-project", type=Path, default=None)
+    use_parser.add_argument(
+        "--harness",
+        choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+        default="all",
+    )
+    use_parser.add_argument("--dry-run", action="store_true")
+    use_parser.add_argument("--replace-with-catalog-content", action="store_true")
+    use_parser.add_argument("--json", action="store_true")
+
+    status_parser = verb_sub.add_parser(
+        "status", help="Plan selected-scope Workspace reconciliation"
+    )
+    status_parser.add_argument("reference", nargs="?")
+    status_parser.add_argument("--all", action="store_true", dest="all_workspaces")
+    status_parser.add_argument("--scope", choices=["project", "global"], required=True)
+    status_parser.add_argument("--target-project", type=Path, default=None)
+    status_parser.add_argument("--json", action="store_true")
+
+    explain_parser = verb_sub.add_parser(
+        "explain", help="Explain ownership of one receipt"
+    )
+    explain_parser.add_argument("member")
+    explain_parser.add_argument("--scope", choices=["project", "global"], required=True)
+    explain_parser.add_argument("--target-project", type=Path, default=None)
+    explain_parser.add_argument("--json", action="store_true")
+
+    sync_parser = verb_sub.add_parser("sync", help="Reconcile registered Workspaces")
+    sync_parser.add_argument("reference", nargs="?")
+    sync_parser.add_argument("--all", action="store_true", dest="all_workspaces")
+    sync_parser.add_argument("--scope", choices=["project", "global"], required=True)
+    sync_parser.add_argument("--target-project", type=Path, default=None)
+    sync_parser.add_argument(
+        "--harness",
+        choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+        default="all",
+    )
+    sync_parser.add_argument("--verify-receipts", action="store_true")
+    sync_parser.add_argument("--prune", action="store_true")
+    sync_parser.add_argument("--apply", action="store_true")
+    sync_parser.add_argument("--acknowledge-plan")
+    sync_parser.add_argument("--json", action="store_true")
+
+    adopt_parser = verb_sub.add_parser(
+        "adopt", help="Adopt or demote an existing member"
+    )
+    adopt_parser.add_argument("reference")
+    adopt_parser.add_argument("member", nargs="?")
+    adopt_parser.add_argument("--definition-commit")
+    adopt_parser.add_argument("--from-direct", action="store_true")
+    adopt_parser.add_argument("--all-reachable", action="store_true")
+    adopt_parser.add_argument("--scope", choices=["project", "global"], required=True)
+    adopt_parser.add_argument("--target-project", type=Path, default=None)
+    adopt_parser.add_argument("--apply", action="store_true")
+    adopt_parser.add_argument("--acknowledge-plan")
+    adopt_parser.add_argument("--json", action="store_true")
+
+    remove_parser = verb_sub.add_parser("remove", help="Unregister a Workspace root")
+    remove_parser.add_argument("reference")
+    remove_parser.add_argument("--scope", choices=["project", "global"], required=True)
+    remove_parser.add_argument("--target-project", type=Path, default=None)
+    remove_parser.add_argument("--json", action="store_true")
 
 
 # ---------------------------------------------------------------------------
@@ -632,7 +759,9 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     CURSOR_UNSUPPORTED_PRIMITIVES = {"agent", "mcp", "guardrail"}
     OPENCODE_UNSUPPORTED_PRIMITIVES = {"mcp", "guardrail"}
     cursor_rejected = harness == "cursor" and primitive in CURSOR_UNSUPPORTED_PRIMITIVES
-    opencode_rejected = harness == "opencode" and primitive in OPENCODE_UNSUPPORTED_PRIMITIVES
+    opencode_rejected = (
+        harness == "opencode" and primitive in OPENCODE_UNSUPPORTED_PRIMITIVES
+    )
     if cursor_rejected or opencode_rejected:
         msg = (
             f"{primitive.capitalize()} install for harness '{harness}' is not supported. "
@@ -653,7 +782,18 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         return exit_code
 
     # Dry-run: just show the target entry's planned ops (no dep resolution for dry-run)
-    return _dispatch_use(args, repo_root, catalog, primitive, name, scope, harness, dry_run, use_json, install_mode)
+    return _dispatch_use(
+        args,
+        repo_root,
+        catalog,
+        primitive,
+        name,
+        scope,
+        harness,
+        dry_run,
+        use_json,
+        install_mode,
+    )
 
 
 def _install_with_deps(
@@ -693,6 +833,7 @@ def _install_with_deps(
     # cannot mutate dependencies before a main-entry gate fails.
     try:
         from lib.compat import check_compatibility_gate, CompatibilityError
+
         check_compatibility_gate(main_entry, harness)
     except CompatibilityError as _compat_exc:
         if use_json:
@@ -712,7 +853,9 @@ def _install_with_deps(
     resolved_name = main_entry.get("name", name)
 
     try:
-        install_order = resolve_requires(catalog, primitive, resolved_name, repo_root, scope)
+        install_order = resolve_requires(
+            catalog, primitive, resolved_name, repo_root, scope
+        )
     except CycleError as exc:
         result = error_result(str(exc), exc.exit_code)
         if use_json:
@@ -815,7 +958,16 @@ def _install_with_deps(
                 continue
         install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
         rc = _dispatch_use(
-            args, repo_root, catalog, dep_prim, dep_name, scope, harness, False, use_json, install_mode
+            args,
+            repo_root,
+            catalog,
+            dep_prim,
+            dep_name,
+            scope,
+            harness,
+            False,
+            use_json,
+            install_mode,
         )
         if rc != 0:
             return rc
@@ -1033,6 +1185,7 @@ def _dispatch_use(
     # dispatching to any primitive installer.
     try:
         from lib.compat import check_compatibility_gate, CompatibilityError
+
         check_compatibility_gate(entry, harness)
     except CompatibilityError as _compat_exc:
         if use_json:
@@ -1041,21 +1194,90 @@ def _dispatch_use(
             print(f"Error: {_compat_exc}", file=sys.stderr)
         return _compat_exc.exit_code
     if primitive == "skill":
-        return _use_skill(args, repo_root, catalog, name, scope, dry_run, use_json, harness, install_mode)
+        return _use_skill(
+            args,
+            repo_root,
+            catalog,
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+        )
     elif primitive == "standard":
-        return _use_standard(args, repo_root, catalog, name, scope, dry_run, use_json, install_mode)
+        return _use_standard(
+            args, repo_root, catalog, name, scope, dry_run, use_json, install_mode
+        )
     elif primitive == "agent":
-        return _use_agent(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
+        return _use_agent(
+            args, repo_root, catalog, name, scope, dry_run, use_json, harness
+        )
     elif primitive == "prompt":
-        return _use_simple_file(args, repo_root, catalog, "prompt", name, scope, dry_run, use_json, harness, install_mode)
+        return _use_simple_file(
+            args,
+            repo_root,
+            catalog,
+            "prompt",
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+        )
     elif primitive == "script":
-        return _use_simple_file(args, repo_root, catalog, "script", name, scope, dry_run, use_json, harness, install_mode)
+        return _use_simple_file(
+            args,
+            repo_root,
+            catalog,
+            "script",
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+        )
     elif primitive == "model-standard":
-        return _use_simple_file(args, repo_root, catalog, "model-standard", name, scope, dry_run, use_json, harness, install_mode)
+        return _use_simple_file(
+            args,
+            repo_root,
+            catalog,
+            "model-standard",
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+        )
     elif primitive == "agent-base":
-        return _use_simple_file(args, repo_root, catalog, "agent-base", name, scope, dry_run, use_json, harness, install_mode)
+        return _use_simple_file(
+            args,
+            repo_root,
+            catalog,
+            "agent-base",
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+        )
     elif primitive == "workflow":
-        return _use_simple_file(args, repo_root, catalog, "workflow", name, scope, dry_run, use_json, harness, install_mode)
+        return _use_simple_file(
+            args,
+            repo_root,
+            catalog,
+            "workflow",
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+        )
     elif primitive in {"pi-extension", "pi-profile", "just-module"}:
         return _use_project_native(
             args,
@@ -1071,11 +1293,25 @@ def _dispatch_use(
             resolve_dependencies=resolve_project_native_dependencies,
         )
     elif primitive == "runtime-config":
-        return _use_runtime_config(args, repo_root, catalog, name, scope, dry_run, use_json, harness, install_mode)
+        return _use_runtime_config(
+            args,
+            repo_root,
+            catalog,
+            name,
+            scope,
+            dry_run,
+            use_json,
+            harness,
+            install_mode,
+        )
     elif primitive == "mcp":
-        return _use_mcp(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
+        return _use_mcp(
+            args, repo_root, catalog, name, scope, dry_run, use_json, harness
+        )
     elif primitive == "guardrail":
-        return _use_guardrail(args, repo_root, catalog, name, scope, dry_run, use_json, harness)
+        return _use_guardrail(
+            args, repo_root, catalog, name, scope, dry_run, use_json, harness
+        )
     else:
         msg = f"'{primitive} use' is not supported."
         if use_json:
@@ -1149,7 +1385,9 @@ def _use_standard(
             print_json(result)
         else:
             _print_human_result(result)
-        return 0 if result.get("status") in ("ok", "dry-run", "blocked") else EXIT_FAILURE
+        return (
+            0 if result.get("status") in ("ok", "dry-run", "blocked") else EXIT_FAILURE
+        )
     except LibraryError as exc:
         if use_json:
             print_json(error_result(str(exc), exc.exit_code))
@@ -1185,7 +1423,9 @@ def _use_agent(
         else:
             _print_human_result(result)
             if result.get("harness_missing"):
-                print(f"Warning: harness source missing for: {', '.join(result['harness_missing'])}")
+                print(
+                    f"Warning: harness source missing for: {', '.join(result['harness_missing'])}"
+                )
         return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
     except LibraryError as exc:
         if use_json:
@@ -1293,9 +1533,7 @@ def _use_project_native(
                     return dependency_exit
                 operations.extend(dependency_result.get("operations", []))
                 target_paths.extend(dependency_result.get("target_paths", []))
-                lockfile_changes.extend(
-                    dependency_result.get("lockfile_changes", [])
-                )
+                lockfile_changes.extend(dependency_result.get("lockfile_changes", []))
             result = dry_run_result(
                 operations,
                 summary=(
@@ -1389,6 +1627,7 @@ def _use_mcp(
 
     # Pass any env overrides from the environment (for testing)
     import os
+
     env_overrides: dict = {}
     for key in [
         "CLAUDE_SETTINGS_FILE",
@@ -1470,7 +1709,9 @@ def _print_human_result(result: dict) -> None:
         if summary:
             print(f"Dry-run: {summary}")
         for op in ops:
-            print(f"  [{op.get('operation', '?')}] {op.get('details', op.get('path', ''))}")
+            print(
+                f"  [{op.get('operation', '?')}] {op.get('details', op.get('path', ''))}"
+            )
     elif status == "blocked":
         print(f"Blocked: {result.get('reason', '')}")
         if result.get("suggestion"):
@@ -1515,7 +1756,9 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         scope = explicit_scope or "project"
 
     try:
-        result = _dispatch_remove(primitive, catalog, name, repo_root, scope, dry_run, harness)
+        result = _dispatch_remove(
+            primitive, catalog, name, repo_root, scope, dry_run, harness
+        )
         if use_json:
             print_json(result)
         else:
@@ -1541,9 +1784,17 @@ def _dispatch_remove(
     """Dispatch remove to the correct primitive handler."""
     if primitive == "skill":
         from lib.installers.remove import remove_skill
-        return remove_skill(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
+
+        return remove_skill(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     elif primitive == "standard":
         from lib.installers.remove import remove_standard
+
         return remove_standard(
             catalog=catalog,
             name=name,
@@ -1554,6 +1805,7 @@ def _dispatch_remove(
         )
     elif primitive == "agent":
         from lib.installers.agent import remove_agent
+
         return remove_agent(
             catalog=catalog,
             name=name,
@@ -1564,24 +1816,59 @@ def _dispatch_remove(
         )
     elif primitive == "prompt":
         from lib.installers.simple_file import remove_simple_file
-        return remove_simple_file(catalog=catalog, primitive_name="prompt", name=name,
-                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+
+        return remove_simple_file(
+            catalog=catalog,
+            primitive_name="prompt",
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     elif primitive == "script":
         from lib.installers.simple_file import remove_simple_file
-        return remove_simple_file(catalog=catalog, primitive_name="script", name=name,
-                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+
+        return remove_simple_file(
+            catalog=catalog,
+            primitive_name="script",
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     elif primitive == "model-standard":
         from lib.installers.simple_file import remove_simple_file
-        return remove_simple_file(catalog=catalog, primitive_name="model-standard", name=name,
-                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+
+        return remove_simple_file(
+            catalog=catalog,
+            primitive_name="model-standard",
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     elif primitive == "agent-base":
         from lib.installers.simple_file import remove_simple_file
-        return remove_simple_file(catalog=catalog, primitive_name="agent-base", name=name,
-                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+
+        return remove_simple_file(
+            catalog=catalog,
+            primitive_name="agent-base",
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     elif primitive == "workflow":
         from lib.installers.simple_file import remove_simple_file
-        return remove_simple_file(catalog=catalog, primitive_name="workflow", name=name,
-                                  repo_root=repo_root, scope=scope, dry_run=dry_run)
+
+        return remove_simple_file(
+            catalog=catalog,
+            primitive_name="workflow",
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     elif primitive in {"pi-extension", "pi-profile", "just-module"}:
         from lib.installers.project_native import remove_project_native_file
 
@@ -1597,6 +1884,7 @@ def _dispatch_remove(
             remove_mcp,
             remove_project_mcp_lock_record,
         )
+
         if scope == "project":
             return remove_project_mcp_lock_record(
                 name=name,
@@ -1604,18 +1892,37 @@ def _dispatch_remove(
                 dry_run=dry_run,
             )
         import os
+
         env_overrides: dict = {}
-        for key in ["CLAUDE_SETTINGS_FILE", "CODEX_CONFIG_FILE", "OPENCODE_CONFIG_FILE"]:
+        for key in [
+            "CLAUDE_SETTINGS_FILE",
+            "CODEX_CONFIG_FILE",
+            "OPENCODE_CONFIG_FILE",
+        ]:
             if key in os.environ:
                 env_overrides[key] = os.environ[key]
-        return remove_mcp(catalog=catalog, name=name, repo_root=repo_root, scope=scope,
-                          dry_run=dry_run, env_overrides=env_overrides if env_overrides else None)
+        return remove_mcp(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            env_overrides=env_overrides if env_overrides else None,
+        )
     elif primitive == "guardrail":
         from lib.installers.guardrail_installer import remove_guardrail
-        return remove_guardrail(catalog=catalog, name=name, repo_root=repo_root, scope=scope, dry_run=dry_run)
+
+        return remove_guardrail(
+            catalog=catalog,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+        )
     else:
         from lib.errors import EXIT_FAILURE
         from lib.output import error_result as _err
+
         return _err(f"'{primitive} remove' is not supported.", EXIT_FAILURE)
 
 
@@ -1720,7 +2027,9 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             if status == "clean":
                 print(f"Audit: CLEAN ({len(entries)} entries checked)")
             elif status == "drift":
-                print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(entries)} entries")
+                print(
+                    f"Audit: DRIFT detected in {len(drift_entries)}/{len(entries)} entries"
+                )
                 for e in drift_entries:
                     kind = e.get("drift_kind", "?")
                     print(f"  DRIFT [{kind}]: {e['primitive']}:{e['name']}")
@@ -1747,7 +2056,9 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-def cmd_audit_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
+def cmd_audit_all(
+    args: argparse.Namespace, repo_root: Path | None, catalog: dict
+) -> int:
     """Handle: audit [--scope=...] [--drift-only] [--json]
 
     Top-level audit command that checks all primitives across the given scope(s).
@@ -1802,7 +2113,9 @@ def cmd_audit_all(args: argparse.Namespace, repo_root: Path | None, catalog: dic
         if overall_status == "clean":
             print(f"Audit: CLEAN ({len(all_entries)} entries checked)")
         else:
-            print(f"Audit: DRIFT detected in {len(drift_entries)}/{len(all_entries)} entries")
+            print(
+                f"Audit: DRIFT detected in {len(drift_entries)}/{len(all_entries)} entries"
+            )
             for e in drift_entries:
                 print(f"  DRIFT: {e['primitive']}:{e['name']}")
                 if e.get("catalog_status") == "orphaned":
@@ -1886,7 +2199,9 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
     # Compute combined overall
     if any_behind or any(e.get("needs_refresh", e.get("behind")) for e in all_entries):
         overall = "behind"
-    elif all(e.get("upstream_status") == "current" for e in all_entries) and all_entries:
+    elif (
+        all(e.get("upstream_status") == "current" for e in all_entries) and all_entries
+    ):
         overall = "current"
     elif not all_entries:
         overall = "current"
@@ -1910,12 +2225,16 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
             behind_count = sum(
                 1 for e in all_entries if e.get("needs_refresh", e.get("behind"))
             )
-            print(f"Status: BEHIND ({behind_count}/{len(all_entries)} entries need update)")
+            print(
+                f"Status: BEHIND ({behind_count}/{len(all_entries)} entries need update)"
+            )
             for e in all_entries:
                 if e.get("behind"):
                     installed = e.get("installed_sha", "?")[:8]
                     remote = str(e.get("remote_sha", "?"))[:8]
-                    print(f"  BEHIND: {e['primitive']}:{e['name']} ({installed} -> {remote})")
+                    print(
+                        f"  BEHIND: {e['primitive']}:{e['name']} ({installed} -> {remote})"
+                    )
                 elif e.get("needs_refresh"):
                     installed = str(e.get("installed_sha", "?"))[:8]
                     runtime = str(e.get("runtime_revision") or "missing")[:8]
@@ -2023,11 +2342,26 @@ def cmd_catalog_match(args: argparse.Namespace, catalog: dict) -> int:
         }
         for match in matches
     ]
-    print(format_table(rows, ["Name", "Registry", "Writable", "Score", "Confidence", "Selection", "Topics"]))
+    print(
+        format_table(
+            rows,
+            [
+                "Name",
+                "Registry",
+                "Writable",
+                "Score",
+                "Confidence",
+                "Selection",
+                "Topics",
+            ],
+        )
+    )
     return 0
 
 
-def cmd_catalog_sync(args: argparse.Namespace, catalog_root: Path, catalog: dict) -> int:
+def cmd_catalog_sync(
+    args: argparse.Namespace, catalog_root: Path, catalog: dict
+) -> int:
     """Handle: catalog sync [--source=...] [--write] [--json]."""
     from lib.catalog_inventory import sync_catalog_inventory
 
@@ -2065,14 +2399,18 @@ def cmd_catalog_sync(args: argparse.Namespace, catalog_root: Path, catalog: dict
     generated = result.get("generated", {})
     total = result.get("total_generated", 0)
     if status == "ok":
-        print(f"Catalog sync: wrote {total} generated entries to {result.get('written')}")
+        print(
+            f"Catalog sync: wrote {total} generated entries to {result.get('written')}"
+        )
     else:
         print(f"Catalog sync dry-run: generated {total} entries")
     for primitive_name, count in generated.items():
         print(f"  {primitive_name}: {count}")
     for source in result.get("sources", []):
         if source.get("status") != "scanned":
-            print(f"  skipped {source.get('name')}: {source.get('reason', source.get('status'))}")
+            print(
+                f"  skipped {source.get('name')}: {source.get('reason', source.get('status'))}"
+            )
     return 0
 
 
@@ -2113,9 +2451,7 @@ def _missing_sync_dependencies(
 
         root = (primitive, name)
         try:
-            install_order = resolve_requires(
-                catalog, primitive, name, repo_root, scope
-            )
+            install_order = resolve_requires(catalog, primitive, name, repo_root, scope)
         except LibraryError as exc:
             warnings.append(
                 f"could not reconcile dependencies for {primitive}:{name}: {exc}"
@@ -2138,7 +2474,9 @@ def _missing_sync_dependencies(
     return missing, warnings
 
 
-def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
+def cmd_sync_all(
+    args: argparse.Namespace, repo_root: Path | None, catalog: dict
+) -> int:
     """Handle: sync [--force] [--dry-run] [--scope=...] [--json]
 
     Top-level sync that iterates ALL primitives across all scopes.
@@ -2204,8 +2542,8 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
             installed = lock_data.get("installed", [])
 
             sync_root = repo_root or Path.cwd()
-            missing_dependencies, reconciliation_warnings = (
-                _missing_sync_dependencies(catalog, installed, sync_root, s)
+            missing_dependencies, reconciliation_warnings = _missing_sync_dependencies(
+                catalog, installed, sync_root, s
             )
             warnings.extend(reconciliation_warnings)
 
@@ -2236,11 +2574,13 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
                     )
                     all_reconciled_dependencies.append(dependency_label)
                 except Exception as exc:
-                    all_failed.append({
-                        "name": dependency_name,
-                        "type": dependency_type,
-                        "error": str(exc),
-                    })
+                    all_failed.append(
+                        {
+                            "name": dependency_name,
+                            "type": dependency_type,
+                            "error": str(exc),
+                        }
+                    )
                     if not use_json:
                         print(f"  ERROR: {dependency_name}: {exc}", file=sys.stderr)
 
@@ -2256,7 +2596,11 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
                 should_refresh = (
                     force or upstream_status == "behind" or runtime_needs_refresh
                 )
-                if upstream_status == "behind" and not force and not runtime_needs_refresh:
+                if (
+                    upstream_status == "behind"
+                    and not force
+                    and not runtime_needs_refresh
+                ):
                     path_changed = _entry_source_path_changed(
                         entry=entry,
                         remote_sha=status_entry.get("remote_sha"),
@@ -2278,7 +2622,9 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
                     if should_skip:
                         all_skipped.append(entry_label)
                         skipped_by_status[
-                            upstream_status if upstream_status in skipped_by_status else "other"
+                            upstream_status
+                            if upstream_status in skipped_by_status
+                            else "other"
                         ].append(entry_label)
                     else:
                         all_refreshed.append(entry_label)
@@ -2287,7 +2633,9 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
                 if should_skip:
                     all_skipped.append(entry_label)
                     skipped_by_status[
-                        upstream_status if upstream_status in skipped_by_status else "other"
+                        upstream_status
+                        if upstream_status in skipped_by_status
+                        else "other"
                     ].append(entry_label)
                     continue
 
@@ -2296,11 +2644,13 @@ def cmd_sync_all(args: argparse.Namespace, repo_root: Path | None, catalog: dict
                     reinstall_entry(catalog, entry, repo_root, s, harness)
                     all_refreshed.append(entry_label)
                 except (LibraryError, Exception) as exc:
-                    all_failed.append({
-                        "name": entry.get("name", ""),
-                        "type": entry.get("type", ""),
-                        "error": str(exc),
-                    })
+                    all_failed.append(
+                        {
+                            "name": entry.get("name", ""),
+                            "type": entry.get("type", ""),
+                            "error": str(exc),
+                        }
+                    )
                     if not use_json:
                         print(f"  ERROR: {entry.get('name')}: {exc}", file=sys.stderr)
 
@@ -2563,6 +2913,730 @@ def _fetch_commit_for_diff(repo_dir: Path, commit_sha: str) -> bool:
     return False
 
 
+def _print_workspace_result(result: dict, *, json_mode: bool) -> None:
+    """Render one Workspace result without leaking nested installer output."""
+    if json_mode:
+        print_json(result)
+        return
+    status = result.get("status", "ok")
+    operation = result.get("operation", "workspace")
+    print(f"Workspace {operation}: {status}")
+    for key in ("reference", "scope", "digest"):
+        if result.get(key) is not None:
+            print(f"  {key}: {result[key]}")
+    for key in ("additions", "updates", "prune_candidates", "blockers"):
+        values = result.get(key)
+        if values:
+            print(f"  {key}:")
+            for value in values:
+                print(f"    - {value}")
+
+
+def _workspace_definition_commit(catalog: dict, workspace) -> str:
+    """Resolve the source catalog pin for a convention-scanned Workspace."""
+    from lib.catalog import get_catalogs
+
+    metadata = workspace.entry.get("metadata")
+    if isinstance(metadata, dict):
+        library_metadata = metadata.get("library")
+        if isinstance(library_metadata, dict):
+            recorded = library_metadata.get("source_commit")
+            if isinstance(recorded, str) and recorded.strip():
+                return recorded.strip()
+    for source in get_catalogs(catalog):
+        if source.get("name") != workspace.catalog_name:
+            continue
+        local_path = source.get("local_path")
+        if not local_path:
+            break
+        result = subprocess.run(
+            ["git", "-C", str(Path(str(local_path)).expanduser()), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    raise LibraryError(
+        f"Workspace {workspace.catalog_name}:{workspace.name} has no resolvable definition commit"
+    )
+
+
+def _workspace_lock(repo_root: Path, scope: str) -> tuple[Path, dict]:
+    path = find_lockfile(repo_root, global_scope=(scope == "global"))
+    return path, load_lockfile(path)
+
+
+def _workspace_prerequisite_blockers(plan: dict) -> list[str]:
+    """Return missing global-root prerequisite diagnostics for a project plan."""
+    if not plan.get("prerequisites"):
+        return []
+    global_lock = load_lockfile(find_lockfile(global_scope=True))
+    global_ids = {
+        str(receipt.get("id") or "") for receipt in global_lock.get("receipts", [])
+    }
+    return [
+        (
+            f"{item['id']} is required globally; run "
+            f"library {item['id'].split(':', 1)[0]} use "
+            f"{item['id'].split(':', 1)[1]} --scope global"
+        )
+        for item in plan.get("prerequisites", [])
+        if item["id"] not in global_ids
+    ]
+
+
+def _workspace_collision_blockers(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    artifacts: tuple[tuple[str, str], ...],
+    lock: dict,
+) -> list[str]:
+    """Preflight existing and externally managed targets before mutation."""
+    from lib.manager_inventory import collect_managed_paths, workspace_manager_adapters
+
+    owned_paths: set[Path] = set()
+    for entry in lock.get("installed", []):
+        raw_target = str(entry.get("install_target") or "").rstrip("/")
+        if raw_target:
+            path = Path(raw_target)
+            owned_paths.add(
+                (path if path.is_absolute() else repo_root / path).absolute()
+            )
+        for bridge in entry.get("bridge_symlinks") or []:
+            raw_bridge = str(bridge).partition(" -> ")[0].strip()
+            if raw_bridge:
+                path = Path(raw_bridge)
+                owned_paths.add(
+                    (path if path.is_absolute() else repo_root / path).absolute()
+                )
+    managed = collect_managed_paths(
+        workspace_manager_adapters(
+            catalog=catalog,
+            project_root=repo_root,
+            platform_root=TOOL_ROOT,
+            scope=args.scope,
+        )
+    )
+    blockers: list[str] = []
+    planned_owners: dict[Path, str] = {}
+    for primitive, name in artifacts:
+        output_buffer = io.StringIO()
+        with redirect_stdout(output_buffer):
+            rc = _dispatch_use(
+                args,
+                repo_root,
+                catalog,
+                primitive,
+                name,
+                args.scope,
+                args.harness,
+                True,
+                True,
+                "vendor",
+            )
+        if rc != 0:
+            blockers.append(f"Cannot plan {primitive}:{name}")
+            continue
+        try:
+            planned = json.loads(output_buffer.getvalue())
+        except json.JSONDecodeError:
+            blockers.append(
+                f"Installer plan for {primitive}:{name} is not machine-readable"
+            )
+            continue
+        for raw_target in planned.get("target_paths") or []:
+            path = Path(str(raw_target)).expanduser().absolute()
+            member_id = f"{primitive}:{name}"
+            prior_owner = planned_owners.get(path)
+            if prior_owner and prior_owner != member_id:
+                blockers.append(
+                    f"Target collision at {path}: {prior_owner} and {member_id}"
+                )
+                continue
+            planned_owners[path] = member_id
+            manager = managed.get(str(path))
+            if manager:
+                blockers.append(f"{path} is managed by {manager}")
+                continue
+            if not (path.exists() or path.is_symlink()):
+                continue
+            if path in owned_paths:
+                continue
+            if any(
+                owned_path.is_dir() and path.is_relative_to(owned_path)
+                for owned_path in owned_paths
+            ):
+                continue
+            blockers.append(
+                f"{path} already exists without a matching Library receipt; "
+                "project-authored or externally owned content is protected"
+            )
+    return sorted(set(blockers))
+
+
+def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    from lib.workspace import (
+        apply_plan_ownership,
+        make_workspace_requested_root,
+        resolve_workspace,
+        resolve_workspace_closure,
+        upsert_workspace_root,
+    )
+
+    workspace = resolve_workspace(catalog, args.reference)
+    closure = resolve_workspace_closure(catalog, workspace, repo_root, args.scope)
+    definition_commit = _workspace_definition_commit(catalog, workspace)
+    lock_path, lock = _workspace_lock(repo_root, args.scope)
+    requested_root = make_workspace_requested_root(
+        workspace, args.scope, definition_commit, args.reference
+    )
+    preview_lock = json.loads(json.dumps(lock))
+    upsert_workspace_root(preview_lock, requested_root)
+    from lib.workspace import build_workspace_plan
+
+    preview = build_workspace_plan(catalog, preview_lock, repo_root, args.scope)
+    prerequisite_blockers = _workspace_prerequisite_blockers(preview)
+    if prerequisite_blockers:
+        preview["blockers"].extend(prerequisite_blockers)
+    preview["blockers"].extend(
+        _workspace_collision_blockers(args, repo_root, catalog, closure.artifacts, lock)
+    )
+    result = {
+        "status": "blocked"
+        if preview["blockers"]
+        else ("dry-run" if args.dry_run else "planned"),
+        "operation": "use",
+        "reference": f"{workspace.catalog_name}:{workspace.name}",
+        "catalog_identity": workspace.catalog_identity,
+        "definition_commit": definition_commit,
+        "scope": args.scope,
+        "artifacts": [f"{primitive}:{name}" for primitive, name in closure.artifacts],
+        **{
+            key: preview[key]
+            for key in (
+                "additions",
+                "updates",
+                "prune_candidates",
+                "blockers",
+                "digest",
+            )
+        },
+    }
+    if args.dry_run or preview["blockers"]:
+        _print_workspace_result(result, json_mode=args.json)
+        return 3 if preview["blockers"] else 0
+
+    from lib.catalog import get_catalogs
+    from lib.workspace import (
+        clear_workspace_journal,
+        recover_workspace_journal,
+        workspace_write_lock,
+        write_workspace_journal,
+    )
+
+    with workspace_write_lock(lock_path):
+        recover_workspace_journal(lock_path, repo_root)
+        current_lock = load_lockfile(lock_path)
+        locked_blockers = _workspace_collision_blockers(
+            args, repo_root, catalog, closure.artifacts, current_lock
+        )
+        if locked_blockers:
+            result.update({"status": "blocked", "blockers": locked_blockers})
+            _print_workspace_result(result, json_mode=args.json)
+            return 3
+        preexisting_direct_ids = {
+            str(root.get("id") or "")
+            for root in current_lock.get("requested_roots", [])
+            if root.get("type") != "workspace"
+        }
+        write_workspace_journal(
+            lock_path,
+            {
+                "operation": "use",
+                "reference": args.reference,
+                "scope": args.scope,
+                "definition_commit": definition_commit,
+                "artifacts": [
+                    f"{primitive}:{name}" for primitive, name in closure.artifacts
+                ],
+            },
+        )
+        for primitive, name in closure.artifacts:
+            output_buffer = io.StringIO()
+            with redirect_stdout(output_buffer):
+                rc = _dispatch_use(
+                    args,
+                    repo_root,
+                    catalog,
+                    primitive,
+                    name,
+                    args.scope,
+                    args.harness,
+                    False,
+                    True,
+                    "vendor",
+                )
+            if rc != 0:
+                message = output_buffer.getvalue().strip()
+                failure = {
+                    **result,
+                    "status": "failed",
+                    "failed_member": f"{primitive}:{name}",
+                    "installer_output": message,
+                }
+                _print_workspace_result(failure, json_mode=args.json)
+                return rc
+
+        lock = load_lockfile(lock_path)
+        closure_ids = {f"{primitive}:{name}" for primitive, name in closure.artifacts}
+        source_identities = {
+            str(source.get("name") or ""): normalize_catalog_identity(
+                str(source.get("source") or "")
+            )
+            for source in get_catalogs(catalog)
+            if source.get("name") and source.get("source")
+        }
+        for primitive, name in closure.artifacts:
+            entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+            source_name = str(
+                entry.get("metadata", {}).get("library", {}).get("source_catalog") or ""
+            )
+            source_identity = source_identities.get(source_name)
+            if not source_identity:
+                continue
+            member_id = f"{primitive}:{name}"
+            for receipt in lock.get("receipts", []):
+                if receipt.get("id") == member_id:
+                    receipt["catalog_identity"] = source_identity
+            for installed_entry in lock.get("installed", []):
+                if (
+                    installed_entry.get("type") == primitive
+                    and installed_entry.get("name") == name
+                ):
+                    installed_entry["catalog_identity"] = source_identity
+        lock["requested_roots"] = [
+            root
+            for root in lock.get("requested_roots", [])
+            if root.get("type") == "workspace"
+            or str(root.get("id") or "") not in closure_ids
+            or str(root.get("id") or "") in preexisting_direct_ids
+        ]
+        upsert_workspace_root(lock, requested_root)
+        applied_plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        apply_plan_ownership(lock, applied_plan)
+        save_lockfile(lock_path, lock)
+        clear_workspace_journal(lock_path)
+    result.update(
+        {
+            "status": "applied",
+            "additions": applied_plan["additions"],
+            "prune_candidates": applied_plan["prune_candidates"],
+            "digest": applied_plan["digest"],
+        }
+    )
+    _print_workspace_result(result, json_mode=args.json)
+    return 0
+
+
+def _workspace_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    from lib.workspace import (
+        build_workspace_plan,
+        resolve_workspace,
+        workspace_journal_path,
+        workspace_root_id,
+    )
+
+    lock_path, lock = _workspace_lock(repo_root, args.scope)
+    if args.reference:
+        workspace = resolve_workspace(catalog, args.reference)
+        selected_id = workspace_root_id(workspace.catalog_identity, workspace.name)
+        if not any(
+            root.get("id") == selected_id for root in lock.get("requested_roots", [])
+        ):
+            raise LibraryError(
+                f"Workspace {args.reference} is not registered", exit_code=2
+            )
+    plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+    plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
+    if workspace_journal_path(lock_path).exists():
+        plan["blockers"].append(
+            f"Incomplete Workspace transaction journal: {workspace_journal_path(lock_path)}"
+        )
+    protected = [
+        item["id"] for item in plan["receipts"] if item.get("prune_blocked_reason")
+    ]
+    result = {"operation": "status", "status": "converged", **plan}
+    if plan["blockers"] or protected:
+        result["status"] = "blocked"
+        result["protected"] = protected
+        exit_code = 3
+    elif plan["additions"] or plan["updates"] or plan["prune_candidates"]:
+        result["status"] = "changes-pending"
+        exit_code = 2
+    else:
+        exit_code = 0
+    _print_workspace_result(result, json_mode=args.json)
+    return exit_code
+
+
+def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    from lib.manager_inventory import collect_managed_paths, workspace_manager_adapters
+    from lib.workspace import (
+        apply_post_prune_lock,
+        build_workspace_plan,
+        prepare_prune_plan,
+        recover_workspace_journal,
+        workspace_write_lock,
+        write_workspace_journal,
+    )
+
+    lock_path, lock = _workspace_lock(repo_root, args.scope)
+    if args.prune:
+        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
+        result = {"operation": "sync-prune", "status": "preview", **plan}
+        if not args.apply:
+            _print_workspace_result(result, json_mode=args.json)
+            return 3 if plan["blockers"] else 0
+        with workspace_write_lock(lock_path):
+            recover_workspace_journal(lock_path, repo_root)
+            lock = load_lockfile(lock_path)
+            plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+            plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
+            managed = collect_managed_paths(
+                workspace_manager_adapters(
+                    catalog=catalog,
+                    project_root=repo_root,
+                    platform_root=TOOL_ROOT,
+                    scope=args.scope,
+                )
+            )
+            prepared = prepare_prune_plan(
+                lock,
+                plan,
+                repo_root,
+                args.acknowledge_plan or "",
+                managed_paths=managed,
+            )
+            write_workspace_journal(
+                lock_path,
+                {
+                    "operation": "prune",
+                    "scope": args.scope,
+                    "digest": plan["digest"],
+                    "candidate_ids": prepared["candidate_ids"],
+                    "targets": prepared["targets"],
+                },
+            )
+            apply_post_prune_lock(lock, set(prepared["candidate_ids"]))
+            save_lockfile(lock_path, lock)
+            deleted = recover_workspace_journal(lock_path, repo_root)
+        result.update({"status": "applied", "deleted": deleted})
+        _print_workspace_result(result, json_mode=args.json)
+        return 0
+
+    references = []
+    for root in lock.get("requested_roots", []):
+        if root.get("type") != "workspace":
+            continue
+        reference = str(root.get("requested_ref") or "")
+        if args.reference and reference != args.reference:
+            continue
+        references.append(reference)
+    if args.reference and not references:
+        raise LibraryError(f"Workspace {args.reference} is not registered", exit_code=2)
+    if not references:
+        raise LibraryError("No registered Workspaces in selected scope", exit_code=2)
+    applied: list[str] = []
+    for reference in references:
+        use_args = argparse.Namespace(
+            reference=reference,
+            scope=args.scope,
+            harness=args.harness,
+            dry_run=False,
+            replace_with_catalog_content=False,
+            json=True,
+        )
+        with redirect_stdout(io.StringIO()):
+            rc = _workspace_use(use_args, repo_root, catalog)
+        if rc != 0:
+            return rc
+        applied.append(reference)
+    result = {
+        "operation": "sync",
+        "status": "applied",
+        "scope": args.scope,
+        "workspaces": applied,
+        "verified_receipts": bool(args.verify_receipts),
+    }
+    _print_workspace_result(result, json_mode=args.json)
+    return 0
+
+
+def _workspace_adopt(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    from lib.manager_inventory import collect_managed_paths, workspace_manager_adapters
+    from lib.workspace import (
+        apply_direct_root_demotion,
+        apply_plan_ownership,
+        build_direct_root_demotion_plan,
+        build_workspace_plan,
+        clear_workspace_journal,
+        recover_workspace_journal,
+        resolve_workspace,
+        workspace_root_id,
+        workspace_write_lock,
+        write_workspace_journal,
+        verify_receipt_targets,
+    )
+
+    workspace = resolve_workspace(catalog, args.reference)
+    owner_id = workspace_root_id(workspace.catalog_identity, workspace.name)
+    lock_path, preview_lock = _workspace_lock(repo_root, args.scope)
+    if not any(
+        root.get("id") == owner_id for root in preview_lock.get("requested_roots", [])
+    ):
+        raise LibraryError(f"Workspace {args.reference} is not registered")
+    if args.from_direct and not args.apply:
+        plan = build_direct_root_demotion_plan(
+            catalog,
+            preview_lock,
+            repo_root,
+            args.scope,
+            args.reference,
+            member=args.member,
+            all_reachable=args.all_reachable,
+        )
+        _print_workspace_result(
+            {"operation": "adopt-from-direct", "status": "preview", **plan},
+            json_mode=args.json,
+        )
+        return 0
+
+    with workspace_write_lock(lock_path):
+        recover_workspace_journal(lock_path, repo_root)
+        lock = load_lockfile(lock_path)
+        if not any(
+            root.get("id") == owner_id for root in lock.get("requested_roots", [])
+        ):
+            raise LibraryError(f"Workspace {args.reference} is not registered")
+        if args.from_direct:
+            plan = build_direct_root_demotion_plan(
+                catalog,
+                lock,
+                repo_root,
+                args.scope,
+                args.reference,
+                member=args.member,
+                all_reachable=args.all_reachable,
+            )
+            write_workspace_journal(
+                lock_path,
+                {"operation": "adopt", "kind": "from-direct", **plan},
+            )
+            apply_direct_root_demotion(lock, plan, args.acknowledge_plan or "")
+            refreshed = build_workspace_plan(catalog, lock, repo_root, args.scope)
+            apply_plan_ownership(lock, refreshed)
+            save_lockfile(lock_path, lock)
+            clear_workspace_journal(lock_path)
+            _print_workspace_result(
+                {"operation": "adopt-from-direct", "status": "applied", **plan},
+                json_mode=args.json,
+            )
+            return 0
+        if not args.member or not args.definition_commit:
+            raise LibraryError(
+                "Filesystem adoption requires a member and --definition-commit"
+            )
+        receipt = next(
+            (
+                item
+                for item in lock.get("receipts", [])
+                if item.get("id") == args.member
+            ),
+            None,
+        )
+        if receipt is None or not receipt.get("verified"):
+            raise LibraryError("Adoption requires an existing verified Library receipt")
+        current_definition_commit = _workspace_definition_commit(catalog, workspace)
+        if args.definition_commit != current_definition_commit:
+            raise LibraryError(
+                "Adoption definition pin does not match the selected catalog Workspace"
+            )
+        managed = collect_managed_paths(
+            workspace_manager_adapters(
+                catalog=catalog,
+                project_root=repo_root,
+                platform_root=TOOL_ROOT,
+                scope=args.scope,
+            )
+        )
+        verify_receipt_targets(receipt, repo_root, managed_paths=managed)
+        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        if owner_id not in next(
+            (item["owners"] for item in plan["receipts"] if item["id"] == args.member),
+            [],
+        ):
+            raise LibraryError(f"Member {args.member} is not reached by Workspace")
+        write_workspace_journal(
+            lock_path,
+            {
+                "operation": "adopt",
+                "kind": "filesystem",
+                "member": args.member,
+                "definition_commit": args.definition_commit,
+            },
+        )
+        receipt["adopted"] = True
+        receipt["definition_commit"] = args.definition_commit
+        apply_plan_ownership(lock, plan)
+        save_lockfile(lock_path, lock)
+        clear_workspace_journal(lock_path)
+    _print_workspace_result(
+        {"operation": "adopt", "status": "applied", "member": args.member},
+        json_mode=args.json,
+    )
+    return 0
+
+
+def _workspace_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    from lib.workspace import (
+        apply_plan_ownership,
+        build_workspace_plan,
+        clear_workspace_journal,
+        recover_workspace_journal,
+        remove_workspace_root,
+        resolve_workspace,
+        workspace_write_lock,
+        write_workspace_journal,
+    )
+
+    workspace = resolve_workspace(catalog, args.reference)
+    lock_path, _lock = _workspace_lock(repo_root, args.scope)
+    with workspace_write_lock(lock_path):
+        recover_workspace_journal(lock_path, repo_root)
+        lock = load_lockfile(lock_path)
+        if not remove_workspace_root(lock, workspace.catalog_identity, workspace.name):
+            raise LibraryError(
+                f"Workspace {args.reference} is not registered", exit_code=2
+            )
+        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        apply_plan_ownership(lock, plan)
+        write_workspace_journal(
+            lock_path,
+            {
+                "operation": "remove",
+                "reference": args.reference,
+                "digest": plan["digest"],
+            },
+        )
+        save_lockfile(lock_path, lock)
+        clear_workspace_journal(lock_path)
+    _print_workspace_result(
+        {
+            "operation": "remove",
+            "status": "unregistered",
+            "reference": args.reference,
+            **plan,
+        },
+        json_mode=args.json,
+    )
+    return 0
+
+
+def cmd_workspace(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    """Dispatch the explicit Workspace lifecycle commands."""
+    from lib.workspace import (
+        build_workspace_plan,
+        resolve_workspace,
+        resolve_workspace_closure,
+        validate_workspace_manifest,
+    )
+
+    if args.verb == "list":
+        identities = []
+        for entry in get_entries(catalog, "workspace"):
+            metadata = entry.get("metadata", {}).get("library", {})
+            identities.append(
+                {
+                    "reference": f"{metadata.get('source_catalog', '')}:{entry.get('name', '')}",
+                    "name": entry.get("name"),
+                    "version": entry.get("version"),
+                    "status": entry.get("status", "experimental"),
+                    "description": entry.get("description"),
+                }
+            )
+        _print_workspace_result(
+            {
+                "operation": "list",
+                "status": "ok",
+                "scope": args.scope,
+                "workspaces": identities,
+            },
+            json_mode=args.json,
+        )
+        return 0
+    if args.verb == "show":
+        workspace = resolve_workspace(catalog, args.reference)
+        closure = resolve_workspace_closure(catalog, workspace, repo_root, args.scope)
+        result = {
+            "operation": "show",
+            "status": "ok",
+            "reference": f"{workspace.catalog_name}:{workspace.name}",
+            "catalog_identity": workspace.catalog_identity,
+            "scope": args.scope,
+            "manifest": workspace.entry,
+            "closure": [f"{primitive}:{name}" for primitive, name in closure.artifacts],
+            "prerequisites": [
+                f"{primitive}:{name}" for primitive, name in closure.prerequisites
+            ],
+        }
+        _print_workspace_result(result, json_mode=args.json)
+        return 0
+    if args.verb == "validate":
+        path = Path(args.reference).expanduser()
+        if path.exists():
+            import yaml
+
+            manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
+            validate_workspace_manifest(manifest)
+            reference = str(path)
+        else:
+            workspace = resolve_workspace(catalog, args.reference)
+            validate_workspace_manifest(workspace.entry)
+            reference = f"{workspace.catalog_name}:{workspace.name}"
+        _print_workspace_result(
+            {"operation": "validate", "status": "valid", "reference": reference},
+            json_mode=args.json,
+        )
+        return 0
+    if args.verb == "use":
+        return _workspace_use(args, repo_root, catalog)
+    if args.verb == "status":
+        return _workspace_status(args, repo_root, catalog)
+    if args.verb == "explain":
+        _lock_path, lock = _workspace_lock(repo_root, args.scope)
+        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        receipt = next(
+            (item for item in plan["receipts"] if item["id"] == args.member), None
+        )
+        if receipt is None:
+            raise LibraryError(f"Receipt {args.member} is not installed", exit_code=2)
+        _print_workspace_result(
+            {"operation": "explain", "status": "ok", "scope": args.scope, **receipt},
+            json_mode=args.json,
+        )
+        return 0
+    if args.verb == "sync":
+        return _workspace_sync(args, repo_root, catalog)
+    if args.verb == "adopt":
+        return _workspace_adopt(args, repo_root, catalog)
+    if args.verb == "remove":
+        return _workspace_remove(args, repo_root, catalog)
+    raise LibraryError(f"Unknown Workspace verb {args.verb}")
+
+
 VERB_HANDLERS = {
     "list": cmd_list,
     "use": cmd_use,
@@ -2674,6 +3748,23 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: Unknown catalog verb.", file=sys.stderr)
         return EXIT_FAILURE
 
+    if args.primitive == "workspace":
+        verb = getattr(args, "verb", None)
+        if not verb:
+            parser.parse_args(["workspace", "--help"])
+            return EXIT_FAILURE
+        try:
+            catalog_root = _resolve_catalog_root()
+            repo_root = _resolve_target_root(args, catalog_root)
+            catalog = load_catalog(catalog_root)
+            return cmd_workspace(args, repo_root, catalog)
+        except LibraryError as exc:
+            if getattr(args, "json", False):
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+
     # Validate primitive
     prim_info = get_primitive(args.primitive)
     if prim_info is None:
@@ -2707,7 +3798,10 @@ def main(argv: list[str] | None = None) -> int:
     # Dispatch
     handler = VERB_HANDLERS.get(verb)
     if handler is None:
-        print(f"Error: Unknown verb '{verb}'. Valid verbs: {', '.join(VALID_VERBS)}", file=sys.stderr)
+        print(
+            f"Error: Unknown verb '{verb}'. Valid verbs: {', '.join(VALID_VERBS)}",
+            file=sys.stderr,
+        )
         return EXIT_FAILURE
 
     try:

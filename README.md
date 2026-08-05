@@ -96,8 +96,9 @@ From a platform checkout:
 bash install.sh
 ```
 
-The installer links the Library Skill and platform forge Skills into detected
-harness directories. It is idempotent. The deterministic engine can also be run
+The installer links only the irreducible Library conversational entrypoint into
+detected harness directories and records exact bootstrap receipts. Optional
+forge Skills belong in a project Workspace. The installer is idempotent. The deterministic engine can also be run
 directly from this repository:
 
 ```bash

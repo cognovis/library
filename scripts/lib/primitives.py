@@ -155,6 +155,13 @@ PRIMITIVES: list[PrimitiveInfo] = [
         aliases=["runtime_config"],
         install_subdir="runtime-configs",
     ),
+    PrimitiveInfo(
+        name="workspace",
+        yaml_section="library.workspaces",
+        yaml_key="library/workspaces",
+        description="Metadata-only desired-state roots for Library capabilities",
+        install_subdir=None,
+    ),
 ]
 
 # Lookup tables

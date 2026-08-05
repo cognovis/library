@@ -6,7 +6,9 @@
 > dependencies the sole Library desired-state mechanism. No new distributable
 > capability should be added to `project_tooling`. Existing entries remain
 > protected from Workspace adoption and pruning until their ownership has been
-> migrated and verified.
+> migrated and verified. The transition exports a read-only target inventory,
+> and each repository disables its legacy writer in the same change that
+> registers replacement roots.
 
 ## Workspace transition
 
@@ -24,6 +26,14 @@ Its entry kinds now route as follows:
 Workspace manifests do not gain `conditions`, arbitrary file-copy, JSON-patch,
 or gitignore-patch fields. A file that cannot be represented by a real Library
 primitive remains project- or tool-owned.
+
+Before cutover, every existing target receives one recorded disposition:
+becomes a primitive, becomes project-owned and frozen with provenance, or is
+explicitly retired. Until then it remains a protected external-manager path and
+cannot be adopted, replaced, or pruned by Workspace reconciliation.
+
+The current row-by-row dispositions live in
+[Workspace legacy-writer inventory](migration/workspace-legacy-inventory.md).
 
 ## What it is and why it exists
 

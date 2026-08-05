@@ -210,7 +210,9 @@ def fixture_standard_file(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def project_dir(tmp_path: Path, fixture_skill_dir: Path, fixture_standard_file: Path) -> Path:
+def project_dir(
+    tmp_path: Path, fixture_skill_dir: Path, fixture_standard_file: Path
+) -> Path:
     """Create a minimal project directory with library.yaml pointing to local fixtures."""
     proj = tmp_path / "test-project"
     proj.mkdir()
@@ -294,7 +296,9 @@ def cursor_project(tmp_path: Path) -> Path:
     proj.mkdir()
     skill_dir = tmp_path / "cursor-test-skill"
     skill_dir.mkdir()
-    (skill_dir / "SKILL.md").write_text("---\nname: cursor-test-skill\n---\n# Cursor Test Skill\n")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: cursor-test-skill\n---\n# Cursor Test Skill\n"
+    )
     yaml_content = f"""
 default_dirs:
   skills:
@@ -326,7 +330,9 @@ model_standards: []
 
 
 @pytest.fixture
-def harness_support_project(tmp_path: Path, fixture_skill_dir: Path, fixture_standard_file: Path) -> Path:
+def harness_support_project(
+    tmp_path: Path, fixture_skill_dir: Path, fixture_standard_file: Path
+) -> Path:
     """Create a project with unsupported Codex entries across primitive types."""
     proj = tmp_path / "harness-support-project"
     proj.mkdir()
@@ -591,7 +597,9 @@ class TestDryRunContractUniformity:
         data = json.loads(result.stdout)
 
         assert data["target_paths"]
-        assert all(str(path).startswith(str(target_project)) for path in data["target_paths"])
+        assert all(
+            str(path).startswith(str(target_project)) for path in data["target_paths"]
+        )
 
     @pytest.mark.parametrize(
         ("harness", "expected_fragment", "unexpected_fragment"),
@@ -738,9 +746,18 @@ class TestDryRunContractUniformity:
         target_paths = "\n".join(data["target_paths"])
 
         assert any(op["operation"] == "vendor_handler" for op in operations)
-        assert ".claude/agents/handler-agent-handlers/handlers/fixture-handler.sh" in target_paths
-        assert ".codex/agents/handler-agent-handlers/handlers/fixture-handler.sh" in target_paths
-        assert ".opencode/agents/handler-agent-handlers/handlers/fixture-handler.sh" in target_paths
+        assert (
+            ".claude/agents/handler-agent-handlers/handlers/fixture-handler.sh"
+            in target_paths
+        )
+        assert (
+            ".codex/agents/handler-agent-handlers/handlers/fixture-handler.sh"
+            in target_paths
+        )
+        assert (
+            ".opencode/agents/handler-agent-handlers/handlers/fixture-handler.sh"
+            in target_paths
+        )
 
     def test_install_agent_copies_declared_handler_assets(
         self,
@@ -769,9 +786,24 @@ class TestDryRunContractUniformity:
         data = json.loads(result.stdout)
 
         expected_handler_targets = [
-            agent_handlers_project / ".claude" / "agents" / "handler-agent-handlers" / "handlers" / "fixture-handler.sh",
-            agent_handlers_project / ".codex" / "agents" / "handler-agent-handlers" / "handlers" / "fixture-handler.sh",
-            agent_handlers_project / ".opencode" / "agents" / "handler-agent-handlers" / "handlers" / "fixture-handler.sh",
+            agent_handlers_project
+            / ".claude"
+            / "agents"
+            / "handler-agent-handlers"
+            / "handlers"
+            / "fixture-handler.sh",
+            agent_handlers_project
+            / ".codex"
+            / "agents"
+            / "handler-agent-handlers"
+            / "handlers"
+            / "fixture-handler.sh",
+            agent_handlers_project
+            / ".opencode"
+            / "agents"
+            / "handler-agent-handlers"
+            / "handlers"
+            / "fixture-handler.sh",
         ]
         for handler_target in expected_handler_targets:
             assert handler_target.exists()
@@ -780,11 +812,11 @@ class TestDryRunContractUniformity:
         installed_targets = data["data"]["installed_targets"]
         assert all(item["handlers"] for item in installed_targets)
         installed_handler_paths = {
-            handler
-            for item in installed_targets
-            for handler in item["handlers"]
+            handler for item in installed_targets for handler in item["handlers"]
         }
-        assert {str(path) for path in expected_handler_targets} <= installed_handler_paths
+        assert {
+            str(path) for path in expected_handler_targets
+        } <= installed_handler_paths
 
         lockfile = agent_handlers_project / ".library.lock"
         lock_data = yaml.safe_load(lockfile.read_text())
@@ -907,7 +939,11 @@ class TestDryRunContractUniformity:
             agent_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -1028,12 +1064,10 @@ class TestDryRunContractUniformity:
             project / ".opencode" / "agents" / "handler-agent-handlers",
         ]
         old_handler_targets = [
-            root / "handlers" / "old-handler.sh"
-            for root in handler_roots
+            root / "handlers" / "old-handler.sh" for root in handler_roots
         ]
         new_handler_targets = [
-            root / "handlers" / "new-handler.sh"
-            for root in handler_roots
+            root / "handlers" / "new-handler.sh" for root in handler_roots
         ]
         assert all(path.exists() for path in old_handler_targets)
         assert not any(path.exists() for path in new_handler_targets)
@@ -1132,8 +1166,12 @@ class TestDryRunContractUniformity:
         )
         assert install_result.returncode == 0, install_result.stderr
 
-        opencode_target = dry_run_contract_project / ".opencode" / "agents" / "contract-agent.md"
-        claude_target = dry_run_contract_project / ".claude" / "agents" / "contract-agent.md"
+        opencode_target = (
+            dry_run_contract_project / ".opencode" / "agents" / "contract-agent.md"
+        )
+        claude_target = (
+            dry_run_contract_project / ".claude" / "agents" / "contract-agent.md"
+        )
         assert opencode_target.exists()
         assert not claude_target.exists()
 
@@ -1166,7 +1204,8 @@ class TestDryRunContractUniformity:
                 "agent",
                 "remove",
                 "contract-agent",
-                "--harness", "cursor",
+                "--harness",
+                "cursor",
                 "--dry-run",
                 "--json",
             ],
@@ -1194,7 +1233,8 @@ class TestDryRunContractUniformity:
                 "agent",
                 "use",
                 "contract-agent",
-                "--harness", "all",
+                "--harness",
+                "all",
                 "--json",
             ],
             capture_output=True,
@@ -1204,9 +1244,15 @@ class TestDryRunContractUniformity:
         )
         assert install_result.returncode == 0, install_result.stderr
 
-        claude_target = dry_run_contract_project / ".claude" / "agents" / "contract-agent.md"
-        codex_target = dry_run_contract_project / ".codex" / "agents" / "contract-agent.toml"
-        opencode_target = dry_run_contract_project / ".opencode" / "agents" / "contract-agent.md"
+        claude_target = (
+            dry_run_contract_project / ".claude" / "agents" / "contract-agent.md"
+        )
+        codex_target = (
+            dry_run_contract_project / ".codex" / "agents" / "contract-agent.toml"
+        )
+        opencode_target = (
+            dry_run_contract_project / ".opencode" / "agents" / "contract-agent.md"
+        )
         assert claude_target.exists()
         assert codex_target.exists()
         assert opencode_target.exists()
@@ -1218,7 +1264,8 @@ class TestDryRunContractUniformity:
                 "agent",
                 "remove",
                 "contract-agent",
-                "--harness", "all",
+                "--harness",
+                "all",
                 "--json",
             ],
             capture_output=True,
@@ -1235,7 +1282,9 @@ class TestDryRunContractUniformity:
         assert not codex_target.exists()
         assert not opencode_target.exists()
 
-    @pytest.mark.parametrize("unsafe_name", ["../shared", "..", "a/b", "a\\b", "sub/agent"])
+    @pytest.mark.parametrize(
+        "unsafe_name", ["../shared", "..", "a/b", "a\\b", "sub/agent"]
+    )
     def test_agent_remove_rejects_unsafe_name_without_deleting(
         self,
         tmp_path: Path,
@@ -1297,7 +1346,9 @@ class TestDryRunContractUniformity:
         targets = "\n".join(data["target_paths"])
         assert ".cursor/skills/cursor-test-skill" in targets
 
-    def test_cursor_skill_dry_run_reports_cursor_target_paths(self, cursor_project: Path):
+    def test_cursor_skill_dry_run_reports_cursor_target_paths(
+        self, cursor_project: Path
+    ):
         """AC6: dry-run --json reports Cursor target_paths, harness_routing, conflict_policy."""
         result = subprocess.run(
             [
@@ -1322,7 +1373,9 @@ class TestDryRunContractUniformity:
         assert data.get("requires_user_confirmation") is False
         assert ".cursor/skills" in "\n".join(data.get("target_paths", []))
 
-    def test_cursor_skill_real_install_creates_bridge_symlink(self, cursor_project: Path):
+    def test_cursor_skill_real_install_creates_bridge_symlink(
+        self, cursor_project: Path
+    ):
         """AC2: real install creates .cursor/skills/<name>/ as symlink to .agents/skills/<name>/."""
         result = subprocess.run(
             [
@@ -1372,7 +1425,10 @@ class TestDryRunContractUniformity:
         data = json.loads(result.stdout)
         assert data["status"] == "error"
         assert "cursor" in data["message"].lower()
-        assert "not supported" in data["message"].lower() or "not currently implemented" in data["message"].lower()
+        assert (
+            "not supported" in data["message"].lower()
+            or "not currently implemented" in data["message"].lower()
+        )
 
     @pytest.mark.parametrize("harness", ["cursor", "opencode"])
     def test_mcp_install_cursor_opencode_rejected_before_side_effects(
@@ -1444,7 +1500,9 @@ class TestDryRunContractUniformity:
             proj.mkdir()
             skill_src = Path(tmpdir) / "smoke-skill"
             skill_src.mkdir()
-            (skill_src / "SKILL.md").write_text("---\nname: smoke-skill\n---\n# Smoke Skill\n")
+            (skill_src / "SKILL.md").write_text(
+                "---\nname: smoke-skill\n---\n# Smoke Skill\n"
+            )
             yaml = f"""
 default_dirs:
   skills:
@@ -1491,9 +1549,18 @@ model_standards: []
         """Cursor bridge is removed when skill is uninstalled."""
         # Install first
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "cursor-test-skill",
-             "--harness", "cursor"],
-            capture_output=True, text=True, cwd=str(cursor_project),
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "cursor-test-skill",
+                "--harness",
+                "cursor",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(cursor_project),
         )
         assert result.returncode == 0, result.stderr
         cursor_bridge = cursor_project / ".cursor" / "skills" / "cursor-test-skill"
@@ -1502,23 +1569,37 @@ model_standards: []
         # Now remove
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "skill", "remove", "cursor-test-skill"],
-            capture_output=True, text=True, cwd=str(cursor_project),
+            capture_output=True,
+            text=True,
+            cwd=str(cursor_project),
         )
         assert result.returncode == 0, result.stderr
         # Bridge must be gone — no dangling symlink
         assert not cursor_bridge.exists()
         assert not cursor_bridge.is_symlink()
 
-    def test_cursor_agent_rejected_before_dependency_install(self, dry_run_contract_project: Path):
+    def test_cursor_agent_rejected_before_dependency_install(
+        self, dry_run_contract_project: Path
+    ):
         """AC8: cursor agent install is rejected before any dependency side effects on real install."""
         # Verify that even a real install (no --dry-run) returns error without creating files
         agents_dir = dry_run_contract_project / ".claude" / "agents"
         agents_dir_exists_before = agents_dir.exists()
 
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "agent", "use", "contract-agent",
-             "--harness", "cursor", "--json"],
-            capture_output=True, text=True, cwd=str(dry_run_contract_project),
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "agent",
+                "use",
+                "contract-agent",
+                "--harness",
+                "cursor",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(dry_run_contract_project),
         )
         assert result.returncode != 0
         data = json.loads(result.stdout)
@@ -1526,17 +1607,23 @@ model_standards: []
         assert "cursor" in data["message"].lower()
         # Agents dir should not be modified by a cursor install attempt
         if not agents_dir_exists_before:
-            assert not agents_dir.exists(), "cursor agent install should not create agents directory"
+            assert not agents_dir.exists(), (
+                "cursor agent install should not create agents directory"
+            )
 
     def test_existing_target_reports_conflict_policy_and_detection(
         self,
         dry_run_contract_project: Path,
     ):
-        existing_target = dry_run_contract_project / ".claude" / "commands" / "contract-prompt.md"
+        existing_target = (
+            dry_run_contract_project / ".claude" / "commands" / "contract-prompt.md"
+        )
         existing_target.parent.mkdir(parents=True)
         existing_target.write_text("# Existing Prompt\n")
 
-        data = run_library_json(dry_run_contract_project, "prompt", "use", "contract-prompt")
+        data = run_library_json(
+            dry_run_contract_project, "prompt", "use", "contract-prompt"
+        )
 
         assert data["conflict_policy"] == "overwrite"
         assert str(existing_target) in data["target_paths"]
@@ -1611,7 +1698,9 @@ def test_use_refuses_unsupported_harness_for_extended_cli_harnesses(
     assert f"harness_support.{harness}: not-supported" in data["message"]
 
 
-@pytest.mark.parametrize("harness", ["claude_code", "codex", "cursor", "opencode", "gemini"])
+@pytest.mark.parametrize(
+    "harness", ["claude_code", "codex", "cursor", "opencode", "gemini"]
+)
 def test_check_harness_support_enforces_closed_registry(harness: str):
     """The harness support gate enforces not-supported for every known harness ID."""
     entry = {
@@ -1675,7 +1764,9 @@ def test_runtime_requirement_present_binary_installs_normally(
     )
 
     assert result.returncode == 0, result.stderr
-    assert (runtime_requirements_project / ".agents" / "skills" / "present-runtime-skill").exists()
+    assert (
+        runtime_requirements_project / ".agents" / "skills" / "present-runtime-skill"
+    ).exists()
     assert (runtime_requirements_project / ".library.lock").exists()
 
 
@@ -1731,7 +1822,9 @@ def test_runtime_requirement_fuzzy_main_gate_precedes_dependency_install(
     assert result.returncode != 0
     data = json.loads(result.stdout)
     assert "__nonexistent_binary_xyz__" in data["message"]
-    assert not (runtime_requirements_project / ".agents" / "skills" / "runtime-dependency").exists()
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "runtime-dependency"
+    ).exists()
     assert not (runtime_requirements_project / ".library.lock").exists()
 
 
@@ -1758,7 +1851,9 @@ def test_compatibility_fuzzy_main_gate_precedes_dependency_install(
     assert result.returncode != 0
     data = json.loads(result.stdout)
     assert "claude_code>=99.0" in data["message"]
-    assert not (runtime_requirements_project / ".agents" / "skills" / "runtime-dependency").exists()
+    assert not (
+        runtime_requirements_project / ".agents" / "skills" / "runtime-dependency"
+    ).exists()
     assert not (runtime_requirements_project / ".library.lock").exists()
 
 
@@ -1804,10 +1899,16 @@ def test_runtime_requirement_dependency_gate_precedes_any_install(
     ).exists()
     # The broken dependency and the main skill must also be absent.
     assert not (
-        runtime_requirements_project / ".agents" / "skills" / "missing-runtime-dependency"
+        runtime_requirements_project
+        / ".agents"
+        / "skills"
+        / "missing-runtime-dependency"
     ).exists()
     assert not (
-        runtime_requirements_project / ".agents" / "skills" / "clean-main-with-bad-dependency"
+        runtime_requirements_project
+        / ".agents"
+        / "skills"
+        / "clean-main-with-bad-dependency"
     ).exists()
     assert not (runtime_requirements_project / ".library.lock").exists()
 
@@ -1836,7 +1937,15 @@ class TestSkillDryRun:
     def test_skill_dry_run_exits_zero(self, project_dir: Path):
         """skill use --dry-run --json must exit 0."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -1849,7 +1958,15 @@ class TestSkillDryRun:
     def test_skill_dry_run_json_valid(self, project_dir: Path):
         """skill use --dry-run --json must emit valid JSON."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -1860,7 +1977,15 @@ class TestSkillDryRun:
     def test_skill_dry_run_status_is_dry_run(self, project_dir: Path):
         """skill use --dry-run --json must have status='dry-run'."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -1873,20 +1998,38 @@ class TestSkillDryRun:
     def test_skill_dry_run_has_operations(self, project_dir: Path):
         """skill use --dry-run --json must include an 'operations' list."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
         )
         data = json.loads(result.stdout)
         ops = data.get("operations", [])
-        assert isinstance(ops, list), f"Expected 'operations' to be a list, got {type(ops)}"
+        assert isinstance(ops, list), (
+            f"Expected 'operations' to be a list, got {type(ops)}"
+        )
         assert len(ops) > 0, "Expected at least one planned operation"
 
     def test_skill_dry_run_includes_cache_op(self, project_dir: Path):
         """Dry-run operations must include a cache materialization step."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -1894,14 +2037,22 @@ class TestSkillDryRun:
         data = json.loads(result.stdout)
         ops = data.get("operations", [])
         op_names = [op.get("operation") for op in ops]
-        assert "materialize_cache" in op_names or any("cache" in (op.get("details", "")) for op in ops), (
-            f"Expected cache materialization operation, got: {op_names}"
-        )
+        assert "materialize_cache" in op_names or any(
+            "cache" in (op.get("details", "")) for op in ops
+        ), f"Expected cache materialization operation, got: {op_names}"
 
     def test_skill_dry_run_includes_vendor_op(self, project_dir: Path):
         """Dry-run operations must include a vendor copy step by default."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -1916,7 +2067,15 @@ class TestSkillDryRun:
     def test_skill_dry_run_includes_lockfile_op(self, project_dir: Path):
         """Dry-run operations must include a lockfile write step."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -1931,7 +2090,15 @@ class TestSkillDryRun:
     def test_skill_dry_run_no_mutation(self, project_dir: Path):
         """skill use --dry-run must NOT create any files in the project directory."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -1949,13 +2116,23 @@ class TestSkillDryRun:
             ".library.lock was created during --dry-run (must not mutate)"
         )
 
-    def test_skill_dry_run_can_target_project_without_library_yaml(self, tmp_path: Path):
+    def test_skill_dry_run_can_target_project_without_library_yaml(
+        self, tmp_path: Path
+    ):
         """Running the CLI from a normal project should use the CLI catalog and target cwd."""
         target_project = tmp_path / "external-project"
         target_project.mkdir()
 
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "standard-forge", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "standard-forge",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(target_project),
@@ -2042,6 +2219,7 @@ library:
         monkeypatch: pytest.MonkeyPatch, skill_mod, fake_repo: Path
     ) -> None:
         """Patch skill installer git commands to clone from a local fixture."""
+
         def fake_run(cmd, capture_output=False, text=False, cwd=None):
             if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
                 target = Path(cmd[-1])
@@ -2077,8 +2255,7 @@ library:
         }
 
         assert resolve_marketplace_source(catalog, entry) == (
-            "https://github.com/pbakaus/impeccable/tree/main/"
-            ".claude/skills/impeccable"
+            "https://github.com/pbakaus/impeccable/tree/main/.claude/skills/impeccable"
         )
 
     def test_marketplace_source_unknown_marketplace_raises(self):
@@ -2126,8 +2303,7 @@ library:
         resolved = data.get("data", {})
         assert data.get("status") == "dry-run"
         assert resolved["source"] == (
-            "https://github.com/pbakaus/impeccable/tree/main/"
-            ".claude/skills/impeccable"
+            "https://github.com/pbakaus/impeccable/tree/main/.claude/skills/impeccable"
         )
         assert resolved["clone_url"] == "https://github.com/pbakaus/impeccable.git"
         assert resolved["source_path"] == ".claude/skills/impeccable"
@@ -2158,7 +2334,11 @@ library:
             skill_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -2220,7 +2400,11 @@ library:
             skill_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -2260,7 +2444,9 @@ library:
         assert result["status"] == "ok", result
         canonical = project / ".agents" / "skills" / "core-skill"
         assert (canonical / "SKILL.md").is_file()
-        assert result["data"]["cache"].endswith("skill/cognovis-core/core-skill@abcdef1")
+        assert result["data"]["cache"].endswith(
+            "skill/cognovis-core/core-skill@abcdef1"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2274,7 +2460,15 @@ class TestStandardDryRun:
     def test_standard_dry_run_exits_zero(self, project_dir: Path):
         """standard use --dry-run --json must exit 0."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "standard",
+                "use",
+                "test-standard",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2287,7 +2481,15 @@ class TestStandardDryRun:
     def test_standard_dry_run_json_valid(self, project_dir: Path):
         """standard use --dry-run --json must emit valid JSON."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "standard",
+                "use",
+                "test-standard",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2298,7 +2500,15 @@ class TestStandardDryRun:
     def test_standard_dry_run_status(self, project_dir: Path):
         """standard use --dry-run --json must have status='dry-run'."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "standard",
+                "use",
+                "test-standard",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2311,7 +2521,15 @@ class TestStandardDryRun:
     def test_standard_dry_run_has_operations(self, project_dir: Path):
         """standard use --dry-run must include operations list."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "standard",
+                "use",
+                "test-standard",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2323,7 +2541,15 @@ class TestStandardDryRun:
     def test_standard_dry_run_does_not_mention_agents_md(self, project_dir: Path):
         """standard dry-run operations must not mention AGENTS.md mutation."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "standard",
+                "use",
+                "test-standard",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2341,7 +2567,15 @@ class TestStandardDryRun:
     def test_standard_dry_run_no_mutation(self, project_dir: Path):
         """standard use --dry-run must not create files."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--dry-run", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "standard",
+                "use",
+                "test-standard",
+                "--dry-run",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2361,7 +2595,14 @@ class TestStandardRealInstall:
     def test_standard_real_install_vendors_without_agents_md(self, project_dir: Path):
         """standard use must install files and leave AGENTS.md alone."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "standard", "use", "test-standard", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "standard",
+                "use",
+                "test-standard",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2391,6 +2632,7 @@ class TestStandardTreeSource:
         monkeypatch: pytest.MonkeyPatch, standard_mod, fake_repo: Path
     ) -> None:
         """Patch standard installer git commands to clone from a local fixture."""
+
         def fake_run(cmd, capture_output=False, text=False, cwd=None):
             if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
                 target = Path(cmd[-1])
@@ -2455,7 +2697,11 @@ class TestStandardTreeSource:
             standard_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -2495,7 +2741,9 @@ class TestStandardTreeSource:
         fake_repo.mkdir()
         self._patch_git_clone(monkeypatch, standard_mod, fake_repo)
 
-        parsed = parse_source("https://github.com/example/repo/tree/main/standards/missing")
+        parsed = parse_source(
+            "https://github.com/example/repo/tree/main/standards/missing"
+        )
         with pytest.raises(InstallError, match="does not exist"):
             standard_mod._fetch_standard_source(parsed, "missing")
 
@@ -2543,7 +2791,9 @@ class TestStandardTreeSource:
 class TestSimpleFileDirectoryEntrypoint:
     """Directory-backed simple-file primitives should honor entrypoint."""
 
-    def test_prompt_directory_source_installs_configured_entrypoint(self, tmp_path: Path):
+    def test_prompt_directory_source_installs_configured_entrypoint(
+        self, tmp_path: Path
+    ):
         """A prompt sourced from a directory must install the configured entrypoint file."""
         source_dir = tmp_path / "prompt-source"
         source_dir.mkdir()
@@ -2577,7 +2827,14 @@ model_standards: []
         )
 
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "prompt", "use", "entrypoint-prompt", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "prompt",
+                "use",
+                "entrypoint-prompt",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project),
@@ -2624,9 +2881,7 @@ class TestSkillRealInstall:
         assert result.returncode == 0
 
         canonical = project_dir / ".agents" / "skills" / "test-skill"
-        assert canonical.exists(), (
-            f"Expected {canonical} to exist after skill install"
-        )
+        assert canonical.exists(), f"Expected {canonical} to exist after skill install"
         assert canonical.is_dir(), (
             f"Expected {canonical} to be a directory after skill install"
         )
@@ -2645,12 +2900,8 @@ class TestSkillRealInstall:
         assert result.returncode == 0
 
         bridge = project_dir / ".claude" / "skills" / "test-skill"
-        assert bridge.exists(), (
-            f"Expected Claude bridge at {bridge} — not found"
-        )
-        assert bridge.is_symlink(), (
-            f"Expected Claude bridge {bridge} to be a symlink"
-        )
+        assert bridge.exists(), f"Expected Claude bridge at {bridge} — not found"
+        assert bridge.is_symlink(), f"Expected Claude bridge {bridge} to be a symlink"
 
     def test_skill_real_install_bridge_points_to_canonical(self, project_dir: Path):
         """Claude bridge symlink must point at the canonical vendored directory."""
@@ -2680,9 +2931,7 @@ class TestSkillRealInstall:
 
         canonical = project_dir / ".agents" / "skills" / "test-skill"
         skill_md = canonical / "SKILL.md"
-        assert skill_md.exists(), (
-            f"SKILL.md not accessible at {skill_md}"
-        )
+        assert skill_md.exists(), f"SKILL.md not accessible at {skill_md}"
         content = skill_md.read_text()
         assert "test-skill" in content.lower() or "Test Skill" in content, (
             f"SKILL.md content doesn't mention test-skill: {content[:100]}"
@@ -2744,18 +2993,26 @@ class TestSkillRealInstall:
         """Installing the same skill twice must succeed (idempotent)."""
         for i in range(2):
             result = subprocess.run(
-                [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--json"],
+                [
+                    sys.executable,
+                    str(LIBRARY_PY),
+                    "skill",
+                    "use",
+                    "test-skill",
+                    "--json",
+                ],
                 capture_output=True,
                 text=True,
                 cwd=str(project_dir),
             )
             assert result.returncode == 0, (
-                f"Install attempt {i+1} failed: {result.returncode}\n{result.stderr}"
+                f"Install attempt {i + 1} failed: {result.returncode}\n{result.stderr}"
             )
 
         # After two installs, lockfile should still have exactly one entry
         try:
             import yaml
+
             lockfile = project_dir / ".library.lock"
             with lockfile.open() as f:
                 lock_data = yaml.safe_load(f)
@@ -2770,7 +3027,15 @@ class TestSkillRealInstall:
     def test_skill_symlink_opt_in_preserves_cache_link_mode(self, project_dir: Path):
         """--symlink must install the canonical path as a cache symlink."""
         result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "test-skill", "--symlink", "--json"],
+            [
+                sys.executable,
+                str(LIBRARY_PY),
+                "skill",
+                "use",
+                "test-skill",
+                "--symlink",
+                "--json",
+            ],
             capture_output=True,
             text=True,
             cwd=str(project_dir),
@@ -2795,6 +3060,7 @@ class TestSkillRealInstall:
         cache = Path(data["data"]["cache"])
         if cache.exists():
             import shutil
+
             shutil.rmtree(cache)
 
         skill_md = project_dir / ".agents" / "skills" / "test-skill" / "SKILL.md"
@@ -2813,7 +3079,11 @@ class TestLockfile:
     def test_lockfile_schema_imports(self):
         """scripts/lib/lockfile.py must be importable."""
         result = subprocess.run(
-            [sys.executable, "-c", "import sys; sys.path.insert(0, 'scripts'); from lib.lockfile import make_entry, upsert_entry, load_lockfile, save_lockfile; print('ok')"],
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.path.insert(0, 'scripts'); from lib.lockfile import make_entry, upsert_entry, load_lockfile, save_lockfile; print('ok')",
+            ],
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
@@ -2838,11 +3108,20 @@ class TestLockfile:
         )
 
         required = [
-            "name", "type", "marketplace", "source", "source_commit",
-            "cache_path", "install_target", "install_timestamp", "checksum_sha256",
+            "name",
+            "type",
+            "marketplace",
+            "source",
+            "source_commit",
+            "cache_path",
+            "install_target",
+            "install_timestamp",
+            "checksum_sha256",
         ]
         for field in required:
-            assert field in entry, f"Required field '{field}' missing from lockfile entry"
+            assert field in entry, (
+                f"Required field '{field}' missing from lockfile entry"
+            )
 
     def test_lockfile_make_entry_type_field(self):
         """make_entry must set 'type' (not 'primitive_type') in the entry."""
@@ -2859,7 +3138,9 @@ class TestLockfile:
             install_target=".agents/skills/x/",
             checksum_sha256="b" * 64,
         )
-        assert entry.get("type") == "skill", f"Expected type='skill', got '{entry.get('type')}'"
+        assert entry.get("type") == "skill", (
+            f"Expected type='skill', got '{entry.get('type')}'"
+        )
 
     def test_lockfile_upsert_insert(self, tmp_path: Path):
         """upsert_entry must add a new entry if name not present."""
@@ -2911,7 +3192,9 @@ class TestLockfile:
         upsert_entry(data, entry2)
 
         assert len(data["installed"]) == 1, "Should have exactly one entry after upsert"
-        assert data["installed"][0]["source_commit"] == "def", "Should have updated to v2"
+        assert data["installed"][0]["source_commit"] == "def", (
+            "Should have updated to v2"
+        )
 
     def test_lockfile_upsert_keeps_same_name_different_type(self, tmp_path: Path):
         """upsert_entry must allow cross-primitive name collisions."""
@@ -2978,13 +3261,20 @@ class TestLockfile:
         assert loaded_entry["checksum_sha256"] == entry["checksum_sha256"]
 
     def test_lockfile_load_missing_returns_empty(self, tmp_path: Path):
-        """load_lockfile on a nonexistent path must return empty installed list."""
+        """load_lockfile on a nonexistent path returns an empty v2 model."""
         sys.path.insert(0, str(SCRIPTS_DIR))
         from lib.lockfile import load_lockfile
 
         lockfile = tmp_path / "nonexistent.lock"
         data = load_lockfile(lockfile)
-        assert data == {"installed": []}, f"Expected empty data, got {data}"
+        assert data == {
+            "schema_version": 2,
+            "migration": {"prune_ack_required": False},
+            "requested_roots": [],
+            "receipts": [],
+            "prerequisites": [],
+            "installed": [],
+        }
 
     def test_lockfile_load_migrates_agent_base_type(self, tmp_path: Path):
         """Legacy golden-prompt lockfile entries load as agent-base entries."""
@@ -3034,6 +3324,7 @@ class TestLockfile:
             pytest.skip("lockfile.schema.json not found")
 
         import json
+
         with schema_path.open() as f:
             schema = json.load(f)
 
@@ -3279,6 +3570,7 @@ class TestStandardInstallCategoryMirror:
         monkeypatch: pytest.MonkeyPatch, standard_mod, fake_repo: Path
     ) -> None:
         """Patch standard installer git commands to clone from a local fixture."""
+
         def fake_run(cmd, capture_output=False, text=False, cwd=None):
             if cmd[:5] == ["git", "clone", "--quiet", "--depth", "1"]:
                 target = Path(cmd[-1])
@@ -3308,7 +3600,11 @@ class TestStandardInstallCategoryMirror:
             standard_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -3358,7 +3654,11 @@ class TestStandardInstallCategoryMirror:
             standard_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -3409,7 +3709,11 @@ class TestStandardInstallCategoryMirror:
             standard_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -3437,7 +3741,11 @@ class TestStandardInstallCategoryMirror:
             lock_data = yaml.safe_load(f)
 
         entry = next(
-            (e for e in lock_data.get("installed", []) if e.get("name") == "bead-hygiene"),
+            (
+                e
+                for e in lock_data.get("installed", [])
+                if e.get("name") == "bead-hygiene"
+            ),
             None,
         )
         assert entry is not None, "No lockfile entry for bead-hygiene"
@@ -3473,6 +3781,7 @@ class TestStandardInstallCategoryMirror:
 
         # Write lockfile entry with old-style install_target (per-name subdir, trailing slash)
         from lib.lockfile import compute_checksum, compute_directory_hash
+
         checksum = compute_directory_hash(old_install_dir)
         entry = make_entry(
             name="bead-hygiene",
@@ -3480,7 +3789,14 @@ class TestStandardInstallCategoryMirror:
             marketplace="cognovis-core",
             source="https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
             source_commit="abcdef1234567890",
-            cache_path=str(tmp_path / "cache" / "standards" / "cognovis-core" / "bead-hygiene@abcdef1") + "/",
+            cache_path=str(
+                tmp_path
+                / "cache"
+                / "standards"
+                / "cognovis-core"
+                / "bead-hygiene@abcdef1"
+            )
+            + "/",
             install_target=str(old_install_dir) + "/",
             checksum_sha256=checksum,
             checksum_type="directory",
@@ -3492,12 +3808,14 @@ class TestStandardInstallCategoryMirror:
 
         catalog = {
             "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
-            "library": {"standards": [
-                {
-                    "name": "bead-hygiene",
-                    "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
-                }
-            ]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bead-hygiene",
+                        "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                    }
+                ]
+            },
             "marketplaces": [],
         }
 
@@ -3532,7 +3850,11 @@ class TestStandardInstallCategoryMirror:
             standard_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -3576,6 +3898,7 @@ class TestStandardInstallCategoryMirror:
     ):
         """AC6: Source URL without parseable category falls back to old behavior with a warning."""
         import warnings
+
         sys.path.insert(0, str(SCRIPTS_DIR))
         from lib.installers import standard as standard_mod
 
@@ -3589,7 +3912,11 @@ class TestStandardInstallCategoryMirror:
             standard_mod,
             "compute_cache_path",
             lambda primitive_type, marketplace, name, source_commit: (
-                tmp_path / "cache" / primitive_type / marketplace / f"{name}@{source_commit[:7]}"
+                tmp_path
+                / "cache"
+                / primitive_type
+                / marketplace
+                / f"{name}@{source_commit[:7]}"
             ),
         )
 
@@ -3619,16 +3946,20 @@ class TestStandardInstallCategoryMirror:
         # Should fall back to old per-name subdir behavior
         install_target = result["data"]["canonical"]
         expected_old_path = str(project / ".agents" / "standards" / "my-rule")
-        assert install_target.rstrip("/") == expected_old_path or install_target == expected_old_path, (
-            f"Expected fallback to old path {expected_old_path}, got: {install_target}"
-        )
+        assert (
+            install_target.rstrip("/") == expected_old_path
+            or install_target == expected_old_path
+        ), f"Expected fallback to old path {expected_old_path}, got: {install_target}"
 
         # A warning must have been emitted
         warning_messages = [str(w.message) for w in caught]
-        assert any("category" in m.lower() or "fallback" in m.lower() or "warning" in m.lower() or "standard" in m.lower()
-                   for m in warning_messages), (
-            f"Expected a warning about category parsing, got: {warning_messages}"
-        )
+        assert any(
+            "category" in m.lower()
+            or "fallback" in m.lower()
+            or "warning" in m.lower()
+            or "standard" in m.lower()
+            for m in warning_messages
+        ), f"Expected a warning about category parsing, got: {warning_messages}"
 
     def test_audit_no_false_drift_for_relative_paths(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -3669,7 +4000,14 @@ class TestStandardInstallCategoryMirror:
             marketplace="cognovis-core",
             source="https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
             source_commit="abcdef1234567890",
-            cache_path=str(tmp_path / "cache" / "standards" / "cognovis-core" / "bead-hygiene@abcdef1") + "/",
+            cache_path=str(
+                tmp_path
+                / "cache"
+                / "standards"
+                / "cognovis-core"
+                / "bead-hygiene@abcdef1"
+            )
+            + "/",
             install_target=relative_target,
             checksum_sha256=checksum,
             checksum_type="file",
@@ -3681,12 +4019,14 @@ class TestStandardInstallCategoryMirror:
 
         catalog = {
             "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
-            "library": {"standards": [
-                {
-                    "name": "bead-hygiene",
-                    "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
-                }
-            ]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bead-hygiene",
+                        "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                    }
+                ]
+            },
             "marketplaces": [],
         }
 
@@ -3749,12 +4089,14 @@ class TestStandardInstallCategoryMirror:
 
         catalog = {
             "default_dirs": {"standards": [{"default": ".agents/standards/"}]},
-            "library": {"standards": [
-                {
-                    "name": "bead-hygiene",
-                    "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
-                }
-            ]},
+            "library": {
+                "standards": [
+                    {
+                        "name": "bead-hygiene",
+                        "source": "https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md",
+                    }
+                ]
+            },
             "marketplaces": [],
         }
 
@@ -3771,7 +4113,11 @@ class TestStandardInstallCategoryMirror:
             skip_upstream=True,
         )
         bh_entry = next(
-            (e for e in result_no_upstream.get("entries", []) if e.get("name") == "bead-hygiene"),
+            (
+                e
+                for e in result_no_upstream.get("entries", [])
+                if e.get("name") == "bead-hygiene"
+            ),
             None,
         )
         assert bh_entry is not None, "bead-hygiene entry not found in audit result"

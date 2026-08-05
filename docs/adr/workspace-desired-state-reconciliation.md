@@ -16,12 +16,9 @@ related_adrs: ["0002"]
 
 ## Status
 
-Accepted. Implementation is tracked by `CL-r7n6`; the first Cognovis
-marketplace definition is tracked by `clc-tzn5`.
-
-This ADR accepts the target architecture. Until `CL-r7n6` lands, the CLI and
-lockfile implementation remain on the legacy additive model documented in the
-transition section of `docs/lockfile-format.md`.
+Accepted and implemented by `CL-r7n6`; the first Cognovis marketplace
+definition is tracked by `clc-tzn5`. Legacy v1 lockfiles remain readable as
+conservative migration input, while all new writes use the v2 ownership model.
 
 ## Context
 
@@ -117,23 +114,14 @@ roots:
     constraint: ">=1.0.0,<2.0.0"
 ```
 
-The catalog entry supplies the source catalog, catalog identity, and definition
-pin. Every root is a normal typed Library reference and may resolve its own
-transitive `requires:` closure under ADR-0004. A Workspace may reference another
-Workspace in the same scope. A cross-catalog root must declare `catalog`; a
-same-catalog root may omit it only while `(type, name)` resolves unambiguously.
-The resolved canonical catalog identity is always recorded in the lock.
-
-Composition uses the same root shape. For example, a Workspace in another
-catalog can reuse this baseline explicitly:
-
-```yaml
-roots:
-  - type: workspace
-    name: python-cli
-    catalog: cognovis-library-core
-    constraint: ">=1.0.0,<2.0.0"
-```
+The catalog entry supplies the source catalog, canonical catalog identity, and
+definition pin. Every v1 root is a normal artifact reference from that same
+catalog and may resolve its own transitive `requires:` closure under ADR-0004.
+Workspace roots and per-root `catalog` qualifiers are rejected by schema v1.
+Cross-catalog composition remains possible at the scope boundary by directly
+registering one Workspace from each configured catalog. Nested Workspaces and
+cross-catalog manifest roots are deferred until real portfolio evidence requires
+their additional lifecycle semantics.
 
 The manifest does not inline routing policy, context-budget schemas, state-owner
 schemas, harness configuration, or duplicated operating instructions. Those
@@ -147,6 +135,22 @@ Workspace definition versions use semantic versioning. The manifest schema and
 its independently versioned runtime contracts may evolve later, but unsupported
 schema versions fail before dependency installation.
 
+Publication applies enforceable admission rules rather than treating every
+repeated directory name as a Workspace:
+
+- a manifest has 2-10 independently meaningful direct roots;
+- every root validates and installs standalone with its own `requires:` closure;
+- a project closure contains at most 30 materialized receipts;
+- the same selection is evidenced in at least two committed consumer locks;
+- exactly one marketplace catalog is named as steward; and
+- a consumer asking for "all except one member" is evidence that the Workspace
+  is too coarse and must be split, not a reason to add exclusions or overrides.
+
+The global lobby is stricter: at most five direct roots, at most 15 receipts,
+no domain or customer content, and deterministically calculable standing context
+within the configured one-percent budget. Unknown context cost blocks lobby
+publication rather than counting as zero.
+
 ### Decision 3a: Composition is many-to-many and unordered
 
 A selected lock scope may register zero or more Workspace requested roots. A
@@ -155,14 +159,13 @@ is the set union of:
 
 - direct artifact roots;
 - directly registered Workspace roots;
-- nested Workspace roots; and
 - all transitive primitive dependencies.
 
-A nested Workspace is a transitive graph node, not an implicitly registered
-direct root. It remains relevant while any direct root reaches it. Composition
-has no declaration order, override layer, or last-writer-wins behavior. Cycles,
-incompatible constraints, ambiguous catalog references, target collisions, and
-scope mismatches fail before mutation.
+Schema v1 has no nested Workspace graph. Composition has no declaration order,
+override layer, exclusion layer, or last-writer-wins behavior. Incompatible
+constraints, ambiguous catalog references, target collisions, and scope
+mismatches fail before mutation with both roots, constraints, canonical catalog
+identities, and stewards named in the diagnostic.
 
 This permits deliberate orthogonal composition. For example,
 `fhir-management` can register both `fhir-ig-authoring` and `python-cli`, while
@@ -185,11 +188,13 @@ declarations fail before mutation.
 
 Typed dependencies whose primitive contract is intrinsically global, including
 `mcp:`, are global prerequisite assertions when reached from a project root.
-They never create a project ownership edge or a project receipt. The resolver
-checks the global lock for the required identity and compatible version before
-any project mutation; absence or incompatibility is a fail-closed status finding
-with the exact global install command. The same dependency reached from a global
-root is a normal owned global receipt.
+They never create a project ownership edge or an artifact receipt. The project
+lock records them as non-owning prerequisite assertions with the requesting root,
+identity, and constraint so status and CI can reproduce the requirement. The
+resolver checks the global lock for the required identity and compatible version
+before any project mutation; absence or incompatibility is a fail-closed status
+finding with the exact global install command. The same dependency reached from
+a global root is a normal owned global receipt.
 
 This makes global reconciliation safe without a cross-project registry: every
 Library-owned global direct root and global Workspace root lives in the single
@@ -237,6 +242,13 @@ receipts:
         link_target: ../../.agents/skills/python-dev
     owners_cache:
       - workspace:python-cli
+
+prerequisites:
+  - id: mcp:example-server
+    scope: global
+    constraint: ">=1.0.0,<2.0.0"
+    requested_by:
+      - workspace:python-cli
 ```
 
 The exact field schema is owned by `docs/schema/lockfile.schema.json`. The
@@ -268,44 +280,77 @@ Every legacy `installed:` entry is migrated conservatively:
 4. set `migration.prune_ack_required: true`.
 
 Migration never infers that a legacy install belongs to a Workspace. A verifying
-reinstall may record per-file digests and clear the prune block. The user may
-later remove the direct root explicitly after seeing the resulting plan.
+reinstall through `workspace sync --verify-receipts` records per-file digests and
+clears the prune block. After registering a Workspace, the user can transfer
+intent without deleting files through a plan-and-apply direct-root demotion:
+
+```text
+library workspace adopt <catalog>:<workspace> --from-direct <type>:<name> --scope <scope>
+library workspace adopt <catalog>:<workspace> --from-direct --all-reachable --scope <scope>
+```
+
+The first form demotes one reachable direct root; the second demotes every direct
+artifact root freshly reachable from the Workspace. Both preview by default and
+require `--apply --acknowledge-plan <digest>` to change the lock. Their plans can
+remove requested-root records only; they never delete or rewrite targets.
 
 This deliberately retains too much rather than deleting a historical manual or
 direct install.
 
 The migration guard blocks only pruning; additive `workspace use` and ordinary
 sync remain available. The first `workspace sync --prune` is always plan-only
-and emits a digest of the complete selected-scope plan. The guard clears only
-when a later `--prune --apply --acknowledge-plan <digest>` supplies that exact
-unchanged digest. A missing or stale digest fails closed.
+and emits a digest of the exact prune set. The guard clears only when a later
+`--prune --apply --acknowledge-plan <digest>` supplies that unchanged digest.
+Additive catalog changes do not invalidate the handshake unless they change
+reachability or a candidate deletion. A missing or stale digest fails closed.
 
 ### Decision 7: The Workspace command surface is explicit about deletion
 
 The v1 CLI surface is:
 
 ```text
-library workspace use <name> [--scope project|global]
-library workspace status [<name>|--all] [--scope project|global]
-library workspace sync [<name>|--all] [--scope project|global]
-library workspace sync [<name>|--all] --prune --apply [--scope project|global]
-library workspace sync [<name>|--all] --prune --apply --acknowledge-plan <digest> [--scope project|global]
-library workspace adopt <workspace> <type>:<name> --definition-commit <pin> [--scope project|global]
-library workspace remove <name> [--scope project|global]
+library workspace list [--scope project|global] [--json]
+library workspace show <catalog>:<name> [--scope project|global] [--json]
+library workspace validate <manifest-or-catalog-reference> [--json]
+library workspace use <catalog>:<name> --scope project|global [--dry-run] [--replace-with-catalog-content] [--json]
+library workspace status [<catalog>:<name>|--all] --scope project|global [--json]
+library workspace explain <type>:<name> --scope project|global [--json]
+library workspace sync [<catalog>:<name>|--all] --scope project|global [--verify-receipts] [--json]
+library workspace sync [<catalog>:<name>|--all] --prune [--apply] --scope project|global [--json]
+library workspace sync [<catalog>:<name>|--all] --prune --apply --acknowledge-plan <digest> --scope project|global [--json]
+library workspace adopt <catalog>:<workspace> <type>:<name> --definition-commit <pin> --scope project|global [--json]
+library workspace adopt <catalog>:<workspace> --from-direct [<type>:<name>|--all-reachable] --scope project|global [--apply --acknowledge-plan <digest>] [--json]
+library workspace remove <catalog>:<name> --scope project|global [--json]
 ```
 
 Semantics:
 
+- `list`, `show`, and `validate` provide catalog discovery, resolved closure
+  preview, and the same validation entrypoint used by marketplace CI.
+- Operator references use `<catalog>:<name>`. A bare name is accepted only when
+  exactly one configured catalog declares it; otherwise the command fails with
+  the candidate list. The configured catalog registry is the only authority that
+  maps an operator nickname to a canonical catalog URL. Locks record both the
+  supplied display name and canonical identity; resolution and pruning use only
+  the canonical identity.
 - `use` idempotently registers the Workspace root and applies additions and
-  updates. It never prunes.
+  updates. It never prunes. `--dry-run` plans an unregistered Workspace without
+  changing requested roots or targets and emits a machine-readable collision
+  report. A consented `--replace-with-catalog-content` apply option is available
+  only when provenance proves the target is Library-authored content from the
+  selected catalog; it cannot replace project-authored or externally owned data.
 - `status` is read-only. It reports additions, updates, drift, foreign collisions,
   missing global prerequisites, adoption candidates, constraint conflicts, and
   prune candidates. With several Workspaces it distinguishes exclusive
-  contribution, shared receipts, and nested Workspace provenance. Exit 0 means
-  converged, exit 2 means the plan has changes or protected findings, and exit 1
-  means the status operation itself failed.
+  contribution and shared receipts. Exit 0 means converged, exit 2 means
+  convergent changes are pending, exit 3 means a protected or blocked finding
+  requires a decision, and exit 1 means the operation itself failed.
+- `explain` shows every current direct root and dependency path that reaches one
+  receipt, plus its locked catalog identity and protection state.
 - `sync` refreshes additions and updates but remains non-pruning by default. It
   always prints the plan and provenance reason for each action.
+- `sync --verify-receipts` rematerializes or re-hashes catalog-pinned content and
+  is the named operation that can clear a migrated `verified: false` state.
 - `sync --prune` without `--apply` is a read-only prune preview. Physical
   deletion requires both `--prune` and `--apply`. A prune plan explains which
   root or catalog edge disappeared and why the receipt is now ownerless.
@@ -314,10 +359,13 @@ Semantics:
   current resolved pin; one catalog artifact and every expected target must
   match exactly before an adopted receipt is written. Adoption never creates a
   direct root.
+- `adopt --from-direct` is a separate ownership-transfer mode. It removes one or
+  all freshly Workspace-reachable direct artifact roots from requested intent,
+  preserves every receipt through Workspace reachability, and never touches the
+  filesystem.
 - `remove` unregisters a directly requested Workspace root and prints the
-  resulting plan. A nested Workspace cannot be removed through an upstream
-  owner's back door; its owner definition must change or it must also be a direct
-  root. Removal does not delete physical targets. It prints the exact follow-up command:
+  resulting plan. Removal does not delete physical targets. It prints the exact
+  follow-up command:
   `library workspace sync --all --prune --apply --scope <scope>`.
 - The Workspace selector limits which Workspace definitions receive additions
   and updates. The prune set is always computed from the entire freshly resolved
@@ -330,6 +378,10 @@ The existing `library sync` and primitive-specific sync commands remain
 conservative and non-pruning. The shared word "sync" means "reconcile toward the
 selected source" in both cases; only the Workspace subcommand accepts the
 explicit `--prune --apply` capability.
+
+Every command supports stable JSON output. Scope may be inferred only when
+exactly one target lock is possible; when both a project and global lock are
+plausible, omission fails and asks for `--scope`.
 
 ### Decision 8: Pruning is provenance-bound and fail-closed
 
@@ -359,6 +411,13 @@ Before planning, the reconciler builds a protected-path set from configured
 Library exclusions and read-only inventories supplied by supported manager
 adapters such as chezmoi. If an installed manager cannot be inventoried, pruning
 is disabled for the affected scope rather than assuming non-overlap.
+
+The platform owns a versioned manager-inventory adapter contract. The reference
+chezmoi adapter reports canonical target paths and manager identity without
+granting Library ownership. Bootstrap, `project_tooling`, and the consumer
+updater provide the same read-only inventory shape during their cutover. An
+installed supported manager without a working adapter is a visible blocked
+status, not a silently disabled prune mode.
 
 An existing unowned path is a collision and blocks installation by default.
 Adoption uses the Decision 7 command, one unambiguous pinned catalog version, and
@@ -417,9 +476,10 @@ semantics:
 `workspace status` groups the closure by these load semantics. For the global
 lobby it also reports the number of direct roots, materialized receipts, and any
 deterministically calculable standing-context estimate. Unknown cost is reported
-as unknown, never as zero. Budget policy remains a separately versioned Standard
-or runtime contract referenced by the Workspace rather than an inline manifest
-schema.
+as unknown, never as zero. A lobby plan blocks above five direct roots, 15
+receipts, or the configured one-percent standing-context budget. Budget policy
+remains a separately versioned Standard or runtime contract referenced by the
+Workspace rather than an inline manifest schema.
 
 This separation lets the lobby stay auditable and small without confusing
 "installed globally" with "fully loaded into every prompt."
@@ -432,6 +492,8 @@ The Library platform repository owns:
 - Workspace and lockfile JSON Schemas;
 - catalog parsing and typed root resolution;
 - CLI commands, planning, reconciliation, migration, and recovery;
+- catalog discovery and canonical catalog-identity resolution;
+- the external-manager inventory adapter contract and chezmoi reference adapter;
 - isolated fixtures and regression tests; and
 - published schema-version compatibility.
 
@@ -440,7 +502,9 @@ Marketplace repositories own:
 - Workspace manifests as catalog content;
 - the selection and versioning of reusable primitive roots;
 - documentation of the environment they provide; and
-- CI validation against a pinned or published platform schema.
+- CI validation against a pinned or published platform schema;
+- evidence that each Workspace root installs standalone and that the manifest
+  meets reuse, size, closure, and lobby admission limits.
 
 Platform tests use local fixtures and never read a live sibling marketplace
 checkout. Marketplace tests never assume an unversioned sibling platform
@@ -467,10 +531,21 @@ transitional:
   database configuration and primer behavior move to Beads; repository policy
   patches remain project-owned.
 
-These legacy managers are protected external owners during migration. A
-Workspace may neither adopt nor prune one of their targets. Removing the legacy
-mechanisms requires separately verified equivalence and receipts; ADR-0010 does
-not reinterpret their historical writes as Library ownership.
+These legacy managers are protected external owners during migration. Before a
+repository cuts over, it records every distributed target with one disposition:
+becomes a primitive, becomes project-owned and frozen with provenance, or is
+explicitly retired. The legacy writer is disabled for that repository in the
+same change that registers its replacement roots. A Workspace may neither adopt
+nor prune a still-managed target. Removing a legacy mechanism requires verified
+equivalence, receipts, and no remaining consumer inventory; ADR-0010 does not
+reinterpret historical writes as Library ownership.
+
+The authoritative per-target dispositions and writer-disable gates are recorded
+in [Workspace legacy-writer inventory](../migration/workspace-legacy-inventory.md).
+
+The irreducible bootstrap writes verified adopted receipts for every Library
+path it materializes, including the engine and conversational entrypoint. It is
+irreducible in install order, not exempt from ownership accounting.
 
 Workspace does not absorb arbitrary file-copy, JSON-patch, routing-profile,
 secret, or customer-data schemas. A capability that cannot be represented by a
@@ -497,12 +572,15 @@ real primitive or dependency remains with its owning project or tool.
 
 - Lockfile v2 is a breaking schema migration and requires journal and lock
   machinery.
-- Legacy installations are intentionally sticky until verified.
+- Legacy installations require an explicit but bulk-capable verification and
+  direct-root demotion runway.
 - Safe prune requires complete catalog availability and cannot proceed offline.
 - Workspace introduces a metadata-only primitive category with no harness
   projection, which must be explained explicitly in primitive documentation.
 - Global desired state is ambient user tooling, not a reproducible project
   dependency.
+- Schema v1 deliberately omits nested Workspaces and cross-catalog manifest
+  roots; consumers compose catalogs by registering several direct Workspaces.
 
 ## Alternatives Considered
 
@@ -540,6 +618,14 @@ canonical primitives that already own those contracts.
 Rejected. A global lobby is a legitimate desired-state scope once all global
 Library roots share the universal global lock. Cross-scope edges remain forbidden.
 
+### Ship nested Workspaces and cross-catalog manifest roots in v1
+
+Deferred. The admitted v1 portfolio composes capabilities through several direct
+Workspace registrations and does not require either feature. Deferral removes
+cycle handling, hidden removal semantics, and nickname-to-canonical-catalog
+resolution from the first deletion-capable release. A later ADR may add them when
+at least two real consumers require the same nested or cross-catalog lifecycle.
+
 ## Implementation and release gates
 
 `CL-r7n6` must land the schema, migration, resolver, CLI, recovery protocol,
@@ -547,13 +633,16 @@ tests, and documentation as one coherent platform capability. The capability is
 not release-ready until fault-injection tests cover incomplete catalogs,
 constraint conflicts, concurrent sync, addition failure, lock-write failure,
 crash between lock commit and delete, drift, external-manager overlap, exact
-adoption, unrecorded nested directory content, missing global prerequisites,
-zero-Workspace scope pruning, and multi-owner survival. Contract tests must also
-cover several direct Workspaces in one scope, same-scope nested Workspaces,
-qualified cross-catalog roots, cycle rejection, contribution and overlap status,
-and the absence of Package as a root type. Migration tests must prove that
-bootstrap, consumer-updater, and `project_tooling` targets remain protected until
-their separately owned replacement is verified.
+adoption, consented Library-content replacement, direct-root demotion, an
+unrecorded nested directory, symlink-to-drifted-directory behavior, missing global
+prerequisites, zero-Workspace scope pruning, and multi-owner survival. Contract
+tests must also cover catalog discovery, qualified identity, bare-name ambiguity,
+several directly registered Workspaces, contribution and overlap status, size and
+lobby budgets, standalone root closure, and rejection of Package, nested
+Workspace, and cross-catalog manifest roots. Migration tests must prove that
+bootstrap, consumer-updater, and `project_tooling` targets remain inventoried and
+protected until their per-file replacement is verified and the legacy writer is
+disabled.
 
 `clc-tzn5` then publishes the first `python-cli` Workspace from the Cognovis
 marketplace and validates it against the supported schema without a live sibling

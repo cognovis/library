@@ -145,6 +145,7 @@ sources:
         - agent_bases
         - workflows
         - runtime_configs
+        - workspaces
       scope:
         topics:
           - team
