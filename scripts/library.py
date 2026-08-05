@@ -2807,6 +2807,14 @@ def _missing_sync_dependencies(
                 continue
             seen.add(dependency)
             dependency_primitive, dependency_name = dependency
+            dependency_entry = lookup_entry(
+                catalog,
+                dependency_primitive,
+                dependency_name,
+                fuzzy=False,
+            )
+            if scope == "project" and dependency_entry.get("default_scope") == "global":
+                continue
             if not is_already_installed(
                 dependency_name,
                 repo_root,

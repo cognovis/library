@@ -92,7 +92,10 @@ def test_project_lock_save_serializes_project_targets_relative_to_lock_root(
             "scope": "project",
             "cache_path": str(cache),
             "install_target": f"{install_target}/",
-            "bridge_symlinks": [f"{bridge} -> {cache}"],
+            "bridge_symlinks": [
+                f"{bridge} -> {install_target}",
+                f"{bridge}-cache -> {cache}",
+            ],
         }
     )
     lock = {
@@ -136,7 +139,8 @@ def test_project_lock_save_serializes_project_targets_relative_to_lock_root(
     assert receipt["targets"][0]["path"] == ".agents/skills/python-dev/SKILL.md"
     assert receipt["targets"][1]["path"] == ".claude/skills/python-dev"
     assert receipt["bridge_symlinks"] == [
-        f".claude/skills/python-dev -> {cache}"
+        ".claude/skills/python-dev -> .agents/skills/python-dev",
+        f".claude/skills/python-dev-cache -> {cache}",
     ]
     assert receipt["cache_path"] == str(cache)
     assert lock["receipts"][0]["install_target"] == f"{install_target}/"

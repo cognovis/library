@@ -462,7 +462,10 @@ def _portable_project_lock(data: dict[str, Any], project_root: Path) -> dict[str
                     bridges.append(str(bridge))
                     continue
                 portable_path = _project_relative_path(raw_path.strip(), project_root)
-                bridges.append(f"{portable_path} -> {raw_target.strip()}")
+                portable_target = _project_relative_path(
+                    raw_target.strip(), project_root
+                )
+                bridges.append(f"{portable_path} -> {portable_target}")
             if "bridge_symlinks" in entry:
                 entry["bridge_symlinks"] = bridges
             for target in entry.get("targets") or []:

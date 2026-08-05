@@ -11,6 +11,7 @@ For Claude Code and Cursor: adds bridge symlinks to Layer C.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -232,11 +233,23 @@ def install_skill(
         bridge_symlink_strs: list[str] = []
         if bridge_dir:
             bridge_target = canonical_dir if install_mode == "vendor" else cache_path
-            create_harness_symlink(bridge_dir, bridge_target)
-            bridge_symlink_strs.append(f"{bridge_dir} -> {bridge_target}")
+            persisted_target = (
+                Path(os.path.relpath(bridge_target, start=bridge_dir.parent))
+                if scope == "project" and install_mode == "vendor"
+                else bridge_target
+            )
+            create_harness_symlink(bridge_dir, persisted_target)
+            bridge_symlink_strs.append(f"{bridge_dir} -> {persisted_target}")
         if cursor_bridge_dir:
-            create_harness_symlink(cursor_bridge_dir, canonical_dir)
-            bridge_symlink_strs.append(f"{cursor_bridge_dir} -> {canonical_dir}")
+            persisted_target = (
+                Path(os.path.relpath(canonical_dir, start=cursor_bridge_dir.parent))
+                if scope == "project"
+                else canonical_dir
+            )
+            create_harness_symlink(cursor_bridge_dir, persisted_target)
+            bridge_symlink_strs.append(
+                f"{cursor_bridge_dir} -> {persisted_target}"
+            )
 
         # 8. Write lockfile — hash local installed content (all files matter)
         try:

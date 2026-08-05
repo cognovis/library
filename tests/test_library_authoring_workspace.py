@@ -44,3 +44,35 @@ def test_library_authoring_roots_resolve_standalone() -> None:
         ("standard", "english-only"),
         ("standard", "no-emoji"),
     }
+
+
+def test_platform_lock_registers_python_and_authoring_workspaces() -> None:
+    lock = yaml.safe_load((REPO_ROOT / ".library.lock").read_text())
+
+    assert {(root["type"], root["name"]) for root in lock["requested_roots"]} == {
+        ("workspace", "library-authoring"),
+        ("workspace", "python-cli"),
+    }
+    assert {receipt["id"] for receipt in lock["receipts"]} == {
+        "skill:agent-forge",
+        "skill:hook-forge",
+        "skill:python-dev",
+        "skill:python-test",
+        "skill:script-forge",
+        "skill:skill-forge",
+        "skill:standard-forge",
+        "standard:agentic-primitives",
+        "standard:primitive-placement",
+        "standard:python-cli-patterns",
+    }
+    for receipt in lock["receipts"]:
+        assert not Path(receipt["install_target"]).is_absolute()
+        assert all(
+            not Path(target["path"]).is_absolute()
+            for target in receipt["targets"]
+        )
+        for bridge in receipt.get("bridge_symlinks") or []:
+            bridge_path, separator, bridge_target = bridge.partition(" -> ")
+            assert separator
+            assert not Path(bridge_path).is_absolute()
+            assert not Path(bridge_target).is_absolute()

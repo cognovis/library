@@ -2915,6 +2915,7 @@ class TestSkillRealInstall:
 
         bridge = project_dir / ".claude" / "skills" / "test-skill"
         assert bridge.is_symlink()
+        assert bridge.readlink() == Path("../../.agents/skills/test-skill")
         target = bridge.resolve()
         canonical = (project_dir / ".agents" / "skills" / "test-skill").resolve()
         assert target == canonical

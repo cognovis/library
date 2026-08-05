@@ -112,7 +112,17 @@ def _write_fixture(project: Path) -> tuple[Path, Path]:
     catalog = {
         "catalog_identity": "https://github.com/example/platform",
         "default_dirs": {
-            "skills": [{"default": ".agents/skills/", "global": "~/.agents/skills/"}]
+            "skills": [
+                {"default": ".agents/skills/", "global": "~/.agents/skills/"},
+                {
+                    "claude_bridge": ".claude/skills/",
+                    "global_claude_bridge": "~/.claude/skills/",
+                },
+                {
+                    "cursor_bridge": ".cursor/skills/",
+                    "global_cursor_bridge": "~/.cursor/skills/",
+                },
+            ]
         },
         "sources": {
             "catalogs": [
@@ -220,7 +230,7 @@ def test_workspace_use_registers_one_root_and_materializes_members(
         "--scope",
         "project",
         "--harness",
-        "codex",
+        "all",
         "--json",
     )
 
@@ -757,7 +767,7 @@ def test_workspace_status_survives_project_relocation(tmp_path: Path) -> None:
         "--scope",
         "project",
         "--harness",
-        "codex",
+        "all",
         "--json",
     )
     assert used.returncode == 0, used.stderr or used.stdout
@@ -776,6 +786,54 @@ def test_workspace_status_survives_project_relocation(tmp_path: Path) -> None:
 
     assert status.returncode == 0, status.stderr or status.stdout
     assert json.loads(status.stdout)["status"] == "converged"
+    bridge = relocated / ".claude" / "skills" / "python-dev"
+    assert bridge.readlink() == Path("../../.agents/skills/python-dev")
+    assert bridge.resolve() == relocated / ".agents" / "skills" / "python-dev"
+
+
+def test_top_level_force_sync_preserves_workspace_requested_intent(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "all",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+
+    synced = _run(
+        project,
+        home,
+        "sync",
+        "--force",
+        "--scope",
+        "project",
+        "--project",
+        str(project),
+        "--harness",
+        "all",
+        "--json",
+    )
+
+    assert synced.returncode == 0, synced.stderr or synced.stdout
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    assert [root["type"] for root in lock["requested_roots"]] == ["workspace"]
+    workspace_id = lock["requested_roots"][0]["id"]
+    assert all(
+        receipt["owners_cache"] == [workspace_id] for receipt in lock["receipts"]
+    )
 
 
 def test_verify_receipts_reinstalls_migrated_direct_roots_without_a_workspace(

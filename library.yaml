@@ -4134,6 +4134,7 @@ library:
         library:
           source_catalog: library-platform
           inventory: manual
+          source_commit: c169a8e5cde0dcd1668967593a902f1cc1bd3259
     - name: python-cli
       description: Shared development and testing baseline for Python CLI repositories.
       source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml
