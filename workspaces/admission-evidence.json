@@ -10,7 +10,7 @@
       {
         "repository": "cognovis/cognovis-pi",
         "lock_path": ".library.lock",
-        "commit": "2fcc0e8c386d742fb9169fbac9870a8ba6bbb8d8",
+        "commit": "991b2a6896330abec8e52636ea6a0baab23ec266",
         "schema_version": 2
       }
     ]
