@@ -3,15 +3,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import yaml
 import pytest
-
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from lib.lockfile import load_lockfile, save_lockfile
 from lib.errors import LockfileError
+from lib.lockfile import load_lockfile, save_lockfile
 
 
 def _legacy_entry() -> dict:
@@ -46,6 +45,22 @@ def test_v1_load_migrates_to_v2_without_deletion_authority(tmp_path: Path) -> No
     assert lock["receipts"][0]["verified"] is False
     assert lock["receipts"][0]["prune_blocked_reason"] == "legacy-unverified"
     assert lock["installed"][0]["name"] == "python-dev"
+
+
+def test_project_lock_migration_keeps_absolute_install_targets_project_scoped(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".library.lock"
+    entry = _legacy_entry()
+    entry["install_target"] = str(
+        tmp_path / ".agents" / "skills" / "python-dev"
+    )
+    path.write_text(yaml.safe_dump({"installed": [entry]}))
+
+    lock = load_lockfile(path)
+
+    assert lock["requested_roots"][0]["scope"] == "project"
+    assert lock["receipts"][0]["scope"] == "project"
 
 
 def test_v2_save_keeps_installed_as_derived_compatibility_projection(

@@ -140,16 +140,17 @@ repeated directory name as a Workspace:
 
 - a manifest has 2-10 independently meaningful direct roots;
 - every root validates and installs standalone with its own `requires:` closure;
-- a project closure contains at most 30 materialized receipts;
+- a project closure contains at most the configured receipt budget (30 by default);
 - the same selection is evidenced in at least two committed consumer locks;
 - exactly one marketplace catalog is named as steward; and
 - a consumer asking for "all except one member" is evidence that the Workspace
   is too coarse and must be split, not a reason to add exclusions or overrides.
 
-The global lobby is stricter: at most five direct roots, at most 15 receipts,
-no domain or customer content, and deterministically calculable standing context
-within the configured one-percent budget. Unknown context cost blocks lobby
-publication rather than counting as zero.
+The global lobby is stricter: by default at most five direct roots, at most 15
+receipts, no domain or customer content, and deterministically calculable
+standing context within one percent. Top-level `workspace_policy` may lower
+these limits for a deployment. Unknown context cost blocks lobby publication
+rather than counting as zero.
 
 ### Decision 3a: Composition is many-to-many and unordered
 
@@ -282,8 +283,10 @@ Every legacy `installed:` entry is migrated conservatively:
 
 Migration never infers that a legacy install belongs to a Workspace. A verifying
 reinstall through `workspace sync --verify-receipts` records per-file digests and
-clears the prune block. After registering a Workspace, the user can transfer
-intent without deleting files through a plan-and-apply direct-root demotion:
+clears the per-receipt prune block. `migration.prune_ack_required` clears only
+after the selected scope has no unverified receipt. After registering a
+Workspace, the user can transfer intent without deleting files through a
+plan-and-apply direct-root demotion:
 
 ```text
 library workspace adopt <catalog>:<workspace> --from-direct <type>:<name> --scope <scope>
@@ -477,10 +480,10 @@ semantics:
 `workspace status` groups the closure by these load semantics. For the global
 lobby it also reports the number of direct roots, materialized receipts, and any
 deterministically calculable standing-context estimate. Unknown cost is reported
-as unknown, never as zero. A lobby plan blocks above five direct roots, 15
-receipts, or the configured one-percent standing-context budget. Budget policy
-remains a separately versioned Standard or runtime contract referenced by the
-Workspace rather than an inline manifest schema.
+as unknown, never as zero. A lobby plan blocks above the top-level
+`workspace_policy` budgets, whose defaults are five direct roots, 15 receipts,
+and one percent standing context. These are Library platform runtime policy, not
+inline Workspace manifest fields.
 
 This separation lets the lobby stay auditable and small without confusing
 "installed globally" with "fully loaded into every prompt."

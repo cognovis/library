@@ -42,6 +42,7 @@ class ChezmoiInventoryAdapter:
             ],
             capture_output=True,
             text=True,
+            check=False,
             timeout=20,
         )
         if result.returncode != 0:
@@ -62,19 +63,26 @@ class ProjectToolingInventoryAdapter:
 
     name = "project-tooling"
 
-    def __init__(self, catalog: dict, project_root: Path) -> None:
+    def __init__(
+        self, catalog: dict, project_root: Path, *, profile: str = "consumer"
+    ) -> None:
         self.catalog = catalog
         self.project_root = project_root.resolve()
+        self.profile = profile
 
     def managed_paths(self) -> set[Path]:
         paths: set[Path] = set()
         for entry in self.catalog.get("project_tooling") or []:
+            profiles = entry.get("profiles") or []
+            if profiles and self.profile not in profiles:
+                continue
             if entry.get("target_kind") == "git_hook":
                 result = subprocess.run(
                     ["git", "rev-parse", "--git-path", "hooks"],
                     cwd=self.project_root,
                     capture_output=True,
                     text=True,
+                    check=False,
                     timeout=10,
                 )
                 hook_name = entry.get("hook_name")

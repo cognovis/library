@@ -13,11 +13,11 @@ The Library uses two explicit graph relationships instead:
 | Need | Use |
 |------|-----|
 | One primitive cannot work without another | Declare the dependency in the entrypoint primitive's `requires:` metadata. The complete closure installs transactionally. |
-| Independently useful capabilities should form a reusable desired-state baseline | Create a [Workspace](workspace.md). Several Workspaces may be registered in one scope and may reference each other. |
+| Independently useful capabilities should form a reusable desired-state baseline | Create a [Workspace](workspace.md). Several Workspaces may be registered side by side in one scope; Workspace manifests cannot reference or nest other Workspaces in v1. |
 
 Examples:
 
-- A Skill that requires a companion Hook declares `hook:<name>` in `requires:`.
+- A Skill that requires a companion Guardrail declares `guardrail:<name>` in `requires:`.
 - A Bead execution entrypoint declares its required Agents, Scripts, Standards,
   and runtime profiles through its dependency graph.
 - `python-cli` groups `python-dev` and `python-test` as independently meaningful

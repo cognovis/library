@@ -135,7 +135,17 @@
         "type": {
           "description": "Primitive type of the installed item.",
           "type": "string",
-          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "mcp"]
+          "enum": ["skill", "agent", "prompt", "script", "guardrail", "standard", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "mcp", "runtime-config"]
+        },
+        "scope": {
+          "description": "Explicit installation scope. Absolute project targets do not imply global scope.",
+          "type": "string",
+          "enum": ["project", "global"]
+        },
+        "version": {
+          "description": "Catalog artifact version resolved at install time when declared.",
+          "type": "string",
+          "minLength": 1
         },
         "catalog_identity": {
           "description": "Stable identity of the library catalog that produced this install, normally its canonical repository URL. Optional only for legacy entries created before catalog provenance was recorded.",

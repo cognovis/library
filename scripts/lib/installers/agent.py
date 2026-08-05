@@ -322,6 +322,8 @@ def install_agent(
         install_mode="vendor",
         license_id=entry.get("license", "unknown"),
         bridge_symlinks=bridge_symlinks,
+        scope=scope,
+        version=str(entry.get("version")) if entry.get("version") is not None else None,
     )
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
     lock_data = load_lockfile(lockfile_path)

@@ -47,6 +47,13 @@ default_dirs:
     - default: .agents/pi/profiles/
   just_modules:
     - default: .agents/just/
+workspace_policy:
+  global:
+    max_roots: 5
+    max_receipts: 15
+    max_standing_context_fraction: 0.01
+  project:
+    max_receipts: 30
 tag_vocabulary:
   - tag: judge-layer
     description: Artifacts that ship as part of the judge-layer family.
@@ -4117,7 +4124,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
-          source_commit: 7372336f5804142cb76ba9b9585439f20a4d6b81
+          source_commit: 2cdbfe648cbcc774daa30c88e03779afbb4abcfa
 project_tooling:
   - name: beads-prime
     description: bd workflow primer — auto-synced from cognovis-library at SessionStart. bd prime emits its content. Fleet policy, not per-project customization.

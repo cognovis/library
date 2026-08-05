@@ -242,6 +242,29 @@
       },
       "default": []
     },
+    "workspace_policy": {
+      "description": "Selected-scope safety budgets for Workspace resolution.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "global": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_roots": {"type": "integer", "minimum": 1, "maximum": 5},
+            "max_receipts": {"type": "integer", "minimum": 1, "maximum": 15},
+            "max_standing_context_fraction": {"type": "number", "minimum": 0, "maximum": 0.01}
+          }
+        },
+        "project": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_receipts": {"type": "integer", "minimum": 1, "maximum": 30}
+          }
+        }
+      }
+    },
     "model_standards": {
       "description": "Deprecated compatibility alias for library.model_standards. New catalog files should use library.model_standards.",
       "type": "array",

@@ -21,7 +21,6 @@ from .errors import EXIT_AMBIGUOUS, LibraryError
 from .lockfile import compute_checksum, root_id
 from .resolver import resolve_requires
 
-
 WORKSPACE_SCHEMA_VERSION = 1
 PROJECT_RECEIPT_LIMIT = 30
 GLOBAL_ROOT_LIMIT = 5
@@ -45,6 +44,7 @@ ARTIFACT_ROOT_TYPES = {
 }
 INTRINSICALLY_GLOBAL_TYPES = {"mcp"}
 SEMVER_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
+ROOT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
 @dataclass
@@ -70,6 +70,39 @@ class WorkspaceClosure:
 
     artifacts: tuple[tuple[str, str], ...]
     prerequisites: tuple[tuple[str, str], ...]
+
+
+def workspace_policy(catalog: dict[str, Any], scope: str) -> dict[str, float | int]:
+    """Return configured Workspace budgets with conservative v1 defaults."""
+    configured = catalog.get("workspace_policy")
+    policy = configured if isinstance(configured, dict) else {}
+    selected = policy.get(scope)
+    values = selected if isinstance(selected, dict) else {}
+    if scope == "global":
+        return {
+            "max_roots": min(
+                GLOBAL_ROOT_LIMIT, int(values.get("max_roots", GLOBAL_ROOT_LIMIT))
+            ),
+            "max_receipts": min(
+                GLOBAL_RECEIPT_LIMIT,
+                int(values.get("max_receipts", GLOBAL_RECEIPT_LIMIT)),
+            ),
+            "max_standing_context_fraction": min(
+                GLOBAL_STANDING_CONTEXT_LIMIT,
+                float(
+                    values.get(
+                        "max_standing_context_fraction",
+                        GLOBAL_STANDING_CONTEXT_LIMIT,
+                    )
+                ),
+            ),
+        }
+    return {
+        "max_receipts": min(
+            PROJECT_RECEIPT_LIMIT,
+            int(values.get("max_receipts", PROJECT_RECEIPT_LIMIT)),
+        )
+    }
 
 
 def workspace_root_id(catalog_identity: str, name: str) -> str:
@@ -133,8 +166,10 @@ def validate_workspace_manifest(manifest: dict[str, Any]) -> None:
             raise LibraryError(
                 f"Workspace v1 root type {primitive!r} is not an artifact primitive"
             )
-        if not isinstance(member_name, str) or not member_name.strip():
-            raise LibraryError("Workspace root name must be non-empty")
+        if not isinstance(member_name, str) or not ROOT_NAME_PATTERN.fullmatch(
+            member_name
+        ):
+            raise LibraryError("Workspace root name has invalid characters")
         member_id = root_id(str(primitive), member_name)
         if member_id in seen:
             raise LibraryError(f"Workspace contains duplicate root {member_id}")
@@ -272,16 +307,21 @@ def resolve_workspace_closure(
         raise LibraryError("Workspace scope must be project or global")
     validate_workspace_manifest(workspace.entry)
     roots = workspace.entry["roots"]
-    if scope == "global" and len(roots) > GLOBAL_ROOT_LIMIT:
-        raise LibraryError("Global lobby permits at most 5 direct roots")
+    policy = workspace_policy(catalog, scope)
+    if scope == "global" and len(roots) > int(policy["max_roots"]):
+        raise LibraryError(
+            f"Global lobby permits at most {policy['max_roots']} direct roots"
+        )
     if scope == "global":
         fraction = workspace.entry.get("standing_context_fraction")
         if fraction is None:
             raise LibraryError(
                 "Global lobby requires a known standing_context_fraction"
             )
-        if float(fraction) > GLOBAL_STANDING_CONTEXT_LIMIT:
-            raise LibraryError("Global lobby exceeds the 1% standing-context budget")
+        if float(fraction) > float(policy["max_standing_context_fraction"]):
+            raise LibraryError(
+                "Global lobby exceeds the configured standing-context budget"
+            )
 
     ordered_artifacts: list[tuple[str, str]] = []
     prerequisites: list[tuple[str, str]] = []
@@ -339,7 +379,7 @@ def resolve_workspace_closure(
                 ordered_artifacts.append(member)
                 seen_artifacts.add(member)
 
-    limit = GLOBAL_RECEIPT_LIMIT if scope == "global" else PROJECT_RECEIPT_LIMIT
+    limit = int(policy["max_receipts"])
     if len(ordered_artifacts) > limit:
         raise LibraryError(
             f"Workspace closure has {len(ordered_artifacts)} receipts; limit is {limit}"
@@ -453,12 +493,12 @@ def build_workspace_plan(
             or root_id(str(receipt.get("type") or ""), str(receipt.get("name") or ""))
         ): receipt
         for receipt in lock.get("receipts", [])
+        if receipt.get("scope", scope) == scope
     }
     desired_ids = set(owners)
     receipt_ids = set(receipt_by_id)
-    scope_receipt_limit = (
-        GLOBAL_RECEIPT_LIMIT if scope == "global" else PROJECT_RECEIPT_LIMIT
-    )
+    policy = workspace_policy(catalog, scope)
+    scope_receipt_limit = int(policy["max_receipts"])
     if len(desired_ids) > scope_receipt_limit:
         blockers.append(
             f"Selected {scope} closure has {len(desired_ids)} receipts; "
@@ -470,12 +510,31 @@ def build_workspace_plan(
             for root in lock.get("requested_roots", [])
             if root.get("scope", scope) == scope
         ]
-        if len(selected_roots) > GLOBAL_ROOT_LIMIT:
+        if len(selected_roots) > int(policy["max_roots"]):
             blockers.append(
                 f"Global lobby has {len(selected_roots)} requested roots; "
-                f"limit is {GLOBAL_ROOT_LIMIT}"
+                f"limit is {policy['max_roots']}"
             )
     additions = sorted(desired_ids - receipt_ids)
+    updates: list[str] = []
+    for receipt_id in sorted(desired_ids.intersection(receipt_ids)):
+        primitive, _, name = receipt_id.partition(":")
+        receipt = receipt_by_id[receipt_id]
+        candidates = [
+            entry
+            for entry in get_entries(catalog, primitive)
+            if entry.get("name") == name
+        ]
+        catalog_version = next(
+            (
+                str(entry["version"])
+                for entry in candidates
+                if entry.get("version") is not None
+            ),
+            None,
+        )
+        if catalog_version and str(receipt.get("resolved_version") or "") != catalog_version:
+            updates.append(receipt_id)
     prune_candidates: list[dict[str, Any]] = []
     for receipt_id in sorted(receipt_ids - desired_ids):
         receipt = receipt_by_id[receipt_id]
@@ -485,6 +544,8 @@ def build_workspace_plan(
                 "verified": bool(receipt.get("verified", False)),
                 "blocked_reason": receipt.get("prune_blocked_reason"),
                 "targets": receipt.get("targets") or [],
+                "scope": receipt.get("scope", scope),
+                "install_target": receipt.get("install_target"),
             }
         )
     receipts = [
@@ -500,13 +561,14 @@ def build_workspace_plan(
     payload = {
         "scope": scope,
         "additions": additions,
+        "updates": updates,
         "prune_candidates": prune_candidates,
         "blockers": blockers,
     }
     return {
         "scope": scope,
         "additions": additions,
-        "updates": [],
+        "updates": updates,
         "receipts": receipts,
         "prerequisites": [
             {"id": prerequisite_id, "requested_by": sorted(set(root_ids))}
@@ -518,7 +580,12 @@ def build_workspace_plan(
     }
 
 
-def apply_plan_ownership(lock: dict[str, Any], plan: dict[str, Any]) -> None:
+def apply_plan_ownership(
+    lock: dict[str, Any],
+    plan: dict[str, Any],
+    *,
+    prerequisite_statuses: dict[str, str] | None = None,
+) -> None:
     """Refresh explanatory owner caches and prerequisite assertions from a plan."""
     owners_by_id = {
         str(item["id"]): list(item.get("owners") or [])
@@ -532,7 +599,7 @@ def apply_plan_ownership(lock: dict[str, Any], plan: dict[str, Any]) -> None:
             "id": item["id"],
             "kind": "global-root",
             "scope": "global",
-            "status": "ready",
+            "status": (prerequisite_statuses or {}).get(str(item["id"]), "unknown"),
             "requested_by": list(item.get("requested_by") or []),
         }
         for item in plan.get("prerequisites", [])
@@ -546,6 +613,7 @@ def apply_prune_plan(
     acknowledge_digest: str,
     *,
     managed_paths: dict[str, str] | None = None,
+    allowed_roots: list[Path] | None = None,
 ) -> list[str]:
     """Delete only digest-matching, exact, verified and clean receipt targets."""
     prepared = prepare_prune_plan(
@@ -554,9 +622,12 @@ def apply_prune_plan(
         repo_root,
         acknowledge_digest,
         managed_paths=managed_paths,
+        allowed_roots=allowed_roots,
     )
     for item in prepared["targets"]:
         Path(item["path"]).unlink()
+    for directory in prepared["directories"]:
+        Path(directory).rmdir()
     apply_post_prune_lock(lock, set(prepared["candidate_ids"]))
     return [item["path"] for item in prepared["targets"]]
 
@@ -568,19 +639,36 @@ def prepare_prune_plan(
     acknowledge_digest: str,
     *,
     managed_paths: dict[str, str] | None = None,
+    allowed_roots: list[Path] | None = None,
 ) -> dict[str, Any]:
     """Verify a prune plan completely without mutating lock or filesystem."""
     if acknowledge_digest != plan.get("digest"):
         raise LibraryError("Prune plan digest is missing or stale")
     if plan.get("blockers"):
         raise LibraryError("Prune is blocked because root resolution is incomplete")
+    if lock.get("migration", {}).get("prune_ack_required"):
+        raise LibraryError(
+            "Prune is blocked until migrated receipts are verified with "
+            "library workspace sync --verify-receipts"
+        )
     managed_paths = managed_paths or {}
+    selected_roots = [
+        _canonical_delete_path(path.expanduser().absolute())
+        for path in (allowed_roots or [])
+    ]
+    if not selected_roots:
+        raise LibraryError("Prune blocked: no Library-managed roots are configured")
     candidates = plan.get("prune_candidates") or []
     verified_targets: list[dict[str, str]] = []
+    verified_directories: set[str] = set()
     candidate_ids: set[str] = set()
     for candidate in candidates:
         candidate_id = str(candidate.get("id") or "")
         candidate_ids.add(candidate_id)
+        if candidate.get("scope", plan.get("scope")) != plan.get("scope"):
+            raise LibraryError(
+                f"Prune blocked for {candidate_id}: receipt scope mismatch"
+            )
         if not candidate.get("verified"):
             raise LibraryError(
                 f"Prune blocked for {candidate_id}: receipt is unverified"
@@ -592,20 +680,57 @@ def prepare_prune_plan(
         targets = candidate.get("targets") or []
         if not targets:
             raise LibraryError(f"Prune blocked for {candidate_id}: no exact targets")
+        resolved_targets: list[tuple[dict[str, Any], Path]] = []
         for target in targets:
+            raw_path = Path(str(target.get("path") or "")).expanduser()
+            path = raw_path if raw_path.is_absolute() else repo_root / raw_path
+            canonical = _canonical_delete_path(path.absolute())
+            if not any(canonical.is_relative_to(root) for root in selected_roots):
+                raise LibraryError(
+                    f"Prune blocked for {candidate_id}: {canonical} is outside "
+                    "Library-managed roots"
+                )
+            resolved_targets.append((target, canonical))
+
+        inventory_paths = {str(path) for _target, path in resolved_targets}
+        for target, path in resolved_targets:
             kind = str(target.get("kind") or "")
-            if kind not in {"file", "symlink"}:
+            if kind not in {"file", "directory", "symlink"}:
                 raise LibraryError(
                     f"Prune blocked for {candidate_id}: target inventory is not per-file"
                 )
-            raw_path = Path(str(target.get("path") or ""))
-            path = raw_path if raw_path.is_absolute() else repo_root / raw_path
-            path = path.absolute()
             manager = managed_paths.get(str(path))
             if manager:
                 raise LibraryError(
                     f"Prune blocked for {candidate_id}: {path} is managed by {manager}"
                 )
+            if kind == "directory":
+                if not path.is_dir() or path.is_symlink():
+                    raise LibraryError(
+                        f"Prune blocked for {candidate_id}: directory drift at {path}"
+                    )
+                for managed_path, managed_by in managed_paths.items():
+                    managed_child = Path(managed_path).expanduser().absolute()
+                    if _canonical_delete_path(managed_child).is_relative_to(path):
+                        raise LibraryError(
+                            f"Prune blocked for {candidate_id}: {managed_child} is "
+                            f"managed by {managed_by}"
+                        )
+                actual_nested = {
+                    str(_canonical_delete_path(child.absolute()))
+                    for child in path.rglob("*")
+                }
+                recorded_nested = {
+                    recorded
+                    for recorded in inventory_paths
+                    if Path(recorded) != path and Path(recorded).is_relative_to(path)
+                }
+                if actual_nested != recorded_nested:
+                    raise LibraryError(
+                        f"Prune blocked for {candidate_id}: unrecorded nested content at {path}"
+                    )
+                verified_directories.add(str(path))
+                continue
             if kind == "symlink":
                 if not path.is_symlink():
                     raise LibraryError(
@@ -641,7 +766,40 @@ def prepare_prune_plan(
     return {
         "candidate_ids": sorted(candidate_ids),
         "targets": verified_targets,
+        "directories": sorted(
+            verified_directories,
+            key=lambda value: len(Path(value).parts),
+            reverse=True,
+        ),
+        "allowed_roots": [str(path) for path in selected_roots],
     }
+
+
+def _canonical_delete_path(path: Path) -> Path:
+    """Canonicalize a deletion target without following the final symlink."""
+    return path.parent.resolve() / path.name
+
+
+def workspace_allowed_roots(
+    catalog: dict[str, Any], repo_root: Path, scope: str
+) -> list[Path]:
+    """Return every configured Library-owned installation root for one scope."""
+    from .paths import expand_path
+
+    roots: set[Path] = set()
+    for entries in (catalog.get("default_dirs") or {}).values():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for key, raw_value in entry.items():
+                is_global = str(key).startswith("global")
+                if (scope == "global") != is_global or not isinstance(raw_value, str):
+                    continue
+                path = expand_path(raw_value, Path.home(), repo_root)
+                roots.add(_canonical_delete_path(path.expanduser().absolute()))
+    return sorted(roots)
 
 
 def verify_receipt_targets(
@@ -649,6 +807,7 @@ def verify_receipt_targets(
     repo_root: Path,
     *,
     managed_paths: dict[str, str] | None = None,
+    allowed_roots: list[Path] | None = None,
 ) -> list[str]:
     """Verify one receipt's exact targets for adoption without changing them."""
     managed_paths = managed_paths or {}
@@ -656,19 +815,44 @@ def verify_receipt_targets(
     if not targets:
         raise LibraryError(f"Receipt {receipt.get('id')} has no exact targets")
     verified: list[str] = []
+    resolved: list[tuple[dict[str, Any], Path]] = []
+    selected_roots = [
+        _canonical_delete_path(path.expanduser().absolute())
+        for path in (allowed_roots or [])
+    ]
     for target in targets:
+        raw_path = Path(str(target.get("path") or "")).expanduser()
+        path = raw_path if raw_path.is_absolute() else repo_root / raw_path
+        path = _canonical_delete_path(path.absolute())
+        if selected_roots and not any(
+            path.is_relative_to(root) for root in selected_roots
+        ):
+            raise LibraryError(f"Receipt target lies outside Library-managed roots: {path}")
+        resolved.append((target, path))
+    inventory_paths = {str(path) for _target, path in resolved}
+    for target, path in resolved:
         kind = str(target.get("kind") or "")
-        if kind not in {"file", "symlink"}:
+        if kind not in {"file", "directory", "symlink"}:
             raise LibraryError(
                 f"Receipt {receipt.get('id')} target inventory is not per-file"
             )
-        raw_path = Path(str(target.get("path") or ""))
-        path = raw_path if raw_path.is_absolute() else repo_root / raw_path
-        path = path.absolute()
         manager = managed_paths.get(str(path))
         if manager:
             raise LibraryError(f"{path} is managed by {manager}")
-        if kind == "symlink":
+        if kind == "directory":
+            if not path.is_dir() or path.is_symlink():
+                raise LibraryError(f"Receipt target drift at {path}")
+            actual_nested = {
+                str(_canonical_delete_path(child.absolute())) for child in path.rglob("*")
+            }
+            recorded_nested = {
+                recorded
+                for recorded in inventory_paths
+                if Path(recorded) != path and Path(recorded).is_relative_to(path)
+            }
+            if actual_nested != recorded_nested:
+                raise LibraryError(f"Receipt has unrecorded nested content at {path}")
+        elif kind == "symlink":
             if not path.is_symlink() or str(path.readlink()) != str(
                 target.get("link_target") or ""
             ):
@@ -684,6 +868,37 @@ def verify_receipt_targets(
                 raise LibraryError(f"Receipt target drift at {path}")
         verified.append(str(path))
     return verified
+
+
+def inspect_workspace_receipts(
+    lock: dict[str, Any],
+    plan: dict[str, Any],
+    repo_root: Path,
+    *,
+    managed_paths: dict[str, str] | None = None,
+    allowed_roots: list[Path] | None = None,
+) -> list[str]:
+    """Return selected desired-receipt filesystem drift diagnostics."""
+    desired = {
+        str(item.get("id") or "")
+        for item in plan.get("receipts", [])
+        if item.get("owners")
+    }
+    blockers: list[str] = []
+    for receipt in lock.get("receipts", []):
+        receipt_id = str(receipt.get("id") or "")
+        if receipt_id not in desired or not receipt.get("targets"):
+            continue
+        try:
+            verify_receipt_targets(
+                receipt,
+                repo_root,
+                managed_paths=managed_paths,
+                allowed_roots=allowed_roots,
+            )
+        except LibraryError as exc:
+            blockers.append(f"{receipt_id}: {exc}")
+    return blockers
 
 
 def apply_post_prune_lock(lock: dict[str, Any], candidate_ids: set[str]) -> None:
@@ -727,6 +942,29 @@ def clear_workspace_journal(lock_path: Path) -> None:
     workspace_journal_path(lock_path).unlink(missing_ok=True)
 
 
+def workspace_journal_digest(lock_path: Path) -> str | None:
+    """Return the exact digest required to discard an unresolved journal."""
+    path = workspace_journal_path(lock_path)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
+    return _stable_digest(payload)
+
+
+def discard_workspace_journal(lock_path: Path, acknowledge_digest: str) -> str:
+    """Discard one journal only after an exact digest acknowledgement."""
+    digest = workspace_journal_digest(lock_path)
+    if digest is None:
+        raise LibraryError("No Workspace journal exists in the selected scope")
+    if acknowledge_digest != digest:
+        raise LibraryError("Workspace journal digest is missing or stale")
+    clear_workspace_journal(lock_path)
+    return digest
+
+
 def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
     """Resume a committed prune or discard a journal whose lock never committed."""
     path = workspace_journal_path(lock_path)
@@ -753,10 +991,18 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
         return []
 
     deleted: list[str] = []
+    allowed_roots = [Path(value) for value in payload.get("allowed_roots") or []]
     for item in payload.get("targets") or []:
         target = Path(str(item.get("path") or ""))
         if not target.is_absolute():
             target = (repo_root / target).absolute()
+        target = _canonical_delete_path(target)
+        if not allowed_roots or not any(
+            target.is_relative_to(root) for root in allowed_roots
+        ):
+            raise LibraryError(
+                f"Workspace recovery blocked: {target} is outside Library-managed roots"
+            )
         if not (target.exists() or target.is_symlink()):
             continue
         if item.get("kind") == "symlink":
@@ -764,7 +1010,8 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
                 item.get("link_target") or ""
             ):
                 raise LibraryError(
-                    f"Workspace recovery blocked by symlink drift at {target}"
+                    f"Workspace recovery blocked by symlink drift at {target}; "
+                    "run library workspace recover with the exact journal digest"
                 )
         else:
             expected = str(item.get("content_sha256") or "")
@@ -774,10 +1021,27 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
                 or compute_checksum(target) != expected
             ):
                 raise LibraryError(
-                    f"Workspace recovery blocked by content drift at {target}"
+                    f"Workspace recovery blocked by content drift at {target}; "
+                    "run library workspace recover with the exact journal digest"
                 )
         target.unlink()
         deleted.append(str(target))
+    for raw_directory in payload.get("directories") or []:
+        directory = _canonical_delete_path(Path(str(raw_directory)).absolute())
+        if not allowed_roots or not any(
+            directory.is_relative_to(root) for root in allowed_roots
+        ):
+            raise LibraryError(
+                f"Workspace recovery blocked: {directory} is outside Library-managed roots"
+            )
+        if directory.exists():
+            try:
+                directory.rmdir()
+            except OSError as exc:
+                raise LibraryError(
+                    f"Workspace recovery blocked by directory drift at {directory}; "
+                    "run library workspace recover with the exact journal digest"
+                ) from exc
     clear_workspace_journal(lock_path)
     return deleted
 

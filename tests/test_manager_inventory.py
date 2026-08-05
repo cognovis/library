@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
@@ -62,3 +61,26 @@ def test_legacy_project_manager_adapters_report_exact_targets(tmp_path: Path) ->
         str((project / ".gitignore").resolve()): "project-tooling",
         str((project / "scripts/managed.py").resolve()): "consumer-updater",
     }
+
+
+def test_project_tooling_inventory_uses_consumer_profile_by_default(
+    tmp_path: Path,
+) -> None:
+    catalog = {
+        "project_tooling": [
+            {
+                "name": "consumer-file",
+                "target_path": "consumer.md",
+                "profiles": ["consumer"],
+            },
+            {
+                "name": "marketplace-file",
+                "target_path": "marketplace.md",
+                "profiles": ["marketplace"],
+            },
+        ]
+    }
+
+    paths = ProjectToolingInventoryAdapter(catalog, tmp_path).managed_paths()
+
+    assert paths == {(tmp_path / "consumer.md").resolve()}

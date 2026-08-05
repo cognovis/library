@@ -32,6 +32,8 @@ library workspace explain <type>:<name> --scope project|global [--json]
 library workspace sync [<catalog>:<name>|--all] --scope project|global [--verify-receipts] [--json]
 library workspace sync [<catalog>:<name>|--all] --prune [--apply] --scope project|global [--json]
 library workspace sync [<catalog>:<name>|--all] --prune --apply --acknowledge-plan <digest> --scope project|global [--json]
+library workspace recover --scope project|global [--json]
+library workspace recover --scope project|global --discard --acknowledge-plan <journal-digest> [--json]
 library workspace adopt <catalog>:<workspace> <type>:<name> --definition-commit <pin> --scope project|global [--json]
 library workspace adopt <catalog>:<workspace> --from-direct [<type>:<name>|--all-reachable] --scope project|global [--apply --acknowledge-plan <digest>] [--json]
 library workspace remove <catalog>:<name> --scope project|global [--json]
@@ -94,11 +96,12 @@ Workspaces over combined variants: a FHIR Python repository can use both
 `fhir-ig-authoring` and `python-cli`.
 
 Admission requires at least two independently meaningful, standalone-installable
-roots and evidence from two committed consumer locks. Project closures are capped
-at 30 receipts. The global lobby is capped at five direct roots, 15 receipts, no
-domain or customer content, and the configured one-percent standing-context
-budget. If a consumer wants "all except one member," split the Workspace instead
-of adding an override.
+roots and evidence from two committed consumer locks. The default policy caps
+project closures at 30 receipts and the global lobby at five direct roots, 15
+receipts, no domain or customer content, and one percent standing context.
+Deployments may lower these values through top-level `workspace_policy`; the
+catalog schema rejects invalid budgets. If a consumer wants "all except one
+member," split the Workspace instead of adding an override.
 
 **Counter-examples.**
 

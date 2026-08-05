@@ -155,6 +155,8 @@ def install_guardrail(
         install_target="~/.claude/settings.json",
         checksum_sha256="0" * 64,
         license_id=entry.get("license", "unknown"),
+        scope=scope,
+        version=str(entry.get("version")) if entry.get("version") is not None else None,
     )
     upsert_entry(lock_data, lockfile_entry)
     save_lockfile(lockfile_path, lock_data)

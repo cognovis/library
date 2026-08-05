@@ -225,10 +225,10 @@ Migration is conservative and one-way unless a backup is restored:
    `workspace sync --verify-receipts` records per-file digests and exact link
    targets.
 4. `migration.prune_ack_required` is set. Additive Workspace operations remain
-   allowed, but the first `workspace sync --prune` is plan-only and emits a digest
-   of the exact prune set. The guard clears only when a later
-   `--prune --apply --acknowledge-plan <digest>` supplies the exact unchanged
-   digest.
+   allowed, but pruning is blocked until `workspace sync --verify-receipts`
+   re-installs every selected-scope direct root from its catalog source and
+   records exact current targets. The guard clears only when no unverified
+   receipt remains in that scope.
 5. Migration never attributes an old entry to a Workspace, even when the current
    Workspace closure contains the same primitive.
 6. `workspace adopt <workspace> --from-direct --all-reachable` previews a
@@ -253,6 +253,12 @@ into a consistent lock view before fresh re-resolution.
 Workspace deletion additionally requires `--prune --apply`. Drifted,
 unverified, foreign, ambiguous, project-authored, or externally managed targets
 remain untouched and are surfaced by Workspace status.
+
+If journal replay encounters drift, `library workspace recover --scope <scope>`
+reports the journal digest and makes no further changes. An operator may repair
+the drift and retry, or explicitly discard only that journal with
+`--discard --acknowledge-plan <journal-digest>`. Discarding never deletes the
+remaining filesystem content; it becomes untracked project-owned residue.
 
 ## Legacy v1 Format
 

@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LIBRARY_PY = REPO_ROOT / "scripts" / "library.py"
+
+
+def _library_module():
+    spec = importlib.util.spec_from_file_location("library_workspace_test", LIBRARY_PY)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_platform_catalog_publishes_operational_python_cli_workspace() -> None:
@@ -52,7 +62,9 @@ def _write_fixture(project: Path) -> tuple[Path, Path]:
     for name in ("python-dev", "python-test"):
         skill = source / "skills" / name
         skill.mkdir(parents=True)
-        (skill / "SKILL.md").write_text(f"---\nname: {name}\n---\n# {name}\n")
+        (skill / "SKILL.md").write_text(
+            f"---\nname: {name}\nversion: 1.0.0\n---\n# {name}\n"
+        )
     workspaces = source / "workspaces"
     workspaces.mkdir()
     manifest = {
@@ -99,6 +111,7 @@ def _write_fixture(project: Path) -> tuple[Path, Path]:
                 {
                     "name": name,
                     "description": f"{name} skill.",
+                    "version": "1.0.0",
                     "source": str(source / "skills" / name / "SKILL.md"),
                     "metadata": {"library": {"source_catalog": "team-core"}},
                 }
@@ -250,7 +263,471 @@ def test_workspace_use_blocks_foreign_target_before_any_install(tmp_path: Path) 
     assert not (project / ".library.lock").exists()
 
 
-def test_workspace_remove_then_digest_bound_prune_deletes_only_receipt_files(
+def test_workspace_use_replaces_only_byte_exact_catalog_content(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    source, _manifest = _write_fixture(project)
+    target = project / ".agents" / "skills" / "python-dev"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_bytes(
+        (source / "skills" / "python-dev" / "SKILL.md").read_bytes()
+    )
+
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--replace-with-catalog-content",
+        "--json",
+    )
+
+    assert used.returncode == 0, used.stderr or used.stdout
+    assert str(target) in json.loads(used.stdout)["replacements"]
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    assert {receipt["id"] for receipt in lock["receipts"]} == {
+        "skill:python-dev",
+        "skill:python-test",
+    }
+
+
+def test_workspace_use_replace_flag_still_blocks_different_content(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    foreign = project / ".agents" / "skills" / "python-dev" / "SKILL.md"
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text("different\n")
+
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--replace-with-catalog-content",
+        "--json",
+    )
+
+    assert used.returncode == 3
+    assert foreign.read_text() == "different\n"
+    assert not (project / ".library.lock").exists()
+
+
+def test_preexisting_project_direct_root_survives_workspace_reconciliation(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+
+    direct = _run(
+        project,
+        home,
+        "skill",
+        "use",
+        "python-dev",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert direct.returncode == 0, direct.stderr or direct.stdout
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+
+    assert used.returncode == 0, used.stderr or used.stdout
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    roots = {root["id"]: root for root in lock["requested_roots"]}
+    assert roots["skill:python-dev"]["scope"] == "project"
+    workspace_id = next(
+        root_id for root_id, root in roots.items() if root["type"] == "workspace"
+    )
+    receipt = next(
+        item for item in lock["receipts"] if item["id"] == "skill:python-dev"
+    )
+    assert set(receipt["owners_cache"]) == {"skill:python-dev", workspace_id}
+
+
+def test_verify_receipts_reinstalls_migrated_direct_roots_without_a_workspace(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    installed = _run(
+        project,
+        home,
+        "skill",
+        "use",
+        "python-dev",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    current = yaml.safe_load((project / ".library.lock").read_text())
+    (project / ".library.lock").write_text(
+        yaml.safe_dump({"installed": current["installed"]}, sort_keys=False)
+    )
+
+    verified = _run(
+        project,
+        home,
+        "workspace",
+        "sync",
+        "--all",
+        "--scope",
+        "project",
+        "--verify-receipts",
+        "--harness",
+        "codex",
+        "--json",
+    )
+
+    assert verified.returncode == 0, verified.stderr or verified.stdout
+    assert json.loads(verified.stdout)["verified_receipts"] == ["skill:python-dev"]
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    assert lock["migration"]["prune_ack_required"] is False
+    assert lock["receipts"][0]["scope"] == "project"
+    assert lock["receipts"][0]["verified"] is True
+
+
+def test_workspace_status_reports_filesystem_drift_and_catalog_updates(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+    target = project / ".agents" / "skills" / "python-dev" / "SKILL.md"
+    target.write_text("drifted\n")
+
+    drifted = _run(
+        project,
+        home,
+        "workspace",
+        "status",
+        "--all",
+        "--scope",
+        "project",
+        "--json",
+    )
+    assert drifted.returncode == 3
+    assert "target drift" in " ".join(json.loads(drifted.stdout)["blockers"])
+
+    target.write_text(
+        "---\nname: python-dev\nversion: 1.0.0\n---\n# python-dev\n"
+    )
+    catalog = yaml.safe_load((project / "library.yaml").read_text())
+    catalog["library"]["skills"][0]["version"] = "1.1.0"
+    (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+    update = _run(
+        project,
+        home,
+        "workspace",
+        "status",
+        "--all",
+        "--scope",
+        "project",
+        "--json",
+    )
+    assert update.returncode == 2, update.stderr or update.stdout
+    assert json.loads(update.stdout)["updates"] == ["skill:python-dev"]
+
+
+def test_workspace_use_fails_before_mutation_when_global_prerequisite_is_missing(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    catalog = yaml.safe_load((project / "library.yaml").read_text())
+    catalog["library"]["skills"][1]["requires"] = ["mcp:test-service"]
+    catalog["library"]["mcp_servers"] = [
+        {
+            "name": "test-service",
+            "description": "Global test prerequisite.",
+            "metadata": {"library": {"source_catalog": "team-core"}},
+        }
+    ]
+    (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+
+    assert used.returncode == 3
+    assert "required globally" in " ".join(json.loads(used.stdout)["blockers"])
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents").exists()
+
+
+def test_filesystem_adoption_verifies_exact_receipt_and_definition_pin(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+    definition_commit = json.loads(used.stdout)["definition_commit"]
+
+    adopted = _run(
+        project,
+        home,
+        "workspace",
+        "adopt",
+        "team-core:python-cli",
+        "skill:python-dev",
+        "--definition-commit",
+        definition_commit,
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert adopted.returncode == 0, adopted.stderr or adopted.stdout
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    receipt = next(
+        item for item in lock["receipts"] if item["id"] == "skill:python-dev"
+    )
+    assert receipt["adopted"] is True
+    assert receipt["definition_commit"] == definition_commit
+
+
+def test_actual_prune_preserves_receipt_owned_by_a_direct_root(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    direct = _run(
+        project,
+        home,
+        "skill",
+        "use",
+        "python-dev",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert direct.returncode == 0, direct.stderr or direct.stdout
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+    removed = _run(
+        project,
+        home,
+        "workspace",
+        "remove",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--json",
+    )
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    preview = _run(
+        project,
+        home,
+        "workspace",
+        "sync",
+        "--all",
+        "--scope",
+        "project",
+        "--prune",
+        "--json",
+    )
+    payload = json.loads(preview.stdout)
+    assert [item["id"] for item in payload["prune_candidates"]] == [
+        "skill:python-test"
+    ]
+    applied = _run(
+        project,
+        home,
+        "workspace",
+        "sync",
+        "--all",
+        "--scope",
+        "project",
+        "--prune",
+        "--apply",
+        "--acknowledge-plan",
+        payload["digest"],
+        "--json",
+    )
+
+    assert applied.returncode == 0, applied.stderr or applied.stdout
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    assert not (project / ".agents" / "skills" / "python-test").exists()
+
+
+def test_addition_failure_stops_before_workspace_registration_or_prune(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    real_dispatch = module._dispatch_use
+
+    def flaky_dispatch(*dispatch_args, **dispatch_kwargs):
+        name = dispatch_args[4]
+        dry_run = dispatch_args[7]
+        if name == "python-test" and not dry_run:
+            print("injected addition failure")
+            return 1
+        return real_dispatch(*dispatch_args, **dispatch_kwargs)
+
+    monkeypatch.setattr(module, "_dispatch_use", flaky_dispatch)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        json=True,
+    )
+
+    rc = module._workspace_use(args, project, load_catalog(project))
+    capsys.readouterr()
+
+    assert rc == 1
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    assert {root["id"] for root in lock["requested_roots"]} == {"skill:python-dev"}
+    assert {receipt["id"] for receipt in lock["receipts"]} == {"skill:python-dev"}
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    assert not (project / ".agents" / "skills" / "python-test").exists()
+
+
+def test_final_lock_write_failure_leaves_recoverable_addition_journal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+    from lib.errors import LockfileError
+
+    module = _library_module()
+
+    def fail_final_save(_path: Path, _lock: dict) -> None:
+        raise LockfileError("injected final lock write failure")
+
+    monkeypatch.setattr(module, "save_lockfile", fail_final_save)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        json=True,
+    )
+
+    with pytest.raises(LockfileError, match="injected final lock write failure"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert (project / ".library.lock.workspace-journal.json").exists()
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    assert {root["type"] for root in lock["requested_roots"]} == {"skill"}
+
+
+def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(
     tmp_path: Path,
 ) -> None:
     project = tmp_path / "project"
@@ -311,8 +788,12 @@ def test_workspace_remove_then_digest_bound_prune_deletes_only_receipt_files(
         "--json",
     )
 
-    assert applied.returncode == 0, applied.stderr or applied.stdout
+    assert applied.returncode != 0
+    assert "unrecorded nested content" in (applied.stderr or applied.stdout)
     assert sibling.read_text() == "keep\n"
-    assert not (project / ".agents" / "skills" / "python-test" / "SKILL.md").exists()
+    assert (project / ".agents" / "skills" / "python-test" / "SKILL.md").exists()
     lock = yaml.safe_load((project / ".library.lock").read_text())
-    assert lock["receipts"] == []
+    assert {receipt["id"] for receipt in lock["receipts"]} == {
+        "skill:python-dev",
+        "skill:python-test",
+    }

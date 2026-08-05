@@ -583,6 +583,15 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     sync_parser.add_argument("--acknowledge-plan")
     sync_parser.add_argument("--json", action="store_true")
 
+    recover_parser = verb_sub.add_parser(
+        "recover", help="Inspect or recover an incomplete Workspace transaction"
+    )
+    recover_parser.add_argument("--scope", choices=["project", "global"], required=True)
+    recover_parser.add_argument("--target-project", type=Path, default=None)
+    recover_parser.add_argument("--discard", action="store_true")
+    recover_parser.add_argument("--acknowledge-plan")
+    recover_parser.add_argument("--json", action="store_true")
+
     adopt_parser = verb_sub.add_parser(
         "adopt", help="Adopt or demote an existing member"
     )
@@ -2924,7 +2933,13 @@ def _print_workspace_result(result: dict, *, json_mode: bool) -> None:
     for key in ("reference", "scope", "digest"):
         if result.get(key) is not None:
             print(f"  {key}: {result[key]}")
-    for key in ("additions", "updates", "prune_candidates", "blockers"):
+    for key in (
+        "additions",
+        "updates",
+        "replacements",
+        "prune_candidates",
+        "blockers",
+    ):
         values = result.get(key)
         if values:
             print(f"  {key}:")
@@ -3000,13 +3015,82 @@ def _workspace_prerequisite_blockers(plan: dict) -> list[str]:
     ]
 
 
-def _workspace_collision_blockers(
+def _workspace_prerequisite_statuses(plan: dict) -> dict[str, str]:
+    """Return persisted prerequisite states from the authoritative global lock."""
+    global_lock = load_lockfile(find_lockfile(global_scope=True))
+    global_ids = {
+        str(receipt.get("id") or "") for receipt in global_lock.get("receipts", [])
+    }
+    return {
+        str(item["id"]): "ready" if item["id"] in global_ids else "missing"
+        for item in plan.get("prerequisites", [])
+    }
+
+
+def _workspace_local_source(
+    catalog: dict, entry: dict, primitive: str
+) -> Path | None:
+    """Resolve a catalog entry to locally inspectable source content."""
+    raw_source = str(entry.get("source") or "")
+    direct = Path(raw_source).expanduser()
+    if direct.exists():
+        source = direct
+    else:
+        source_name = str(
+            entry.get("metadata", {}).get("library", {}).get("source_catalog") or ""
+        )
+        source_catalog = next(
+            (
+                item
+                for item in catalog.get("sources", {}).get("catalogs", [])
+                if item.get("name") == source_name and item.get("local_path")
+            ),
+            None,
+        )
+        if source_catalog is None:
+            return None
+        marker = "/blob/" if "/blob/" in raw_source else "/tree/"
+        if marker not in raw_source:
+            return None
+        suffix = raw_source.split(marker, 1)[1]
+        _revision, separator, relative = suffix.partition("/")
+        if not separator:
+            return None
+        source = Path(str(source_catalog["local_path"])).expanduser() / relative
+    if primitive == "skill" and source.is_file() and source.name.lower() == "skill.md":
+        return source.parent
+    return source if source.exists() else None
+
+
+def _workspace_content_matches(source: Path, target: Path) -> bool:
+    """Return whether an unreceipted target is byte-exact catalog content."""
+    from lib.lockfile import compute_checksum
+
+    if source.is_file() and target.is_file() and not target.is_symlink():
+        return compute_checksum(source) == compute_checksum(target)
+    if not source.is_dir() or not target.is_dir() or target.is_symlink():
+        return False
+
+    def inventory(root: Path) -> dict[str, tuple[str, str]]:
+        result: dict[str, tuple[str, str]] = {}
+        for path in sorted(root.rglob("*")):
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                result[relative] = ("symlink", str(path.readlink()))
+            elif path.is_file():
+                result[relative] = ("file", compute_checksum(path))
+        return result
+
+    return inventory(source) == inventory(target)
+
+
+def _workspace_collision_analysis(
     args: argparse.Namespace,
     repo_root: Path,
     catalog: dict,
     artifacts: tuple[tuple[str, str], ...],
     lock: dict,
-) -> list[str]:
+) -> dict[str, list[str]]:
     """Preflight existing and externally managed targets before mutation."""
     from lib.manager_inventory import collect_managed_paths, workspace_manager_adapters
 
@@ -3034,8 +3118,11 @@ def _workspace_collision_blockers(
         )
     )
     blockers: list[str] = []
+    replacements: list[str] = []
     planned_owners: dict[Path, str] = {}
     for primitive, name in artifacts:
+        catalog_entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+        local_source = _workspace_local_source(catalog, catalog_entry, primitive)
         output_buffer = io.StringIO()
         with redirect_stdout(output_buffer):
             rc = _dispatch_use(
@@ -3083,11 +3170,21 @@ def _workspace_collision_blockers(
                 for owned_path in owned_paths
             ):
                 continue
+            if (
+                getattr(args, "replace_with_catalog_content", False)
+                and local_source is not None
+                and _workspace_content_matches(local_source, path)
+            ):
+                replacements.append(str(path))
+                continue
             blockers.append(
                 f"{path} already exists without a matching Library receipt; "
                 "project-authored or externally owned content is protected"
             )
-    return sorted(set(blockers))
+    return {
+        "blockers": sorted(set(blockers)),
+        "replacements": sorted(set(replacements)),
+    }
 
 
 def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
@@ -3114,9 +3211,10 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     prerequisite_blockers = _workspace_prerequisite_blockers(preview)
     if prerequisite_blockers:
         preview["blockers"].extend(prerequisite_blockers)
-    preview["blockers"].extend(
-        _workspace_collision_blockers(args, repo_root, catalog, closure.artifacts, lock)
+    collision = _workspace_collision_analysis(
+        args, repo_root, catalog, closure.artifacts, lock
     )
+    preview["blockers"].extend(collision["blockers"])
     result = {
         "status": "blocked"
         if preview["blockers"]
@@ -3127,6 +3225,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         "definition_commit": definition_commit,
         "scope": args.scope,
         "artifacts": [f"{primitive}:{name}" for primitive, name in closure.artifacts],
+        "replacements": collision["replacements"],
         **{
             key: preview[key]
             for key in (
@@ -3153,11 +3252,17 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     with workspace_write_lock(lock_path):
         recover_workspace_journal(lock_path, repo_root)
         current_lock = load_lockfile(lock_path)
-        locked_blockers = _workspace_collision_blockers(
+        locked_collision = _workspace_collision_analysis(
             args, repo_root, catalog, closure.artifacts, current_lock
         )
-        if locked_blockers:
-            result.update({"status": "blocked", "blockers": locked_blockers})
+        if locked_collision["blockers"]:
+            result.update(
+                {
+                    "status": "blocked",
+                    "blockers": locked_collision["blockers"],
+                    "replacements": locked_collision["replacements"],
+                }
+            )
             _print_workspace_result(result, json_mode=args.json)
             return 3
         preexisting_direct_ids = {
@@ -3239,7 +3344,11 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         ]
         upsert_workspace_root(lock, requested_root)
         applied_plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
-        apply_plan_ownership(lock, applied_plan)
+        apply_plan_ownership(
+            lock,
+            applied_plan,
+            prerequisite_statuses=_workspace_prerequisite_statuses(applied_plan),
+        )
         save_lockfile(lock_path, lock)
         clear_workspace_journal(lock_path)
     result.update(
@@ -3255,9 +3364,12 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
 
 
 def _workspace_status(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
+    from lib.manager_inventory import collect_managed_paths, workspace_manager_adapters
     from lib.workspace import (
         build_workspace_plan,
+        inspect_workspace_receipts,
         resolve_workspace,
+        workspace_allowed_roots,
         workspace_journal_path,
         workspace_root_id,
     )
@@ -3274,12 +3386,31 @@ def _workspace_status(args: argparse.Namespace, repo_root: Path, catalog: dict) 
             )
     plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
     plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
+    managed = collect_managed_paths(
+        workspace_manager_adapters(
+            catalog=catalog,
+            project_root=repo_root,
+            platform_root=TOOL_ROOT,
+            scope=args.scope,
+        )
+    )
+    plan["blockers"].extend(
+        inspect_workspace_receipts(
+            lock,
+            plan,
+            repo_root,
+            managed_paths=managed,
+            allowed_roots=workspace_allowed_roots(catalog, repo_root, args.scope),
+        )
+    )
     if workspace_journal_path(lock_path).exists():
         plan["blockers"].append(
             f"Incomplete Workspace transaction journal: {workspace_journal_path(lock_path)}"
         )
     protected = [
-        item["id"] for item in plan["receipts"] if item.get("prune_blocked_reason")
+        item["id"]
+        for item in plan["receipts"]
+        if item.get("prune_blocked_reason") or not item.get("verified")
     ]
     result = {"operation": "status", "status": "converged", **plan}
     if plan["blockers"] or protected:
@@ -3302,11 +3433,14 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
         build_workspace_plan,
         prepare_prune_plan,
         recover_workspace_journal,
+        workspace_allowed_roots,
         workspace_write_lock,
         write_workspace_journal,
     )
 
     lock_path, lock = _workspace_lock(repo_root, args.scope)
+    if args.prune and args.verify_receipts:
+        raise LibraryError("--verify-receipts and --prune are separate operations")
     if args.prune:
         plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
         plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
@@ -3333,6 +3467,9 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
                 repo_root,
                 args.acknowledge_plan or "",
                 managed_paths=managed,
+                allowed_roots=workspace_allowed_roots(
+                    catalog, repo_root, args.scope
+                ),
             )
             write_workspace_journal(
                 lock_path,
@@ -3342,6 +3479,8 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
                     "digest": plan["digest"],
                     "candidate_ids": prepared["candidate_ids"],
                     "targets": prepared["targets"],
+                    "directories": prepared["directories"],
+                    "allowed_roots": prepared["allowed_roots"],
                 },
             )
             apply_post_prune_lock(lock, set(prepared["candidate_ids"]))
@@ -3351,17 +3490,25 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
         _print_workspace_result(result, json_mode=args.json)
         return 0
 
+    selected_workspace_id: str | None = None
+    if args.reference:
+        from lib.workspace import resolve_workspace, workspace_root_id
+
+        selected = resolve_workspace(catalog, args.reference)
+        selected_workspace_id = workspace_root_id(
+            selected.catalog_identity, selected.name
+        )
     references = []
     for root in lock.get("requested_roots", []):
-        if root.get("type") != "workspace":
+        if root.get("type") != "workspace" or root.get("scope", args.scope) != args.scope:
             continue
         reference = str(root.get("requested_ref") or "")
-        if args.reference and reference != args.reference:
+        if selected_workspace_id and root.get("id") != selected_workspace_id:
             continue
         references.append(reference)
     if args.reference and not references:
         raise LibraryError(f"Workspace {args.reference} is not registered", exit_code=2)
-    if not references:
+    if not references and not args.verify_receipts:
         raise LibraryError("No registered Workspaces in selected scope", exit_code=2)
     applied: list[str] = []
     for reference in references:
@@ -3378,12 +3525,63 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
         if rc != 0:
             return rc
         applied.append(reference)
+    verified_receipts: list[str] = []
+    if args.verify_receipts:
+        lock = load_lockfile(lock_path)
+        direct_ids = {
+            str(root.get("id") or "")
+            for root in lock.get("requested_roots", [])
+            if root.get("type") != "workspace"
+            and root.get("scope", args.scope) == args.scope
+        }
+        pending = [
+            str(receipt.get("id") or "")
+            for receipt in lock.get("receipts", [])
+            if receipt.get("scope", args.scope) == args.scope
+            and not receipt.get("verified")
+            and receipt.get("id") in direct_ids
+        ]
+        for receipt_id in pending:
+            primitive, separator, name = receipt_id.partition(":")
+            if not separator:
+                raise LibraryError(f"Invalid receipt identity {receipt_id!r}")
+            output_buffer = io.StringIO()
+            with redirect_stdout(output_buffer):
+                rc = _dispatch_use(
+                    args,
+                    repo_root,
+                    catalog,
+                    primitive,
+                    name,
+                    args.scope,
+                    args.harness,
+                    False,
+                    True,
+                    "vendor",
+                )
+            if rc != 0:
+                raise LibraryError(
+                    f"Receipt verification failed for {receipt_id}: "
+                    f"{output_buffer.getvalue().strip()}"
+                )
+            verified_receipts.append(receipt_id)
+        lock = load_lockfile(lock_path)
+        remaining_unverified = [
+            receipt
+            for receipt in lock.get("receipts", [])
+            if receipt.get("scope", args.scope) == args.scope
+            and not receipt.get("verified")
+        ]
+        if not remaining_unverified and isinstance(lock.get("migration"), dict):
+            lock["migration"]["prune_ack_required"] = False
+            save_lockfile(lock_path, lock)
+
     result = {
         "operation": "sync",
         "status": "applied",
         "scope": args.scope,
         "workspaces": applied,
-        "verified_receipts": bool(args.verify_receipts),
+        "verified_receipts": verified_receipts,
     }
     _print_workspace_result(result, json_mode=args.json)
     return 0
@@ -3451,7 +3649,11 @@ def _workspace_adopt(args: argparse.Namespace, repo_root: Path, catalog: dict) -
             )
             apply_direct_root_demotion(lock, plan, args.acknowledge_plan or "")
             refreshed = build_workspace_plan(catalog, lock, repo_root, args.scope)
-            apply_plan_ownership(lock, refreshed)
+            apply_plan_ownership(
+                lock,
+                refreshed,
+                prerequisite_statuses=_workspace_prerequisite_statuses(refreshed),
+            )
             save_lockfile(lock_path, lock)
             clear_workspace_journal(lock_path)
             _print_workspace_result(
@@ -3504,7 +3706,11 @@ def _workspace_adopt(args: argparse.Namespace, repo_root: Path, catalog: dict) -
         )
         receipt["adopted"] = True
         receipt["definition_commit"] = args.definition_commit
-        apply_plan_ownership(lock, plan)
+        apply_plan_ownership(
+            lock,
+            plan,
+            prerequisite_statuses=_workspace_prerequisite_statuses(plan),
+        )
         save_lockfile(lock_path, lock)
         clear_workspace_journal(lock_path)
     _print_workspace_result(
@@ -3536,7 +3742,11 @@ def _workspace_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) 
                 f"Workspace {args.reference} is not registered", exit_code=2
             )
         plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
-        apply_plan_ownership(lock, plan)
+        apply_plan_ownership(
+            lock,
+            plan,
+            prerequisite_statuses=_workspace_prerequisite_statuses(plan),
+        )
         write_workspace_journal(
             lock_path,
             {
@@ -3553,6 +3763,77 @@ def _workspace_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) 
             "status": "unregistered",
             "reference": args.reference,
             **plan,
+        },
+        json_mode=args.json,
+    )
+    return 0
+
+
+def _workspace_recover(args: argparse.Namespace, repo_root: Path) -> int:
+    from lib.workspace import (
+        discard_workspace_journal,
+        recover_workspace_journal,
+        workspace_journal_digest,
+        workspace_journal_path,
+        workspace_write_lock,
+    )
+
+    lock_path, _lock = _workspace_lock(repo_root, args.scope)
+    journal_path = workspace_journal_path(lock_path)
+    digest = workspace_journal_digest(lock_path)
+    if digest is None:
+        _print_workspace_result(
+            {
+                "operation": "recover",
+                "status": "clean",
+                "scope": args.scope,
+                "deleted": [],
+            },
+            json_mode=args.json,
+        )
+        return 0
+    if args.discard:
+        with workspace_write_lock(lock_path):
+            discarded = discard_workspace_journal(
+                lock_path, args.acknowledge_plan or ""
+            )
+        _print_workspace_result(
+            {
+                "operation": "recover",
+                "status": "discarded",
+                "scope": args.scope,
+                "journal": str(journal_path),
+                "journal_digest": discarded,
+            },
+            json_mode=args.json,
+        )
+        return 0
+    try:
+        with workspace_write_lock(lock_path):
+            deleted = recover_workspace_journal(lock_path, repo_root)
+    except LibraryError as exc:
+        _print_workspace_result(
+            {
+                "operation": "recover",
+                "status": "blocked",
+                "scope": args.scope,
+                "journal": str(journal_path),
+                "journal_digest": digest,
+                "blockers": [str(exc)],
+                "discard_command": (
+                    "library workspace recover "
+                    f"--scope {args.scope} --discard --acknowledge-plan {digest}"
+                ),
+            },
+            json_mode=args.json,
+        )
+        return 3
+    _print_workspace_result(
+        {
+            "operation": "recover",
+            "status": "recovered",
+            "scope": args.scope,
+            "deleted": deleted,
         },
         json_mode=args.json,
     )
@@ -3644,6 +3925,8 @@ def cmd_workspace(args: argparse.Namespace, repo_root: Path, catalog: dict) -> i
         return 0
     if args.verb == "sync":
         return _workspace_sync(args, repo_root, catalog)
+    if args.verb == "recover":
+        return _workspace_recover(args, repo_root)
     if args.verb == "adopt":
         return _workspace_adopt(args, repo_root, catalog)
     if args.verb == "remove":
