@@ -23,6 +23,7 @@ from .lockfile import (
     find_lockfile,
     get_entry,
     load_lockfile,
+    resolve_lockfile_path,
     save_lockfile,
 )
 from .output import dry_run_result, success
@@ -968,7 +969,4 @@ def _agent_frontmatter_issue(
 
 def _entry_path(path_str: str, repo_root: Path) -> Path:
     """Resolve a lockfile path relative to repo_root when needed."""
-    path = Path(path_str.rstrip("/"))
-    if path.is_absolute():
-        return path
-    return repo_root / path
+    return resolve_lockfile_path(path_str, repo_root)

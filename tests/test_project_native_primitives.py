@@ -28,6 +28,27 @@ def _run(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _run_for_target(
+    project: Path, cwd: Path, *args: str
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["HOME"] = str(project / "home")
+    return subprocess.run(
+        [
+            sys.executable,
+            str(LIBRARY),
+            *args,
+            "--target-project",
+            str(project),
+            "--json",
+        ],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
 def _project(tmp_path: Path) -> Path:
     project = tmp_path / "consumer"
     sources = tmp_path / "sources"
@@ -305,6 +326,24 @@ def test_project_native_dependency_lifecycle_and_just_import(tmp_path: Path) -> 
     assert hashlib.sha256(justfile.read_bytes()).hexdigest() == root_checksum
 
     removed = _run(project, "just-module", "remove", "workbench")
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    assert not (project / ".agents/just/workbench.just").exists()
+    assert not (project / ".agents/just/Justfile").exists()
+
+
+def test_project_native_remove_resolves_portable_targets_from_other_cwd(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    installed = _run(project, "just-module", "use", "workbench")
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+
+    removed = _run_for_target(
+        project, elsewhere, "just-module", "remove", "workbench"
+    )
+
     assert removed.returncode == 0, removed.stderr or removed.stdout
     assert not (project / ".agents/just/workbench.just").exists()
     assert not (project / ".agents/just/Justfile").exists()

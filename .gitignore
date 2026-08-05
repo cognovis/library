@@ -32,7 +32,9 @@ tests/__pycache__/
 # Library-installed primitives in this marketplace repo (source lives in top-level primitive dirs)
 .claude/skills/
 .agents/skills/
-.agents/standards/
+.agents/standards/*
+!.agents/standards/judge-layer/
+!.agents/standards/judge-layer/**
 .agents/agents/
 .agents/prompts/
 !.library.lock

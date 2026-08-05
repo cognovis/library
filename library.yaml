@@ -415,6 +415,7 @@ library:
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
+        - standard:judge-layer
         - standard:english-only
         - standard:no-emoji
       metadata:
@@ -451,6 +452,7 @@ library:
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
+        - standard:judge-layer
         - standard:english-only
         - standard:no-emoji
       metadata:
@@ -493,6 +495,7 @@ library:
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
+        - standard:judge-layer
         - standard:english-only
         - standard:no-emoji
       metadata:

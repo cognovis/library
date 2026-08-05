@@ -25,7 +25,7 @@ requested_roots:
   catalog_name: cognovis-library-core
   requested_ref: cognovis-library-core:python-cli
   resolved_version: 0.1.0
-  definition_commit: 2cdbfe648cbcc774daa30c88e03779afbb4abcfa
+  definition_commit: dee0415f47d8ae4ccfa7e166bdd682c29f94c33b
   roots:
   - skill:python-dev
   - skill:python-test
@@ -37,7 +37,7 @@ receipts:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/standards/unknown/agentic-primitives@519c7764576a80/
   install_target: .agents/standards/agentic-primitives/agentic-primitives.md
-  install_timestamp: '2026-08-05T17:55:23Z'
+  install_timestamp: '2026-08-05T18:30:41Z'
   checksum_sha256: 746cb95af6c8955c138b35c295df819d902c4dfb2338cd06baf215528420c100
   checksum_type: file
   content_sha256: 746cb95af6c8955c138b35c295df819d902c4dfb2338cd06baf215528420c100
@@ -64,7 +64,7 @@ receipts:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/standards/unknown/primitive-placement@519c7764576a80/
   install_target: .agents/standards/agentic-primitives/primitive-placement.md
-  install_timestamp: '2026-08-05T17:55:24Z'
+  install_timestamp: '2026-08-05T18:30:42Z'
   checksum_sha256: 29e5886ad84ecb5588ca4087a563f01b4cfdf3f9453ff143f1f3ddeb1a4a8a25
   checksum_type: file
   content_sha256: 29e5886ad84ecb5588ca4087a563f01b4cfdf3f9453ff143f1f3ddeb1a4a8a25
@@ -91,7 +91,7 @@ receipts:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/agent-forge@519c7764576a80/
   install_target: .agents/skills/agent-forge/
-  install_timestamp: '2026-08-05T17:55:25Z'
+  install_timestamp: '2026-08-05T18:30:44Z'
   checksum_sha256: ff229cecb0b53f31973da8869ff2c96402e00faf1d8eda25a0c690b6c6171701
   checksum_type: directory
   content_sha256: ff229cecb0b53f31973da8869ff2c96402e00faf1d8eda25a0c690b6c6171701
@@ -170,7 +170,7 @@ receipts:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/skill-forge@519c7764576a80/
   install_target: .agents/skills/skill-forge/
-  install_timestamp: '2026-08-05T17:55:25Z'
+  install_timestamp: '2026-08-05T18:30:45Z'
   checksum_sha256: c1cf7f252292918a193fa57a6b54bfcd5e086d638ae066e721488c2e21c741fd
   checksum_type: directory
   content_sha256: c1cf7f252292918a193fa57a6b54bfcd5e086d638ae066e721488c2e21c741fd
@@ -236,7 +236,7 @@ receipts:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/standard-forge@519c7764576a80/
   install_target: .agents/skills/standard-forge/
-  install_timestamp: '2026-08-05T17:55:26Z'
+  install_timestamp: '2026-08-05T18:30:46Z'
   checksum_sha256: 7fd380431b0b5e28e0652a886f4d33e78f6302938abd44c028cc4fe5ffc9b81f
   checksum_type: directory
   content_sha256: 7fd380431b0b5e28e0652a886f4d33e78f6302938abd44c028cc4fe5ffc9b81f
@@ -281,7 +281,7 @@ receipts:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/script-forge@519c7764576a80/
   install_target: .agents/skills/script-forge/
-  install_timestamp: '2026-08-05T17:55:27Z'
+  install_timestamp: '2026-08-05T18:30:47Z'
   checksum_sha256: 7a158b7ce7e2e35481a8ecfe8c1e0263661fd34259abc7078a29bdf9380f86df
   checksum_type: directory
   content_sha256: 7a158b7ce7e2e35481a8ecfe8c1e0263661fd34259abc7078a29bdf9380f86df
@@ -323,7 +323,7 @@ receipts:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/hook-forge@519c7764576a80/
   install_target: .agents/skills/hook-forge/
-  install_timestamp: '2026-08-05T17:55:28Z'
+  install_timestamp: '2026-08-05T18:30:48Z'
   checksum_sha256: 870a2ca3c056119276a0dc97321f00dc7c3b55e81f533a672f7dfa0a05392f51
   checksum_type: directory
   content_sha256: 870a2ca3c056119276a0dc97321f00dc7c3b55e81f533a672f7dfa0a05392f51
@@ -527,6 +527,84 @@ receipts:
     link_target: ../../.agents/skills/python-test
   owners_cache:
   - workspace:https://github.com/cognovis/library-core#python-cli
+- name: judge-layer
+  type: standard
+  marketplace: unknown
+  source: https://github.com/cognovis/library-core/tree/main/standards/judge-layer/
+  source_commit: d4a9c64112ee94fcf72312733815a4dcbff63b18
+  cache_path: /Users/malte/.local/share/library/standards/unknown/judge-layer@d4a9c64112ee94/
+  install_target: .agents/standards/judge-layer/
+  install_timestamp: '2026-08-05T18:30:43Z'
+  checksum_sha256: 394690689706960b36a92b7352a9883a220b22fd5719dbe03a92b65da45fa453
+  checksum_type: directory
+  content_sha256: 394690689706960b36a92b7352a9883a220b22fd5719dbe03a92b65da45fa453
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  catalog_identity: https://github.com/cognovis/library-core
+  id: standard:judge-layer
+  resolved_version: legacy
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/standards/judge-layer
+    kind: directory
+  - path: .agents/standards/judge-layer/README.md
+    kind: file
+    content_sha256: 79f2a00a9e48424e2e474770e40de8226e3dd7d55705cf003ea1acb5b7dc9f07
+  - path: .agents/standards/judge-layer/action-proposal.md
+    kind: file
+    content_sha256: 42bb8d3fca71d48939c378c25323310a37a3c194c3e46137c66d9448a9b975d1
+  - path: .agents/standards/judge-layer/decision-brief.md
+    kind: file
+    content_sha256: 504df87ccb55bee3d5903fe4f7ce1e14db17405b8fabd913e53725733c01abf3
+  - path: .agents/standards/judge-layer/decision-gate.md
+    kind: file
+    content_sha256: fbac33f5e771c089d6243bb8d48ab55f3cc0fe75572b8089a8b398a9fcd46463
+  - path: .agents/standards/judge-layer/judge-eval-suite.md
+    kind: file
+    content_sha256: 31d56708fc874bcd64ac27ffb4f10eef64790da0512826cb05a86d91feb81427
+  - path: .agents/standards/judge-layer/judge-layer.md
+    kind: file
+    content_sha256: f908ca4af650c1d08d60f162c579fec911887ba0315c832007ee2ec86f404108
+  - path: .agents/standards/judge-layer/judge-outcomes.md
+    kind: file
+    content_sha256: fc9229de1d6a99110bc0cb3da7b33d1f2a7a72816f226de3575b8c3e3b0673a9
+  - path: .agents/standards/judge-layer/mandate-schema.md
+    kind: file
+    content_sha256: 55fb536a17f275151c71c8627901369ac6af5f94aa4c27f2385c0030df89360c
+  - path: .agents/standards/judge-layer/mcp-tool-policy-manifest.md
+    kind: file
+    content_sha256: 8f7653d032ef0266879e36794822087345ae8cf92980805f056a946634adb87f
+  - path: .agents/standards/judge-layer/provenance-labels.md
+    kind: file
+    content_sha256: 186217f52a24d0abb8c215e856929fd56517daa044690e3ca60f07b8b9653e77
+  - path: .agents/standards/judge-layer/scripts
+    kind: directory
+  - path: .agents/standards/judge-layer/scripts/validate_action_proposal.py
+    kind: file
+    content_sha256: ebf90b0932e0ed8fa2a5f7e6a2be557b2e870a42479cd27ce2f9530c2ac6d900
+  - path: .agents/standards/judge-layer/scripts/validate_decision_gate.py
+    kind: file
+    content_sha256: eb6c501b6deea2e956bfdc2b570936895bb7c7e29b3873656bf2126ed089b86a
+  - path: .agents/standards/judge-layer/stop-taxonomy.md
+    kind: file
+    content_sha256: 7d6046db95d2ab35b212ba01016c6515f9bec349aa096a5ef254adeadb8dea45
+  - path: .agents/standards/judge-layer/tests
+    kind: directory
+  - path: .agents/standards/judge-layer/tests/test_decision_gate_contract.py
+    kind: file
+    content_sha256: a7c7f55f175bc9e621b16a58f99ee67c2fd05703836c1c6b6fc65cf9b597ada4
+  - path: .agents/standards/judge-layer/tests/test_validate_action_proposal.py
+    kind: file
+    content_sha256: e43c3dc93f4381f8685ae5deaa97d81cfdb4e813b5ed7005c48fef083aed8ad0
+  - path: .agents/standards/judge-layer/tests/test_validate_decision_gate.py
+    kind: file
+    content_sha256: d63077c1a459c8df73343ab44eb496040397d90be9300b88df54efc43d735a06
+  owners_cache:
+  - workspace:https://github.com/cognovis/library#library-authoring
 prerequisites:
 - id: standard:english-only
   kind: global-root
@@ -550,7 +628,7 @@ installed:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/standards/unknown/agentic-primitives@519c7764576a80/
   install_target: .agents/standards/agentic-primitives/agentic-primitives.md
-  install_timestamp: '2026-08-05T17:55:23Z'
+  install_timestamp: '2026-08-05T18:30:41Z'
   checksum_sha256: 746cb95af6c8955c138b35c295df819d902c4dfb2338cd06baf215528420c100
   checksum_type: file
   content_sha256: 746cb95af6c8955c138b35c295df819d902c4dfb2338cd06baf215528420c100
@@ -566,7 +644,7 @@ installed:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/standards/unknown/primitive-placement@519c7764576a80/
   install_target: .agents/standards/agentic-primitives/primitive-placement.md
-  install_timestamp: '2026-08-05T17:55:24Z'
+  install_timestamp: '2026-08-05T18:30:42Z'
   checksum_sha256: 29e5886ad84ecb5588ca4087a563f01b4cfdf3f9453ff143f1f3ddeb1a4a8a25
   checksum_type: file
   content_sha256: 29e5886ad84ecb5588ca4087a563f01b4cfdf3f9453ff143f1f3ddeb1a4a8a25
@@ -582,7 +660,7 @@ installed:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/agent-forge@519c7764576a80/
   install_target: .agents/skills/agent-forge/
-  install_timestamp: '2026-08-05T17:55:25Z'
+  install_timestamp: '2026-08-05T18:30:44Z'
   checksum_sha256: ff229cecb0b53f31973da8869ff2c96402e00faf1d8eda25a0c690b6c6171701
   checksum_type: directory
   content_sha256: ff229cecb0b53f31973da8869ff2c96402e00faf1d8eda25a0c690b6c6171701
@@ -600,7 +678,7 @@ installed:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/skill-forge@519c7764576a80/
   install_target: .agents/skills/skill-forge/
-  install_timestamp: '2026-08-05T17:55:25Z'
+  install_timestamp: '2026-08-05T18:30:45Z'
   checksum_sha256: c1cf7f252292918a193fa57a6b54bfcd5e086d638ae066e721488c2e21c741fd
   checksum_type: directory
   content_sha256: c1cf7f252292918a193fa57a6b54bfcd5e086d638ae066e721488c2e21c741fd
@@ -618,7 +696,7 @@ installed:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/standard-forge@519c7764576a80/
   install_target: .agents/skills/standard-forge/
-  install_timestamp: '2026-08-05T17:55:26Z'
+  install_timestamp: '2026-08-05T18:30:46Z'
   checksum_sha256: 7fd380431b0b5e28e0652a886f4d33e78f6302938abd44c028cc4fe5ffc9b81f
   checksum_type: directory
   content_sha256: 7fd380431b0b5e28e0652a886f4d33e78f6302938abd44c028cc4fe5ffc9b81f
@@ -636,7 +714,7 @@ installed:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/script-forge@519c7764576a80/
   install_target: .agents/skills/script-forge/
-  install_timestamp: '2026-08-05T17:55:27Z'
+  install_timestamp: '2026-08-05T18:30:47Z'
   checksum_sha256: 7a158b7ce7e2e35481a8ecfe8c1e0263661fd34259abc7078a29bdf9380f86df
   checksum_type: directory
   content_sha256: 7a158b7ce7e2e35481a8ecfe8c1e0263661fd34259abc7078a29bdf9380f86df
@@ -654,7 +732,7 @@ installed:
   source_commit: 519c7764576a800b5def9240eede7c1c0221b2d4
   cache_path: /Users/malte/.local/share/library/skills/unknown/hook-forge@519c7764576a80/
   install_target: .agents/skills/hook-forge/
-  install_timestamp: '2026-08-05T17:55:28Z'
+  install_timestamp: '2026-08-05T18:30:48Z'
   checksum_sha256: 870a2ca3c056119276a0dc97321f00dc7c3b55e81f533a672f7dfa0a05392f51
   checksum_type: directory
   content_sha256: 870a2ca3c056119276a0dc97321f00dc7c3b55e81f533a672f7dfa0a05392f51
@@ -719,3 +797,19 @@ installed:
   scope: project
   version: 1.0.0
   catalog_identity: https://github.com/cognovis/library
+- name: judge-layer
+  type: standard
+  marketplace: unknown
+  source: https://github.com/cognovis/library-core/tree/main/standards/judge-layer/
+  source_commit: d4a9c64112ee94fcf72312733815a4dcbff63b18
+  cache_path: /Users/malte/.local/share/library/standards/unknown/judge-layer@d4a9c64112ee94/
+  install_target: .agents/standards/judge-layer/
+  install_timestamp: '2026-08-05T18:30:43Z'
+  checksum_sha256: 394690689706960b36a92b7352a9883a220b22fd5719dbe03a92b65da45fa453
+  checksum_type: directory
+  content_sha256: 394690689706960b36a92b7352a9883a220b22fd5719dbe03a92b65da45fa453
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  catalog_identity: https://github.com/cognovis/library-core

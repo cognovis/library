@@ -212,6 +212,11 @@ the literal target from `.claude/skills/python-dev` to
 compares the exact recorded `readlink` value; it does not normalize a different
 absolute or relative spelling into a match.
 
+In each `bridge_symlinks` string, the left side is a lock-root-relative bridge
+path and the right side is the literal symlink payload interpreted relative to
+that bridge's parent directory. The two sides therefore use different relative
+bases by design.
+
 A directory target is only a container marker. Prune removes its individually
 recorded files and links, then removes the directory only when empty. Any
 unrecorded nested entry is drift and makes the receipt prune-blocked; recursive

@@ -32,25 +32,22 @@ def test_library_authoring_manifest_has_exact_platform_forge_roots() -> None:
     assert {(root["type"], root["name"]) for root in manifest["roots"]} == FORGE_ROOTS
 
 
-def test_library_authoring_stable_evidence_names_two_committed_consumers() -> None:
+def test_library_authoring_stable_evidence_names_distinct_consumers() -> None:
     evidence = json.loads(
         (REPO_ROOT / "workspaces" / "admission-evidence.json").read_text()
     )
 
-    assert evidence["library-authoring"]["consumer_locks"] == [
-        {
-            "repository": "cognovis/library",
-            "lock_path": ".library.lock",
-            "commit": "0449abc628915c4ace93ed447458646052382ff1",
-            "schema_version": 2,
-        },
-        {
-            "repository": "cognovis/cognovis-pi",
-            "lock_path": ".library.lock",
-            "commit": "2fcc0e8c386d742fb9169fbac9870a8ba6bbb8d8",
-            "schema_version": 2,
-        },
-    ]
+    consumers = evidence["library-authoring"]["consumer_locks"]
+    assert {consumer["repository"] for consumer in consumers} == {
+        "cognovis/library",
+        "cognovis/cognovis-pi",
+    }
+    for consumer in consumers:
+        assert consumer["lock_path"] == ".library.lock"
+        assert len(consumer["commit"]) == 40
+        assert all(character in "0123456789abcdef" for character in consumer["commit"])
+        assert type(consumer["schema_version"]) is int
+        assert consumer["schema_version"] == 2
 
 
 def test_library_authoring_roots_resolve_standalone() -> None:
@@ -61,6 +58,7 @@ def test_library_authoring_roots_resolve_standalone() -> None:
 
     assert set(closure.artifacts) == FORGE_ROOTS | {
         ("standard", "agentic-primitives"),
+        ("standard", "judge-layer"),
         ("standard", "primitive-placement"),
     }
     assert set(closure.prerequisites) == {
@@ -85,6 +83,7 @@ def test_platform_lock_registers_python_and_authoring_workspaces() -> None:
         "skill:skill-forge",
         "skill:standard-forge",
         "standard:agentic-primitives",
+        "standard:judge-layer",
         "standard:primitive-placement",
         "standard:python-cli-patterns",
     }

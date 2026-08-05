@@ -82,7 +82,12 @@ from lib.errors import (
     EXIT_NOT_FOUND,
     LibraryError,
 )
-from lib.lockfile import find_lockfile, load_lockfile, save_lockfile
+from lib.lockfile import (
+    find_lockfile,
+    load_lockfile,
+    resolve_lockfile_path,
+    save_lockfile,
+)
 from lib.installed import cmd_installed_impl, format_installed_output
 from lib.output import (
     format_list_output,
@@ -1059,7 +1064,7 @@ def _has_local_tamper(
         if not (expected_sha and checksum_type and install_target_str):
             return False
 
-        target = Path(install_target_str.rstrip("/"))
+        target = resolve_lockfile_path(install_target_str, repo_root)
         if target.is_symlink():
             target = target.resolve()
         if not target.exists():
@@ -3011,7 +3016,7 @@ def cmd_sync_all(
     # a stray test fixture survived months of syncs while reading like a network
     # problem (CL-t71i).
     unresolvable, still_unknown = _classify_unknown_entries(
-        skipped_by_status["unknown"], installed
+        skipped_by_status["unknown"], installed, repo_root=repo_root
     )
     for label, source, target in unresolvable:
         primitive, _, entry_name = label.partition(":")
@@ -3076,14 +3081,15 @@ def cmd_sync_all(
 def _classify_unknown_entries(
     unknown_labels: list[str],
     installed: list[dict],
+    *,
+    repo_root: Path | None = None,
 ) -> tuple[list[tuple[str, str, str]], list[str]]:
     """Split unknown-status labels into unresolvable and genuinely unknown.
 
-    Unresolvable means both the recorded source and the recorded install target
-    are absolute paths that no longer exist -- the entry describes an install
-    that cannot be refreshed, repaired, or reasoned about, and the operator can
-    only remove it. Anything else stays 'unknown upstream status', which is a
-    statement about the remote, not about the entry.
+    Unresolvable means both the recorded local source and the recorded install
+    target no longer exist. Portable project targets are resolved against
+    ``repo_root``; remote sources stay an upstream question. Anything else
+    remains ``unknown upstream status``.
     """
     by_label = {
         f"{item.get('type', '')}:{item.get('name', '')}": item for item in installed
@@ -3095,7 +3101,14 @@ def _classify_unknown_entries(
         source = str(entry.get("source") or "")
         target = str(entry.get("install_target") or "")
         source_gone = source.startswith("/") and not Path(source).exists()
-        target_gone = target.startswith("/") and not Path(target).exists()
+        target_path = (
+            resolve_lockfile_path(target, repo_root)
+            if target and repo_root is not None
+            else Path(target)
+        )
+        target_gone = bool(target) and (
+            target.startswith("/") or repo_root is not None
+        ) and not target_path.exists()
         if source_gone and target_gone:
             unresolvable.append((label, source, target))
         else:

@@ -10,7 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from lib.errors import LockfileError
-from lib.lockfile import load_lockfile, save_lockfile
+from lib.lockfile import compute_checksum, load_lockfile, save_lockfile
+from lib.resolver import is_already_installed
 
 
 def _legacy_entry() -> dict:
@@ -152,3 +153,59 @@ def test_newer_lockfile_schema_fails_closed(tmp_path: Path) -> None:
 
     with pytest.raises(LockfileError, match="Unsupported lockfile schema_version"):
         load_lockfile(path)
+
+
+def test_relative_install_target_is_resolved_against_selected_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    elsewhere = tmp_path / "elsewhere"
+    target = project / ".agents" / "skills" / "python-dev"
+    target.mkdir(parents=True)
+    elsewhere.mkdir()
+    entry = _legacy_entry()
+    entry["install_target"] = ".agents/skills/python-dev/"
+    (project / ".library.lock").write_text(
+        yaml.safe_dump({"installed": [entry]})
+    )
+
+    monkeypatch.chdir(elsewhere)
+
+    assert is_already_installed("python-dev", project, "project", "skill")
+
+
+def test_local_tamper_uses_selected_project_for_relative_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    project = tmp_path / "project"
+    elsewhere = tmp_path / "elsewhere"
+    target = project / ".agents" / "scripts" / "example.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("print('tampered')\n")
+    elsewhere.mkdir()
+    expected = tmp_path / "expected.py"
+    expected.write_text("print('expected')\n")
+    entry = {
+        **_legacy_entry(),
+        "name": "example",
+        "type": "script",
+        "install_target": ".agents/scripts/example.py",
+        "checksum_type": "file",
+        "checksum_sha256": compute_checksum(expected),
+        "content_sha256": compute_checksum(expected),
+    }
+    (project / ".library.lock").write_text(
+        yaml.safe_dump({"installed": [entry]})
+    )
+    spec = importlib.util.spec_from_file_location(
+        "library_portable_path_test", REPO_ROOT / "scripts" / "library.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.chdir(elsewhere)
+
+    assert module._has_local_tamper(project, "project", "script", "example")

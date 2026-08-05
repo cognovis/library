@@ -62,6 +62,20 @@ LEGACY_PRIMITIVE_TYPES = {
 LOCKFILE_SCHEMA_VERSION = 2
 
 
+def resolve_lockfile_path(path_value: str | Path, project_root: Path) -> Path:
+    """Resolve a persisted lockfile path against its project root.
+
+    Project-scoped lockfiles use repository-relative paths so they remain
+    portable after a checkout is moved. Global entries and legacy project
+    entries may still be absolute. Readers must use this helper instead of
+    allowing ``Path`` to resolve relative values against the process CWD.
+    """
+    path = Path(str(path_value).rstrip("/")).expanduser()
+    if path.is_absolute():
+        return path
+    return project_root / path
+
+
 def root_id(primitive_type: str, name: str) -> str:
     """Return the stable identity for one direct artifact root."""
     return f"{canonical_lockfile_type(primitive_type)}:{name}"

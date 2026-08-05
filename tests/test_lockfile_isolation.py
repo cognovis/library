@@ -165,3 +165,27 @@ def test_remote_source_is_not_called_unresolvable():
 
     assert unresolvable == []
     assert still_unknown == ["skill:remote-thing"]
+
+
+def test_relative_missing_target_is_classified_against_project_root(tmp_path):
+    installed = [
+        {
+            "name": "local-script",
+            "type": "script",
+            "source": str(tmp_path / "gone" / "local-script.py"),
+            "install_target": ".agents/scripts/local-script.py",
+        }
+    ]
+
+    unresolvable, still_unknown = LIBRARY_MODULE._classify_unknown_entries(
+        ["script:local-script"], installed, repo_root=tmp_path
+    )
+
+    assert still_unknown == []
+    assert unresolvable == [
+        (
+            "script:local-script",
+            str(tmp_path / "gone" / "local-script.py"),
+            ".agents/scripts/local-script.py",
+        )
+    ]
