@@ -1,7 +1,7 @@
 # Agentic Primitives Glossary
 
 > v0 — source of truth for primitive definitions used across the cognovis-library multi-harness stack.
-> Last updated: 2026-05-24
+> Last updated: 2026-08-05
 >
 > **Claim labeling convention**: Every per-harness behavioral claim is labeled
 > **NORMATIVE** (verified against vendor docs / confirmed behavior) or
@@ -41,6 +41,11 @@ Does it need an isolated context budget / own tool permissions?
 
 Must it fire regardless of what the model decides?
  └─ YES → GUARDRAIL / HOOK (runs outside the LLM loop)
+ └─ NO  → Continue below.
+
+Does it define the authoritative Library-managed environment for one project
+class or the global lobby, including safe retirement of obsolete members?
+ └─ YES → WORKSPACE (metadata-only desired-state root; no harness artifact)
  └─ NO  → Continue below.
 
 Is it a bundle of multiple primitives above?
@@ -121,6 +126,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
 | 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | n/a | details |
 | 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files and extension bundles | files and directories | Pi-native | verified | verified | project-only; Open Skills stays authoritative for methods |
+| 15 | [Workspace](primitives/workspace.md) | **YES** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | members inherit support | metadata-only desired-state root; lifecycle owned by Library CLI |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
@@ -269,6 +275,14 @@ spawn fresh-context model subagents. Distinct from **script** (#9 — runs no
 model) and **agent** (#3 — a single context window, not control flow over many).
 Established by [ADR-0006](adr/workflow-primitive.md).
 
+### 15. Workspace
+
+Details: [Workspace](primitives/workspace.md). A metadata-only requested root
+whose constitutive feature is ownership-aware desired-state reconciliation. It
+is distinct from **Package** (#5): Package is an atomic content composite;
+Workspace has no deployable artifact and can explicitly retire clean, ownerless
+receipts through ADR-0010's prune contract.
+
 
 ## Precedence and Name Collision Policy
 
@@ -315,6 +329,12 @@ then lockfile. The Layer-B cache (`~/.local/share/library/skills/...`) is
 garbage-collected separately by `/library prune-cache` once no lockfile entry
 references it.
 
+Workspace reconciliation follows a stricter ownership protocol. Removing a
+Workspace unregisters only its requested root and prints the resulting plan.
+Physical receipt deletion requires `library workspace sync --prune --apply`,
+freshly resolved zero-owner proof, matching per-file digests, and an atomic
+post-prune lock write before target deletion. See ADR-0010.
+
 ### Admin override
 
 Anthropic's marketplace force-enable operates outside Library's path rules.
@@ -331,6 +351,8 @@ Library treats managed skills as read-only and does not override them.
   navigation entrypoint and compatibility anchor map.
 - **Name Collision Policy**: `docs/policy/name-collision.md` (CL-b4o) — authoritative
   policy for collision handling, symlink lifecycle, and uninstall completeness.
+- **Workspace Desired State**: [ADR-0010](adr/workspace-desired-state-reconciliation.md)
+  — universal ownership, lockfile v2, scope isolation, and safe pruning.
 - **Audit doc** (`docs/audit/skills-origin.md`, CL-23z): This doc's taxonomy is used to
   classify the intent of every existing artifact. CL-23z inventory uses PRIMITIVES.md
   definitions to classify all 44 agents in scope.

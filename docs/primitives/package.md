@@ -16,6 +16,12 @@ model-invoked by themselves; see Script below.)
 bundling — it contains multiple primitive types that work together as a coherent
 capability. Installing a package installs all its parts atomically.
 
+Per ADR-0010, atomicity describes the install transaction: either every required
+member materializes successfully or the Package root is not committed. Each
+member still receives its own lockfile receipt. When a Package root is removed,
+an unshared member may become pruneable while a member reached by another direct,
+Package, or Workspace root remains installed.
+
 **Trigger semantics.** Packages are not directly invoked. A user (or CI) runs
 `/install-package <name>` (`pi install <source>`, `/library use <name>`) to
 install. After installation, each bundled primitive activates according to its
@@ -35,6 +41,9 @@ bundled skill/hook for its standing context or latency cost.
 - Do NOT create a package for a single skill — that is over-packaging.
 - Do NOT treat a package as a primitive you can invoke — install it first, then invoke
   its constituent primitives normally.
+- Do NOT use a package to describe the complete desired state of a repository or
+  global lobby. Use a [Workspace](workspace.md) when ownership-aware
+  reconciliation and safe retirement are the defining behavior.
 
 **Worked examples.**
 

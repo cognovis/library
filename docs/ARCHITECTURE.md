@@ -8,6 +8,39 @@ One **catalog** (this repo) that distributes skills/agents/prompts/hooks/workflo
 across **multiple harnesses** (Claude Code, OpenAI Codex CLI, future: Pi) via a
 **per-repo on-demand pull** model — not deploy-all.
 
+## Library Workspace control plane
+
+[ADR-0010](adr/workspace-desired-state-reconciliation.md) adds a desired-state
+control plane above artifact installation. A **Library Workspace** is a
+metadata-only catalog primitive that names typed requested roots for one project
+or the user-global lobby. It has no harness file of its own.
+
+The lockfile owns the deep behavior:
+
+```text
+requested roots (direct primitives, Packages, Workspaces)
+                         |
+                         | fresh complete resolution
+                         v
+                 materialized receipts
+                         |
+                         | explicit --prune --apply
+                         v
+         clean + verified + ownerless receipts only
+```
+
+Ownership is universal rather than Workspace-private. A shared receipt survives
+while any requested root reaches it. Persisted owner edges explain a plan but
+never replace fresh resolution. Project and global closures are isolated in
+their existing lock scopes; a global Workspace can define the lobby only because
+all direct global Library roots share `~/.config/library/global.lock`.
+Intrinsically global dependencies such as MCP are checked as global-lock
+prerequisites for a project root; they never become project ownership edges.
+
+Installation scope is separate from model-context scope. Workspace members keep
+their Skill, Standard, Agent, Hook, Workflow, or Script load semantics, so an
+installed lobby is not automatically resident in every prompt.
+
 ## The 4-layer Agentic Stack
 
 Each layer builds on the one below (terminology from disler / IndyDevDan):
@@ -44,6 +77,15 @@ differs. The `cdx` wrapper (bead `CL-tap`) parallels `cld`.
    repo pulls only what it needs.
 4. **Use** — invoked normally once in place. Same as any native skill/agent.
 
+A Workspace adds an optional desired-state route across stages 2 and 3:
+
+- a marketplace publishes a small versioned Workspace manifest containing typed
+  roots;
+- `library workspace use <name>` registers that root and applies additions;
+- `library workspace status` explains the freshly resolved plan; and
+- `library workspace sync --prune --apply` can retire only exact, verified,
+  ownerless Library receipts. Ordinary `library sync` remains non-pruning.
+
 Plus the return path: `/library <primitive> push <name>` sends local edits back upstream;
 `library sync` pulls latest for all installed items.
 
@@ -53,6 +95,7 @@ Consumer projects should commit the project-local `.agents/` tree:
 
 ```text
 <consumer-project>/
+├── .library.lock             # requested roots + receipts after lockfile v2
 ├── .agents/
 │   ├── skills/<name>/SKILL.md
 │   ├── standards/<name>/<name>.md
@@ -228,6 +271,7 @@ required.
 | **MCP-Server** | `mcpServers` in `.mcp.json` (or `--mcp-config`) | `mcp_servers` TOML in `~/.codex/config.toml` | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config syntax is not portable. The generic installer supports Claude Code, Codex, OpenCode, Antigravity-compatible JSON config, and Cursor. `cognovis-tools` intentionally declares only Claude Code, Codex, and Cursor Agent. |
 | **Plugin** | Bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | TBD | **Per-harness** — both harnesses now support plugins; bundle formats and install commands differ |
 | **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
+| **Workspace** | Library CLI metadata; members project individually | Same | Same | Same | **Metadata-portable** — no harness artifact; resolved members inherit their own portability |
 
 **Reading the table:**
 - *Portable* means the same artifact file works across all harnesses that support the primitive.
@@ -249,6 +293,9 @@ tree, and worked examples from real codebase items, see [docs/PRIMITIVES.md](PRI
 | [ADR-0005](adr/library-plane-vocabulary.md) | Library catalog plane vocabulary and Gas City PackV2 projection boundaries | Accepted |
 | [ADR-0006](adr/workflow-primitive.md) | Workflow as a first-class Library primitive | Accepted |
 | [ADR-0007](adr/library-tool-surface-mcp.md) | Library tool surface as a second species of MCP server | Proposed |
+| [ADR-0008](adr/git-hook-chain-existing-composition.md) | Chain-safe composition for existing Git hooks | Accepted |
+| [ADR-0009](adr/intentional-release-lifecycle.md) | Intentional Library release lifecycle | Accepted |
+| [ADR-0010](adr/workspace-desired-state-reconciliation.md) | Universal Library ownership and Workspace desired-state reconciliation | Accepted; implementation tracked by CL-r7n6 |
 | [ADR: library.yaml information model](adr/library-yaml-information-model.md) | Root section ownership, primitive catalog nesting, and source registry nesting | Accepted |
 
 ## Open beads

@@ -1,20 +1,23 @@
 # .library.lock Format
 
-> **Status**: NORMATIVE — this document is the authoritative format specification for the
-> `.library.lock` file used by the cognovis-library tooling.
+> **Status**: TRANSITIONAL NORMATIVE — this document is the authoritative format
+> specification for `.library.lock`. Schema v2 is the accepted target from
+> ADR-0010; the schema v1 sections remain the current implementation until
+> `CL-r7n6` lands.
 >
-> **Bead**: CL-t21 / CL-yx2 / CL-yum0 | **Epic**: CL-36o | **Last updated**: 2026-07-16
+> **Bead**: CL-t21 / CL-yx2 / CL-yum0 / CL-r7n6 | **Epic**: CL-36o | **Last updated**: 2026-08-05
 >
 > **Applies to**: `/library <primitive> use`, `/library <primitive> remove`,
-> `/library sync`, `/library audit`, and any tooling that installs or manages library items.
+> `/library sync`, `/library workspace use|status|sync|remove`, `/library audit`,
+> and any tooling that installs or manages Library items.
 
 ---
 
 ## Overview
 
-Library lockfiles record every item installed by `/library <primitive> use`. Most
-primitives may use either the project or global lockfile; MCP registrations are
-always user-global and therefore exist only in the global lockfile. They provide:
+Library lockfiles record Library intent and materialized state. Most primitives
+may use either the project or global lockfile; MCP registrations are always
+user-global and therefore exist only in the global lockfile. They provide:
 
 - **Reproducibility**: any clone of the project can restore the exact set of installed
   items by running `/library sync` (which reads the lockfile, not the catalog).
@@ -22,6 +25,21 @@ always user-global and therefore exist only in the global lockfile. They provide
   time against the current on-disk file to identify modifications made outside the Library.
 - **Audit trail**: every new entry records the producing catalog identity, source URL,
   commit SHA, license, and install timestamp for security and compliance review.
+- **Ownership** in schema v2: explicit requested roots are separated from
+  materialized receipts so a freshly resolved graph can preserve shared
+  dependencies and identify only clean ownerless receipts as prune candidates.
+
+## Version Status and Transition
+
+| Version | State | Top-level model | Deletion authority |
+|---------|-------|-----------------|--------------------|
+| v1 | Implemented legacy format | `installed:` flat list | Explicit primitive removal only; no desired-state prune |
+| v2 | Accepted target, implementation bead `CL-r7n6` | `requested_roots:` plus `receipts:` | Workspace prune only after fresh resolution and `--prune --apply` |
+
+Readers implementing new behavior must follow v2. Operators using the released
+CLI must follow the v1 sections until `CL-r7n6` ships the migration. The CLI must
+reject a lockfile schema newer than it supports rather than interpreting it as
+v1.
 
 ---
 
@@ -80,7 +98,140 @@ because ordinary MCP removal also unregisters the global service.
 
 ---
 
-## Format
+## Schema v2 Target Format
+
+The file remains YAML and uses the same project and global locations. Schema v2
+separates user intent from materialized state:
+
+```yaml
+schema_version: 2
+migration:
+  prune_ack_required: false
+
+requested_roots:
+  - id: workspace:python-cli
+    type: workspace
+    name: python-cli
+    scope: project
+    catalog_identity: https://example.invalid/cognovis-catalog
+    constraint: ">=1.0.0,<2.0.0"
+    resolved_version: 1.0.0
+    definition_commit: 0123456789abcdef
+
+receipts:
+  - id: skill:python-dev@1.0.0
+    type: skill
+    name: python-dev
+    scope: project
+    catalog_identity: https://example.invalid/cognovis-catalog
+    source: https://example.invalid/cognovis-catalog/skills/python-dev/SKILL.md
+    source_commit: fedcba9876543210
+    resolved_version: 1.0.0
+    cache_path: /Users/example/.local/share/library/skills/cognovis-core/python-dev@fedcba98/
+    install_timestamp: 2026-08-05T10:00:00Z
+    verified: true
+    adopted: false
+    prune_blocked_reason: null
+    targets:
+      - path: .agents/skills/python-dev/SKILL.md
+        kind: file
+        content_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
+      - path: .claude/skills/python-dev
+        kind: symlink
+        link_target: ../../.agents/skills/python-dev
+    owners_cache:
+      - workspace:python-cli
+```
+
+### v2 requested root fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | YES | Stable root identity unique within the selected lock scope. |
+| `type` | YES | Any directly requestable primitive type, including `workspace` and `package`. |
+| `name` | YES | Catalog name of the requested primitive. |
+| `scope` | YES | `project` or `global`; every resolved member must use the same scope. |
+| `catalog_identity` | YES | Stable identity of the catalog that supplied the root. |
+| `constraint` | Optional | User-requested compatible version range or pin. |
+| `resolved_version` | YES | Version selected by the last complete resolution. |
+| `definition_commit` | YES | Exact catalog or definition pin used for that resolution. |
+
+Direct primitives, Packages, and Workspaces use the same root model. Transitive
+dependencies are receipts, not implicit direct roots.
+
+### v2 receipt fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id`, `type`, `name`, `scope` | YES | Identity of one materialized primitive in one lock scope. |
+| `catalog_identity` | YES | Catalog provenance used for collision, adoption, and prune safety. |
+| `source`, `source_commit`, `resolved_version` | YES | Exact resolved source identity. |
+| `cache_path` | When cached | Layer-B cache location; retained for rollback and cache GC. |
+| `install_timestamp` | YES | UTC completion time for the verified materialization. |
+| `verified` | YES | Whether every recorded target has install-time proof. Unverified receipts are never pruneable. |
+| `adopted` | YES | Whether an exact pre-existing target was explicitly adopted. |
+| `prune_blocked_reason` | YES, nullable | Drift, migration, foreign manager, or another reason deletion is blocked. |
+| `targets` | YES | Exact file, directory, or symlink inventory created or adopted for this receipt. |
+| `targets[].content_sha256` | Every file | Per-file install-time digest. Aggregate directory hashes may supplement but not replace it. |
+| `targets[].link_target` | Every symlink | Literal `readlink` value recorded immediately after install. |
+| `owners_cache` | Optional | Derived explanation only. Never resolver input for later pruning. |
+
+Library-created v2 harness bridges within one scope use normalized relative
+targets computed from the bridge parent to the canonical target. For example,
+the literal target from `.claude/skills/python-dev` to
+`.agents/skills/python-dev` is `../../.agents/skills/python-dev`. Verification
+compares the exact recorded `readlink` value; it does not normalize a different
+absolute or relative spelling into a match.
+
+A directory target is only a container marker. Prune removes its individually
+recorded files and links, then removes the directory only when empty. Any
+unrecorded nested entry is drift and makes the receipt prune-blocked; recursive
+deletion of a recorded directory is forbidden.
+
+The authoritative owner set is recomputed from every requested root against a
+fresh, complete, catalog-pinned dependency graph. Persisted owners and edges are
+only an audit cache. Conflicting constraints for one materialization abort the
+operation before mutation.
+
+### v1 to v2 migration
+
+Migration is conservative and one-way unless a backup is restored:
+
+1. Every v1 `installed:` entry becomes its own direct requested root.
+2. Its known install fields become a receipt and target inventory where possible.
+3. The receipt is marked `verified: false` and prune-blocked until a verifying
+   reinstall records per-file digests and exact link targets.
+4. `migration.prune_ack_required` is set. Additive Workspace operations remain
+   allowed, but the first `workspace sync --prune` is plan-only and emits a plan
+   digest. The guard clears only when a later
+   `--prune --apply --acknowledge-plan <digest>` supplies the exact unchanged
+   digest.
+5. Migration never attributes an old entry to a Workspace, even when the current
+   Workspace closure contains the same primitive.
+
+Unknown state is retained. It is never converted into deletion authority.
+
+### v2 write, recovery, and prune ordering
+
+The selected lock scope has one write mutex. Reconciliation resolves the entire
+root set before mutation, journals verified additions and updates per artifact,
+and aborts all pruning on any incomplete catalog, conflict, addition, or update.
+For an approved prune, the complete deletion manifest and retired receipts are
+durably journaled before the intended post-prune lock state is written
+atomically. Only then are exact recorded targets deleted. A crash may therefore
+leave a physical orphan recoverable from the journal but must never leave a
+receipt claiming a deleted file. Resume replays completed receipt operations
+into a consistent lock view before fresh re-resolution.
+
+Workspace deletion additionally requires `--prune --apply`. Drifted,
+unverified, foreign, ambiguous, project-authored, or externally managed targets
+remain untouched and are surfaced by Workspace status.
+
+## Legacy v1 Format
+
+The remainder of this format section documents the released v1 implementation.
+It is retained for migration and current operator compatibility; it is not the
+target shape for new Workspace code.
 
 The file is YAML. The top-level key is `installed`, containing an ordered list of entries.
 
@@ -265,6 +416,42 @@ the lock record was written.
 
 ## Lockfile Lifecycle
 
+### Schema v2 Workspace lifecycle
+
+- `library workspace use` registers an idempotent requested root and applies
+  additions and updates only.
+- `library workspace status` resolves all roots in the selected scope and emits
+  a read-only plan with ownership reasons, drift, conflicts, adoption candidates,
+  missing global prerequisites, and prune candidates.
+- `library workspace sync` refreshes additions and updates but does not prune by
+  default. `--prune` without `--apply` previews deletion. Physical deletion
+  requires `--prune --apply` after a complete plan.
+- `library workspace adopt <workspace> <type>:<name> --definition-commit <pin>`
+  records one exact-match existing member as adopted without creating a direct
+  root.
+- `library workspace remove` unregisters the root and reports the resulting plan;
+  it does not delete targets by itself and prints
+  `library workspace sync --all --prune --apply --scope <scope>`.
+- Workspace selectors limit additions and updates. Prune always evaluates the
+  complete requested-root set in the selected lock scope, and `--all --prune`
+  remains valid when zero Workspaces are registered.
+- General `library sync` remains conservative and non-pruning while reading and
+  refreshing schema v2 receipts.
+
+Global-only primitive types such as MCP are prerequisite assertions when reached
+from a project root. They are checked against the global lock before project
+mutation but never become project receipts or project ownership edges.
+
+Ownership-derived prune requires a verified, clean receipt. Explicit named
+primitive removal is separate user consent and may remove the ownerless named
+artifact's recorded targets after warning about unverified or drifted legacy
+state. It never silently removes newly ownerless transitive receipts; it prints
+the selected-scope Workspace prune follow-up.
+
+The complete safety and recovery protocol is normative in ADR-0010.
+
+### Legacy v1 lifecycle
+
 ### `/library <primitive> use` writes/updates an entry
 
 After a successful install, write or update the entry:
@@ -374,6 +561,8 @@ installed:
 
 ## Cross-References
 
+- `docs/adr/workspace-desired-state-reconciliation.md` (ADR-0010) — universal ownership, Workspace commands, prune safety, and recovery ordering.
+- `docs/schema/workspace.schema.json` — target Workspace manifest schema (`CL-r7n6`).
 - `docs/schema/lockfile.schema.json` — JSON Schema for machine validation (`checksum_type` field, expanded `type` enum).
 - `docs/adr/three-layer-cache-architecture.md` (ADR-0003) — Three-layer deployment model that introduced `marketplace` and `cache_path`.
 - `docs/policy/name-collision.md` — Canonical/bridge model for `bridge_symlinks`.

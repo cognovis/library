@@ -8,7 +8,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
-related_adrs: ["0002", "0003"]
+amended_by: ["0010"]
+related_adrs: ["0002", "0003", "0010"]
 ---
 
 # ADR-0004: Frontmatter-driven dependency resolution + harness-neutral source layout for library primitives
@@ -16,6 +17,12 @@ related_adrs: ["0002", "0003"]
 ## Status
 
 Accepted.
+
+Amended by ADR-0010. Frontmatter remains authoritative for a primitive's
+dependencies and transitive installation remains idempotent. ADR-0010 adds
+universal requested-root ownership, fresh reachability resolution, and safe
+transitive removal. It also clarifies that Workspace is not the rejected bundle
+primitive from Decision 4.
 
 ## Context
 
@@ -80,6 +87,25 @@ A single contract that answers:
 - **How do we prevent drift between declaration and reality?**
 
 ## Decision
+
+### 2026-08-05 amendment: desired-state ownership completes the graph lifecycle
+
+ADR-0010 extends the dependency graph from additive installation to universal
+ownership-aware reconciliation:
+
+- every direct primitive, Package, and Workspace request is a requested root;
+- materialized primitives receive individual receipts;
+- reachability is recomputed from all requested roots against fresh, complete,
+  catalog-pinned definitions before a receipt can become pruneable;
+- persisted edge or owner snapshots are audit-only and never authoritative; and
+- incompatible constraints for one materialization fail before mutation.
+- an intrinsically global dependency such as `mcp:` reached from a project root
+  is a prerequisite assertion against the global lock, not a project ownership
+  edge; a missing or incompatible prerequisite fails before project mutation.
+
+This amendment does not change where a primitive declares `requires:`. It changes
+how the resolved graph is retained and reconciled after roots or dependencies
+change.
 
 ### Decision 1: Frontmatter `requires:` is the authoritative declaration
 
@@ -169,6 +195,12 @@ validator complexity, and resolver branching. The graph already
 expresses bundles without a new type. See "Alternatives Considered"
 for the rejected `library.bundles:` proposal.
 
+**ADR-0010 clarification:** Workspace does not reverse this decision. A bundle
+or Package is a content-composition and distribution concern. Workspace is a
+metadata-only requested root whose constitutive feature is authoritative
+desired-state ownership and safe reconciliation. It carries typed roots, not
+deployable members, and has no harness projection.
+
 ### Decision 5: `/library use` resolves transitively, idempotently
 
 Updated `/library use <name>` semantics:
@@ -190,6 +222,13 @@ Updated `/library use <name>` semantics:
 Idempotency: each step checks "already installed and at the right
 version per lockfile" and skips if so. Force re-install: explicit
 flag `--reinstall`.
+
+**ADR-0010 amendment:** the full transitive closure is materialized as receipts,
+while only explicit user requests are recorded as requested roots. Dependency
+receipts do not silently become direct roots. Package installation remains an
+atomic transaction, but member receipts have independent lifetime and survive
+whenever another root still reaches them. Workspace pruning follows ADR-0010's
+explicit `--prune --apply` and fail-closed safety contract.
 
 ### Decision 6: Source repos use a harness-neutral top-level layout
 

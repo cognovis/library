@@ -3,10 +3,11 @@
 > **Status**: NORMATIVE — this document is the authoritative policy for how the
 > cognovis-library handles skill name collisions across harness paths.
 >
-> **Bead**: CL-b4o | **Epic**: CL-36o | **Last updated**: 2026-04-30
+> **Bead**: CL-b4o / CL-r7n6 | **Epic**: CL-36o | **Last updated**: 2026-08-05
 >
-> **Applies to**: `/library skill use`, `/library skill remove`, `/library sync`, and any
-> tooling that installs or manages skills, agents, or prompts across harnesses.
+> **Applies to**: `/library skill use`, `/library skill remove`, `/library sync`,
+> `/library workspace use|status|sync|remove`, and any tooling that installs or
+> manages primitives across harnesses.
 
 ---
 
@@ -34,6 +35,12 @@ Am I removing a skill?
  └─ YES → Uninstall rule (Decision 6):
            Remove BOTH canonical and all bridge symlinks.
            Do NOT leave dangling bridges.
+
+Does a Workspace plan want to adopt or prune an existing path?
+ └─ YES → ADR-0010 ownership rule:
+           No Library provenance → collision, never overwrite or delete.
+           Exact one-version per-file digest match + explicit adoption → receipt.
+           Drift, ambiguity, another manager, or any remaining owner → no prune.
 
 Is this a managed/marketplace skill that Anthropic force-enables?
  └─ YES → Admin override (Decision 7):
@@ -161,6 +168,13 @@ The bridges must be created AFTER the canonical is in place. Reversing the
 order produces dangling symlinks.
 
 **Bridge symlink command** (from cookbook/use.md Step 5c):
+
+The command below documents the released v1 procedure, which writes an absolute
+target. Under lockfile v2, Library-created bridges within one lock scope use the
+normalized relative path from the bridge parent to the canonical target and
+record the literal `readlink` value. Existing v1 absolute bridges remain valid
+legacy receipts but a v2 verifier never treats a different spelling as an exact
+match.
 
 ```bash
 canonical_target=".agents/skills/<name>"        # already pointing at cache
@@ -361,6 +375,19 @@ the same file.
 ## Decision 6: Uninstall Behavior
 
 **Policy: `/library skill remove` must reverse ALL bridges, not just the canonical.**
+
+**ADR-0010 amendment:** With lockfile v2, `remove` first unregisters the direct
+requested root and freshly resolves all remaining roots. If another direct,
+Package, or Workspace root still reaches the receipt, the canonical target,
+bridges, and receipt remain. If it is ownerless, the named remove command is
+explicit user consent to delete that named artifact's recorded targets even when
+a migrated receipt is unverified. It must warn about unverified or drifted state
+and use the journaled safe lock-before-delete path. Verification remains
+mandatory for ownership-derived Workspace pruning, where no artifact was named
+for deletion. Newly ownerless transitive receipts are not silently removed; the
+command prints `library workspace sync --all --prune --apply --scope <scope>`.
+The shell sequence below documents the legacy v1 implementation and must not be
+copied into the v2 reconciler.
 
 When a skill was dual-installed (canonical + bridge), removing only the canonical
 leaves a dangling symlink. That dangling symlink will cause Codex to fail on skill
