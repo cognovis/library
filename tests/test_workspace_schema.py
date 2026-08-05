@@ -23,8 +23,8 @@ def manifest() -> dict:
         "description": "Shared Python CLI development baseline",
         "status": "experimental",
         "roots": [
-            {"type": "skill", "name": "python-dev", "constraint": ">=1,<2"},
-            {"type": "skill", "name": "python-test", "constraint": ">=1,<2"},
+            {"type": "skill", "name": "python-dev", "constraint": ">=1.0.0,<2.0.0"},
+            {"type": "skill", "name": "python-test", "constraint": ">=1.0.0,<2.0.0"},
         ],
     }
 
@@ -55,6 +55,13 @@ def test_workspace_manifest_rejects_v1_composition_expansion(
 def test_workspace_manifest_rejects_one_member_alias(manifest: dict) -> None:
     candidate = deepcopy(manifest)
     candidate["roots"] = candidate["roots"][:1]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(candidate, SCHEMA)
+
+
+def test_workspace_manifest_rejects_partial_semver_constraint(manifest: dict) -> None:
+    candidate = deepcopy(manifest)
+    candidate["roots"][0]["constraint"] = ">=1,<2"
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(candidate, SCHEMA)
 

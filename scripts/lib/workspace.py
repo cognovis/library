@@ -19,7 +19,7 @@ from typing import Any
 from .catalog import get_catalogs, get_entries, normalize_catalog_identity
 from .errors import EXIT_AMBIGUOUS, LibraryError
 from .lockfile import compute_checksum, root_id
-from .resolver import resolve_requires
+from .resolver import resolve_requires, resolve_requires_bound
 
 WORKSPACE_SCHEMA_VERSION = 1
 PROJECT_RECEIPT_LIMIT = 30
@@ -70,6 +70,8 @@ class WorkspaceClosure:
 
     artifacts: tuple[tuple[str, str], ...]
     prerequisites: tuple[tuple[str, str], ...]
+    artifact_bindings: tuple[tuple[str, str, str], ...] = ()
+    prerequisite_bindings: tuple[tuple[str, str, str], ...] = ()
 
 
 def workspace_policy(catalog: dict[str, Any], scope: str) -> dict[str, float | int]:
@@ -174,6 +176,16 @@ def validate_workspace_manifest(manifest: dict[str, Any]) -> None:
         if member_id in seen:
             raise LibraryError(f"Workspace contains duplicate root {member_id}")
         seen.add(member_id)
+        constraint = item.get("constraint")
+        if constraint is not None:
+            clauses = str(constraint).split(",")
+            if not clauses or any(
+                re.fullmatch(r"(?:<=|>=|==|<|>)\d+\.\d+\.\d+", clause) is None
+                for clause in clauses
+            ):
+                raise LibraryError(
+                    f"Unsupported Workspace version constraint {constraint!r}"
+                )
     context_fraction = manifest.get("standing_context_fraction")
     if context_fraction is not None and (
         not isinstance(context_fraction, (int, float))
@@ -325,6 +337,8 @@ def resolve_workspace_closure(
 
     ordered_artifacts: list[tuple[str, str]] = []
     prerequisites: list[tuple[str, str]] = []
+    artifact_bindings: list[tuple[str, str, str]] = []
+    prerequisite_bindings: list[tuple[str, str, str]] = []
     seen_artifacts: set[tuple[str, str]] = set()
     seen_prerequisites: set[tuple[str, str]] = set()
     for root in roots:
@@ -352,15 +366,19 @@ def resolve_workspace_closure(
                     f"Workspace constraint {constraint!r} is unsatisfied for "
                     f"{primitive}:{name} at version {version!r}"
                 )
-        closure = resolve_requires(catalog, primitive, name, repo_root, scope)
-        for member in closure:
+        closure = resolve_requires_bound(
+            catalog,
+            primitive,
+            name,
+            source_catalog=workspace.catalog_name,
+        )
+        for member_primitive, member_name, member_source in closure:
+            member = (member_primitive, member_name)
             member_catalog_entry = next(
-                (
-                    entry
-                    for entry in get_entries(catalog, member[0])
-                    if entry.get("name") == member[1]
-                ),
-                {},
+                entry
+                for entry in get_entries(catalog, member_primitive)
+                if entry.get("name") == member_name
+                and _entry_catalog_name(entry) == member_source
             )
             declared_scope = member_catalog_entry.get("default_scope")
             if scope == "project" and (
@@ -368,6 +386,9 @@ def resolve_workspace_closure(
             ):
                 if member not in seen_prerequisites:
                     prerequisites.append(member)
+                    prerequisite_bindings.append(
+                        (member_primitive, member_name, member_source)
+                    )
                     seen_prerequisites.add(member)
                 continue
             if declared_scope in {"project", "global"} and declared_scope != scope:
@@ -377,6 +398,7 @@ def resolve_workspace_closure(
                 )
             if member not in seen_artifacts:
                 ordered_artifacts.append(member)
+                artifact_bindings.append((member_primitive, member_name, member_source))
                 seen_artifacts.add(member)
 
     limit = int(policy["max_receipts"])
@@ -384,7 +406,12 @@ def resolve_workspace_closure(
         raise LibraryError(
             f"Workspace closure has {len(ordered_artifacts)} receipts; limit is {limit}"
         )
-    return WorkspaceClosure(tuple(ordered_artifacts), tuple(prerequisites))
+    return WorkspaceClosure(
+        tuple(ordered_artifacts),
+        tuple(prerequisites),
+        tuple(artifact_bindings),
+        tuple(prerequisite_bindings),
+    )
 
 
 def make_workspace_requested_root(
@@ -426,7 +453,11 @@ def _resolve_requested_root(
     root: dict[str, Any],
     repo_root: Path,
     scope: str,
-) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+) -> tuple[
+    list[tuple[str, str]],
+    list[tuple[str, str]],
+    dict[str, dict[str, str]],
+]:
     primitive = str(root.get("type") or "")
     name = str(root.get("name") or "")
     if primitive == "workspace":
@@ -440,7 +471,10 @@ def _resolve_requested_root(
                 f"Workspace {reference} catalog identity changed; explicit re-registration required"
             )
         closure = resolve_workspace_closure(catalog, workspace, repo_root, scope)
-        return list(closure.artifacts), list(closure.prerequisites)
+        requirements = _prerequisite_requirements(
+            catalog, closure.prerequisite_bindings
+        )
+        return list(closure.artifacts), list(closure.prerequisites), requirements
     if primitive not in ARTIFACT_ROOT_TYPES:
         raise LibraryError(f"Unsupported requested root {primitive}:{name}")
     closure = resolve_requires(catalog, primitive, name, repo_root, scope)
@@ -451,7 +485,49 @@ def _resolve_requested_root(
             prerequisites.append(member)
         else:
             artifacts.append(member)
-    return artifacts, prerequisites
+    direct_bindings: list[tuple[str, str, str]] = []
+    for prerequisite_primitive, prerequisite_name in prerequisites:
+        candidate = next(
+            (
+                entry
+                for entry in get_entries(catalog, prerequisite_primitive)
+                if entry.get("name") == prerequisite_name
+            ),
+            None,
+        )
+        if candidate is not None:
+            direct_bindings.append(
+                (
+                    prerequisite_primitive,
+                    prerequisite_name,
+                    _entry_catalog_name(candidate),
+                )
+            )
+    return (
+        artifacts,
+        prerequisites,
+        _prerequisite_requirements(catalog, tuple(direct_bindings)),
+    )
+
+
+def _prerequisite_requirements(
+    catalog: dict[str, Any],
+    bindings: tuple[tuple[str, str, str], ...],
+) -> dict[str, dict[str, str]]:
+    """Return catalog identity and version requirements for global assertions."""
+    identities = _catalog_identities(catalog)
+    requirements: dict[str, dict[str, str]] = {}
+    for primitive, name, source_catalog in bindings:
+        entry = next(
+            item
+            for item in get_entries(catalog, primitive)
+            if item.get("name") == name and _entry_catalog_name(item) == source_catalog
+        )
+        requirements[root_id(primitive, name)] = {
+            "catalog_identity": identities.get(source_catalog, ""),
+            "resolved_version": str(entry.get("version") or ""),
+        }
+    return requirements
 
 
 def _stable_digest(payload: dict[str, Any]) -> str:
@@ -468,14 +544,15 @@ def build_workspace_plan(
     """Recompute reachability and return an ownership-aware selected-scope plan."""
     owners: dict[str, list[str]] = {}
     prerequisite_owners: dict[str, list[str]] = {}
+    prerequisite_requirements: dict[str, dict[str, str]] = {}
     blockers: list[str] = []
     for requested_root in lock.get("requested_roots", []):
         if requested_root.get("scope", scope) != scope:
             continue
         owner_id = str(requested_root.get("id") or "")
         try:
-            artifacts, prerequisites = _resolve_requested_root(
-                catalog, requested_root, repo_root, scope
+            artifacts, prerequisites, root_prerequisite_requirements = (
+                _resolve_requested_root(catalog, requested_root, repo_root, scope)
             )
         except LibraryError as exc:
             blockers.append(f"{owner_id}: {exc}")
@@ -483,9 +560,16 @@ def build_workspace_plan(
         for primitive, name in artifacts:
             owners.setdefault(root_id(primitive, name), []).append(owner_id)
         for primitive, name in prerequisites:
-            prerequisite_owners.setdefault(root_id(primitive, name), []).append(
-                owner_id
-            )
+            prerequisite_id = root_id(primitive, name)
+            prerequisite_owners.setdefault(prerequisite_id, []).append(owner_id)
+            current = prerequisite_requirements.get(prerequisite_id)
+            requirement = root_prerequisite_requirements.get(prerequisite_id, {})
+            if current and current != requirement:
+                blockers.append(
+                    f"{prerequisite_id}: requested with conflicting catalog provenance"
+                )
+            else:
+                prerequisite_requirements[prerequisite_id] = requirement
 
     receipt_by_id = {
         str(
@@ -524,6 +608,13 @@ def build_workspace_plan(
             entry
             for entry in get_entries(catalog, primitive)
             if entry.get("name") == name
+            and (
+                not receipt.get("catalog_identity")
+                or _catalog_identities(catalog).get(_entry_catalog_name(entry))
+                == normalize_catalog_identity(
+                    str(receipt.get("catalog_identity") or "")
+                )
+            )
         ]
         catalog_version = next(
             (
@@ -533,7 +624,10 @@ def build_workspace_plan(
             ),
             None,
         )
-        if catalog_version and str(receipt.get("resolved_version") or "") != catalog_version:
+        if (
+            catalog_version
+            and str(receipt.get("resolved_version") or "") != catalog_version
+        ):
             updates.append(receipt_id)
     prune_candidates: list[dict[str, Any]] = []
     for receipt_id in sorted(receipt_ids - desired_ids):
@@ -553,8 +647,15 @@ def build_workspace_plan(
             "id": receipt_id,
             "owners": sorted(set(owners.get(receipt_id, []))),
             "shared": len(set(owners.get(receipt_id, []))) > 1,
+            "catalog_identity": receipt.get("catalog_identity"),
+            "resolved_version": receipt.get("resolved_version"),
+            "scope": receipt.get("scope", scope),
             "verified": bool(receipt.get("verified", False)),
             "prune_blocked_reason": receipt.get("prune_blocked_reason"),
+            "protection": (
+                receipt.get("prune_blocked_reason")
+                or (None if receipt.get("verified", False) else "receipt is unverified")
+            ),
         }
         for receipt_id, receipt in sorted(receipt_by_id.items())
     ]
@@ -571,7 +672,11 @@ def build_workspace_plan(
         "updates": updates,
         "receipts": receipts,
         "prerequisites": [
-            {"id": prerequisite_id, "requested_by": sorted(set(root_ids))}
+            {
+                "id": prerequisite_id,
+                "requested_by": sorted(set(root_ids)),
+                **prerequisite_requirements.get(prerequisite_id, {}),
+            }
             for prerequisite_id, root_ids in sorted(prerequisite_owners.items())
         ],
         "prune_candidates": prune_candidates,
@@ -612,10 +717,13 @@ def apply_prune_plan(
     repo_root: Path,
     acknowledge_digest: str,
     *,
+    lock_path: Path,
     managed_paths: dict[str, str] | None = None,
     allowed_roots: list[Path] | None = None,
 ) -> list[str]:
-    """Delete only digest-matching, exact, verified and clean receipt targets."""
+    """Commit a journaled prune transaction and resume exact target deletion."""
+    from .lockfile import save_lockfile
+
     prepared = prepare_prune_plan(
         lock,
         plan,
@@ -624,12 +732,42 @@ def apply_prune_plan(
         managed_paths=managed_paths,
         allowed_roots=allowed_roots,
     )
-    for item in prepared["targets"]:
-        Path(item["path"]).unlink()
-    for directory in prepared["directories"]:
-        Path(directory).rmdir()
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "prune",
+            "scope": plan.get("scope"),
+            "digest": plan.get("digest"),
+            **prepared,
+        },
+    )
     apply_post_prune_lock(lock, set(prepared["candidate_ids"]))
-    return [item["path"] for item in prepared["targets"]]
+    save_lockfile(lock_path, lock)
+    return recover_workspace_journal(lock_path, repo_root)
+
+
+def select_prune_candidates(
+    plan: dict[str, Any], candidate_ids: set[str]
+) -> dict[str, Any]:
+    """Return a digest-bound plan containing only explicitly selected receipts."""
+    selected = [
+        candidate
+        for candidate in plan.get("prune_candidates") or []
+        if str(candidate.get("id") or "") in candidate_ids
+    ]
+    if {str(item.get("id") or "") for item in selected} != candidate_ids:
+        missing = sorted(
+            candidate_ids - {str(item.get("id") or "") for item in selected}
+        )
+        raise LibraryError(f"Selected prune candidates are not ownerless: {missing}")
+    payload = {
+        "scope": plan.get("scope"),
+        "additions": plan.get("additions") or [],
+        "updates": plan.get("updates") or [],
+        "prune_candidates": selected,
+        "blockers": plan.get("blockers") or [],
+    }
+    return {**plan, "prune_candidates": selected, "digest": _stable_digest(payload)}
 
 
 def prepare_prune_plan(
@@ -651,10 +789,9 @@ def prepare_prune_plan(
             "Prune is blocked until migrated receipts are verified with "
             "library workspace sync --verify-receipts"
         )
-    managed_paths = managed_paths or {}
+    managed_paths = _canonical_managed_inventory(managed_paths or {})
     selected_roots = [
-        _canonical_delete_path(path.expanduser().absolute())
-        for path in (allowed_roots or [])
+        path.expanduser().absolute().resolve() for path in (allowed_roots or [])
     ]
     if not selected_roots:
         raise LibraryError("Prune blocked: no Library-managed roots are configured")
@@ -780,6 +917,14 @@ def _canonical_delete_path(path: Path) -> Path:
     return path.parent.resolve() / path.name
 
 
+def _canonical_managed_inventory(managed_paths: dict[str, str]) -> dict[str, str]:
+    """Normalize external-manager keys to the deletion safety boundary."""
+    return {
+        str(_canonical_delete_path(Path(raw).expanduser().absolute())): manager
+        for raw, manager in managed_paths.items()
+    }
+
+
 def workspace_allowed_roots(
     catalog: dict[str, Any], repo_root: Path, scope: str
 ) -> list[Path]:
@@ -787,6 +932,14 @@ def workspace_allowed_roots(
     from .paths import expand_path
 
     roots: set[Path] = set()
+    if scope == "project":
+        roots.update(
+            {
+                (repo_root / ".agents" / "pi" / "extensions").resolve(),
+                (repo_root / ".agents" / "pi" / "profiles").resolve(),
+                (repo_root / ".agents" / "just").resolve(),
+            }
+        )
     for entries in (catalog.get("default_dirs") or {}).values():
         if not isinstance(entries, list):
             continue
@@ -798,7 +951,7 @@ def workspace_allowed_roots(
                 if (scope == "global") != is_global or not isinstance(raw_value, str):
                     continue
                 path = expand_path(raw_value, Path.home(), repo_root)
-                roots.add(_canonical_delete_path(path.expanduser().absolute()))
+                roots.add(path.expanduser().absolute().resolve())
     return sorted(roots)
 
 
@@ -810,24 +963,25 @@ def verify_receipt_targets(
     allowed_roots: list[Path] | None = None,
 ) -> list[str]:
     """Verify one receipt's exact targets for adoption without changing them."""
-    managed_paths = managed_paths or {}
+    managed_paths = _canonical_managed_inventory(managed_paths or {})
     targets = receipt.get("targets") or []
     if not targets:
         raise LibraryError(f"Receipt {receipt.get('id')} has no exact targets")
     verified: list[str] = []
     resolved: list[tuple[dict[str, Any], Path]] = []
     selected_roots = [
-        _canonical_delete_path(path.expanduser().absolute())
-        for path in (allowed_roots or [])
+        path.expanduser().absolute().resolve() for path in (allowed_roots or [])
     ]
+    if not selected_roots:
+        raise LibraryError("Adoption blocked: no Library-managed roots are configured")
     for target in targets:
         raw_path = Path(str(target.get("path") or "")).expanduser()
         path = raw_path if raw_path.is_absolute() else repo_root / raw_path
         path = _canonical_delete_path(path.absolute())
-        if selected_roots and not any(
-            path.is_relative_to(root) for root in selected_roots
-        ):
-            raise LibraryError(f"Receipt target lies outside Library-managed roots: {path}")
+        if not any(path.is_relative_to(root) for root in selected_roots):
+            raise LibraryError(
+                f"Receipt target lies outside Library-managed roots: {path}"
+            )
         resolved.append((target, path))
     inventory_paths = {str(path) for _target, path in resolved}
     for target, path in resolved:
@@ -843,7 +997,8 @@ def verify_receipt_targets(
             if not path.is_dir() or path.is_symlink():
                 raise LibraryError(f"Receipt target drift at {path}")
             actual_nested = {
-                str(_canonical_delete_path(child.absolute())) for child in path.rglob("*")
+                str(_canonical_delete_path(child.absolute()))
+                for child in path.rglob("*")
             }
             recorded_nested = {
                 recorded
@@ -943,15 +1098,15 @@ def clear_workspace_journal(lock_path: Path) -> None:
 
 
 def workspace_journal_digest(lock_path: Path) -> str | None:
-    """Return the exact digest required to discard an unresolved journal."""
+    """Return a byte-exact digest, including for an unparseable journal."""
     path = workspace_journal_path(lock_path)
     if not path.exists():
         return None
     try:
-        payload = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+        payload = path.read_bytes()
+    except OSError as exc:
         raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
-    return _stable_digest(payload)
+    return hashlib.sha256(payload).hexdigest()
 
 
 def discard_workspace_journal(lock_path: Path, acknowledge_digest: str) -> str:

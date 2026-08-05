@@ -2189,7 +2189,10 @@
         "description": {"type": "string", "minLength": 1},
         "source": {"$ref": "#/$defs/source_ref"},
         "schema_version": {"const": 1},
-        "version": {"type": "string"},
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+        },
         "status": {"type": "string", "enum": ["experimental", "stable", "deprecated"]},
         "standing_context_fraction": {"type": "number", "minimum": 0, "maximum": 1},
         "roots": {
@@ -2213,7 +2216,10 @@
           "enum": ["skill", "agent", "prompt", "script", "standard", "guardrail", "mcp", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "runtime-config"]
         },
         "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
-        "constraint": {"type": "string", "minLength": 1}
+        "constraint": {
+          "type": "string",
+          "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+        }
       }
     },
     "project_native_entry": {

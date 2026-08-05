@@ -14,6 +14,12 @@ import yaml
 from .errors import LibraryError
 
 
+def canonical_manager_path(path: Path) -> Path:
+    """Canonicalize ownership paths without following a final symlink."""
+    absolute = path.expanduser().absolute()
+    return absolute.parent.resolve() / absolute.name
+
+
 class ManagerInventoryAdapter(Protocol):
     """Read-only adapter for paths owned by another configuration manager."""
 
@@ -55,7 +61,7 @@ class ChezmoiInventoryAdapter:
             raise LibraryError("chezmoi inventory returned invalid JSON") from exc
         if not isinstance(payload, list):
             raise LibraryError("chezmoi inventory must be a JSON list")
-        return {Path(str(item)).expanduser().absolute() for item in payload}
+        return {canonical_manager_path(Path(str(item))) for item in payload}
 
 
 class ProjectToolingInventoryAdapter:
@@ -91,11 +97,11 @@ class ProjectToolingInventoryAdapter:
                 hooks = Path(result.stdout.strip())
                 if not hooks.is_absolute():
                     hooks = self.project_root / hooks
-                paths.add((hooks / str(hook_name)).resolve())
+                paths.add(canonical_manager_path(hooks / str(hook_name)))
                 continue
             target = entry.get("target_path")
             if target:
-                paths.add((self.project_root / str(target)).resolve())
+                paths.add(canonical_manager_path(self.project_root / str(target)))
         return paths
 
 
@@ -128,7 +134,7 @@ class ConsumerUpdaterInventoryAdapter:
             for item in consumer.get("managed_files") or []:
                 target = item.get("target")
                 if target:
-                    paths.add((self.project_root / str(target)).resolve())
+                    paths.add(canonical_manager_path(self.project_root / str(target)))
         return paths
 
 
@@ -154,5 +160,5 @@ def collect_managed_paths(
     managed: dict[str, str] = {}
     for adapter in selected:
         for path in adapter.managed_paths():
-            managed[str(path.absolute())] = adapter.name
+            managed[str(canonical_manager_path(path))] = adapter.name
     return managed

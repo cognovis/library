@@ -9,9 +9,7 @@ Works cross-primitive: agent:X can require skill:Y and vice versa.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
-
-from .catalog import lookup_entry, get_entries
+from .catalog import get_entries, lookup_entry
 from .errors import DependencyMissingError, EXIT_DEPENDENCY_MISSING, LibraryError
 from .lockfile import find_lockfile, get_entry, load_lockfile
 
@@ -78,6 +76,74 @@ def resolve_requires(
         order.append((prim, item_name))
 
     _visit(primitive, name, [])
+    return order
+
+
+def resolve_requires_bound(
+    catalog: dict,
+    primitive: str,
+    name: str,
+    *,
+    source_catalog: str,
+) -> list[tuple[str, str, str]]:
+    """Resolve dependencies while retaining an unambiguous source binding.
+
+    A dependency prefers the catalog of the entry that declared it. If that
+    catalog does not publish the dependency, the dependency must be globally
+    unique by primitive and name.
+    """
+    order: list[tuple[str, str, str]] = []
+    visited: set[tuple[str, str, str]] = set()
+    in_stack: set[tuple[str, str, str]] = set()
+
+    def entry_source(entry: dict) -> str:
+        return str(
+            (entry.get("metadata") or {}).get("library", {}).get("source_catalog") or ""
+        )
+
+    def bound_entry(prim: str, item_name: str, preferred: str) -> tuple[dict, str]:
+        exact = [
+            entry
+            for entry in get_entries(catalog, prim)
+            if entry.get("name") == item_name
+        ]
+        preferred_entries = [
+            entry for entry in exact if entry_source(entry) == preferred
+        ]
+        if len(preferred_entries) == 1:
+            return preferred_entries[0], preferred
+        if len(preferred_entries) > 1:
+            raise LibraryError(
+                f"Duplicate {prim}:{item_name} entries in source catalog {preferred}"
+            )
+        if len(exact) == 1:
+            return exact[0], entry_source(exact[0])
+        if not exact:
+            raise DependencyMissingError(f"{prim}:{item_name}", "Workspace closure")
+        catalogs = sorted({entry_source(entry) or "unbound" for entry in exact})
+        raise LibraryError(
+            f"Ambiguous dependency {prim}:{item_name}; qualify its catalog contract "
+            f"by publishing it in the requiring catalog or remove duplicates: {catalogs}"
+        )
+
+    def visit(prim: str, item_name: str, preferred: str, stack: list[str]) -> None:
+        entry, resolved_source = bound_entry(prim, item_name, preferred)
+        key = (prim, item_name, resolved_source)
+        label = f"{resolved_source}:{prim}:{item_name}"
+        if key in in_stack:
+            raise CycleError(stack + [label])
+        if key in visited:
+            return
+        in_stack.add(key)
+        next_stack = stack + [label]
+        for dependency in entry.get("requires") or []:
+            dep_primitive, dep_name = _parse_dep(dependency, label)
+            visit(dep_primitive, dep_name, resolved_source, next_stack)
+        in_stack.remove(key)
+        visited.add(key)
+        order.append(key)
+
+    visit(primitive, name, source_catalog, [])
     return order
 
 

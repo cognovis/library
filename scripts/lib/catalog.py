@@ -67,7 +67,9 @@ def normalize_catalog_identity(value: str) -> str:
     if identity.startswith("git@github.com:"):
         identity = f"https://github.com/{identity.removeprefix('git@github.com:')}"
     elif identity.startswith("ssh://git@github.com/"):
-        identity = f"https://github.com/{identity.removeprefix('ssh://git@github.com/')}"
+        identity = (
+            f"https://github.com/{identity.removeprefix('ssh://git@github.com/')}"
+        )
 
     parsed = urlparse(identity)
     if parsed.scheme in {"http", "https"} and parsed.hostname:
@@ -76,7 +78,9 @@ def normalize_catalog_identity(value: str) -> str:
         path = parsed.path.rstrip("/")
         if path.endswith(".git"):
             path = path[:-4]
-        identity = urlunparse((parsed.scheme.lower(), f"{host}{port}", path, "", "", ""))
+        identity = urlunparse(
+            (parsed.scheme.lower(), f"{host}{port}", path, "", "", "")
+        )
     elif identity.endswith(".git"):
         identity = identity[:-4]
     return identity
@@ -172,9 +176,7 @@ def load_catalog(repo_root: Optional[Path] = None) -> dict[str, Any]:
     return data
 
 
-def get_entries(
-    data: dict[str, Any], primitive_name: str
-) -> list[dict[str, Any]]:
+def get_entries(data: dict[str, Any], primitive_name: str) -> list[dict[str, Any]]:
     """Return catalog entries for the given primitive name.
 
     Args:
@@ -233,6 +235,7 @@ def lookup_entry(
     name_or_query: str,
     *,
     fuzzy: bool = True,
+    source_catalog: str | None = None,
 ) -> dict[str, Any]:
     """Find exactly one catalog entry by name or fuzzy description match.
 
@@ -241,6 +244,7 @@ def lookup_entry(
         primitive_name: Primitive section to search.
         name_or_query: Exact name or keyword for fuzzy search.
         fuzzy: If True, also match against description (case-insensitive substring).
+        source_catalog: Optional source-catalog name that provenance-binds the lookup.
 
     Returns:
         The matching entry dict.
@@ -250,6 +254,15 @@ def lookup_entry(
         AmbiguousMatchError: If multiple entries match (fuzzy only).
     """
     entries = get_entries(data, primitive_name)
+    if source_catalog is not None:
+        entries = [
+            entry
+            for entry in entries
+            if (
+                (entry.get("metadata") or {}).get("library", {}).get("source_catalog")
+                == source_catalog
+            )
+        ]
 
     # Exact name match first
     for entry in entries:
@@ -279,9 +292,7 @@ def lookup_entry(
     return matches[0]
 
 
-def search_all(
-    data: dict[str, Any], query: str
-) -> list[dict[str, Any]]:
+def search_all(data: dict[str, Any], query: str) -> list[dict[str, Any]]:
     """Search across ALL primitive sections for a keyword.
 
     Args:

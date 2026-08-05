@@ -9,6 +9,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from lib.manager_inventory import (
     ConsumerUpdaterInventoryAdapter,
     ProjectToolingInventoryAdapter,
+    canonical_manager_path,
     collect_managed_paths,
 )
 
@@ -22,8 +23,27 @@ class _FakeInventory:
 
 def test_collect_managed_paths_preserves_manager_identity() -> None:
     assert collect_managed_paths([_FakeInventory()]) == {
-        "/tmp/example": "fixture-manager",
-        "/tmp/another": "fixture-manager",
+        str(canonical_manager_path(Path("/tmp/example"))): "fixture-manager",
+        str(canonical_manager_path(Path("/tmp/another"))): "fixture-manager",
+    }
+
+
+def test_collect_managed_paths_resolves_symlinked_ancestors_only(
+    tmp_path: Path,
+) -> None:
+    real_parent = tmp_path / "real"
+    real_parent.mkdir()
+    alias_parent = tmp_path / "alias"
+    alias_parent.symlink_to(real_parent, target_is_directory=True)
+
+    class _SymlinkedInventory:
+        name = "chezmoi"
+
+        def managed_paths(self) -> set[Path]:
+            return {alias_parent / "managed.md"}
+
+    assert collect_managed_paths([_SymlinkedInventory()]) == {
+        str(real_parent / "managed.md"): "chezmoi"
     }
 
 

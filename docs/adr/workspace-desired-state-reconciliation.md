@@ -349,8 +349,9 @@ Semantics:
   contribution and shared receipts. Exit 0 means converged, exit 2 means
   convergent changes are pending, exit 3 means a protected or blocked finding
   requires a decision, and exit 1 means the operation itself failed.
-- `explain` shows every current direct root and dependency path that reaches one
-  receipt, plus its locked catalog identity and protection state.
+- `explain` shows every recomputed direct-root owner that reaches one receipt,
+  plus its locked catalog identity and protection state. Full intermediate
+  dependency-edge traces are not persisted in schema v1.
 - `sync` refreshes additions and updates but remains non-pruning by default. It
   always prints the plan and provenance reason for each action.
 - `sync --verify-receipts` rematerializes or re-hashes catalog-pinned content and
@@ -368,9 +369,8 @@ Semantics:
   preserves every receipt through Workspace reachability, and never touches the
   filesystem.
 - `remove` unregisters a directly requested Workspace root and prints the
-  resulting plan. Removal does not delete physical targets. It prints the exact
-  follow-up command:
-  `library workspace sync --all --prune --apply --scope <scope>`.
+  resulting plan. Removal does not delete physical targets. It prints the
+  selected-scope prune preview command and the digest-bound apply command.
 - The Workspace selector limits which Workspace definitions receive additions
   and updates. The prune set is always computed from the entire freshly resolved
   requested-root set in the selected lock scope, including direct artifact roots.
@@ -430,13 +430,13 @@ consent to future Library reconciliation. Drifted Library files remain protected
 until the user explicitly restores, replaces, or relinquishes them; a force flag
 cannot bypass the ownership proof.
 
-The verified-receipt rule governs ownership-derived pruning. Explicit named
-`library <primitive> remove <name>` is separate user consent: it unregisters the
-direct root, preserves the receipt when another root still reaches it, and may
-delete the ownerless named artifact's recorded targets even when a migrated
-receipt is unverified. It must show an unverified or drift warning and use the
-journaled safe-delete path. Ownerless transitive receipts are not silently
-deleted; the command prints the selected-scope Workspace prune follow-up.
+The verified-receipt rule governs both ownership-derived pruning and explicit
+named removal of a v2 receipt. `library <primitive> remove <name>` unregisters
+the direct root and preserves the receipt when another root still reaches it.
+An ownerless verified receipt is removed through the same exact-target,
+containment, external-manager, lock, and journal protocol as prune. Unverified,
+drifted, externally managed, or unrecorded content blocks without mutation.
+Ownerless transitive receipts are never silently deleted.
 
 ### Decision 9: Reconciliation is locked, journaled, and re-entrant
 

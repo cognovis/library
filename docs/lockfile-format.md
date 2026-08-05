@@ -461,8 +461,9 @@ the lock record was written.
   a read-only plan with ownership reasons, drift, conflicts, adoption candidates,
   missing global prerequisites, and prune candidates. Exit 2 means changes are
   pending, while exit 3 means protected or blocked findings.
-- `library workspace explain <type>:<name>` reports every direct root and
-  dependency path reaching one receipt.
+- `library workspace explain <type>:<name>` reports the recomputed direct-root
+  owner set reaching one receipt. Schema v1 does not persist full dependency
+  paths, so the command does not claim an intermediate-edge trace.
 - `library workspace sync` refreshes additions and updates but does not prune by
   default. `--verify-receipts` is the named verifying reinstall for migrated
   receipts. `--prune` without `--apply` previews deletion. Physical deletion
@@ -475,7 +476,7 @@ the lock record was written.
   changes lock intent only and never deletes files.
 - `library workspace remove` unregisters the root and reports the resulting plan;
   it does not delete targets by itself and prints
-  `library workspace sync --all --prune --apply --scope <scope>`.
+  both the selected-scope prune preview and digest-bound apply commands.
 - Workspace selectors limit additions and updates. Prune always evaluates the
   complete requested-root set in the selected lock scope, and `--all --prune`
   remains valid when zero Workspaces are registered.
@@ -489,10 +490,12 @@ recorded as non-owning project-lock assertions, but never become project receipt
 or project ownership edges.
 
 Ownership-derived prune requires a verified, clean receipt. Explicit named
-primitive removal is separate user consent and may remove the ownerless named
-artifact's recorded targets after warning about unverified or drifted legacy
-state. It never silently removes newly ownerless transitive receipts; it prints
-the selected-scope Workspace prune follow-up.
+primitive removal is separate user consent, but uses the same exact-target,
+manager-aware, journaled transaction whenever a v2 receipt exists. Remaining
+Workspace owners retain the files; ownerless verified targets are removed;
+unverified, drifted, foreign-managed, or unrecorded content blocks without
+mutating files or lock intent. Legacy targetless records retain their
+primitive-specific compatibility handler.
 
 The complete safety and recovery protocol is normative in ADR-0010.
 

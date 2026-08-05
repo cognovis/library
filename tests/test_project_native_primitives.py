@@ -158,8 +158,7 @@ def test_canonical_fusion_dry_run_resolves_complete_closure_without_mutation(
         "just-module:fusion-harness",
     ]
     assert {
-        Path(path).relative_to(project).as_posix()
-        for path in payload["target_paths"]
+        Path(path).relative_to(project).as_posix() for path in payload["target_paths"]
     } == {
         ".agents/pi/extensions/acpx-workbench",
         ".agents/pi/extensions/fusion-context",
@@ -205,8 +204,7 @@ def test_project_native_dry_run_and_apply_support_mixed_dependencies(
         "just-module:workbench",
     ]
     assert {
-        Path(path).relative_to(project).as_posix()
-        for path in payload["target_paths"]
+        Path(path).relative_to(project).as_posix() for path in payload["target_paths"]
     } >= {
         ".agents/skills/helper",
         ".agents/just/workbench.just",
@@ -232,9 +230,7 @@ def test_sync_reconciles_missing_project_native_dependencies(tmp_path: Path) -> 
     lock_path = project / ".library.lock"
     lock = yaml.safe_load(lock_path.read_text())
     lock["installed"] = [
-        entry
-        for entry in lock["installed"]
-        if entry["type"] != "pi-extension"
+        entry for entry in lock["installed"] if entry["type"] != "pi-extension"
     ]
     lock_path.write_text(yaml.safe_dump(lock, sort_keys=False))
     (project / ".agents/pi/extensions/workbench.ts").unlink()
@@ -272,9 +268,7 @@ def test_project_native_dependency_lifecycle_and_just_import(tmp_path: Path) -> 
     assert (project / ".agents/pi/extensions/workbench.ts").is_file()
     assert (project / ".agents/pi/profiles/development.json").is_file()
     assert (project / ".agents/just/workbench.just").is_file()
-    assert "import 'workbench.just'" in (
-        project / ".agents/just/Justfile"
-    ).read_text()
+    assert "import 'workbench.just'" in (project / ".agents/just/Justfile").read_text()
     lock = yaml.safe_load((project / ".library.lock").read_text())
     assert [entry["type"] for entry in lock["installed"]] == [
         "pi-extension",
@@ -340,14 +334,14 @@ def test_just_module_bootstraps_missing_root_justfile(tmp_path: Path) -> None:
 
         # Recipes are written against repository-root-relative paths, so the
         # working directory must be the repository root, not .agents/just.
-        (project / ".agents/just/workbench.just").write_text(
-            "workbench:\n    @pwd\n"
-        )
+        (project / ".agents/just/workbench.just").write_text("workbench:\n    @pwd\n")
         ran = subprocess.run(
             ["just", "workbench"], cwd=project, capture_output=True, text=True
         )
         assert ran.returncode == 0, ran.stderr
         assert ran.stdout.strip() == str(project.resolve())
+        restored = _run(project, "just-module", "sync", "workbench")
+        assert restored.returncode == 0, restored.stderr or restored.stdout
 
     removed = _run(project, "just-module", "remove", "workbench")
     assert removed.returncode == 0, removed.stderr or removed.stdout

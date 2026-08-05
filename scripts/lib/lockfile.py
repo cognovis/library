@@ -157,13 +157,65 @@ def _initial_targets(entry: dict[str, Any]) -> list[dict[str, Any]]:
     for bridge in entry.get("bridge_symlinks") or []:
         raw_path, separator, raw_target = str(bridge).partition(" -> ")
         if separator and raw_path.strip() and raw_target.strip():
-            bridge_item = {
-                "path": raw_path.strip(),
-                "kind": "symlink",
-                "link_target": raw_target.strip(),
-            }
-            if bridge_item not in items:
-                items.append(bridge_item)
+            bridge_path = Path(raw_path.strip()).expanduser()
+            if any(item.get("path") == str(bridge_path) for item in items):
+                continue
+            if bridge_path.is_symlink():
+                items.append(
+                    {
+                        "path": str(bridge_path),
+                        "kind": "symlink",
+                        "link_target": str(bridge_path.readlink()),
+                    }
+                )
+            elif bridge_path.is_file():
+                items.append(
+                    {
+                        "path": str(bridge_path),
+                        "kind": "file",
+                        "content_sha256": compute_checksum(bridge_path),
+                    }
+                )
+                handler_root_name = f"{entry.get('name', '')}-handlers"
+                handler_root = next(
+                    (
+                        ancestor
+                        for ancestor in bridge_path.parents
+                        if ancestor.name == handler_root_name
+                    ),
+                    None,
+                )
+                if handler_root is not None:
+                    directory = bridge_path.parent
+                    while directory.is_relative_to(handler_root):
+                        if not any(
+                            item.get("path") == str(directory) for item in items
+                        ):
+                            items.append({"path": str(directory), "kind": "directory"})
+                        if directory == handler_root:
+                            break
+                        directory = directory.parent
+            elif bridge_path.is_dir():
+                items.append({"path": str(bridge_path), "kind": "directory"})
+                for child in sorted(bridge_path.rglob("*")):
+                    if child.is_symlink():
+                        items.append(
+                            {
+                                "path": str(child),
+                                "kind": "symlink",
+                                "link_target": str(child.readlink()),
+                            }
+                        )
+                    elif child.is_dir():
+                        items.append({"path": str(child), "kind": "directory"})
+                    elif child.is_file():
+                        items.append(
+                            {
+                                "path": str(child),
+                                "kind": "file",
+                                "content_sha256": compute_checksum(child),
+                            }
+                        )
     return items
 
 

@@ -335,9 +335,11 @@ def test_workspace_policy_can_lower_but_not_raise_safety_budgets() -> None:
 def test_workspace_write_lock_rejects_concurrent_mutation(tmp_path: Path) -> None:
     lock_path = tmp_path / ".library.lock"
 
-    with workspace_write_lock(lock_path), pytest.raises(
-        LibraryError, match="Another Workspace mutation"
-    ), workspace_write_lock(lock_path):
+    with (
+        workspace_write_lock(lock_path),
+        pytest.raises(LibraryError, match="Another Workspace mutation"),
+        workspace_write_lock(lock_path),
+    ):
         pytest.fail("second lock acquisition must not succeed")
 
 
@@ -369,7 +371,7 @@ def test_prune_is_exact_digest_bound_and_blocks_foreign_siblings(
                     "path": str(managed.relative_to(tmp_path)),
                     "kind": "file",
                     "content_sha256": compute_checksum(managed),
-                }
+                },
             ],
             "owners_cache": [],
         }
@@ -377,7 +379,13 @@ def test_prune_is_exact_digest_bound_and_blocks_foreign_siblings(
     plan = build_workspace_plan(_catalog(), lock, tmp_path, "project")
 
     with pytest.raises(LibraryError, match="digest"):
-        apply_prune_plan(lock, plan, tmp_path, "stale")
+        apply_prune_plan(
+            lock,
+            plan,
+            tmp_path,
+            "stale",
+            lock_path=tmp_path / ".library.lock",
+        )
     assert managed.exists()
 
     with pytest.raises(LibraryError, match="unrecorded nested content"):
@@ -386,6 +394,7 @@ def test_prune_is_exact_digest_bound_and_blocks_foreign_siblings(
             plan,
             tmp_path,
             plan["digest"],
+            lock_path=tmp_path / ".library.lock",
             allowed_roots=[tmp_path / ".agents" / "skills"],
         )
 
@@ -431,6 +440,7 @@ def test_prune_removes_an_exact_empty_library_container(tmp_path: Path) -> None:
         plan,
         tmp_path,
         plan["digest"],
+        lock_path=tmp_path / ".library.lock",
         allowed_roots=[tmp_path / ".agents" / "skills"],
     )
 
@@ -475,10 +485,57 @@ def test_prune_blocks_external_manager_claim_before_deleting(tmp_path: Path) -> 
             plan,
             tmp_path,
             plan["digest"],
+            lock_path=tmp_path / ".library.lock",
             managed_paths={str(target): "chezmoi"},
             allowed_roots=[target.parent],
         )
     assert target.exists()
+
+
+def test_prune_blocks_manager_claim_through_symlinked_parent(tmp_path: Path) -> None:
+    from lib.lockfile import compute_checksum
+
+    real_root = tmp_path / "real-standards"
+    real_root.mkdir()
+    alias_root = tmp_path / "standards"
+    alias_root.symlink_to(real_root, target_is_directory=True)
+    target = alias_root / "managed.md"
+    target.write_text("managed\n")
+    lock = _empty_lock()
+    lock["receipts"] = [
+        {
+            "id": "standard:managed",
+            "type": "standard",
+            "name": "managed",
+            "scope": "global",
+            "catalog_identity": "https://github.com/example/core",
+            "resolved_version": "1.0.0",
+            "verified": True,
+            "adopted": False,
+            "prune_blocked_reason": None,
+            "targets": [
+                {
+                    "path": str(target),
+                    "kind": "file",
+                    "content_sha256": compute_checksum(target),
+                }
+            ],
+            "owners_cache": [],
+        }
+    ]
+    plan = build_workspace_plan(_catalog(), lock, tmp_path, "global")
+
+    with pytest.raises(LibraryError, match="managed by chezmoi"):
+        prepare_prune_plan(
+            lock,
+            plan,
+            tmp_path,
+            plan["digest"],
+            managed_paths={str(target): "chezmoi"},
+            allowed_roots=[alias_root],
+        )
+
+    assert target.read_text() == "managed\n"
 
 
 def test_prune_blocks_symlink_target_drift(tmp_path: Path) -> None:
@@ -522,6 +579,7 @@ def test_prune_blocks_symlink_target_drift(tmp_path: Path) -> None:
             plan,
             tmp_path,
             plan["digest"],
+            lock_path=tmp_path / ".library.lock",
             allowed_roots=[root],
         )
 
@@ -612,3 +670,17 @@ def test_recovery_discard_requires_exact_journal_digest_and_deletes_nothing(
     assert discarded == digest
     assert target.read_text() == "changed\n"
     assert workspace_journal_digest(lock_path) is None
+
+
+def test_unparseable_journal_can_be_digest_acknowledged_and_discarded(
+    tmp_path: Path,
+) -> None:
+    lock_path = tmp_path / ".library.lock"
+    journal = lock_path.with_name(".library.lock.workspace-journal.json")
+    journal.write_text("{not-json")
+
+    digest = workspace_journal_digest(lock_path)
+
+    assert digest
+    assert discard_workspace_journal(lock_path, digest) == digest
+    assert not journal.exists()
