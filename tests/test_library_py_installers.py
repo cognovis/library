@@ -827,7 +827,7 @@ class TestDryRunContractUniformity:
         )
         bridge_text = "\n".join(lock_entry["bridge_symlinks"])
         for handler_target in expected_handler_targets:
-            assert str(handler_target) in bridge_text
+            assert str(handler_target.relative_to(agent_handlers_project)) in bridge_text
 
     def test_agent_remove_all_deletes_installed_handler_directories(
         self,

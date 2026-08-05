@@ -384,7 +384,7 @@ def test_pi_extension_bundle_lifecycle(tmp_path: Path) -> None:
 
     lock = yaml.safe_load((project / ".library.lock").read_text())
     assert lock["installed"][0]["checksum_type"] == "directory"
-    assert lock["installed"][0]["install_target"] == str(target)
+    assert lock["installed"][0]["install_target"] == ".agents/pi/extensions/workbench"
 
     audit = _run(project, "pi-extension", "audit", "--no-upstream")
     assert audit.returncode == 0, audit.stderr or audit.stdout
