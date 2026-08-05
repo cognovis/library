@@ -1,72 +1,43 @@
-# Install The Library
+# Install the Library Platform
 
-## Context
-First-time setup of The Library on a new device. The user either has the template repo cloned directly, or has already forked it to their own private repo.
+## Purpose
 
-## Steps
+Bootstrap the Library engine and conversational entrypoint from an existing
+platform checkout. This is not a catalog fork workflow and does not configure a
+consumer-project profile.
 
-### 1. Check Prerequisites
-- Verify `git` is installed: `git --version`
-- Verify the global skills directory exists or can be created: `~/.claude/skills/`
+## Procedure
 
-### 2. Determine Fork Status
-Ask the user: **"Is this the template repo or your own fork?"**
+1. Confirm that the platform checkout contains `SKILL.md`, `library.yaml`,
+   `install.sh`, and `scripts/library.py`.
+2. Run the idempotent installer from the checkout:
 
-**If template repo (hasn't forked yet):**
-- Instruct the user to create a private fork on GitHub
-- Once forked, update the remote URL:
-  ```bash
-  cd <LIBRARY_SKILL_DIR>
-  git remote set-url origin <fork_url>
-  ```
-- Verify with: `git remote -v`
+   ```bash
+   bash install.sh
+   ```
 
-**If already forked:**
-- Skip this step — the remote is already pointing to their fork
+3. Verify the deterministic engine directly:
 
-### 3. Clone to Global Skills Directory
-If the repo isn't already cloned locally:
-```bash
-mkdir -p <LIBRARY_SKILL_DIR>
-cd <LIBRARY_SKILL_DIR>
-git clone <fork_url> .
-```
+   ```bash
+   uv run --script scripts/library.py --help
+   ```
 
-If already cloned (e.g., user cloned the template first), just update the remote per step 2.
+4. Start a new session in each detected harness and verify that the `/library`
+   Skill is discoverable.
 
-### 4. Update Variables
-- Open `SKILL.md` in the library directory
-- Take note of your current working directory.
-- Update the `## Variables` section:
-  - **LIBRARY_REPO_URL**: Set to the user's fork URL
-  - **LIBRARY_YAML_PATH**: Confirm path (default: `~/.claude/skills/library/library.yaml`)
-  - **LIBRARY_SKILL_DIR**: Confirm path (default: `~/.claude/skills/library/`)
+The repository does not currently ship a standalone `bin/library` executable.
+The installer links the platform checkout into detected harness Skill roots; the
+chat Skill delegates deterministic operations to `scripts/library.py`.
 
-### 5. Verify Installation
-- Confirm SKILL.md exists at `<LIBRARY_SKILL_DIR>/SKILL.md`
-- Confirm library.yaml exists at `<LIBRARY_SKILL_DIR>/library.yaml`
-- Confirm the `/library` command is now available
+## Bootstrap boundary
 
-### 6. Select Project Tooling Profile
+The released installer also links the five platform forge Skills globally. Under
+ADR-0010 that is transitional: the irreducible pre-Workspace bootstrap contains
+only the Library engine and conversational entrypoint, while forge Skills move to
+the project-scoped `library-authoring` Workspace.
 
-The Library manages `.gitignore` lines for installed primitive trees with two profiles:
+Do not use `project_tooling` profiles for new repository setup. Consumer projects
+commit their project-local Library artifacts and `.library.lock`; marketplace
+repositories keep authored primitives at their top-level source paths.
 
-| Profile | Use for | `.agents/` policy |
-|---------|---------|-------------------|
-| `consumer` | Application repos that consume skills, agents, prompts, and standards | `.agents/skills/`, `.agents/standards/`, `.agents/agents/`, and `.agents/prompts/` are committed |
-| `marketplace` | Library-core and catalog repos that publish primitives | `.agents/` install targets stay ignored; source lives in top-level primitive directories |
-
-Apply the profile from the project root:
-
-```bash
-python3 <LIBRARY_SKILL_DIR>/scripts/sync_project_tooling.py --profile consumer --verbose
-```
-
-Use `--profile marketplace` only in repos that publish Library primitives.
-
-### 7. Done
-Tell the user:
-- The Library is now globally available
-- `/library skill list` will show the skill catalog (empty by default)
-- `/library <primitive> add` starts adding skills, agents, prompts, and standards
-- The `justfile` in the library directory has shorthand commands
+Workspace commands remain an accepted target until bead `CL-r7n6` lands.

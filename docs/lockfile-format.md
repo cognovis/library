@@ -7,8 +7,8 @@
 >
 > **Bead**: CL-t21 / CL-yx2 / CL-yum0 / CL-r7n6 | **Epic**: CL-36o | **Last updated**: 2026-08-05
 >
-> **Applies to**: `/library <primitive> use`, `/library <primitive> remove`,
-> `/library sync`, `/library workspace use|status|sync|remove`, `/library audit`,
+> **Applies to**: `library <primitive> use`, `library <primitive> remove`,
+> `library sync`, `library workspace use|status|sync|remove`, `library audit`,
 > and any tooling that installs or manages Library items.
 
 ---
@@ -19,8 +19,10 @@ Library lockfiles record Library intent and materialized state. Most primitives
 may use either the project or global lockfile; MCP registrations are always
 user-global and therefore exist only in the global lockfile. They provide:
 
-- **Reproducibility**: any clone of the project can restore the exact set of installed
-  items by running `/library sync` (which reads the lockfile, not the catalog).
+- **Reproducibility**: any clone of the project can restore the locked roots and
+  exact source pins. Legacy v1 sync reads the flat lock entries; v2 reconciliation
+  reads requested roots and resolves their definitions from the recorded catalog
+  identities and pins.
 - **Drift detection**: `/library audit` compares the `content_sha256`/`checksum_sha256` stored at install
   time against the current on-disk file to identify modifications made outside the Library.
 - **Audit trail**: every new entry records the producing catalog identity, source URL,
@@ -148,7 +150,7 @@ receipts:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `id` | YES | Stable root identity unique within the selected lock scope. |
-| `type` | YES | Any directly requestable primitive type, including `workspace` and `package`. |
+| `type` | YES | Any directly requestable artifact primitive type or `workspace`. Package is not a Library root type. |
 | `name` | YES | Catalog name of the requested primitive. |
 | `scope` | YES | `project` or `global`; every resolved member must use the same scope. |
 | `catalog_identity` | YES | Stable identity of the catalog that supplied the root. |
@@ -156,8 +158,15 @@ receipts:
 | `resolved_version` | YES | Version selected by the last complete resolution. |
 | `definition_commit` | YES | Exact catalog or definition pin used for that resolution. |
 
-Direct primitives, Packages, and Workspaces use the same root model. Transitive
-dependencies are receipts, not implicit direct roots.
+Direct artifact primitives and Workspaces use the same root model. Transitive
+dependencies and nested Workspaces are graph nodes, not implicit direct roots.
+
+One lock scope may contain several Workspace requested roots. Their effective
+closure is an unordered union with all direct artifact roots. Nested Workspace
+definitions are captured in the pinned resolution/audit graph, while only the
+Workspaces explicitly selected by the user appear in `requested_roots`. A
+cross-catalog Workspace reference must be qualified in its manifest; every
+resolved node records canonical catalog identity regardless of shorthand.
 
 ### v2 receipt fields
 
@@ -345,9 +354,9 @@ installed:
 | `name` | YES | string | Unique item name. Must match the catalog entry in `library.yaml`. |
 | `type` | YES | string | Registered primitive type, including project-native `pi-extension`, `pi-profile`, and `just-module` bridge entries. |
 | `catalog_identity` | New entries | string | Stable identity of the catalog that produced the install, normally its canonical repository URL. Entries created before this field existed remain valid and audit as `undetermined`. |
-| `marketplace` | YES | string | Name of the source marketplace from `library.yaml` `sources.marketplaces`. Use `local` for local-path sources, `unknown` for unrecognized sources. |
-| `source` | YES | string | GitHub browser URL or local path used for the install. |
-| `source_commit` | YES | string | Git commit SHA of the source repo at install time. Use `local` for non-git sources. |
+| `marketplace` | YES | string | Name of the source marketplace from `library.yaml` `sources.marketplaces`. Legacy v1 entries may contain `local`; new catalog installs use a registered remote marketplace identity. |
+| `source` | YES | string | Published HTTPS Git source used for the install. A migrated v1 entry may retain a historical local path until it is verified and refreshed; committed catalog definitions may not create new local-source entries. |
+| `source_commit` | YES | string | Git commit SHA of the source repo at install time. Historical non-git entries may contain `local` and remain migration-protected. |
 | `cache_path` | YES | string | Absolute Layer-B cache path (`~/.local/share/library/skills/<marketplace>/<name>@<first-14-hex-chars-of-source_commit>/`). Empty string `""` for migrated entries pending next sync. |
 | `install_target` | YES | string | Relative (project) or absolute (global) path of the install directory (trailing slash required). |
 | `install_timestamp` | YES | string | ISO 8601 UTC datetime of the install or last refresh. |

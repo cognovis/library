@@ -1,87 +1,26 @@
-# Push a Library Primitive to the Source
+# Publish a Primitive Source Change
 
-## Context
-The user has improved an installed primitive locally and wants to push changes
-back to the source.
+## Purpose
 
-## Input
-The user invokes `/library <primitive> push <name-or-description>`.
+Return an intentional change to the primitive's canonical marketplace repository.
+A deployed Library target is not automatically a writable source checkout.
 
-## Steps
+## Procedure
 
-### 1. Find the Entry
-- Read `library.yaml`
-- Search only the catalog section for `<primitive>`
-- If no match, tell the user the item wasn't found in the catalog
+1. Read the installed receipt and aggregate catalog entry to identify the exact
+   source catalog, path, and installed pin.
+2. Inspect drift between the deployed copy and the published source. Stop if the
+   source identity is missing, ambiguous, local-only, or has advanced in a way that
+   would make the intended patch unclear.
+3. Apply the intended change in a task worktree of the owning marketplace
+   repository. Do not overwrite the source directory from the deployed copy as a
+   whole.
+4. Run the primitive forge validator and the marketplace's focused tests.
+5. Update aggregate catalog metadata only when the source path, dependencies,
+   version, or searchable metadata changed.
+6. Commit and push through the owning repository's normal review workflow.
+7. Preview `library <primitive> sync <name>` from a consumer after the published
+   revision is available.
 
-### 2. Locate the Local Copy
-- Check the default directory for the type (from `default_dirs`)
-- Check the global directory
-- If found in multiple places, ask which one to push
-- If not found locally, tell the user there's nothing to push
-
-### 3. Check for Conflicts
-
-**If source is a local path:**
-- Compare the local installed copy with the source
-- If the source has been modified since last pull, warn the user:
-  "The source has changes that aren't in your local copy. Pushing will overwrite them. Continue?"
-
-**If source is a GitHub URL:**
-- Clone the repo to a temp directory (shallow):
-  ```bash
-  tmp_dir=$(mktemp -d)
-  git clone --depth 1 --branch <branch> <clone_url> "$tmp_dir"
-  ```
-- Compare the skill directory in the clone with the local copy
-- If they differ AND the remote has changes not in the local copy, warn about conflict
-- Ask the user to resolve before continuing
-
-### 4. Push to Source
-
-**If source is a local path:**
-- Copy the entire local directory to the source location, overwriting:
-  ```bash
-  cp -R <local_directory>/ <source_parent_directory>/
-  ```
-- Confirm the overwrite
-
-**If source is a GitHub URL:**
-- If we don't already have a tmp clone from step 3, clone now:
-  ```bash
-  tmp_dir=$(mktemp -d)
-  git clone --depth 1 --branch <branch> <clone_url> "$tmp_dir"
-  ```
-- Remove the old skill directory in the clone:
-  ```bash
-  rm -r "$tmp_dir/<skill_path_in_repo>"
-  ```
-- Copy the local version into the clone:
-  ```bash
-  cp -R <local_directory>/ "$tmp_dir/<skill_path_in_repo>/"
-  ```
-- Stage ONLY the relevant changes:
-  ```bash
-  cd "$tmp_dir"
-  git add <skill_path_in_repo>
-  ```
-- Commit with the standard format:
-  ```bash
-  git commit -m "library: updated <name> <brief description of what changed>"
-  ```
-- Push:
-  ```bash
-  git push
-  ```
-- Clean up (use `rm -r` without `-f` to satisfy the `block-destructive-bash`
-  guardrail; `mktemp -d` directories are owned by the agent so no force is
-  needed):
-  ```bash
-  rm -r "$tmp_dir"
-  ```
-
-### 5. Confirm
-Tell the user:
-- What was pushed and where
-- The commit message used
-- If it was a local path push, confirm the overwrite
+Committed catalog sources are published HTTPS Git references. Historical local
+source entries are migration state, not a supported publication path.

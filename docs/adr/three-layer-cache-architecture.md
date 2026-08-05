@@ -24,6 +24,14 @@ and cache-retention policy remain accepted. Decision 4's flat `installed:` data
 model is superseded by lockfile v2 requested roots and receipts; its deployment
 fields become receipt fields rather than disappearing.
 
+The title's "Harness Symlink" and the `upgrade`, `pin`, `edit`, `gc`, and `push`
+commands below record the 2026-05 design, not the released CLI. Canonical Layer-C
+content is now vendored by default, with symlinks used for harness bridges or an
+explicit development mode. The current deterministic grammar is
+`library <primitive> <verb>` with `list`, `use`, `remove`, `sync`, `search`, and
+`audit`; ADR-0010 adds the Workspace lifecycle. Historical lifecycle examples
+remain useful rationale but are not an operator reference.
+
 ## Context
 
 ADR-0002 established the source/deployment split:

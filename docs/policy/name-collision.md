@@ -377,8 +377,8 @@ the same file.
 **Policy: `/library skill remove` must reverse ALL bridges, not just the canonical.**
 
 **ADR-0010 amendment:** With lockfile v2, `remove` first unregisters the direct
-requested root and freshly resolves all remaining roots. If another direct,
-Package, or Workspace root still reaches the receipt, the canonical target,
+requested root and freshly resolves all remaining roots. If another direct or
+Workspace root still reaches the receipt, the canonical target,
 bridges, and receipt remain. If it is ownerless, the named remove command is
 explicit user consent to delete that named artifact's recorded targets even when
 a migrated receipt is unverified. It must warn about unverified or drifted state

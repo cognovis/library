@@ -84,6 +84,12 @@ manifest and has no harness install target. It still belongs under `library.*`
 because it is cataloged, resolved, versioned, and operated through the Library
 primitive interface.
 
+ADR-0010 also freezes `project_tooling` as a transitional root section. It is
+not a second Workspace schema and accepts no new distributable capabilities.
+After its existing entries have moved to primitive dependencies, tool-owned
+migrations, or project ownership, the target information model removes the
+section entirely.
+
 ## Compatibility
 
 The checked-in `library.yaml` has been migrated to the canonical shape. Runtime
@@ -110,8 +116,8 @@ New catalog edits should use only the canonical locations.
   primitive to `library/<section>`.
 - Source registry lookup becomes explicit through `sources.catalogs` and
   `sources.marketplaces`.
-- `project_tooling` remains root-level because it is fleet policy, not a
-  primitive catalog.
+- `project_tooling` remains readable only during its migration; Workspace is the
+  sole target-state Library baseline mechanism.
 - Future schema work should extend `library.*` for primitive types and
   `sources.*` for provider registries instead of adding unrelated root keys.
 - Workspace definitions extend `library.workspaces`; they do not introduce a

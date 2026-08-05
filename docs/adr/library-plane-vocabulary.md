@@ -145,10 +145,12 @@ when another primitive or runtime surface invokes it explicitly.
 
 ### Decision 8: Workspace is a dev-plane lifecycle primitive
 
-Workspace definitions live in stewarded marketplaces and name typed Library
-roots for one project or the global lobby. The platform consumes the definition
-to reconcile lockfile ownership. The definition itself is never installed into
-a harness and is not a Gas City PackV2 projection.
+Workspace definitions live in stewarded catalog sources and name typed Library
+roots for a reusable project or global baseline. One lock scope may register
+several Workspaces, and one Workspace may reference another in the same scope.
+The platform consumes the unordered union to reconcile lockfile ownership. The
+definition itself is never installed into a harness and is not a Gas City PackV2
+projection.
 
 "Workspace" in this ADR is explicitly qualified as **Library Workspace** when
 ambiguity is possible. It is unrelated to cmux workspaces, Git worktrees,

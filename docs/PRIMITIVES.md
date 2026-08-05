@@ -48,9 +48,9 @@ class or the global lobby, including safe retirement of obsolete members?
  └─ YES → WORKSPACE (metadata-only desired-state root; no harness artifact)
  └─ NO  → Continue below.
 
-Is it a bundle of multiple primitives above?
- └─ YES → PACKAGE (installable unit containing skills/commands/agents/hooks/workflows)
-          → Register it in a MARKETPLACE if you want it discoverable
+Does one entrypoint primitive require other primitives in order to function?
+ └─ YES → Declare typed `requires:` dependencies on that entrypoint. Do not add
+          a Package or empty bundle sentinel.
  └─ NO  → Continue below.
 
 Is it project-specific or cross-cutting context supplementing global skills?
@@ -116,7 +116,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 3 | [Agent](primitives/agent.md) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | `.opencode/agents/*.md` (Markdown, same format as Claude Code) | details |
 | 3a | [Action Boundary](primitives/action-boundary.md) | partial — shared keys, primitive-native serialization | YAML frontmatter on skills/agents | YAML for skills, TOML for agents | n/a | unverified | unverified | metadata |
 | 4 | [Guardrail/Hook](primitives/guardrail-hook.md) | **NO** — event coverage diverges | 15 events | 8 events (PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | details |
-| 5 | [Package](primitives/package.md) | bundle — portability inherits from contents | yes | yes | partial | partial | partial | details |
+| 5 | [Package](primitives/package.md) | **RETIRED Library concept** — external ecosystem packages remain distribution formats | n/a | n/a | n/a | n/a | n/a | retirement note |
 | 6 | [Marketplace](primitives/marketplace.md) | yes — distribution layer | yes | yes | yes | yes | yes | details |
 | 7 | [Standard](primitives/standard.md) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | n/a | details |
 | 8 | [MCP-Server](primitives/mcp-server.md) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | details |
@@ -126,7 +126,7 @@ Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels
 | 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
 | 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | n/a | details |
 | 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files and extension bundles | files and directories | Pi-native | verified | verified | project-only; Open Skills stays authoritative for methods |
-| 15 | [Workspace](primitives/workspace.md) | **YES** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | members inherit support | metadata-only desired-state root; lifecycle owned by Library CLI |
+| 15 | [Workspace](primitives/workspace.md) | **ACCEPTED TARGET** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | members inherit support | metadata-only desired-state root; implementation tracked by `CL-r7n6` |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
@@ -225,14 +225,10 @@ Details: [Guardrail / Hook](primitives/guardrail-hook.md).
 
 ### 5. Package
 
-Details: [Package](primitives/package.md).
-
-> **Vocabulary note (2026-05-27).** This primitive was previously named
-> "Plugin." Renamed to "Package" to align with Pi's terminology
-> (`pi install`, `pi.dev/packages`) and npm/git native distribution
-> semantics. Historical ADRs and `library.yaml` may still use "plugin"
-> in code surfaces and key names; rename of those structural surfaces
-> is tracked separately and not part of this vocabulary change.
+Retired as a Library primitive. See the [Package retirement note](primitives/package.md).
+Use an entrypoint primitive's `requires:` closure for strict functional coupling
+and a Workspace for selectable desired-state composition. External ecosystem
+packages remain ordinary distribution formats.
 
 ### 6. Marketplace
 
@@ -279,9 +275,11 @@ Established by [ADR-0006](adr/workflow-primitive.md).
 
 Details: [Workspace](primitives/workspace.md). A metadata-only requested root
 whose constitutive feature is ownership-aware desired-state reconciliation. It
-is distinct from **Package** (#5): Package is an atomic content composite;
-Workspace has no deployable artifact and can explicitly retire clean, ownerless
-receipts through ADR-0010's prune contract.
+has no deployable artifact, can compose other Workspaces in the same scope, and
+can explicitly retire clean, ownerless receipts through ADR-0010's prune
+contract. A project may register several orthogonal Workspaces. This is the
+accepted target contract; the released CLI does not expose it until `CL-r7n6`
+lands.
 
 
 ## Precedence and Name Collision Policy
@@ -323,10 +321,10 @@ violation — bug reports from that state will be untriageable.
 
 ### Uninstall completeness
 
-`/library remove` MUST remove the Claude bridge AND the canonical install AND
+`library <primitive> remove <name>` MUST remove the Claude bridge AND the canonical install AND
 the lockfile entry. The removal sequence: Claude bridge first, then canonical,
 then lockfile. The Layer-B cache (`~/.local/share/library/skills/...`) is
-garbage-collected separately by `/library prune-cache` once no lockfile entry
+garbage-collected separately once no lockfile receipt
 references it.
 
 Workspace reconciliation follows a stricter ownership protocol. Removing a

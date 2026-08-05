@@ -93,7 +93,7 @@ A single contract that answers:
 ADR-0010 extends the dependency graph from additive installation to universal
 ownership-aware reconciliation:
 
-- every direct primitive, Package, and Workspace request is a requested root;
+- every direct artifact primitive and Workspace request is a requested root;
 - materialized primitives receive individual receipts;
 - reachability is recomputed from all requested roots against fresh, complete,
   catalog-pinned definitions before a receipt can become pruneable;
@@ -185,21 +185,20 @@ agent itself, which `requires:` its 15 skills + 5 sibling agents.
 `/library use bead-orchestrator` from a clean polaris installs the
 full closure.
 
-If we ever need a non-agent, non-skill "bundle as such," we add a
-sentinel entry (e.g. an empty `agent:beads-workflow-meta`) whose only
-purpose is to carry the `requires:` array. The graph remains the
-single source of truth; bundles are syntactic sugar over the graph.
+Do not add a non-agent, non-skill sentinel merely to carry `requires:`. A strict
+dependency graph needs a real entrypoint primitive that owns the capability. A
+selection of independently meaningful capabilities belongs in a Workspace.
 
 Rationale: every additional primitive type increases schema surface,
 validator complexity, and resolver branching. The graph already
 expresses bundles without a new type. See "Alternatives Considered"
 for the rejected `library.bundles:` proposal.
 
-**ADR-0010 clarification:** Workspace does not reverse this decision. A bundle
-or Package is a content-composition and distribution concern. Workspace is a
-metadata-only requested root whose constitutive feature is authoritative
-desired-state ownership and safe reconciliation. It carries typed roots, not
-deployable members, and has no harness projection.
+**ADR-0010 clarification:** Workspace does not reverse this decision. It is the
+metadata-only requested root for selectable desired-state composition and safe
+reconciliation. Strict functional composition remains in a real primitive's
+`requires:` graph. Package is retired as an unimplemented Library concept;
+external ecosystem packages remain distribution formats, not Library roots.
 
 ### Decision 5: `/library use` resolves transitively, idempotently
 
@@ -225,8 +224,8 @@ flag `--reinstall`.
 
 **ADR-0010 amendment:** the full transitive closure is materialized as receipts,
 while only explicit user requests are recorded as requested roots. Dependency
-receipts do not silently become direct roots. Package installation remains an
-atomic transaction, but member receipts have independent lifetime and survive
+receipts do not silently become direct roots. The complete addition set must
+materialize before the requested root is committed, and shared receipts survive
 whenever another root still reaches them. Workspace pruning follows ADR-0010's
 explicit `--prune --apply` and fail-closed safety contract.
 

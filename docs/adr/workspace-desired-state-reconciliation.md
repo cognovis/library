@@ -40,10 +40,11 @@ This matters at two distinct scopes:
   content that is no longer part of that baseline should be identifiable and
   removable without treating every globally installed file as disposable.
 
-Packages do not fill this gap. A Package is an atomic content composite: it
-ships multiple cooperating artifacts together. It does not claim that its
-members are the complete desired state of a project, and it does not supply the
-ownership information required for safe garbage collection.
+Dependency closures do not fill this gap. `requires:` correctly says what one
+primitive needs in order to function, but it does not say which independently
+useful capabilities a user intends to keep together as a repository baseline.
+The previously documented Package concept is not implemented by the Library CLI
+or catalog schema and would duplicate these two graph relationships.
 
 The missing capability has two layers:
 
@@ -59,9 +60,8 @@ harness session.
 ### Decision 1: Ownership is universal; Workspace is its first desired-state consumer
 
 Every user request is represented as a **requested root** in the selected
-lockfile scope. A direct Skill, Standard, Agent, Workflow, Package, and Workspace
-can all be roots. Every installed artifact is represented by a **materialized
-receipt**.
+lockfile scope. Any directly requestable artifact primitive and any Workspace can
+be a root. Every installed artifact is represented by a **materialized receipt**.
 
 The resolver computes reachability from the complete requested-root set. A
 receipt remains required while at least one freshly resolved root reaches it.
@@ -81,25 +81,23 @@ commands, but it forms a new primitive category:
 The deep module is the resolver, lockfile, and reconciler. Workspace intentionally
 has a small interface over that mechanism.
 
-### Decision 2: Workspace and Package remain distinct
+### Decision 2: Two graph relationships replace Package and bundle aliases
 
-| Concern | Package | Workspace |
-|---------|---------|-----------|
-| Constitutive feature | Atomic distribution of cooperating artifacts | Named desired-state ownership root |
-| Contains deployable content | Yes | No |
-| Install transaction | All package members succeed or the root is not committed | All newly required members succeed before prune can begin |
-| Member activation | Each member follows its own trigger semantics | Each resolved primitive follows its own trigger semantics |
-| Removal | Unregistering the root may make unshared member receipts pruneable | Unregistering the root may make unshared closure receipts pruneable |
-| Harness projection | Inherited from package members | None |
+The Library has exactly two composition relationships:
 
-Package atomicity is an installation transaction guarantee, not a requirement to
-keep an unreachable member forever. Package members receive individual receipts.
-After full re-resolution, removing a Package root may prune an unshared member
-while preserving the same member when another root still reaches it.
+| Relationship | Meaning | Authoritative declaration |
+|--------------|---------|---------------------------|
+| Dependency | One primitive cannot function correctly without another | The entrypoint primitive's `requires:` metadata |
+| Desired-state composition | Independently meaningful capabilities are selected together and may later be retired together | A Workspace manifest's `roots:` |
 
-ADR-0004's rejection of a `bundle` primitive remains valid. Workspace is not a
-second bundle syntax: a bundle groups content for distribution; a Workspace names
-the desired ownership boundary to reconcile.
+Both relationships are installed transactionally: all newly required artifacts
+must materialize before the requested root is committed. That transaction property
+does not justify a third Package or bundle primitive.
+
+The Package page in the primitive glossary is retained only as a retirement note.
+External npm, PyPI, Pi, and harness packages remain valid distribution formats, but
+they are not Library requested-root types. ADR-0004's rejection of a `bundle`
+primitive therefore remains the active decision.
 
 ### Decision 3: Workspace manifests are intentionally small
 
@@ -117,26 +115,59 @@ roots:
   - type: skill
     name: python-test
     constraint: ">=1.0.0,<2.0.0"
-  - type: standard
-    name: beads-workflow
-    constraint: ">=1.0.0,<2.0.0"
 ```
 
-The catalog entry supplies the source marketplace, catalog identity, and
-definition pin. Every root is a normal typed Library reference and may resolve
-its own transitive `requires:` closure under ADR-0004.
+The catalog entry supplies the source catalog, catalog identity, and definition
+pin. Every root is a normal typed Library reference and may resolve its own
+transitive `requires:` closure under ADR-0004. A Workspace may reference another
+Workspace in the same scope. A cross-catalog root must declare `catalog`; a
+same-catalog root may omit it only while `(type, name)` resolves unambiguously.
+The resolved canonical catalog identity is always recorded in the lock.
+
+Composition uses the same root shape. For example, a Workspace in another
+catalog can reuse this baseline explicitly:
+
+```yaml
+roots:
+  - type: workspace
+    name: python-cli
+    catalog: cognovis-library-core
+    constraint: ">=1.0.0,<2.0.0"
+```
 
 The manifest does not inline routing policy, context-budget schemas, state-owner
 schemas, harness configuration, or duplicated operating instructions. Those
 concerns remain in their canonical primitives. For example, Beads rules or a
 Workspace routing contract are modeled as Standard, Skill, Agent, Workflow, or
-Package roots. This lets the same Workspace provide the same information set to
+other ordinary primitive roots. This lets the same Workspace provide the same information set to
 Claude Code, Codex, Pi, or a shell-facing CLI without making the Workspace a
 second configuration system.
 
 Workspace definition versions use semantic versioning. The manifest schema and
 its independently versioned runtime contracts may evolve later, but unsupported
 schema versions fail before dependency installation.
+
+### Decision 3a: Composition is many-to-many and unordered
+
+A selected lock scope may register zero or more Workspace requested roots. A
+repository is not assigned a single Workspace type. Its effective desired state
+is the set union of:
+
+- direct artifact roots;
+- directly registered Workspace roots;
+- nested Workspace roots; and
+- all transitive primitive dependencies.
+
+A nested Workspace is a transitive graph node, not an implicitly registered
+direct root. It remains relevant while any direct root reaches it. Composition
+has no declaration order, override layer, or last-writer-wins behavior. Cycles,
+incompatible constraints, ambiguous catalog references, target collisions, and
+scope mismatches fail before mutation.
+
+This permits deliberate orthogonal composition. For example,
+`fhir-management` can register both `fhir-ig-authoring` and `python-cli`, while
+`library/meta` can register `library-authoring` and `python-cli`. A one-member
+alias with no independent lifecycle purpose should remain a direct primitive root.
 
 ### Decision 4: Reconciliation is scope-homogeneous
 
@@ -269,8 +300,10 @@ Semantics:
   updates. It never prunes.
 - `status` is read-only. It reports additions, updates, drift, foreign collisions,
   missing global prerequisites, adoption candidates, constraint conflicts, and
-  prune candidates. Exit 0 means converged, exit 2 means the plan has changes or
-  protected findings, and exit 1 means the status operation itself failed.
+  prune candidates. With several Workspaces it distinguishes exclusive
+  contribution, shared receipts, and nested Workspace provenance. Exit 0 means
+  converged, exit 2 means the plan has changes or protected findings, and exit 1
+  means the status operation itself failed.
 - `sync` refreshes additions and updates but remains non-pruning by default. It
   always prints the plan and provenance reason for each action.
 - `sync --prune` without `--apply` is a read-only prune preview. Physical
@@ -281,13 +314,15 @@ Semantics:
   current resolved pin; one catalog artifact and every expected target must
   match exactly before an adopted receipt is written. Adoption never creates a
   direct root.
-- `remove` unregisters the Workspace root and prints the resulting plan. It does
-  not delete physical targets. It prints the exact follow-up command:
+- `remove` unregisters a directly requested Workspace root and prints the
+  resulting plan. A nested Workspace cannot be removed through an upstream
+  owner's back door; its owner definition must change or it must also be a direct
+  root. Removal does not delete physical targets. It prints the exact follow-up command:
   `library workspace sync --all --prune --apply --scope <scope>`.
 - The Workspace selector limits which Workspace definitions receive additions
   and updates. The prune set is always computed from the entire freshly resolved
-  requested-root set in the selected lock scope, including direct and Package
-  roots. `--all --prune` remains valid with zero registered Workspaces, so the
+  requested-root set in the selected lock scope, including direct artifact roots.
+  `--all --prune` remains valid with zero registered Workspaces, so the
   last removed Workspace and orphaned dependencies from a direct named removal
   can still be reconciled. It is never a cross-project fleet sweep.
 
@@ -412,13 +447,44 @@ checkout. Marketplace tests never assume an unversioned sibling platform
 checkout. An unsupported manifest schema fails with an explicit compatibility
 error.
 
+### Decision 12: Workspace retires parallel Library desired-state manifests
+
+The Workspace reconciler becomes the sole Library mechanism for declaring a
+reusable project or global artifact baseline. Three older mechanisms are
+transitional:
+
+- ADR-0002's hand-maintained capability list becomes an `engineering-lobby`
+  Workspace. An irreducible bootstrap still installs the Library engine and its
+  conversational entrypoint because Workspace cannot install its own resolver.
+  Platform forge Skills leave bootstrap and become roots of
+  `library-authoring`.
+- `consumer-projects.yml` and `scripts/update-consumers.py` stop distributing
+  Library primitives after each consumer has registered equivalent Workspace or
+  direct roots. Their `managed_files` escape hatch is not carried forward.
+- root-level `project_tooling` stops accepting new distributable capability
+  entries. Existing entries migrate according to ownership: normal Library
+  artifacts become primitives with `requires:` and Workspace roots; Beads-owned
+  database configuration and primer behavior move to Beads; repository policy
+  patches remain project-owned.
+
+These legacy managers are protected external owners during migration. A
+Workspace may neither adopt nor prune one of their targets. Removing the legacy
+mechanisms requires separately verified equivalence and receipts; ADR-0010 does
+not reinterpret their historical writes as Library ownership.
+
+Workspace does not absorb arbitrary file-copy, JSON-patch, routing-profile,
+secret, or customer-data schemas. A capability that cannot be represented by a
+real primitive or dependency remains with its owning project or tool.
+
 ## Consequences
 
 ### Positive
 
 - Repository classes can share one reviewable information set without copying
   project instructions.
-- Direct, Package, and Workspace requests follow one ownership model.
+- Direct artifact and Workspace requests follow one ownership model.
+- Orthogonal Workspaces can be composed without creating a combined variant for
+  every repository class.
 - Shared dependencies survive until their final owner disappears.
 - The global lobby can be inspected and deliberately reduced without touching
   foreign or unverified state.
@@ -440,16 +506,18 @@ error.
 
 ## Alternatives Considered
 
-### Treat Workspace as a Package alias
+### Add Package as a third composite root
 
-Rejected. Package membership expresses atomic distribution, not the complete
-desired state or ownership needed to remove stale transitive receipts.
+Rejected. The current Library has no Package catalog or CLI primitive. Strict
+functional coupling belongs in `requires:` and selectable lifecycle grouping
+belongs in Workspace. Transactional installation applies to both graphs without
+another public abstraction.
 
 ### Implement pruning only inside Workspace state
 
-Rejected. Direct primitives and Packages would retain incompatible ownership
-semantics, and shared dependencies could be removed or leaked depending on which
-command installed them.
+Rejected. Direct primitives would retain incompatible ownership semantics, and
+shared dependencies could be removed or leaked depending on which command
+installed them.
 
 ### Persist owner edges as the next prune's source of truth
 
@@ -480,7 +548,12 @@ not release-ready until fault-injection tests cover incomplete catalogs,
 constraint conflicts, concurrent sync, addition failure, lock-write failure,
 crash between lock commit and delete, drift, external-manager overlap, exact
 adoption, unrecorded nested directory content, missing global prerequisites,
-zero-Workspace scope pruning, and multi-owner survival.
+zero-Workspace scope pruning, and multi-owner survival. Contract tests must also
+cover several direct Workspaces in one scope, same-scope nested Workspaces,
+qualified cross-catalog roots, cycle rejection, contribution and overlap status,
+and the absence of Package as a root type. Migration tests must prove that
+bootstrap, consumer-updater, and `project_tooling` targets remain protected until
+their separately owned replacement is verified.
 
 `clc-tzn5` then publishes the first `python-cli` Workspace from the Cognovis
 marketplace and validates it against the supported schema without a live sibling
