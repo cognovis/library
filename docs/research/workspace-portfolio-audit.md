@@ -1,7 +1,9 @@
 # Workspace Portfolio Audit
 
-**Date:** 2026-08-05  
-**Bead:** CL-r7n6  
+**Date:** 2026-08-05
+
+**Bead:** CL-r7n6
+
 **Status:** Architecture input, not an installation manifest
 
 ## Question
