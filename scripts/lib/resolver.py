@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from .catalog import get_entries, lookup_entry
 from .errors import DependencyMissingError, EXIT_DEPENDENCY_MISSING, LibraryError
-from .lockfile import find_lockfile, get_entry, load_lockfile
+from .lockfile import find_lockfile, get_entry, load_lockfile, resolve_lockfile_path
 
 
 class CycleError(LibraryError):
@@ -172,4 +172,4 @@ def is_already_installed(
     install_target = entry.get("install_target")
     if not install_target:
         return False
-    return Path(str(install_target).rstrip("/")).exists()
+    return resolve_lockfile_path(str(install_target), repo_root).exists()

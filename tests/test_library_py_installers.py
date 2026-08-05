@@ -827,7 +827,7 @@ class TestDryRunContractUniformity:
         )
         bridge_text = "\n".join(lock_entry["bridge_symlinks"])
         for handler_target in expected_handler_targets:
-            assert str(handler_target) in bridge_text
+            assert str(handler_target.relative_to(agent_handlers_project)) in bridge_text
 
     def test_agent_remove_all_deletes_installed_handler_directories(
         self,
@@ -2915,6 +2915,7 @@ class TestSkillRealInstall:
 
         bridge = project_dir / ".claude" / "skills" / "test-skill"
         assert bridge.is_symlink()
+        assert bridge.readlink() == Path("../../.agents/skills/test-skill")
         target = bridge.resolve()
         canonical = (project_dir / ".agents" / "skills" / "test-skill").resolve()
         assert target == canonical

@@ -1,0 +1,18 @@
+{
+  "library-authoring": {
+    "consumer_locks": [
+      {
+        "repository": "cognovis/library",
+        "lock_path": ".library.lock",
+        "commit": "0449abc628915c4ace93ed447458646052382ff1",
+        "schema_version": 2
+      },
+      {
+        "repository": "cognovis/cognovis-pi",
+        "lock_path": ".library.lock",
+        "commit": "991b2a6896330abec8e52636ea6a0baab23ec266",
+        "schema_version": 2
+      }
+    ]
+  }
+}

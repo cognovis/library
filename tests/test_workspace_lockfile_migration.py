@@ -10,7 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from lib.errors import LockfileError
-from lib.lockfile import load_lockfile, save_lockfile
+from lib.lockfile import compute_checksum, load_lockfile, save_lockfile
+from lib.resolver import is_already_installed
 
 
 def _legacy_entry() -> dict:
@@ -79,9 +80,132 @@ def test_v2_save_keeps_installed_as_derived_compatibility_projection(
     assert persisted["installed"][0]["name"] == "python-dev"
 
 
+def test_project_lock_save_serializes_project_targets_relative_to_lock_root(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".library.lock"
+    cache = tmp_path.parent / "cache" / "python-dev"
+    install_target = tmp_path / ".agents" / "skills" / "python-dev"
+    bridge = tmp_path / ".claude" / "skills" / "python-dev"
+    entry = _legacy_entry()
+    entry.update(
+        {
+            "scope": "project",
+            "cache_path": str(cache),
+            "install_target": f"{install_target}/",
+            "bridge_symlinks": [
+                f"{bridge} -> {install_target}",
+                f"{bridge}-cache -> {cache}",
+            ],
+        }
+    )
+    lock = {
+        "schema_version": 2,
+        "migration": {"prune_ack_required": False},
+        "requested_roots": [],
+        "receipts": [
+            {
+                **entry,
+                "id": "skill:python-dev",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "prune_blocked_reason": None,
+                "targets": [
+                    {
+                        "path": str(install_target / "SKILL.md"),
+                        "kind": "file",
+                        "content_sha256": "b" * 64,
+                    },
+                    {
+                        "path": str(bridge),
+                        "kind": "symlink",
+                        "link_target": "../../.agents/skills/python-dev",
+                    },
+                ],
+                "owners_cache": ["workspace:python-cli"],
+            }
+        ],
+        "prerequisites": [],
+        "installed": [entry],
+    }
+
+    save_lockfile(path, lock)
+    persisted = yaml.safe_load(path.read_text())
+
+    receipt = persisted["receipts"][0]
+    installed = persisted["installed"][0]
+    assert receipt["install_target"] == ".agents/skills/python-dev/"
+    assert installed["install_target"] == ".agents/skills/python-dev/"
+    assert receipt["targets"][0]["path"] == ".agents/skills/python-dev/SKILL.md"
+    assert receipt["targets"][1]["path"] == ".claude/skills/python-dev"
+    assert receipt["bridge_symlinks"] == [
+        ".claude/skills/python-dev -> .agents/skills/python-dev",
+        f".claude/skills/python-dev-cache -> {cache}",
+    ]
+    assert receipt["cache_path"] == str(cache)
+    assert lock["receipts"][0]["install_target"] == f"{install_target}/"
+
+
 def test_newer_lockfile_schema_fails_closed(tmp_path: Path) -> None:
     path = tmp_path / ".library.lock"
     path.write_text(yaml.safe_dump({"schema_version": 3, "installed": []}))
 
     with pytest.raises(LockfileError, match="Unsupported lockfile schema_version"):
         load_lockfile(path)
+
+
+def test_relative_install_target_is_resolved_against_selected_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    elsewhere = tmp_path / "elsewhere"
+    target = project / ".agents" / "skills" / "python-dev"
+    target.mkdir(parents=True)
+    elsewhere.mkdir()
+    entry = _legacy_entry()
+    entry["install_target"] = ".agents/skills/python-dev/"
+    (project / ".library.lock").write_text(
+        yaml.safe_dump({"installed": [entry]})
+    )
+
+    monkeypatch.chdir(elsewhere)
+
+    assert is_already_installed("python-dev", project, "project", "skill")
+
+
+def test_local_tamper_uses_selected_project_for_relative_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    project = tmp_path / "project"
+    elsewhere = tmp_path / "elsewhere"
+    target = project / ".agents" / "scripts" / "example.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("print('tampered')\n")
+    elsewhere.mkdir()
+    expected = tmp_path / "expected.py"
+    expected.write_text("print('expected')\n")
+    entry = {
+        **_legacy_entry(),
+        "name": "example",
+        "type": "script",
+        "install_target": ".agents/scripts/example.py",
+        "checksum_type": "file",
+        "checksum_sha256": compute_checksum(expected),
+        "content_sha256": compute_checksum(expected),
+    }
+    (project / ".library.lock").write_text(
+        yaml.safe_dump({"installed": [entry]})
+    )
+    spec = importlib.util.spec_from_file_location(
+        "library_portable_path_test", REPO_ROOT / "scripts" / "library.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.chdir(elsewhere)
+
+    assert module._has_local_tamper(project, "project", "script", "example")

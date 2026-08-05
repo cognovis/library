@@ -18,6 +18,7 @@ from ..lockfile import (
     load_lockfile,
     make_entry,
     remove_entry,
+    resolve_lockfile_path,
     save_lockfile,
     upsert_entry,
 )
@@ -219,7 +220,9 @@ def _write_just_aggregator(repo_root: Path, lock_data: dict[str, Any]) -> None:
     for locked in lock_data.get("installed", []):
         if locked.get("type") != "just-module":
             continue
-        target = Path(str(locked.get("install_target", "")))
+        target = resolve_lockfile_path(
+            str(locked.get("install_target", "")), root
+        )
         if target.parent.resolve() != base or target.suffix != ".just":
             raise InstallError(
                 f"Refusing unsafe Just module target in lockfile: {target}."
@@ -430,8 +433,12 @@ def remove_project_native_file(
     lockfile_path = find_lockfile(repo_root, global_scope=False)
     lock_data = load_lockfile(lockfile_path)
     locked = get_entry(lock_data, name, primitive_type=primitive)
-    target = Path(locked["install_target"]) if locked else None
     root = repo_root.resolve()
+    target = (
+        resolve_lockfile_path(str(locked["install_target"]), root)
+        if locked
+        else None
+    )
     expected_base = (root / PROJECT_NATIVE_TARGETS[primitive]).resolve()
     if not expected_base.is_relative_to(root):
         raise InstallError(

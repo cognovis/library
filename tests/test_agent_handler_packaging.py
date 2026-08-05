@@ -87,7 +87,7 @@ def test_missing_handler_directory_is_reported(tmp_path: Path):
     agents.mkdir()
     entry = _entry("needs-handler", agents / "needs-handler.md")
 
-    issue = _check_missing_agent_handlers(entry, CATALOG, "global")
+    issue = _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global")
 
     assert issue is not None
     assert str(agents / "needs-handler-handlers") in issue["missing"][0]
@@ -100,7 +100,7 @@ def test_empty_handler_directory_counts_as_missing(tmp_path: Path):
     (agents / "needs-handler-handlers").mkdir(parents=True)
     entry = _entry("needs-handler", agents / "needs-handler.md")
 
-    assert _check_missing_agent_handlers(entry, CATALOG, "global") is not None
+    assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is not None
 
 
 def test_present_handler_directory_is_clean(tmp_path: Path):
@@ -110,7 +110,7 @@ def test_present_handler_directory_is_clean(tmp_path: Path):
     (handlers / "run.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     entry = _entry("needs-handler", agents / "needs-handler.md")
 
-    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+    assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is None
 
 
 def test_agent_without_declared_handlers_is_not_flagged(tmp_path: Path):
@@ -118,12 +118,12 @@ def test_agent_without_declared_handlers_is_not_flagged(tmp_path: Path):
     agents.mkdir()
     entry = _entry("no-handler", agents / "no-handler.md")
 
-    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+    assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is None
 
 
 def test_non_agent_entries_are_ignored(tmp_path: Path):
     entry = {"name": "needs-handler", "type": "skill", "install_target": str(tmp_path / "x")}
-    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+    assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is None
 
 
 # -- CL-8a7z: completeness, not merely non-emptiness -------------------------
@@ -158,7 +158,7 @@ def test_a_directory_holding_only_a_leftover_is_reported(tmp_path: Path):
     """The false negative: non-empty is not the same as intact."""
     entry, handlers = _rotted(tmp_path, keep=())
 
-    issue = _check_missing_agent_handlers(entry, CATALOG, "global")
+    issue = _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global")
 
     assert issue is not None
     missing = {Path(p).name for p in issue["missing"]}
@@ -169,7 +169,7 @@ def test_a_directory_holding_only_a_leftover_is_reported(tmp_path: Path):
 def test_one_missing_handler_file_is_reported(tmp_path: Path):
     entry, _ = _rotted(tmp_path, keep=("run.sh", "lib/util.sh"))
 
-    issue = _check_missing_agent_handlers(entry, CATALOG, "global")
+    issue = _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global")
 
     assert issue is not None
     assert [Path(p).name for p in issue["missing"]] == ["helper.sh"]
@@ -179,7 +179,7 @@ def test_one_missing_handler_file_is_reported(tmp_path: Path):
 def test_a_complete_handler_tree_is_clean(tmp_path: Path):
     entry, _ = _rotted(tmp_path, keep=("run.sh", "helper.sh", "lib/util.sh"))
 
-    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+    assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is None
 
 
 def test_an_entry_without_recorded_targets_is_not_accused(tmp_path: Path):
@@ -187,7 +187,7 @@ def test_an_entry_without_recorded_targets_is_not_accused(tmp_path: Path):
     entry, _ = _rotted(tmp_path, keep=())
     entry["bridge_symlinks"] = []
 
-    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+    assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is None
 
 
 def test_a_vanished_cache_is_not_treated_as_rot(tmp_path: Path):
@@ -196,7 +196,7 @@ def test_a_vanished_cache_is_not_treated_as_rot(tmp_path: Path):
         f"{tmp_path / 'agents' / 'needs-handler-handlers'} -> {tmp_path / 'gone'}"
     ]
 
-    assert _check_missing_agent_handlers(entry, CATALOG, "global") is None
+    assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is None
 
 
 # -- CL-8a7z: the default scope must match where agents look -----------------

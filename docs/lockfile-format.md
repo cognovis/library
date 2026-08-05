@@ -198,12 +198,24 @@ never becomes a project receipt, and creates no project ownership edge.
 | `targets[].link_target` | Every symlink | Literal `readlink` value recorded immediately after install. |
 | `owners_cache` | Optional | Derived explanation only. Never resolver input for later pruning. |
 
+Project locks persist project-owned `install_target`, bridge link paths, and
+`targets[].path` values relative to the directory containing `.library.lock`.
+Status, verification, removal, adoption, and reconciliation resolve them against
+the selected project root. This is a serialization boundary: the in-memory
+operation may use absolute paths, Layer-B `cache_path` values remain absolute,
+and global-lock targets remain absolute.
+
 Library-created v2 harness bridges within one scope use normalized relative
 targets computed from the bridge parent to the canonical target. For example,
 the literal target from `.claude/skills/python-dev` to
 `.agents/skills/python-dev` is `../../.agents/skills/python-dev`. Verification
 compares the exact recorded `readlink` value; it does not normalize a different
 absolute or relative spelling into a match.
+
+In each `bridge_symlinks` string, the left side is a lock-root-relative bridge
+path and the right side is the literal symlink payload interpreted relative to
+that bridge's parent directory. The two sides therefore use different relative
+bases by design.
 
 A directory target is only a container marker. Prune removes its individually
 recorded files and links, then removes the directory only when empty. Any

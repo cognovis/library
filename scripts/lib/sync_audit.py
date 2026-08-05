@@ -8,6 +8,7 @@ audit: Computes content checksums for installed entries and compares against loc
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,8 @@ from .lockfile import (
     find_lockfile,
     get_entry,
     load_lockfile,
+    resolve_lockfile_path,
+    save_lockfile,
 )
 from .output import dry_run_result, success
 from .paths import resolve_install_paths
@@ -271,48 +274,61 @@ def reinstall_entry(
     scope: str,
     harness: str,
 ) -> dict[str, Any] | None:
-    """Re-install a single lockfile entry and return the installer result."""
+    """Re-install one receipt without changing authoritative requested intent."""
     entry_name = entry.get("name", "")
     entry_type = entry.get("type", "")
     install_mode = entry.get("install_mode", "vendor")
 
+    lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+    before = load_lockfile(lockfile_path)
+    requested_roots = deepcopy(before.get("requested_roots") or [])
+    prerequisite_statuses = {
+        str(item.get("id") or ""): str(item.get("status") or "unknown")
+        for item in before.get("prerequisites") or []
+    }
+
     if entry_type == "skill":
         from .installers.skill import install_skill
-        return install_skill(
-            catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, install_mode=install_mode
+        result = install_skill(
+            catalog=catalog,
+            name=entry_name,
+            repo_root=repo_root,
+            scope=scope,
+            install_mode=install_mode,
+            harness=harness,
         )
     elif entry_type == "agent":
         from .installers.agent import install_agent
-        return install_agent(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
+        result = install_agent(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
     elif entry_type == "prompt":
         from .installers.simple_file import install_simple_file
-        return install_simple_file(catalog=catalog, primitive_name="prompt", name=entry_name,
+        result = install_simple_file(catalog=catalog, primitive_name="prompt", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "script":
         from .installers.simple_file import install_simple_file
-        return install_simple_file(catalog=catalog, primitive_name="script", name=entry_name,
+        result = install_simple_file(catalog=catalog, primitive_name="script", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "standard":
         from .installers.standard import install_standard
-        return install_standard(
+        result = install_standard(
             catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, install_mode=install_mode
         )
     elif entry_type == "model-standard":
         from .installers.simple_file import install_simple_file
-        return install_simple_file(catalog=catalog, primitive_name="model-standard", name=entry_name,
+        result = install_simple_file(catalog=catalog, primitive_name="model-standard", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "agent-base":
         from .installers.simple_file import install_simple_file
-        return install_simple_file(catalog=catalog, primitive_name="agent-base", name=entry_name,
+        result = install_simple_file(catalog=catalog, primitive_name="agent-base", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "workflow":
         from .installers.simple_file import install_simple_file
-        return install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
+        result = install_simple_file(catalog=catalog, primitive_name="workflow", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type in {"pi-extension", "pi-profile", "just-module"}:
         from .installers.project_native import install_project_native_file
 
-        return install_project_native_file(
+        result = install_project_native_file(
             catalog=catalog,
             primitive=entry_type,
             name=entry_name,
@@ -322,16 +338,31 @@ def reinstall_entry(
         )
     elif entry_type == "runtime-config":
         from .runtime_config import install_runtime_config
-        return install_runtime_config(catalog=catalog, name=entry_name, repo_root=repo_root,
+        result = install_runtime_config(catalog=catalog, name=entry_name, repo_root=repo_root,
                                scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "mcp":
         from .installers.mcp_installer import install_mcp
-        return install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
+        result = install_mcp(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
     elif entry_type == "guardrail":
         from .installers.guardrail_installer import install_guardrail
-        return install_guardrail(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
+        result = install_guardrail(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)
     # Unknown types are silently skipped
-    return None
+    else:
+        return None
+
+    refreshed = load_lockfile(lockfile_path)
+    refreshed["requested_roots"] = requested_roots
+    from .workspace import apply_plan_ownership, build_workspace_plan
+
+    plan = build_workspace_plan(catalog, refreshed, repo_root, scope)
+    if not plan.get("blockers"):
+        apply_plan_ownership(
+            refreshed,
+            plan,
+            prerequisite_statuses=prerequisite_statuses,
+        )
+    save_lockfile(lockfile_path, refreshed)
+    return result
 
 
 def cmd_audit_impl(
@@ -616,7 +647,7 @@ def cmd_audit_impl(
         # were both installed without their handlers, and nothing reported it
         # (CL-b6oy).
         handler_issue = (
-            _check_missing_agent_handlers(entry, catalog, scope)
+            _check_missing_agent_handlers(entry, catalog, repo_root, scope)
             if catalog_checks_apply
             else None
         )
@@ -716,6 +747,7 @@ def _classify_catalog_provenance(
 def _check_missing_agent_handlers(
     entry: dict,
     catalog: dict,
+    repo_root: Path,
     scope: str,
 ) -> dict[str, Any] | None:
     """Report handler assets an installed agent declares but does not have.
@@ -741,7 +773,7 @@ def _check_missing_agent_handlers(
     if not install_target:
         return None
     name = entry.get("name", "")
-    handler_root = Path(install_target).parent / f"{name}-handlers"
+    handler_root = _entry_path(install_target, repo_root).parent / f"{name}-handlers"
 
     if not handler_root.is_dir() or not any(handler_root.iterdir()):
         return {
@@ -753,7 +785,7 @@ def _check_missing_agent_handlers(
             ),
         }
 
-    missing_files = _missing_recorded_handler_files(entry, handler_root)
+    missing_files = _missing_recorded_handler_files(entry, handler_root, repo_root)
     if not missing_files:
         return None
     return {
@@ -766,7 +798,9 @@ def _check_missing_agent_handlers(
     }
 
 
-def _missing_recorded_handler_files(entry: dict, handler_root: Path) -> list[str]:
+def _missing_recorded_handler_files(
+    entry: dict, handler_root: Path, repo_root: Path
+) -> list[str]:
     """Return handler files recorded for this install that are absent on disk.
 
     The lockfile records each handler target as `<install path> -> <cache path>`,
@@ -783,7 +817,7 @@ def _missing_recorded_handler_files(entry: dict, handler_root: Path) -> list[str
         if " -> " not in raw:
             continue
         target_str, _, cache_str = raw.partition(" -> ")
-        target = Path(target_str.strip().rstrip("/"))
+        target = _entry_path(target_str.strip().rstrip("/"), repo_root)
         cache = Path(cache_str.strip().rstrip("/"))
         try:
             if not target.is_relative_to(handler_root) and target != handler_root:
@@ -935,7 +969,4 @@ def _agent_frontmatter_issue(
 
 def _entry_path(path_str: str, repo_root: Path) -> Path:
     """Resolve a lockfile path relative to repo_root when needed."""
-    path = Path(path_str.rstrip("/"))
-    if path.is_absolute():
-        return path
-    return repo_root / path
+    return resolve_lockfile_path(path_str, repo_root)
