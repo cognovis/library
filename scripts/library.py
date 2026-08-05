@@ -1807,9 +1807,7 @@ def _safe_receipted_remove(
         (
             receipt
             for receipt in preview.get("receipts", [])
-            if receipt.get("id") == receipt_id
-            and receipt.get("scope", scope) == scope
-            and receipt.get("targets")
+            if receipt.get("id") == receipt_id and receipt.get("scope", scope) == scope
         ),
         None,
     )
@@ -1823,9 +1821,7 @@ def _safe_receipted_remove(
             (
                 item
                 for item in lock.get("receipts", [])
-                if item.get("id") == receipt_id
-                and item.get("scope", scope) == scope
-                and item.get("targets")
+                if item.get("id") == receipt_id and item.get("scope", scope) == scope
             ),
             None,
         )
@@ -1844,11 +1840,26 @@ def _safe_receipted_remove(
             )
         ]
         plan = build_workspace_plan(catalog, working, repo_root, scope)
-        if plan.get("blockers"):
+        requested_roots_by_id = {
+            str(root.get("id") or ""): root
+            for root in working.get("requested_roots", [])
+        }
+        cached_owners = set(receipt.get("owners_cache") or []) - {receipt_id}
+        reachability_blockers: list[str] = []
+        for blocker in plan.get("blockers") or []:
+            blocked_owner = blocker.split(": ", 1)[0]
+            blocked_root = requested_roots_by_id.get(blocked_owner)
+            if blocked_root and (
+                blocked_root.get("type") == "workspace"
+                or blocked_owner in cached_owners
+            ):
+                reachability_blockers.append(blocker)
+        if reachability_blockers:
             raise LibraryError(
                 "Remove blocked because Workspace reachability is incomplete: "
-                + "; ".join(plan["blockers"])
+                + "; ".join(reachability_blockers)
             )
+        plan["blockers"] = []
         owners = next(
             (
                 item.get("owners") or []
@@ -1886,6 +1897,83 @@ def _safe_receipted_remove(
             save_lockfile(lock_path, working)
             clear_workspace_journal(lock_path)
             return result
+
+        catalog_entry_exists = any(
+            entry.get("name") == name for entry in get_entries(catalog, primitive)
+        )
+        if not catalog_entry_exists and (
+            not receipt.get("verified") or not receipt.get("targets")
+        ):
+            retained_paths = [
+                str(target.get("path") or "")
+                for target in receipt.get("targets") or []
+                if target.get("path")
+            ]
+            result = success(
+                data={
+                    "name": name,
+                    "removed_files": [],
+                    "retained_orphan_paths": retained_paths,
+                },
+                message=(
+                    f"Orphaned receipt '{receipt_id}' removed from Library state; "
+                    "unverified or targetless filesystem content was retained."
+                ),
+            )
+            if dry_run:
+                return {
+                    "status": "dry-run",
+                    "summary": result["message"],
+                    "operations": [
+                        {
+                            "operation": "retain",
+                            "path": path,
+                            "details": "unverified orphan content is not deleted",
+                        }
+                        for path in retained_paths
+                    ],
+                }
+            write_workspace_journal(
+                lock_path,
+                {"operation": "remove", "member": receipt_id, "orphan": True},
+            )
+            apply_post_prune_lock(working, {receipt_id})
+            apply_plan_ownership(
+                working,
+                plan,
+                prerequisite_statuses=_workspace_prerequisite_statuses(plan),
+            )
+            save_lockfile(lock_path, working)
+            clear_workspace_journal(lock_path)
+            return result
+
+        if not receipt.get("targets"):
+            if dry_run:
+                return _dispatch_remove(
+                    primitive,
+                    catalog,
+                    name,
+                    repo_root,
+                    scope,
+                    True,
+                    harness,
+                )
+            write_workspace_journal(
+                lock_path,
+                {"operation": "remove", "member": receipt_id, "targetless": True},
+            )
+            try:
+                return _dispatch_remove(
+                    primitive,
+                    catalog,
+                    name,
+                    repo_root,
+                    scope,
+                    False,
+                    harness,
+                )
+            finally:
+                clear_workspace_journal(lock_path)
 
         selected = select_prune_candidates(plan, {receipt_id})
         managed = collect_managed_paths(
@@ -3547,6 +3635,21 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     with workspace_write_lock(lock_path):
         recover_workspace_journal(lock_path, repo_root)
         current_lock = load_lockfile(lock_path)
+        locked_preview = json.loads(json.dumps(current_lock))
+        upsert_workspace_root(locked_preview, requested_root)
+        locked_plan = build_workspace_plan(
+            catalog, locked_preview, repo_root, args.scope
+        )
+        locked_prerequisite_blockers = _workspace_prerequisite_blockers(locked_plan)
+        if locked_prerequisite_blockers:
+            result.update(
+                {
+                    "status": "blocked",
+                    "blockers": locked_prerequisite_blockers,
+                }
+            )
+            _print_workspace_result(result, json_mode=args.json)
+            return 3
         locked_collision = _workspace_collision_analysis(
             args,
             repo_root,
@@ -3916,6 +4019,14 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
                 for source in get_catalogs(catalog)
                 if source.get("name") and source.get("source")
             }
+            source_identities = {
+                str(source.get("name") or ""): normalize_catalog_identity(
+                    str(source.get("source") or "")
+                )
+                for source in get_catalogs(catalog)
+                if source.get("name") and source.get("source")
+            }
+            verified_identities: dict[str, str] = {}
             for receipt in pending:
                 receipt_id = str(receipt.get("id") or "")
                 primitive, separator, name = receipt_id.partition(":")
@@ -3970,7 +4081,21 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
                         f"{output_buffer.getvalue().strip()}"
                     )
                 verified_receipts.append(receipt_id)
+                if source_catalog and source_identities.get(source_catalog):
+                    verified_identities[receipt_id] = source_identities[source_catalog]
             lock = load_lockfile(lock_path)
+            for receipt in lock.get("receipts", []):
+                identity = verified_identities.get(str(receipt.get("id") or ""))
+                if identity:
+                    receipt["catalog_identity"] = identity
+            for installed_entry in lock.get("installed", []):
+                installed_id = (
+                    f"{installed_entry.get('type', '')}:"
+                    f"{installed_entry.get('name', '')}"
+                )
+                identity = verified_identities.get(installed_id)
+                if identity:
+                    installed_entry["catalog_identity"] = identity
             remaining_unverified = [
                 receipt
                 for receipt in lock.get("receipts", [])
@@ -3979,6 +4104,9 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
             ]
             if not remaining_unverified and isinstance(lock.get("migration"), dict):
                 lock["migration"]["prune_ack_required"] = False
+            if verified_identities or (
+                not remaining_unverified and isinstance(lock.get("migration"), dict)
+            ):
                 save_lockfile(lock_path, lock)
 
     result = {

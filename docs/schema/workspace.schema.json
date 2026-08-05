@@ -27,6 +27,13 @@
       "minimum": 0,
       "maximum": 1
     },
+    "source": {"type": "string", "minLength": 1},
+    "metadata": {"type": "object"},
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
     "roots": {
       "type": "array",
       "minItems": 2,

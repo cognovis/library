@@ -259,7 +259,12 @@ def lookup_entry(
             entry
             for entry in entries
             if (
-                (entry.get("metadata") or {}).get("library", {}).get("source_catalog")
+                str(
+                    (entry.get("metadata") or {})
+                    .get("library", {})
+                    .get("source_catalog")
+                    or ""
+                )
                 == source_catalog
             )
         ]

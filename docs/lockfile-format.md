@@ -493,9 +493,11 @@ Ownership-derived prune requires a verified, clean receipt. Explicit named
 primitive removal is separate user consent, but uses the same exact-target,
 manager-aware, journaled transaction whenever a v2 receipt exists. Remaining
 Workspace owners retain the files; ownerless verified targets are removed;
-unverified, drifted, foreign-managed, or unrecorded content blocks without
-mutating files or lock intent. Legacy targetless records retain their
-primitive-specific compatibility handler.
+unverified, drifted, foreign-managed, or unrecorded content blocks physical
+deletion. An unverified direct receipt whose supplying catalog no longer lists
+the entry may be unregistered by an explicit named remove, but every recorded
+path is retained. Legacy targetless records retain their primitive-specific
+compatibility handler only after the same fresh Workspace-ownership check.
 
 The complete safety and recovery protocol is normative in ADR-0010.
 

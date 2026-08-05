@@ -302,11 +302,12 @@ This deliberately retains too much rather than deleting a historical manual or
 direct install.
 
 The migration guard blocks only pruning; additive `workspace use` and ordinary
-sync remain available. The first `workspace sync --prune` is always plan-only
-and emits a digest of the exact prune set. The guard clears only when a later
-`--prune --apply --acknowledge-plan <digest>` supplies that unchanged digest.
-Additive catalog changes do not invalidate the handshake unless they change
-reachability or a candidate deletion. A missing or stale digest fails closed.
+sync remain available. Only `workspace sync --verify-receipts` can clear the
+guard, after every selected-scope receipt has exact verified targets. Once the
+guard is clear, `workspace sync --prune` is plan-only and emits a digest of the
+exact prune set; a later apply must supply that unchanged digest. Additive
+catalog changes invalidate the handshake only when they change reachability or
+a candidate deletion. A missing or stale digest fails closed.
 
 ### Decision 7: The Workspace command surface is explicit about deletion
 
@@ -435,8 +436,13 @@ named removal of a v2 receipt. `library <primitive> remove <name>` unregisters
 the direct root and preserves the receipt when another root still reaches it.
 An ownerless verified receipt is removed through the same exact-target,
 containment, external-manager, lock, and journal protocol as prune. Unverified,
-drifted, externally managed, or unrecorded content blocks without mutation.
-Ownerless transitive receipts are never silently deleted.
+drifted, externally managed, or unrecorded content blocks physical deletion.
+When the supplying catalog no longer contains an unverified direct root, named
+removal may unregister its Library state but must retain every recorded path;
+this is an ownership relinquishment, not a prune. Ownerless transitive receipts
+are never silently deleted. Legacy targetless receipts pass through the same
+fresh ownership check before their primitive-specific compatibility handler may
+run.
 
 ### Decision 9: Reconciliation is locked, journaled, and re-entrant
 

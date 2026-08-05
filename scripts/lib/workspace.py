@@ -1069,8 +1069,6 @@ def apply_post_prune_lock(lock: dict[str, Any], candidate_ids: set[str]) -> None
         if root_id(str(entry.get("type") or ""), str(entry.get("name") or ""))
         not in candidate_ids
     ]
-    if lock.get("migration", {}).get("prune_ack_required"):
-        lock["migration"]["prune_ack_required"] = False
 
 
 def workspace_journal_path(lock_path: Path) -> Path:

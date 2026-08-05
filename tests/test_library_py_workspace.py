@@ -45,6 +45,24 @@ def test_platform_catalog_publishes_operational_python_cli_workspace() -> None:
     }
 
 
+def test_source_bound_lookup_normalizes_missing_metadata_to_unbound() -> None:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import lookup_entry
+
+    catalog = {"library": {"mcp_servers": [{"name": "unbound-service"}]}}
+
+    assert (
+        lookup_entry(
+            catalog,
+            "mcp",
+            "unbound-service",
+            fuzzy=False,
+            source_catalog="",
+        )["name"]
+        == "unbound-service"
+    )
+
+
 def _run(project: Path, home: Path, *args: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["HOME"] = str(home)
@@ -428,6 +446,205 @@ def test_named_remove_preserves_workspace_reachable_receipt(tmp_path: Path) -> N
     assert "skill:python-dev" in {item["id"] for item in lock["receipts"]}
 
 
+def test_named_remove_preserves_targetless_workspace_reachable_receipt(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+    lock_path = project / ".library.lock"
+    lock = yaml.safe_load(lock_path.read_text())
+    receipt = next(
+        item for item in lock["receipts"] if item["id"] == "skill:python-dev"
+    )
+    receipt["targets"] = []
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False))
+
+    removed = _run(
+        project,
+        home,
+        "skill",
+        "remove",
+        "python-dev",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    payload = json.loads(removed.stdout)
+    assert payload["removed_files"] == []
+    assert payload["retained_by"][0].startswith("workspace:")
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    final_lock = yaml.safe_load(lock_path.read_text())
+    assert "skill:python-dev" in {item["id"] for item in final_lock["receipts"]}
+
+
+def test_unrelated_catalog_orphan_does_not_block_named_remove(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    for name in ("python-dev", "python-test"):
+        installed = _run(
+            project,
+            home,
+            "skill",
+            "use",
+            name,
+            "--scope",
+            "project",
+            "--harness",
+            "codex",
+            "--json",
+        )
+        assert installed.returncode == 0, installed.stderr or installed.stdout
+    catalog_path = project / "library.yaml"
+    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog["library"]["skills"] = [
+        entry for entry in catalog["library"]["skills"] if entry["name"] != "python-dev"
+    ]
+    catalog_path.write_text(yaml.safe_dump(catalog, sort_keys=False))
+
+    removed = _run(
+        project,
+        home,
+        "skill",
+        "remove",
+        "python-test",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    assert not (project / ".agents" / "skills" / "python-test").exists()
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    assert {root["id"] for root in lock["requested_roots"]} == {"skill:python-dev"}
+    assert {receipt["id"] for receipt in lock["receipts"]} == {"skill:python-dev"}
+
+
+def test_unverified_catalog_orphan_remove_retains_filesystem_content(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    installed = _run(
+        project,
+        home,
+        "skill",
+        "use",
+        "python-dev",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    lock_path = project / ".library.lock"
+    current = yaml.safe_load(lock_path.read_text())
+    lock_path.write_text(
+        yaml.safe_dump({"installed": current["installed"]}, sort_keys=False)
+    )
+    catalog_path = project / "library.yaml"
+    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog["library"]["skills"] = []
+    catalog_path.write_text(yaml.safe_dump(catalog, sort_keys=False))
+
+    removed = _run(
+        project,
+        home,
+        "skill",
+        "remove",
+        "python-dev",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    payload = json.loads(removed.stdout)
+    assert payload["data"]["removed_files"] == []
+    assert payload["data"]["retained_orphan_paths"]
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    final_lock = yaml.safe_load(lock_path.read_text())
+    assert final_lock["requested_roots"] == []
+    assert final_lock["receipts"] == []
+    assert final_lock["migration"]["prune_ack_required"] is True
+
+
+def test_targetless_catalog_orphan_remove_retains_filesystem_content(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    installed = _run(
+        project,
+        home,
+        "skill",
+        "use",
+        "python-dev",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    lock_path = project / ".library.lock"
+    lock = yaml.safe_load(lock_path.read_text())
+    receipt = next(
+        item for item in lock["receipts"] if item["id"] == "skill:python-dev"
+    )
+    receipt["targets"] = []
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False))
+    catalog_path = project / "library.yaml"
+    catalog = yaml.safe_load(catalog_path.read_text())
+    catalog["library"]["skills"] = []
+    catalog_path.write_text(yaml.safe_dump(catalog, sort_keys=False))
+
+    removed = _run(
+        project,
+        home,
+        "skill",
+        "remove",
+        "python-dev",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert removed.returncode == 0, removed.stderr or removed.stdout
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    final_lock = yaml.safe_load(lock_path.read_text())
+    assert final_lock["requested_roots"] == []
+    assert final_lock["receipts"] == []
+
+
 def test_named_remove_blocks_drift_without_mutating_lock_or_files(
     tmp_path: Path,
 ) -> None:
@@ -564,6 +781,7 @@ def test_verify_receipts_reinstalls_migrated_direct_roots_without_a_workspace(
     assert lock["migration"]["prune_ack_required"] is False
     assert lock["receipts"][0]["scope"] == "project"
     assert lock["receipts"][0]["verified"] is True
+    assert lock["receipts"][0]["catalog_identity"] == "https://github.com/example/core"
 
 
 def test_workspace_status_reports_filesystem_drift_and_catalog_updates(
@@ -914,6 +1132,53 @@ def test_workspace_use_rejects_incompatible_global_prerequisite_version(
         json.loads(used.stdout)["blockers"]
     )
     assert not (project / ".library.lock").exists()
+
+
+def test_workspace_use_rechecks_prerequisites_after_acquiring_write_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    checks = iter(([], ["mcp:test-service changed while waiting for the lock"]))
+    real_dispatch = module._dispatch_use
+    monkeypatch.setattr(
+        module,
+        "_workspace_prerequisite_blockers",
+        lambda _plan: next(checks),
+    )
+
+    def guarded_dispatch(*dispatch_args, **dispatch_kwargs):
+        if dispatch_args[7]:
+            return real_dispatch(*dispatch_args, **dispatch_kwargs)
+        pytest.fail("member installation started after prerequisite drift")
+
+    monkeypatch.setattr(module, "_dispatch_use", guarded_dispatch)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        json=True,
+    )
+
+    rc = module._workspace_use(args, project, load_catalog(project))
+    output = json.loads(capsys.readouterr().out)
+
+    assert rc == 3
+    assert output["blockers"] == ["mcp:test-service changed while waiting for the lock"]
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents").exists()
 
 
 def test_filesystem_adoption_verifies_exact_receipt_and_definition_pin(

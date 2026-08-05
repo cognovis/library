@@ -35,6 +35,18 @@ def test_workspace_manifest_accepts_two_same_catalog_artifact_roots(
     jsonschema.validate(manifest, SCHEMA)
 
 
+def test_workspace_schema_accepts_catalog_enrichment_fields(manifest: dict) -> None:
+    candidate = deepcopy(manifest)
+    candidate.update(
+        {
+            "source": "workspaces/python-cli.yaml",
+            "metadata": {"library": {"source_catalog": "team-core"}},
+            "tags": ["python", "cli"],
+        }
+    )
+    jsonschema.validate(candidate, SCHEMA)
+
+
 @pytest.mark.parametrize(
     "bad_root",
     [
