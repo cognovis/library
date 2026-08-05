@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -27,7 +28,29 @@ def test_library_authoring_manifest_has_exact_platform_forge_roots() -> None:
         (REPO_ROOT / "workspaces" / "library-authoring.yaml").read_text()
     )
 
+    assert manifest["status"] == "stable"
     assert {(root["type"], root["name"]) for root in manifest["roots"]} == FORGE_ROOTS
+
+
+def test_library_authoring_stable_evidence_names_two_committed_consumers() -> None:
+    evidence = json.loads(
+        (REPO_ROOT / "workspaces" / "admission-evidence.json").read_text()
+    )
+
+    assert evidence["library-authoring"]["consumer_locks"] == [
+        {
+            "repository": "cognovis/library",
+            "lock_path": ".library.lock",
+            "commit": "0449abc628915c4ace93ed447458646052382ff1",
+            "schema_version": 2,
+        },
+        {
+            "repository": "cognovis/cognovis-pi",
+            "lock_path": ".library.lock",
+            "commit": "2fcc0e8c386d742fb9169fbac9870a8ba6bbb8d8",
+            "schema_version": 2,
+        },
+    ]
 
 
 def test_library_authoring_roots_resolve_standalone() -> None:

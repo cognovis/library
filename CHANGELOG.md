@@ -15,8 +15,9 @@
 ### Added
 
 - *(CL-hyp9, Workspace)* Publish the platform-owned `library-authoring`
-  Workspace over the five Forge Skills and make project lock receipts portable
-  across worktree cleanup and repository relocation.
+  Workspace over the five Forge Skills, admit it as stable from committed Library
+  platform and `cognovis-pi` consumer locks, and make project lock receipts
+  portable across worktree cleanup and repository relocation.
 
 - *(CL-r7n6, Workspace)* Add the metadata-only Workspace primitive, qualified catalog discovery, selected-scope desired-state commands, lockfile v2 requested roots and receipts, digest-bound prune/recovery, policy budgets, and the pinned `cognovis-library-core:python-cli` pilot Workspace. Package is retired as a composition primitive.
 - *(cld/cdx)* `-br`/`--bead-review <id>` is now a thin provider selector over a shared cognovis-tools client. The client owns the typed bead read, fresh role-scoped reviewer dispatch, terminal verdict validation, and `metadata.review` write. Claude defaults to Opus; both launchers retain explicit model overrides.

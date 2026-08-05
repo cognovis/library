@@ -2,7 +2,7 @@ schema_version: 1
 name: library-authoring
 version: 0.1.0
 description: Shared authoring baseline for Library primitive repositories.
-status: experimental
+status: stable
 roots:
   - type: skill
     name: agent-forge

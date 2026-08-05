@@ -1,6 +1,6 @@
 # Library Authoring Workspace
 
-`library-platform:library-authoring` is the project baseline for repositories
+`library-platform:library-authoring` is a stable project baseline for repositories
 that create or maintain Library primitives. Its direct roots are the five
 platform-owned Forge Skills:
 
@@ -19,6 +19,12 @@ The Library platform therefore registers both `library-authoring` and
 `cognovis-library-core:python-cli`. `cognovis-pi` registers only
 `library-authoring`; its runtime primitives remain owned and versioned by the Pi
 catalog.
+
+Stable admission is backed by committed v2 Library locks in the Library platform
+and `cognovis-pi`. Both consumers keep project install targets and harness bridges
+relative, so repository relocation does not change Workspace intent. The Pi
+consumer demonstrates the ownership boundary: the shared Forge capabilities come
+from this Workspace while Pi extensions remain local to `cognovis-pi`.
 
 Use a dry run before registration:
 

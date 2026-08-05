@@ -4118,7 +4118,7 @@ library:
       source: https://github.com/cognovis/library/blob/main/workspaces/library-authoring.yaml
       schema_version: 1
       version: 0.1.0
-      status: experimental
+      status: stable
       roots:
         - type: skill
           name: agent-forge
@@ -4140,7 +4140,7 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml
       schema_version: 1
       version: 0.1.0
-      status: experimental
+      status: stable
       roots:
         - type: skill
           name: python-dev
@@ -4152,7 +4152,7 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
-          source_commit: 2cdbfe648cbcc774daa30c88e03779afbb4abcfa
+          source_commit: dee0415f47d8ae4ccfa7e166bdd682c29f94c33b
 project_tooling:
   - name: beads-prime
     description: bd workflow primer — auto-synced from cognovis-library at SessionStart. bd prime emits its content. Fleet policy, not per-project customization.
