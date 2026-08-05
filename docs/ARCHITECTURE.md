@@ -39,6 +39,9 @@ all direct global Library roots share `~/.config/library/global.lock`.
 Intrinsically global dependencies such as MCP are checked as global-lock
 prerequisites for a project root. The project lock records the non-owning
 assertion, but it never becomes a project artifact receipt or ownership edge.
+Project-owned receipt paths are serialized relative to the project lock root, so
+a committed desired state survives worktree cleanup and repository relocation.
+Global targets and Layer-B cache provenance remain absolute.
 
 Workspace selection is many-to-many. One project may register several
 orthogonal Workspaces, and one Workspace may be reused by many projects. A
@@ -52,7 +55,9 @@ bundle root between those two relationships.
 The evidence-backed initial cuts and repository mapping are documented in the
 [Workspace Portfolio Audit](research/workspace-portfolio-audit.md). In
 particular, `library/meta` directly composes `library-authoring` and
-`python-cli`. `fhir-ig-authoring` remains conditional on proving that at least
+`python-cli`; `cognovis-pi` consumes `library-authoring` while keeping Pi
+extensions, profiles, and Just modules as separately selected Pi-owned
+primitives. `fhir-ig-authoring` remains conditional on proving that at least
 two independent roots remain after its entrypoint `requires:` audit.
 
 Installation scope is separate from model-context scope. Workspace members keep

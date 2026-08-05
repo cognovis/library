@@ -79,6 +79,69 @@ def test_v2_save_keeps_installed_as_derived_compatibility_projection(
     assert persisted["installed"][0]["name"] == "python-dev"
 
 
+def test_project_lock_save_serializes_project_targets_relative_to_lock_root(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".library.lock"
+    cache = tmp_path.parent / "cache" / "python-dev"
+    install_target = tmp_path / ".agents" / "skills" / "python-dev"
+    bridge = tmp_path / ".claude" / "skills" / "python-dev"
+    entry = _legacy_entry()
+    entry.update(
+        {
+            "scope": "project",
+            "cache_path": str(cache),
+            "install_target": f"{install_target}/",
+            "bridge_symlinks": [f"{bridge} -> {cache}"],
+        }
+    )
+    lock = {
+        "schema_version": 2,
+        "migration": {"prune_ack_required": False},
+        "requested_roots": [],
+        "receipts": [
+            {
+                **entry,
+                "id": "skill:python-dev",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "prune_blocked_reason": None,
+                "targets": [
+                    {
+                        "path": str(install_target / "SKILL.md"),
+                        "kind": "file",
+                        "content_sha256": "b" * 64,
+                    },
+                    {
+                        "path": str(bridge),
+                        "kind": "symlink",
+                        "link_target": "../../.agents/skills/python-dev",
+                    },
+                ],
+                "owners_cache": ["workspace:python-cli"],
+            }
+        ],
+        "prerequisites": [],
+        "installed": [entry],
+    }
+
+    save_lockfile(path, lock)
+    persisted = yaml.safe_load(path.read_text())
+
+    receipt = persisted["receipts"][0]
+    installed = persisted["installed"][0]
+    assert receipt["install_target"] == ".agents/skills/python-dev/"
+    assert installed["install_target"] == ".agents/skills/python-dev/"
+    assert receipt["targets"][0]["path"] == ".agents/skills/python-dev/SKILL.md"
+    assert receipt["targets"][1]["path"] == ".claude/skills/python-dev"
+    assert receipt["bridge_symlinks"] == [
+        f".claude/skills/python-dev -> {cache}"
+    ]
+    assert receipt["cache_path"] == str(cache)
+    assert lock["receipts"][0]["install_target"] == f"{install_target}/"
+
+
 def test_newer_lockfile_schema_fails_closed(tmp_path: Path) -> None:
     path = tmp_path / ".library.lock"
     path.write_text(yaml.safe_dump({"schema_version": 3, "installed": []}))

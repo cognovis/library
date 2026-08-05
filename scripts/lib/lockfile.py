@@ -7,6 +7,8 @@ Schema: see docs/lockfile-format.md and docs/schema/lockfile.schema.json.
 from __future__ import annotations
 
 import hashlib
+import os
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -425,6 +427,52 @@ def load_lockfile(lockfile_path: Path) -> dict[str, Any]:
     return data
 
 
+def _project_relative_path(value: str, project_root: Path) -> str:
+    """Serialize an absolute project-owned path relative to its lock root."""
+    raw = str(value)
+    trailing_slash = raw.endswith("/")
+    candidate = Path(raw.rstrip("/")).expanduser()
+    if not candidate.is_absolute():
+        return raw
+    normalized_root = Path(os.path.abspath(project_root))
+    normalized_candidate = Path(os.path.abspath(candidate))
+    try:
+        relative = normalized_candidate.relative_to(normalized_root).as_posix()
+    except ValueError:
+        return raw
+    return f"{relative}/" if trailing_slash else relative
+
+
+def _portable_project_lock(data: dict[str, Any], project_root: Path) -> dict[str, Any]:
+    """Return a portable serialization without changing the runtime lock."""
+    portable = deepcopy(data)
+    for collection in ("receipts", "installed"):
+        for entry in portable.get(collection) or []:
+            if not isinstance(entry, dict) or entry.get("scope") != "project":
+                continue
+            install_target = entry.get("install_target")
+            if isinstance(install_target, str) and install_target:
+                entry["install_target"] = _project_relative_path(
+                    install_target, project_root
+                )
+            bridges: list[str] = []
+            for bridge in entry.get("bridge_symlinks") or []:
+                raw_path, separator, raw_target = str(bridge).partition(" -> ")
+                if not separator:
+                    bridges.append(str(bridge))
+                    continue
+                portable_path = _project_relative_path(raw_path.strip(), project_root)
+                bridges.append(f"{portable_path} -> {raw_target.strip()}")
+            if "bridge_symlinks" in entry:
+                entry["bridge_symlinks"] = bridges
+            for target in entry.get("targets") or []:
+                if isinstance(target, dict) and isinstance(target.get("path"), str):
+                    target["path"] = _project_relative_path(
+                        target["path"], project_root
+                    )
+    return portable
+
+
 def save_lockfile(lockfile_path: Path, data: dict[str, Any]) -> None:
     """Write lockfile data to disk.
 
@@ -442,11 +490,20 @@ def save_lockfile(lockfile_path: Path, data: dict[str, Any]) -> None:
         else "project"
     )
     migrate_lockfile_v2(data, scope=scope)
+    serialized = (
+        _portable_project_lock(data, lockfile_path.parent)
+        if scope == "project"
+        else data
+    )
     try:
         lockfile_path.parent.mkdir(parents=True, exist_ok=True)
         with lockfile_path.open("w") as f:
             yaml.dump(
-                data, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+                serialized,
+                f,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
             )
     except OSError as exc:
         raise LockfileError(f"Failed to write {lockfile_path}: {exc}") from exc

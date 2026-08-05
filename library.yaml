@@ -75,6 +75,7 @@ sources:
         - skills
         - scripts
         - standards
+        - workspaces
         - project_tooling
       scope:
         topics:
@@ -418,6 +419,7 @@ library:
         - standard:no-emoji
       metadata:
         library:
+          source_catalog: library-platform
           plane: dev
           steward: library-platform
           gascity:
@@ -435,6 +437,7 @@ library:
         - standard:no-emoji
       metadata:
         library:
+          source_catalog: library-platform
           plane: dev
           steward: library-platform
           gascity:
@@ -452,6 +455,7 @@ library:
         - standard:no-emoji
       metadata:
         library:
+          source_catalog: library-platform
           plane: dev
           steward: library-platform
           gascity:
@@ -475,6 +479,7 @@ library:
           output_contract: bare-value
       metadata:
         library:
+          source_catalog: library-platform
           plane: dev
           steward: library-platform
           gascity:
@@ -492,6 +497,7 @@ library:
         - standard:no-emoji
       metadata:
         library:
+          source_catalog: library-platform
           plane: dev
           steward: library-platform
           gascity:
@@ -4107,6 +4113,27 @@ library:
         - origin:original
         - tier:core
   workspaces:
+    - name: library-authoring
+      description: Shared authoring baseline for Library primitive repositories.
+      source: https://github.com/cognovis/library/blob/main/workspaces/library-authoring.yaml
+      schema_version: 1
+      version: 0.1.0
+      status: experimental
+      roots:
+        - type: skill
+          name: agent-forge
+        - type: skill
+          name: skill-forge
+        - type: skill
+          name: standard-forge
+        - type: skill
+          name: script-forge
+        - type: skill
+          name: hook-forge
+      metadata:
+        library:
+          source_catalog: library-platform
+          inventory: manual
     - name: python-cli
       description: Shared development and testing baseline for Python CLI repositories.
       source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml

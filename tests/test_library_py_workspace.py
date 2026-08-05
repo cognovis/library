@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -733,6 +734,48 @@ def test_preexisting_project_direct_root_survives_workspace_reconciliation(
         item for item in lock["receipts"] if item["id"] == "skill:python-dev"
     )
     assert set(receipt["owners_cache"]) == {"skill:python-dev", workspace_id}
+
+
+def test_workspace_status_survives_project_relocation(tmp_path: Path) -> None:
+    catalog_project = tmp_path / "catalog-project"
+    project = tmp_path / "consumer"
+    relocated = tmp_path / "relocated-consumer"
+    home = tmp_path / "home"
+    catalog_project.mkdir()
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(catalog_project)
+    shutil.copy2(catalog_project / "library.yaml", project / "library.yaml")
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+
+    project.rename(relocated)
+    status = _run(
+        relocated,
+        home,
+        "workspace",
+        "status",
+        "--all",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert status.returncode == 0, status.stderr or status.stdout
+    assert json.loads(status.stdout)["status"] == "converged"
 
 
 def test_verify_receipts_reinstalls_migrated_direct_roots_without_a_workspace(

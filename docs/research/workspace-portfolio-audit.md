@@ -4,9 +4,11 @@
 
 **Bead:** CL-r7n6
 
-**Implementation status:** platform contract implemented by `CL-r7n6`. Only the
-`python-cli` pilot is admitted for initial marketplace publication under
-`clc-tzn5`; the remaining portfolio entries stay evidence-gated candidates.
+**Implementation status:** platform contract implemented by `CL-r7n6`.
+`python-cli` was published experimentally under `clc-tzn5`; `CL-hyp9` adds the
+platform-owned `library-authoring` manifest and portable consumer locks. Stable
+admission for each Workspace still depends on two exact committed schema-v2
+consumer locks.
 
 ## Question
 
@@ -22,7 +24,7 @@ This audit used primary repository state and selected Open Brain observations:
   `cognovis-platform`, `open-brain`, the FHIR repositories, `library/meta`, and
   `cli-tools/ccu-cli`.
 - Committed `.agents/`, `.claude/`, `.codex/`, and `.agents/pi/` trees in those
-  repositories.
+  repositories, including `mm-cli` as the independent Python consumer.
 - The Python CLI repositories below `~/code/cli-tools/`.
 - The Library catalog and primitive sources in `library/meta`,
   `library/cognovis-core`, `library/sussdorff-core`, and `library/cognovis-pi`.
@@ -110,13 +112,14 @@ independent long-term:
 | Workspace | Catalog steward | Default scope | Apply to | Root shape |
 |-----------|-----------------|---------------|----------|------------|
 | `python-cli` | `cognovis-core` | project | Active Python CLI repositories, `library/meta`, and `fhir-management` | Exactly `skill:python-dev` plus `skill:python-test`; `python-cli-patterns` and other mandatory Standards remain transitive `requires:` dependencies. Keep the name only while the baseline is genuinely CLI-specific; otherwise rename it once to `python-repo` before publication. |
-| `library-authoring` | `cognovis-core` | project | `library/meta`; catalog repositories only while authoring Library content | Forge Skills plus primitive-placement Standards. It does not nest `python-cli`; `library/meta` registers both directly. The platform repository is a consumer, not the manifest steward. |
+| `library-authoring` | `library-platform` | project | `library/meta`, `cognovis-pi`, and catalog repositories only while authoring Library content | Exactly the five platform-owned Forge Skills. Primitive-placement and other mandatory Standards remain transitive. It does not nest `python-cli`; `library/meta` registers both directly. Pi extensions, profiles, and Just modules remain Pi-owned primitives outside this Workspace. |
 
 `python-cli` is the platform pilot because it has a small two-root boundary and a
-large potential consumer set. `library-authoring` follows after the current global
-forge links have an explicit ownership disposition. Publishing either Workspace
-still requires two committed consumer locks; the catalog may stage the manifest
-before that gate, but must label it experimental rather than generally available.
+large potential consumer set. `library-authoring` is platform-owned because all
+five Forge Skills deliberately moved to the platform repository and must not be
+copied back into a content catalog. Publishing either Workspace still requires
+two committed consumer locks; the catalog may stage the manifest before that
+gate, but must label it experimental rather than generally available.
 
 ### Conditional candidate
 

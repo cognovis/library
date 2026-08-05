@@ -259,6 +259,10 @@ architectural invariants are:
 - `requested_roots` is authoritative user intent.
 - Each receipt identifies one materialized primitive and every exact target or
   bridge created for it.
+- A project lock serializes every project-owned install target, bridge path, and
+  receipt target relative to the lock root. Runtime operations resolve those
+  paths against the selected project. Global targets and Layer-B cache
+  provenance remain absolute because they are not owned by the project tree.
 - Content digests are per file. Directory-level summary digests may be retained
   for audit performance but cannot replace the target inventory required for
   safe deletion and adoption.
@@ -507,7 +511,7 @@ The Library platform repository owns:
 - isolated fixtures and regression tests; and
 - published schema-version compatibility.
 
-Marketplace repositories own:
+Publishing catalog repositories own:
 
 - Workspace manifests as catalog content;
 - the selection and versioning of reusable primitive roots;
@@ -516,10 +520,11 @@ Marketplace repositories own:
 - evidence that each Workspace root installs standalone and that the manifest
   meets reuse, size, closure, and lobby admission limits.
 
-Platform tests use local fixtures and never read a live sibling marketplace
-checkout. Marketplace tests never assume an unversioned sibling platform
-checkout. An unsupported manifest schema fails with an explicit compatibility
-error.
+The platform may also publish a Workspace when every root is platform-owned;
+`library-authoring` is the first example. Platform tests use local fixtures and
+never read a live sibling catalog checkout. Catalog tests never assume an
+unversioned sibling platform checkout. An unsupported manifest schema fails with
+an explicit compatibility error.
 
 ### Decision 12: Workspace retires parallel Library desired-state manifests
 
