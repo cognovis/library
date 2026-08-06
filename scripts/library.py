@@ -10,10 +10,10 @@
 # ]
 # ///
 """
-library.py — Deterministic library engine CLI.
+library — Deterministic Library engine CLI.
 
 Canonical command grammar:
-  uv run --script scripts/library.py <primitive> <verb> [name-or-query] [options]
+  library <primitive> <verb> [name-or-query] [options]
 
 Supported primitives: skill, agent, prompt, script, standard, guardrail, mcp,
                       model-standard, agent-base, workflow
@@ -37,14 +37,14 @@ Exit codes:
   5  (reserved for future use)
 
 Usage examples:
-  uv run --script scripts/library.py skill list
-  uv run --script scripts/library.py skill list --json
-  uv run --script scripts/library.py standard use english-only --scope global
-  uv run --script scripts/library.py skill use dolt --dry-run --json
-  uv run --script scripts/library.py skill use dolt --symlink --json
-  uv run --script scripts/library.py search firecrawl
-  uv run --script scripts/library.py catalog match --primitive-type=standard --topics=python,uv --writable-only
-  uv run --script scripts/library.py installed --diff-catalog
+  library skill list
+  library skill list --json
+  library standard use english-only --scope global
+  library skill use dolt --dry-run --json
+  library skill use dolt --symlink --json
+  library search firecrawl
+  library catalog match --primitive-type=standard --topics=python,uv --writable-only
+  library installed --diff-catalog
 """
 
 from __future__ import annotations
@@ -112,10 +112,10 @@ DEFAULT_LIFECYCLE_SCOPE = "both"
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for the library CLI."""
     parser = argparse.ArgumentParser(
-        prog="library.py",
+        prog="library",
         description=(
             "Deterministic library engine — manages skills, agents, standards, and more.\n\n"
-            "Canonical grammar: uv run --script scripts/library.py <primitive> <verb> [name] [options]\n\n"
+            "Canonical grammar: library <primitive> <verb> [name] [options]\n\n"
             f"Supported primitives: {', '.join(VALID_PRIMITIVES)}\n"
             f"Supported verbs: {', '.join(VALID_VERBS)}"
         ),
@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version="library.py 2.0.0 (CL-8ph)",
+        version="library 2.0.0 (CL-8ph)",
     )
 
     subparsers = parser.add_subparsers(
@@ -733,7 +733,7 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     primitive = args.primitive
 
     if name is None:
-        msg = f"usage: library.py {primitive} use <name>"
+        msg = f"usage: library {primitive} use <name>"
         if use_json:
             print_json(error_result(msg))
         else:
@@ -2071,7 +2071,7 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     primitive = args.primitive
 
     if name is None:
-        msg = f"usage: library.py {primitive} remove <name>"
+        msg = f"usage: library {primitive} remove <name>"
         if use_json:
             print_json(error_result(msg))
         else:
@@ -2285,7 +2285,7 @@ def cmd_search(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     query = getattr(args, "query", None)
 
     if query is None:
-        msg = "usage: library.py search <keyword>  or  library.py <primitive> search <keyword>"
+        msg = "usage: library search <keyword>  or  library <primitive> search <keyword>"
         if use_json:
             print_json(error_result(msg))
         else:

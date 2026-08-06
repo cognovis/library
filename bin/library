@@ -3,8 +3,15 @@
 set -euo pipefail
 
 launcher_path="${BASH_SOURCE[0]}"
+link_count=0
 
 while test -L "$launcher_path"; do
+    link_count=$((link_count + 1))
+    if test "$link_count" -gt 40; then
+        echo "ERROR: library launcher symlink chain exceeds 40 links: $launcher_path" >&2
+        exit 1
+    fi
+
     link_target="$(readlink "$launcher_path")"
     case "$link_target" in
         /*) launcher_path="$link_target" ;;
@@ -14,5 +21,11 @@ done
 
 launcher_dir="$(cd "$(dirname "$launcher_path")" && pwd)"
 repo_root="$(cd "$launcher_dir/.." && pwd)"
+engine_path="$repo_root/scripts/library.py"
 
-exec uv run --script "$repo_root/scripts/library.py" "$@"
+if ! test -f "$engine_path"; then
+    echo "ERROR: Library engine not found at $engine_path" >&2
+    exit 1
+fi
+
+exec uv run --script "$engine_path" "$@"

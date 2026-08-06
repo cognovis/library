@@ -15,8 +15,7 @@
 # Post-install:
 #   - `library` works in any shell through ~/.local/bin/library.
 #   - `/library <verb>` works in every present harness.
-#   - Updates: `library update library` (re-runs this install.sh from the
-#     latest remote main of the meta repo).
+#   - Updates: pull the canonical checkout, then re-run this installer.
 
 set -euo pipefail
 
@@ -65,6 +64,10 @@ fi
 echo ""
 echo "Installing CLI:"
 LOCAL_BIN="${HOME}/.local/bin"
+case "$META_ROOT/" in
+    */.worktrees/*)
+        echo "  warn  This checkout is a disposable worktree. Reinstall from the canonical checkout after delivery." ;;
+esac
 _link "$META_ROOT/bin/library" "$LOCAL_BIN/library"
 case ":${PATH}:" in
     *":${LOCAL_BIN}:"*) ;;
