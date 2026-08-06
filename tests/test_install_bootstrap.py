@@ -23,6 +23,7 @@ def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) ->
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["XDG_DATA_HOME"] = str(tmp_path / "xdg-data")
+    env["PATH"] = f"{home / '.local' / 'bin'}{os.pathsep}{env['PATH']}"
 
     result = subprocess.run(
         ["bash", str(REPO_ROOT / "install.sh")],
@@ -33,6 +34,42 @@ def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) ->
     )
 
     assert result.returncode == 0, result.stderr
+
+    installed_cli = home / ".local" / "bin" / "library"
+    assert installed_cli.is_symlink()
+    assert installed_cli.resolve() == (REPO_ROOT / "bin" / "library").resolve()
+    assert os.access(installed_cli, os.X_OK)
+
+    consumer_dir = tmp_path / "consumer"
+    consumer_dir.mkdir()
+
+    # A subprocess is required here: this test covers shell PATH lookup, the
+    # bootstrap symlink, and the launcher's interpreter/runtime boundary.
+    wrapped = subprocess.run(
+        ["library", "skill", "list", "--json"],
+        cwd=consumer_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    direct = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--script",
+            str(REPO_ROOT / "scripts" / "library.py"),
+            "skill",
+            "list",
+            "--json",
+        ],
+        cwd=consumer_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert wrapped.returncode == direct.returncode == 0
+    assert wrapped.stdout == direct.stdout
 
     for skill_root in (
         home / ".agents" / "skills",
@@ -56,6 +93,19 @@ def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) ->
     lock = yaml.safe_load((home / ".config" / "library" / "global.lock").read_text())
     assert [root["id"] for root in lock["requested_roots"]] == ["skill:library"]
     assert lock["receipts"][0]["bootstrap_owned"] is True
+
+
+def test_readme_documents_the_installed_cli_contract() -> None:
+    readme = (REPO_ROOT / "README.md").read_text()
+    normalized_readme = " ".join(readme.split())
+
+    assert "library workspace status --all --scope project" in readme
+    assert "library workspace sync --all --scope project" in readme
+    assert "library skill list" in readme
+    assert "library audit" in readme
+    assert "The repository currently has no standalone `bin/library`" not in readme
+    assert "irreducible global bootstrap" in normalized_readme
+    assert "dialog-oriented" in readme
 
 
 def test_install_sh_adopts_exact_historical_forge_link_without_recreating_others(

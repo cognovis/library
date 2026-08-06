@@ -13,8 +13,7 @@
 # Safe to re-run. Idempotent.
 #
 # Post-install:
-#   - `library` works in any shell (when bin/library is provided; today
-#     it points at the SKILL.md-based slash-command flow).
+#   - `library` works in any shell through ~/.local/bin/library.
 #   - `/library <verb>` works in every present harness.
 #   - Updates: `library update library` (re-runs this install.sh from the
 #     latest remote main of the meta repo).
@@ -56,23 +55,22 @@ _link() {
 
 echo "Library bootstrap from: $META_ROOT"
 
-# --- Phase 1: bin/library command (if/when provided) -----------------------
-# Today: bin/library does not yet exist as a standalone CLI. The library
-# logic lives in SKILL.md + cookbook/ and runs via harness slash-commands.
-# When bin/library lands in this repo (planned per ADR-0004 Decision 8), the
-# block below activates and installs it to ~/.local/bin/library.
+# --- Phase 1: deterministic library CLI -----------------------------------
 
-if test -f "$META_ROOT/bin/library"; then
-    echo ""
-    echo "Installing CLI:"
-    LOCAL_BIN="${HOME}/.local/bin"
-    _link "$META_ROOT/bin/library" "$LOCAL_BIN/library"
-    case ":${PATH}:" in
-        *":${LOCAL_BIN}:"*) ;;
-        *) echo "  warn  ${LOCAL_BIN} is not in \$PATH; add to ~/.zshrc:"
-           echo "        export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
-    esac
+if ! test -f "$META_ROOT/bin/library"; then
+    echo "ERROR: required Library CLI is missing at $META_ROOT/bin/library" >&2
+    exit 1
 fi
+
+echo ""
+echo "Installing CLI:"
+LOCAL_BIN="${HOME}/.local/bin"
+_link "$META_ROOT/bin/library" "$LOCAL_BIN/library"
+case ":${PATH}:" in
+    *":${LOCAL_BIN}:"*) ;;
+    *) echo "  warn  ${LOCAL_BIN} is not in \$PATH; add to ~/.zshrc:"
+       echo "        export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
+esac
 
 # --- Phase 2: harness skill/command entries --------------------------------
 # Detect each harness by the presence of its global dir. For every present
@@ -145,9 +143,9 @@ echo ""
 echo "Done."
 echo ""
 echo "Next steps:"
-echo "  - In any harness: /library list"
+echo "  - In any shell: library --help"
+echo "  - In any harness: /library"
 echo "  - Optional forge skills belong in a project Workspace, not the global bootstrap"
-echo "  - To install a primitive transitively: /library use <name>"
-echo "  - To update the library itself: /library update library"
+echo "  - To inspect available Skills: library skill list"
 echo ""
 echo "If you wipe ~/.claude/ or ~/.codex/, re-run: cd $META_ROOT && bash install.sh"

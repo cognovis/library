@@ -97,37 +97,39 @@ bash install.sh
 ```
 
 The installer links only the irreducible Library conversational entrypoint into
-detected harness directories and records exact bootstrap receipts. Optional
-forge Skills belong in a project Workspace. The installer is idempotent. The deterministic engine can also be run
-directly from this repository:
+detected harness directories, installs the deterministic CLI as
+`~/.local/bin/library`, and records exact bootstrap receipts. Optional forge
+Skills belong in a project Workspace. The installer is idempotent. Ensure
+`~/.local/bin` is on `PATH`, then verify the command from any directory:
 
 ```bash
-uv run --script scripts/library.py --help
+library --help
 ```
 
-The repository currently has no standalone `bin/library` executable. Until one is
-published, use `/library` inside a supported harness or invoke the engine through
-`uv run --script`.
+`library` is the deterministic shell interface and belongs to the irreducible global
+bootstrap; it is not copied into project Workspaces. `/library` remains the
+dialog-oriented interface inside supported coding harnesses for operations that
+benefit from advice or user decisions.
 
 ## Current command surface
 
 Primitive commands use singular primitive names:
 
 ```bash
-uv run --script scripts/library.py skill list
-uv run --script scripts/library.py skill use python-dev --dry-run --json
-uv run --script scripts/library.py skill use python-dev
-uv run --script scripts/library.py standard use english-only --scope global
-uv run --script scripts/library.py installed --diff-catalog
-uv run --script scripts/library.py status --offline --json
-uv run --script scripts/library.py audit --drift-only --json
-uv run --script scripts/library.py sync --dry-run
+library workspace status --all --scope project
+library workspace sync --all --scope project
+library skill list
+library skill use python-dev --dry-run --json
+library standard use english-only --scope global
+library installed --diff-catalog
+library status --offline --json
+library audit
+library sync --dry-run
 ```
 
-Run `uv run --script scripts/library.py --help` for the authoritative primitive and
-verb inventory. Guided catalog-authoring and source-publication flows remain in the
-`/library` Skill because they require user decisions; they are not deterministic CLI
-verbs.
+Run `library --help` for the authoritative primitive and verb inventory. Guided
+catalog-authoring and source-publication flows remain in the `/library` Skill
+because they require user decisions; they are not deterministic CLI verbs.
 
 ## Desired-state migration
 
