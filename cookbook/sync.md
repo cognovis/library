@@ -10,13 +10,13 @@ operation is conservative and non-pruning.
 Preview all installed entries first:
 
 ```bash
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run --json
+library sync --dry-run --json
 ```
 
 Apply the reported additions and updates:
 
 ```bash
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync --json
+library sync --json
 ```
 
 Use `library <primitive> sync <name>` when only one named entry should refresh.
@@ -28,9 +28,9 @@ The released v1 lock is an additive installed list. Historical local-source
 entries may report unknown or protected state; do not reinterpret them as remote
 catalog provenance.
 
-## Workspace target
+## Workspace lifecycle
 
-After `CL-r7n6`, Workspace sync adds contribution and ownership-aware planning:
+Workspace sync provides contribution and ownership-aware planning:
 
 ```text
 library workspace status --all --scope project

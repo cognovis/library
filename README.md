@@ -49,9 +49,9 @@ direct primitive roots + Workspace roots
        verified + clean + ownerless targets only
 ```
 
-Workspace support and lockfile schema v2 are tracked by bead `CL-r7n6`; the
-Workspace commands documented in ADR-0010 are therefore a target interface until
-that bead lands. The current CLI remains additive and non-pruning.
+Workspace support and lockfile schema v2 are available through the `library`
+CLI. Ordinary lifecycle operations remain additive and non-pruning; physical
+deletion requires the explicit, provenance-bound Workspace prune flow.
 
 The evidence-backed initial Workspace cuts and repository mapping live in the
 [Workspace Portfolio Audit](docs/research/workspace-portfolio-audit.md).

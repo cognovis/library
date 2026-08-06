@@ -27,7 +27,7 @@ flow owns author decisions; deterministic install mechanics remain in
 7. Preview a consumer install through the deterministic engine:
 
    ```bash
-   uv run --script scripts/library.py <primitive> use <name> --dry-run --json
+   library <primitive> use <name> --dry-run --json
    ```
 
 8. Commit and publish each changed repository through its own review workflow.

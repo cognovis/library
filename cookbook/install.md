@@ -9,25 +9,26 @@ consumer-project profile.
 ## Procedure
 
 1. Confirm that the platform checkout contains `SKILL.md`, `library.yaml`,
-   `install.sh`, and `scripts/library.py`.
+   `install.sh`, `bin/library`, and `scripts/library.py`.
 2. Run the idempotent installer from the checkout:
 
    ```bash
    bash install.sh
    ```
 
-3. Verify the deterministic engine directly:
+3. Verify the globally installed deterministic CLI:
 
    ```bash
-   uv run --script scripts/library.py --help
+   library --help
    ```
 
 4. Start a new session in each detected harness and verify that the `/library`
    Skill is discoverable.
 
-The repository does not currently ship a standalone `bin/library` executable.
-The installer links the platform checkout into detected harness Skill roots; the
-chat Skill delegates deterministic operations to `scripts/library.py`.
+The installer links `bin/library` into `~/.local/bin/library` and links the
+platform checkout into detected harness Skill roots. The global command is the
+deterministic shell interface; the `/library` Skill remains the dialog-oriented
+entrypoint for operations that require advice or decisions.
 
 ## Bootstrap boundary
 
@@ -40,4 +41,4 @@ Do not use `project_tooling` profiles for new repository setup. Consumer project
 commit their project-local Library artifacts and `.library.lock`; marketplace
 repositories keep authored primitives at their top-level source paths.
 
-Workspace commands remain an accepted target until bead `CL-r7n6` lands.
+Workspace lifecycle commands are available through the global `library` CLI.

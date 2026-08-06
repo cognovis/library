@@ -12,10 +12,10 @@ Use the CLI for deterministic search:
 
 ```bash
 # Search across all primitives:
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword> --json
+library search <keyword> --json
 
 # Search within one primitive:
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py skill search <keyword> --json
+library skill search <keyword> --json
 ```
 
 Use the steps below when you need to present results interactively or need

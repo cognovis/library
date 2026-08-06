@@ -134,17 +134,33 @@ def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) ->
     assert lock["receipts"][0]["bootstrap_owned"] is True
 
 
-def test_readme_documents_the_installed_cli_contract() -> None:
+def test_bootstrap_documents_the_installed_cli_contract() -> None:
     readme = (REPO_ROOT / "README.md").read_text()
+    skill = (REPO_ROOT / "SKILL.md").read_text()
+    cookbooks = {
+        path.name: path.read_text()
+        for path in sorted((REPO_ROOT / "cookbook").glob("*.md"))
+    }
+    install_cookbook = cookbooks["install.md"]
+    add_cookbook = cookbooks["add.md"]
     normalized_readme = " ".join(readme.split())
+    bootstrap_docs = "\n".join((readme, skill, *cookbooks.values()))
 
     assert "library workspace status --all --scope project" in readme
     assert "library workspace sync --all --scope project" in readme
     assert "library skill list" in readme
     assert "library audit" in readme
-    assert "The repository currently has no standalone `bin/library`" not in readme
+    assert "target interface until" not in readme
+    assert "does not currently ship a standalone `bin/library`" not in bootstrap_docs
+    assert "uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py" not in skill
+    assert "uv run --script scripts/library.py" not in bootstrap_docs
+    assert "uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py" not in bootstrap_docs
+    assert "library --help" in skill
+    assert "library --help" in install_cookbook
+    assert "library <primitive> use <name> --dry-run --json" in add_cookbook
     assert "irreducible global bootstrap" in normalized_readme
     assert "dialog-oriented" in readme
+    assert "dialog-oriented" in install_cookbook
 
 
 def test_install_sh_adopts_exact_historical_forge_link_without_recreating_others(
