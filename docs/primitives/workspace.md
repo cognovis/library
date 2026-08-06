@@ -54,7 +54,9 @@ configured catalog candidate exists; ambiguity reports every candidate. The
 catalog registry maps display names to canonical identities, and locks use the
 canonical identity for resolution and ownership. Status exits 0 when converged,
 2 for applicable changes, 3 for blocked or protected findings, and 1 when the
-operation itself fails.
+operation itself fails. Human and JSON status output both inventory the
+registered Workspace roots in the selected scope before reporting their resolved
+members, prerequisites, and reconciliation plan.
 
 Workspace commands keep the current repository as the project target, but the
 repository's own `library.yaml` must not hide a Workspace published through the

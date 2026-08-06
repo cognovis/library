@@ -268,6 +268,90 @@ def test_workspace_use_registers_one_root_and_materializes_members(
     assert json.loads(status.stdout)["status"] == "converged"
 
 
+def test_regression_workspace_status_lists_registered_roots(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "all",
+        "--json",
+    )
+    assert used.returncode == 0, used.stderr or used.stdout
+
+    status_json = _run(
+        project,
+        home,
+        "workspace",
+        "status",
+        "--all",
+        "--scope",
+        "project",
+        "--json",
+    )
+    status_human = _run(
+        project,
+        home,
+        "workspace",
+        "status",
+        "--all",
+        "--scope",
+        "project",
+    )
+
+    assert status_json.returncode == status_human.returncode == 0
+    assert json.loads(status_json.stdout)["workspaces"] == [
+        {
+            "id": "workspace:https://github.com/example/core#python-cli",
+            "reference": "team-core:python-cli",
+            "version": "1.0.0",
+            "status": "registered",
+            "scope": "project",
+            "catalog_identity": "https://github.com/example/core",
+        }
+    ]
+    assert "workspaces:" in status_human.stdout
+    assert "team-core:python-cli (1.0.0, registered)" in status_human.stdout
+
+
+def test_workspace_renderer_accepts_string_workspace_identities(capsys) -> None:
+    library = _library_module()
+
+    library._print_workspace_result(
+        {
+            "operation": "sync",
+            "status": "applied",
+            "workspaces": ["library-platform:library-authoring"],
+            "prerequisites": [
+                {
+                    "id": "standard:english-only",
+                    "requested_by": [
+                        "workspace:https://github.com/cognovis/library#library-authoring"
+                    ],
+                    "catalog_identity": "https://github.com/cognovis/library",
+                    "resolved_version": "",
+                }
+            ],
+        },
+        json_mode=False,
+    )
+
+    output = capsys.readouterr().out
+    assert "library-platform:library-authoring" in output
+    assert "standard:english-only" in output
+    assert "requested by: workspace:https://github.com/cognovis/library#library-authoring" in output
+    assert "{'id':" not in output
+
+
 def test_workspace_use_blocks_foreign_target_before_any_install(tmp_path: Path) -> None:
     project = tmp_path / "project"
     home = tmp_path / "home"
