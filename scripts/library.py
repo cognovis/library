@@ -3314,16 +3314,67 @@ def _print_workspace_result(result: dict, *, json_mode: bool) -> None:
     if workspaces:
         print("  workspaces:")
         for workspace in workspaces:
-            print(
-                f"    - {workspace['reference']} "
-                f"({workspace['version']}, {workspace['status']})"
-            )
+            if not isinstance(workspace, dict):
+                print(f"    - {workspace}")
+                continue
+            details = [
+                str(workspace.get(key))
+                for key in ("version", "status")
+                if workspace.get(key)
+            ]
+            suffix = f" ({', '.join(details)})" if details else ""
+            print(f"    - {workspace.get('reference', workspace.get('id'))}{suffix}")
     for key in ("closure", "prerequisites", "owners", "deleted"):
         values = result.get(key)
         if values:
             print(f"  {key}:")
             for value in values:
-                print(f"    - {value}")
+                print(f"    - {_render_workspace_value(value)}")
+
+
+def _render_workspace_value(value: object) -> str:
+    """Render a structured Workspace detail as stable human-readable text."""
+    if not isinstance(value, dict):
+        return str(value)
+    identifier = value.get("id")
+    if not identifier:
+        return json.dumps(value, sort_keys=True)
+    details = []
+    if value.get("catalog_identity"):
+        details.append(f"catalog: {value['catalog_identity']}")
+    if value.get("resolved_version"):
+        details.append(f"version: {value['resolved_version']}")
+    requested_by = value.get("requested_by")
+    if isinstance(requested_by, list) and requested_by:
+        requesters = ", ".join(str(item) for item in requested_by)
+        details.append(f"requested by: {requesters}")
+    suffix = f" ({'; '.join(details)})" if details else ""
+    return f"{identifier}{suffix}"
+
+
+def _registered_workspace_inventory(lock: dict, scope: str) -> list[dict]:
+    """Return the registered Workspace roots selected by a status operation."""
+    inventory = []
+    for root in lock.get("requested_roots", []):
+        if root.get("type") != "workspace" or root.get("scope", scope) != scope:
+            continue
+        catalog_name = str(root.get("catalog_name") or "")
+        name = str(root.get("name") or "")
+        reference = str(
+            root.get("requested_ref")
+            or (f"{catalog_name}:{name}" if catalog_name else name)
+        )
+        inventory.append(
+            {
+                "id": str(root.get("id") or ""),
+                "reference": reference,
+                "version": str(root.get("resolved_version") or ""),
+                "status": "registered",
+                "scope": str(root.get("scope") or scope),
+                "catalog_identity": str(root.get("catalog_identity") or ""),
+            }
+        )
+    return sorted(inventory, key=lambda item: (item["reference"], item["id"]))
 
 
 def _workspace_definition_commit(catalog: dict, workspace) -> str:
@@ -3899,6 +3950,7 @@ def _workspace_status(args: argparse.Namespace, repo_root: Path, catalog: dict) 
         "collisions": collision["blockers"],
         "adoption_candidates": adoption_candidates,
         **plan,
+        "workspaces": _registered_workspace_inventory(lock, args.scope),
     }
     if plan["blockers"] or protected:
         result["status"] = "blocked"

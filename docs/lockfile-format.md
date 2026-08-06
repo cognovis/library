@@ -470,9 +470,10 @@ the lock record was written.
   and applies additions and updates only. Bare names are accepted only for one
   configured candidate; the lock records canonical catalog identity.
 - `library workspace status` resolves all roots in the selected scope and emits
-  a read-only plan with ownership reasons, drift, conflicts, adoption candidates,
-  missing global prerequisites, and prune candidates. Exit 2 means changes are
-  pending, while exit 3 means protected or blocked findings.
+  the registered Workspace-root inventory plus a read-only plan with ownership
+  reasons, drift, conflicts, adoption candidates, missing global prerequisites,
+  and prune candidates. Exit 2 means changes are pending, while exit 3 means
+  protected or blocked findings.
 - `library workspace explain <type>:<name>` reports the recomputed direct-root
   owner set reaching one receipt. Schema v1 does not persist full dependency
   paths, so the command does not claim an intermediate-edge trace.
