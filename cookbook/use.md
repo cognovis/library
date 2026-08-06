@@ -11,15 +11,15 @@ harness bridges, and lockfile writes; do not reproduce those steps manually.
 1. Inspect the current primitive help and preview the operation:
 
    ```bash
-   uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --help
-   uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --dry-run --json
+   library <primitive> use <name> --help
+   library <primitive> use <name> --dry-run --json
    ```
 
 2. Resolve any explicit scope or collision decision reported by the preview.
 3. Apply the same operation without `--dry-run`:
 
    ```bash
-   uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py <primitive> use <name> --json
+   library <primitive> use <name> --json
    ```
 
 4. Inspect `.library.lock` and the reported canonical and bridge targets.
@@ -33,10 +33,9 @@ transitively. Committed catalog entries use published HTTPS Git sources; a
 historical local-source lock entry is migration state and must not be treated as
 a new catalog source.
 
-## Workspace target
+## Workspace lifecycle
 
-After `CL-r7n6`, `library workspace use <name>` registers a metadata-only desired-
+`library workspace use <name>` registers a metadata-only desired-
 state root and applies additions. A scope may register several Workspaces, but
 ordinary primitive `use` remains available for direct roots that should survive
-Workspace changes independently. Workspace commands are not present in the
-released CLI yet.
+Workspace changes independently.

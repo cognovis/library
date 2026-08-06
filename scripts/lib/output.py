@@ -202,7 +202,7 @@ def format_search_output(
         print(f'\nNo results found for "{query}".')
         print(
             f"\nTip: Try broader keywords or run: "
-            f"uv run --script scripts/library.py <primitive> list"
+            f"library <primitive> list"
         )
         return
 
@@ -217,9 +217,7 @@ def format_search_output(
         for r in results
     ]
     print(format_table(rows, ["Primitive", "Name", "Description", "Source"]))
-    print(
-        "\nRun: uv run --script scripts/library.py <primitive> use <name>  to install one of these."
-    )
+    print("\nRun: library <primitive> use <name>  to install one of these.")
     print()
 
 

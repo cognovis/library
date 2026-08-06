@@ -49,7 +49,7 @@ When invoked without arguments:
 1. Run the canonical help command:
 
    ```bash
-   uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py --help
+   library --help
    ```
 
 2. Derive the available values from that output instead of maintaining another
@@ -77,36 +77,44 @@ unless the user has explicitly asked to skip the preview.
 
 ## CLI Delegation
 
-**For deterministic operations, call `uv run --script scripts/library.py` directly:**
+**For deterministic operations, call the globally installed `library` command:**
 
 ```bash
 # List all skills in JSON (machine-readable):
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py skill list --json
+library skill list --json
 
 # Dry-run install of a skill (preview without mutation):
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py skill use <name> --dry-run --json
+library skill use <name> --dry-run --json
 
 # Install a standard to global scope:
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py standard use <name> --scope global
+library standard use <name> --scope global
+```
 
+```bash
 # Search across all primitives:
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py search <keyword>
+library search <keyword>
 
 # Check upstream status for all installed entries (no clone):
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py status --json
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py status --offline --json
+library status --json
+library status --offline --json
+```
 
+```bash
 # See what is installed across project and global scopes:
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
+library installed
+library installed --diff-catalog
+library installed --offline
+```
 
+```bash
 # Detect local drift across all primitives (exit 2 if drift):
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py audit --drift-only --json
+library audit --drift-only --json
+```
 
+```bash
 # Sync all installed entries reported behind by status, dry-run first:
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync --dry-run
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py sync
+library sync --dry-run
+library sync
 ```
 
 **The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
@@ -183,11 +191,14 @@ home or scratch directories from being reported as project installs.
 Examples:
 
 ```bash
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --scope project --primitive skill
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --project /path/to/project
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --offline
-uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py installed --diff-catalog --json
+library installed
+library installed --scope project --primitive skill
+library installed --project /path/to/project
+```
+
+```bash
+library installed --offline
+library installed --diff-catalog --json
 ```
 
 The `precedence` column is `active` for the entry the harness should load.
@@ -369,17 +380,13 @@ Add this to `.git/hooks/pre-commit` (or `scripts/pre-commit`):
 
 ```bash
 #!/bin/sh
-python3 scripts/validate-library.py --quiet
-if [ $? -ne 0 ]; then
-  echo "library.yaml validation failed. Fix errors before committing."
-  exit 1
-fi
+uv run python scripts/validate-library.py --quiet
 ```
 
 Or install automatically:
 
 ```bash
-echo 'python3 scripts/validate-library.py --quiet || exit 1' >> .git/hooks/pre-commit
+echo 'uv run python scripts/validate-library.py --quiet' >> .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 

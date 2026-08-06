@@ -32,9 +32,9 @@ def test_bare_library_invocation_derives_non_mutating_cli_help() -> None:
 
     assert "## Invocation Guidance" in text
     assert "When invoked without arguments" in text
-    assert (
-        "uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py --help" in text
-    )
+    assert "library --help" in text
+    assert "globally installed `library` command" in text
+    assert "uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py" not in text
     assert "derive the available values from that output" in normalized
     assert "primitive names" in text
     assert "primitive verbs" in text
