@@ -272,6 +272,23 @@ def _resolved_source_commit(result: Any) -> str | None:
     return commit if isinstance(commit, str) and commit else None
 
 
+def _resolve_receipt_entry(catalog: dict, entry: dict) -> dict | None:
+    """Resolve an installed receipt against the catalog by its recorded type and exact name.
+
+    Sync must not pass the bare receipt name through fuzzy search. A root
+    ``skill:library`` receipt, for example, would otherwise match unrelated
+    skills whose descriptions contain the word "library".
+    """
+    primitive = entry.get("type", "")
+    name = entry.get("name", "")
+    if not primitive or not name:
+        return None
+    try:
+        return lookup_entry(catalog, primitive, name, fuzzy=False)
+    except LibraryError:
+        return None
+
+
 def reinstall_entry(
     catalog: dict,
     entry: dict,
@@ -294,14 +311,28 @@ def reinstall_entry(
 
     if entry_type == "skill":
         from .installers.skill import install_skill
-        result = install_skill(
-            catalog=catalog,
-            name=entry_name,
-            repo_root=repo_root,
-            scope=scope,
-            install_mode=install_mode,
-            harness=harness,
-        )
+
+        # Resolve the receipt by its typed identity. Do not pass the bare name
+        # through fuzzy skill search: a root ``skill:library`` receipt would
+        # otherwise match unrelated skills whose descriptions contain "library".
+        catalog_entry = _resolve_receipt_entry(catalog, entry)
+        if catalog_entry is None:
+            result = success(
+                data={"name": entry_name, "type": entry_type},
+                message=(
+                    f"Retained {entry_type}:{entry_name} "
+                    "(not listed in active catalog)."
+                ),
+            )
+        else:
+            result = install_skill(
+                catalog=catalog,
+                name=entry_name,
+                repo_root=repo_root,
+                scope=scope,
+                install_mode=install_mode,
+                harness=harness,
+            )
     elif entry_type == "agent":
         from .installers.agent import install_agent
         result = install_agent(catalog=catalog, name=entry_name, repo_root=repo_root, scope=scope, harness=harness)

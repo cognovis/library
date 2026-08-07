@@ -1345,3 +1345,105 @@ class TestSyncReportsSourceCommit:
 
         assert isinstance(result, dict)
         assert result.get("status") == "ok"
+
+
+# ---------------------------------------------------------------------------
+# CL-gd1w: root skill:library receipt must resolve by typed identity, not fuzzy
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def ambiguous_library_project_dir(tmp_path):
+    """Project catalog where the bare word 'library' is ambiguous in skill search.
+
+    No skill is named exactly 'library', but several skill descriptions contain
+    the word 'library'. This mirrors the library-platform catalog that caused
+    the production failure.
+    """
+    skill_dir = tmp_path / "fixture-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("# Test Skill\nA test skill.")
+
+    library_yaml = """
+default_dirs:
+  skills:
+    - default: .agents/skills/
+    - global: ~/.agents/skills/
+library:
+  skills:
+    - name: script-forge
+      description: Create scripts for the Library.
+      source: {source}
+    - name: standard-forge
+      description: Create standards for the Library.
+      source: {source}
+    - name: workflow-forge
+      description: Create workflows for the Library.
+      source: {source}
+  agents: []
+  prompts: []
+  standards: []
+marketplaces: []
+guardrails: []
+mcp_servers: []
+model_standards: []
+""".format(source=str(skill_dir / "SKILL.md"))
+
+    (tmp_path / "library.yaml").write_text(library_yaml)
+    (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
+    return tmp_path
+
+
+class TestRootSkillSync:
+    def test_sync_root_library_skill_resolves_by_typed_identity(
+        self, ambiguous_library_project_dir
+    ):
+        """CL-gd1w: installed skill:library receipt must not be passed through fuzzy search.
+
+        The catalog has no skill named 'library', so passing the bare name to the
+        skill installer would raise an ambiguous-match error. Sync must resolve the
+        receipt by its recorded primitive type and exact name instead.
+        """
+        from lib.sync_audit import cmd_sync_impl
+
+        project_dir = ambiguous_library_project_dir
+        entry = {
+            "name": "library",
+            "type": "skill",
+            "marketplace": "local",
+            "source": "local",
+            "source_commit": "abc123",
+            "cache_path": "",
+            "install_target": str(project_dir / ".agents/skills/library") + "/",
+            "install_timestamp": "2024-01-01T00:00:00Z",
+            "checksum_sha256": "a" * 64,
+            "checksum_type": "directory",
+            "license": "unknown",
+            "bridge_symlinks": [],
+        }
+        (project_dir / ".library.lock").write_text(yaml.dump({"installed": [entry]}))
+
+        catalog = yaml.safe_load((project_dir / "library.yaml").read_text())
+        result = cmd_sync_impl(
+            catalog=catalog,
+            primitive="skill",
+            repo_root=project_dir,
+            scope="project",
+            target_name="library",
+        )
+
+        assert result["status"] == "ok"
+        synced_names = [e["name"] for e in result["data"]["synced_entries"]]
+        assert "library" in synced_names
+
+    def test_untyped_skill_query_ambiguity_still_rejected(
+        self, ambiguous_library_project_dir
+    ):
+        """Interactive fuzzy skill queries remain fail-closed when ambiguous."""
+        result = run_library(
+            "skill", "use", "library", "--json", cwd=ambiguous_library_project_dir
+        )
+        assert result.returncode == 3, (
+            f"Expected exit 3 for ambiguous skill query, got {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "Ambiguous skill query 'library'" in result.stdout
