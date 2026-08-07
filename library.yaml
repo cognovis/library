@@ -319,6 +319,31 @@ sources:
           - team
 library:
   scripts:
+    - name: ccore
+      description: Installable Cognovis developer-workflow CLI with shared deterministic capabilities.
+      source: https://github.com/cognovis/library-core/tree/main/scripts/ccore
+      language: python
+      output_contract: json-envelope
+      default_scope: global
+      distribution:
+        kind: uv-tool
+        package_name: cognovis-core-tools
+        executables:
+          - ccore
+      runtime_requirements:
+        binaries:
+          - bd
+          - git
+          - ob
+          - uv
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          plane: dev
+      tags:
+        - origin:original
+        - tier:core
     - name: refinement/bead_io
       description: Shared bead-array JSON I/O helpers for refinement scripts.
       source: https://github.com/cognovis/library-core/blob/main/scripts/refinement/bead_io.py
@@ -1724,11 +1749,12 @@ library:
           inventory: convention-scan
           plane: dev
     - name: session-close
-      description: 'use when: closing a coding session or bead workflow through the deterministic four-state protocol, or when the user says session close, session beenden, release, or rc; in a root session dispatch to the installed session-close agent and wait; NOT for implementing feature work or ad hoc Git cleanup.'
+      default_scope: global
+      description: 'use when: ending a coding session by integrating or proving containment of the caller''s code, finalizing explicit Beads, persisting learnings, and cleaning caller-owned worktrees; NOT for Pack Review, release, or unrelated repository cleanup.'
       source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
       requires:
+        - script:ccore
         - skill:cognovis-beads
-        - skill:worktree-cleanup
       tags:
         - origin:original
         - tier:core
@@ -2201,7 +2227,7 @@ library:
       default_scope: global
       handlers:
         - agents/ci-monitor-handlers
-      description: Watches GitHub Actions CI pipeline for a specific pushed commit. Blocks silently until pipeline completes. Handles parallel session-closes by filtering on commit SHA. Returns a single structured verdict line — no polling noise visible in the caller.
+      description: Watches GitHub Actions CI for a specific pushed commit on behalf of the originating delivery flow. Blocks silently until completion, filters parallel flows by commit SHA, and returns one structured verdict line.
       source: https://github.com/cognovis/library-core/blob/main/agents/ci-monitor.md
       tags:
         - origin:original
@@ -2426,10 +2452,8 @@ library:
       default_scope: global
       handlers:
         - agents/release-handlers
-      description: 'Cuts a deliberate versioned release. session-close defers all release materialization (changelog, VERSION bump, tag) — this agent runs git-cliff once, bumps the version, commits chore(release), tags, and pushes. Use when you decide to ship a release. Triggers on: release, rc, cut a release, version bump, tag a release.'
+      description: 'Cuts a deliberate versioned release independently of Session Close: git-cliff once, VERSION bump, chore(release) commit, tag, and push. Use when you decide to ship a release. Triggers on: release, rc, cut a release, version bump, tag a release.'
       source: https://github.com/cognovis/library-core/blob/main/agents/release.md
-      requires:
-        - skill:session-close
       tags:
         - origin:original
         - tier:core

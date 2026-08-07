@@ -172,6 +172,6 @@ mandates use `produces-mandate`. The tag vocabulary is defined in `library.yaml`
 |-------|-------------------|
 | `beads-workflow:bead-orchestrator` | Orchestrates a multi-step bead workflow with its own agent system prompt, model, and tool set. Parent model delegates the entire workflow. |
 | `beads-workflow:verification-agent` | Isolated, read-only verification context. Tool grant is explicitly limited to Read, Bash, Grep, Glob — isolation prevents accidental writes during verification. |
-| `core:session-close` | Orchestrates a multi-phase close pipeline (merge, commit, changelog, push, close bead). Too complex and stateful for inline execution; needs its own context. |
+| `core:session-close` | Retired agent shape. Calling-session finalization is now a thin skill over the deterministic `ccore` Script distribution and does not need a separate model context. |
 
 ---

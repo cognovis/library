@@ -321,12 +321,14 @@ def main() -> int:
             if section == 'script':
                 source = entry.get('source') or ''
                 entrypoint = entry.get('entrypoint') or source
+                distribution = entry.get('distribution') or {}
+                is_uv_tool = distribution.get('kind') == 'uv-tool'
                 if entry.get('language', 'python') != 'python':
                     semantic_errors.append(
                         f"  [{primitive.yaml_section}[{i}] '{name}'] Scripts are Python-only: "
                         "set language: python"
                     )
-                if entrypoint and not str(entrypoint).endswith('.py'):
+                if entrypoint and not is_uv_tool and not str(entrypoint).endswith('.py'):
                     semantic_errors.append(
                         f"  [{primitive.yaml_section}[{i}] '{name}'] Script entrypoint/source must end in .py"
                     )

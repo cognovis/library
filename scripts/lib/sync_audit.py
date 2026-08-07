@@ -14,7 +14,12 @@ from typing import Any
 
 import yaml
 
-from .catalog import get_catalog_identity, get_entries, normalize_catalog_identity
+from .catalog import (
+    get_catalog_identity,
+    get_entries,
+    lookup_entry,
+    normalize_catalog_identity,
+)
 from .errors import EXIT_NOT_FOUND, LibraryError
 from .installers.standard import _parse_standard_category
 from .lockfile import (
@@ -305,9 +310,23 @@ def reinstall_entry(
         result = install_simple_file(catalog=catalog, primitive_name="prompt", name=entry_name,
                            repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "script":
-        from .installers.simple_file import install_simple_file
-        result = install_simple_file(catalog=catalog, primitive_name="script", name=entry_name,
-                           repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
+        catalog_entry = lookup_entry(catalog, "script", entry_name, fuzzy=False)
+        from .installers.uv_tool import is_uv_tool_entry, install_uv_tool
+
+        if is_uv_tool_entry(catalog_entry):
+            result = install_uv_tool(
+                catalog=catalog,
+                name=entry_name,
+                repo_root=repo_root,
+                scope=scope,
+                harness=harness,
+                install_mode=install_mode,
+            )
+        else:
+            from .installers.simple_file import install_simple_file
+
+            result = install_simple_file(catalog=catalog, primitive_name="script", name=entry_name,
+                               repo_root=repo_root, scope=scope, harness=harness, install_mode=install_mode)
     elif entry_type == "standard":
         from .installers.standard import install_standard
         result = install_standard(

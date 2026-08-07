@@ -59,6 +59,28 @@ scripts:
     output_contract: json-envelope
 ```
 
+Directory-backed Python CLI distributions remain Script primitives. Declare the
+external installer as a distribution format instead of creating a separate Package
+primitive:
+
+```yaml
+- name: ccore
+  description: Installable Cognovis developer-workflow CLI.
+  source: https://github.com/cognovis/library-core/tree/main/scripts/ccore
+  language: python
+  output_contract: json-envelope
+  default_scope: global
+  distribution:
+    kind: uv-tool
+    package_name: cognovis-core-tools
+    executables: [ccore]
+```
+
+`library script use ccore` materializes the directory in the immutable cache and
+runs `uv tool install --force` against that cache. Skills depend on the installed
+CLI with a typed `requires: [script:ccore]` reference. Removal delegates to
+`uv tool uninstall`; Library does not delete uv-managed executables individually.
+
 **Output contracts.**
 
 | Contract | Use when |
