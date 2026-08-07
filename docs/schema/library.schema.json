@@ -1216,6 +1216,37 @@
         }
       ]
     },
+    "script_distribution": {
+      "description": "Optional installation format for a first-class Script primitive. Omit for one-file scripts.",
+      "type": "object",
+      "required": [
+        "kind",
+        "package_name",
+        "executables"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "uv-tool",
+          "description": "Install the directory-backed Python distribution with uv tool."
+        },
+        "package_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Python distribution name passed to uv tool uninstall."
+        },
+        "executables": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          },
+          "description": "Console scripts that must exist after installation."
+        }
+      }
+    },
     "script_entry": {
       "description": "A first-class Python script primitive. Scripts are deterministic helpers, not model context, and may be exported to Gas City assets/scripts, commands, doctor checks, or formula steps.",
       "allOf": [
@@ -1244,6 +1275,9 @@
               "description": "Path to the primary Python entrypoint relative to the source directory, or omitted when source points directly at the .py file.",
               "type": "string",
               "pattern": "^[^\\0]+\\.py$"
+            },
+            "distribution": {
+              "$ref": "#/$defs/script_distribution"
             },
             "output_contract": {
               "description": "Output contract expected by consumers.",

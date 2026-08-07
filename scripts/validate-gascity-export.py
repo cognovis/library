@@ -284,9 +284,11 @@ def _validate_script_entry(
 ) -> None:
     source = str(entry.get("source") or "")
     entrypoint = str(entry.get("entrypoint") or source)
+    distribution = entry.get("distribution") or {}
+    is_uv_tool = distribution.get("kind") == "uv-tool"
     if entry.get("language", "python") != "python":
         errors.append(f"{location} must use language: python")
-    if entrypoint and not entrypoint.endswith(".py"):
+    if entrypoint and not is_uv_tool and not entrypoint.endswith(".py"):
         errors.append(f"{location} entrypoint/source must end in .py")
 
 

@@ -870,6 +870,14 @@ def _install_with_deps(
         return EXIT_FAILURE
 
     resolved_name = main_entry.get("name", name)
+    root_key = (primitive, resolved_name)
+
+    def dependency_scope(dep_primitive: str, dep_name: str) -> str:
+        if (dep_primitive, dep_name) == root_key:
+            return scope
+        return _resolve_command_scope(
+            catalog, dep_primitive, dep_name, explicit_scope=None
+        )
 
     try:
         install_order = resolve_requires(
@@ -903,11 +911,12 @@ def _install_with_deps(
     # earlier dependencies in install_order have already been installed. Check
     # every entry up front so the dependency graph install is all-or-nothing.
     for dep_prim, dep_name in install_order:
+        dep_scope = dependency_scope(dep_prim, dep_name)
         if dep_prim in {"pi-extension", "pi-profile", "just-module"}:
             from lib.installers.project_native import require_project_native_request
 
             try:
-                require_project_native_request(dep_prim, dep_name, scope)
+                require_project_native_request(dep_prim, dep_name, dep_scope)
             except LibraryError as exc:
                 if use_json:
                     print_json(error_result(str(exc), exc.exit_code))
@@ -928,6 +937,7 @@ def _install_with_deps(
 
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
+        dep_scope = dependency_scope(dep_prim, dep_name)
         # Already-installed handling. is_already_installed() only checks
         # (lockfile_has_entry AND install_target_exists) — it does NOT detect:
         #   (a) catalog HEAD has moved beyond the lockfile's pinned source_commit
@@ -939,13 +949,13 @@ def _install_with_deps(
         #       primary installed prompt file stayed byte-identical.
         # Without these checks `use` silently no-ops in these cases, leaving
         # deployed files stale or broken.
-        if is_already_installed(dep_name, repo_root, scope, dep_prim):
+        if is_already_installed(dep_name, repo_root, dep_scope, dep_prim):
             upstream_status = _check_upstream_status_for_entry(
-                catalog, repo_root, scope, dep_prim, dep_name
+                catalog, repo_root, dep_scope, dep_prim, dep_name
             )
-            local_drift = _has_local_tamper(repo_root, scope, dep_prim, dep_name)
+            local_drift = _has_local_tamper(repo_root, dep_scope, dep_prim, dep_name)
             handler_drift = _has_agent_handler_declaration_drift(
-                catalog, repo_root, scope, dep_prim, dep_name, harness
+                catalog, repo_root, dep_scope, dep_prim, dep_name, harness
             )
             if upstream_status == "behind":
                 if not use_json:
@@ -982,7 +992,7 @@ def _install_with_deps(
             catalog,
             dep_prim,
             dep_name,
-            scope,
+            dep_scope,
             harness,
             False,
             use_json,
@@ -1284,6 +1294,19 @@ def _dispatch_use(
             install_mode,
         )
     elif primitive == "script":
+        from lib.installers.uv_tool import is_uv_tool_entry
+
+        if is_uv_tool_entry(entry):
+            return _use_uv_tool(
+                repo_root,
+                catalog,
+                name,
+                scope,
+                dry_run,
+                use_json,
+                harness,
+                install_mode,
+            )
         return _use_simple_file(
             args,
             repo_root,
@@ -1511,6 +1534,42 @@ def _use_simple_file(
         result = install_simple_file(
             catalog=catalog,
             primitive_name=primitive,
+            name=name,
+            repo_root=repo_root,
+            scope=scope,
+            dry_run=dry_run,
+            harness=harness,
+            install_mode=install_mode,
+        )
+        if use_json:
+            print_json(result)
+        else:
+            _print_human_result(result)
+        return 0 if result.get("status") in ("ok", "dry-run") else EXIT_FAILURE
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+
+def _use_uv_tool(
+    repo_root: Path,
+    catalog: dict,
+    name: str,
+    scope: str,
+    dry_run: bool,
+    use_json: bool,
+    harness: str,
+    install_mode: str,
+) -> int:
+    """Install a directory-backed Python Script primitive with uv tool."""
+    from lib.installers.uv_tool import install_uv_tool
+
+    try:
+        result = install_uv_tool(
+            catalog=catalog,
             name=name,
             repo_root=repo_root,
             scope=scope,
@@ -1903,6 +1962,33 @@ def _safe_receipted_remove(
             clear_workspace_journal(lock_path)
             return result
 
+        if primitive == "script":
+            try:
+                script_entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+            except LibraryError:
+                script_entry = {}
+            from lib.installers.uv_tool import is_uv_tool_entry
+
+            if is_uv_tool_entry(script_entry):
+                if dry_run:
+                    return _dispatch_remove(
+                        primitive, catalog, name, repo_root, scope, True, harness
+                    )
+                write_workspace_journal(
+                    lock_path,
+                    {
+                        "operation": "remove",
+                        "member": receipt_id,
+                        "external_manager": "uv-tool",
+                    },
+                )
+                try:
+                    return _dispatch_remove(
+                        primitive, catalog, name, repo_root, scope, False, harness
+                    )
+                finally:
+                    clear_workspace_journal(lock_path)
+
         catalog_entry_exists = any(
             entry.get("name") == name for entry in get_entries(catalog, primitive)
         )
@@ -2090,6 +2176,18 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             else:
                 print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
+    elif primitive == "script":
+        try:
+            script_entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+        except LibraryError:
+            script_entry = {}
+        from lib.installers.uv_tool import is_uv_tool_entry
+
+        scope = (
+            _resolve_command_scope(catalog, primitive, name, explicit_scope)
+            if is_uv_tool_entry(script_entry)
+            else explicit_scope or "project"
+        )
     else:
         # Preserve historical remove semantics regardless of catalog default_scope.
         scope = explicit_scope or "project"
@@ -2175,6 +2273,17 @@ def _dispatch_remove(
             dry_run=dry_run,
         )
     elif primitive == "script":
+        entry = lookup_entry(catalog, primitive, name, fuzzy=True)
+        from lib.installers.uv_tool import is_uv_tool_entry, remove_uv_tool
+
+        if is_uv_tool_entry(entry):
+            return remove_uv_tool(
+                catalog=catalog,
+                name=name,
+                repo_root=repo_root,
+                scope=scope,
+                dry_run=dry_run,
+            )
         from lib.installers.simple_file import remove_simple_file
 
         return remove_simple_file(
