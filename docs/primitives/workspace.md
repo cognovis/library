@@ -75,6 +75,44 @@ rather than copying their content or inlining routing, context-budget,
 state-owner, or harness-runtime schemas. Schema v1 rejects nested Workspace and
 cross-catalog roots.
 
+**Schema v2 — cross-catalog roots (contract accepted, approval tentative).**
+[ADR-0011](../adr/heterogeneous-marketplace-workspaces.md) defines schema v2, in
+which a manifest may declare a pinned `catalogs:` block of alias-to-identity
+mappings and each root may carry a `catalog:` alias qualifier. Rules: the
+`catalogs:` block is the only place a Workspace may name a source, a root may
+never carry a URL, every declared catalog carries a `pin`, an unqualified root
+resolves from the Workspace's own steward catalog, and alias-to-identity mapping
+is manifest-local while locks and diagnostics use canonical identity throughout.
+v1 manifests remain valid and unchanged; a `catalog:` qualifier in a v1 manifest
+is a validation error.
+
+> **This approval is TENTATIVE, not final.** The ADR-0010 two-consumer evidence
+> gate was **amended, not satisfied** — provisionally, by Malte Sussdorff on
+> 2026-08-08. It becomes final only after implementation slice 1 (provider core
+> and normalized inventory) delivers the four evidence items listed in ADR-0011
+> `Approval Finalization`. If that evidence fails, the amendment lapses, ADR-0010's
+> gate is restored unamended, and Workspace v2 returns to deferred. Do not cite
+> schema v2 as settled until `Approval Finalization` reads `final`.
+
+**Nested Workspaces remain deferred.** ADR-0011 admits cross-catalog roots only.
+Nested Workspaces change the graph shape itself and keep their original gate:
+independent justification plus cycle handling, ownership visibility, and removal
+semantics.
+
+**Composition across catalogs stays no-overlay.** ADR-0011 restates the rule
+unchanged rather than replacing it. Across a trust boundary an overlay would be a
+redirection mechanism, reintroducing at the composition layer exactly what the
+pinned `catalogs:` block prevents at the manifest layer.
+
+**Foreign-catalog prune guard.** A catalog is *registered in the resolved
+Workspace closure* when its canonical identity appears in the `catalogs:` block of
+a Workspace in the selected scope's freshly resolved root set. A receipt whose
+`catalog_identity` is not in that closure is a foreign owner and is never pruned
+by this scope. When closure registration cannot be determined — unresolvable
+catalog, degraded provider, missing identity, or a legacy `catalog_identity:
+unknown` — the receipt is treated as foreign. The fail-closed default is
+authoritative.
+
 **Composition.** A project or global scope may register several Workspaces. The
 effective desired state is their unordered set union together with direct roots
 and all `requires:` dependencies. Cross-catalog composition uses several direct

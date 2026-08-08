@@ -334,6 +334,55 @@ This is the bug this policy exists to prevent.
 
 ---
 
+## Decision 4a: Cross-Catalog Identity and Upstream Name Preservation
+
+> Added by [ADR-0011](../adr/heterogeneous-marketplace-workspaces.md) (`CL-2p73`,
+> 2026-08-08) for content sourced from heterogeneous providers.
+
+**Policy: upstream names are preserved; disambiguation happens through qualified
+identity, never through renaming.**
+
+A foreign item's `upstream_name` is recorded verbatim. The Library never renames
+an upstream artifact to fit a naming convention, a reserved prefix, or a
+collision-avoidance scheme. A `library_name` may differ from `upstream_name` only
+through a recorded, reviewable projection rule — never as an ad-hoc rename at
+install time.
+
+**Qualified identity.** The canonical form for a foreign item is:
+
+```text
+<provider-identity>#<upstream-id>
+```
+
+for example `https://github.com/mattpocock/skills#skills/engineering/implement`.
+Locks, conflict diagnostics, ownership, audit, and prune decisions all use this
+canonical form. Display aliases appear only in human output.
+
+**Collision behavior across catalogs.** Two catalogs supplying the same
+`library_name` for one harness projection path is a **collision that fails before
+mutation**, exactly as a same-catalog collision does. It is not resolved by
+precedence, by declaration order, or by an overlay. The diagnostic names both
+canonical provider identities, both upstream IDs, and both stewards. A consumer
+resolves it by choosing one, not by layering.
+
+**No `runbook-` prefix is reserved.** ADR-0011 tested and **rejected** a
+first-class Runbook primitive; runbook-shaped content is a Skill carrying
+validated `classification.skill_class` metadata (`navigator` or `procedure`).
+Because no new primitive exists, no `runbook-` projection prefix is reserved and
+no fail-closed prefix check applies.
+
+Recorded for future readers who reopen the question: a reserved prefix would have
+collided immediately. The two reference navigator/procedure artifacts are
+upstream-named `ask-matt` and `implement`. A `runbook-` prefix would have had to
+either rename them — violating upstream name preservation above — or fail closed
+on first contact with the very content it was designed for.
+
+**If a reserved prefix is ever adopted** for some later primitive, it is governed
+by this policy and fails closed on an existing upstream claim. A reserved prefix
+never wins against an upstream name.
+
+---
+
 ## Decision 5: Versioned Installs
 
 **Policy: Version is tracked by content, not by path.**

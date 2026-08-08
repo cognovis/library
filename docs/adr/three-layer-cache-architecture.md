@@ -24,6 +24,29 @@ and cache-retention policy remain accepted. Decision 4's flat `installed:` data
 model is superseded by lockfile v2 requested roots and receipts; its deployment
 fields become receipt fields rather than disappearing.
 
+Extended by [ADR-0011](heterogeneous-marketplace-workspaces.md) (`CL-2p73`,
+2026-08-08) — **extended, not superseded**. The three-layer Source/Cache/Harness
+model and marketplace symmetry stand and are the foundation ADR-0011 builds on.
+Two elements are replaced:
+
+- **Decision 3's cache key.** The skill-focused
+  `<type>/<marketplace>/<name>@<commit14>` key (`scripts/lib/cache.py`
+  `compute_cache_path`) is replaced by a tuple of provider identity, upstream
+  item identity, upstream revision *or null*, normalized content digest,
+  primitive type, and transformation version. The old key cannot express a
+  revisionless provider — it degrades every one to the literal tag `local` and
+  collides them — and cannot express a transformation. Legacy objects are
+  **re-materialized**, never renamed into the new key space; renaming would
+  fabricate a digest identity they never had.
+- **Decision 5's adapter-per-marketplace-`type`.** Its intent is fulfilled by
+  ADR-0011's provider capability contract, which covers `git-repo`, `git-org`
+  with an allowlist, `mcp-content`, and `hosted-index`. The deferred hosted
+  adapter is subsumed.
+
+ADR-0011 additionally adds distribution-rights state, executable admission,
+fail-closed retention, and an operator-explicit purge on top of this ADR's
+retention policy. Migration grants no deletion authority.
+
 The title's "Harness Symlink" and the `upgrade`, `pin`, `edit`, `gc`, and `push`
 commands below record the 2026-05 design, not the released CLI. Canonical Layer-C
 content is now vendored by default, with symlinks used for harness bridges or an

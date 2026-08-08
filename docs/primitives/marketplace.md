@@ -2,13 +2,49 @@
 
 > Primitive reference extracted from [PRIMITIVES.md](../PRIMITIVES.md).
 
-**Definition.** A GitHub org or repository that publishes a discoverable collection
-of skills, agents, or plugins. The library catalog can reference a marketplace so
-users can browse and pull from it.
+**Definition.** A source that publishes a discoverable collection of primitives.
+The library catalog can reference a marketplace so users can browse and pull from
+it. It is not necessarily a GitHub org or repository — see *Provider kinds*.
 
 **Key constitutive feature.** Discovery surface: a marketplace is defined by its role
 as a catalog entry point — it publishes primitives for others to find and install, but
 does not itself contain installed primitives.
+
+**Registration installs nothing.** Marketplace registration answers *where content
+may be found*. Normalized inventory answers *what is available*. Workspace roots
+and their resolved closure answer *what is installed*. Discovery never implies
+installation, trust, license permission, redistribution permission, compatibility,
+or availability of credentials.
+
+**Provider kinds** ([ADR-0011](../adr/heterogeneous-marketplace-workspaces.md),
+`CL-2p73`). A marketplace declares a provider kind, and adapters implement one
+capability contract so that resolver, cache, and Workspace layers contain no
+provider-specific branch:
+
+| Kind | Enumeration | Revision | Auth |
+|---|---|---|---|
+| `git-repo` | Recursive tree listing at a ref, no clone required | Commit SHA | Optional |
+| `git-org` | Repository listing filtered by an explicit **Library-owned allowlist**, then per-repo `git-repo` behavior | Commit SHA per repo | Optional |
+| `mcp-content` | Typed MCP tool call returning item IDs and collection membership | Often none — **revisionless** | Usually required |
+| `hosted-index` | HTTP index document | Index-declared | Optional |
+
+Organization-level enumeration **without** an allowlist is refused: it would make
+Library inventory a function of an external party's repository creation.
+
+**MCP as transport is not the MCP primitive.** A `mcp-content` provider fetching a
+prompt kit produces a **Prompt** receipt for that item's own type and scope. It
+never creates an `mcp:` dependency, a global ownership edge, or a harness MCP
+registration. A genuinely required MCP server remains a separate global
+prerequisite assertion. The transport that delivered an artifact contributes
+nothing to that artifact's type, scope, dependencies, or ownership.
+
+**Rights metadata.** A marketplace entry records four independent grants —
+`fetch_authorization`, `install_rights`, `redistribution_rights`,
+`derivative_rights` — each `granted`, `denied`, or `unknown` with a named evidence
+source. `unknown` is conservative, not permissive: it blocks committed project
+projection by default and permits a machine-local gitignored projection only on
+explicit operator opt-in after the rights state is displayed. Rights are resolved
+**per repository** for a `git-org` provider; there is no organizational grant.
 
 **Trigger semantics.** Marketplaces are not invoked. They are registered via
 `library add-marketplace <github-url>`. Users browse or search them and then pull
@@ -36,7 +72,14 @@ set. Writable first-party catalogs such as Cognovis Core, Sussdorff Core, and
 Open-Brain can therefore become promotion targets without client-specific
 repository routing tables.
 
-**Inventory refresh.** Local writable sources can be scanned by convention with:
+**Inventory refresh.** This convention scan applies to **local writable sources
+only**. It reads `local_path` and regenerates catalog entries from a fixed shallow
+layout. Remote-only providers do not use it: they enumerate through their adapter's
+`enumerate()` capability, which supports recursive and provider-native layouts.
+`mattpocock/skills` is the worked counter-example — it stores skills at
+`skills/<category>/<name>/SKILL.md`, one level deeper than this scan expects.
+
+Local writable sources can be scanned by convention with:
 
 ```bash
 lib catalog sync --source=cognovis-library-core --primitive-type=standard --write --json

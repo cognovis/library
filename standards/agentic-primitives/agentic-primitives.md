@@ -165,6 +165,7 @@ scoped-leaves security model.
 | Use a hook for `/install-playwright` | Hooks are non-interactive; installs are explicit acts | Command |
 | Spawn an agent just to use a stronger model for one prompt | C5 alone is rarely enough | Inline call, or a skill that documents when to switch |
 | Encode a fixed multi-phase pipeline as a long prose agent | The shape is deterministic; prose drifts under context pressure and cannot resume | Workflow (deterministic spine + scoped leaves) |
+| Introduce a "runbook" primitive for a decision, routing, or handoff guide | Tested and rejected by ADR-0011 (`CL-2p73`). Versioning, non-self-execution, required-vs-optional capabilities, conditional routes, handoff artifacts, and human gates are all already carried by Skill plus `requires:` plus Workspace membership. The only remaining candidate was a reserved `runbook-` prefix, which is a name-collision policy concern and would have collided with the upstream names it was designed for | Skill with `classification.skill_class: navigator \| procedure` |
 
 ## Forge Self-Correction Pattern
 

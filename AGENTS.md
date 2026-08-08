@@ -34,6 +34,8 @@ separate from the target catalog or project where content is installed.
 | Which primitive should I create for this new capability? | `docs/PRIMITIVES.md` | **Quick Decision Tree** — very top |
 | How is this repo structured (4-layer stack, install paths)? | `docs/ARCHITECTURE.md` | The 4-layer Agentic Stack |
 | Which design decisions were made and why? | `docs/adr/` | matching ADR filename |
+| How do external marketplaces, rights, foreign caching, and cross-catalog Workspaces work? | `docs/adr/heterogeneous-marketplace-workspaces.md` | ADR-0011 |
+| Is Runbook a primitive? Is the Workflow executor moving to Pi? | `docs/adr/heterogeneous-marketplace-workspaces.md` | **Primitive and Projection Boundaries** — both answered NO, on recorded evidence |
 | Name collisions, project-local vs. global precedence | `docs/policy/name-collision.md` | — |
 | How does `library.yaml` / lockfile work? | `docs/lockfile-format.md` | — |
 | Tooling (chezmoi, install scripts, etc.) | `docs/project-tooling.md`, `docs/chezmoi-externals.md` | — |

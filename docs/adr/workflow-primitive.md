@@ -20,6 +20,26 @@ posture (Decisions 1–4). The cross-harness runtime that executes the spec
 outside the native tool is the open implementation question; it is recorded in
 Consequences and deferred to a follow-up spike, not built as part of this ADR.
 
+> **Supersession attempted and refused (CL-2p73, 2026-08-08).**
+> [ADR-0011](heterogeneous-marketplace-workspaces.md) tested a Pi-only Workflow
+> executor target against an objective, executable threshold and **retained this
+> ADR unamended**. Decision 2 and the clc-j7mn amendment stand; the native
+> parse-check deploy gate in `scripts/lib/installers/simple_file.py` stays in
+> force; no receipt migration was performed.
+>
+> Seven of seven required checks failed: Pi 0.84.1 exposes no Workflow-spec
+> execution entrypoint, injects none of the orchestration globals, journals
+> conversational sessions rather than `(prompt, opts)`-keyed leaf calls, and the
+> only concrete Pi orchestration design places git, Beads, and gate side effects
+> inside the orchestration layer — violating Decision 4's inert spine.
+>
+> The checks are re-runnable:
+> `uv run python scripts/checks/pi_workflow_executor_evidence.py --output docs/research/pi-workflow-executor-evidence.json`.
+> If that runner ever reports `supersede-adr-0006`, a supersession ADR may be
+> written. Until then this branch is closed. Pi remains fully supported as a
+> **runtime target** for Pi extensions and Pi profiles, which is a different axis
+> than executor authority.
+
 ## Context
 
 Claude Code ships an unreleased, unannounced **Workflow tool**, gated behind the
