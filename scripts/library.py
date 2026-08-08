@@ -58,6 +58,7 @@ import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import NamedTuple
 
 # Make `lib` importable when running as a script
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -905,11 +906,15 @@ def _install_with_deps(
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
 
-    # Pre-flight runtime gate for the FULL resolved install order. Runtime
-    # requirements must fail before any install/dependency mutation occurs;
-    # otherwise a missing binary on a later dependency would only surface after
-    # earlier dependencies in install_order have already been installed. Check
-    # every entry up front so the dependency graph install is all-or-nothing.
+    # Pre-flight runtime and catalog-contract gate for the FULL resolved install
+    # order. Runtime requirements must fail before any install/dependency
+    # mutation occurs; otherwise a missing binary on a later dependency would
+    # only surface after earlier dependencies in install_order have already been
+    # installed. Check every entry up front so the dependency graph install is
+    # all-or-nothing. The same pass records which already-installed members
+    # diverge from the active catalog contract, so the install loop below can
+    # refresh them instead of skipping them.
+    contract_drift_by_member: dict[tuple[str, str], str] = {}
     for dep_prim, dep_name in install_order:
         dep_scope = dependency_scope(dep_prim, dep_name)
         if dep_prim in {"pi-extension", "pi-profile", "just-module"}:
@@ -935,6 +940,36 @@ def _install_with_deps(
                 print(f"Error: {dep_runtime_error}", file=sys.stderr)
             return EXIT_FAILURE
 
+        # Catalog-contract gate. A member installed at an older contract must be
+        # refreshed. When it cannot be refreshed from the active catalog — it
+        # drifted but declares no installable source, or its declared source
+        # cannot be resolved at all — fail here rather than install the root on
+        # top of a member `use` can never repair. The blocker check is
+        # deliberately independent of whether a drift reason was produced: an
+        # unresolvable source also means we could not compare the contract in
+        # the first place, so silence there would be indistinguishable from
+        # "current".
+        if not is_already_installed(dep_name, repo_root, dep_scope, dep_prim):
+            continue
+        verdict = _catalog_contract_drift(
+            catalog, repo_root, dep_scope, dep_prim, dep_name
+        )
+        if verdict.blocker_reason:
+            drift_error = (
+                f"Dependency {dep_prim}:{dep_name} is already installed but "
+                f"cannot be refreshed from the active catalog: "
+                f"{verdict.blocker_reason}. Run `library {dep_prim} sync "
+                f"{dep_name}` first, then retry `library {primitive} use "
+                f"{resolved_name}`."
+            )
+            if use_json:
+                print_json(error_result(drift_error, EXIT_FAILURE))
+            else:
+                print(f"Error: {drift_error}", file=sys.stderr)
+            return EXIT_FAILURE
+        if verdict.drift_reason:
+            contract_drift_by_member[(dep_prim, dep_name)] = verdict.drift_reason
+
     # Install each entry in dependency order (deps first, main last)
     for dep_prim, dep_name in install_order:
         dep_scope = dependency_scope(dep_prim, dep_name)
@@ -947,6 +982,11 @@ def _install_with_deps(
         #       a partial-write left bad files, or another tool overwrote it).
         #   (c) an agent's declared private handler set changed while the
         #       primary installed prompt file stayed byte-identical.
+        #   (d) the ACTIVE catalog moved the entry to a new source or bumped its
+        #       declared version ("catalog contract drift" — the stale closure
+        #       member case). This one takes precedence over the skip path
+        #       because upstream_status is computed against the OLD source and
+        #       therefore reports 'current'/'unknown' for a stale member.
         # Without these checks `use` silently no-ops in these cases, leaving
         # deployed files stale or broken.
         if is_already_installed(dep_name, repo_root, dep_scope, dep_prim):
@@ -957,7 +997,18 @@ def _install_with_deps(
             handler_drift = _has_agent_handler_declaration_drift(
                 catalog, repo_root, dep_scope, dep_prim, dep_name, harness
             )
-            if upstream_status == "behind":
+            # Reuse the pre-flight verdict; recomputing it here would re-read
+            # the lockfile for every member.
+            contract_drift = contract_drift_by_member.get((dep_prim, dep_name))
+            if contract_drift:
+                if not use_json:
+                    print(
+                        f"[refresh] {dep_prim}:{dep_name} diverges from the active "
+                        f"catalog ({contract_drift}) — reinstalling",
+                        file=sys.stderr,
+                    )
+                # Fall through to reinstall
+            elif upstream_status == "behind":
                 if not use_json:
                     print(
                         f"[refresh] {dep_prim}:{dep_name} is behind upstream — reinstalling",
@@ -1036,6 +1087,178 @@ def _check_upstream_status_for_entry(
         # rather than silently no-opping.
         pass
     return "unknown"
+
+
+class _CatalogSources(NamedTuple):
+    """How an active catalog entry resolves to installable source strings.
+
+    Three states must stay distinguishable, because collapsing them hides a
+    stale closure member behind a clean-looking skip:
+      * no source intent     -> candidates empty, unresolvable_reason None
+        (e.g. `distribution:`-only entries such as mcp/runtime-config); the
+        entry never claimed to be installable from a source, so it is neither
+        drift nor a failure.
+      * resolvable intent    -> candidates non-empty; compare them normally.
+      * unresolvable intent  -> candidates empty, unresolvable_reason set; the
+        entry claims a source we cannot produce, so the member can neither be
+        verified against the active catalog nor refreshed from it.
+    """
+
+    candidates: list[str]
+    unresolvable_reason: str | None
+
+
+class _CatalogContractVerdict(NamedTuple):
+    """Verdict for one already-installed closure member vs. the active catalog.
+
+    `drift_reason` set  -> reinstall the member from the active catalog.
+    `blocker_reason` set -> the member cannot be refreshed automatically; the
+    caller must fail before installing anything and demand an explicit sync.
+    """
+
+    drift_reason: str | None
+    blocker_reason: str | None
+
+
+_NO_CONTRACT_VERDICT = _CatalogContractVerdict(None, None)
+
+
+def _normalize_source(value: str) -> str:
+    """Normalize a source string for equality comparison."""
+    text = str(value).strip()
+    if text.startswith("~"):
+        text = str(Path(text).expanduser())
+    return text.rstrip("/")
+
+
+def _catalog_entry_sources(catalog: dict, entry: dict) -> _CatalogSources:
+    """Return every source string the active catalog entry could resolve to.
+
+    Mirrors how the installers resolve a source (_resolve_entry_source in
+    lib/installers/skill.py, plus the raw entry['source'] recorded by
+    lib/installers/project_native.py) so a legitimate multi-harness or
+    marketplace entry is never mistaken for a moved one. A marketplace that
+    cannot be resolved — unknown marketplace, a schema-valid but non-git
+    marketplace type, a marketplace without a source URL — is reported as an
+    unresolvable intent rather than being silently dropped.
+    """
+    candidates: list[str] = []
+    direct = entry.get("source")
+    if isinstance(direct, str) and direct.strip():
+        candidates.append(direct)
+    sources_map = entry.get("sources") or {}
+    if isinstance(sources_map, dict):
+        for value in sources_map.values():
+            if isinstance(value, str) and value.strip():
+                candidates.append(value)
+
+    unresolvable_reason: str | None = None
+    # `from_marketplace` is the marketplace source intent. A bare `path` is not:
+    # it can never produce a marketplace source on its own, so treating it as
+    # intent would block entries that never claimed to be marketplace-backed.
+    if entry.get("from_marketplace"):
+        marketplace_source = None
+        try:
+            from lib.source import resolve_marketplace_source
+
+            marketplace_source = resolve_marketplace_source(catalog, entry)
+        except Exception as exc:
+            # Any resolution failure is a signal, not noise: record it so the
+            # caller can fail closed instead of treating it as "no drift".
+            unresolvable_reason = str(exc)
+        if marketplace_source:
+            candidates.append(marketplace_source)
+            unresolvable_reason = None
+        elif unresolvable_reason is None:
+            unresolvable_reason = (
+                f"catalog entry '{entry.get('name')}' declares a marketplace "
+                "source that resolves to nothing"
+            )
+
+    # An entry that already yields a usable source is installable regardless of
+    # a secondary marketplace failure, so it is not blocked.
+    if candidates:
+        unresolvable_reason = None
+    return _CatalogSources(candidates, unresolvable_reason)
+
+
+def _catalog_contract_drift(
+    catalog: dict,
+    repo_root: Path,
+    scope: str,
+    primitive: str,
+    name: str,
+) -> _CatalogContractVerdict:
+    """Compare an installed entry against the ACTIVE catalog contract.
+
+    `_check_upstream_status_for_entry` only compares the lockfile's recorded
+    source against that same source's HEAD, so it cannot see the case where the
+    ACTIVE catalog moved the entry to a different source or bumped its declared
+    version. Without this check an older direct install of a closure member
+    survives a root install and the root loads against an incompatible member.
+
+    Tolerant only of the genuinely unknowable cases (no lockfile, no lockfile
+    entry, catalog lookup miss) — those return the empty verdict. A source that
+    the active catalog cannot resolve is NOT unknowable: it is returned as a
+    blocker so the caller fails closed.
+    """
+    from lib.lockfile import get_entry
+
+    try:
+        lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
+        if not lockfile_path.exists():
+            return _NO_CONTRACT_VERDICT
+        lock_entry = get_entry(load_lockfile(lockfile_path), name, primitive)
+    except (LibraryError, OSError):
+        # A missing/unreadable lockfile tells us nothing about the contract.
+        return _NO_CONTRACT_VERDICT
+    if lock_entry is None:
+        return _NO_CONTRACT_VERDICT
+    try:
+        entry = lookup_entry(catalog, primitive, name, fuzzy=False)
+    except LibraryError:
+        return _NO_CONTRACT_VERDICT
+
+    sources = _catalog_entry_sources(catalog, entry)
+    if sources.unresolvable_reason:
+        return _CatalogContractVerdict(
+            None,
+            "its active catalog source cannot be resolved "
+            f"({sources.unresolvable_reason})",
+        )
+
+    drift_reason: str | None = None
+
+    # Version drift. Only a minority of catalog entries declare a version, so
+    # this check stays narrow: it fires only when the catalog states one.
+    catalog_version = entry.get("version")
+    if catalog_version is not None:
+        locked_version = lock_entry.get("version")
+        if str(locked_version or "") != str(catalog_version):
+            drift_reason = (
+                f"catalog declares version {catalog_version}, installed "
+                f"version is {locked_version or 'unrecorded'}"
+            )
+
+    # Source drift. An empty candidate set means the entry declares no source
+    # intent at all, which tells us nothing about the contract and is therefore
+    # never drift on its own.
+    locked_source = str(lock_entry.get("source") or "").strip()
+    if drift_reason is None and locked_source and sources.candidates:
+        normalized = {_normalize_source(item) for item in sources.candidates}
+        if _normalize_source(locked_source) not in normalized:
+            drift_reason = (
+                f"catalog source is {sources.candidates[0]}, installed from "
+                f"{locked_source}"
+            )
+
+    if drift_reason and not sources.candidates:
+        # Drifted, but nothing to reinstall from.
+        return _CatalogContractVerdict(
+            drift_reason,
+            f"{drift_reason}, and its catalog entry declares no installable source",
+        )
+    return _CatalogContractVerdict(drift_reason, None)
 
 
 def _has_local_tamper(

@@ -546,3 +546,160 @@ def test_pi_extension_bundle_rejects_symlink_escape_before_artifact_mutation(
     assert "resolves outside" in json.loads(result.stdout)["message"]
     assert list(outside.iterdir()) == []
     assert not (project / ".library.lock").exists()
+
+
+# Regression CL-2i17: a root install must not retain an older direct install of
+# one of its own dependencies.
+def _stale_closure_catalog(
+    sources: Path,
+    *,
+    dep_version: str,
+    dep_has_source: bool = True,
+    with_root: bool = False,
+) -> dict:
+    old_dep: dict = {"name": "old-dep", "version": dep_version}
+    if dep_has_source:
+        old_dep["source"] = str(sources / "old-dep.ts")
+    extensions: list[dict] = [
+        old_dep,
+        {
+            "name": "steady-dep",
+            "source": str(sources / "steady-dep.ts"),
+            "version": "1.0.0",
+        },
+    ]
+    if with_root:
+        extensions.append(
+            {
+                "name": "new-root",
+                "source": str(sources / "new-root.ts"),
+                "requires": ["pi-extension:old-dep", "pi-extension:steady-dep"],
+            }
+        )
+    return {"library": {"pi_extensions": extensions}}
+
+
+def _stale_closure_project(tmp_path: Path) -> tuple[Path, Path]:
+    project = tmp_path / "stale-consumer"
+    sources = tmp_path / "stale-sources"
+    project.mkdir()
+    sources.mkdir()
+    (sources / "old-dep.ts").write_text("export const dep = 1;\n")
+    (sources / "steady-dep.ts").write_text("export const steady = true;\n")
+    (sources / "new-root.ts").write_text("export const root = true;\n")
+    (project / "library.yaml").write_text(
+        yaml.safe_dump(
+            _stale_closure_catalog(sources, dep_version="1.0.0"), sort_keys=False
+        )
+    )
+    return project, sources
+
+
+def _lock_entries(project: Path) -> dict[str, dict]:
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    return {f"{e['type']}:{e['name']}": e for e in lock.get("installed", [])}
+
+
+def _requested_roots(project: Path) -> dict[str, dict]:
+    lock = yaml.safe_load((project / ".library.lock").read_text())
+    return {root["id"]: root for root in lock.get("requested_roots", [])}
+
+
+def _tree_snapshot(project: Path) -> dict[str, str]:
+    snapshot: dict[str, str] = {}
+    for path in sorted(project.rglob("*")):
+        if path.is_file():
+            snapshot[path.relative_to(project).as_posix()] = path.read_text()
+    return snapshot
+
+
+def test_root_install_refreshes_stale_project_native_dependency(
+    tmp_path: Path,
+) -> None:
+    """Old/new mixed closure: the stale direct root is refreshed, the current one is not."""
+    project, sources = _stale_closure_project(tmp_path)
+    extensions = project / ".agents" / "pi" / "extensions"
+
+    for dependency in ("old-dep", "steady-dep"):
+        installed = _run(project, "pi-extension", "use", dependency)
+        assert installed.returncode == 0, installed.stderr or installed.stdout
+
+    assert (extensions / "old-dep.ts").read_text() == "export const dep = 1;\n"
+    before = _lock_entries(project)
+    old_before = before["pi-extension:old-dep"]
+    steady_before = before["pi-extension:steady-dep"]
+    roots_before = _requested_roots(project)
+    assert old_before["version"] == "1.0.0"
+    assert roots_before["pi-extension:old-dep"]["resolved_version"] == "1.0.0"
+
+    # The active catalog moves old-dep to 2.0.0 with new content and publishes a
+    # root that requires it; steady-dep keeps its contract.
+    (sources / "old-dep.ts").write_text("export const dep = 2;\n")
+    (project / "library.yaml").write_text(
+        yaml.safe_dump(
+            _stale_closure_catalog(sources, dep_version="2.0.0", with_root=True),
+            sort_keys=False,
+        )
+    )
+
+    result = _run(project, "pi-extension", "use", "new-root")
+    assert result.returncode == 0, result.stderr or result.stdout
+
+    # The stale member is refreshed: deployed bytes AND lockfile provenance.
+    after = _lock_entries(project)
+    old_after = after["pi-extension:old-dep"]
+    assert (extensions / "old-dep.ts").read_text() == "export const dep = 2;\n"
+    assert old_after["version"] == "2.0.0"
+    assert (
+        old_after["content_sha256"]
+        == hashlib.sha256(b"export const dep = 2;\n").hexdigest()
+    )
+    assert old_after["content_sha256"] != old_before["content_sha256"]
+    assert old_after["install_timestamp"] >= old_before["install_timestamp"]
+
+    # The contract-current member is untouched: no churn, provenance identical.
+    assert (extensions / "steady-dep.ts").read_text() == "export const steady = true;\n"
+    assert after["pi-extension:steady-dep"] == steady_before
+
+    # The root is installed after its dependencies.
+    assert (extensions / "new-root.ts").is_file()
+    assert "pi-extension:new-root" in after
+
+    # The refreshed dependency keeps its direct-root ownership and scope.
+    assert old_after["scope"] == "project"
+    roots_after = _requested_roots(project)
+    assert roots_after["pi-extension:old-dep"]["scope"] == "project"
+    assert roots_after["pi-extension:old-dep"]["resolved_version"] == "2.0.0"
+
+
+def test_unrefreshable_stale_project_native_dependency_blocks_root_install(
+    tmp_path: Path,
+) -> None:
+    """A stale member the catalog cannot supply fails before any mutation."""
+    project, sources = _stale_closure_project(tmp_path)
+    installed = _run(project, "pi-extension", "use", "old-dep")
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+
+    # old-dep is bumped but the active catalog no longer declares a source for
+    # it, so it can neither be verified nor refreshed.
+    (project / "library.yaml").write_text(
+        yaml.safe_dump(
+            _stale_closure_catalog(
+                sources, dep_version="2.0.0", dep_has_source=False, with_root=True
+            ),
+            sort_keys=False,
+        )
+    )
+    before = _tree_snapshot(project)
+
+    result = _run(project, "pi-extension", "use", "new-root")
+
+    assert result.returncode != 0, result.stdout
+    message = result.stdout + result.stderr
+    assert "old-dep" in message
+    assert "library pi-extension sync old-dep" in message
+
+    # Pre-root non-mutation: nothing installed, nothing rewritten.
+    assert not (project / ".agents" / "pi" / "extensions" / "new-root.ts").exists()
+    assert _tree_snapshot(project) == before
+    assert "pi-extension:new-root" not in _lock_entries(project)
