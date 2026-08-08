@@ -195,6 +195,42 @@ def test_canonical_fusion_dry_run_resolves_complete_closure_without_mutation(
     assert not (project / "Justfile").exists()
 
 
+# Regression CL-1w5g: consumer repositories must see the aggregate Solo catalog root.
+def test_fix_CL_1w5g_consumer_resolves_solo_workbench_closure(tmp_path: Path) -> None:
+    project = tmp_path / "solo-consumer"
+    project.mkdir()
+    initialized = subprocess.run(
+        ["git", "init", "--quiet"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+    )
+    assert initialized.returncode == 0, initialized.stderr
+
+    result = _run(project, "pi-extension", "use", "solo-workbench", "--dry-run")
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "dry-run"
+    assert payload["dependency_order"][-1] == "pi-extension:solo-workbench"
+    assert set(payload["dependency_order"]) == {
+        "pi-extension:fusion-harness",
+        "pi-extension:cognovis-bead-harness",
+        "pi-extension:native-pack",
+        "pi-extension:acpx-session-view",
+        "pi-extension:fusion-context",
+        "pi-profile:fusion-sota",
+        "pi-extension:acpx-workbench",
+        "pi-profile:pi-workbench",
+        "pi-extension:docker-lifecycle-guard",
+        "pi-profile:bead-high-assurance",
+        "pi-profile:native-pack-standard",
+        "pi-extension:solo-workbench",
+    }
+    assert not (project / ".agents").exists()
+    assert not (project / ".library.lock").exists()
+
+
 def test_project_native_dry_run_resolves_fuzzy_root_name_like_apply(
     tmp_path: Path,
 ) -> None:

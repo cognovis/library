@@ -4016,6 +4016,111 @@ library:
         - pi
         - fusion
         - adversarial
+    - name: acpx-claude
+      description: Claude Code subscription provider for ordinary Pi sessions through pinned ACPX.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/acpx-claude
+      bundle: true
+      entrypoint: index.ts
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - claude
+        - acpx
+    - name: acpx-session-view
+      description: Read-only interactive attach view for active and retained ACPX event streams.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/acpx-session-view
+      bundle: true
+      entrypoint: index.ts
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - acpx
+        - observability
+    - name: cognovis-bead-harness
+      description: Evidence-bound observable standard and high-assurance one-Bead execution adapter.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/cognovis-bead-harness
+      bundle: true
+      entrypoint: index.ts
+      version: 2.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - beads
+        - review
+        - adversarial
+    - name: docker-lifecycle-guard
+      description: Thin Pi adapter for the canonical Core ephemeral Docker ownership guard.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/docker-lifecycle-guard
+      bundle: true
+      entrypoint: index.ts
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - docker
+        - guard
+        - lifecycle
+    - name: native-pack
+      description: Clean-room native Pi SDK orchestration for ordered multi-Bead Packs.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/native-pack
+      bundle: true
+      entrypoint: index.ts
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - beads
+        - pack
+        - native
+        - review
+    - name: solo-workbench
+      description: Daily-driver Pi package exposing Fusion, Bead, Pack, and run inspection commands in one session.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/solo-workbench
+      bundle: true
+      entrypoint: index.ts
+      requires:
+        - pi-extension:fusion-harness
+        - pi-extension:cognovis-bead-harness
+        - pi-extension:native-pack
+        - pi-extension:acpx-session-view
+        - pi-profile:fusion-sota
+        - pi-profile:bead-high-assurance
+        - pi-profile:native-pack-standard
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - workbench
+        - solo
+        - fusion
+        - beads
+        - pack
   pi_profiles:
     - name: pi-workbench
       description: Hash-pinned clean-room workbench profile and provider policy.
@@ -4065,6 +4170,61 @@ library:
         - pi
         - fusion
         - sota
+    - name: bead-standard
+      description: Evidence-bound standard one-Bead execution with Sol and one opposite-family reviewer.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/bead-standard.json
+      requires:
+        - pi-profile:pi-workbench
+        - pi-extension:acpx-session-view
+        - pi-extension:docker-lifecycle-guard
+        - pi-extension:cognovis-bead-harness
+      version: 2.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - beads
+        - standard
+    - name: bead-high-assurance
+      description: Evidence-bound high-assurance execution with parallel Opus/Kimi review and distinct adjudication.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/bead-high-assurance.json
+      requires:
+        - pi-profile:pi-workbench
+        - pi-extension:acpx-session-view
+        - pi-extension:docker-lifecycle-guard
+        - pi-extension:cognovis-bead-harness
+      version: 2.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - beads
+        - adversarial
+        - high-assurance
+    - name: native-pack-standard
+      description: Native Pi multi-Bead Pack with Sol implementation and parallel Opus/Kimi focused review.
+      source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/native-pack-standard.json
+      requires:
+        - pi-extension:docker-lifecycle-guard
+        - pi-extension:native-pack
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - beads
+        - pack
+        - native
+        - adversarial
   just_modules:
     - name: pi-workbench
       description: Repository-local workbench, session, and sessions operator recipes.
