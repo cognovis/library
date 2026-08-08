@@ -149,7 +149,16 @@ the first two for every derivative.
 
 ## 2. Nate B. Jones — Executive Circle prompt kits
 
-**Canonical source identity:** MCP provider identity `executive-circle`
+**Canonical source identity:** `mcp:executive-circle`
+
+This exact string is the canonical provider identity everywhere — `identity()`,
+`provider_identity` on every normalized item, qualified identities, cache keys,
+receipts, conflict diagnostics, ownership, and prune decisions. The bare word
+`executive-circle` is the **display alias** and the `library.yaml` `mcp_servers`
+entry name; it is never stored as an identity. Using both forms as identities
+would let one provider produce two distinct record sets, which is why the
+distinction is stated here rather than left to convention.
+
 **Provider kind:** `mcp-content`
 **Transport observed:** HTTP MCP endpoint at `contentmasterpro.limited`, registered
 in `~/.codex/config.toml` (`[mcp_servers.executive-circle]`) and in

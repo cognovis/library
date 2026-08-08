@@ -8,7 +8,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
-related_adrs: ["0005"]
+retained_by: ["0011"]
+related_adrs: ["0005", "0011"]
 ---
 
 # ADR-0006: Workflow as a first-class Library primitive

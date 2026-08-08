@@ -8,6 +8,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
+amends: ["0003", "0010"]
+retains: ["0006"]
 related_adrs: ["0003", "0004", "0005", "0006", "0010"]
 ---
 
@@ -49,11 +51,17 @@ the same boundary:
 | Inventory scan | Convention scan of local writable sources; fixed shallow `skills/<name>/SKILL.md` layout | `docs/primitives/marketplace.md`, *Inventory refresh* |
 
 The forcing function is that real third-party content is already on this machine
-and is already outside every one of those contracts. `~/.claude/skills/implement`,
-`research`, `resolving-merge-conflicts`, `codebase-design`, `diagnosing-bugs`, and
-`domain-modeling` are unpinned real directories with no lockfile receipt and no
-recorded rights state. `~/.claude/workflows/` holds four materialized workflow
-projections with **zero** lockfile receipts. Upstream, `mattpocock/skills` stores
+and is already outside every one of those contracts. Under `~/.claude/skills/`,
+**23** directories carry the names of upstream `mattpocock/skills` items —
+`implement`, `ask-matt`, `tdd`, `research`, `triage`, `wayfinder` and 17 more —
+and **not one of them has a lockfile receipt, a pin, or a recorded rights state**.
+Eleven are real directories and twelve are Library-shaped symlinks into
+`~/.agents/skills/`, which makes the point sharper: the shape of a Library install
+is present and the ownership is not. `~/.claude/workflows/` holds four
+materialized workflow projections with **zero** lockfile receipts. The complete
+inventory and its method are in `Legacy Projection Disposition`.
+
+Upstream, `mattpocock/skills` stores
 its skills at `skills/<category>/<name>/SKILL.md` — one level deeper than the
 scanner's fixed layout — and `executive-circle` is reachable only through a
 subscriber-token-scoped MCP endpoint that no Git adapter can clone.
@@ -94,6 +102,30 @@ permission, compatibility, or availability of credentials.** Each of those is a
 separate recorded state with its own evidence, defined in
 `Normalized Inventory and Admission State` and `Distribution Rights`.
 
+### Numbered invariants used by this ADR
+
+`CL-2p73` states fourteen architecture invariants that this ADR must preserve.
+Two of them are cited by number in the sections below. They are reproduced here
+in full so that a reader with only this repository — and no access to the bead
+tracker — can check the citation. They are stated as this ADR's own normative
+rules; the bead is their origin, not a second authority a reader must go find.
+
+> **Invariant 4 (Runbook admission).** If justified as a distinct primitive, a
+> Runbook guides an acting agent; it neither executes orchestration nor owns
+> installation. A Workspace may select its projection and required capabilities.
+> **If no Library-enforced behavior distinguishes it from a Skill plus metadata,
+> the ADR must reject the new primitive honestly.**
+
+> **Invariant 13 (blocked project projection).** A project projection without
+> confirmed redistribution rights must not materialize third-party bytes into a
+> committed vendored tree. The default for `unknown` or `denied` redistribution
+> state is a blocked project projection. A machine-local cached projection into a
+> gitignored target requires explicit policy or operator opt-in after the rights
+> state is shown, and the chosen behavior is visible before mutation.
+
+The remaining twelve invariants are preserved but are not cited by number
+anywhere in this document; each is carried by the section that owns its subject.
+
 ## Source Provider Contract
 
 There is no universal scanner. A provider adapter implements a capability
@@ -130,7 +162,7 @@ catalog, which the platform already supports.
 |---|---|---|---|---|
 | `git-repo` | Tree listing at a ref, recursive, no clone required | Commit SHA | Optional | `mattpocock/skills` |
 | `git-org` | Repository listing filtered by an explicit **allowlist**; then per-repo `git-repo` behavior | Commit SHA per repo | Optional | `disler` |
-| `mcp-content` | Typed MCP tool call returning item IDs and collection membership | Provider-supplied ID or none | Required, token-scoped | `executive-circle` |
+| `mcp-content` | Typed MCP tool call returning item IDs and collection membership | Provider-supplied ID or none | Required, token-scoped | `mcp:executive-circle` |
 | `hosted-index` | HTTP index document | Index-declared | Optional | none yet; contract only |
 
 `git-org` is not "a Git repo with a wildcard". Organization-level enumeration
@@ -166,6 +198,13 @@ for example `https://github.com/mattpocock/skills#skills/engineering/implement`.
 The provider identity is canonical, not the operator's display alias. Locks,
 conflict diagnostics, ownership, audit, and prune decisions all use the canonical
 form; display aliases appear only in human output.
+
+A non-URL provider uses a URN-shaped identity: the MCP reference provider's
+canonical identity is `mcp:executive-circle`, and the bare `executive-circle` —
+its `library.yaml` `mcp_servers` entry name — is a display alias only. Prose in
+this ADR uses the alias for readability; **stored** identity is always the
+canonical form. Storing both would let one provider produce two distinct record
+sets under two identities.
 
 ## Normalized Inventory and Admission State
 
@@ -244,7 +283,8 @@ The candidate was tested against the normative Quick Decision Tree in
 | Tree question | Answer for a Runbook | Consequence |
 |---|---|---|
 | Purely deterministic logic (>50 lines) running NO model? | No — it guides a model | Not SCRIPT |
-| Fixed-shape orchestration of multiple subagents, deterministic control flow spawning fresh contexts? | No — Invariant 4 says a Runbook guides one **acting** agent and executes no orchestration | Not WORKFLOW |
+| Fixed-shape orchestration of multiple subagents, deterministic control flow spawning fresh contexts? | No — Invariant 4 (`Numbered invariants used by this ADR`) says a Runbook guides one **acting** agent and executes no orchestration | Not WORKFLOW |
+| Is it project-specific or cross-cutting context supplementing skills — passive, injected, not invokable? | No. A Runbook's defining shape is *invoked routing and handoff*: `ask-matt` answers "which flow fits my situation", which requires being asked. A Standard is loaded into context and never asked anything, and a Standard containing "Step 1, then Step 2" is exactly what `standards/agentic-primitives` names as the counter-example that must become a Skill | Not STANDARD |
 | Should the model auto-pick it up from context? | Sometimes; the "navigator" shape is explicitly user-invoked | **SKILL**, with the auto-pickup flag varying |
 | Does the user invoke it explicitly by slash command? | For the navigator shape, yes | COMMAND is the harness projection of that flag, not a separate source primitive |
 
@@ -347,9 +387,21 @@ version `0.84.1`, observed 2026-08-08.
 `tests/test_pi_workflow_executor_evidence.py`.
 
 **Result artifact.** `docs/research/pi-workflow-executor-evidence.json`
-(`cognovis.pi-workflow-executor-evidence.v1`). The committed artifact is verified
-against a recomputed threshold by the test suite, so a hand-edited verdict fails
-CI.
+(`cognovis.pi-workflow-executor-evidence.v1`). The test suite verifies the
+committed artifact's schema, its check identities and titles, its outcome
+vocabulary, its constitutive/migration partition, and its verdict and threshold
+recomputed from the recorded outcomes. A hand-edited verdict, a renamed check, or
+an invented outcome value all fail CI. The per-check `evidence` prose is asserted
+non-empty but is not otherwise pinned; regenerate the artifact by re-running the
+checker rather than editing it.
+
+**Every threshold check has a reachable `pass` path.** This is a property of the
+checker, enforced by paired pass/fail tests over synthetic contexts for all seven
+threshold checks, plus one end-to-end test proving a fully capable world reaches
+`supersede-adr-0006`. A check that could never pass would silently weld the
+re-entry condition below shut and make the "the verdict flips automatically"
+claim false. The first draft of this checker had exactly that defect in three
+checks; adversarial review caught it, and the tests exist so it cannot return.
 
 **Objective threshold.** Supersede ADR-0006 only when **all** constitutive checks
 `PWE-2, PWE-3, PWE-4, PWE-5` and **all** migration-completeness checks
@@ -359,13 +411,13 @@ CI.
 | Check | Question | Result |
 |---|---|---|
 | PWE-1 | Pi runtime identity and version pin | `pass` — Pi 0.84.1 |
-| PWE-2 | Does Pi execute a canonical Workflow JS spec? | `fail` |
-| PWE-3 | Does Pi inject the ADR-0006 orchestration globals? | `fail` |
-| PWE-4 | Does Pi journal leaf calls and resume a crashed run? | `fail` |
-| PWE-5 | Is the Pi orchestration spine inert? | `fail` |
-| PWE-6 | Do installed workflow receipts have a defined Pi migration? | `fail` |
-| PWE-7 | Does the native parse-check deploy gate have a Pi replacement? | `fail` |
-| PWE-8 | Is a rollback path to the ADR-0006 executor reachable? | `fail` |
+| PWE-2 | Does Pi execute a canonical Workflow JS spec? Discover a documented entrypoint, then run a canonical probe spec through it | `fail` |
+| PWE-3 | Does the discovered entrypoint inject the ADR-0006 orchestration globals, as reported by the probe spec itself? | `fail` |
+| PWE-4 | Does the discovered entrypoint document a run journal and run resume, as distinct from conversational session resume? | `fail` |
+| PWE-5 | Does the only concrete Pi orchestration **design** keep its spine inert? (Scope note: this probes a design document, not Pi's runtime) | `fail` |
+| PWE-6 | Is a Pi target declared for the workflow primitive, and does every materialized projection carry a lockfile receipt? | `fail` |
+| PWE-7 | Does the workflow installer contain a Pi-side validation **code path** (comments and docstrings stripped)? | `fail` |
+| PWE-8 | Is an ADR-0006 executor reachable for mutating work — native tool gate enabled, or ≥1 `verified` adapter? | `fail` |
 
 **Verdict: `retain-adr-0006`.** Seven of seven required checks fail. The
 substantive findings:
@@ -385,14 +437,19 @@ substantive findings:
   Decision 4, which makes an inert spine normative. It is also pack-specific: it
   is a native Executive Pack harness, not a general executor for the Workflow
   primitive.
-- Five workflow catalog entries and four materialized projections in
-  `~/.claude/workflows/` carry **zero** lockfile receipts. There is nothing to
-  migrate *from* in lock terms, which is a migration defect in its own right and
-  is dispositioned in `Legacy Projection Disposition`.
-- `scripts/lib/workflow_runtime.py` reports zero `verified` adapters and three
-  `blocked` ones (`claude-agent`, `codex-exec`, `codex-impl`). The ADR-0006
-  fallback runtime is itself read-only for mutating work, so it is not a usable
-  rollback target for a superseded executor.
+- No Pi target is declared for the workflow primitive — `scripts/lib/primitives.py`
+  still describes it as "Claude workflow JavaScript" with
+  `install_subdir="workflows"` — so there is nowhere to migrate *to*. And five
+  workflow catalog entries with four materialized projections in
+  `~/.claude/workflows/` carry **zero** lockfile receipts, so there is nothing to
+  migrate *from* in lock terms either. The unreceipted projections are a defect in
+  their own right and are dispositioned in `Legacy Projection Disposition`.
+- Neither ADR-0006 executor path can run mutating work. The **canonical** executor
+  is the native Claude Workflow tool, whose `CLAUDE_CODE_WORKFLOWS` gate is unset;
+  the explicitly non-canonical `scripts/lib/workflow_runtime.py` reports zero
+  `verified` adapters and three `blocked` ones (`claude-agent`, `codex-exec`,
+  `codex-impl`). A rollback target that cannot run mutating work is not a rollback
+  path for a superseded executor.
 
 **Authority statement.** ADR-0006 Decision 2 and the clc-j7mn amendment remain
 **authoritative and unamended**. The canonical Workflow spec format stays the
@@ -562,7 +619,7 @@ only. Rationale on record: the gate was written to prevent speculative lifecycle
 complexity, and the complexity here is no longer speculative — three committed
 locks compose across catalogs, the scope-boundary workaround forces a consumer to
 publish one Workspace per catalog for what is one baseline, and the heterogeneous
-providers this ADR admits (`mattpocock`, `executive-circle`, `disler`) cannot be
+providers this ADR admits (`mattpocock`, `mcp:executive-circle`, `disler`) cannot be
 reached by a first-party Workspace at all without qualified roots. Nested
 Workspaces, the other half of the original deferral, keep the gate unchanged.
 
@@ -582,26 +639,25 @@ slice 1.
 | Final state on success | `final` — the amendment stands and later slices unblock |
 | Final state on failure | `withdrawn` — the amendment lapses, ADR-0010's gate is restored unamended, and Workspace v2 returns to deferred |
 
-**Evidence that finalizes the approval.** All four must hold, demonstrated by
-slice 1's committed tests:
+**Evidence that finalizes the approval.** All four must hold, and all four are
+deliverable **within slice 1's own scope** — this was checked against `CL-coif`'s
+acceptance criteria rather than assumed. Workspace-v2 schema validation and
+cache/receipt round-tripping are deliberately *not* required here, because slice 1
+scopes both out; requiring them would make the gate unsatisfiable by the only
+slice authorized to satisfy it.
 
-1. **A working normalized-inventory contract over at least one real provider.**
-   `enumerate` plus `describe` produce normalized items with populated
-   `provider_identity`, `upstream_id`, `upstream_name`, `collection_membership`,
-   `library_type`, and `rights` for a live reference provider, with no local
-   checkout of that provider.
-2. **No provider-specific branches in core.** A mechanical check proves that the
-   resolver, cache, and Workspace modules contain no reference to any provider
-   name, provider kind conditional, or upstream URL. Provider knowledge exists
-   only inside adapter modules and Library-owned configuration.
-3. **Passing validator tests.** The catalog, workspace, and lockfile schema
-   validators accept the v2 shapes defined here and reject the negative cases:
-   an unpinned `catalogs:` entry, a root naming a URL directly, a root whose
-   `catalog` alias is undeclared, and a v1 manifest carrying a `catalog`
-   qualifier.
-4. **A round-trip qualified identity.** One normalized item resolves from
-   provider through cache identity to a lock receipt and back to its canonical
-   `<provider-identity>#<upstream-id>` without loss.
+| # | Evidence | Slice-1 AC that delivers it |
+|---|---|---|
+| 1 | **A working normalized-inventory contract over at least one real provider.** `enumerate` plus `describe` produce normalized items with populated `provider_identity`, `upstream_id`, `upstream_name`, `collection_membership`, `library_type`, and `rights` for a live reference provider, with no local checkout | `CL-coif` AC1 and AC3 |
+| 2 | **No provider-specific branches in core.** A mechanical check proves the resolver, cache, and Workspace modules contain no provider name, provider-kind conditional, or upstream URL, and it fails CI when one is introduced | `CL-coif` AC4 |
+| 3 | **Passing catalog validator tests.** `library.yaml` accepts `provider_kind`, `allowlist`, `auth_ref`, and `rights`, rejects an unknown `provider_kind`, and rejects a `git-org` entry with no `allowlist` | `CL-coif` AC5 |
+| 4 | **A round-trip qualified identity.** One normalized item round-trips from provider through the canonical `<provider-identity>#<upstream-id>` and back without loss | `CL-coif` AC6 |
+
+The Workspace-v2 schema negative cases — unpinned `catalogs:` entry, URL in a
+root, undeclared alias, `catalog:` qualifier in a v1 manifest — and the
+cache-identity-to-receipt round trip remain required, but they are **acceptance
+criteria of the slices that own them** (`CL-dbam` AC2 and `CL-y5z4` AC1), not
+inputs to this gate. They are gated *by* this approval; they cannot also gate it.
 
 Until all four hold, this section's status field is the authoritative answer to
 "is cross-catalog Workspace composition approved?" and the answer is
@@ -741,20 +797,52 @@ each resolving to `granted`, `denied`, or `unknown`:
 Authorization to fetch is **not** permission to redistribute. A subscriber token
 proves the first and says nothing about the second.
 
+### Caching is not installing
+
+Three capabilities are separated, and the separation is what makes the table
+below sound:
+
+| Capability | Governed by | Meaning |
+|---|---|---|
+| **Retain in cache** | `fetch_authorization` | Authorized bytes are held in the content-addressed cache. No projection exists. Nothing is on a harness path |
+| **Install (project a machine-local copy)** | `install_rights` | Bytes are materialized into a usable machine-local target |
+| **Redistribute (project into a committed tree)** | `redistribution_rights` | Bytes enter a tree that others receive |
+
+A lawfully fetched artifact may therefore sit `verified` in the cache while it is
+neither installable nor projectable. Cache retention is not a projection and never
+requires `install_rights`.
+
 ### Invariant 13 binding
 
 **A project projection without confirmed redistribution rights must not
 materialize third-party bytes into a committed vendored tree.**
 
-| `redistribution_rights` | Committed project projection | Machine-local gitignored projection |
-|---|---|---|
-| `granted` | Allowed | Allowed |
-| `unknown` | **Blocked (default)** | Requires explicit policy or operator opt-in, after the rights state is displayed |
-| `denied` | **Blocked** | Requires explicit policy or operator opt-in, after the rights state is displayed |
+Projection eligibility composes the grants in order. `install_rights` is checked
+**first** and governs both targets; `redistribution_rights` then adds the separate
+committed-tree restriction. A recorded denial of local installation is not
+something an operator opt-in may override — the opt-in exists to accept a
+*redistribution* risk the operator is entitled to accept, not to grant a
+permission the upstream party withheld.
 
-`unknown` binds to the blocked default. It is not a permissive middle state; it is
-the conservative one. The chosen behavior is displayed **before** mutation, never
-discovered afterwards.
+| `install_rights` | `redistribution_rights` | Machine-local gitignored projection | Committed project projection |
+|---|---|---|---|
+| `granted` | `granted` | Allowed | Allowed |
+| `granted` | `unknown` | Explicit policy or operator opt-in, after the rights state is displayed | **Blocked (default)** |
+| `granted` | `denied` | Explicit policy or operator opt-in, after the rights state is displayed | **Blocked** |
+| `unknown` | any | Explicit policy or operator opt-in, after the rights state is displayed | **Blocked** |
+| `denied` | any | **Blocked. No opt-in overrides a recorded denial** | **Blocked** |
+
+`unknown` binds to the blocked default on both axes. It is not a permissive middle
+state; it is the conservative one, and the distinction from `denied` is that
+`unknown` is unfinished work an operator may knowingly accept for a machine-local
+target, whereas `denied` is a decision someone else already made. The chosen
+behavior is displayed **before** mutation, never discovered afterwards.
+
+Worked case, because it is the one this ADR actually ships: `executive-circle`
+resolves `fetch_authorization: granted` and `install_rights: unknown`. Its bytes
+may be fetched and cached. Its committed projection is blocked. Its machine-local
+projection requires an explicit operator opt-in shown first, and that opt-in
+accepts an *unresolved* rights state rather than overriding a refusal.
 
 ### Derivative works
 
@@ -792,7 +880,7 @@ Full evidence in `docs/research/external-marketplace-reference-matrix.md`.
 |---|---|---|---|---|---|
 | `mattpocock/skills` | `granted` | `granted` | `granted` | `granted` | Upstream `LICENSE` (MIT) confirmed via `raw.githubusercontent.com` HTTP 200 and the GitHub repository API reporting `spdx_id: MIT`, 2026-08-08 |
 | `disler` (allowlist: `pi-vs-claude-code`, `fusion-harness`, `planf3`) | `granted` | `granted` | `granted` | `granted` | Per-repository MIT `LICENSE` recorded in `/Users/malte/code/library/cognovis-pi/docs/research/indydevdan-pi-repos.md`, with commit pins |
-| `executive-circle` | `granted` | `unknown` | `unknown` | `unknown` | Subscriber-token-scoped MCP endpoint in `~/.codex/config.toml` and `~/.claude.json`; no published licence or redistribution grant located |
+| `mcp:executive-circle` | `granted` | `unknown` | `unknown` | `unknown` | Subscriber-token-scoped MCP endpoint in `~/.codex/config.toml` and `~/.claude.json`; no published licence or redistribution grant located |
 
 At least one provider exercises the rights-restricted path, so no constructed
 `unknown` case is required: **`executive-circle` resolves to `unknown` for
@@ -805,7 +893,7 @@ Two related traps, recorded because both are live:
 
 - Nate B. Jones's `https://github.com/NateBJones-Projects/OB1` is **not** the
   Executive Circle source. It must never be conflated with the
-  `executive-circle` provider identity or used as a substitute when the MCP
+  `mcp:executive-circle` provider identity or used as a substitute when the MCP
   provider is unreachable.
 - The `disler` grant is per repository, not organizational.
   `indydevdan-pi-repos.md` records `live-bench` with **no observed LICENSE file**.
@@ -838,13 +926,27 @@ Decision 6 and holds for cache objects, receipts, and projections alike.
 ### Legacy Projection Disposition
 
 Already-materialized third-party projections are inventoried and classified by
-redistribution state. The inventory taken on 2026-08-08:
+redistribution state.
 
-| Projection | Location | Receipt | Rights | Disposition |
-|---|---|---|---|---|
-| `implement`, `research`, `resolving-merge-conflicts`, `codebase-design`, `diagnosing-bugs`, `domain-modeling` | `~/.claude/skills/<name>/` — real directories, no Library bridge | **none** | `granted` (MIT, `mattpocock`) | Adoptable. Machine-local global scope; not a committed tree. Adopt under the ADR-0010 exact-digest adoption path once the provider is registered, or leave as untracked operator-owned content |
-| `ask-matt`, `code-review`, `grilling`, `prototype`, `tdd` | `~/.claude/skills/<name>` symlinked to `~/.agents/skills/<name>` (real directories) | **none** in the global lock | `granted` (MIT, `mattpocock`) | Same. Library-**shaped** bridges without Library receipts are not Library-owned; the shape does not confer ownership |
-| `bead-context-pack.js`, `bead-review.js`, `quick-fix.js`, `stream-review.js` | `~/.claude/workflows/` | **none** | first-party | Re-materialize from catalog on next install so a receipt exists. First-party, so no rights issue — but an unreceipted projection is unreproducible regardless of who wrote it |
+**Inventory method, stated because it determines what the inventory can and
+cannot say.** Taken 2026-08-08 by intersecting the names under `~/.claude/skills/`
+with the upstream `mattpocock/skills` tree at `skills/<category>/<name>/SKILL.md`,
+and by listing `~/.claude/workflows/`, then checking each against
+`~/.config/library/global.lock`. Name matching is the only method available
+**because none of these projections has a receipt** — and that is the finding, not
+a limitation of the survey. With zero receipts there is no recorded provenance,
+so it is not possible to state from local evidence whether a given directory came
+from `mattpocock`, from a first-party catalog, or from a hand copy. Slice 7
+(`CL-m6cc`) must re-derive provenance by content digest, not by name.
+
+| Projection group | Count | Location | Receipt | Rights | Disposition |
+|---|---|---|---|---|---|
+| Directories whose names match upstream `mattpocock/skills` items — including `implement`, `ask-matt`, `tdd`, `code-review`, `research`, `resolving-merge-conflicts`, `codebase-design`, `diagnosing-bugs`, `domain-modeling`, `grilling`, `prototype`, `triage`, `wayfinder`, `to-spec`, `to-tickets`, `teach`, `handoff`, `improve-codebase-architecture`, `grill-me`, `grill-with-docs`, `setup-matt-pocock-skills`, `claude-handoff`, `loop-me` | **23** | `~/.claude/skills/<name>` — 11 real directories and 12 symlinks into `~/.agents/skills/<name>` (themselves real directories) | **none** — 0 of 23 | `granted` **if** upstream is `mattpocock` (MIT); **unverified** per item until provenance is re-derived | Machine-local global scope, not a committed tree, so nothing is currently non-compliant. Re-derive provenance by content digest, then either adopt under the ADR-0010 exact-digest adoption path once the provider is registered, or leave as untracked operator-owned content |
+| Workflow specs `bead-context-pack.js`, `bead-review.js`, `quick-fix.js`, `stream-review.js` | **4** | `~/.claude/workflows/` | **none** — 0 of 4 | first-party | Re-materialize from catalog on next install so a receipt exists. First-party, so no rights issue — but an unreceipted projection is unreproducible regardless of who wrote it |
+
+A Library-**shaped** bridge without a Library receipt is not Library-owned; the
+shape does not confer ownership. Twelve of the 23 have exactly that shape, which
+is why shape is not accepted as evidence anywhere in this ADR.
 
 Rules that follow:
 
@@ -964,13 +1066,24 @@ acceptance surface and could ship alone.
 | 7 | `CL-m6cc` | Cache and lock migration, legacy projection disposition | Legacy receipts re-materialize; unresolvable receipts are retained and prune-blocked; no deletion authority is granted | `CL-y5z4`, `CL-uliw` |
 
 The dependency edges above are live in the Beads graph, not narrative ordering.
-Verify with `bd dep tree CL-2p73`; `bd dep cycles` reports no cycles.
+`bd dep tree CL-2p73` shows this ADR's own dependencies, not its dependents, so
+verify the slice edges from the slice side:
+
+```bash
+bd dep list CL-coif --json   # -> CL-2p73
+bd dep list CL-dbam --json   # -> CL-coif, CL-n7ex
+bd dep list CL-mvet --json   # -> CL-coif, CL-n7ex, CL-y5z4
+bd dep cycles                # -> no dependency cycles detected
+```
 
 Each slice is independently verifiable rather than a phase fragment: every one has
-its own acceptance surface and could ship alone. Slices 3 and 5 in particular do
-not depend on each other, and slice 4 exists separately from slice 3 because
-"cache the bytes" and "decide when bytes may be destroyed" have different failure
-modes and different reviewers.
+its own acceptance surface, its own tests, and its own reviewable outcome. That is
+weaker than "could ship in any order" and is the honest claim — slices 2 through 7
+have real prerequisites, listed above. What it rules out is a phase fragment whose
+only acceptance criterion is "the next phase can now start". Slices 3 and 5 in
+particular do not depend on each other, and slice 4 exists separately from slice 3
+because "cache the bytes" and "decide when bytes may be destroyed" have different
+failure modes and different reviewers.
 
 **Slice 1 (`CL-coif`) is pre-approved to execute** without further approval
 (Human Decision HD-3, Malte Sussdorff, 2026-08-08). Slices 2 through 7 are gated

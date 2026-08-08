@@ -15,8 +15,12 @@
   authoritative and unamended. Workspace schema v2 adds pinned, alias-qualified
   cross-catalog roots; its ADR-0010 consumer-evidence gate is **tentatively**
   amended and finalizes only on implementation-slice-1 evidence. ADR-0003 is
-  extended (cache key and provider adapters), not superseded. Documentation only —
-  no runtime behavior changes in this bead.
+  extended (cache key and provider adapters), not superseded. Projection
+  eligibility composes `install_rights` first — governing both machine-local and
+  committed targets — and then `redistribution_rights`, which adds the
+  committed-tree restriction; `unknown` blocks by default and `denied` cannot be
+  overridden by an operator opt-in. Cache retention is explicitly not installation.
+  Documentation only — no runtime behavior changes in this bead.
 
 - *(clc-z9wp, cld/cdx)* `-b` and `-bq` now converge on the installed single-bead implementation loop. Explicit `-bq` means unconditional Quick for every executable leaf, without effort classification, route profiles, forced-tier overrides, or logical impl/exec adapter selection; the launched harness implements natively and reserves the neutral agent-session gateway for opposite-family review.
 

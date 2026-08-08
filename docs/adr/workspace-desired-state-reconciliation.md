@@ -9,7 +9,8 @@ deciders:
 supersedes: []
 superseded_by: []
 amends: ["0003", "0004", "0005", "library-yaml-information-model"]
-related_adrs: ["0002"]
+amended_by: ["0011"]
+related_adrs: ["0002", "0011"]
 ---
 
 # ADR-0010: Universal Library ownership and Workspace desired-state reconciliation

@@ -2,15 +2,23 @@
 """Executable Pi Workflow executor evidence checks for CL-2p73 (AC3).
 
 ADR-0006 makes the Claude Workflow JS surface canonical and its native tool the
-canonical executor. The heterogeneous-marketplace ADR may supersede that
-decision only when an objective, re-runnable evidence threshold is met. This
-module is that threshold: it enumerates the checks, runs them against the live
-machine and repository, writes one typed artifact, and derives the verdict from
-the recorded outcomes rather than from prose.
+canonical executor. ADR-0011 may supersede that decision only when an objective,
+re-runnable evidence threshold is met. This module is that threshold: it
+enumerates the checks, runs them against the live machine and repository, writes
+one typed artifact, and derives the verdict from the recorded outcomes rather
+than from prose.
 
-The verdict is intentionally derived, not authored. A later reader re-runs this
-runner; if Pi grows a Workflow-spec executor the verdict flips without anyone
-editing the ADR's claim by hand.
+The verdict is intentionally derived, not authored. **Every threshold check has a
+reachable `pass` path**, and `tests/test_pi_workflow_executor_evidence.py`
+exercises both the pass and the fail path of each one against synthetic contexts.
+A checker whose checks cannot pass would weld the re-entry gate shut and make the
+"the verdict flips automatically" claim false; that defect was found in review and
+is what this structure exists to prevent.
+
+Checks compose. `PWE-2` discovers a spec-execution entrypoint and publishes it in
+a shared probe map; `PWE-3` and `PWE-4` then probe **that entrypoint**. A check
+that has no subject to probe records `fail` with "no executor to probe", which is
+an honest observation about the world, not a hard-coded outcome.
 
 Usage:
     uv run python scripts/checks/pi_workflow_executor_evidence.py \\
@@ -22,14 +30,14 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping
 
 SCHEMA = "cognovis.pi-workflow-executor-evidence.v1"
 BEAD_ID = "CL-2p73"
@@ -37,6 +45,7 @@ BEAD_ID = "CL-2p73"
 PASS = "pass"
 FAIL = "fail"
 UNAVAILABLE = "unavailable"
+RESULTS = (PASS, FAIL, UNAVAILABLE)
 
 #: Constitutive checks. ADR-0006 Decisions 2-4 define the Workflow primitive by
 #: these properties; a candidate executor that misses one is not an executor for
@@ -50,6 +59,22 @@ MIGRATION_CHECKS = ("PWE-6", "PWE-7", "PWE-8")
 #: The canonical injected orchestration globals from ADR-0006 Decision 2.
 WORKFLOW_GLOBALS = ("agent", "pipeline", "parallel", "phase", "budget", "args", "workflow")
 
+#: Command names that could plausibly load and run a spec file.
+SPEC_ENTRYPOINT_CANDIDATES = frozenset({"workflow", "workflows", "run", "exec"})
+
+#: A canonical-shaped probe spec. `export const meta` must be the first statement
+#: (ADR-0006 Decision 2); the body reports which orchestration globals the
+#: executor injected.
+PROBE_SPEC = """export const meta = {
+  name: 'pwe-probe',
+  description: 'ADR-0011 executor probe: reports injected orchestration globals',
+};
+
+const names = %s;
+const present = names.filter((n) => typeof globalThis[n] !== 'undefined');
+console.log('PWE_GLOBALS=' + present.join(','));
+""" % json.dumps(list(WORKFLOW_GLOBALS))
+
 _TIMEOUT_SECONDS = 30
 
 
@@ -60,17 +85,30 @@ class Check:
     check_id: str
     title: str
     method: str
-    runner: Callable[["Context"], tuple[str, str]]
+    runner: Callable[["Context", dict[str, Any]], tuple[str, str]]
 
 
 @dataclass(frozen=True)
 class Context:
-    """Everything a check may inspect."""
+    """Everything a check may inspect.
+
+    `spec_runner` is the single injection point that makes behavioral probing
+    testable: it executes a canonical spec through a discovered entrypoint and
+    returns `(exit_code, output)`.
+    """
 
     repo_root: Path
     pi_executable: str | None
     pi_version: str | None
     pi_help: str
+    subcommand_help: Mapping[str, str] = field(default_factory=dict)
+    spec_runner: Callable[[str, Path], tuple[int, str]] | None = None
+    env: Mapping[str, str] = field(default_factory=dict)
+    #: Where materialized harness projections live. Explicit so PWE-6 probes a
+    #: bounded, testable surface instead of reaching into the ambient home directory.
+    projection_roots: tuple[Path, ...] = ()
+    #: Extra roots searched for `.library.lock` files, beyond the repository itself.
+    lock_search_roots: tuple[Path, ...] = ()
 
 
 def _run(argv: list[str], *, cwd: Path | None = None) -> tuple[int, str]:
@@ -88,20 +126,43 @@ def _run(argv: list[str], *, cwd: Path | None = None) -> tuple[int, str]:
     return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
 
 
+def documented_commands(help_text: str) -> list[str]:
+    """Command names Pi documents in its own help output."""
+    return sorted(set(re.findall(r"^\s{2}pi\s+([a-z-]+)", help_text, re.MULTILINE)))
+
+
 def build_context(repo_root: Path) -> Context:
+    import os
+
     executable = shutil.which("pi")
     version = None
     help_text = ""
+    sub_help: dict[str, str] = {}
     if executable:
         code, out = _run([executable, "--version"])
-        if code == 0:
-            version = out.strip().splitlines()[0].strip() if out.strip() else None
+        if code == 0 and out.strip():
+            version = out.strip().splitlines()[0].strip()
         _, help_text = _run([executable, "--help"])
+        for command in sorted(SPEC_ENTRYPOINT_CANDIDATES & set(documented_commands(help_text))):
+            _, sub_help[command] = _run([executable, command, "--help"])
+
+    def real_spec_runner(entrypoint: str, spec_path: Path) -> tuple[int, str]:
+        assert executable is not None
+        return _run([executable, entrypoint, str(spec_path)])
+
     return Context(
         repo_root=repo_root,
         pi_executable=executable,
         pi_version=version,
         pi_help=help_text,
+        subcommand_help=sub_help,
+        spec_runner=real_spec_runner if executable else None,
+        env=dict(os.environ),
+        projection_roots=(
+            Path.home() / ".claude" / "workflows",
+            Path.home() / ".agents" / "workflows",
+        ),
+        lock_search_roots=(Path.home() / "code",),
     )
 
 
@@ -110,7 +171,7 @@ def build_context(repo_root: Path) -> Context:
 # --------------------------------------------------------------------------
 
 
-def _check_runtime_identity(ctx: Context) -> tuple[str, str]:
+def _check_runtime_identity(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
     if not ctx.pi_executable:
         return UNAVAILABLE, "No `pi` executable on PATH; the candidate runtime cannot be pinned."
     if not ctx.pi_version:
@@ -118,115 +179,161 @@ def _check_runtime_identity(ctx: Context) -> tuple[str, str]:
     return PASS, f"Pi runtime pinned: executable={ctx.pi_executable} version={ctx.pi_version}"
 
 
-def _check_spec_executor(ctx: Context) -> tuple[str, str]:
-    """Does Pi expose an entrypoint that executes a canonical Workflow JS spec?"""
+def _check_spec_executor(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
+    """Does Pi execute a canonical Workflow JS spec?
+
+    Discovery, then behavior. A documented entrypoint is necessary but not
+    sufficient: the check passes only when a canonical-shaped spec actually runs
+    through it. The discovered entrypoint is published for PWE-3 and PWE-4.
+    """
     if not ctx.pi_executable:
         return UNAVAILABLE, "No `pi` executable on PATH; no executor entrypoint can be probed."
-    haystack = ctx.pi_help.lower()
-    # A Workflow-spec executor would have to surface a run/exec entrypoint for a
-    # spec file. Pi's documented command set is install/remove/update/list/config/auth.
-    documented_commands = re.findall(r"^\s{2}pi\s+([a-z-]+)", ctx.pi_help, re.MULTILINE)
-    spec_commands = sorted(
-        {cmd for cmd in documented_commands if cmd in {"workflow", "workflows", "run", "exec"}}
-    )
-    if spec_commands:
-        return PASS, (
-            "Pi documents a candidate spec-execution entrypoint: "
-            f"{', '.join(spec_commands)} (commands seen: {sorted(set(documented_commands))})"
+    commands = documented_commands(ctx.pi_help)
+    candidates = sorted(SPEC_ENTRYPOINT_CANDIDATES & set(commands))
+    if not candidates:
+        return FAIL, (
+            "Pi documents no candidate spec-execution entrypoint. Documented commands are "
+            f"{commands}; the surface is an interactive/`--print` coding assistant with "
+            "extensions, skills, prompt templates, and sessions. A canonical spec "
+            "(`export const meta = {...}` first statement plus a top-level async body) has no "
+            f"loader. ('workflow' appears in `pi --help`: {'workflow' in ctx.pi_help.lower()})"
         )
-    mentions_workflow = "workflow" in haystack
+    if ctx.spec_runner is None:  # pragma: no cover - guarded by the executable check
+        return UNAVAILABLE, "No spec runner is available to execute the probe spec."
+
+    attempts: list[str] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        spec_path = Path(tmp) / "pwe-probe.js"
+        spec_path.write_text(PROBE_SPEC, encoding="utf-8")
+        for entrypoint in candidates:
+            code, output = ctx.spec_runner(entrypoint, spec_path)
+            attempts.append(f"`pi {entrypoint} <spec>` exit={code}")
+            if code == 0:
+                shared["executor_entrypoint"] = entrypoint
+                shared["executor_output"] = output
+                return PASS, (
+                    f"Pi executed a canonical probe spec through `pi {entrypoint}` (exit 0). "
+                    f"Discovered entrypoint published for PWE-3 and PWE-4. Attempts: {attempts}"
+                )
     return FAIL, (
-        "Pi exposes no Workflow-spec execution entrypoint. Documented commands are "
-        f"{sorted(set(documented_commands))}; the surface is an interactive/`--print` "
-        "coding assistant with extensions, skills, prompt templates, and sessions. "
-        f"'workflow' appears in `pi --help`: {mentions_workflow}. A canonical spec "
-        "(`export const meta = {...}` first statement plus a top-level async body) has "
-        "no loader."
+        f"Pi documents candidate entrypoints {candidates} but none executed a canonical probe "
+        f"spec. Attempts: {attempts}"
     )
 
 
-def _check_injected_globals(ctx: Context) -> tuple[str, str]:
-    """Does the candidate executor inject the ADR-0006 orchestration globals?"""
-    if not ctx.pi_executable:
-        return UNAVAILABLE, "No `pi` executable on PATH; injected globals cannot be probed."
-    launcher = Path(ctx.pi_executable)
-    try:
-        blob = launcher.read_text(encoding="utf-8", errors="ignore")
-    except OSError as exc:  # pragma: no cover - env dependent
-        return UNAVAILABLE, f"Could not read {launcher}: {exc}"
-    marker_present = "export const meta" in blob
-    found = sorted(
-        name for name in WORKFLOW_GLOBALS if re.search(rf"\b{name}\s*\(", ctx.pi_help)
-    )
-    if marker_present:
-        return PASS, (
-            f"{launcher} references the canonical `export const meta` spec marker; "
-            f"help-surface global references: {found}"
-        )
-    return FAIL, (
-        f"{launcher} contains no `export const meta` spec marker and Pi documents no "
-        f"injected orchestration globals {list(WORKFLOW_GLOBALS)}. Pi's unit of model work "
-        "is an AgentSession created by extension TypeScript, not a leaf `agent(prompt, opts)` "
-        "call injected into an inert JavaScript spine."
-    )
+def _check_injected_globals(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
+    """Does the executor inject the ADR-0006 orchestration globals?
 
-
-def _check_journal_and_resume(ctx: Context) -> tuple[str, str]:
-    """Is orchestration journaled per leaf call and resumable after a crash?"""
-    if not ctx.pi_executable:
-        return UNAVAILABLE, "No `pi` executable on PATH; journal semantics cannot be probed."
-    resumes_sessions = "--resume" in ctx.pi_help or "--continue" in ctx.pi_help
-    return FAIL, (
-        "Pi resumes conversational SESSIONS (`--continue`/`--resume` present: "
-        f"{resumes_sessions}), not orchestration runs. ADR-0006 requires a journal keyed by a "
-        "hash of (prompt, opts) per `agent()` call so a re-run with the same script and args is "
-        "a full cache hit and a crashed run resumes at the failed leaf. Pi exposes no such "
-        "run journal, because it has no leaf-call abstraction to key one on."
-    )
-
-
-def _check_inert_spine(ctx: Context) -> tuple[str, str]:
-    """Is the orchestration layer denied filesystem, shell, and network?
-
-    Evidence source is the Cognovis Pi harness design, which is the only
-    concrete Pi orchestration proposal on this machine.
+    Probes the entrypoint PWE-2 discovered by reading the probe spec's own report
+    of which globals were defined during its run.
     """
+    entrypoint = shared.get("executor_entrypoint")
+    if not entrypoint:
+        return FAIL, (
+            "No spec-execution entrypoint was discovered by PWE-2, so there is no executor whose "
+            f"injected globals can be probed. ADR-0006 requires {list(WORKFLOW_GLOBALS)}. Pi's "
+            "unit of model work is an AgentSession created by extension TypeScript, not a leaf "
+            "`agent(prompt, opts)` call injected into an inert JavaScript spine."
+        )
+    output = str(shared.get("executor_output") or "")
+    match = re.search(r"PWE_GLOBALS=([a-zA-Z0-9_,]*)", output)
+    if not match:
+        return FAIL, (
+            f"`pi {entrypoint}` ran the probe spec but emitted no `PWE_GLOBALS=` report, so no "
+            "orchestration global could be observed."
+        )
+    present = [name for name in match.group(1).split(",") if name]
+    missing = [name for name in WORKFLOW_GLOBALS if name not in present]
+    if missing:
+        return FAIL, (
+            f"`pi {entrypoint}` injected {present} but is missing {missing} of the ADR-0006 "
+            "orchestration globals."
+        )
+    return PASS, f"`pi {entrypoint}` injected every ADR-0006 orchestration global: {present}"
+
+
+def _check_journal_and_resume(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
+    """Is orchestration journaled per leaf call and resumable after a crash?
+
+    Conversational session resume does not qualify. The check looks for run-level
+    journal/resume on the discovered spec entrypoint's own surface.
+    """
+    entrypoint = shared.get("executor_entrypoint")
+    if not entrypoint:
+        session_resume = "--resume" in ctx.pi_help or "--continue" in ctx.pi_help
+        return FAIL, (
+            "No spec-execution entrypoint was discovered by PWE-2, so there is no orchestration "
+            "run to journal. Pi resumes conversational SESSIONS (`--continue`/`--resume` present: "
+            f"{session_resume}), not runs. ADR-0006 requires a journal keyed by a hash of "
+            "(prompt, opts) per `agent()` call so a re-run with the same script and args is a "
+            "full cache hit and a crashed run resumes at the failed leaf."
+        )
+    surface = ctx.subcommand_help.get(entrypoint, "")
+    has_journal = bool(re.search(r"\bjournal\b", surface, re.IGNORECASE))
+    has_run_resume = bool(re.search(r"--resume\b|\bresume (a |the )?run\b", surface, re.IGNORECASE))
+    if has_journal and has_run_resume:
+        return PASS, (
+            f"`pi {entrypoint} --help` documents both a run journal and run resume: "
+            f"journal={has_journal}, resume={has_run_resume}."
+        )
+    return FAIL, (
+        f"`pi {entrypoint} --help` does not document a leaf-call journal and run resume "
+        f"(journal={has_journal}, resume={has_run_resume}). Conversational session resume does "
+        "not satisfy ADR-0006's (prompt, opts)-keyed run journal."
+    )
+
+
+#: Markers that indicate an orchestration layer performing its own side effects.
+_SPINE_SIDE_EFFECT_MARKERS = (
+    "Git and Beads adapters",
+    "Git adapter",
+    "Beads adapter",
+    "Evidence store",
+    "Git and Beads",
+)
+
+
+def _design_document(ctx: Context) -> Path | None:
     candidates = [
         ctx.repo_root.parent / "cognovis-pi" / "docs" / "native-executive-pack-harness.md",
         Path.home() / "code" / "library" / "cognovis-pi" / "docs" / "native-executive-pack-harness.md",
     ]
-    design = next((path for path in candidates if path.is_file()), None)
+    return next((path for path in candidates if path.is_file()), None)
+
+
+def _check_design_spine_inertness(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
+    """Does the only concrete Pi orchestration design keep its spine inert?
+
+    Scope note, because the title used to overclaim: this probes a **design
+    document**, not Pi's runtime. It is the strongest available evidence because
+    that document is the only concrete Pi orchestration proposal on this machine.
+    """
+    design = _design_document(ctx)
     if design is None:
         return UNAVAILABLE, (
-            "The Pi harness design document was not found at "
-            f"{[str(path) for path in candidates]}; spine inertness cannot be evaluated."
+            "The Pi harness design document was not found next to this repository or under "
+            "~/code/library/cognovis-pi/docs/; spine inertness cannot be evaluated."
         )
     text = design.read_text(encoding="utf-8", errors="ignore")
-    side_effect_markers = [
-        marker
-        for marker in ("Git and Beads adapters", "Evidence store", "Git adapter", "Beads adapter")
-        if marker in text
-    ]
-    if side_effect_markers:
+    markers = [marker for marker in _SPINE_SIDE_EFFECT_MARKERS if marker in text]
+    if markers:
         return FAIL, (
-            f"{design} places {side_effect_markers} inside the orchestration extension itself. "
+            f"{design} places {sorted(set(markers))} inside the orchestration extension itself. "
             "ADR-0006 Decision 4 makes an inert spine normative: the orchestration layer has no "
-            "filesystem, no shell, and no network. A host that executes git, Beads, and gate "
-            "side effects is the acting layer and the deciding layer at once, which is the exact "
-            "separation ADR-0006 exists to enforce."
+            "filesystem, no shell, and no network. A host that executes git, Beads, and gate side "
+            "effects is the acting layer and the deciding layer at once, which is the exact "
+            "separation ADR-0006 exists to enforce. The document is also pack-specific: it is a "
+            "native Executive Pack harness, not a general executor for the Workflow primitive."
         )
     return PASS, f"{design} declares no orchestration-layer side effects."
 
 
-def _iter_lock_files(repo_root: Path) -> list[Path]:
-    search_roots = [repo_root]
-    code_root = Path.home() / "code"
-    if code_root.is_dir():
-        search_roots.append(code_root)
+def _iter_lock_files(repo_root: Path, extra_roots: tuple[Path, ...] = ()) -> list[Path]:
+    search_roots = [repo_root, *(root for root in extra_roots if root.is_dir())]
     found: list[Path] = []
     seen: set[Path] = set()
     for root in search_roots:
-        for depth_glob in ("*/.library.lock", "*/*/.library.lock", ".library.lock"):
+        for depth_glob in (".library.lock", "*/.library.lock", "*/*/.library.lock"):
             for path in sorted(root.glob(depth_glob)):
                 resolved = path.resolve()
                 if resolved not in seen and ".worktrees" not in resolved.parts:
@@ -235,38 +342,11 @@ def _iter_lock_files(repo_root: Path) -> list[Path]:
     return found
 
 
-def _check_receipt_migration(ctx: Context) -> tuple[str, str]:
-    """Does every installed workflow receipt have a defined Pi target?"""
-    locks = _iter_lock_files(ctx.repo_root)
-    if not locks:
-        return UNAVAILABLE, "No `.library.lock` files were reachable; receipts cannot be inventoried."
-    workflow_receipts: list[str] = []
-    for lock in locks:
-        try:
-            text = lock.read_text(encoding="utf-8", errors="ignore")
-        except OSError:  # pragma: no cover - env dependent
-            continue
-        for match in re.finditer(r"^\s*-\s*id:\s*(workflow:[^\s]+)", text, re.MULTILINE):
-            workflow_receipts.append(f"{lock}:{match.group(1)}")
-    catalogued = _count_catalogued_workflows(ctx.repo_root / "library.yaml")
-    materialized = _materialized_workflow_projections()
-    return FAIL, (
-        f"{catalogued} workflow catalog entries, {len(workflow_receipts)} lockfile workflow "
-        f"receipts, and {len(materialized)} materialized harness projections "
-        f"({[path.name for path in materialized][:8]}) were found. The installer's workflow type "
-        "still targets `workflows/` as Claude workflow JavaScript "
-        "(scripts/lib/primitives.py: install_subdir='workflows'). No Pi target path, receipt "
-        "re-key rule, or re-materialization rule is defined for any of them, so migration is "
-        "undefined rather than merely incomplete. The projections that exist are additionally "
-        "unreceipted, so a cutover has nothing to migrate FROM in lock terms."
-    )
-
-
 def _count_catalogued_workflows(catalog: Path) -> int:
     if not catalog.is_file():
         return 0
     try:
-        import yaml  # local import: the checker must run without a hard YAML dependency
+        import yaml
     except ImportError:  # pragma: no cover - env dependent
         return -1
     try:
@@ -277,11 +357,7 @@ def _count_catalogued_workflows(catalog: Path) -> int:
     return len(entries) if isinstance(entries, list) else 0
 
 
-def _materialized_workflow_projections() -> list[Path]:
-    roots = [
-        Path.home() / ".claude" / "workflows",
-        Path.home() / ".agents" / "workflows",
-    ]
+def _materialized_workflow_projections(roots: tuple[Path, ...]) -> list[Path]:
     found: list[Path] = []
     for root in roots:
         if root.is_dir():
@@ -289,38 +365,120 @@ def _materialized_workflow_projections() -> list[Path]:
     return found
 
 
-def _check_deploy_gate_replacement(ctx: Context) -> tuple[str, str]:
-    """Is there a Pi-side replacement for the native parse-check deploy gate?"""
+def _check_receipt_migration(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
+    """Do installed workflow receipts have a defined Pi migration?
+
+    Passes when the workflow primitive declares a Pi install target (so there is
+    somewhere to migrate TO) and every materialized projection carries a lockfile
+    receipt (so there is something to migrate FROM).
+    """
+    primitives = ctx.repo_root / "scripts" / "lib" / "primitives.py"
+    if not primitives.is_file():
+        return UNAVAILABLE, f"{primitives} not found; the workflow install target cannot be read."
+    text = primitives.read_text(encoding="utf-8", errors="ignore")
+    workflow_block = ""
+    match = re.search(r'name="workflow",(.*?)\)\s*,\s*PrimitiveInfo', text, re.S)
+    if match:
+        workflow_block = match.group(1)
+    pi_target = bool(re.search(r"pi[_-]?(install_subdir|target|projection)", workflow_block, re.I))
+
+    locks = _iter_lock_files(ctx.repo_root, ctx.lock_search_roots)
+    receipts: list[str] = []
+    for lock in locks:
+        try:
+            lock_text = lock.read_text(encoding="utf-8", errors="ignore")
+        except OSError:  # pragma: no cover - env dependent
+            continue
+        for found in re.finditer(r"^\s*-\s*id:\s*(workflow:\S+)", lock_text, re.MULTILINE):
+            receipts.append(f"{lock}:{found.group(1)}")
+
+    catalogued = _count_catalogued_workflows(ctx.repo_root / "library.yaml")
+    materialized = _materialized_workflow_projections(ctx.projection_roots)
+    unreceipted = len(materialized) - len(receipts)
+
+    if pi_target and unreceipted <= 0:
+        return PASS, (
+            f"The workflow primitive declares a Pi target and all {len(materialized)} materialized "
+            f"projections carry lockfile receipts ({len(receipts)} found), so every installed "
+            "receipt has a defined migration source and destination."
+        )
+    return FAIL, (
+        f"{catalogued} workflow catalog entries, {len(receipts)} lockfile workflow receipts, and "
+        f"{len(materialized)} materialized harness projections "
+        f"({[path.name for path in materialized][:8]}) were found. A Pi target path is declared "
+        f"for the workflow primitive: {pi_target} (the entry still uses "
+        "`install_subdir='workflows'` as Claude workflow JavaScript). Unreceipted projections: "
+        f"{max(unreceipted, 0)}. Migration is therefore undefined in both directions: no Pi "
+        "destination is declared, and the projections that exist have nothing to migrate FROM in "
+        "lock terms."
+    )
+
+
+def _check_deploy_gate_replacement(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
+    """Does the native parse-check deploy gate have a Pi replacement?
+
+    Requires a real Pi-side validation code path, not a marker string that a
+    comment could satisfy.
+    """
     installer = ctx.repo_root / "scripts" / "lib" / "installers" / "simple_file.py"
     if not installer.is_file():
         return UNAVAILABLE, f"{installer} not found; the current deploy gate cannot be located."
     text = installer.read_text(encoding="utf-8", errors="ignore")
+    code_only = re.sub(r"#.*$", "", text, flags=re.MULTILINE)
+    code_only = re.sub(r'"""(?:.|\n)*?"""', "", code_only)
     has_native_gate = "export const meta" in text and "node --check" in text
-    pi_gate_markers = [marker for marker in ("pi --check", "pi workflow", "pi_workflow_gate") if marker in text]
-    if pi_gate_markers:
-        return PASS, f"{installer} already carries a Pi-side gate: {pi_gate_markers}"
+    pi_gate_defs = re.findall(r"^\s*def\s+(\w*pi\w*(?:gate|check|validate)\w*)", code_only, re.I | re.M)
+    pi_gate_calls = re.findall(r"\b(\w*pi_\w*(?:gate|parse|validate)\w*)\s*\(", code_only, re.I)
+    if pi_gate_defs or pi_gate_calls:
+        return PASS, (
+            f"{installer} carries a Pi-side gate code path: definitions={sorted(set(pi_gate_defs))}, "
+            f"calls={sorted(set(pi_gate_calls))}."
+        )
     return FAIL, (
         f"{installer} enforces the ADR-0006 native parse gate (meta-first textual check plus "
-        f"`node --check`): present={has_native_gate}. No Pi-side equivalent exists, so superseding "
-        "ADR-0006 today would delete a working deploy gate and replace it with nothing."
+        f"`node --check`): present={has_native_gate}. No Pi-side validation code path exists "
+        "(searched executable code with comments and docstrings stripped), so superseding ADR-0006 "
+        "today would delete a working deploy gate and replace it with nothing."
     )
 
 
-def _check_rollback_path(ctx: Context) -> tuple[str, str]:
-    """Is there a reachable rollback to the ADR-0006 Claude executor?"""
+def _check_rollback_path(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
+    """Is a rollback path to the ADR-0006 executor reachable?
+
+    ADR-0006's canonical executor is the **native Claude Workflow tool**; the
+    Library runtime is an explicitly non-canonical subset. Rollback is therefore
+    reachable when either the native tool is enabled, or the non-canonical runtime
+    has at least one adapter verified for mutating execution.
+    """
+    native_gate = str(ctx.env.get("CLAUDE_CODE_WORKFLOWS") or "").strip()
+    native_enabled = native_gate not in ("", "0", "false", "False")
+
     runtime = ctx.repo_root / "scripts" / "lib" / "workflow_runtime.py"
-    if not runtime.is_file():
-        return UNAVAILABLE, f"{runtime} not found; rollback capability cannot be evaluated."
-    text = runtime.read_text(encoding="utf-8", errors="ignore")
-    has_status_registry = "ADAPTER_PRESERVATION_STATUS" in text
-    blocked = re.findall(r'"(?P<name>[a-z0-9_-]+)":\s*"blocked"', text)
-    verified = re.findall(r'"(?P<name>[a-z0-9_-]+)":\s*"verified"', text)
+    verified: list[str] = []
+    blocked: list[str] = []
+    runtime_present = runtime.is_file()
+    if runtime_present:
+        text = runtime.read_text(encoding="utf-8", errors="ignore")
+        verified = sorted(set(re.findall(r'"([a-z0-9_-]+)":\s*"verified"', text)))
+        blocked = sorted(set(re.findall(r'"([a-z0-9_-]+)":\s*"blocked"', text)))
+
+    if native_enabled:
+        return PASS, (
+            "The ADR-0006 canonical executor is reachable: the native Workflow tool gate "
+            f"CLAUDE_CODE_WORKFLOWS is set to {native_gate!r}."
+        )
+    if verified:
+        return PASS, (
+            "The non-canonical Library runtime has adapters verified for mutating execution: "
+            f"{verified}. A rollback target that can run mutating work exists."
+        )
     return FAIL, (
-        f"{runtime} carries the fail-closed adapter registry (present={has_status_registry}) with "
-        f"verified adapters={sorted(set(verified))} and blocked adapters={sorted(set(blocked))}. "
-        "No adapter is approved for mutating execution, so the ADR-0006 fallback is itself "
-        "read-only. A rollback target that cannot run mutating work is not a rollback path for a "
-        "superseded executor; it is the reason ADR-0006 must be retained rather than replaced."
+        "Neither ADR-0006 executor path can run mutating work. The canonical native Workflow tool "
+        f"is gated off (CLAUDE_CODE_WORKFLOWS={native_gate!r}), and the explicitly non-canonical "
+        f"Library runtime ({runtime}, present={runtime_present}) reports verified adapters="
+        f"{verified} and blocked adapters={blocked}. A rollback target that cannot run mutating "
+        "work is not a rollback path for a superseded executor; it is the reason ADR-0006 must be "
+        "retained rather than replaced."
     )
 
 
@@ -334,43 +492,43 @@ CHECKS: tuple[Check, ...] = (
     Check(
         "PWE-2",
         "Pi executes a canonical Workflow JS spec",
-        "Scan Pi's documented command surface for an entrypoint that loads and runs a spec file.",
+        "Discover a documented spec-execution entrypoint, then execute a canonical probe spec through it.",
         _check_spec_executor,
     ),
     Check(
         "PWE-3",
         "Pi injects the ADR-0006 orchestration globals",
-        "Probe the Pi launcher and help surface for the canonical spec marker and injected globals.",
+        "Read the probe spec's own report of which orchestration globals the discovered entrypoint injected.",
         _check_injected_globals,
     ),
     Check(
         "PWE-4",
         "Pi journals leaf calls and resumes a crashed run",
-        "Distinguish conversational session resume from a (prompt, opts)-keyed orchestration journal.",
+        "Probe the discovered entrypoint's surface for a run journal and run resume, not conversational session resume.",
         _check_journal_and_resume,
     ),
     Check(
         "PWE-5",
-        "The Pi orchestration spine is inert",
-        "Inspect the Cognovis Pi harness design for orchestration-layer filesystem, shell, or VCS side effects.",
-        _check_inert_spine,
+        "The only concrete Pi orchestration design keeps its spine inert",
+        "Inspect the Cognovis Pi harness design document for orchestration-layer filesystem, shell, or VCS side effects.",
+        _check_design_spine_inertness,
     ),
     Check(
         "PWE-6",
         "Installed workflow receipts have a defined Pi migration",
-        "Inventory workflow catalog entries and lockfile receipts and look for a defined Pi target path.",
+        "Require a declared Pi target on the workflow primitive and a lockfile receipt for every materialized projection.",
         _check_receipt_migration,
     ),
     Check(
         "PWE-7",
         "The native parse-check deploy gate has a Pi replacement",
-        "Inspect the workflow installer for the ADR-0006 native gate and any Pi-side equivalent.",
+        "Search the workflow installer's executable code, comments stripped, for a Pi-side validation code path.",
         _check_deploy_gate_replacement,
     ),
     Check(
         "PWE-8",
         "A rollback path to the ADR-0006 executor is reachable",
-        "Inspect the Library runtime adapter-preservation registry for an executor that may run mutating work.",
+        "Require either the native Workflow tool gate enabled or at least one adapter verified for mutating execution.",
         _check_rollback_path,
     ),
 )
@@ -398,11 +556,14 @@ def evaluate_threshold(outcomes: Mapping[str, str]) -> dict[str, object]:
     }
 
 
-def run_checks(repo_root: Path) -> dict[str, object]:
-    ctx = build_context(repo_root)
+def run_checks(repo_root: Path, ctx: Context | None = None) -> dict[str, object]:
+    context = ctx if ctx is not None else build_context(repo_root)
+    shared: dict[str, Any] = {}
     records: list[dict[str, str]] = []
     for check in CHECKS:
-        result, evidence = check.runner(ctx)
+        result, evidence = check.runner(context, shared)
+        if result not in RESULTS:  # pragma: no cover - guards a programming error
+            raise ValueError(f"{check.check_id} returned an invalid result {result!r}")
         records.append(
             {
                 "check_id": check.check_id,
@@ -419,8 +580,8 @@ def run_checks(repo_root: Path) -> dict[str, object]:
         "bead_id": BEAD_ID,
         "generated_at": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "runtime": {
-            "pi_executable": ctx.pi_executable,
-            "pi_version": ctx.pi_version,
+            "pi_executable": context.pi_executable,
+            "pi_version": context.pi_version,
         },
         "constitutive_checks": list(CONSTITUTIVE_CHECKS),
         "migration_checks": list(MIGRATION_CHECKS),

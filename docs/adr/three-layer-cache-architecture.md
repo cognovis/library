@@ -9,8 +9,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
-amended_by: ["0010"]
-related_adrs: ["0002", "0010"]
+amended_by: ["0010", "0011"]
+related_adrs: ["0002", "0010", "0011"]
 ---
 
 # ADR-0003: Three-layer skill deployment + marketplace-symmetric primitives
