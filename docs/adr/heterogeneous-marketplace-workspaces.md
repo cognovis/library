@@ -144,7 +144,7 @@ degrades deterministically; it never probes by catching exceptions.
 | `identity()` | Canonical, stable provider identity (URL or URN). Display aliases resolve to it. | YES | — |
 | `capabilities()` | The declared capability set, including which of the below are present. | YES | — |
 | `enumerate(selector)` | Remote-only listing of items with no local checkout. Returns upstream IDs, names, and collection membership. | YES | — |
-| `describe(upstream_id)` | Item metadata sufficient for classification without fetching content. | YES | Falls back to `fetch` plus classification; recorded as a costlier path, never as a failure |
+| `describe(upstream_id)` | Item metadata sufficient for classification without fetching content. | NO | Falls back to `fetch` plus classification; recorded as a costlier path, never as a failure |
 | `fetch(upstream_id, revision)` | Complete immutable content bytes for one item. | YES | — |
 | `revision_of(upstream_id)` | Immutable upstream revision identity. | NO | Provider is **revisionless**; see `Trust on first use` |
 | `verify(bytes, expected)` | Provider-native integrity proof (for example a Git object hash). | NO | Library normalized digest is the only integrity proof |
@@ -155,6 +155,38 @@ degrades deterministically; it never probes by catching exceptions.
 `enumerate` is deliberately the required floor. A provider that cannot list
 without a local checkout is not a provider under this contract; it is a local
 catalog, which the platform already supports.
+
+**Amendment (slice 1, `CL-coif`, 2026-08-08).** `describe` was originally marked
+`Required: YES` while this same table also defined behavior for its absence. Both
+readings — "mandatory method with a default implementation" and "optional
+declared capability" — were supported by the text, and the ambiguity was routed
+to this slice as a round-2 review advisory on `CL-2p73`. It is resolved in favor
+of **optional and declared**: the absence behavior is required to be driven by
+`capabilities()`, and a capability that is always present cannot be. A provider
+that cannot cheaply describe an item is a costlier provider, never an excluded
+one. The implemented contract is `scripts/lib/providers/contract.py`; the
+fetch-then-classify path is recorded as a typed `NormalizationCost`, and
+`tests/test_source_provider_contract.py::test_optional_capability_absence_is_declared`
+holds it.
+
+Two clarifications from the same slice, both raised in its adversarial review:
+
+- **`fetch` returns a complete item, not a marker file.** An item is frequently
+  a directory — the reference provider's `implement` skill ships `SKILL.md` and
+  `agents/openai.yaml` — so "complete immutable content bytes" is carried by a
+  typed `FetchedItem` holding every member file, its item-relative path, its
+  upstream content identity, and the pinned revision. A fetch that returned only
+  the marker would hand the slice-3 cache an incomplete item while reporting
+  success.
+- **`describe` answers the type axis, not `classification.skill_class`.**
+  `skill_class` is curated catalog metadata (see the correction under
+  `Runbook: rejected as a primitive`), not something any provider capability can
+  answer. The normalized item carries it **only** when the catalog supplies it,
+  and otherwise records `classification.skill_class_source: not-curated`. No
+  third `skill_class` state is introduced: the vocabulary remains
+  `navigator | procedure`. Content inspection remains available as an explicit,
+  costed normalization option and records the factual
+  `classification.upstream_model_invocation`.
 
 ### Provider kinds
 
@@ -312,7 +344,7 @@ metadata cannot carry**. Each candidate behavior was tested and each failed:
 
 | Claimed constitutive behavior | Why Skill plus metadata already carries it |
 |---|---|
-| Navigator versus Procedure distinction | Already expressed in existing Skill frontmatter. `ask-matt` and `implement` both ship `disable-model-invocation: true` upstream; the Library adds a validated `classification.skill_class` field for querying |
+| Navigator versus Procedure distinction | Carried by Skill plus catalog metadata: the Library adds a validated `classification.skill_class` field for querying. It is **curated, not derived** — see the slice-1 correction below |
 | Versioned, non-self-executing decision graph | Every Library primitive is versioned, and the Library executes **no** primitive. Non-self-execution is not a distinguishing property; it is the default |
 | Required versus optional capabilities | `requires:` already carries hard dependencies (ADR-0004); Workspace membership already carries optional composition (ADR-0010) |
 | Conditional routes and handoff artifacts | Content inside the artifact. The Library enforces nothing about them and would enforce nothing about them under a new type either |
@@ -323,6 +355,24 @@ metadata cannot carry**. Each candidate behavior was tested and each failed:
 validated `classification.skill_class` of `navigator` or `procedure`. The
 `runbook-` prefix is **not reserved**, and no `runbook-` harness projection
 exists.
+
+**Correction (slice 1, `CL-coif`, 2026-08-08).** This section originally cited
+`disable-model-invocation: true` on both `ask-matt` and `implement` as evidence
+that the distinction is already expressed in upstream frontmatter. It is not.
+The Placement Records below classify `implement` as `procedure` and `ask-matt`
+as `navigator` while both carry that identical flag, so the flag cannot be the
+discriminator — it means "do not auto-invoke me", which navigators and
+procedures alike declare. Slice 1 briefly implemented that derivation, and the
+adversarial review caught the resulting misclassification against this ADR's own
+table.
+
+`classification.skill_class` is therefore **Library-curated catalog metadata**,
+supplied by the catalog and validated against `navigator | procedure`. An item
+with no curated value records `classification.skill_class_source: not-curated`
+and no `skill_class` at all; content inspection instead records the factual
+`classification.upstream_model_invocation`. This strengthens rather than weakens
+the Runbook rejection: the distinction is carried by catalog metadata, which is
+exactly what the rejection claimed.
 
 This decision also avoids a collision the prefix would have caused immediately:
 the two reference navigator/procedure artifacts are upstream-named `ask-matt` and

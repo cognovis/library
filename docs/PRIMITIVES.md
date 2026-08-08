@@ -233,6 +233,12 @@ Skill plus `requires:` plus Workspace membership plus the name-collision policy.
 The honest cost is recorded there: a harness that ignores classification metadata
 cannot tell the two apart.
 
+It is **curated, never inferred from upstream content** (`CL-coif`). No upstream
+frontmatter field distinguishes the two: `ask-matt` (navigator) and `implement`
+(procedure) both ship `disable-model-invocation: true`, which means "do not
+auto-invoke me" and nothing about routing. An entry with no curated value carries
+`classification.skill_class_source: not-curated` rather than a guess.
+
 ### 2. Command
 
 Details: [Command](primitives/command.md).

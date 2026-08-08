@@ -958,7 +958,7 @@
           "minLength": 1
         },
         "source": {
-          "description": "Base GitHub URL or organization URL for this marketplace.",
+          "description": "Canonical base source identity for this provider: a repository URL, an organization URL, or a provider URN such as an MCP provider identity.",
           "type": "string"
         },
         "description": {
@@ -1051,9 +1051,89 @@
               "default": []
             }
           }
+        },
+        "provider_kind": {
+          "description": "ADR-0011 source-provider kind. Declares how this provider is enumerated, revisioned, and authenticated. Absent means the legacy `type`-driven behavior.",
+          "type": "string",
+          "enum": [
+            "git-repo",
+            "git-org",
+            "mcp-content",
+            "hosted-index"
+          ]
+        },
+        "allowlist": {
+          "description": "Library-owned list of upstream units (for example repository names) this provider may contribute. Required for organization-level enumeration so the inventory is never a function of someone else's repository creation.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "auth_ref": {
+          "description": "Name of the credential reference this provider requires. A reference and its scope only — never a credential value.",
+          "type": "string",
+          "minLength": 1
+        },
+        "rights": {
+          "description": "ADR-0011 distribution rights. Four independent grants, each resolving to granted, denied, or unknown, with a named evidence source. `unknown` is the conservative default and blocks committed project projection.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fetch_authorization": {
+              "description": "May these bytes be retrieved with the configured credentials?",
+              "$ref": "#/$defs/rights_grant"
+            },
+            "install_rights": {
+              "description": "May they be materialized for local use and retained durably in the cache?",
+              "$ref": "#/$defs/rights_grant"
+            },
+            "redistribution_rights": {
+              "description": "May they be copied into a tree that others receive?",
+              "$ref": "#/$defs/rights_grant"
+            },
+            "derivative_rights": {
+              "description": "May a materially adapted first-party derivative be created?",
+              "$ref": "#/$defs/rights_grant"
+            },
+            "evidence_source": {
+              "description": "Named source of the recorded rights evidence, for example an upstream LICENSE URL plus the date it was observed.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "provider_kind"
+            ],
+            "properties": {
+              "provider_kind": {
+                "const": "git-org"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "allowlist"
+            ]
+          }
+        }
+      ]
+    },
+    "rights_grant": {
+      "description": "One distribution-rights grant state.",
+      "type": "string",
+      "enum": [
+        "granted",
+        "denied",
+        "unknown"
+      ]
     },
     "skill_entry": {
       "description": "A skill catalog entry with install path information.",

@@ -1,0 +1,52 @@
+name: Provider contract
+
+# ADR-0011 AC4 (CL-coif): the promise that resolver, cache, and Workspace carry
+# no provider knowledge is a CI gate, not a review convention. This job fails
+# the build the moment a provider name, provider-kind conditional, or upstream
+# URL is introduced into a core module.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # The recorded provider capture is offline evidence. Without a scheduled
+    # live run it can drift from the real provider with no signal at all.
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  provider-neutrality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: No provider knowledge in core modules
+        run: uv run python scripts/checks/provider_neutrality.py
+      - name: Provider contract and normalized inventory tests
+        run: |
+          uv run --extra dev pytest -q \
+            tests/test_provider_neutrality.py \
+            tests/test_source_provider_contract.py \
+            tests/test_normalized_inventory.py \
+            tests/test_library_yaml_provider_fields.py
+
+  provider-liveness:
+    # The offline evidence is a recorded capture of a real provider. This job
+    # re-binds it to reality on a schedule so drift surfaces here rather than in
+    # a later slice that trusted the capture.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Recorded provider capture still matches the live provider
+        env:
+          NETWORK_TESTS: "1"
+        run: |
+          uv run --extra dev pytest -q \
+            tests/test_source_provider_contract.py \
+            -k live_enumeration_matches_recording
