@@ -291,23 +291,118 @@ def test_git_repo_fetch_honors_an_explicit_revision() -> None:
     assert fetched.revision == sha
 
 
-def test_content_inspection_derives_skill_class_from_upstream_frontmatter() -> None:
-    """`skill_class` is an upstream property, so it costs a recorded fetch."""
-    identity = f"{MATTPOCOCK}#skills/engineering/ask-matt"
+def test_git_repo_fetch_reads_the_tree_of_the_requested_revision() -> None:
+    """File list and blob identities come from the fetched revision's tree.
 
-    described = normalize_inventory(_provider()).inventory.resolve(identity)
-    assert described.library_type == "skill"
-    assert "skill_class" not in described.classification
-    assert described.classification["skill_class_source"] == "not-determined-without-content"
-    assert described.classification["content_inspected"] == "no"
+    A tree cached against the adapter's ref would let a pinned fetch report
+    revision B while structurally describing revision A: A's file list, A's blob
+    shas. That is fabricated provenance, so the tree is keyed by commit.
+    """
+    ref_commit = "a" * 40
+    pinned_commit = "b" * 40
+    recording = {
+        "json": {
+            "https://api.github.com/repos/acme/kit/git/ref/heads/main": {
+                "object": {"sha": ref_commit}
+            },
+            f"https://api.github.com/repos/acme/kit/git/trees/{ref_commit}?recursive=1": {
+                "truncated": False,
+                "tree": [{"path": "skills/one/SKILL.md", "type": "blob", "sha": "sha-at-a"}],
+            },
+            f"https://api.github.com/repos/acme/kit/git/trees/{pinned_commit}?recursive=1": {
+                "truncated": False,
+                "tree": [
+                    {"path": "skills/one/SKILL.md", "type": "blob", "sha": "sha-at-b"},
+                    {"path": "skills/one/extra.md", "type": "blob", "sha": "extra-at-b"},
+                ],
+            },
+        },
+        "bytes": {
+            f"https://raw.githubusercontent.com/acme/kit/{pinned_commit}/skills/one/SKILL.md": "a",
+            f"https://raw.githubusercontent.com/acme/kit/{pinned_commit}/skills/one/extra.md": "b",
+        },
+    }
+    provider = _synthetic_provider(recording)
+    fetched = provider.fetch("skills/one", pinned_commit)
 
-    inspected_result = normalize_inventory(
-        _provider(), selector="skills/engineering/ask-matt", inspect_content=True
+    assert fetched.revision == pinned_commit
+    assert fetched.paths() == ("SKILL.md", "extra.md")
+    assert {file.upstream_content_identity for file in fetched.files} == {
+        "sha-at-b",
+        "extra-at-b",
+    }
+
+
+def test_git_repo_refuses_an_ambiguous_root_and_nested_layout() -> None:
+    """A repository-level item and nested items would own the same bytes."""
+    from lib.providers.git_repo import AmbiguousItemLayout
+
+    provider = _synthetic_provider(
+        _synthetic_recording(
+            [
+                {"path": "SKILL.md", "type": "blob", "sha": "root"},
+                {"path": "skills/one/SKILL.md", "type": "blob", "sha": "nested"},
+            ]
+        )
     )
-    inspected = inspected_result.inventory.resolve(identity)
-    assert inspected.classification["skill_class"] == "navigator"
-    assert inspected.classification["skill_class_source"] == "upstream-frontmatter"
-    assert [cost.path for cost in inspected_result.costs] == ["content-inspection"]
+    with pytest.raises(AmbiguousItemLayout):
+        provider.enumerate()
+
+
+def test_skill_class_is_curated_and_never_guessed_from_upstream() -> None:
+    """No upstream field distinguishes navigator from procedure.
+
+    ADR-0011 classifies `implement` as `procedure` and `ask-matt` as
+    `navigator`, and both ship `disable-model-invocation: true`. A rule derived
+    from that flag therefore misclassifies one of the ADR's own examples, so
+    `skill_class` is Library-curated and absent when uncurated.
+    """
+    ask_matt = f"{MATTPOCOCK}#skills/engineering/ask-matt"
+    implement = f"{MATTPOCOCK}#skills/engineering/implement"
+
+    uncurated = normalize_inventory(_provider()).inventory.resolve(ask_matt)
+    assert uncurated.library_type == "skill"
+    assert "skill_class" not in uncurated.classification
+    assert uncurated.classification["skill_class_source"] == "not-curated"
+    assert uncurated.classification["content_inspected"] == "no"
+
+    curated = {
+        "skills/engineering/ask-matt": "navigator",
+        "skills/engineering/implement": "procedure",
+    }
+    ask_matt_result = normalize_inventory(
+        _provider(),
+        selector="skills/engineering/ask-matt",
+        inspect_content=True,
+        curated_skill_classes=curated,
+    )
+    implement_result = normalize_inventory(
+        _provider(),
+        selector="skills/engineering/implement",
+        inspect_content=True,
+        curated_skill_classes=curated,
+    )
+    curated_result = ask_matt_result
+    curated_ask_matt = ask_matt_result.inventory.resolve(ask_matt)
+    curated_implement = implement_result.inventory.resolve(implement)
+
+    assert curated_ask_matt.classification["skill_class"] == "navigator"
+    assert curated_implement.classification["skill_class"] == "procedure"
+    assert curated_ask_matt.classification["skill_class_source"] == "library-curated"
+
+    # The upstream flag is recorded as the fact it is, and it is identical for
+    # both items -- which is exactly why it cannot be the discriminator.
+    assert curated_ask_matt.classification["upstream_model_invocation"] == "disabled"
+    assert curated_implement.classification["upstream_model_invocation"] == "disabled"
+    assert {cost.path for cost in curated_result.costs} == {"content-inspection"}
+
+
+def test_curated_skill_class_outside_the_vocabulary_is_refused() -> None:
+    with pytest.raises(ValueError, match="skill_class must be one of"):
+        normalize_inventory(
+            _provider(),
+            curated_skill_classes={"skills/engineering/ask-matt": "router"},
+        )
 
 
 def test_normalization_resolves_the_revision_before_it_fetches() -> None:
@@ -357,6 +452,46 @@ def test_normalization_refuses_content_from_another_revision() -> None:
 
     with pytest.raises(ProvenanceMismatch):
         normalize_inventory(DriftingProvider())
+
+
+def test_normalization_refuses_a_fetch_with_no_revision_proof() -> None:
+    """Omitting the revision is not a pass; it is the absence of proof."""
+    from lib.providers.normalize import ProvenanceMismatch
+
+    class SilentProvider(MinimalProvider):
+        def capabilities(self) -> frozenset[str]:
+            return frozenset(REQUIRED_CAPABILITIES) | {"revision_of"}
+
+        def revision_of(self, upstream_id: str) -> str:
+            return "rev-1"
+
+        def fetch(self, upstream_id: str, revision: str | None = None) -> FetchedItem:
+            return FetchedItem(
+                upstream_id=upstream_id,
+                revision=None,
+                files=(FetchedFile(path="anchor.md", content=b"body\n"),),
+                primary_path="anchor.md",
+            )
+
+    with pytest.raises(ProvenanceMismatch):
+        normalize_inventory(SilentProvider())
+
+
+def test_normalization_refuses_content_belonging_to_another_item() -> None:
+    """The bytes must belong to the item whose record will carry them."""
+    from lib.providers.normalize import ProvenanceMismatch
+
+    class SwappingProvider(MinimalProvider):
+        def fetch(self, upstream_id: str, revision: str | None = None) -> FetchedItem:
+            return FetchedItem(
+                upstream_id="kits/somewhere-else",
+                revision=revision,
+                files=(FetchedFile(path="anchor.md", content=b"body\n"),),
+                primary_path="anchor.md",
+            )
+
+    with pytest.raises(ProvenanceMismatch):
+        normalize_inventory(SwappingProvider())
 
 
 @pytest.mark.skipif(

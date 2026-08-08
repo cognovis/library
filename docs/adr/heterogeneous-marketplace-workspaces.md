@@ -179,13 +179,14 @@ Two clarifications from the same slice, both raised in its adversarial review:
   the marker would hand the slice-3 cache an incomplete item while reporting
   success.
 - **`describe` answers the type axis, not `classification.skill_class`.**
-  `skill_class` is defined above as an upstream frontmatter property, which
-  lives in content; a description produced without content cannot answer it. The
-  normalized item therefore carries `skill_class` **only** when content was
-  inspected, and otherwise records `classification.skill_class_source` naming
-  why. No third `skill_class` state is introduced: the vocabulary remains
-  `navigator | procedure`. Content inspection is an explicit, costed option on
-  normalization.
+  `skill_class` is curated catalog metadata (see the correction under
+  `Runbook: rejected as a primitive`), not something any provider capability can
+  answer. The normalized item carries it **only** when the catalog supplies it,
+  and otherwise records `classification.skill_class_source: not-curated`. No
+  third `skill_class` state is introduced: the vocabulary remains
+  `navigator | procedure`. Content inspection remains available as an explicit,
+  costed normalization option and records the factual
+  `classification.upstream_model_invocation`.
 
 ### Provider kinds
 
@@ -343,7 +344,7 @@ metadata cannot carry**. Each candidate behavior was tested and each failed:
 
 | Claimed constitutive behavior | Why Skill plus metadata already carries it |
 |---|---|
-| Navigator versus Procedure distinction | Already expressed in existing Skill frontmatter. `ask-matt` and `implement` both ship `disable-model-invocation: true` upstream; the Library adds a validated `classification.skill_class` field for querying |
+| Navigator versus Procedure distinction | Carried by Skill plus catalog metadata: the Library adds a validated `classification.skill_class` field for querying. It is **curated, not derived** — see the slice-1 correction below |
 | Versioned, non-self-executing decision graph | Every Library primitive is versioned, and the Library executes **no** primitive. Non-self-execution is not a distinguishing property; it is the default |
 | Required versus optional capabilities | `requires:` already carries hard dependencies (ADR-0004); Workspace membership already carries optional composition (ADR-0010) |
 | Conditional routes and handoff artifacts | Content inside the artifact. The Library enforces nothing about them and would enforce nothing about them under a new type either |
@@ -354,6 +355,24 @@ metadata cannot carry**. Each candidate behavior was tested and each failed:
 validated `classification.skill_class` of `navigator` or `procedure`. The
 `runbook-` prefix is **not reserved**, and no `runbook-` harness projection
 exists.
+
+**Correction (slice 1, `CL-coif`, 2026-08-08).** This section originally cited
+`disable-model-invocation: true` on both `ask-matt` and `implement` as evidence
+that the distinction is already expressed in upstream frontmatter. It is not.
+The Placement Records below classify `implement` as `procedure` and `ask-matt`
+as `navigator` while both carry that identical flag, so the flag cannot be the
+discriminator — it means "do not auto-invoke me", which navigators and
+procedures alike declare. Slice 1 briefly implemented that derivation, and the
+adversarial review caught the resulting misclassification against this ADR's own
+table.
+
+`classification.skill_class` is therefore **Library-curated catalog metadata**,
+supplied by the catalog and validated against `navigator | procedure`. An item
+with no curated value records `classification.skill_class_source: not-curated`
+and no `skill_class` at all; content inspection instead records the factual
+`classification.upstream_model_invocation`. This strengthens rather than weakens
+the Runbook rejection: the distinction is carried by catalog metadata, which is
+exactly what the rejection claimed.
 
 This decision also avoids a collision the prefix would have caused immediately:
 the two reference navigator/procedure artifacts are upstream-named `ask-matt` and

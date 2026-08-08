@@ -56,13 +56,17 @@
   did not come from. `scripts/checks/provider_neutrality.py` fails CI when a
   provider name, provider-kind conditional, legacy distribution-type branch,
   upstream URL, or provider host literal appears in the resolver, cache, or
-  Workspace modules, and it additionally holds the pre-ADR-0011 resolver
-  (`scripts/lib/source.py`) to a ratchet so the legacy path cannot gain provider
-  knowledge while the generic contract is built beside it. ADR-0011's adapter
-  table is amended: `describe` is optional-and-declared rather than
-  mandatory-with-a-default, it answers the type axis only, and
-  `classification.skill_class` appears only when content was inspected — the
-  vocabulary stays `navigator | procedure` with no invented third state.
+  Workspace modules — inside identifiers and f-strings as well as plain literals
+  and comments. It additionally holds every pre-ADR-0011 provider-aware module to
+  a committed **per-finding-identity** baseline, so removing an old leak never
+  buys room for a new one, while provider adapters are excluded because provider
+  knowledge belongs there. ADR-0011's adapter table is amended: `describe` is
+  optional-and-declared rather than mandatory-with-a-default and answers the type
+  axis only. ADR-0011 is also corrected on `classification.skill_class`: it is
+  curated catalog metadata, not derived from upstream frontmatter — `ask-matt`
+  (navigator) and `implement` (procedure) ship the identical
+  `disable-model-invocation` flag, so no upstream field distinguishes them. An
+  uncurated item records `skill_class_source: not-curated` rather than a guess.
 
 - *(CL-hyp9, Workspace)* Publish the platform-owned `library-authoring`
   Workspace over the five Forge Skills, admit it as stable from committed Library

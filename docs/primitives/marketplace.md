@@ -63,11 +63,15 @@ produced no cache object, no receipt, and no projection.
 Provider knowledge stays inside adapters. `scripts/checks/provider_neutrality.py`
 fails CI when a provider name, provider-kind conditional, legacy
 distribution-type branch, upstream URL, or provider host literal appears in
-`scripts/lib/resolver.py`, `scripts/lib/cache.py`, or `scripts/lib/workspace.py`.
-The pre-ADR-0011 resolution path in `scripts/lib/source.py` is declared legacy
-and held to a ratchet: its provider knowledge may shrink as slice 6 (`CL-mvet`)
-routes it through adapters, and may not grow. The check reports both facts, so a
-clean core is never read as a clean repository.
+`scripts/lib/resolver.py`, `scripts/lib/cache.py`, or `scripts/lib/workspace.py`
+— in identifiers and f-strings as well as plain literals and comments. The
+pre-ADR-0011 resolution path (`scripts/lib/source.py` and its neighbours) is
+held to a committed baseline compared **per finding identity**, so its provider
+knowledge may shrink as slice 6 (`CL-mvet`) routes it through adapters and may
+not grow, and removing one leak never buys room for another. Adapters under
+`scripts/lib/providers/` are excluded from that ledger because provider
+knowledge belongs there. The check reports every one of these facts, so a clean
+core is never read as a clean repository.
 
 **Trigger semantics.** Marketplaces are not invoked. They are registered via
 `library add-marketplace <github-url>`. Users browse or search them and then pull

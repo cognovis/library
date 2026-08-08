@@ -12,6 +12,7 @@ each violation class is also shown to fail the check with a non-zero exit code.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -22,9 +23,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from checks.provider_neutrality import (  # noqa: E402
+    BASELINE_PATH,
     CORE_MODULES,
-    LEGACY_PROVIDER_MODULES,
     Finding,
+    fingerprint_counts,
+    load_baseline,
     scan_legacy,
     scan_paths,
     scan_repository,
@@ -100,8 +103,36 @@ def test_check_does_not_flag_the_word_git_in_prose(tmp_path: Path) -> None:
 
 def test_check_fails_on_an_unlisted_provider_host(tmp_path: Path) -> None:
     """No allowlist of provider names can be complete; hostnames are structural."""
-    findings = _findings_for(tmp_path, 'HOST = "sources.example-forge.io"\n')
-    assert [finding.kind for finding in findings] == ["provider-host-literal"]
+    for literal in ("sources.example-forge.io", "forge.example.de", "git.example.eu"):
+        findings = _findings_for(tmp_path, f'HOST = "{literal}"\n')
+        assert [finding.kind for finding in findings] == ["provider-host-literal"], literal
+
+
+def test_check_sees_inside_an_f_string(tmp_path: Path) -> None:
+    """PEP 701 tokenizes f-strings apart, and a token-only scan would miss them.
+
+    Building an upstream URL with an f-string is the most idiomatic way to write
+    the exact leak this check exists to stop, so it must be caught on every
+    supported Python version.
+    """
+    findings = _findings_for(
+        tmp_path,
+        "def url(owner, repo):\n"
+        '    return f"https://github.com/{owner}/{repo}"\n',
+    )
+    kinds = {finding.kind for finding in findings}
+    assert {"provider-name", "upstream-url", "provider-host-literal"} <= kinds
+
+
+def test_check_sees_a_provider_kind_identifier_in_any_casing(tmp_path: Path) -> None:
+    findings = _findings_for(
+        tmp_path,
+        "def plan(entry, PROVIDER_KIND):\n"
+        "    return entry == PROVIDER_KIND\n",
+    )
+    assert findings
+    assert {finding.kind for finding in findings} == {"provider-kind-conditional"}
+    assert {finding.token for finding in findings} == {"PROVIDER_KIND"}
 
 
 def test_check_fails_on_a_provider_name_in_a_comment(tmp_path: Path) -> None:
@@ -167,7 +198,11 @@ def test_check_exits_non_zero_when_a_violation_is_introduced(tmp_path: Path) -> 
 
     dirty_root = tmp_path / "repo"
     (dirty_root / "scripts" / "lib").mkdir(parents=True)
-    for relative in (*CORE_MODULES, *LEGACY_PROVIDER_MODULES):
+    (dirty_root / BASELINE_PATH).parent.mkdir(parents=True, exist_ok=True)
+    (dirty_root / BASELINE_PATH).write_text(
+        json.dumps({"schema": "cognovis.provider-neutrality-baseline.v1", "modules": {}})
+    )
+    for relative in CORE_MODULES:
         target = dirty_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text((REPO_ROOT / relative).read_text())
@@ -192,44 +227,62 @@ def test_check_exits_non_zero_when_a_violation_is_introduced(tmp_path: Path) -> 
 
 
 def test_legacy_provider_modules_are_measured_against_a_ratchet() -> None:
-    """The pre-ADR-0011 resolver is declared, measured, and may not get worse.
+    """The pre-ADR-0011 resolution path is measured and may not get worse.
 
     A gate that certifies only three modules, while the module that actually
     resolves a marketplace today is full of provider knowledge, would read as a
-    stronger claim than it is. The legacy set makes that state visible and stops
-    it growing.
+    stronger claim than it is. The legacy baseline makes that state visible and
+    stops it growing.
     """
-    assert "scripts/lib/source.py" in LEGACY_PROVIDER_MODULES
+    baseline = load_baseline(REPO_ROOT)
+    assert "scripts/lib/source.py" in baseline
 
     statuses = scan_legacy(REPO_ROOT)
     assert statuses, "the legacy set must not be silently empty"
     for status in statuses:
         assert not status.regressed, (
-            f"{status.path} gained provider knowledge: "
-            f"{status.observed} > baseline {status.baseline}"
+            f"{status.path} gained provider knowledge: {status.new_fingerprints}"
         )
-        # The baseline is real, not a ceiling parked far above reality.
-        assert status.baseline == status.observed, (
-            f"{status.path} improved to {status.observed}; lower the baseline"
+        # The baseline is measured, not a ceiling parked above reality.
+        assert not status.improved, (
+            f"{status.path} improved ({status.removed_fingerprints}); "
+            "rerun with --update-baseline"
         )
 
 
-def test_legacy_regression_fails_the_check(tmp_path: Path) -> None:
-    """Adding provider knowledge to a legacy module fails CI too."""
+def test_provider_adapters_are_not_measured_as_legacy_debt() -> None:
+    """Provider knowledge belongs in adapters; recording it as debt is wrong."""
+    baseline = load_baseline(REPO_ROOT)
+    assert not [path for path in baseline if path.startswith("scripts/lib/providers/")]
+
+
+def test_the_ratchet_compares_finding_identities_not_counts(tmp_path: Path) -> None:
+    """Removing an old leak must not buy room for a new one.
+
+    A counted ratchet passes when a module drops one finding and gains a
+    different one, which lets the active resolver acquire a brand-new provider
+    branch while CI stays green.
+    """
     repo = tmp_path / "repo"
     (repo / "scripts" / "lib").mkdir(parents=True)
-    legacy = repo / "scripts" / "lib" / "source.py"
-    legacy.write_text('BASE = "https://github.com/example/repo"\n')
+    legacy = repo / "scripts" / "lib" / "legacy.py"
 
-    held = scan_legacy(repo, {"scripts/lib/source.py": 3})
-    assert held[0].regressed is False
+    legacy.write_text('BASE = "https://github.com/x"\n')
+    baseline = {"scripts/lib/legacy.py": fingerprint_counts(scan_paths([legacy]))}
+    held = scan_legacy(repo, baseline)
+    assert [status.regressed for status in held] == [False]
 
-    legacy.write_text(
-        'BASE = "https://github.com/example/repo"\n'
-        'OTHER = "https://gitlab.com/example/repo"\n'
-    )
-    regressed = scan_legacy(repo, {"scripts/lib/source.py": 3})
-    assert regressed[0].regressed is True
+    # One finding removed, a different one added: the total is unchanged.
+    legacy.write_text('KIND = "git-org"\n')
+    swapped = scan_legacy(repo, baseline)
+    assert swapped[0].regressed is True
+    assert "provider-kind-conditional:git-org" in swapped[0].new_fingerprints
+
+
+def test_a_missing_baseline_fails_the_check(tmp_path: Path) -> None:
+    """A gate whose baseline can vanish is a gate that can be deleted."""
+    with pytest.raises(FileNotFoundError):
+        load_baseline(tmp_path)
 
 
 def test_check_writes_a_typed_artifact(tmp_path: Path) -> None:
@@ -259,7 +312,8 @@ def test_check_writes_a_typed_artifact(tmp_path: Path) -> None:
     assert "not a claim about every module" in payload["scope_note"]
     legacy = {entry["path"]: entry for entry in payload["legacy_provider_modules"]}
     assert legacy["scripts/lib/source.py"]["state"] == "held"
-    assert legacy["scripts/lib/source.py"]["observed"] > 0
+    assert legacy["scripts/lib/source.py"]["observed_total"] > 0
+    assert legacy["scripts/lib/source.py"]["new_fingerprints"] == {}
     assert "not a claim about every module" in result.stdout
 
 

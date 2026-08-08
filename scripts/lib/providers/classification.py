@@ -9,14 +9,20 @@ Two rules are recorded because they are decisions rather than derivations:
 - `library_type` must be an existing primitive type. Introducing a type
   requires its own ADR (ADR-0011 schema table), so an unrecognized artifact is
   classified by extension and marked low-confidence rather than given a new type.
-- `skill_class` is derived from the upstream frontmatter flag ADR-0011 names
-  (`disable-model-invocation: true` marks a navigator). That flag lives in
-  content. ADR-0011 admits exactly `navigator` and `procedure`, so a
-  classification produced *without* content omits the key entirely and records
-  why. Emitting a third state would invent vocabulary the ADR does not have;
-  guessing `procedure` would silently misclassify every navigator. Absence of a
-  key is the one honest option, and it is queryable through
-  `skill_class_source`.
+- `skill_class` is **curated, not derived**. It was briefly derived from the
+  upstream `disable-model-invocation` flag, and review showed that rule is
+  simply wrong: ADR-0011's own Placement Records classify `implement` as
+  `procedure` and `ask-matt` as `navigator`, and **both ship that same flag**.
+  The flag says "do not auto-invoke me", which navigators and procedures alike
+  set. No upstream field distinguishes the two, so the Library records a curated
+  classification supplied by its catalog and otherwise omits the key, with
+  `skill_class_source` naming why. ADR-0011 admits exactly `navigator` and
+  `procedure`; inventing a third state or guessing would each have been a
+  silent falsehood, and one of them was caught only because a reviewer compared
+  the output against the ADR's own table.
+
+  What content inspection *does* answer is factual: whether upstream disables
+  model invocation, recorded verbatim as `upstream_model_invocation`.
 """
 
 from __future__ import annotations
@@ -80,40 +86,55 @@ def library_type_for(hint: str | None) -> tuple[str, str]:
     return DEFAULT_LIBRARY_TYPE, "unrecognized-default"
 
 
-def skill_class_for(library_type: str, content: bytes | None) -> str | None:
-    """Derive `skill_class` from upstream frontmatter.
+def upstream_model_invocation(content: bytes | None) -> str | None:
+    """Whether upstream frontmatter disables model invocation.
 
-    Returns:
-        `navigator` or `procedure`, or `None` when the item is not a Skill or
-        its content was not inspected. `None` means "not determined"; it is
-        never rendered into the classification as a value.
+    A fact about the artifact, recorded verbatim. It is deliberately **not**
+    used to infer `skill_class`; see the module docstring.
     """
-    if library_type != "skill" or content is None:
+    if content is None:
         return None
     match = _FRONTMATTER_RE.match(content)
     if not match:
         return None
-    return "navigator" if _NAVIGATOR_FLAG_RE.search(match.group(1)) else "procedure"
+    return "disabled" if _NAVIGATOR_FLAG_RE.search(match.group(1)) else "enabled"
+
+
+def validated_skill_class(value: str | None) -> str | None:
+    """Return a curated `skill_class`, refusing anything outside the vocabulary."""
+    if value is None:
+        return None
+    if value not in SKILL_CLASSES:
+        raise ValueError(
+            f"skill_class must be one of {list(SKILL_CLASSES)}, got {value!r}"
+        )
+    return value
 
 
 def classification_for(
-    library_type: str, basis: str, content: bytes | None
+    library_type: str,
+    basis: str,
+    content: bytes | None,
+    curated_skill_class: str | None = None,
 ) -> dict[str, str]:
     """The Library-owned classification metadata for one item."""
     classification = {
         "type_basis": basis,
         "content_inspected": "yes" if content is not None else "no",
     }
-    skill_class = skill_class_for(library_type, content)
-    if skill_class is not None:
-        classification["skill_class"] = skill_class
-        classification["skill_class_source"] = "upstream-frontmatter"
-    elif library_type == "skill":
-        classification["skill_class_source"] = (
-            "content-inspected-without-frontmatter"
-            if content is not None
-            else "not-determined-without-content"
-        )
+    invocation = upstream_model_invocation(content)
+    if invocation is not None:
+        classification["upstream_model_invocation"] = invocation
+
+    if library_type != "skill":
+        return classification
+
+    curated = validated_skill_class(curated_skill_class)
+    if curated is not None:
+        classification["skill_class"] = curated
+        classification["skill_class_source"] = "library-curated"
+    else:
+        classification["skill_class_source"] = "not-curated"
     return classification
 
 

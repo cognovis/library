@@ -102,23 +102,30 @@ LEGACY_TYPE_LITERALS: frozenset[str] = frozenset({"git", "skills-sh", "http-tarb
 #: The identifier through which a provider-kind branch would be written.
 PROVIDER_KIND_IDENTIFIER = "provider_kind"
 
-#: Modules that legitimately carry provider knowledge today. They are the
-#: pre-ADR-0011 resolution path that slice 6 (`CL-mvet`) replaces. The baseline
-#: is a ratchet: it may fall, never rise.
-LEGACY_PROVIDER_MODULES: dict[str, int] = {
-    # 33 findings on 2026-08-08: hard-coded hosting-service URLs, host literals,
-    # a branch on the legacy `type` value, and provider-named identifiers in
-    # `resolve_marketplace_source` and its helpers. Slice 6 (`CL-mvet`) routes
-    # this path through the adapters and drives the number down.
-    "scripts/lib/source.py": 33,
-}
+#: Where the legacy fingerprint baseline lives. It is generated, committed, and
+#: compared per finding identity — never by counting.
+BASELINE_PATH = "scripts/checks/provider_neutrality_baseline.json"
+BASELINE_SCHEMA = "cognovis.provider-neutrality-baseline.v1"
+
+#: Directories whose modules are measured as legacy provider-aware code.
+LEGACY_ROOTS: tuple[str, ...] = ("scripts/lib",)
+
+#: Where provider knowledge **belongs**. Adapters are the sanctioned boundary,
+#: so they are neither required to be clean nor recorded as debt. Measuring them
+#: would turn the correct location for provider knowledge into a debt ledger and
+#: make every new adapter look like a regression.
+PROVIDER_ADAPTER_ROOTS: tuple[str, ...] = ("scripts/lib/providers",)
 
 _URL_RE = re.compile(r"(?:https?|ftp|git\+https?)://[^\s'\"`)]+|git@[\w.-]+:[\w./-]+")
-#: A domain-shaped literal. Deliberately restricted to common TLDs so that
-#: `file.py` or `item.md` is not read as a hostname.
+#: A domain-shaped literal. Restricted to a broad but closed TLD set so that
+#: `file.py`, `item.md`, or `lib.providers.inventory` is not read as a hostname.
+_TLDS = (
+    "com|org|net|io|dev|sh|ai|co|app|cloud|xyz|me|gg|to|de|eu|fr|uk|ch|at|it|es|nl"
+    "|se|no|dk|fi|pl|cz|ru|cn|jp|in|br|ca|au|us|tech|tools|works|page|site|network"
+    "|systems|software|codes|run|build|team|space|store|online|live|blog|wiki|cc|tv"
+)
 _DOMAIN_RE = re.compile(
-    r"(?<![\w.-])[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*"
-    r"\.(?:com|org|net|io|dev|sh|ai|co|app|cloud|xyz|me|gg|to)(?![\w-])",
+    r"(?<![\w.-])[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*" rf"\.(?:{_TLDS})(?![\w-])",
     re.IGNORECASE,
 )
 _STRING_LITERAL_RE = re.compile(r"^[rbufRBUF]*('''|\"\"\"|'|\")(?P<body>.*)\1$", re.DOTALL)
@@ -142,6 +149,17 @@ class Finding:
     kind: str
     token: str
     excerpt: str
+
+    @property
+    def fingerprint(self) -> str:
+        """Line-independent identity of this finding.
+
+        The baseline compares fingerprints, not counts. Counting cannot tell
+        "an old leak was removed" from "a new leak was added", so a counted
+        ratchet lets a module swap one provider branch for another and stay
+        green -- which a reviewer demonstrated end to end.
+        """
+        return f"{self.kind}:{self.token.lower()}"
 
     def render(self) -> str:
         return f"{self.path}:{self.line}: {self.kind}: {self.token!r} in {self.excerpt!r}"
@@ -229,11 +247,24 @@ def _scan_text_tokens(path: str, source: str) -> list[Finding]:
     return findings
 
 
-def _scan_identifiers(path: str, source: str) -> list[Finding]:
-    """Scan the AST for the `provider_kind` identifier in any position.
+def _normalized_identifier(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower())
 
-    A branch can be written without any provider literal at all
-    (`if entry.provider_kind == expected:`). The identifier is the tell.
+
+def _scan_ast(path: str, source: str) -> list[Finding]:
+    """Scan the AST for identifiers and for every string value, f-strings included.
+
+    Two reasons this exists beside the token scan:
+
+    - A branch can be written without any provider literal at all
+      (`if entry.provider_kind == expected:`), and with any casing
+      (`PROVIDER_KIND`). The identifier is the tell.
+    - Since PEP 701, an f-string is tokenized as `FSTRING_START`/`MIDDLE`/`END`
+      rather than as a `STRING`, so a token-only scan silently ignores
+      `f"https://host/{owner}/{repo}"` -- the single most idiomatic way to build
+      an upstream URL. A reviewer demonstrated exactly that bypass against a
+      poisoned copy of a core module, and this walk closes it on every Python
+      version because the AST shape is unchanged.
     """
     findings: list[Finding] = []
     try:
@@ -252,7 +283,7 @@ def _scan_identifiers(path: str, source: str) -> list[Finding]:
             name = node.arg
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             name = node.name
-        if name and PROVIDER_KIND_IDENTIFIER in name:
+        if name and PROVIDER_KIND_IDENTIFIER.replace("_", "") in _normalized_identifier(name):
             findings.append(
                 Finding(
                     path,
@@ -262,6 +293,42 @@ def _scan_identifiers(path: str, source: str) -> list[Finding]:
                     "identifier",
                 )
             )
+
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            findings.extend(
+                _scan_string_value(path, getattr(node, "lineno", 0), node.value)
+            )
+    return findings
+
+
+def _scan_string_value(path: str, line: int, value: str) -> list[Finding]:
+    """Scan one string value, wherever it came from."""
+    findings: list[Finding] = []
+    for name in PROVIDER_NAME_TOKENS:
+        if _token_pattern(name).search(value):
+            findings.append(Finding(path, line, "provider-name", name, _excerpt(value)))
+    for kind in PROVIDER_KIND_TOKENS:
+        if _token_pattern(kind).search(value):
+            findings.append(
+                Finding(path, line, "provider-kind-conditional", kind, _excerpt(value))
+            )
+    if PROVIDER_KIND_IDENTIFIER in value:
+        findings.append(
+            Finding(
+                path, line, "provider-kind-conditional", PROVIDER_KIND_IDENTIFIER,
+                _excerpt(value),
+            )
+        )
+    if value in LEGACY_TYPE_LITERALS:
+        findings.append(
+            Finding(path, line, "provider-kind-conditional", value, _excerpt(value))
+        )
+    for match in _URL_RE.finditer(value):
+        findings.append(Finding(path, line, "upstream-url", match.group(0), _excerpt(value)))
+    for match in _DOMAIN_RE.finditer(value):
+        findings.append(
+            Finding(path, line, "provider-host-literal", match.group(0), _excerpt(value))
+        )
     return findings
 
 
@@ -279,7 +346,7 @@ def _deduplicate(findings: Iterable[Finding]) -> list[Finding]:
 
 def scan_source(path: str, source: str) -> list[Finding]:
     """Scan one module's source text for provider knowledge."""
-    return _deduplicate([*_scan_text_tokens(path, source), *_scan_identifiers(path, source)])
+    return _deduplicate([*_scan_text_tokens(path, source), *_scan_ast(path, source)])
 
 
 def scan_paths(paths: Sequence[Path], *, relative_to: Path | None = None) -> list[Finding]:
@@ -305,45 +372,114 @@ def scan_repository(repo_root: Path, modules: Sequence[str] = CORE_MODULES) -> l
 
 @dataclass(frozen=True)
 class LegacyStatus:
-    """One legacy module measured against its recorded baseline."""
+    """One legacy module measured against its recorded fingerprint baseline."""
 
     path: str
-    baseline: int
-    observed: int
+    baseline: dict[str, int]
+    observed: dict[str, int]
+
+    @property
+    def new_fingerprints(self) -> dict[str, int]:
+        """Findings that exceed, or do not appear in, the baseline."""
+        return {
+            fingerprint: count - self.baseline.get(fingerprint, 0)
+            for fingerprint, count in self.observed.items()
+            if count > self.baseline.get(fingerprint, 0)
+        }
+
+    @property
+    def removed_fingerprints(self) -> dict[str, int]:
+        return {
+            fingerprint: count - self.observed.get(fingerprint, 0)
+            for fingerprint, count in self.baseline.items()
+            if count > self.observed.get(fingerprint, 0)
+        }
 
     @property
     def regressed(self) -> bool:
-        return self.observed > self.baseline
+        return bool(self.new_fingerprints)
 
     @property
     def improved(self) -> bool:
-        return self.observed < self.baseline
+        return bool(self.removed_fingerprints)
 
     def to_dict(self) -> dict[str, object]:
         return {
             "path": self.path,
-            "baseline": self.baseline,
-            "observed": self.observed,
+            "baseline_total": sum(self.baseline.values()),
+            "observed_total": sum(self.observed.values()),
+            "new_fingerprints": dict(sorted(self.new_fingerprints.items())),
+            "removed_fingerprints": dict(sorted(self.removed_fingerprints.items())),
             "state": "regressed" if self.regressed else ("improved" if self.improved else "held"),
         }
 
 
+def fingerprint_counts(findings: Sequence[Finding]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for finding in findings:
+        counts[finding.fingerprint] = counts.get(finding.fingerprint, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def load_baseline(repo_root: Path) -> dict[str, dict[str, int]]:
+    """Read the committed legacy baseline.
+
+    Raises:
+        FileNotFoundError: when it is missing. A gate whose baseline can vanish
+            is a gate that can be switched off by deleting a file.
+    """
+    path = repo_root / BASELINE_PATH
+    if not path.is_file():
+        raise FileNotFoundError(f"provider-neutrality baseline is missing: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema") != BASELINE_SCHEMA:
+        raise ValueError(f"unexpected baseline schema in {path}: {payload.get('schema')}")
+    return {str(key): dict(value) for key, value in payload["modules"].items()}
+
+
+def measure_legacy(repo_root: Path) -> dict[str, dict[str, int]]:
+    """Measure every legacy module that currently carries provider knowledge."""
+    measured: dict[str, dict[str, int]] = {}
+    core = set(CORE_MODULES)
+    for root in LEGACY_ROOTS:
+        for path in sorted((repo_root / root).rglob("*.py")):
+            relative = str(path.relative_to(repo_root))
+            if relative in core:
+                continue
+            if any(
+                relative == adapter_root or relative.startswith(f"{adapter_root}/")
+                for adapter_root in PROVIDER_ADAPTER_ROOTS
+            ):
+                continue
+            counts = fingerprint_counts(
+                scan_source(relative, path.read_text(encoding="utf-8"))
+            )
+            if counts:
+                measured[relative] = counts
+    return measured
+
+
 def scan_legacy(
-    repo_root: Path, baselines: dict[str, int] | None = None
+    repo_root: Path, baselines: dict[str, dict[str, int]] | None = None
 ) -> list[LegacyStatus]:
-    """Measure the declared legacy provider-aware modules against their baseline.
+    """Compare the legacy provider-aware modules against their baseline.
 
     These modules are *expected* to contain provider knowledge: they are the
-    pre-ADR-0011 path. What is not expected is for them to gain more of it while
-    the generic contract is being built beside them.
+    pre-ADR-0011 path. What is not expected is for them to gain any, and the
+    comparison is per finding identity so removing an old leak can never buy
+    room for a new one.
     """
+    baseline = baselines if baselines is not None else load_baseline(repo_root)
+    observed = measure_legacy(repo_root)
     statuses: list[LegacyStatus] = []
-    for relative, baseline in (baselines or LEGACY_PROVIDER_MODULES).items():
-        path = repo_root / relative
-        if not path.is_file():
-            raise FileNotFoundError(f"legacy provider module is missing: {path}")
-        observed = len(scan_source(relative, path.read_text(encoding="utf-8")))
-        statuses.append(LegacyStatus(path=relative, baseline=baseline, observed=observed))
+    for relative in sorted(set(baseline) | set(observed)):
+        statuses.append(
+            LegacyStatus(
+                path=relative,
+                baseline=dict(baseline.get(relative, {})),
+                observed=dict(observed.get(relative, {})),
+            )
+        )
     return statuses
 
 
@@ -369,8 +505,8 @@ def build_report(
         "legacy_provider_modules": [status.to_dict() for status in legacy],
         "scope_note": (
             "A pass means the named core modules carry no provider knowledge and "
-            "no declared legacy module exceeds its baseline. It is not a claim "
-            "about every module in the repository."
+            "no legacy module gained a finding identity it did not already have. "
+            "It is not a claim about every module in the repository."
         ),
     }
 
@@ -388,13 +524,38 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo-root", default=None)
     parser.add_argument("--output", default=None, help="write the typed artifact here")
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="rewrite the legacy fingerprint baseline from the current tree",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(args.repo_root).resolve() if args.repo_root else _default_repo_root()
+
+    if args.update_baseline:
+        payload = {
+            "schema": BASELINE_SCHEMA,
+            "bead_id": BEAD_ID,
+            "note": (
+                "Legacy provider-aware modules: the pre-ADR-0011 resolution path "
+                "that slice 6 (CL-mvet) replaces. Compared per finding identity, "
+                "so removing an old leak never buys room for a new one. Regenerate "
+                "with: uv run python scripts/checks/provider_neutrality.py "
+                "--update-baseline"
+            ),
+            "modules": measure_legacy(repo_root),
+        }
+        (repo_root / BASELINE_PATH).write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        )
+        print(f"wrote {BASELINE_PATH} for {len(payload['modules'])} legacy module(s)")
+        return 0
+
     try:
         findings = scan_repository(repo_root)
         legacy = scan_legacy(repo_root)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"FAIL: {exc}")
         return 1
 
@@ -417,10 +578,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if regressions:
         print(f"FAIL: {len(regressions)} legacy module(s) gained provider knowledge")
         for status in regressions:
-            print(f"  {status.path}: {status.observed} findings, baseline {status.baseline}")
+            for fingerprint, extra in sorted(status.new_fingerprints.items()):
+                print(f"  {status.path}: +{extra} {fingerprint}")
         print(
             "\nThese modules are the pre-ADR-0011 path and are being replaced, not "
-            "extended. Add new provider knowledge to an adapter instead."
+            "extended. Add new provider knowledge to an adapter instead. Removing "
+            "an unrelated old finding does not buy room for a new one."
         )
     if findings or regressions:
         return 1
@@ -428,11 +591,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"PASS: no provider knowledge in {len(CORE_MODULES)} core module(s)")
     for relative in CORE_MODULES:
         print(f"  {relative}")
-    if legacy:
-        print("Declared legacy provider-aware modules (baseline is a ratchet):")
-        for status in legacy:
-            note = " (improved — lower the baseline)" if status.improved else ""
-            print(f"  {status.path}: {status.observed}/{status.baseline}{note}")
+    improved = [status for status in legacy if status.improved]
+    print(
+        f"Legacy provider-aware modules held at their baseline: "
+        f"{sum(1 for status in legacy if status.observed)}"
+    )
+    for status in improved:
+        print(
+            f"  {status.path}: improved — rerun with --update-baseline to record it"
+        )
     print(
         "This pass covers the modules named above. It is not a claim about every "
         "module in the repository."

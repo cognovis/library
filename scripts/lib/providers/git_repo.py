@@ -56,6 +56,14 @@ class ProviderTransportError(RuntimeError):
     """The provider could not be reached or answered with an error."""
 
 
+class AmbiguousItemLayout(RuntimeError):
+    """A repository-level item coexists with nested items.
+
+    Their content overlaps, so which item owns which bytes is undefined. Slice 3
+    would cache the same bytes under two identities. Fail loudly here instead.
+    """
+
+
 class ProviderInventoryIncomplete(RuntimeError):
     """The provider returned a truncated listing.
 
@@ -135,7 +143,7 @@ class GitRepoProvider(SourceProvider):
         self._owner, self._repository = _split_repository(self.repository_url)
         self._identity = f"https://{urlparse(self.repository_url).netloc}/{self._owner}/{self._repository}"
         self._commit: str | None = None
-        self._entries: dict[str, dict[str, Any]] | None = None
+        self._trees: dict[str, dict[str, dict[str, Any]]] = {}
         self._items: tuple[ProviderItem, ...] | None = None
 
     # -- Required capabilities ------------------------------------------------
@@ -174,15 +182,30 @@ class GitRepoProvider(SourceProvider):
         Raises:
             KeyError: when the provider does not list that item.
         """
-        marker = self._entry(upstream_id)
+        self._entry(upstream_id)  # refuse an item this provider does not list
         commit = revision or self._resolve_commit()
         directory = "" if upstream_id == ROOT_ITEM_ID else f"{upstream_id}/"
-        entries = self._tree_entries()
+
+        # Paths and blob identities come from the tree of the revision actually
+        # being fetched, never from the adapter's ref.
+        entries = self._tree_entries(commit)
         member_paths = sorted(
-            path
-            for path in entries
-            if (path.startswith(directory) if directory else True)
+            path for path in entries if (path.startswith(directory) if directory else True)
         )
+        marker_path = next(
+            (
+                path
+                for path in member_paths
+                if path.rsplit("/", 1)[-1].lower() in ITEM_MARKERS
+                and path[len(directory) :].count("/") == 0
+            ),
+            None,
+        )
+        if marker_path is None:
+            raise ProviderInventoryIncomplete(
+                f"{self._identity} has no item {upstream_id!r} at revision {commit}"
+            )
+
         files = []
         for path in member_paths:
             url = f"{self.raw_base}/{self._owner}/{self._repository}/{commit}/{path}"
@@ -193,12 +216,11 @@ class GitRepoProvider(SourceProvider):
                     upstream_content_identity=entries[path].get("sha"),
                 )
             )
-        primary = marker["path"]
         return FetchedItem(
             upstream_id=upstream_id,
             revision=commit,
             files=tuple(files),
-            primary_path=primary[len(directory) :] if directory else primary,
+            primary_path=marker_path[len(directory) :] if directory else marker_path,
         )
 
     def auth_requirements(self) -> Sequence[AuthRequirement]:
@@ -290,10 +312,20 @@ class GitRepoProvider(SourceProvider):
         self._commit = str(commit)
         return self._commit
 
-    def _tree_entries(self) -> dict[str, dict[str, Any]]:
-        if self._entries is not None:
-            return self._entries
-        commit = self._resolve_commit()
+    def _tree_entries(self, commit: str | None = None) -> dict[str, dict[str, Any]]:
+        """The blob entries of one commit's tree.
+
+        Keyed by commit, not cached for the adapter as a whole. A tree cached
+        against the adapter's ref would answer questions about a *different*
+        revision when a caller pins one explicitly, so a pinned fetch could
+        return the ref's file list and the ref's blob identities while
+        reporting the pinned revision. That is fabricated provenance, and it is
+        why the cache key here is the commit.
+        """
+        commit = commit or self._resolve_commit()
+        cached = self._trees.get(commit)
+        if cached is not None:
+            return cached
         url = (
             f"{self.api_base}/repos/{self._owner}/{self._repository}"
             f"/git/trees/{commit}?recursive=1"
@@ -306,17 +338,19 @@ class GitRepoProvider(SourceProvider):
                 f"the provider truncated the listing for {self._identity} at {commit}; "
                 "a partial inventory is never presented as a complete one"
             )
-        self._entries = {
+        entries = {
             str(entry["path"]): entry
             for entry in payload["tree"]
             if entry.get("type") == "blob"
         }
-        return self._entries
+        self._trees[commit] = entries
+        return entries
 
     def _enumerate_all(self) -> tuple[ProviderItem, ...]:
         if self._items is not None:
             return self._items
         items: list[ProviderItem] = []
+        root_marker: str | None = None
         for path in sorted(self._tree_entries()):
             basename = path.rsplit("/", 1)[-1].lower()
             if basename not in ITEM_MARKERS:
@@ -324,7 +358,8 @@ class GitRepoProvider(SourceProvider):
             if "/" not in path:
                 # A marker at the repository root means the repository *is* the
                 # item. Skipping it would drop an item silently, which is the
-                # failure mode the truncation guard above also exists to prevent.
+                # failure mode the truncation guard also exists to prevent.
+                root_marker = path
                 items.append(
                     ProviderItem(
                         upstream_id=ROOT_ITEM_ID,
@@ -343,6 +378,16 @@ class GitRepoProvider(SourceProvider):
                     collection_membership=tuple(segments[:-1]),
                     content_hint=path,
                 )
+            )
+        if root_marker is not None and len(items) > 1:
+            # Ownership would be ambiguous: the root item's content is the whole
+            # repository, which contains the nested items' bytes as well. Two
+            # items owning the same bytes would give the slice-3 cache two
+            # receipts for one artifact. Refuse, and say why.
+            raise AmbiguousItemLayout(
+                f"{self._identity} declares a repository-level {root_marker} and "
+                f"{len(items) - 1} nested item(s); the root item's content would "
+                "contain the nested items' bytes, so item ownership is undefined"
             )
         self._items = tuple(items)
         return self._items

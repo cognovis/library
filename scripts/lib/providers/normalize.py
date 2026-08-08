@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import datetime as _dt
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from .classification import (
     classification_for,
@@ -108,6 +108,7 @@ def normalize_inventory(
     rights: Rights | None = None,
     trust_state: str = "unreviewed",
     inspect_content: bool = False,
+    curated_skill_classes: Mapping[str, str] | None = None,
 ) -> NormalizationResult:
     """Normalize one provider's inventory through its declared capabilities.
 
@@ -118,11 +119,17 @@ def normalize_inventory(
             Slice 1 carries them; slice 2 (`CL-n7ex`) enforces them.
         trust_state: Recorded trust for this source.
         inspect_content: Fetch each item's content even when the adapter
-            declares `describe`. Content-derived classification -- notably
-            `classification.skill_class`, which ADR-0011 sources from upstream
-            frontmatter -- is only available this way. It is off by default
-            because it costs one fetch per item, and it is recorded as a cost
-            when used, exactly like the `describe`-absent path.
+            declares `describe`. Content-derived classification -- currently
+            `classification.upstream_model_invocation` -- is only available
+            this way. It is off by default because it costs one fetch per item,
+            and it is recorded as a cost when used, exactly like the
+            `describe`-absent path.
+        curated_skill_classes: Library-curated `skill_class` per upstream id.
+            `skill_class` is not derivable from upstream content: ADR-0011
+            classifies `implement` as `procedure` and `ask-matt` as `navigator`
+            while both ship the same `disable-model-invocation` flag. An item
+            with no curated entry records `skill_class_source: not-curated`
+            rather than a guess.
 
     Returns:
         The normalized inventory, the costs paid, and the capabilities the
@@ -161,6 +168,7 @@ def normalize_inventory(
             description.library_type,
             str(description.classification.get("type_basis", "provider-described")),
             content,
+            (curated_skill_classes or {}).get(raw.upstream_id),
         )
         classification.update(
             {
@@ -235,9 +243,26 @@ def _fetch_primary(
     costs: list[NormalizationCost],
     path: str,
 ) -> bytes:
-    """Fetch one item at its already-resolved revision and return its marker bytes."""
+    """Fetch one item at its already-resolved revision and return its marker bytes.
+
+    Both halves of the provenance claim are checked, because a normalized item
+    asserts "these bytes are item X at revision R" and neither half is implied
+    by the other:
+
+    - the returned item identity must be the requested one, or the bytes belong
+      to a different item than the record that will carry them;
+    - when a revision was requested, the returned revision must equal it
+      exactly. `None` is a failure here, not a pass: a provider that declares
+      `revision_of` and then omits the revision from its fetch has supplied no
+      proof, and accepting silence would let the guard be bypassed by omission.
+    """
     fetched = provider.fetch(raw.upstream_id, revision)
-    if fetched.revision is not None and revision is not None and fetched.revision != revision:
+    if fetched.upstream_id != raw.upstream_id:
+        raise ProvenanceMismatch(
+            f"asked for item {raw.upstream_id!r}, provider returned "
+            f"{fetched.upstream_id!r}"
+        )
+    if revision is not None and fetched.revision != revision:
         raise ProvenanceMismatch(
             f"{raw.upstream_id}: asked for revision {revision}, "
             f"provider returned {fetched.revision}"
