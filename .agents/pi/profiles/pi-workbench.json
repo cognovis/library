@@ -1,0 +1,176 @@
+{
+  "schema": "cognovis.pi.profile.v1",
+  "id": "pi-workbench",
+  "version": "2.0.0",
+  "package": {
+    "catalog": "library.yaml",
+    "dependencyRoot": "just-module:pi-workbench"
+  },
+  "library": {
+    "repository": "library:cognovis-core",
+    "commit": "26a704b49e2f2dbf3fa5f6e6b22d7e95abe51e4d",
+    "allowlist": ["golden-prompts/cognovis-base.md"]
+  },
+  "resources": [
+    {
+      "id": "workbench-system-prompt",
+      "kind": "system-prompt",
+      "path": "project-native:pi-extension/acpx-workbench/system-prompt.md",
+      "sha256": "779f96021adbb0710271427601f65a246d9f2d739c1eab3f68d08af53d9a1e70",
+      "source": "library:cognovis-core/golden-prompts/cognovis-base.md"
+    },
+    {
+      "id": "pi-workbench-extension",
+      "kind": "pi-extension",
+      "path": "project-native:pi-extension/acpx-workbench/index.ts",
+      "sha256": "6e045d4781b6e93e8957c2e59a0a546f9a526ad8f9b10627430a561f7974160d",
+      "source": "library:pi-extension/acpx-workbench"
+    },
+    {
+      "id": "acpx-workbench-provider-implementation",
+      "kind": "provider-implementation",
+      "path": "project-native:pi-extension/acpx-workbench/dist/provider.js",
+      "sha256": "6e487eafe139e7eb2aeb8eac81e115af7935b406f24c3bd2c5fa03c7af84c04a",
+      "source": "library:pi-extension/acpx-workbench"
+    },
+    {
+      "id": "acp-cleanroom-proxy",
+      "kind": "runtime-boundary",
+      "path": "project-native:pi-extension/acpx-workbench/dist/acp-cleanroom-proxy.js",
+      "sha256": "29cae8c287d30751d20cfd8ff422b2021636881ff8257451fb57100a5e97bff5",
+      "source": "library:pi-extension/acpx-workbench"
+    },
+    {
+      "id": "open-brain-readonly-proxy",
+      "kind": "mcp-boundary",
+      "path": "project-native:pi-extension/acpx-workbench/dist/open-brain-readonly-proxy.js",
+      "sha256": "dfff49ec778bf1602d47f97616776256cc18f653f8e79bf04613f2cae123e7fb",
+      "source": "library:pi-extension/acpx-workbench"
+    },
+    {
+      "id": "beads-readonly-mcp",
+      "kind": "mcp-boundary",
+      "path": "project-native:pi-extension/acpx-workbench/dist/beads-readonly-mcp.js",
+      "sha256": "4a1268b64654691c1f024f8762e4157669b5e7b00fb0c25f1b91ba1783c5b2f3",
+      "source": "library:pi-extension/acpx-workbench"
+    }
+  ],
+  "provider": {
+    "id": "acpx-workbench",
+    "default": "claude",
+    "selections": {
+      "claude": {
+        "agent": "claude",
+        "model": "claude:opus[1m]",
+        "mode": "default",
+        "route": ["Pi", "ACPX runtime", "Claude ACP adapter", "Claude"],
+        "authContext": "normal Claude OAuth/config context",
+        "isolationCapability": {
+          "ambientUserSkills": "enforced",
+          "warning": null
+        },
+        "adapter": {
+          "command": ["node_modules/.bin/claude-agent-acp"],
+          "version": "0.62.0",
+          "provenance": "repository-package"
+        }
+      },
+      "codex": {
+        "agent": "codex",
+        "model": "codex:gpt-5.6-sol",
+        "mode": "read-only",
+        "route": ["Pi", "ACPX runtime", "Codex ACP adapter", "Codex"],
+        "authContext": "normal Codex login/config context",
+        "isolationCapability": {
+          "ambientUserSkills": "adapter-managed",
+          "warning": null
+        },
+        "adapter": {
+          "command": ["node_modules/.bin/codex-acp"],
+          "version": "1.1.4",
+          "provenance": "repository-package"
+        }
+      },
+      "kimi": {
+        "agent": "kimi",
+        "model": "kimi:kimi-code/k3",
+        "mode": "default",
+        "route": ["Pi", "ACPX runtime", "Kimi ACP adapter", "Kimi"],
+        "authContext": "normal Kimi CLI login/config context",
+        "isolationCapability": {
+          "ambientUserSkills": "not-supported",
+          "warning": "Kimi CLI ACP exposes ambient user skills; managed cwd and MCP isolation remain enforced, while only adapter-emitted permission requests reach the host callback"
+        },
+        "adapter": {
+          "command": ["kimi", "acp"],
+          "provenance": "host-binary"
+        }
+      }
+    },
+    "models": {
+      "claude": [
+        "claude:opus[1m]",
+        {
+          "id": "claude:fable",
+          "nativeModel": "claude:claude-fable-5[1m]"
+        },
+        "claude:sonnet",
+        "claude:haiku"
+      ],
+      "codex": [
+        "codex:gpt-5.6-sol",
+        "codex:gpt-5.6-terra"
+      ],
+      "kimi": [
+        "kimi:kimi-code/k3"
+      ]
+    }
+  },
+  "permissions": {
+    "id": "repository-safe-v1",
+    "acpxFallback": "deny-all",
+    "downstreamMode": "default",
+    "nonInteractive": "fail",
+    "allowedTools": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "mcp__beads__beads_read",
+      "mcp__open-brain__search",
+      "mcp__open-brain__timeline",
+      "mcp__open-brain__get_observations",
+      "mcp__open-brain__search_by_concept",
+      "mcp__open-brain__get_context",
+      "mcp__open-brain__stats"
+    ],
+    "pathScope": "repository",
+    "shell": "disabled",
+    "network": "open-brain-readonly-proxy-only"
+  },
+  "isolation": {
+    "piDiscovery": {
+      "context": false,
+      "skills": false,
+      "extensions": false,
+      "promptTemplates": false,
+      "themes": false,
+      "settings": false
+    },
+    "downstream": {
+      "settingSources": [],
+      "skills": [],
+      "plugins": [],
+      "mcpServers": {},
+      "managedMcpServers": ["beads", "open-brain"],
+      "hooks": false,
+      "projectCwd": false
+    }
+  },
+  "observability": {
+    "events": "jsonl",
+    "consumer": "workbench session",
+    "retention": "durable"
+  }
+}

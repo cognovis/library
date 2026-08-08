@@ -1,0 +1,56 @@
+{
+  "schema": "cognovis.pi.bead-harness-profile.v2",
+  "id": "bead-high-assurance",
+  "version": "2.0.0",
+  "mode": "high-assurance",
+  "coreContract": "cognovis.bead-harness-run.v2",
+  "implementer": {
+    "role": "bead-loop-implementer",
+    "harness": "codex",
+    "family": "openai",
+    "model": "gpt-5.6-sol",
+    "route": "codex:gpt-5.6-sol",
+    "reasoning": "high",
+    "transport": "native-pi",
+    "transportModel": "openai-codex/gpt-5.6-sol"
+  },
+  "reviewers": [
+    {
+      "id": "depth",
+      "perspective": "depth-failure",
+      "role": "bead-depth-reviewer",
+      "harness": "claude",
+      "family": "anthropic",
+      "model": "opus",
+      "route": "claude:opus[1m]",
+      "reasoning": "high",
+      "transport": "direct-acpx",
+      "transportModel": "acpx-claude/opus[1m]"
+    },
+    {
+      "id": "boundary",
+      "perspective": "boundary-operator",
+      "role": "bead-boundary-reviewer",
+      "harness": "kimi",
+      "family": "kimi",
+      "model": "kimi-code/k3",
+      "route": "kimi:kimi-code/k3",
+      "reasoning": "high",
+      "transport": "native-pi",
+      "transportModel": "kimi-coding/k3"
+    }
+  ],
+  "adjudicator": {
+    "id": "adjudicator",
+    "perspective": "adjudication",
+    "role": "bead-review-adjudicator",
+    "harness": "claude",
+    "family": "anthropic",
+    "model": "fable",
+    "route": "claude:fable",
+    "reasoning": "high",
+    "transport": "direct-acpx",
+    "transportModel": "acpx-claude/fable"
+  },
+  "maxReviewWaves": 3
+}

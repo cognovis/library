@@ -1,0 +1,59 @@
+{
+  "schema": "cognovis.pi.native-pack-profile.v1",
+  "id": "native-pack-standard",
+  "version": "1.0.0",
+  "maxPackSize": 6,
+  "maxReviewTurns": 3,
+  "implementer": {
+    "model": "openai-codex/gpt-5.6-sol",
+    "thinking": "high"
+  },
+  "preflight": [
+    {
+      "id": "seams",
+      "focus": "tdd-seams-and-open-decisions",
+      "model": "anthropic/claude-opus-5",
+      "thinking": "high"
+    },
+    {
+      "id": "integration",
+      "focus": "cross-bead-integration-and-ordering",
+      "model": "kimi-coding/k3",
+      "thinking": "high"
+    }
+  ],
+  "beadReviewers": [
+    {
+      "id": "correctness",
+      "focus": "correctness-and-regression",
+      "model": "anthropic/claude-opus-5",
+      "thinking": "high"
+    },
+    {
+      "id": "boundary",
+      "focus": "boundary-and-operator-behavior",
+      "model": "kimi-coding/k3",
+      "thinking": "high"
+    }
+  ],
+  "aggregateReviewers": [
+    {
+      "id": "architecture",
+      "focus": "architecture-and-cross-bead-integration",
+      "model": "anthropic/claude-opus-5",
+      "thinking": "high"
+    },
+    {
+      "id": "operator",
+      "focus": "boundary-operator-and-release-readiness",
+      "model": "kimi-coding/k3",
+      "thinking": "high"
+    }
+  ],
+  "beadGates": [
+    ["just", "verify"]
+  ],
+  "packGates": [
+    ["just", "verify"]
+  ]
+}

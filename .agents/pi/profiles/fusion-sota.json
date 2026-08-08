@@ -1,0 +1,17 @@
+{
+  "schema": "cognovis.pi.fusion-profile.v1",
+  "id": "fusion-sota",
+  "version": "2.2.0",
+  "roles": {
+    "architect": "kimi-coding/k3",
+    "builder": "openai-codex/gpt-5.6-sol",
+    "reviewer": "acpx-claude/claude-fable-5[1m]",
+    "validator": "kimi-coding/k3"
+  },
+  "thinking": {
+    "architect": "xhigh",
+    "builder": "xhigh",
+    "reviewer": "xhigh",
+    "validator": "xhigh"
+  }
+}

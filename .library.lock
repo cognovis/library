@@ -29,6 +29,90 @@ requested_roots:
   roots:
   - skill:python-dev
   - skill:python-test
+- id: pi-extension:fusion-harness
+  type: pi-extension
+  name: fusion-harness
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-extension:cognovis-bead-harness
+  type: pi-extension
+  name: cognovis-bead-harness
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 2.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-extension:native-pack
+  type: pi-extension
+  name: native-pack
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-extension:acpx-session-view
+  type: pi-extension
+  name: acpx-session-view
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-extension:acpx-workbench
+  type: pi-extension
+  name: acpx-workbench
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 2.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-profile:pi-workbench
+  type: pi-profile
+  name: pi-workbench
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 2.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-extension:fusion-context
+  type: pi-extension
+  name: fusion-context
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-profile:fusion-sota
+  type: pi-profile
+  name: fusion-sota
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-extension:docker-lifecycle-guard
+  type: pi-extension
+  name: docker-lifecycle-guard
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-profile:bead-high-assurance
+  type: pi-profile
+  name: bead-high-assurance
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 2.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-profile:native-pack-standard
+  type: pi-profile
+  name: native-pack-standard
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+- id: pi-extension:solo-workbench
+  type: pi-extension
+  name: solo-workbench
+  scope: project
+  catalog_identity: https://github.com/cognovis/library
+  resolved_version: 1.0.0
+  definition_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
 receipts:
 - name: agentic-primitives
   type: standard
@@ -605,6 +689,577 @@ receipts:
     content_sha256: d63077c1a459c8df73343ab44eb496040397d90be9300b88df54efc43d735a06
   owners_cache:
   - workspace:https://github.com/cognovis/library#library-authoring
+- name: fusion-harness
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-harness
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/fusion-harness@317ca9daadc755/
+  install_target: .agents/pi/extensions/fusion-harness
+  install_timestamp: '2026-08-08T13:21:46Z'
+  checksum_sha256: 3710b870483ae39c1bce8de0bbd293aa8fab328b2bf9aa01f01ba89acbe449db
+  checksum_type: directory
+  content_sha256: 3710b870483ae39c1bce8de0bbd293aa8fab328b2bf9aa01f01ba89acbe449db
+  install_mode: vendor
+  license: MIT
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:fusion-harness
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/fusion-harness
+    kind: directory
+  - path: .agents/pi/extensions/fusion-harness/LICENSE
+    kind: file
+    content_sha256: 3a347ae7d8ea4672d822f4d320e406662556927febfcd51d9cf1e517272ed8da
+  - path: .agents/pi/extensions/fusion-harness/NOTICE.md
+    kind: file
+    content_sha256: 35f2c99367f058c0fc4dc167d484f049afb5c86a96f665c9dea6c3b42fc68301
+  - path: .agents/pi/extensions/fusion-harness/SYSTEM_PROMPT_TRIAGE.md
+    kind: file
+    content_sha256: 3da4d9f3e5c434f6986163bc5979a47df0667322ebe45ab61def77b229065cfa
+  - path: .agents/pi/extensions/fusion-harness/SYSTEM_PROMPT_VALIDATOR.md
+    kind: file
+    content_sha256: ee4455cad8909eedbda04e5a7bce797eb1ba9997de0b46257779db4fb80ff920
+  - path: .agents/pi/extensions/fusion-harness/SYSTEM_PROMPT_WORKER.md
+    kind: file
+    content_sha256: 7816630fc29700fc164e3ddfa1b49207db776eecfd5990c08696a5ee7a4f25ff
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_BUILDER.md
+    kind: file
+    content_sha256: 74ba7a1ad92e04de6003c13447076aa9d063ab090e3bf547c6f27123f9bf301e
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_CORRECTION.md
+    kind: file
+    content_sha256: ad989fd195a2c5bd099cbf9188ede586d87de854f5a33bd1d917d6b849e39fae
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_FUSION_DEFAULT_INSTRUCTION.md
+    kind: file
+    content_sha256: 2441f49babe420686c5c8490fabcb8a03085e747b24df67ccdc3cdf084899e73
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_FUSION_MERGE.md
+    kind: file
+    content_sha256: 127f1b06705972c3c007775e9780e4b4074b35611b090d6643a12a2a8296be27
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_FUSION_WORKER.md
+    kind: file
+    content_sha256: fcd10159d82bd404156f53f98e937bcc8beba3df1af05a4ac182637e067aaf45
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_OPINION.md
+    kind: file
+    content_sha256: 689ac8311b02c26c80781346f53061b99a88b1e212f68c499e5ad85be723fad7
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_TRIAGE.md
+    kind: file
+    content_sha256: affbf522731777ac02983a4531bd43f49de9aef681d689bed4ec66aa6dc68f9e
+  - path: .agents/pi/extensions/fusion-harness/USER_PROMPT_VALIDATOR.md
+    kind: file
+    content_sha256: 3d2cb806f161d028e23981f9f9c6ee93249351a34bbef03b962e42c18c97d8d2
+  - path: .agents/pi/extensions/fusion-harness/child-adapters.ts
+    kind: file
+    content_sha256: 036bacef8e7c3418bc84b16bb6daa4b50db25b9699971b2dead860f4c7ad95bb
+  - path: .agents/pi/extensions/fusion-harness/child-runtime.ts
+    kind: file
+    content_sha256: e907dd7fd743dd30d4a0a3c95ff006c24073224ab5c509f49344dde8a6e560b5
+  - path: .agents/pi/extensions/fusion-harness/fusion-harness.ts
+    kind: file
+    content_sha256: c4252d1c97bd413079f9a60362ab8ab4fe660c971746e0d1114dd83a834e39a5
+  - path: .agents/pi/extensions/fusion-harness/profile.ts
+    kind: file
+    content_sha256: b2d27020ec1577b497240517cf1b167cfbf2868a840111e8cd7b8c9c7af1238b
+  - path: .agents/pi/extensions/fusion-harness/tool-matrices.ts
+    kind: file
+    content_sha256: 406c9651cd119885419414bc2846f14403f7324f0b539c68c822e7abac8884ec
+  owners_cache:
+  - pi-extension:fusion-harness
+- name: cognovis-bead-harness
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/cognovis-bead-harness
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/cognovis-bead-harness@317ca9daadc755/
+  install_target: .agents/pi/extensions/cognovis-bead-harness
+  install_timestamp: '2026-08-08T13:21:47Z'
+  checksum_sha256: 4fcbe5bc99e4a9afccd3e867607dc212f461da7ffbc85fe85613c7aba72cefcf
+  checksum_type: directory
+  content_sha256: 4fcbe5bc99e4a9afccd3e867607dc212f461da7ffbc85fe85613c7aba72cefcf
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:cognovis-bead-harness
+  resolved_version: 2.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/cognovis-bead-harness
+    kind: directory
+  - path: .agents/pi/extensions/cognovis-bead-harness/acpx-transport.ts
+    kind: file
+    content_sha256: c941bf665cc62057371727925abd72995b2a57561a0e565d485dfa751aa447ee
+  - path: .agents/pi/extensions/cognovis-bead-harness/index.ts
+    kind: file
+    content_sha256: 92b4d17166aab675a48311fd4c711416a336c50eeac489e69ff416024bfe4e32
+  - path: .agents/pi/extensions/cognovis-bead-harness/process.ts
+    kind: file
+    content_sha256: 8dc7c1cd5898f05f089e8411261119d99897c01026362aa991a45feddb3d7aa0
+  - path: .agents/pi/extensions/cognovis-bead-harness/profile.ts
+    kind: file
+    content_sha256: 4aea5cbedb73ed2bce1f58cb99a3e3a6b62f2025045a1e3a03644c188e87b391
+  - path: .agents/pi/extensions/cognovis-bead-harness/runner.ts
+    kind: file
+    content_sha256: 92513416e7f0dac49203407b644a78528740f0d22f1f63e50fef38319c87e796
+  - path: .agents/pi/extensions/cognovis-bead-harness/state.ts
+    kind: file
+    content_sha256: 0e4be34d9e979b2c262565db76873aedaad6eaef3c5b34268cd44a9ccca27adf
+  - path: .agents/pi/extensions/cognovis-bead-harness/transport.ts
+    kind: file
+    content_sha256: 8b72eb43a5813eb950b60a1b2204fee2044d7e6d968aa8c4ce311ed6cb881b3f
+  owners_cache:
+  - pi-extension:cognovis-bead-harness
+- name: native-pack
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/native-pack
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/native-pack@317ca9daadc755/
+  install_target: .agents/pi/extensions/native-pack
+  install_timestamp: '2026-08-08T13:21:48Z'
+  checksum_sha256: 7ae4cb593fa4365c9494432d503b1f6a8bf98da680b41529aeb7f0ae407dd90b
+  checksum_type: directory
+  content_sha256: 7ae4cb593fa4365c9494432d503b1f6a8bf98da680b41529aeb7f0ae407dd90b
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:native-pack
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/native-pack
+    kind: directory
+  - path: .agents/pi/extensions/native-pack/candidate-diff.ts
+    kind: file
+    content_sha256: 0c42f806c43c97722721ec8bb00ddb5a28fb25470488dbd8deeb6c4fcd831dda
+  - path: .agents/pi/extensions/native-pack/engine.ts
+    kind: file
+    content_sha256: 14d8d5a2ecb0a8a413f39d5ab8974893fa067ef953364ba43f9ca7700ad3b272
+  - path: .agents/pi/extensions/native-pack/host.ts
+    kind: file
+    content_sha256: 0944b6ad6892f395ffc1510bc4ef2c3031afd72189cbff18616e2c1bdddce69e
+  - path: .agents/pi/extensions/native-pack/index.ts
+    kind: file
+    content_sha256: 6e434c806e8c0ace934fd049a221c9d84b6d844ba16c10111530609dc4e36e18
+  - path: .agents/pi/extensions/native-pack/native-sessions.ts
+    kind: file
+    content_sha256: 9349e864ca62a459047425a082db250eb17fc8cf86672d1c80e243ea7adb7003
+  - path: .agents/pi/extensions/native-pack/profile.ts
+    kind: file
+    content_sha256: 0d3cbd201f2af8ce9b6bf73cdbd053c618471da74cb53b5dbe8ec427d2e79d88
+  - path: .agents/pi/extensions/native-pack/prompts
+    kind: directory
+  - path: .agents/pi/extensions/native-pack/prompts/aggregate-reviewer.system.md
+    kind: file
+    content_sha256: 303f14e01365f180d73df57c9074e78d0fec191bd91b0d7a3abe46eea0505aa0
+  - path: .agents/pi/extensions/native-pack/prompts/implementer.system.md
+    kind: file
+    content_sha256: dc80341dab9693c60d0e99bc8741b262ff1eff1a190e758d62e491edd2415e22
+  - path: .agents/pi/extensions/native-pack/prompts/preflight.system.md
+    kind: file
+    content_sha256: 6a5314abecdb201cc90219c05640bec0814767262898335c321eed713ced5cfa
+  - path: .agents/pi/extensions/native-pack/prompts/reviewer.system.md
+    kind: file
+    content_sha256: 815f94fdef535c4c5b79f81f6b10e9f941288277953aa35dca0b77731052e730
+  - path: .agents/pi/extensions/native-pack/state.ts
+    kind: file
+    content_sha256: 567a6120aca5af0ee9a01a51113efe1ed95cdad7c872ff136a7bd7ad68397a69
+  - path: .agents/pi/extensions/native-pack/types.ts
+    kind: file
+    content_sha256: 261e436791a8ee3bcb1c29dde96abfb65d9db98157eb70958f616ebf581b4062
+  owners_cache:
+  - pi-extension:native-pack
+- name: acpx-session-view
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/acpx-session-view
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/acpx-session-view@317ca9daadc755/
+  install_target: .agents/pi/extensions/acpx-session-view
+  install_timestamp: '2026-08-08T13:21:49Z'
+  checksum_sha256: 0757a640a17965fc952ffbf179abe6247243992a4d9ef35fbf8c998bef6b3aa6
+  checksum_type: directory
+  content_sha256: 0757a640a17965fc952ffbf179abe6247243992a4d9ef35fbf8c998bef6b3aa6
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:acpx-session-view
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/acpx-session-view
+    kind: directory
+  - path: .agents/pi/extensions/acpx-session-view/index.ts
+    kind: file
+    content_sha256: ef8dc3c7425ae41aec48967496d3298158c65357951f03d0fa0dbaa7432fb95a
+  - path: .agents/pi/extensions/acpx-session-view/pi-extension.ts
+    kind: file
+    content_sha256: a394b3ff439c9e3284fa4ecacc38d985f2e95b1fbf09098d6c9f009d582c377c
+  - path: .agents/pi/extensions/acpx-session-view/session-source.ts
+    kind: file
+    content_sha256: 1bc4ba3eadf0cc45f90bb118676dee8b3f286967ce77087778005a5dbef4e9e6
+  owners_cache:
+  - pi-extension:acpx-session-view
+- name: acpx-workbench
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/acpx-workbench
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/acpx-workbench@317ca9daadc755/
+  install_target: .agents/pi/extensions/acpx-workbench
+  install_timestamp: '2026-08-08T13:21:51Z'
+  checksum_sha256: 309caf0474e7c96eab8e0004c550b329f573f94350214e22da50091d8a151674
+  checksum_type: directory
+  content_sha256: 309caf0474e7c96eab8e0004c550b329f573f94350214e22da50091d8a151674
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:acpx-workbench
+  resolved_version: 2.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/acpx-workbench
+    kind: directory
+  - path: .agents/pi/extensions/acpx-workbench/acp-cleanroom-proxy.ts
+    kind: file
+    content_sha256: cc6c38c6a7f5cb1c6938b91bda227c76d07d084123881125c5f5d667b75ea100
+  - path: .agents/pi/extensions/acpx-workbench/auth-provenance.ts
+    kind: file
+    content_sha256: fbab5e3c3196713be3eedab1143e5af2392828f2f1e0e1c9b91e91c3f8bfbc93
+  - path: .agents/pi/extensions/acpx-workbench/beads-read.ts
+    kind: file
+    content_sha256: 3bd1a032580be330cd901c728b9154c7b864b40cf03a8cfa8fc4e5c7d671b785
+  - path: .agents/pi/extensions/acpx-workbench/beads-readonly-mcp.ts
+    kind: file
+    content_sha256: 024fb0de180ceaad4c22767ef275b3c612aa50b93ba64a9af7d0ec2d0c6d66c6
+  - path: .agents/pi/extensions/acpx-workbench/cli.ts
+    kind: file
+    content_sha256: ca6a358d120e75c7db98a09c09506033144d1a07d9a1cadc9e5d355e67544115
+  - path: .agents/pi/extensions/acpx-workbench/config.ts
+    kind: file
+    content_sha256: 0c58441718726d2217e3edbe8bc20b87bcb38783e2000674b7bf85d1a049f0ae
+  - path: .agents/pi/extensions/acpx-workbench/dist
+    kind: directory
+  - path: .agents/pi/extensions/acpx-workbench/dist/acp-cleanroom-proxy.js
+    kind: file
+    content_sha256: 29cae8c287d30751d20cfd8ff422b2021636881ff8257451fb57100a5e97bff5
+  - path: .agents/pi/extensions/acpx-workbench/dist/beads-readonly-mcp.js
+    kind: file
+    content_sha256: 4a1268b64654691c1f024f8762e4157669b5e7b00fb0c25f1b91ba1783c5b2f3
+  - path: .agents/pi/extensions/acpx-workbench/dist/cli.js
+    kind: file
+    content_sha256: 947ebb518408bf90fcb4d8bea2af7b8fee9ce9dfa097ff87fd0d24e7becef97a
+  - path: .agents/pi/extensions/acpx-workbench/dist/open-brain-readonly-proxy.js
+    kind: file
+    content_sha256: dfff49ec778bf1602d47f97616776256cc18f653f8e79bf04613f2cae123e7fb
+  - path: .agents/pi/extensions/acpx-workbench/dist/provider.js
+    kind: file
+    content_sha256: 6e487eafe139e7eb2aeb8eac81e115af7935b406f24c3bd2c5fa03c7af84c04a
+  - path: .agents/pi/extensions/acpx-workbench/evidence.ts
+    kind: file
+    content_sha256: ee923cd9b1a83449f18de04a25755e0c35a8e28a638b7c2de081f7326941652d
+  - path: .agents/pi/extensions/acpx-workbench/index.ts
+    kind: file
+    content_sha256: 6e045d4781b6e93e8957c2e59a0a546f9a526ad8f9b10627430a561f7974160d
+  - path: .agents/pi/extensions/acpx-workbench/launcher.ts
+    kind: file
+    content_sha256: 8a173a9e73513fba4b143d3ac180bad7a27ccf1f4db99a02c0cfdc8474f8a8be
+  - path: .agents/pi/extensions/acpx-workbench/model-switching.ts
+    kind: file
+    content_sha256: 611d07c9c62ef5f2731986b6e1372749b2c8f6b0fc955f95eb310115518e27b9
+  - path: .agents/pi/extensions/acpx-workbench/open-brain-readonly-proxy.ts
+    kind: file
+    content_sha256: 81fd113e76f9e18f4c636e650befe4e8e69846a537f9aba33a15e7b1352f19f1
+  - path: .agents/pi/extensions/acpx-workbench/permission-policy.ts
+    kind: file
+    content_sha256: 50d210e24e0c70c0fe48a95aa8e3cde277504d04f242f84ceb897421f270c30b
+  - path: .agents/pi/extensions/acpx-workbench/profile.ts
+    kind: file
+    content_sha256: 1ce16d8b33eafc4d4c6321a1a1aa5085f42c0f6a456f879231a4623ec63a5767
+  - path: .agents/pi/extensions/acpx-workbench/provider-runtime.ts
+    kind: file
+    content_sha256: 7817f95200076d3b396f608c9c6c679567212e7614401cfdaacfcb450d75e0b3
+  - path: .agents/pi/extensions/acpx-workbench/provider.ts
+    kind: file
+    content_sha256: 14fb063df98fb49da3769166de0fedd929f92c872a9b4263ddf83b1803fa0986
+  - path: .agents/pi/extensions/acpx-workbench/providers.ts
+    kind: file
+    content_sha256: b612b681d18bee5ca6f49dfa31bde824d0f5fb40ffaeb82f76da1b67aa985e1e
+  - path: .agents/pi/extensions/acpx-workbench/redaction.ts
+    kind: file
+    content_sha256: c7a4459c53a7fbfbd49c7fc9523121c297c8acb1ed740aefcf605ac7e3fb1e7e
+  - path: .agents/pi/extensions/acpx-workbench/runtime-events.ts
+    kind: file
+    content_sha256: 667c51caf1c6557280421c3f664ae21a05429ad96447079f02d302f622b0e65f
+  - path: .agents/pi/extensions/acpx-workbench/session-store.ts
+    kind: file
+    content_sha256: 1c97ebec97421608083a66aa784124671ca95a3a40c9fe8ca85bd0fb8f88b9ce
+  - path: .agents/pi/extensions/acpx-workbench/system-prompt.md
+    kind: file
+    content_sha256: 779f96021adbb0710271427601f65a246d9f2d739c1eab3f68d08af53d9a1e70
+  owners_cache:
+  - pi-extension:acpx-workbench
+- name: pi-workbench
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/pi-workbench.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/pi-workbench@317ca9daadc755/
+  install_target: .agents/pi/profiles/pi-workbench.json
+  install_timestamp: '2026-08-08T13:21:52Z'
+  checksum_sha256: 4de227f12e2cf26b2cb1469cdd3d5193bdbdaaaa924d43e2fa57fcd1666b9e57
+  checksum_type: file
+  content_sha256: 4de227f12e2cf26b2cb1469cdd3d5193bdbdaaaa924d43e2fa57fcd1666b9e57
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-profile:pi-workbench
+  resolved_version: 2.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/profiles/pi-workbench.json
+    kind: file
+    content_sha256: 4de227f12e2cf26b2cb1469cdd3d5193bdbdaaaa924d43e2fa57fcd1666b9e57
+  owners_cache:
+  - pi-profile:pi-workbench
+- name: fusion-context
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-context
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/fusion-context@317ca9daadc755/
+  install_target: .agents/pi/extensions/fusion-context
+  install_timestamp: '2026-08-08T13:21:53Z'
+  checksum_sha256: c20f56a3a43a65fda0df94fe6606f61f8beb50deb4c3f11c5be2a2b4fb8f8787
+  checksum_type: directory
+  content_sha256: c20f56a3a43a65fda0df94fe6606f61f8beb50deb4c3f11c5be2a2b4fb8f8787
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:fusion-context
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/fusion-context
+    kind: directory
+  - path: .agents/pi/extensions/fusion-context/beads-read.ts
+    kind: file
+    content_sha256: d240fafc7c416b2a015376e6ddf198a93f529927fb98282d778e5df2f620b1b3
+  - path: .agents/pi/extensions/fusion-context/beads-readonly-mcp.ts
+    kind: file
+    content_sha256: 4946c529d56388fa6ac59882c5c5574bd374d34648abd59d9ad5656c3098909f
+  - path: .agents/pi/extensions/fusion-context/dist
+    kind: directory
+  - path: .agents/pi/extensions/fusion-context/dist/beads-readonly-mcp.js
+    kind: file
+    content_sha256: c8b33199aed55367229e9c2317b7940d633be8e0be94104e29942080a7af4288
+  - path: .agents/pi/extensions/fusion-context/dist/open-brain-readonly-proxy.js
+    kind: file
+    content_sha256: f57a1370518ea5bb34738e83b34934cc6f76c0c81b64a7215ecdbd0e1a62aaea
+  - path: .agents/pi/extensions/fusion-context/dist/pi-extension.js
+    kind: file
+    content_sha256: 50414c200135556d2a4ff981e0405a4ba8b0b04aa62a0d055db6f49e6ec64a56
+  - path: .agents/pi/extensions/fusion-context/index.ts
+    kind: file
+    content_sha256: 64f1faa375be93e6df7573d75e2085e9984e4ff1d03860db7557b3e06dab0423
+  - path: .agents/pi/extensions/fusion-context/open-brain-readonly-proxy.ts
+    kind: file
+    content_sha256: ac652a277cdc32d904d0697cc48c7c7235dc525cb9ef851489d80eeb7dad5efe
+  - path: .agents/pi/extensions/fusion-context/pi-extension.ts
+    kind: file
+    content_sha256: 189b0b77c1cb9ba50b4af616a21f398651871607b9d675ad57b1aaabd1636f9d
+  owners_cache:
+  - pi-extension:fusion-context
+- name: fusion-sota
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-sota.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/fusion-sota@317ca9daadc755/
+  install_target: .agents/pi/profiles/fusion-sota.json
+  install_timestamp: '2026-08-08T13:21:55Z'
+  checksum_sha256: f949fa3ed4d733efd052804399cf72eaf1cc3dbd8ceea8ee6f5d33a9486503c6
+  checksum_type: file
+  content_sha256: f949fa3ed4d733efd052804399cf72eaf1cc3dbd8ceea8ee6f5d33a9486503c6
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-profile:fusion-sota
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/profiles/fusion-sota.json
+    kind: file
+    content_sha256: f949fa3ed4d733efd052804399cf72eaf1cc3dbd8ceea8ee6f5d33a9486503c6
+  owners_cache:
+  - pi-profile:fusion-sota
+- name: docker-lifecycle-guard
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/docker-lifecycle-guard
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/docker-lifecycle-guard@317ca9daadc755/
+  install_target: .agents/pi/extensions/docker-lifecycle-guard
+  install_timestamp: '2026-08-08T13:21:56Z'
+  checksum_sha256: 1d50e1a02eb0265fe4350f1267d3cf87cd8bba309653d4ca799a3be54f65fbb0
+  checksum_type: directory
+  content_sha256: 1d50e1a02eb0265fe4350f1267d3cf87cd8bba309653d4ca799a3be54f65fbb0
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:docker-lifecycle-guard
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/docker-lifecycle-guard
+    kind: directory
+  - path: .agents/pi/extensions/docker-lifecycle-guard/index.ts
+    kind: file
+    content_sha256: 12fdc2551a6a0fa26fece654883a100744f925fcadd72ed7e2ec405bd14e5518
+  owners_cache:
+  - pi-extension:docker-lifecycle-guard
+- name: bead-high-assurance
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/bead-high-assurance.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/bead-high-assurance@317ca9daadc755/
+  install_target: .agents/pi/profiles/bead-high-assurance.json
+  install_timestamp: '2026-08-08T13:21:57Z'
+  checksum_sha256: cfa3381c7eb7da382a7e5a95bd7906311faa939c603f6a9420dd3907e33f45a6
+  checksum_type: file
+  content_sha256: cfa3381c7eb7da382a7e5a95bd7906311faa939c603f6a9420dd3907e33f45a6
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-profile:bead-high-assurance
+  resolved_version: 2.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/profiles/bead-high-assurance.json
+    kind: file
+    content_sha256: cfa3381c7eb7da382a7e5a95bd7906311faa939c603f6a9420dd3907e33f45a6
+  owners_cache:
+  - pi-profile:bead-high-assurance
+- name: native-pack-standard
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/native-pack-standard.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/native-pack-standard@317ca9daadc755/
+  install_target: .agents/pi/profiles/native-pack-standard.json
+  install_timestamp: '2026-08-08T13:21:58Z'
+  checksum_sha256: b0c44c61ea2722388fe7f0782ade642dbbe89f8f640a4cae3d6715cad62d694b
+  checksum_type: file
+  content_sha256: b0c44c61ea2722388fe7f0782ade642dbbe89f8f640a4cae3d6715cad62d694b
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-profile:native-pack-standard
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/profiles/native-pack-standard.json
+    kind: file
+    content_sha256: b0c44c61ea2722388fe7f0782ade642dbbe89f8f640a4cae3d6715cad62d694b
+  owners_cache:
+  - pi-profile:native-pack-standard
+- name: solo-workbench
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/solo-workbench
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/solo-workbench@317ca9daadc755/
+  install_target: .agents/pi/extensions/solo-workbench
+  install_timestamp: '2026-08-08T13:22:00Z'
+  checksum_sha256: 6cfac1fe31fca6de2039bcc6bdc1de05a08bf17aa9c9a5ef72b7e17f6e18ce7e
+  checksum_type: directory
+  content_sha256: 6cfac1fe31fca6de2039bcc6bdc1de05a08bf17aa9c9a5ef72b7e17f6e18ce7e
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+  id: pi-extension:solo-workbench
+  resolved_version: 1.0.0
+  verified: true
+  adopted: false
+  prune_blocked_reason: null
+  targets:
+  - path: .agents/pi/extensions/solo-workbench
+    kind: directory
+  - path: .agents/pi/extensions/solo-workbench/README.md
+    kind: file
+    content_sha256: 62963d5d71e62a6764263eb3cc872060ec5eb039e4bffee0a9a0f798640953a7
+  - path: .agents/pi/extensions/solo-workbench/index.ts
+    kind: file
+    content_sha256: 77cd7ebad828c7e91aefcb3060f775ce94f61cd33d8d6bf7ff2a338c74f503f7
+  - path: .agents/pi/extensions/solo-workbench/package.json
+    kind: file
+    content_sha256: d4e3db7a64321e685e6e8f2253d2baad48c7855ffa03aab7d001ff39d2266bbb
+  - path: .agents/pi/extensions/solo-workbench/preparation.ts
+    kind: file
+    content_sha256: 97ae4a66df3e3125fc4733a0883b6ae3ffd5159e2a05f446e22d735f4c09f334
+  - path: .agents/pi/extensions/solo-workbench/runs.ts
+    kind: file
+    content_sha256: 0161c427df92d9f86a27400dd46c74e53b4626a85aa668c84e2fdaaadd3cbfd2
+  owners_cache:
+  - pi-extension:solo-workbench
 prerequisites:
 - id: standard:english-only
   kind: global-root
@@ -813,3 +1468,207 @@ installed:
   bridge_symlinks: []
   scope: project
   catalog_identity: https://github.com/cognovis/library-core
+- name: fusion-harness
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-harness
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/fusion-harness@317ca9daadc755/
+  install_target: .agents/pi/extensions/fusion-harness
+  install_timestamp: '2026-08-08T13:21:46Z'
+  checksum_sha256: 3710b870483ae39c1bce8de0bbd293aa8fab328b2bf9aa01f01ba89acbe449db
+  checksum_type: directory
+  content_sha256: 3710b870483ae39c1bce8de0bbd293aa8fab328b2bf9aa01f01ba89acbe449db
+  install_mode: vendor
+  license: MIT
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: cognovis-bead-harness
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/cognovis-bead-harness
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/cognovis-bead-harness@317ca9daadc755/
+  install_target: .agents/pi/extensions/cognovis-bead-harness
+  install_timestamp: '2026-08-08T13:21:47Z'
+  checksum_sha256: 4fcbe5bc99e4a9afccd3e867607dc212f461da7ffbc85fe85613c7aba72cefcf
+  checksum_type: directory
+  content_sha256: 4fcbe5bc99e4a9afccd3e867607dc212f461da7ffbc85fe85613c7aba72cefcf
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: native-pack
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/native-pack
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/native-pack@317ca9daadc755/
+  install_target: .agents/pi/extensions/native-pack
+  install_timestamp: '2026-08-08T13:21:48Z'
+  checksum_sha256: 7ae4cb593fa4365c9494432d503b1f6a8bf98da680b41529aeb7f0ae407dd90b
+  checksum_type: directory
+  content_sha256: 7ae4cb593fa4365c9494432d503b1f6a8bf98da680b41529aeb7f0ae407dd90b
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: acpx-session-view
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/acpx-session-view
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/acpx-session-view@317ca9daadc755/
+  install_target: .agents/pi/extensions/acpx-session-view
+  install_timestamp: '2026-08-08T13:21:49Z'
+  checksum_sha256: 0757a640a17965fc952ffbf179abe6247243992a4d9ef35fbf8c998bef6b3aa6
+  checksum_type: directory
+  content_sha256: 0757a640a17965fc952ffbf179abe6247243992a4d9ef35fbf8c998bef6b3aa6
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: acpx-workbench
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/acpx-workbench
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/acpx-workbench@317ca9daadc755/
+  install_target: .agents/pi/extensions/acpx-workbench
+  install_timestamp: '2026-08-08T13:21:51Z'
+  checksum_sha256: 309caf0474e7c96eab8e0004c550b329f573f94350214e22da50091d8a151674
+  checksum_type: directory
+  content_sha256: 309caf0474e7c96eab8e0004c550b329f573f94350214e22da50091d8a151674
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: pi-workbench
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/pi-workbench.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/pi-workbench@317ca9daadc755/
+  install_target: .agents/pi/profiles/pi-workbench.json
+  install_timestamp: '2026-08-08T13:21:52Z'
+  checksum_sha256: 4de227f12e2cf26b2cb1469cdd3d5193bdbdaaaa924d43e2fa57fcd1666b9e57
+  checksum_type: file
+  content_sha256: 4de227f12e2cf26b2cb1469cdd3d5193bdbdaaaa924d43e2fa57fcd1666b9e57
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: fusion-context
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/fusion-context
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/fusion-context@317ca9daadc755/
+  install_target: .agents/pi/extensions/fusion-context
+  install_timestamp: '2026-08-08T13:21:53Z'
+  checksum_sha256: c20f56a3a43a65fda0df94fe6606f61f8beb50deb4c3f11c5be2a2b4fb8f8787
+  checksum_type: directory
+  content_sha256: c20f56a3a43a65fda0df94fe6606f61f8beb50deb4c3f11c5be2a2b4fb8f8787
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: fusion-sota
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/fusion-sota.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/fusion-sota@317ca9daadc755/
+  install_target: .agents/pi/profiles/fusion-sota.json
+  install_timestamp: '2026-08-08T13:21:55Z'
+  checksum_sha256: f949fa3ed4d733efd052804399cf72eaf1cc3dbd8ceea8ee6f5d33a9486503c6
+  checksum_type: file
+  content_sha256: f949fa3ed4d733efd052804399cf72eaf1cc3dbd8ceea8ee6f5d33a9486503c6
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: docker-lifecycle-guard
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/docker-lifecycle-guard
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/docker-lifecycle-guard@317ca9daadc755/
+  install_target: .agents/pi/extensions/docker-lifecycle-guard
+  install_timestamp: '2026-08-08T13:21:56Z'
+  checksum_sha256: 1d50e1a02eb0265fe4350f1267d3cf87cd8bba309653d4ca799a3be54f65fbb0
+  checksum_type: directory
+  content_sha256: 1d50e1a02eb0265fe4350f1267d3cf87cd8bba309653d4ca799a3be54f65fbb0
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: bead-high-assurance
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/bead-high-assurance.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/bead-high-assurance@317ca9daadc755/
+  install_target: .agents/pi/profiles/bead-high-assurance.json
+  install_timestamp: '2026-08-08T13:21:57Z'
+  checksum_sha256: cfa3381c7eb7da382a7e5a95bd7906311faa939c603f6a9420dd3907e33f45a6
+  checksum_type: file
+  content_sha256: cfa3381c7eb7da382a7e5a95bd7906311faa939c603f6a9420dd3907e33f45a6
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 2.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: native-pack-standard
+  type: pi-profile
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/native-pack-standard.json
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-profiles/unknown/native-pack-standard@317ca9daadc755/
+  install_target: .agents/pi/profiles/native-pack-standard.json
+  install_timestamp: '2026-08-08T13:21:58Z'
+  checksum_sha256: b0c44c61ea2722388fe7f0782ade642dbbe89f8f640a4cae3d6715cad62d694b
+  checksum_type: file
+  content_sha256: b0c44c61ea2722388fe7f0782ade642dbbe89f8f640a4cae3d6715cad62d694b
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
+- name: solo-workbench
+  type: pi-extension
+  marketplace: unknown
+  source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/solo-workbench
+  source_commit: 317ca9daadc755e4f2e5ef260bb98413396762f8
+  cache_path: /Users/malte/.local/share/library/pi-extensions/unknown/solo-workbench@317ca9daadc755/
+  install_target: .agents/pi/extensions/solo-workbench
+  install_timestamp: '2026-08-08T13:22:00Z'
+  checksum_sha256: 6cfac1fe31fca6de2039bcc6bdc1de05a08bf17aa9c9a5ef72b7e17f6e18ce7e
+  checksum_type: directory
+  content_sha256: 6cfac1fe31fca6de2039bcc6bdc1de05a08bf17aa9c9a5ef72b7e17f6e18ce7e
+  install_mode: vendor
+  license: unknown
+  bridge_symlinks: []
+  scope: project
+  version: 1.0.0
+  catalog_identity: https://github.com/cognovis/library
