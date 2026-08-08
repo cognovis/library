@@ -4062,6 +4062,22 @@ library:
         - beads
         - review
         - adversarial
+    - name: docker-lifecycle-guard
+      description: Thin Pi adapter for the canonical Core ephemeral Docker ownership guard.
+      source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/docker-lifecycle-guard
+      bundle: true
+      entrypoint: index.ts
+      version: 1.0.0
+      metadata:
+        library:
+          source_catalog: cognovis-pi
+          inventory: manual
+      tags:
+        - cognovis
+        - pi
+        - docker
+        - guard
+        - lifecycle
     - name: native-pack
       description: Clean-room native Pi SDK orchestration for ordered multi-Bead Packs.
       source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/native-pack
@@ -4160,6 +4176,7 @@ library:
       requires:
         - pi-profile:pi-workbench
         - pi-extension:acpx-session-view
+        - pi-extension:docker-lifecycle-guard
         - pi-extension:cognovis-bead-harness
       version: 2.0.0
       metadata:
@@ -4177,6 +4194,7 @@ library:
       requires:
         - pi-profile:pi-workbench
         - pi-extension:acpx-session-view
+        - pi-extension:docker-lifecycle-guard
         - pi-extension:cognovis-bead-harness
       version: 2.0.0
       metadata:
@@ -4193,6 +4211,7 @@ library:
       description: Native Pi multi-Bead Pack with Sol implementation and parallel Opus/Kimi focused review.
       source: https://github.com/cognovis/cognovis-pi/blob/main/profiles/native-pack-standard.json
       requires:
+        - pi-extension:docker-lifecycle-guard
         - pi-extension:native-pack
       version: 1.0.0
       metadata:
