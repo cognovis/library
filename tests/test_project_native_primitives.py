@@ -222,7 +222,6 @@ def test_fix_CL_1w5g_consumer_resolves_solo_workbench_closure(tmp_path: Path) ->
         "pi-profile:fusion-sota",
         "pi-extension:acpx-workbench",
         "pi-profile:pi-workbench",
-        "pi-extension:docker-lifecycle-guard",
         "pi-profile:bead-high-assurance",
         "pi-profile:native-pack-standard",
         "pi-extension:solo-workbench",
