@@ -1,0 +1,1863 @@
+{
+ "bytes": {
+  "https://raw.githubusercontent.com/mattpocock/skills/84fdeffd12f2ee307994d1eb6feb48173b6e0502/skills/engineering/implement/SKILL.md": "---\nname: implement\ndescription: \"Implement a piece of work based on a spec or set of tickets.\"\ndisable-model-invocation: true\n---\n\nImplement the work described by the user in the spec or tickets.\n\nUse /tdd where possible, at pre-agreed seams.\n\nRun typechecking regularly, single test files regularly, and the full test suite once at the end.\n\nOnce done, use /code-review to review the work.\n\nCommit your work to the current branch.\n"
+ },
+ "capture": {
+  "captured_at": "2026-08-08T20:10:27Z",
+  "commit": "84fdeffd12f2ee307994d1eb6feb48173b6e0502",
+  "note": "Verbatim GitHub API responses. tests/test_source_provider_contract.py::test_git_repo_live_enumeration_matches_recording re-verifies this capture against the live provider when NETWORK_TESTS=1.",
+  "provider_identity": "https://github.com/mattpocock/skills",
+  "ref": "main",
+  "schema": "cognovis.provider-capture.v1"
+ },
+ "json": {
+  "https://api.github.com/repos/mattpocock/skills/git/ref/heads/main": {
+   "node_id": "REF_kwDORHkddq9yZWZzL2hlYWRzL21haW4",
+   "object": {
+    "sha": "84fdeffd12f2ee307994d1eb6feb48173b6e0502",
+    "type": "commit",
+    "url": "https://api.github.com/repos/mattpocock/skills/git/commits/84fdeffd12f2ee307994d1eb6feb48173b6e0502"
+   },
+   "ref": "refs/heads/main",
+   "url": "https://api.github.com/repos/mattpocock/skills/git/refs/heads/main"
+  },
+  "https://api.github.com/repos/mattpocock/skills/git/trees/84fdeffd12f2ee307994d1eb6feb48173b6e0502?recursive=1": {
+   "sha": "84fdeffd12f2ee307994d1eb6feb48173b6e0502",
+   "tree": [
+    {
+     "mode": "040000",
+     "path": ".agents",
+     "sha": "9de118b042d75ec8fc5168410ec60d81b2af0506",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/9de118b042d75ec8fc5168410ec60d81b2af0506"
+    },
+    {
+     "mode": "040000",
+     "path": ".agents/adr",
+     "sha": "76938658a803de73d2001af6a46b3a216e63a7ae",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/76938658a803de73d2001af6a46b3a216e63a7ae"
+    },
+    {
+     "mode": "100644",
+     "path": ".agents/adr/0001-explicit-setup-pointer-only-for-hard-dependencies.md",
+     "sha": "dd2ad0fc0533340199ecf25bc6ccacafb8bd4221",
+     "size": 1166,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/dd2ad0fc0533340199ecf25bc6ccacafb8bd4221"
+    },
+    {
+     "mode": "100644",
+     "path": ".agents/adr/0002-ship-as-a-claude-code-plugin.md",
+     "sha": "e5c13ea7f50b87ba4ce9a7917ee328e58387af3d",
+     "size": 5560,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/e5c13ea7f50b87ba4ce9a7917ee328e58387af3d"
+    },
+    {
+     "mode": "100644",
+     "path": ".agents/install-block.md",
+     "sha": "8971bde2d7ad2bbc722cc4beb838ea6c906b57c7",
+     "size": 2802,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/8971bde2d7ad2bbc722cc4beb838ea6c906b57c7"
+    },
+    {
+     "mode": "100644",
+     "path": ".agents/invocation.md",
+     "sha": "4ed77010a135462c3524f74975aca67e41714957",
+     "size": 2344,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/4ed77010a135462c3524f74975aca67e41714957"
+    },
+    {
+     "mode": "100644",
+     "path": ".agents/writing-docs.md",
+     "sha": "c915ab8be6e22dab003df00f76ffc69937517bd9",
+     "size": 12760,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c915ab8be6e22dab003df00f76ffc69937517bd9"
+    },
+    {
+     "mode": "040000",
+     "path": ".changeset",
+     "sha": "d1f66316a31fac04df32f919120e0502f7659229",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/d1f66316a31fac04df32f919120e0502f7659229"
+    },
+    {
+     "mode": "100644",
+     "path": ".changeset/README.md",
+     "sha": "654c6d4750dca19541bd9803371735943bb3fe4e",
+     "size": 512,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/654c6d4750dca19541bd9803371735943bb3fe4e"
+    },
+    {
+     "mode": "100644",
+     "path": ".changeset/config.json",
+     "sha": "06c7350518b33bdaedd0eae254f75fd887f16963",
+     "size": 380,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/06c7350518b33bdaedd0eae254f75fd887f16963"
+    },
+    {
+     "mode": "040000",
+     "path": ".claude-plugin",
+     "sha": "e0e14ff267458d6871918ef8972ef331867bb880",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/e0e14ff267458d6871918ef8972ef331867bb880"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude-plugin/marketplace.json",
+     "sha": "2944f1db83a04679b98b0c8c964f23a9650a0c39",
+     "size": 607,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/2944f1db83a04679b98b0c8c964f23a9650a0c39"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude-plugin/plugin.json",
+     "sha": "60fc082e64efbbe1071a58e9d174ad620be6f41d",
+     "size": 1639,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/60fc082e64efbbe1071a58e9d174ad620be6f41d"
+    },
+    {
+     "mode": "040000",
+     "path": ".github",
+     "sha": "93fa3f4faa6e26e4b9480e92abb45e09842fb04e",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/93fa3f4faa6e26e4b9480e92abb45e09842fb04e"
+    },
+    {
+     "mode": "040000",
+     "path": ".github/workflows",
+     "sha": "bd47e4c315e87d2809df6dfdb2089bae03aad91d",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/bd47e4c315e87d2809df6dfdb2089bae03aad91d"
+    },
+    {
+     "mode": "100644",
+     "path": ".github/workflows/release.yml",
+     "sha": "b503eff7b073afe8a08d0b25cc31efca78caea02",
+     "size": 780,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/b503eff7b073afe8a08d0b25cc31efca78caea02"
+    },
+    {
+     "mode": "100644",
+     "path": ".gitignore",
+     "sha": "3c3629e647f5ddf82548912e337bea9826b434af",
+     "size": 13,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3c3629e647f5ddf82548912e337bea9826b434af"
+    },
+    {
+     "mode": "040000",
+     "path": ".out-of-scope",
+     "sha": "fadc1fabb55628dc758a2275fcbd2721ea75e08a",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/fadc1fabb55628dc758a2275fcbd2721ea75e08a"
+    },
+    {
+     "mode": "100644",
+     "path": ".out-of-scope/mainstream-issue-trackers-only.md",
+     "sha": "7cd3dd6ddd022fa3ca0c72b91eb852fab77b0a11",
+     "size": 1574,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/7cd3dd6ddd022fa3ca0c72b91eb852fab77b0a11"
+    },
+    {
+     "mode": "100644",
+     "path": ".out-of-scope/question-limits.md",
+     "sha": "9ec41214d8e76f88d320613ba830bf9d81a229ea",
+     "size": 1262,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/9ec41214d8e76f88d320613ba830bf9d81a229ea"
+    },
+    {
+     "mode": "100644",
+     "path": ".out-of-scope/setup-skill-verify-mode.md",
+     "sha": "70d8714705002dd4e9d6fcb8cd79e98138ecfcb0",
+     "size": 1134,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/70d8714705002dd4e9d6fcb8cd79e98138ecfcb0"
+    },
+    {
+     "mode": "120000",
+     "path": "AGENTS.md",
+     "sha": "681311eb9cf453d0faddf3aacaec7357e97ba8e9",
+     "size": 9,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/681311eb9cf453d0faddf3aacaec7357e97ba8e9"
+    },
+    {
+     "mode": "100644",
+     "path": "CHANGELOG.md",
+     "sha": "26d68ffa7cf2f58471abd578042dded7b75675aa",
+     "size": 44408,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/26d68ffa7cf2f58471abd578042dded7b75675aa"
+    },
+    {
+     "mode": "100644",
+     "path": "CLAUDE.md",
+     "sha": "8b87834045fa73090c81d8c67d2d0c8b3725eee5",
+     "size": 3407,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/8b87834045fa73090c81d8c67d2d0c8b3725eee5"
+    },
+    {
+     "mode": "100644",
+     "path": "CONTEXT.md",
+     "sha": "a8b514c13b283c4ead4722f5e3589a3e48564ea3",
+     "size": 1786,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/a8b514c13b283c4ead4722f5e3589a3e48564ea3"
+    },
+    {
+     "mode": "100644",
+     "path": "LICENSE",
+     "sha": "f1dd2c09108dde1a5f56097cee8461b3ea834499",
+     "size": 1068,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/f1dd2c09108dde1a5f56097cee8461b3ea834499"
+    },
+    {
+     "mode": "100644",
+     "path": "README.md",
+     "sha": "3b6952dfe0f306c2b58447e5b1124af9d8b49cc4",
+     "size": 15682,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3b6952dfe0f306c2b58447e5b1124af9d8b49cc4"
+    },
+    {
+     "mode": "040000",
+     "path": "docs",
+     "sha": "30524b97865508de570b7a128ee70e22bf1efa39",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/30524b97865508de570b7a128ee70e22bf1efa39"
+    },
+    {
+     "mode": "040000",
+     "path": "docs/engineering",
+     "sha": "08dbb22b1a75fef7dcccb6df6588cfdf4d138d68",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/08dbb22b1a75fef7dcccb6df6588cfdf4d138d68"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/ask-matt.md",
+     "sha": "aa14dbc11f0001b7b7ece5b76323ef1525b87932",
+     "size": 10760,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/aa14dbc11f0001b7b7ece5b76323ef1525b87932"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/code-review.md",
+     "sha": "5cabe864334b4958764e78bf51a688367f35212f",
+     "size": 10607,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5cabe864334b4958764e78bf51a688367f35212f"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/codebase-design.md",
+     "sha": "add28574b831d1660e9ecaa3536e3873b4641a7f",
+     "size": 12347,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/add28574b831d1660e9ecaa3536e3873b4641a7f"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/diagnosing-bugs.md",
+     "sha": "4527956c59fbd73967b1e90d84f4e1a8b28621c2",
+     "size": 10771,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/4527956c59fbd73967b1e90d84f4e1a8b28621c2"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/domain-modeling.md",
+     "sha": "01d172876f08f68f492c9c38c18d30048c1bbc07",
+     "size": 10802,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/01d172876f08f68f492c9c38c18d30048c1bbc07"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/grill-with-docs.md",
+     "sha": "9f2f28ae0ed0d8ee5c0848f30dd44cb71db416bb",
+     "size": 10717,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/9f2f28ae0ed0d8ee5c0848f30dd44cb71db416bb"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/implement.md",
+     "sha": "20293b523446d3089ec07822d1fd0c07c8a026ad",
+     "size": 10253,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/20293b523446d3089ec07822d1fd0c07c8a026ad"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/improve-codebase-architecture.md",
+     "sha": "cc3fdd089705874b0f197b8dd92ec6b3c7f0ce8b",
+     "size": 11843,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/cc3fdd089705874b0f197b8dd92ec6b3c7f0ce8b"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/prototype.md",
+     "sha": "de86e9cc7472338016b17b367d65893659a1f170",
+     "size": 9705,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/de86e9cc7472338016b17b367d65893659a1f170"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/research.md",
+     "sha": "f17edac5ccdd1f4fab3cf7bfecc19d386083bc13",
+     "size": 9734,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/f17edac5ccdd1f4fab3cf7bfecc19d386083bc13"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/resolving-merge-conflicts.md",
+     "sha": "6a05a003bef359587042c6e073930bdd691673b8",
+     "size": 5349,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/6a05a003bef359587042c6e073930bdd691673b8"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/setup-matt-pocock-skills.md",
+     "sha": "f5ca9b9e7e06973853ef11940123c6490358529a",
+     "size": 9398,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/f5ca9b9e7e06973853ef11940123c6490358529a"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/tdd.md",
+     "sha": "5028b22f61689c6dd6ee7f428fb9d014e73c6839",
+     "size": 10503,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5028b22f61689c6dd6ee7f428fb9d014e73c6839"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/to-spec.md",
+     "sha": "42cbf939af619508efa302050a9eba70ceb3e7a3",
+     "size": 8847,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/42cbf939af619508efa302050a9eba70ceb3e7a3"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/to-tickets.md",
+     "sha": "c594031a5fab5c59e04d04786aaf4217356eae18",
+     "size": 10796,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c594031a5fab5c59e04d04786aaf4217356eae18"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/triage.md",
+     "sha": "4123fb75e45a1f8b9f0d916f502aaca072341c4e",
+     "size": 13156,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/4123fb75e45a1f8b9f0d916f502aaca072341c4e"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/wayfinder.md",
+     "sha": "adacf738247700fd8abd95794a58c42652073e43",
+     "size": 16051,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/adacf738247700fd8abd95794a58c42652073e43"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/engineering/wizard.md",
+     "sha": "9918d282ce7a499f664ab9b2ace576f5dce116fa",
+     "size": 9929,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/9918d282ce7a499f664ab9b2ace576f5dce116fa"
+    },
+    {
+     "mode": "040000",
+     "path": "docs/productivity",
+     "sha": "feac18d032482f83fe1d34cb64b715f9b4e30047",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/feac18d032482f83fe1d34cb64b715f9b4e30047"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/productivity/grill-me.md",
+     "sha": "9a9ce529191ac9adfbd8bed59d3aef5e790fac93",
+     "size": 6531,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/9a9ce529191ac9adfbd8bed59d3aef5e790fac93"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/productivity/grilling.md",
+     "sha": "6882c9ba216bb51a69c307f3f6c4a54c9441e097",
+     "size": 10473,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/6882c9ba216bb51a69c307f3f6c4a54c9441e097"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/productivity/handoff.md",
+     "sha": "474ec2530219fe8fe1944b046cbe6e5f90092c64",
+     "size": 8814,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/474ec2530219fe8fe1944b046cbe6e5f90092c64"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/productivity/teach.md",
+     "sha": "5b490699ff29b451b22d07d61b1bbc91491708a2",
+     "size": 13323,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5b490699ff29b451b22d07d61b1bbc91491708a2"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/productivity/to-questionnaire.md",
+     "sha": "beed35503487b1d24d3c1e7727d5b1411d97524b",
+     "size": 7886,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/beed35503487b1d24d3c1e7727d5b1411d97524b"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/productivity/wait-what.md",
+     "sha": "389558044beb88ed5bb57687e1cb55acde299754",
+     "size": 3462,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/389558044beb88ed5bb57687e1cb55acde299754"
+    },
+    {
+     "mode": "100644",
+     "path": "docs/productivity/writing-for-agents.md",
+     "sha": "a6ee718caebf55db7f3ac3febbe098595ae9e5cf",
+     "size": 7860,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/a6ee718caebf55db7f3ac3febbe098595ae9e5cf"
+    },
+    {
+     "mode": "100644",
+     "path": "package-lock.json",
+     "sha": "db12f086c92da55b5d724f0dd3afecfebd2d793f",
+     "size": 49290,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/db12f086c92da55b5d724f0dd3afecfebd2d793f"
+    },
+    {
+     "mode": "100644",
+     "path": "package.json",
+     "sha": "2200fefca3d8c1ebac5a823681915eec736dfa07",
+     "size": 597,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/2200fefca3d8c1ebac5a823681915eec736dfa07"
+    },
+    {
+     "mode": "040000",
+     "path": "scripts",
+     "sha": "ce43f858b7f6ae6db0edb88e8bc2b64b77552e8b",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/ce43f858b7f6ae6db0edb88e8bc2b64b77552e8b"
+    },
+    {
+     "mode": "100755",
+     "path": "scripts/link-skills.sh",
+     "sha": "a453287d02ab1f5bb9e57580d83efc997b5a3b85",
+     "size": 1829,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/a453287d02ab1f5bb9e57580d83efc997b5a3b85"
+    },
+    {
+     "mode": "100755",
+     "path": "scripts/list-skills.sh",
+     "sha": "f13da41774c8bffea798e64505a4c3adc528ee63",
+     "size": 168,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/f13da41774c8bffea798e64505a4c3adc528ee63"
+    },
+    {
+     "mode": "100644",
+     "path": "scripts/sync-plugin-version.mjs",
+     "sha": "c9e9907c75dac969e5b129ef1f80c64742de0d17",
+     "size": 1431,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c9e9907c75dac969e5b129ef1f80c64742de0d17"
+    },
+    {
+     "mode": "040000",
+     "path": "skills",
+     "sha": "5d76a9b8320eab13d8fc71037df154053e7fb3f7",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/5d76a9b8320eab13d8fc71037df154053e7fb3f7"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/deprecated",
+     "sha": "4f5b3c15c5a232c67481af36ec0dc01582ea5612",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/4f5b3c15c5a232c67481af36ec0dc01582ea5612"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/deprecated/README.md",
+     "sha": "ac3f47d3d28f8ca6371df209e14540243b47a360",
+     "size": 163,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/ac3f47d3d28f8ca6371df209e14540243b47a360"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering",
+     "sha": "75e2a52ab42d4b9c200bc1888d3152a3f3d0e7dd",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/75e2a52ab42d4b9c200bc1888d3152a3f3d0e7dd"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/README.md",
+     "sha": "4a948b8112e3e5a13fd29d4bd4b43e64ba44b9ab",
+     "size": 3883,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/4a948b8112e3e5a13fd29d4bd4b43e64ba44b9ab"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/ask-matt",
+     "sha": "c9c83b11b1a0c91c555ed6ade5ba67f6d6b103d4",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/c9c83b11b1a0c91c555ed6ade5ba67f6d6b103d4"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/ask-matt/PHASE-BOUNDARIES.md",
+     "sha": "cb31e6abf5c3fce903f1f4ed554cf541c9354977",
+     "size": 4276,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/cb31e6abf5c3fce903f1f4ed554cf541c9354977"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/ask-matt/SKILL.md",
+     "sha": "7f3ab7829fba2321ac9e5b2ff9d58b8321734aa8",
+     "size": 11491,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/7f3ab7829fba2321ac9e5b2ff9d58b8321734aa8"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/ask-matt/agents",
+     "sha": "61fae70dcff7acf7aee91ce9cdafd09dff73e89b",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/61fae70dcff7acf7aee91ce9cdafd09dff73e89b"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/ask-matt/agents/openai.yaml",
+     "sha": "5c60d51b5b1248d7210bff8c6b42a5a06524b8a4",
+     "size": 137,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5c60d51b5b1248d7210bff8c6b42a5a06524b8a4"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/code-review",
+     "sha": "7a2057dcc514dc024d4e6bf8ad78021b97f229ae",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/7a2057dcc514dc024d4e6bf8ad78021b97f229ae"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/code-review/SKILL.md",
+     "sha": "2d276fe88bddd363395b4887a555769222a34975",
+     "size": 6634,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/2d276fe88bddd363395b4887a555769222a34975"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/code-review/agents",
+     "sha": "8bacfedbf90e1a083c7cbd86f313d50cdd1d0165",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/8bacfedbf90e1a083c7cbd86f313d50cdd1d0165"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/code-review/agents/openai.yaml",
+     "sha": "9076774ba327f49068db9273feceda03bfe940fa",
+     "size": 100,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/9076774ba327f49068db9273feceda03bfe940fa"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/codebase-design",
+     "sha": "20b7cd1dd1fe5b0bd37ba72649f3a29375574b5b",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/20b7cd1dd1fe5b0bd37ba72649f3a29375574b5b"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/codebase-design/DEEPENING.md",
+     "sha": "3938457b88ddf98262d5f461aac703dbd74f749a",
+     "size": 2559,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3938457b88ddf98262d5f461aac703dbd74f749a"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
+     "sha": "8419ad6fa966be2e9e435c932b3584df56cb1af6",
+     "size": 2691,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/8419ad6fa966be2e9e435c932b3584df56cb1af6"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/codebase-design/SKILL.md",
+     "sha": "16620c24528b737408e78d95dd6a0e01a98d3d63",
+     "size": 6488,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/16620c24528b737408e78d95dd6a0e01a98d3d63"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/codebase-design/agents",
+     "sha": "f4eed2af42f99ada31a12e14b19189aea4dcc72f",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/f4eed2af42f99ada31a12e14b19189aea4dcc72f"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/codebase-design/agents/openai.yaml",
+     "sha": "3180715edb37f6e96bec42f92f00169faa8886ef",
+     "size": 102,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3180715edb37f6e96bec42f92f00169faa8886ef"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/diagnosing-bugs",
+     "sha": "463c81def888fefa77b894837d301d9ed70e0994",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/463c81def888fefa77b894837d301d9ed70e0994"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/diagnosing-bugs/SKILL.md",
+     "sha": "7f8acf7e3c5929a557d7bf26c88a7844551e3976",
+     "size": 8969,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/7f8acf7e3c5929a557d7bf26c88a7844551e3976"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/diagnosing-bugs/agents",
+     "sha": "58c19f15c6ddc4ca50c700669811d853deebe711",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/58c19f15c6ddc4ca50c700669811d853deebe711"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/diagnosing-bugs/agents/openai.yaml",
+     "sha": "a13a755a77634ce61a649a3a0d905a66d3865b35",
+     "size": 103,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/a13a755a77634ce61a649a3a0d905a66d3865b35"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/diagnosing-bugs/scripts",
+     "sha": "e0d3e0824707d32d2b4f19e4450e916108e792c5",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/e0d3e0824707d32d2b4f19e4450e916108e792c5"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/diagnosing-bugs/scripts/hitl-loop.template.sh",
+     "sha": "43daedd1bdbb47b49638c82557990fc5100d7c9c",
+     "size": 1319,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/43daedd1bdbb47b49638c82557990fc5100d7c9c"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/domain-modeling",
+     "sha": "959e63161ff78b4b1cd553b2c0e09e0c68418e5f",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/959e63161ff78b4b1cd553b2c0e09e0c68418e5f"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/domain-modeling/ADR-FORMAT.md",
+     "sha": "da7e78ec1c220cd0aedf7ad36424c9398034f375",
+     "size": 2766,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/da7e78ec1c220cd0aedf7ad36424c9398034f375"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/domain-modeling/CONTEXT-FORMAT.md",
+     "sha": "eaf2a18573f0a2d8c69ed53e29e4d9e21baf81d8",
+     "size": 2299,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/eaf2a18573f0a2d8c69ed53e29e4d9e21baf81d8"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/domain-modeling/SKILL.md",
+     "sha": "d0f7e1a5ccb06a7184056ff9af02b67bc77f9dda",
+     "size": 3427,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/d0f7e1a5ccb06a7184056ff9af02b67bc77f9dda"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/domain-modeling/agents",
+     "sha": "f142d14320695e1004d43997f20d2e98ff40e62c",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/f142d14320695e1004d43997f20d2e98ff40e62c"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/domain-modeling/agents/openai.yaml",
+     "sha": "7f1522d2f11506ee205275ab7c282aa52366ecf6",
+     "size": 101,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/7f1522d2f11506ee205275ab7c282aa52366ecf6"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/grill-with-docs",
+     "sha": "5fdcdeedf2d0c73b3ecb1da0a464dd885590f8d6",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/5fdcdeedf2d0c73b3ecb1da0a464dd885590f8d6"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/grill-with-docs/SKILL.md",
+     "sha": "bed05d2bd3245306267cea57cd696b5dd94d50fe",
+     "size": 245,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/bed05d2bd3245306267cea57cd696b5dd94d50fe"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/grill-with-docs/agents",
+     "sha": "3715f0eaf6fcc837da99f7b18bf908bec43f360a",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/3715f0eaf6fcc837da99f7b18bf908bec43f360a"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/grill-with-docs/agents/openai.yaml",
+     "sha": "5dbe2780a51be3e9b118bd7758a73e54a9384e11",
+     "size": 145,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5dbe2780a51be3e9b118bd7758a73e54a9384e11"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/implement",
+     "sha": "f07d230f645fc9ac390cf13a450bbff12ad791a3",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/f07d230f645fc9ac390cf13a450bbff12ad791a3"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/implement/SKILL.md",
+     "sha": "7a0b11f5f4fe9505ea5c7983c3083ba1bf754f69",
+     "size": 433,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/7a0b11f5f4fe9505ea5c7983c3083ba1bf754f69"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/implement/agents",
+     "sha": "0038b921a1e87de17b068d200a2284f5681a6ced",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/0038b921a1e87de17b068d200a2284f5681a6ced"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/implement/agents/openai.yaml",
+     "sha": "f8794dc153b409052a9167baf10858cf01b36175",
+     "size": 139,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/f8794dc153b409052a9167baf10858cf01b36175"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/improve-codebase-architecture",
+     "sha": "6a971d1f5b109ac817e18c0f0419c2a32d60f26a",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/6a971d1f5b109ac817e18c0f0419c2a32d60f26a"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/improve-codebase-architecture/HTML-REPORT.md",
+     "sha": "17f6d2c7b8342ee7c4260d8d98024d462c7d3eaa",
+     "size": 6685,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/17f6d2c7b8342ee7c4260d8d98024d462c7d3eaa"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/improve-codebase-architecture/SKILL.md",
+     "sha": "529761a3a01d35996018f27530b3c3cc0ab18d41",
+     "size": 6009,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/529761a3a01d35996018f27530b3c3cc0ab18d41"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/improve-codebase-architecture/agents",
+     "sha": "7c39fbb2cce2baee4f7c4e22b04358534aa79206",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/7c39fbb2cce2baee4f7c4e22b04358534aa79206"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/improve-codebase-architecture/agents/openai.yaml",
+     "sha": "706fdca096da5937fe57875a9154017d50668c42",
+     "size": 166,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/706fdca096da5937fe57875a9154017d50668c42"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/prototype",
+     "sha": "57569dda16077a016b8fb82494dbf9f6430d7cc4",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/57569dda16077a016b8fb82494dbf9f6430d7cc4"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/prototype/LOGIC.md",
+     "sha": "5f5a3fd5a8cbd69c029854e9881ddc6e87ae5093",
+     "size": 6093,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5f5a3fd5a8cbd69c029854e9881ddc6e87ae5093"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/prototype/SKILL.md",
+     "sha": "094571156140f5993cce8557dc31383c82817f3e",
+     "size": 2954,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/094571156140f5993cce8557dc31383c82817f3e"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/prototype/UI.md",
+     "sha": "76c0f6012b016af04d6105fa696a9a0e29dfa53a",
+     "size": 6959,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/76c0f6012b016af04d6105fa696a9a0e29dfa53a"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/prototype/agents",
+     "sha": "675949db356200842ab314c5e243274732563d51",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/675949db356200842ab314c5e243274732563d51"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/prototype/agents/openai.yaml",
+     "sha": "1618b147965bc729b7bf3e8da5f130132067aadc",
+     "size": 100,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/1618b147965bc729b7bf3e8da5f130132067aadc"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/research",
+     "sha": "972a34cd8128b7952b7eb279b06715862db906a7",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/972a34cd8128b7952b7eb279b06715862db906a7"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/research/SKILL.md",
+     "sha": "0ba594a07f306479baa67104381f48e209ab6aae",
+     "size": 799,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/0ba594a07f306479baa67104381f48e209ab6aae"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/research/agents",
+     "sha": "594c816ffc0393d64c92c42d440be0904fc9648c",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/594c816ffc0393d64c92c42d440be0904fc9648c"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/research/agents/openai.yaml",
+     "sha": "e18b96ca0ccc1003889d5d6991386207c2454bc2",
+     "size": 94,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/e18b96ca0ccc1003889d5d6991386207c2454bc2"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/resolving-merge-conflicts",
+     "sha": "6aa1ed0b40fac0ebea5c0cf6f2addf82c99b6323",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/6aa1ed0b40fac0ebea5c0cf6f2addf82c99b6323"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/resolving-merge-conflicts/SKILL.md",
+     "sha": "aadb3fcb1dfb43413dff30c2fb4b18b7cf58e90e",
+     "size": 921,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/aadb3fcb1dfb43413dff30c2fb4b18b7cf58e90e"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/resolving-merge-conflicts/agents",
+     "sha": "194f859796049eb26413278d3905fa6e6ea8fc03",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/194f859796049eb26413278d3905fa6e6ea8fc03"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/resolving-merge-conflicts/agents/openai.yaml",
+     "sha": "331ffb9d38937877f51a5f867a66dc61eee259ae",
+     "size": 113,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/331ffb9d38937877f51a5f867a66dc61eee259ae"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/setup-matt-pocock-skills",
+     "sha": "abf20c04a4aa8a37ff20aa7286f28857150f8b8d",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/abf20c04a4aa8a37ff20aa7286f28857150f8b8d"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
+     "sha": "4cbdd0f60f1fb47fa63b93102d75d74dd0e24fae",
+     "size": 6922,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/4cbdd0f60f1fb47fa63b93102d75d74dd0e24fae"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/setup-matt-pocock-skills/agents",
+     "sha": "f9e04d6e5228bdda9ccbac73f499cb672e23102d",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/f9e04d6e5228bdda9ccbac73f499cb672e23102d"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/setup-matt-pocock-skills/agents/openai.yaml",
+     "sha": "65a0da8128c98051183235e490767a8065310868",
+     "size": 152,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/65a0da8128c98051183235e490767a8065310868"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/setup-matt-pocock-skills/domain.md",
+     "sha": "b548c538d606a65bde9bcd4ca3a458ec7c52cd9b",
+     "size": 2045,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/b548c538d606a65bde9bcd4ca3a458ec7c52cd9b"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/setup-matt-pocock-skills/issue-tracker-github.md",
+     "sha": "bf595e2470597fcd316d8b316ad861f05ed630be",
+     "size": 3746,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/bf595e2470597fcd316d8b316ad861f05ed630be"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/setup-matt-pocock-skills/issue-tracker-gitlab.md",
+     "sha": "95e49cbb9c103c343a7f14ac087630a14031d78c",
+     "size": 3827,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/95e49cbb9c103c343a7f14ac087630a14031d78c"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/setup-matt-pocock-skills/issue-tracker-local.md",
+     "sha": "fbda5e04217fcdb73b513720f513abbe0b3014ed",
+     "size": 1815,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/fbda5e04217fcdb73b513720f513abbe0b3014ed"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/setup-matt-pocock-skills/triage-labels.md",
+     "sha": "b716855d485f3865f9dfde2a82141721f065b2e7",
+     "size": 1045,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/b716855d485f3865f9dfde2a82141721f065b2e7"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/tdd",
+     "sha": "423f3cc2bccf3b0ed426fb35eeb4b38d9188a343",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/423f3cc2bccf3b0ed426fb35eeb4b38d9188a343"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/tdd/SKILL.md",
+     "sha": "ead7781d79eb11cdafa1ac2db978cadef0eba240",
+     "size": 3568,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/ead7781d79eb11cdafa1ac2db978cadef0eba240"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/tdd/agents",
+     "sha": "55d7815f7a20e77d38dc82abe8b01f7c71bc8664",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/55d7815f7a20e77d38dc82abe8b01f7c71bc8664"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/tdd/agents/openai.yaml",
+     "sha": "651b838a7663e027b1b8884491e867f26bb9a021",
+     "size": 87,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/651b838a7663e027b1b8884491e867f26bb9a021"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/tdd/mocking.md",
+     "sha": "71cbfee674d93244ce81d1830b930ca9a69200bd",
+     "size": 1481,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/71cbfee674d93244ce81d1830b930ca9a69200bd"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/tdd/tests.md",
+     "sha": "7ab86479f925a1f9e8ba680af33cb3b12e015381",
+     "size": 2214,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/7ab86479f925a1f9e8ba680af33cb3b12e015381"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/to-spec",
+     "sha": "dc32a36159f99c854cb470f371106cd38513a15f",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/dc32a36159f99c854cb470f371106cd38513a15f"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/to-spec/SKILL.md",
+     "sha": "3fd64959895b7eb095a13d797e1c7544f1f08c8f",
+     "size": 3035,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3fd64959895b7eb095a13d797e1c7544f1f08c8f"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/to-spec/agents",
+     "sha": "7d1b433d25c266f934f4ade97a6bbd8525392ff9",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/7d1b433d25c266f934f4ade97a6bbd8525392ff9"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/to-spec/agents/openai.yaml",
+     "sha": "549e6f76f020a1b9ba65f52ccda336566ee6222a",
+     "size": 135,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/549e6f76f020a1b9ba65f52ccda336566ee6222a"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/to-tickets",
+     "sha": "80c1bedbdaa72a4abd524055013accb4fe0ea8c4",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/80c1bedbdaa72a4abd524055013accb4fe0ea8c4"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/to-tickets/SKILL.md",
+     "sha": "96deac51d4391a3f691478d48f85f43261516c08",
+     "size": 5707,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/96deac51d4391a3f691478d48f85f43261516c08"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/to-tickets/agents",
+     "sha": "4b6bae5ffba2e5300d013880aefebbaaec71a53c",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/4b6bae5ffba2e5300d013880aefebbaaec71a53c"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/to-tickets/agents/openai.yaml",
+     "sha": "24605a5db64e4fc750b999aa94aea126bee814ee",
+     "size": 146,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/24605a5db64e4fc750b999aa94aea126bee814ee"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/triage",
+     "sha": "b20940845332f540e3f17b0cb32d45fd8c2298bf",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/b20940845332f540e3f17b0cb32d45fd8c2298bf"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/triage/AGENT-BRIEF.md",
+     "sha": "6535c9bd00e81266e03fc257348aa02405ee3d10",
+     "size": 7972,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/6535c9bd00e81266e03fc257348aa02405ee3d10"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/triage/OUT-OF-SCOPE.md",
+     "sha": "fc0e39f529146883d23d0dd315f55af05a39cbdf",
+     "size": 4712,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/fc0e39f529146883d23d0dd315f55af05a39cbdf"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/triage/SKILL.md",
+     "sha": "e67b7bbabf5215b52f135c7e58b8da5f91337a86",
+     "size": 6582,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/e67b7bbabf5215b52f135c7e58b8da5f91337a86"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/triage/agents",
+     "sha": "42aafadffab73310f2c1501d3a9328d2e3a58a71",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/42aafadffab73310f2c1501d3a9328d2e3a58a71"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/triage/agents/openai.yaml",
+     "sha": "acb366cf0f2527e8925ff1223b77610ac0b1be4c",
+     "size": 135,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/acb366cf0f2527e8925ff1223b77610ac0b1be4c"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/wayfinder",
+     "sha": "48c3a8b0a9705d6310d37f7f9b53bcb2c55955c7",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/48c3a8b0a9705d6310d37f7f9b53bcb2c55955c7"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/wayfinder/SKILL.md",
+     "sha": "e4984ed327e12ba65303f4b5de2eb75c01e99c16",
+     "size": 11887,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/e4984ed327e12ba65303f4b5de2eb75c01e99c16"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/wayfinder/agents",
+     "sha": "43fb277f74a0e65c9fd674935d0860a845ac3eb4",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/43fb277f74a0e65c9fd674935d0860a845ac3eb4"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/wayfinder/agents/openai.yaml",
+     "sha": "b37544751e0570f9df8de6c02aef238de8c3e1e0",
+     "size": 144,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/b37544751e0570f9df8de6c02aef238de8c3e1e0"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/wizard",
+     "sha": "359db2fb13dc168346632556185252cab9dbec77",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/359db2fb13dc168346632556185252cab9dbec77"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/wizard/SKILL.md",
+     "sha": "fdc2a72162b75db138df2f81c9cc6fd8a72f4495",
+     "size": 4163,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/fdc2a72162b75db138df2f81c9cc6fd8a72f4495"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/engineering/wizard/agents",
+     "sha": "0390248e6862d908ba4657b734e8d4ff4d5c1a97",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/0390248e6862d908ba4657b734e8d4ff4d5c1a97"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/wizard/agents/openai.yaml",
+     "sha": "b601bdf3a321e7d32d5714681540b811287d3988",
+     "size": 96,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/b601bdf3a321e7d32d5714681540b811287d3988"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/engineering/wizard/template.sh",
+     "sha": "e5b28ab65e034cec1bd61f12116808d343bdb957",
+     "size": 8596,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/e5b28ab65e034cec1bd61f12116808d343bdb957"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress",
+     "sha": "3673cd673dbfdbe100848c521cd3585efbb58aa7",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/3673cd673dbfdbe100848c521cd3585efbb58aa7"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/README.md",
+     "sha": "5e08535aaf93c6b7b37bae80f039cb61771efbad",
+     "size": 1706,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5e08535aaf93c6b7b37bae80f039cb61771efbad"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/claude-handoff",
+     "sha": "b312afac556f7229717dbd9b786d77bc160c8649",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/b312afac556f7229717dbd9b786d77bc160c8649"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/claude-handoff/SKILL.md",
+     "sha": "69b26bc53019e4704fe320d6a9726aef2bef2ceb",
+     "size": 1286,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/69b26bc53019e4704fe320d6a9726aef2bef2ceb"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/claude-handoff/agents",
+     "sha": "5572458bdf828210baef5c90a8b6bef13c23d3f1",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/5572458bdf828210baef5c90a8b6bef13c23d3f1"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/claude-handoff/agents/openai.yaml",
+     "sha": "0a7aa5da50d0e73248fc17fb8fe82409ec071eaf",
+     "size": 141,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/0a7aa5da50d0e73248fc17fb8fe82409ec071eaf"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/loop-me",
+     "sha": "6364da007c562d9f6ad3f54524dbc42465d9893a",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/6364da007c562d9f6ad3f54524dbc42465d9893a"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/loop-me/SKILL.md",
+     "sha": "c408efa39d2a5da50562e29c914bf8095bf4a1db",
+     "size": 2560,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c408efa39d2a5da50562e29c914bf8095bf4a1db"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/loop-me/agents",
+     "sha": "4961e291bf0aabae1ba0e01ed3dc424917b93142",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/4961e291bf0aabae1ba0e01ed3dc424917b93142"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/loop-me/agents/openai.yaml",
+     "sha": "1a4f4111192ff75b4771e8a248c603994d5eafdc",
+     "size": 140,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/1a4f4111192ff75b4771e8a248c603994d5eafdc"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/setup-ts-deep-modules",
+     "sha": "706cd1617d53587b0c4e6df5a8c56974f54cacd2",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/706cd1617d53587b0c4e6df5a8c56974f54cacd2"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/setup-ts-deep-modules/SKILL.md",
+     "sha": "5963b8a39f1818da85bbef74eab8c96cf544181e",
+     "size": 7602,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5963b8a39f1818da85bbef74eab8c96cf544181e"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/setup-ts-deep-modules/agents",
+     "sha": "32327210e4f02cc765bf938fb44bda41a6c755d1",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/32327210e4f02cc765bf938fb44bda41a6c755d1"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/setup-ts-deep-modules/agents/openai.yaml",
+     "sha": "5d0581bdd4f9337cfb1e13feb7e1e18f43ea9db1",
+     "size": 149,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5d0581bdd4f9337cfb1e13feb7e1e18f43ea9db1"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/setup-ts-deep-modules/dependency-cruiser.config.cjs",
+     "sha": "94a9dcded37a9d500d819b316aa16fb8b5c15af6",
+     "size": 3732,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/94a9dcded37a9d500d819b316aa16fb8b5c15af6"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/writing-beats",
+     "sha": "545d05c3fdbfdd094dd88900b0ef8c9a823eac90",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/545d05c3fdbfdd094dd88900b0ef8c9a823eac90"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/writing-beats/SKILL.md",
+     "sha": "1cdb7dec65d1168c8516c3e83af32149226f79e3",
+     "size": 4905,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/1cdb7dec65d1168c8516c3e83af32149226f79e3"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/writing-beats/agents",
+     "sha": "879971020d99454498793f60a71c1a38895852bd",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/879971020d99454498793f60a71c1a38895852bd"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/writing-beats/agents/openai.yaml",
+     "sha": "e8eaa188d4c70b582eed2d1775fe4c4ea3562b25",
+     "size": 142,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/e8eaa188d4c70b582eed2d1775fe4c4ea3562b25"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/writing-fragments",
+     "sha": "ce7d2741a30df8a488f6248c84cf954cff98393f",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/ce7d2741a30df8a488f6248c84cf954cff98393f"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/writing-fragments/SKILL.md",
+     "sha": "3d0ea7527ac01405ce94857e8a5e0c4c1e105087",
+     "size": 3579,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3d0ea7527ac01405ce94857e8a5e0c4c1e105087"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/writing-fragments/agents",
+     "sha": "343878ac39008f2b36efd8b01ef85affedb63e74",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/343878ac39008f2b36efd8b01ef85affedb63e74"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/writing-fragments/agents/openai.yaml",
+     "sha": "be3713e91e3ddc6c71e04e6b512b6ad6502d7cc8",
+     "size": 140,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/be3713e91e3ddc6c71e04e6b512b6ad6502d7cc8"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/writing-shape",
+     "sha": "31af0156520819c15d19358a8e0bd36f82e67ad3",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/31af0156520819c15d19358a8e0bd36f82e67ad3"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/writing-shape/SKILL.md",
+     "sha": "a9694e345d585e58778a5541f6a35fd4479d6f7f",
+     "size": 5970,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/a9694e345d585e58778a5541f6a35fd4479d6f7f"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/in-progress/writing-shape/agents",
+     "sha": "3c6ba7952b51309c1adbeb219235ba1a84092d2a",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/3c6ba7952b51309c1adbeb219235ba1a84092d2a"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/in-progress/writing-shape/agents/openai.yaml",
+     "sha": "87e0c736be148002f9db275258cd2f405643ad7b",
+     "size": 144,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/87e0c736be148002f9db275258cd2f405643ad7b"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc",
+     "sha": "e27fe099d3f57e9828a5787818b570ab305304e5",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/e27fe099d3f57e9828a5787818b570ab305304e5"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/README.md",
+     "sha": "d407187d7613aaf22a5d564a8e9f4153114b4af5",
+     "size": 699,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/d407187d7613aaf22a5d564a8e9f4153114b4af5"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/git-guardrails-claude-code",
+     "sha": "e90e289cce7a31bdf1afdf591f0790d7ac6c3cbc",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/e90e289cce7a31bdf1afdf591f0790d7ac6c3cbc"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/git-guardrails-claude-code/SKILL.md",
+     "sha": "d943c68219d0f47512f10c5018a11fd8358e9bb5",
+     "size": 2312,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/d943c68219d0f47512f10c5018a11fd8358e9bb5"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/git-guardrails-claude-code/agents",
+     "sha": "fc0e93f60a719f73e17602eb90a3f3f6d4d02649",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/fc0e93f60a719f73e17602eb90a3f3f6d4d02649"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/git-guardrails-claude-code/agents/openai.yaml",
+     "sha": "3f5d756f1b9b97d94cef1473fb480ccda5fdfbc1",
+     "size": 112,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3f5d756f1b9b97d94cef1473fb480ccda5fdfbc1"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/git-guardrails-claude-code/scripts",
+     "sha": "b91370b1a2b0ca1b4f3650dccbbd08adee74618e",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/b91370b1a2b0ca1b4f3650dccbbd08adee74618e"
+    },
+    {
+     "mode": "100755",
+     "path": "skills/misc/git-guardrails-claude-code/scripts/block-dangerous-git.sh",
+     "sha": "c40b59cb47880fc9da8fe4179bd742f51f09d17d",
+     "size": 507,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c40b59cb47880fc9da8fe4179bd742f51f09d17d"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/migrate-to-shoehorn",
+     "sha": "0aea91a3599a4bf7aeec17e3262d4cbcfcbeec23",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/0aea91a3599a4bf7aeec17e3262d4cbcfcbeec23"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/migrate-to-shoehorn/SKILL.md",
+     "sha": "ae4f965e204fc93cedbc4e2c306e92829d93f800",
+     "size": 2795,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/ae4f965e204fc93cedbc4e2c306e92829d93f800"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/migrate-to-shoehorn/agents",
+     "sha": "6d0b115f0b6247aa024a80e983c1600d505ce78f",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/6d0b115f0b6247aa024a80e983c1600d505ce78f"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/migrate-to-shoehorn/agents/openai.yaml",
+     "sha": "3bd79ee2b502075c6d1fe40e6fe98f4fe3f3c5f5",
+     "size": 110,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3bd79ee2b502075c6d1fe40e6fe98f4fe3f3c5f5"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/scaffold-exercises",
+     "sha": "44a0ee332b9d67ebbd59389c7eb4e5aff1ce845c",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/44a0ee332b9d67ebbd59389c7eb4e5aff1ce845c"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/scaffold-exercises/SKILL.md",
+     "sha": "d87df28e7d8abb4e57ecc6e47d71c274d16054c7",
+     "size": 3589,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/d87df28e7d8abb4e57ecc6e47d71c274d16054c7"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/scaffold-exercises/agents",
+     "sha": "3c0517e749a0b39a50160a5d2c87c7fdd5dbb448",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/3c0517e749a0b39a50160a5d2c87c7fdd5dbb448"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/scaffold-exercises/agents/openai.yaml",
+     "sha": "963723a58973effa256cbfe0f23a7bcc03a374b8",
+     "size": 108,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/963723a58973effa256cbfe0f23a7bcc03a374b8"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/setup-pre-commit",
+     "sha": "dcc584ff84c4f040ea12742fcb46b7c3ad7070bd",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/dcc584ff84c4f040ea12742fcb46b7c3ad7070bd"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/setup-pre-commit/SKILL.md",
+     "sha": "395a77b5f7e33911092f7bc86e7d87c4ca70d189",
+     "size": 2261,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/395a77b5f7e33911092f7bc86e7d87c4ca70d189"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/misc/setup-pre-commit/agents",
+     "sha": "fbd6f7f72c3a80ce1b0cc5c45c0d5089f26dfffa",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/fbd6f7f72c3a80ce1b0cc5c45c0d5089f26dfffa"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/misc/setup-pre-commit/agents/openai.yaml",
+     "sha": "e5a1c63df9e0703893cdad799bd5e2a6b5e6939d",
+     "size": 99,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/e5a1c63df9e0703893cdad799bd5e2a6b5e6939d"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity",
+     "sha": "a418fafcdb1246c373fbb020f8dbb4c45e22b158",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/a418fafcdb1246c373fbb020f8dbb4c45e22b158"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/README.md",
+     "sha": "21bc1781e0276608b853bc71d3613c2ad06ac77b",
+     "size": 1503,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/21bc1781e0276608b853bc71d3613c2ad06ac77b"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/grill-me",
+     "sha": "c817f6f36acd483294144694a935a76d3e3eb101",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/c817f6f36acd483294144694a935a76d3e3eb101"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/grill-me/SKILL.md",
+     "sha": "9470cfcfe231a35e46494cddbacdd395991afb1e",
+     "size": 147,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/9470cfcfe231a35e46494cddbacdd395991afb1e"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/grill-me/agents",
+     "sha": "07f595a948444a6d67c2ebd26af9c370d324fffd",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/07f595a948444a6d67c2ebd26af9c370d324fffd"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/grill-me/agents/openai.yaml",
+     "sha": "4d6fb0c746c5d21364dce5d0cf8c51eab9712e7b",
+     "size": 137,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/4d6fb0c746c5d21364dce5d0cf8c51eab9712e7b"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/grilling",
+     "sha": "fd99bcbb818f7ef766b83656fb5fac0b58e223ad",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/fd99bcbb818f7ef766b83656fb5fac0b58e223ad"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/grilling/SKILL.md",
+     "sha": "95bd01ee9049a7e08120d54af9cd6ceeef282335",
+     "size": 1872,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/95bd01ee9049a7e08120d54af9cd6ceeef282335"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/grilling/agents",
+     "sha": "d8adf71d95e60b320608cf0aaf32f8587bc5cb0a",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/d8adf71d95e60b320608cf0aaf32f8587bc5cb0a"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/grilling/agents/openai.yaml",
+     "sha": "ddbdb96139c0c1dfe6bca698f39d0465674b8a39",
+     "size": 113,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/ddbdb96139c0c1dfe6bca698f39d0465674b8a39"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/handoff",
+     "sha": "184d485ae68a2132893a94239b2b85d253e6152b",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/184d485ae68a2132893a94239b2b85d253e6152b"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/handoff/SKILL.md",
+     "sha": "043d9e13dc7eca3002a47d3ab9865c568f647863",
+     "size": 879,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/043d9e13dc7eca3002a47d3ab9865c568f647863"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/handoff/agents",
+     "sha": "d3633c2ea1653808784e627a98337b6e9c86349d",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/d3633c2ea1653808784e627a98337b6e9c86349d"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/handoff/agents/openai.yaml",
+     "sha": "6e1d8da121beceddc2f9ec7fa8714c1d914dd11a",
+     "size": 141,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/6e1d8da121beceddc2f9ec7fa8714c1d914dd11a"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/teach",
+     "sha": "15f8c86d39ef834e643d092733ca899b59049067",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/15f8c86d39ef834e643d092733ca899b59049067"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/teach/GLOSSARY-FORMAT.md",
+     "sha": "9cae84c44c8eb5d27b8695d4ef29a2893dc4900c",
+     "size": 2131,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/9cae84c44c8eb5d27b8695d4ef29a2893dc4900c"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/teach/LEARNING-RECORD-FORMAT.md",
+     "sha": "2faa7c98fabcdff48eb6bd07e4847d48a6b8d4e1",
+     "size": 2777,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/2faa7c98fabcdff48eb6bd07e4847d48a6b8d4e1"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/teach/MISSION-FORMAT.md",
+     "sha": "5dac184a319308e2ec0c18c16d6b8d52b9be2748",
+     "size": 1553,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/5dac184a319308e2ec0c18c16d6b8d52b9be2748"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/teach/RESOURCES-FORMAT.md",
+     "sha": "c94aac6a2634cc229fe0b777fc5cc7da3a28c3d2",
+     "size": 1926,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c94aac6a2634cc229fe0b777fc5cc7da3a28c3d2"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/teach/SKILL.md",
+     "sha": "b1603e5ac536d2b5c29496c06df4db0bb9f74e69",
+     "size": 9507,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/b1603e5ac536d2b5c29496c06df4db0bb9f74e69"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/teach/agents",
+     "sha": "7552a1a296689bb84090ef3a8d4dd2fe63fe4860",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/7552a1a296689bb84090ef3a8d4dd2fe63fe4860"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/teach/agents/openai.yaml",
+     "sha": "3452a850e3b0c1f0a3d41b2bfd45164d2d38d7f6",
+     "size": 139,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/3452a850e3b0c1f0a3d41b2bfd45164d2d38d7f6"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/to-questionnaire",
+     "sha": "7c4d04fb4d77824d7d98433ee7a8b17dde5efa13",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/7c4d04fb4d77824d7d98433ee7a8b17dde5efa13"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/to-questionnaire/SKILL.md",
+     "sha": "1423375bb23923a754e931f034a9714b8f81dfcc",
+     "size": 2921,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/1423375bb23923a754e931f034a9714b8f81dfcc"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/to-questionnaire/agents",
+     "sha": "a6c8a4c1c89e76b6fd08d3196a754fc0a381575a",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/a6c8a4c1c89e76b6fd08d3196a754fc0a381575a"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/to-questionnaire/agents/openai.yaml",
+     "sha": "a58d14765beb4acb4c9708b516310558e1308a22",
+     "size": 166,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/a58d14765beb4acb4c9708b516310558e1308a22"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/wait-what",
+     "sha": "6abe708f1bf253158a037ac49faea2944e2809dc",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/6abe708f1bf253158a037ac49faea2944e2809dc"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/wait-what/SKILL.md",
+     "sha": "d493cfa883645bb7ce2e12f5232c0fbe3a0b9f87",
+     "size": 325,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/d493cfa883645bb7ce2e12f5232c0fbe3a0b9f87"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/wait-what/agents",
+     "sha": "2c0d28dbe73e041d883c5ef1c36ccc88fd5b6d0c",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/2c0d28dbe73e041d883c5ef1c36ccc88fd5b6d0c"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/wait-what/agents/openai.yaml",
+     "sha": "ba77f1c967700d7c6574ba70b0dd585056c98b7f",
+     "size": 161,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/ba77f1c967700d7c6574ba70b0dd585056c98b7f"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/writing-for-agents",
+     "sha": "bd9c9c4762db0a9a094fd419316ebd4b0444d06e",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/bd9c9c4762db0a9a094fd419316ebd4b0444d06e"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/writing-for-agents/SKILL-MECHANICS.md",
+     "sha": "c28e3bf035403080a849ac4b7816d3af93d145ff",
+     "size": 2651,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c28e3bf035403080a849ac4b7816d3af93d145ff"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/writing-for-agents/SKILL.md",
+     "sha": "c059d48cd70cfd1494bde74afcc426010b1c10e3",
+     "size": 10966,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/c059d48cd70cfd1494bde74afcc426010b1c10e3"
+    },
+    {
+     "mode": "040000",
+     "path": "skills/productivity/writing-for-agents/agents",
+     "sha": "1a0e4610dc7305e776f9619417bad296bc99ca01",
+     "type": "tree",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/trees/1a0e4610dc7305e776f9619417bad296bc99ca01"
+    },
+    {
+     "mode": "100644",
+     "path": "skills/productivity/writing-for-agents/agents/openai.yaml",
+     "sha": "079c933b75743dec18b5d0c01006def20b6aad26",
+     "size": 102,
+     "type": "blob",
+     "url": "https://api.github.com/repos/mattpocock/skills/git/blobs/079c933b75743dec18b5d0c01006def20b6aad26"
+    }
+   ],
+   "truncated": false,
+   "url": "https://api.github.com/repos/mattpocock/skills/git/trees/84fdeffd12f2ee307994d1eb6feb48173b6e0502"
+  }
+ }
+}

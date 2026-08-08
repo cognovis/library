@@ -144,7 +144,7 @@ degrades deterministically; it never probes by catching exceptions.
 | `identity()` | Canonical, stable provider identity (URL or URN). Display aliases resolve to it. | YES | — |
 | `capabilities()` | The declared capability set, including which of the below are present. | YES | — |
 | `enumerate(selector)` | Remote-only listing of items with no local checkout. Returns upstream IDs, names, and collection membership. | YES | — |
-| `describe(upstream_id)` | Item metadata sufficient for classification without fetching content. | YES | Falls back to `fetch` plus classification; recorded as a costlier path, never as a failure |
+| `describe(upstream_id)` | Item metadata sufficient for classification without fetching content. | NO | Falls back to `fetch` plus classification; recorded as a costlier path, never as a failure |
 | `fetch(upstream_id, revision)` | Complete immutable content bytes for one item. | YES | — |
 | `revision_of(upstream_id)` | Immutable upstream revision identity. | NO | Provider is **revisionless**; see `Trust on first use` |
 | `verify(bytes, expected)` | Provider-native integrity proof (for example a Git object hash). | NO | Library normalized digest is the only integrity proof |
@@ -155,6 +155,19 @@ degrades deterministically; it never probes by catching exceptions.
 `enumerate` is deliberately the required floor. A provider that cannot list
 without a local checkout is not a provider under this contract; it is a local
 catalog, which the platform already supports.
+
+**Amendment (slice 1, `CL-coif`, 2026-08-08).** `describe` was originally marked
+`Required: YES` while this same table also defined behavior for its absence. Both
+readings — "mandatory method with a default implementation" and "optional
+declared capability" — were supported by the text, and the ambiguity was routed
+to this slice as a round-2 review advisory on `CL-2p73`. It is resolved in favor
+of **optional and declared**: the absence behavior is required to be driven by
+`capabilities()`, and a capability that is always present cannot be. A provider
+that cannot cheaply describe an item is a costlier provider, never an excluded
+one. The implemented contract is `scripts/lib/providers/contract.py`; the
+fetch-then-classify path is recorded as a typed `NormalizationCost`, and
+`tests/test_source_provider_contract.py::test_optional_capability_absence_is_declared`
+holds it.
 
 ### Provider kinds
 

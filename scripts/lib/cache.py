@@ -2,7 +2,7 @@
 cache.py — Layer-B cache path calculation and materialization.
 
 Per ADR-0003, library items are deployed through three layers:
-  Layer A — Source: GitHub URL or local path (catalog entry `source:`)
+  Layer A — Source: a remote source URL or a local path (catalog entry `source:`)
   Layer B — Cache:  ~/.local/share/library/<type>/<marketplace>/<name>@<14hex>/
   Layer C — Harness: .agents/skills/<name>/ (vendored copy by default)
 """

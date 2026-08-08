@@ -38,6 +38,23 @@
 
 ### Added
 
+- *(CL-coif, marketplace)* Implement the ADR-0011 source-provider capability
+  contract and the normalized inventory core. A provider adapter declares its
+  capabilities and consumers degrade from that declaration alone: an absent
+  `revision_of` makes the provider revisionless, an absent `describe` costs a
+  recorded fetch-then-classify path, and an absent `verify` or `rights_evidence`
+  is recorded rather than guessed around. The reference `git-repo` adapter
+  enumerates a remote repository's nested layout with **no local checkout** and
+  refuses a truncated listing instead of presenting it as complete. Normalized
+  items carry upstream identity verbatim beside Library-owned classification and
+  round-trip through the canonical `<provider-identity>#<upstream-id>`.
+  `sources.marketplaces` entries gain `provider_kind`, `allowlist`, `auth_ref`,
+  and `rights`; an unknown kind and an allowlist-less `git-org` are rejected.
+  Registration installs nothing. `scripts/checks/provider_neutrality.py` fails CI
+  when a provider name, provider-kind conditional, or upstream URL appears in the
+  resolver, cache, or Workspace modules. ADR-0011's adapter table is amended:
+  `describe` is optional-and-declared, not mandatory-with-a-default.
+
 - *(CL-hyp9, Workspace)* Publish the platform-owned `library-authoring`
   Workspace over the five Forge Skills, admit it as stable from committed Library
   platform and `cognovis-pi` consumer locks, and make project lock receipts

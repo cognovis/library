@@ -46,6 +46,24 @@ projection by default and permits a machine-local gitignored projection only on
 explicit operator opt-in after the rights state is displayed. Rights are resolved
 **per repository** for a `git-org` provider; there is no organizational grant.
 
+**Registration fields** (`CL-coif`). A `sources.marketplaces` entry carries four
+schema-validated provider fields beyond its legacy `name`, `source`, and `type`:
+
+| Field | Meaning |
+|---|---|
+| `provider_kind` | One of the four kinds above. An unknown kind is rejected by `docs/schema/library.schema.json` |
+| `allowlist` | Library-owned list of upstream units a provider may contribute. **Required and non-empty for `git-org`** |
+| `auth_ref` | The *name* of a credential reference and nothing else. Credential values never enter the catalog, a cache object, or a receipt |
+| `rights` | The four independent grants plus a named `evidence_source` |
+
+The API counterpart is `lib.providers.registration.register_provider`, which
+enforces the same rules before it mutates anything and reports explicitly that it
+produced no cache object, no receipt, and no projection.
+
+Provider knowledge stays inside adapters. `scripts/checks/provider_neutrality.py`
+fails CI when a provider name, provider-kind conditional, or upstream URL appears
+in `scripts/lib/resolver.py`, `scripts/lib/cache.py`, or `scripts/lib/workspace.py`.
+
 **Trigger semantics.** Marketplaces are not invoked. They are registered via
 `library add-marketplace <github-url>`. Users browse or search them and then pull
 specific items into their repos.
