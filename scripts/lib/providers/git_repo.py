@@ -28,6 +28,8 @@ from .classification import ITEM_MARKERS, library_type_for
 from .contract import (
     AuthRequirement,
     Availability,
+    FetchedFile,
+    FetchedItem,
     ItemDescription,
     OPTIONAL_CAPABILITIES,
     ProviderItem,
@@ -161,16 +163,43 @@ class GitRepoProvider(SourceProvider):
             if item.upstream_id == prefix or item.upstream_id.startswith(f"{prefix}/")
         )
 
-    def fetch(self, upstream_id: str, revision: str | None = None) -> bytes:
-        """Content bytes of the item's marker file at a pinned revision.
+    def fetch(self, upstream_id: str, revision: str | None = None) -> FetchedItem:
+        """Every file the item consists of, at a pinned revision.
+
+        An item is a directory here, and the reference provider's skills carry
+        more than their marker file (`implement` ships `agents/openai.yaml`).
+        Fetching only the marker would hand a downstream cache an incomplete
+        item while reporting success.
 
         Raises:
             KeyError: when the provider does not list that item.
         """
-        entry = self._entry(upstream_id)
+        marker = self._entry(upstream_id)
         commit = revision or self._resolve_commit()
-        url = f"{self.raw_base}/{self._owner}/{self._repository}/{commit}/{entry['path']}"
-        return self.transport.get_bytes(url, self._headers())
+        directory = "" if upstream_id == ROOT_ITEM_ID else f"{upstream_id}/"
+        entries = self._tree_entries()
+        member_paths = sorted(
+            path
+            for path in entries
+            if (path.startswith(directory) if directory else True)
+        )
+        files = []
+        for path in member_paths:
+            url = f"{self.raw_base}/{self._owner}/{self._repository}/{commit}/{path}"
+            files.append(
+                FetchedFile(
+                    path=path[len(directory) :] if directory else path,
+                    content=self.transport.get_bytes(url, self._headers()),
+                    upstream_content_identity=entries[path].get("sha"),
+                )
+            )
+        primary = marker["path"]
+        return FetchedItem(
+            upstream_id=upstream_id,
+            revision=commit,
+            files=tuple(files),
+            primary_path=primary[len(directory) :] if directory else primary,
+        )
 
     def auth_requirements(self) -> Sequence[AuthRequirement]:
         """The named credential reference, when this source declares one."""
@@ -191,7 +220,14 @@ class GitRepoProvider(SourceProvider):
     # -- Optional capabilities ------------------------------------------------
 
     def describe(self, upstream_id: str) -> ItemDescription:
-        """Classify from tree metadata alone. No content bytes are fetched."""
+        """Classify the Library type from tree metadata alone.
+
+        No content bytes are fetched, which is the point of the capability and
+        also its limit: `classification.skill_class` is an upstream frontmatter
+        property, so it is not answered here and no substitute value is
+        invented. A caller that needs it asks `normalize_inventory` for content
+        inspection and pays the recorded cost.
+        """
         entry = self._entry(upstream_id)
         library_type, basis = library_type_for(entry["path"])
         return ItemDescription(

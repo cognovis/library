@@ -23,7 +23,9 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from checks.provider_neutrality import (  # noqa: E402
     CORE_MODULES,
+    LEGACY_PROVIDER_MODULES,
     Finding,
+    scan_legacy,
     scan_paths,
     scan_repository,
 )
@@ -56,9 +58,50 @@ def test_check_fails_on_a_provider_name(tmp_path: Path) -> None:
         tmp_path,
         'def resolve(url):\n    if "github.com" in url:\n        return "special"\n',
     )
-    assert [finding.kind for finding in findings] == ["provider-name", "upstream-url"] or (
-        "provider-name" in {finding.kind for finding in findings}
+    assert {finding.kind for finding in findings} == {
+        "provider-name",
+        "provider-host-literal",
+    }
+    assert {finding.token for finding in findings} == {"github", "github.com"}
+
+
+def test_check_fails_on_a_provider_name_inside_an_identifier(tmp_path: Path) -> None:
+    """`resolve_github_url` is provider knowledge with or without a literal."""
+    findings = _findings_for(
+        tmp_path, "def _resolve_github_repo_url(base):\n    return base\n"
     )
+    assert [finding.kind for finding in findings] == ["provider-name"]
+    assert "identifier" in findings[0].excerpt
+
+
+def test_check_fails_on_a_legacy_distribution_type_branch(tmp_path: Path) -> None:
+    """A branch on the legacy `type` value is a provider-kind branch renamed."""
+    findings = _findings_for(
+        tmp_path,
+        'def plan(entry):\n'
+        '    if entry["type"] != "git":\n'
+        '        raise ValueError("unsupported")\n'
+        '    return entry\n',
+    )
+    assert [finding.kind for finding in findings] == ["provider-kind-conditional"]
+    assert findings[0].token == "git"
+
+
+def test_check_does_not_flag_the_word_git_in_prose(tmp_path: Path) -> None:
+    """Only a whole-literal match counts, or the check becomes background noise."""
+    findings = _findings_for(
+        tmp_path,
+        '# run git rev-parse to resolve the head\n'
+        'COMMAND = ["git", "rev-parse", "HEAD"]\n',
+    )
+    # The list element is still a whole literal and is reported; the comment is not.
+    assert [finding.line for finding in findings] == [2]
+
+
+def test_check_fails_on_an_unlisted_provider_host(tmp_path: Path) -> None:
+    """No allowlist of provider names can be complete; hostnames are structural."""
+    findings = _findings_for(tmp_path, 'HOST = "sources.example-forge.io"\n')
+    assert [finding.kind for finding in findings] == ["provider-host-literal"]
 
 
 def test_check_fails_on_a_provider_name_in_a_comment(tmp_path: Path) -> None:
@@ -124,7 +167,7 @@ def test_check_exits_non_zero_when_a_violation_is_introduced(tmp_path: Path) -> 
 
     dirty_root = tmp_path / "repo"
     (dirty_root / "scripts" / "lib").mkdir(parents=True)
-    for relative in CORE_MODULES:
+    for relative in (*CORE_MODULES, *LEGACY_PROVIDER_MODULES):
         target = dirty_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text((REPO_ROOT / relative).read_text())
@@ -146,6 +189,47 @@ def test_check_exits_non_zero_when_a_violation_is_introduced(tmp_path: Path) -> 
     assert "provider-kind-conditional" in dirty.stdout
     assert "provider-name" in dirty.stdout
     assert "upstream-url" in dirty.stdout
+
+
+def test_legacy_provider_modules_are_measured_against_a_ratchet() -> None:
+    """The pre-ADR-0011 resolver is declared, measured, and may not get worse.
+
+    A gate that certifies only three modules, while the module that actually
+    resolves a marketplace today is full of provider knowledge, would read as a
+    stronger claim than it is. The legacy set makes that state visible and stops
+    it growing.
+    """
+    assert "scripts/lib/source.py" in LEGACY_PROVIDER_MODULES
+
+    statuses = scan_legacy(REPO_ROOT)
+    assert statuses, "the legacy set must not be silently empty"
+    for status in statuses:
+        assert not status.regressed, (
+            f"{status.path} gained provider knowledge: "
+            f"{status.observed} > baseline {status.baseline}"
+        )
+        # The baseline is real, not a ceiling parked far above reality.
+        assert status.baseline == status.observed, (
+            f"{status.path} improved to {status.observed}; lower the baseline"
+        )
+
+
+def test_legacy_regression_fails_the_check(tmp_path: Path) -> None:
+    """Adding provider knowledge to a legacy module fails CI too."""
+    repo = tmp_path / "repo"
+    (repo / "scripts" / "lib").mkdir(parents=True)
+    legacy = repo / "scripts" / "lib" / "source.py"
+    legacy.write_text('BASE = "https://github.com/example/repo"\n')
+
+    held = scan_legacy(repo, {"scripts/lib/source.py": 3})
+    assert held[0].regressed is False
+
+    legacy.write_text(
+        'BASE = "https://github.com/example/repo"\n'
+        'OTHER = "https://gitlab.com/example/repo"\n'
+    )
+    regressed = scan_legacy(repo, {"scripts/lib/source.py": 3})
+    assert regressed[0].regressed is True
 
 
 def test_check_writes_a_typed_artifact(tmp_path: Path) -> None:
@@ -171,6 +255,12 @@ def test_check_writes_a_typed_artifact(tmp_path: Path) -> None:
     assert payload["result"] == "pass"
     assert payload["findings"] == []
     assert sorted(payload["scanned"]) == sorted(CORE_MODULES)
+    # The artifact states the limit of its own claim, both in prose and in data.
+    assert "not a claim about every module" in payload["scope_note"]
+    legacy = {entry["path"]: entry for entry in payload["legacy_provider_modules"]}
+    assert legacy["scripts/lib/source.py"]["state"] == "held"
+    assert legacy["scripts/lib/source.py"]["observed"] > 0
+    assert "not a claim about every module" in result.stdout
 
 
 def test_check_fails_loudly_when_a_scanned_module_is_missing(tmp_path: Path) -> None:

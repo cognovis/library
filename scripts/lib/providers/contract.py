@@ -29,6 +29,13 @@ one. The ADR table is amended to match.
 `enumerate` is the required floor. A provider that cannot list without a local
 checkout is not a provider under this contract; it is a local catalog, which the
 platform already supports.
+
+`describe` answers the Library **type** axis without content. It does not
+answer every classification question: `classification.skill_class` is defined by
+ADR-0011 as an upstream frontmatter property, which lives in content. A
+description produced without content therefore carries no `skill_class` key at
+all, rather than a third state value the ADR does not admit. Deriving it is an
+explicit, costed content inspection — see `normalize.normalize_inventory`.
 """
 
 from __future__ import annotations
@@ -124,6 +131,65 @@ class ItemDescription:
 
 
 @dataclass(frozen=True)
+class FetchedFile:
+    """One file of an item's content, at its item-relative path."""
+
+    path: str
+    content: bytes
+    upstream_content_identity: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.path, str) or not self.path.strip():
+            raise ValueError("FetchedFile.path is required")
+        if self.path.startswith("/") or ".." in self.path.split("/"):
+            raise ValueError(f"FetchedFile.path must be item-relative: {self.path!r}")
+        if not isinstance(self.content, (bytes, bytearray)):
+            raise ValueError("FetchedFile.content must be bytes")
+        object.__setattr__(self, "content", bytes(self.content))
+
+
+@dataclass(frozen=True)
+class FetchedItem:
+    """**Complete** immutable content for one item, at a pinned revision.
+
+    An item is frequently a directory, not a file: the reference provider's
+    `implement` skill ships `SKILL.md` **and** `agents/openai.yaml`. Returning
+    only the marker file would silently drop the rest, and a cache built on that
+    would materialize an incomplete item while reporting success. This type
+    makes "complete" structural rather than a promise in a docstring.
+
+    `primary_path` names the marker file classification is derived from.
+    """
+
+    upstream_id: str
+    revision: str | None
+    files: tuple[FetchedFile, ...]
+    primary_path: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.upstream_id, str) or not self.upstream_id.strip():
+            raise ValueError("FetchedItem.upstream_id is required")
+        object.__setattr__(self, "files", tuple(self.files))
+        if not self.files:
+            raise ValueError("FetchedItem must carry at least one file")
+        paths = [item.path for item in self.files]
+        if len(paths) != len(set(paths)):
+            raise ValueError("FetchedItem file paths must be unique")
+        if self.primary_path not in paths:
+            raise ValueError(
+                f"FetchedItem.primary_path {self.primary_path!r} is not among its files"
+            )
+
+    @property
+    def primary(self) -> bytes:
+        """Bytes of the marker file classification is derived from."""
+        return next(item.content for item in self.files if item.path == self.primary_path)
+
+    def paths(self) -> tuple[str, ...]:
+        return tuple(item.path for item in self.files)
+
+
+@dataclass(frozen=True)
 class AuthRequirement:
     """A named credential *reference* and its scope. Never a value.
 
@@ -190,8 +256,13 @@ class SourceProvider(abc.ABC):
         """Remote-only listing of items. No local checkout, ever."""
 
     @abc.abstractmethod
-    def fetch(self, upstream_id: str, revision: str | None = None) -> bytes:
-        """Complete immutable content bytes for one item."""
+    def fetch(self, upstream_id: str, revision: str | None = None) -> FetchedItem:
+        """Complete immutable content for one item, pinned to `revision`.
+
+        Complete means every file the item consists of, not just its marker
+        file. A caller that passes `revision` gets that revision or an error;
+        it never silently gets a different one.
+        """
 
     @abc.abstractmethod
     def auth_requirements(self) -> Sequence[AuthRequirement]:

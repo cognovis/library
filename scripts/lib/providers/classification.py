@@ -11,9 +11,12 @@ Two rules are recorded because they are decisions rather than derivations:
   classified by extension and marked low-confidence rather than given a new type.
 - `skill_class` is derived from the upstream frontmatter flag ADR-0011 names
   (`disable-model-invocation: true` marks a navigator). That flag lives in
-  content, so a classification produced *without* fetching content records
-  `unknown` instead of guessing. `unknown` is a legal value; a wrong
-  `procedure` would be a silent misclassification.
+  content. ADR-0011 admits exactly `navigator` and `procedure`, so a
+  classification produced *without* content omits the key entirely and records
+  why. Emitting a third state would invent vocabulary the ADR does not have;
+  guessing `procedure` would silently misclassify every navigator. Absence of a
+  key is the one honest option, and it is queryable through
+  `skill_class_source`.
 """
 
 from __future__ import annotations
@@ -47,7 +50,8 @@ EXECUTABLE_TYPES = frozenset(
     {"workflow", "pi-extension", "pi-profile", "script", "hook", "guardrail"}
 )
 
-SKILL_CLASSES = ("navigator", "procedure", "unknown")
+#: The complete ADR-0011 vocabulary. There is no third state.
+SKILL_CLASSES = ("navigator", "procedure")
 
 _FRONTMATTER_RE = re.compile(rb"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 _NAVIGATOR_FLAG_RE = re.compile(
@@ -76,15 +80,19 @@ def library_type_for(hint: str | None) -> tuple[str, str]:
     return DEFAULT_LIBRARY_TYPE, "unrecognized-default"
 
 
-def skill_class_for(library_type: str, content: bytes | None) -> str:
-    """Derive `skill_class` from upstream frontmatter, or `unknown` without it."""
-    if library_type != "skill":
-        return "unknown"
-    if content is None:
-        return "unknown"
+def skill_class_for(library_type: str, content: bytes | None) -> str | None:
+    """Derive `skill_class` from upstream frontmatter.
+
+    Returns:
+        `navigator` or `procedure`, or `None` when the item is not a Skill or
+        its content was not inspected. `None` means "not determined"; it is
+        never rendered into the classification as a value.
+    """
+    if library_type != "skill" or content is None:
+        return None
     match = _FRONTMATTER_RE.match(content)
     if not match:
-        return "unknown"
+        return None
     return "navigator" if _NAVIGATOR_FLAG_RE.search(match.group(1)) else "procedure"
 
 
@@ -92,11 +100,21 @@ def classification_for(
     library_type: str, basis: str, content: bytes | None
 ) -> dict[str, str]:
     """The Library-owned classification metadata for one item."""
-    return {
-        "skill_class": skill_class_for(library_type, content),
+    classification = {
         "type_basis": basis,
         "content_inspected": "yes" if content is not None else "no",
     }
+    skill_class = skill_class_for(library_type, content)
+    if skill_class is not None:
+        classification["skill_class"] = skill_class
+        classification["skill_class_source"] = "upstream-frontmatter"
+    elif library_type == "skill":
+        classification["skill_class_source"] = (
+            "content-inspected-without-frontmatter"
+            if content is not None
+            else "not-determined-without-content"
+        )
+    return classification
 
 
 def executable_admission_for(library_type: str) -> str:

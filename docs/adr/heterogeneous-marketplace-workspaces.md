@@ -169,6 +169,24 @@ fetch-then-classify path is recorded as a typed `NormalizationCost`, and
 `tests/test_source_provider_contract.py::test_optional_capability_absence_is_declared`
 holds it.
 
+Two clarifications from the same slice, both raised in its adversarial review:
+
+- **`fetch` returns a complete item, not a marker file.** An item is frequently
+  a directory — the reference provider's `implement` skill ships `SKILL.md` and
+  `agents/openai.yaml` — so "complete immutable content bytes" is carried by a
+  typed `FetchedItem` holding every member file, its item-relative path, its
+  upstream content identity, and the pinned revision. A fetch that returned only
+  the marker would hand the slice-3 cache an incomplete item while reporting
+  success.
+- **`describe` answers the type axis, not `classification.skill_class`.**
+  `skill_class` is defined above as an upstream frontmatter property, which
+  lives in content; a description produced without content cannot answer it. The
+  normalized item therefore carries `skill_class` **only** when content was
+  inspected, and otherwise records `classification.skill_class_source` naming
+  why. No third `skill_class` state is introduced: the vocabulary remains
+  `navigator | procedure`. Content inspection is an explicit, costed option on
+  normalization.
+
 ### Provider kinds
 
 | Kind | Enumeration | Revision | Auth | Reference provider |

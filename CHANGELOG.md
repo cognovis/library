@@ -50,10 +50,19 @@
   round-trip through the canonical `<provider-identity>#<upstream-id>`.
   `sources.marketplaces` entries gain `provider_kind`, `allowlist`, `auth_ref`,
   and `rights`; an unknown kind and an allowlist-less `git-org` are rejected.
-  Registration installs nothing. `scripts/checks/provider_neutrality.py` fails CI
-  when a provider name, provider-kind conditional, or upstream URL appears in the
-  resolver, cache, or Workspace modules. ADR-0011's adapter table is amended:
-  `describe` is optional-and-declared, not mandatory-with-a-default.
+  Registration installs nothing. `fetch` returns a complete item — every member
+  file with its upstream content identity, pinned to a revision resolved
+  *before* the fetch, so classification can never be attributed to a revision it
+  did not come from. `scripts/checks/provider_neutrality.py` fails CI when a
+  provider name, provider-kind conditional, legacy distribution-type branch,
+  upstream URL, or provider host literal appears in the resolver, cache, or
+  Workspace modules, and it additionally holds the pre-ADR-0011 resolver
+  (`scripts/lib/source.py`) to a ratchet so the legacy path cannot gain provider
+  knowledge while the generic contract is built beside it. ADR-0011's adapter
+  table is amended: `describe` is optional-and-declared rather than
+  mandatory-with-a-default, it answers the type axis only, and
+  `classification.skill_class` appears only when content was inspected — the
+  vocabulary stays `navigator | procedure` with no invented third state.
 
 - *(CL-hyp9, Workspace)* Publish the platform-owned `library-authoring`
   Workspace over the five Forge Skills, admit it as stable from committed Library

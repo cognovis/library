@@ -45,6 +45,26 @@ from .inventory import (
 )
 
 FETCH_THEN_CLASSIFY = "fetch-then-classify"
+CONTENT_INSPECTION = "content-inspection"
+
+_COST_REASONS = {
+    FETCH_THEN_CLASSIFY: (
+        "the adapter does not declare describe, so content was fetched to classify"
+    ),
+    CONTENT_INSPECTION: (
+        "content-derived classification was requested, so content was fetched "
+        "in addition to the adapter's description"
+    ),
+}
+
+
+class ProvenanceMismatch(RuntimeError):
+    """A provider returned content at a revision other than the requested one.
+
+    Fail closed. Accepting the substitute would record classification derived
+    from one revision against the identity of another, which is drift wearing
+    the costume of clean provenance.
+    """
 
 
 @dataclass(frozen=True)
@@ -87,6 +107,7 @@ def normalize_inventory(
     selector: Any = None,
     rights: Rights | None = None,
     trust_state: str = "unreviewed",
+    inspect_content: bool = False,
 ) -> NormalizationResult:
     """Normalize one provider's inventory through its declared capabilities.
 
@@ -96,10 +117,16 @@ def normalize_inventory(
         rights: Rights recorded for this source in catalog configuration.
             Slice 1 carries them; slice 2 (`CL-n7ex`) enforces them.
         trust_state: Recorded trust for this source.
+        inspect_content: Fetch each item's content even when the adapter
+            declares `describe`. Content-derived classification -- notably
+            `classification.skill_class`, which ADR-0011 sources from upstream
+            frontmatter -- is only available this way. It is off by default
+            because it costs one fetch per item, and it is recorded as a cost
+            when used, exactly like the `describe`-absent path.
 
     Returns:
-        The normalized inventory, the costs paid for absent capabilities, and
-        the capabilities the provider does not offer.
+        The normalized inventory, the costs paid, and the capabilities the
+        provider does not offer.
     """
     declared = validate_capability_declaration(provider)
     absent = tuple(sorted(OPTIONAL_CAPABILITIES - declared))
@@ -122,7 +149,14 @@ def normalize_inventory(
     items: list[NormalizedItem] = []
 
     for raw in provider.enumerate(selector):
-        description, content = _describe(provider, declared, raw, costs)
+        # The revision is resolved BEFORE any content is fetched, and is passed
+        # into the fetch. Resolving it afterwards would let a mutable provider
+        # advance in between and bind classification derived from newer bytes to
+        # an older recorded revision -- drift that looks like clean provenance.
+        revision = provider.revision_of(raw.upstream_id) if "revision_of" in declared else None
+        description, content = _describe(
+            provider, declared, raw, revision, costs, inspect_content=inspect_content
+        )
         classification = classification_for(
             description.library_type,
             str(description.classification.get("type_basis", "provider-described")),
@@ -137,8 +171,6 @@ def normalize_inventory(
         )
         if description.content_identity:
             classification["upstream_content_identity"] = description.content_identity
-
-        revision = provider.revision_of(raw.upstream_id) if "revision_of" in declared else None
 
         items.append(
             NormalizedItem(
@@ -171,21 +203,20 @@ def _describe(
     provider: SourceProvider,
     declared: frozenset[str],
     raw: Any,
+    revision: str | None,
     costs: list[NormalizationCost],
+    *,
+    inspect_content: bool,
 ) -> tuple[ItemDescription, bytes | None]:
-    """Describe one item, paying the fetch-then-classify cost when needed."""
+    """Describe one item, paying the fetch cost only when it buys something."""
     if "describe" in declared:
-        return provider.describe(raw.upstream_id), None
+        description = provider.describe(raw.upstream_id)
+        if not inspect_content:
+            return description, None
+        content = _fetch_primary(provider, raw, revision, costs, CONTENT_INSPECTION)
+        return description, content
 
-    content = provider.fetch(raw.upstream_id)
-    costs.append(
-        NormalizationCost(
-            upstream_id=raw.upstream_id,
-            capability="describe",
-            path=FETCH_THEN_CLASSIFY,
-            reason="the adapter does not declare describe, so content was fetched to classify",
-        )
-    )
+    content = _fetch_primary(provider, raw, revision, costs, FETCH_THEN_CLASSIFY)
     library_type, basis = library_type_for(raw.content_hint or raw.upstream_name)
     return (
         ItemDescription(
@@ -195,6 +226,31 @@ def _describe(
         ),
         content,
     )
+
+
+def _fetch_primary(
+    provider: SourceProvider,
+    raw: Any,
+    revision: str | None,
+    costs: list[NormalizationCost],
+    path: str,
+) -> bytes:
+    """Fetch one item at its already-resolved revision and return its marker bytes."""
+    fetched = provider.fetch(raw.upstream_id, revision)
+    if fetched.revision is not None and revision is not None and fetched.revision != revision:
+        raise ProvenanceMismatch(
+            f"{raw.upstream_id}: asked for revision {revision}, "
+            f"provider returned {fetched.revision}"
+        )
+    costs.append(
+        NormalizationCost(
+            upstream_id=raw.upstream_id,
+            capability="describe",
+            path=path,
+            reason=_COST_REASONS[path],
+        )
+    )
+    return fetched.primary
 
 
 def normalized_types(items: Sequence[NormalizedItem]) -> tuple[str, ...]:

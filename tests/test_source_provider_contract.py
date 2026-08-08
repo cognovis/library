@@ -30,6 +30,8 @@ from lib.providers.contract import (  # noqa: E402
     AuthRequirement,
     Availability,
     CapabilityNotDeclared,
+    FetchedFile,
+    FetchedItem,
     ItemDescription,
     OPTIONAL_CAPABILITIES,
     ProviderItem,
@@ -258,48 +260,103 @@ def test_git_repo_rights_evidence_reports_a_located_licence() -> None:
     assert absent.source is None
 
 
-def test_git_repo_fetch_pins_to_the_resolved_commit() -> None:
-    """Content is fetched at the enumerated commit, never at a moving ref."""
+def test_git_repo_fetch_returns_the_complete_item_at_a_pinned_commit() -> None:
+    """Complete means every file of the item, not just its marker file.
+
+    `implement` ships `SKILL.md` **and** `agents/openai.yaml`. Returning only
+    the marker would hand a cache an incomplete item while reporting success.
+    """
     transport = RecordedTransport(_recording())
     provider = _provider(transport)
-    content = provider.fetch("skills/engineering/implement")
-    assert content.startswith(b"---\n")
-    assert any(
-        "84fdeffd12f2ee307994d1eb6feb48173b6e0502" in url and url.endswith("SKILL.md")
+    fetched = provider.fetch("skills/engineering/implement")
+
+    assert fetched.paths() == ("SKILL.md", "agents/openai.yaml")
+    assert fetched.primary_path == "SKILL.md"
+    assert fetched.primary.startswith(b"---\n")
+    assert fetched.revision == "84fdeffd12f2ee307994d1eb6feb48173b6e0502"
+    assert all(file.upstream_content_identity for file in fetched.files)
+    assert all(
+        "84fdeffd12f2ee307994d1eb6feb48173b6e0502" in url
         for url in transport.requests
+        if "raw.githubusercontent" in url
     )
 
 
-def test_normalization_over_a_fetching_provider_derives_skill_class() -> None:
-    """The fetch-then-classify path reads the frontmatter flag ADR-0011 names."""
+def test_git_repo_fetch_honors_an_explicit_revision() -> None:
+    """A caller that pins a revision gets that revision, not the current ref."""
+    recording = _recording()
+    sha = "84fdeffd12f2ee307994d1eb6feb48173b6e0502"
+    provider = _provider(RecordedTransport(recording))
+    fetched = provider.fetch("skills/engineering/implement", sha)
+    assert fetched.revision == sha
 
-    class FetchingProvider(MinimalProvider):
-        def enumerate(self, selector: object = None) -> tuple[ProviderItem, ...]:
-            return (
-                ProviderItem(
-                    upstream_id="skills/engineering/implement",
-                    upstream_name="implement",
-                    collection_membership=("skills", "engineering"),
-                    content_hint="skills/engineering/implement/SKILL.md",
-                ),
+
+def test_content_inspection_derives_skill_class_from_upstream_frontmatter() -> None:
+    """`skill_class` is an upstream property, so it costs a recorded fetch."""
+    identity = f"{MATTPOCOCK}#skills/engineering/ask-matt"
+
+    described = normalize_inventory(_provider()).inventory.resolve(identity)
+    assert described.library_type == "skill"
+    assert "skill_class" not in described.classification
+    assert described.classification["skill_class_source"] == "not-determined-without-content"
+    assert described.classification["content_inspected"] == "no"
+
+    inspected_result = normalize_inventory(
+        _provider(), selector="skills/engineering/ask-matt", inspect_content=True
+    )
+    inspected = inspected_result.inventory.resolve(identity)
+    assert inspected.classification["skill_class"] == "navigator"
+    assert inspected.classification["skill_class_source"] == "upstream-frontmatter"
+    assert [cost.path for cost in inspected_result.costs] == ["content-inspection"]
+
+
+def test_normalization_resolves_the_revision_before_it_fetches() -> None:
+    """Classification bytes and the recorded revision come from the same pin."""
+    order: list[str] = []
+
+    class OrderingProvider(MinimalProvider):
+        def capabilities(self) -> frozenset[str]:
+            return frozenset(REQUIRED_CAPABILITIES) | {"revision_of"}
+
+        def revision_of(self, upstream_id: str) -> str:
+            order.append("revision_of")
+            return "rev-1"
+
+        def fetch(self, upstream_id: str, revision: str | None = None) -> FetchedItem:
+            order.append(f"fetch:{revision}")
+            return FetchedItem(
+                upstream_id=upstream_id,
+                revision=revision,
+                files=(FetchedFile(path="anchor.md", content=b"body\n"),),
+                primary_path="anchor.md",
             )
 
-        def fetch(self, upstream_id: str, revision: str | None = None) -> bytes:
-            return _provider().fetch("skills/engineering/implement")
+    result = normalize_inventory(OrderingProvider())
+    assert order == ["revision_of", "fetch:rev-1"]
+    assert next(iter(result.inventory)).upstream_revision == "rev-1"
 
-    result = normalize_inventory(FetchingProvider())
-    item = next(iter(result.inventory))
-    assert item.library_type == "skill"
-    assert item.classification["skill_class"] == "navigator"
-    assert item.classification["content_inspected"] == "yes"
 
-    described = _provider().describe("skills/engineering/implement")
-    assert described.library_type == "skill"
-    described_item = normalize_inventory(_provider()).inventory.resolve(
-        f"{MATTPOCOCK}#skills/engineering/implement"
-    )
-    assert described_item.classification["skill_class"] == "unknown"
-    assert described_item.classification["content_inspected"] == "no"
+def test_normalization_refuses_content_from_another_revision() -> None:
+    """A provider that substitutes a revision fails closed."""
+    from lib.providers.normalize import ProvenanceMismatch
+
+    class DriftingProvider(MinimalProvider):
+        def capabilities(self) -> frozenset[str]:
+            return frozenset(REQUIRED_CAPABILITIES) | {"revision_of"}
+
+        def revision_of(self, upstream_id: str) -> str:
+            return "rev-1"
+
+        def fetch(self, upstream_id: str, revision: str | None = None) -> FetchedItem:
+            return FetchedItem(
+                upstream_id=upstream_id,
+                revision="rev-2",
+                files=(FetchedFile(path="anchor.md", content=b"body\n"),),
+                primary_path="anchor.md",
+            )
+
+    with pytest.raises(ProvenanceMismatch):
+        normalize_inventory(DriftingProvider())
 
 
 @pytest.mark.skipif(
@@ -307,18 +364,46 @@ def test_normalization_over_a_fetching_provider_derives_skill_class() -> None:
     reason="set NETWORK_TESTS=1 to re-verify the recording against the live provider",
 )
 def test_git_repo_live_enumeration_matches_recording() -> None:
-    """The recorded capture still matches the live provider (no local checkout)."""
+    """The recorded capture still matches the live provider (no local checkout).
+
+    Two directions are checked, because a one-directional subset assertion can
+    hold forever while the recording quietly becomes a museum piece:
+
+    - every recorded item still exists upstream (the recording is not stale);
+    - the pinned commit still resolves, and the item set at that pin is exactly
+      what was recorded (the capture is faithful, not merely compatible).
+
+    New upstream items are reported, not failed: the recording is a pinned
+    capture, and upstream growth is not a defect in this repository. The
+    scheduled `provider-liveness` CI job runs this test so the check does not
+    depend on a person remembering to.
+    """
     from lib.providers.git_repo import UrllibTransport
 
-    live = GitRepoProvider(
+    recording = _recording()
+    pinned = recording["capture"]["commit"]
+
+    live_head = GitRepoProvider(
         repository_url=MATTPOCOCK, ref="main", transport=UrllibTransport()
     )
-    assert live.availability().state == "available"
+    assert live_head.availability().state == "available"
 
-    live_ids = {item.upstream_id for item in live.enumerate()}
+    live_ids = {item.upstream_id for item in live_head.enumerate()}
     recorded_ids = {item.upstream_id for item in _provider().enumerate()}
-    assert recorded_ids <= live_ids, sorted(recorded_ids - live_ids)
+    assert recorded_ids <= live_ids, (
+        "the recording references items that no longer exist upstream: "
+        f"{sorted(recorded_ids - live_ids)}"
+    )
     assert "skills/engineering/implement" in live_ids
+
+    live_at_pin = GitRepoProvider(
+        repository_url=MATTPOCOCK, ref=pinned, transport=UrllibTransport()
+    )
+    assert {item.upstream_id for item in live_at_pin.enumerate()} == recorded_ids
+
+    new_upstream = sorted(live_ids - recorded_ids)
+    if new_upstream:
+        print(f"upstream has {len(new_upstream)} item(s) newer than the recording: {new_upstream}")
 
 
 # ---------------------------------------------------------------------------
@@ -356,9 +441,14 @@ class MinimalProvider(SourceProvider):
             ),
         )
 
-    def fetch(self, upstream_id: str, revision: str | None = None) -> bytes:
+    def fetch(self, upstream_id: str, revision: str | None = None) -> FetchedItem:
         self.calls.append("fetch")
-        return b"---\nname: anchor\n---\nbody\n"
+        return FetchedItem(
+            upstream_id=upstream_id,
+            revision=revision,
+            files=(FetchedFile(path="anchor.md", content=b"---\nname: anchor\n---\nbody\n"),),
+            primary_path="anchor.md",
+        )
 
     def auth_requirements(self) -> tuple[AuthRequirement, ...]:
         return ()
