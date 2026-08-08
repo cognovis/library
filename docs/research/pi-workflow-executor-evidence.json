@@ -1,0 +1,89 @@
+{
+  "schema": "cognovis.pi-workflow-executor-evidence.v1",
+  "bead_id": "CL-2p73",
+  "generated_at": "2026-08-08T19:50:11Z",
+  "runtime": {
+    "pi_executable": "/Users/malte/.local/bin/pi",
+    "pi_version": "0.84.1"
+  },
+  "constitutive_checks": [
+    "PWE-2",
+    "PWE-3",
+    "PWE-4",
+    "PWE-5"
+  ],
+  "migration_checks": [
+    "PWE-6",
+    "PWE-7",
+    "PWE-8"
+  ],
+  "checks": [
+    {
+      "check_id": "PWE-1",
+      "title": "Pi runtime identity and version pin",
+      "method": "Resolve `pi` on PATH and record its reported version as the runtime identity.",
+      "result": "pass",
+      "evidence": "Pi runtime pinned: executable=/Users/malte/.local/bin/pi version=0.84.1"
+    },
+    {
+      "check_id": "PWE-2",
+      "title": "Pi executes a canonical Workflow JS spec",
+      "method": "Discover a documented spec-execution entrypoint, then execute a canonical probe spec through it.",
+      "result": "fail",
+      "evidence": "Pi documents no candidate spec-execution entrypoint. Documented commands are ['--continue', '--exclude-tools', '--export', '--model', '--models', '--name', '--provider', '--thinking', '--tools', '-p', 'auth', 'config', 'install', 'list', 'remove', 'uninstall', 'update']; the surface is an interactive/`--print` coding assistant with extensions, skills, prompt templates, and sessions. A canonical spec (`export const meta = {...}` first statement plus a top-level async body) has no loader. ('workflow' appears in `pi --help`: False)"
+    },
+    {
+      "check_id": "PWE-3",
+      "title": "Pi injects the ADR-0006 orchestration globals",
+      "method": "Read the probe spec's own report of which orchestration globals the discovered entrypoint injected.",
+      "result": "fail",
+      "evidence": "No spec-execution entrypoint was discovered by PWE-2, so there is no executor whose injected globals can be probed. ADR-0006 requires ['agent', 'pipeline', 'parallel', 'phase', 'budget', 'args', 'workflow']. Pi's unit of model work is an AgentSession created by extension TypeScript, not a leaf `agent(prompt, opts)` call injected into an inert JavaScript spine."
+    },
+    {
+      "check_id": "PWE-4",
+      "title": "Pi journals leaf calls and resumes a crashed run",
+      "method": "Probe the discovered entrypoint's surface for a run journal and run resume, not conversational session resume.",
+      "result": "fail",
+      "evidence": "No spec-execution entrypoint was discovered by PWE-2, so there is no orchestration run to journal. Pi resumes conversational SESSIONS (`--continue`/`--resume` present: True), not runs. ADR-0006 requires a journal keyed by a hash of (prompt, opts) per `agent()` call so a re-run with the same script and args is a full cache hit and a crashed run resumes at the failed leaf."
+    },
+    {
+      "check_id": "PWE-5",
+      "title": "The only concrete Pi orchestration design keeps its spine inert",
+      "method": "Inspect the Cognovis Pi harness design document for orchestration-layer filesystem, shell, or VCS side effects.",
+      "result": "fail",
+      "evidence": "/Users/malte/code/library/cognovis-pi/docs/native-executive-pack-harness.md places ['Beads adapter', 'Evidence store', 'Git and Beads', 'Git and Beads adapters'] inside the orchestration extension itself. ADR-0006 Decision 4 makes an inert spine normative: the orchestration layer has no filesystem, no shell, and no network. A host that executes git, Beads, and gate side effects is the acting layer and the deciding layer at once, which is the exact separation ADR-0006 exists to enforce. The document is also pack-specific: it is a native Executive Pack harness, not a general executor for the Workflow primitive."
+    },
+    {
+      "check_id": "PWE-6",
+      "title": "Installed workflow receipts have a defined Pi migration",
+      "method": "Require a declared Pi target on the workflow primitive and a lockfile receipt for every materialized projection.",
+      "result": "fail",
+      "evidence": "5 workflow catalog entries and 4 materialized harness projections (['bead-context-pack.js', 'bead-review.js', 'quick-fix.js', 'stream-review.js']) were found. A Pi target path is declared for the workflow primitive: False (the entry still uses `install_subdir='workflows'` as Claude workflow JavaScript). Projections with **no matching workflow receipt by name**: ['bead-context-pack', 'bead-review', 'quick-fix', 'stream-review'] (4 of 4); receipted workflow names found across 17 lock files: []. Migration is therefore undefined in both directions: no Pi destination is declared, and the projections that exist have nothing to migrate FROM in lock terms."
+    },
+    {
+      "check_id": "PWE-7",
+      "title": "The native parse-check deploy gate has a Pi replacement",
+      "method": "Search the workflow installer's executable code, comments stripped, for a Pi-side validation code path.",
+      "result": "fail",
+      "evidence": "/Users/malte/code/.worktrees/library-platform/CL-2p73-heterogeneous-marketplace-workspaces/scripts/lib/installers/simple_file.py enforces the ADR-0006 native parse gate (meta-first textual check plus `node --check`): present=True. No Pi-side validation code path exists (searched executable code with comments and docstrings stripped), so superseding ADR-0006 today would delete a working deploy gate and replace it with nothing."
+    },
+    {
+      "check_id": "PWE-8",
+      "title": "A rollback path to the ADR-0006 executor is reachable",
+      "method": "Require either the native Workflow tool gate enabled or at least one adapter verified for mutating execution.",
+      "result": "fail",
+      "evidence": "Neither ADR-0006 executor path can run mutating work. The canonical native Workflow tool is gated off (CLAUDE_CODE_WORKFLOWS=''), and the explicitly non-canonical Library runtime (/Users/malte/code/.worktrees/library-platform/CL-2p73-heterogeneous-marketplace-workspaces/scripts/lib/workflow_runtime.py, present=True) reports verified adapters=[] and blocked adapters=['claude-agent', 'codex-exec', 'codex-impl']. A rollback target that cannot run mutating work is not a rollback path for a superseded executor; it is the reason ADR-0006 must be retained rather than replaced."
+    }
+  ],
+  "threshold": "Supersede ADR-0006 only when all of ['PWE-2', 'PWE-3', 'PWE-4', 'PWE-5'] (constitutive) and ['PWE-6', 'PWE-7', 'PWE-8'] (migration completeness) record `pass`. Any `fail` or `unavailable` retains ADR-0006.",
+  "verdict": "retain-adr-0006",
+  "failed_checks": [
+    "PWE-2",
+    "PWE-3",
+    "PWE-4",
+    "PWE-5",
+    "PWE-6",
+    "PWE-7",
+    "PWE-8"
+  ]
+}

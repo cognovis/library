@@ -198,6 +198,48 @@ never becomes a project receipt, and creates no project ownership edge.
 | `targets[].link_target` | Every symlink | Literal `readlink` value recorded immediately after install. |
 | `owners_cache` | Optional | Derived explanation only. Never resolver input for later pruning. |
 
+### v2 receipt fields for foreign-sourced content
+
+> Added by [ADR-0011](adr/heterogeneous-marketplace-workspaces.md) (`CL-2p73`,
+> 2026-08-08). Additive: absent fields read as `unknown`, and a receipt without
+> them remains valid and prune-blocked until it is re-materialized.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `provider_identity` | For foreign content | Canonical provider identity from the ADR-0011 provider contract; not the operator's display alias |
+| `upstream_id` | For foreign content | Provider-native item identity, opaque to the Library |
+| `upstream_name` | For foreign content | Preserved verbatim from upstream; never a rename |
+| `collection_membership` | For foreign content | Ordered upstream grouping (repository category, prompt-kit ID); may be empty |
+| `upstream_revision` | YES, nullable | `null` marks a revisionless provider whose pin is trust-on-first-use |
+| `normalized_content_digest` | YES | Library-computed digest over normalized content bytes. The authoritative integrity proof; a provider-native proof is supplementary evidence only |
+| `transformation_version` | YES | Identity of the projection rule applied to produce installed bytes. Part of the cache key, so a rule change produces a new cache object rather than rewriting one |
+| `rights` | For foreign content | Four independent grants — `fetch_authorization`, `install_rights`, `redistribution_rights`, `derivative_rights` — each `granted`/`denied`/`unknown` with a named `evidence` source |
+| `executable_admission` | YES | `inert`, `admitted`, `pending`, or `refused`. Bound to `normalized_content_digest`; any digest change returns it to `pending` |
+| `projection_eligibility` | YES | Per target class: `machine_local` and `project_committed`, each `allowed`, `opt-in`, or `blocked`. `unknown` redistribution rights bind `project_committed` to `blocked` |
+| `upstream_state` | YES | `present` or `upstream-vanished`. A durable, queryable state entered when a reachable and complete provider no longer lists a previously installed item. Never converted into deletion authority |
+| `provider_availability` | YES | Last observed provider state with its observation timestamp. Freshness is reported as `unknown` when the provider is unreachable; never as current |
+
+Rules that bind these fields:
+
+- **No projection is activated before its cache object and receipt are complete.**
+  An unreceipted materialized projection is unreproducible and is a defect
+  regardless of who authored the content.
+- **A verified cache object plus a blocked committed projection is a normal
+  state**, not a contradiction: `cache_state` and `projection_eligibility` are
+  independent axes.
+- **Credentials never appear here.** A receipt carries only artifact bytes'
+  digests and non-secret provenance. Credential *references* live in provider
+  configuration.
+- **`upstream-vanished` receipts protect their cache objects.** Automatic garbage
+  collection fails closed for an unreferenced foreign object while its provider is
+  unavailable, access is revoked, or the upstream item no longer exists. Only an
+  operator-explicit purge, requiring an object digest and an acknowledgement of
+  permanent loss, may delete it.
+- **Explicit named removal remains available under every degraded-inventory
+  condition.** It records the degraded state and operator intent in receipt
+  history, is never triggered by ownership-derived prune, and never implicitly
+  deletes the underlying cache object.
+
 Project locks persist project-owned `install_target`, bridge link paths, and
 `targets[].path` values relative to the directory containing `.library.lock`.
 Status, verification, removal, adoption, and reconciliation resolve them against

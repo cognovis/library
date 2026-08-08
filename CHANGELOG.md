@@ -2,6 +2,26 @@
 
 ### Changed
 
+- *(CL-2p73, architecture)* ADR-0011 establishes the heterogeneous marketplace,
+  cross-catalog Workspace, durable foreign-cache, and distribution-rights
+  architecture. Six canonical authority axes and one provider capability contract
+  replace the Git-only marketplace install path; normalized inventory models
+  discovery, admission, executable admission, rights, cache presence, and
+  projection eligibility as orthogonal states. Runbook was tested against the
+  primitive decision tree and **rejected** — runbook-shaped content is a Skill with
+  `classification.skill_class: navigator | procedure`, and no `runbook-` prefix is
+  reserved. A Pi-only Workflow executor target was tested by re-runnable executable
+  checks and **rejected on evidence** (7/7 required checks failed); ADR-0006 remains
+  authoritative and unamended. Workspace schema v2 adds pinned, alias-qualified
+  cross-catalog roots; its ADR-0010 consumer-evidence gate is **tentatively**
+  amended and finalizes only on implementation-slice-1 evidence. ADR-0003 is
+  extended (cache key and provider adapters), not superseded. Projection
+  eligibility composes `install_rights` first — governing both machine-local and
+  committed targets — and then `redistribution_rights`, which adds the
+  committed-tree restriction; `unknown` blocks by default and `denied` cannot be
+  overridden by an operator opt-in. Cache retention is explicitly not installation.
+  Documentation only — no runtime behavior changes in this bead.
+
 - *(clc-z9wp, cld/cdx)* `-b` and `-bq` now converge on the installed single-bead implementation loop. Explicit `-bq` means unconditional Quick for every executable leaf, without effort classification, route profiles, forced-tier overrides, or logical impl/exec adapter selection; the launched harness implements natively and reserves the neutral agent-session gateway for opposite-family review.
 
 ### Fixed

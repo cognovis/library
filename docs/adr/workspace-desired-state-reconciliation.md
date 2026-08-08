@@ -9,7 +9,8 @@ deciders:
 supersedes: []
 superseded_by: []
 amends: ["0003", "0004", "0005", "library-yaml-information-model"]
-related_adrs: ["0002"]
+amended_by: ["0011"]
+related_adrs: ["0002", "0011"]
 ---
 
 # ADR-0010: Universal Library ownership and Workspace desired-state reconciliation
@@ -640,6 +641,29 @@ Workspace registrations and does not require either feature. Deferral removes
 cycle handling, hidden removal semantics, and nickname-to-canonical-catalog
 resolution from the first deletion-capable release. A later ADR may add them when
 at least two real consumers require the same nested or cross-catalog lifecycle.
+
+> **Amended for cross-catalog manifest roots only — TENTATIVE (CL-2p73,
+> 2026-08-08).** [ADR-0011](heterogeneous-marketplace-workspaces.md) defines
+> Workspace schema v2 with pinned, alias-qualified cross-catalog roots. The
+> two-consumer evidence gate above was **amended, not satisfied**: the three
+> committed locks that compose across catalogs (`library/meta`,
+> `library/cognovis-pi`, `mira`) all compose at the **scope boundary**, which is
+> this ADR's own v1 escape hatch, and therefore do not evidence a manifest-root
+> requirement. The amendment is an explicit Human Decision by Malte Sussdorff with
+> its rationale recorded in ADR-0011 `Consumer Lock Evidence`.
+>
+> The amendment is **provisional**. It becomes final only after ADR-0011
+> implementation slice 1 delivers the evidence listed in its `Approval
+> Finalization` section. If that evidence fails, the amendment lapses and this
+> gate is restored unamended.
+>
+> **Nested Workspaces are not amended.** They remain deferred under this gate
+> exactly as written, with their original cycle-handling, ownership-visibility,
+> and removal-semantics conditions.
+>
+> Every other decision in this ADR — in particular fail-before-mutation, the seven
+> Decision 8 prune conditions, scope homogeneity, and no-overlay composition — is
+> restated unchanged by ADR-0011 and is non-replaceable.
 
 ## Implementation and release gates
 

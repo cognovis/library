@@ -3,6 +3,22 @@
 > Primitive reference extracted from [PRIMITIVES.md](../PRIMITIVES.md).
 > Established by [ADR-0006](../adr/workflow-primitive.md).
 
+> **Executor authority (CL-2p73, 2026-08-08).** A Pi-only executor target was
+> tested by [ADR-0011](../adr/heterogeneous-marketplace-workspaces.md) against an
+> objective executable threshold and **rejected on evidence** (seven of seven
+> required checks failed). ADR-0006 remains authoritative: the canonical spec
+> format is the Anthropic Workflow JS surface, the native tool is the canonical
+> executor, and the native parse-check deploy gate stays in force. Pi remains a
+> supported **runtime target** for Pi extensions and Pi profiles — a different
+> axis from executor authority. Re-run
+> `scripts/checks/pi_workflow_executor_evidence.py` before reopening the question;
+> the recorded verdict is `docs/research/pi-workflow-executor-evidence.json`.
+>
+> **Workflow source ownership is unconstrained.** A Workflow may be first-party or
+> come from an external marketplace through the ADR-0011 provider contract. An
+> externally sourced Workflow is an **executable** artifact and requires explicit
+> executable admission bound to its content digest before it becomes installable.
+
 **Definition.** A deterministic orchestration spec whose control flow runs as
 code and whose leaves spawn fresh-context model subagents. The loops,
 conditionals, fan-out, and gates are plain JavaScript that spend zero model

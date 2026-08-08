@@ -25,6 +25,16 @@ flow that spawns fresh-context agents, the same shape every run, worth resuming?
  └─ YES → WORKFLOW (deterministic spine + model leaves — see primitives/workflow.md)
  └─ NO  → Continue below.
 
+Is it a "runbook" — a versioned, non-self-executing decision, routing, or
+handoff guide for one acting agent?
+ └─ YES → SKILL with `classification.skill_class: navigator | procedure`.
+          RUNBOOK IS NOT A PRIMITIVE. Tested and rejected by ADR-0011
+          (CL-2p73, 2026-08-08): every claimed constitutive behavior is already
+          carried by Skill plus catalog metadata, and no `runbook-` projection
+          prefix is reserved. Do not re-open without a Library-ENFORCED behavior
+          that Skill plus metadata cannot carry.
+ └─ NO  → Continue below.
+
 Should the model auto-pick this up from context?
  └─ YES → SKILL (model-triggered, no user action needed)
  └─ NO  → Continue below.
@@ -210,6 +220,18 @@ the field is absent. `tier:core` entries are exempt.
 ### 1. Skill
 
 Details: [Skill](primitives/skill.md).
+
+**Classification metadata (ADR-0011, `CL-2p73`).** A catalog Skill entry may carry
+`classification.skill_class` with the value `navigator` or `procedure`. A
+*navigator* routes a reader to the right capability (`ask-matt`, `ask-malte`); a
+*procedure* carries out a named piece of work (`implement`, `tdd`). This is
+validated catalog metadata, not a new primitive: ADR-0011 tested and rejected a
+first-class Runbook because every claimed constitutive behavior — versioning,
+non-self-execution, required-versus-optional capabilities, conditional routes,
+handoff artifacts, human gates, and prefix reservation — is already carried by
+Skill plus `requires:` plus Workspace membership plus the name-collision policy.
+The honest cost is recorded there: a harness that ignores classification metadata
+cannot tell the two apart.
 
 ### 2. Command
 
