@@ -55,7 +55,7 @@ and is already outside every one of those contracts. Under `~/.claude/skills/`,
 **23** directories carry the names of upstream `mattpocock/skills` items —
 `implement`, `ask-matt`, `tdd`, `research`, `triage`, `wayfinder` and 17 more —
 and **not one of them has a lockfile receipt, a pin, or a recorded rights state**.
-Eleven are real directories and twelve are Library-shaped symlinks into
+Twelve are real directories and 11 are Library-shaped symlinks into
 `~/.agents/skills/`, which makes the point sharper: the shape of a Library install
 is present and the ownership is not. `~/.claude/workflows/` holds four
 materialized workflow projections with **zero** lockfile receipts. The complete
@@ -278,7 +278,12 @@ are marked stale; they do not vanish, and they do not claim currency.
 ### Runbook: rejected as a primitive, retained as Skill classification
 
 The candidate was tested against the normative Quick Decision Tree in
-`docs/PRIMITIVES.md`, honestly and in order:
+`docs/PRIMITIVES.md` **as that tree stood before this change**. The
+`runbook -> SKILL` terminator this delivery adds to the tree is a *record of this
+result* for future readers; it is not evidence for it, and the derivation below
+does not use it. The rows are grouped by topic rather than replayed in the tree's
+literal order — the STANDARD question sits ninth in the tree, not third — because
+the terminating question is the same either way:
 
 | Tree question | Answer for a Runbook | Consequence |
 |---|---|---|
@@ -286,7 +291,20 @@ The candidate was tested against the normative Quick Decision Tree in
 | Fixed-shape orchestration of multiple subagents, deterministic control flow spawning fresh contexts? | No — Invariant 4 (`Numbered invariants used by this ADR`) says a Runbook guides one **acting** agent and executes no orchestration | Not WORKFLOW |
 | Is it project-specific or cross-cutting context supplementing skills — passive, injected, not invokable? | No. A Runbook's defining shape is *invoked routing and handoff*: `ask-matt` answers "which flow fits my situation", which requires being asked. A Standard is loaded into context and never asked anything, and a Standard containing "Step 1, then Step 2" is exactly what `standards/agentic-primitives` names as the counter-example that must become a Skill | Not STANDARD |
 | Should the model auto-pick it up from context? | Sometimes; the "navigator" shape is explicitly user-invoked | **SKILL**, with the auto-pickup flag varying |
-| Does the user invoke it explicitly by slash command? | For the navigator shape, yes | COMMAND is the harness projection of that flag, not a separate source primitive |
+| Does the user invoke it explicitly by slash command? | For the navigator shape, yes | See the Skill/Command note below |
+
+**The Skill/Command boundary, stated rather than glossed.** The tree reaches
+SKILL at the auto-pickup question, and a user-invoked navigator would ordinarily
+continue to COMMAND. That tension is real and is resolved on the *source format*
+axis, not by overriding the tree: the Open Skills format carries
+`disable-model-invocation`, and both `ask-matt` and `implement` ship it upstream.
+A user-invoked Skill is therefore an existing, portable shape, not a contradiction
+— the flag is what a harness projects into a slash command where it has one. What
+the Library must not do is re-type an upstream `SKILL.md` as a Command because of
+one frontmatter flag; that would break upstream identity (axis A3) for a
+projection concern (axis A5). Recorded as a real seam rather than a settled one:
+if the Command primitive later grows Library-enforced behavior that a flagged
+Skill cannot carry, this classification is the thing to revisit.
 
 The tree terminates at SKILL. Invariant 4 then permits admission anyway, but only
 on proof of **at least one Library-enforced behavior that Skill plus catalog
@@ -403,6 +421,25 @@ re-entry condition below shut and make the "the verdict flips automatically"
 claim false. The first draft of this checker had exactly that defect in three
 checks; adversarial review caught it, and the tests exist so it cannot return.
 
+**What each check can and cannot prove — stated because the ADR leans on it.**
+
+| Check | Strength of its pass condition |
+|---|---|
+| PWE-2, PWE-3 | **Behavioral.** A canonical probe spec is executed and reports its own injected globals. These cannot pass without a working executor |
+| PWE-6 | **Identity-matched.** Every materialized projection must match a workflow receipt *by name*; a count comparison is explicitly rejected and tested against |
+| PWE-7 | **Reachability-checked.** The Pi gate must be *called*, not merely defined, with comments and docstrings stripped first |
+| PWE-4, PWE-5, PWE-8 | **Declaration-level.** PWE-4 reads a documented surface, PWE-5 reads a design document, PWE-8 reads an environment gate or an adapter-status registry. Each is the strongest evidence available without a running executor, and none is a behavioral proof |
+
+The three declaration-level checks are an accepted limitation, not an oversight:
+there is no executor to behaviorally probe, and a checker cannot smoke-test a
+rollback path that does not exist. Their consequence is bounded and one-directional
+— they can be *too generous* on a future pass, never too strict on today's fail —
+so they cannot manufacture the current `retain` verdict. **Whoever writes the
+eventual supersession ADR must not treat a PWE-4/5/8 pass as proof of the
+capability; the supersession slice owns upgrading them to behavioral probes once
+an executor exists to probe.** This is recorded here so a future reader inherits
+the caveat rather than the number.
+
 **Objective threshold.** Supersede ADR-0006 only when **all** constitutive checks
 `PWE-2, PWE-3, PWE-4, PWE-5` and **all** migration-completeness checks
 `PWE-6, PWE-7, PWE-8` record `pass`. Any `fail` or `unavailable` retains ADR-0006.
@@ -508,6 +545,23 @@ Rules:
    pinned block in the manifest the operator installed.
 2. **Every declared catalog carries a `pin`.** Resolution uses the pin, not a
    moving branch. An unpinned catalog entry is a schema error.
+
+   A pin is **typed**, because not every provider has a commit:
+
+   | `pin.kind` | Value | Used by |
+   |---|---|---|
+   | `commit` | Immutable upstream revision | `git-repo`, `git-org` |
+   | `inventory-snapshot` | Digest over the provider's normalized inventory listing — the set of `(upstream_id, upstream_name, collection_membership, per-item content digest)` tuples returned by `enumerate` plus `describe`, canonically serialized | revisionless providers such as `mcp:executive-circle` |
+
+   An `inventory-snapshot` pin is a trust-on-first-use pin over the **catalog**,
+   exactly as a per-item digest is a TOFU pin over one item, and it carries the
+   same honesty requirement: it proves the inventory has not changed since it was
+   recorded, and proves nothing about upstream authenticity. Re-resolution
+   computing a different snapshot digest is **fail-closed drift** naming both
+   digests; it is never silently re-pinned. This is what makes a revisionless
+   provider usable as a Workspace catalog at all — without it, the `pin`
+   requirement would be unsatisfiable for one of the three reference providers and
+   the cross-catalog contract would be incomplete for it.
 3. **An unqualified root resolves from the Workspace's own steward catalog**, as
    in v1. v1 manifests remain valid v1 manifests; v2 is additive.
 4. **Alias-to-identity mapping is manifest-local.** Two Workspaces may use the
@@ -656,7 +710,7 @@ slice authorized to satisfy it.
 The Workspace-v2 schema negative cases — unpinned `catalogs:` entry, URL in a
 root, undeclared alias, `catalog:` qualifier in a v1 manifest — and the
 cache-identity-to-receipt round trip remain required, but they are **acceptance
-criteria of the slices that own them** (`CL-dbam` AC2 and `CL-y5z4` AC1), not
+criteria of the slices that own them** (`CL-dbam` AC2 and `CL-y5z4` AC3), not
 inputs to this gate. They are gated *by* this approval; they cannot also gate it.
 
 Until all four hold, this section's status field is the authoritative answer to
@@ -677,9 +731,22 @@ The cache key is a tuple, not a path convention:
 ```
 
 This replaces the current `<type>/<marketplace>/<name>@<commit14>` key
-(`scripts/lib/cache.py` `compute_cache_path`), which cannot express a revisionless
-provider — it degrades every one of them to the literal tag `local` and collides
-them — and cannot express a transformation.
+(`scripts/lib/cache.py` `compute_cache_path`).
+
+**The precise defect, corrected after review.** The current key does *not* collide
+two revisionless items across different providers: `marketplace` and `name` are
+both path segments, so `provider-a/kit-x@local` and `provider-b/kit-x@local` are
+distinct. That earlier claim was wrong. The real collisions are within a provider:
+
+| Collision | Current key | Why |
+|---|---|---|
+| Same provider, same name, **different content** | `provider-a/kit-x@local` for both | A revisionless item's every version pins to the literal tag `local`, so changed upstream bytes overwrite the cache object in place, destroying the only copy of the previous bytes and erasing the drift signal |
+| Two **different upstream IDs** that normalize to the same Library name | one path for both | The key carries `name`, not `upstream_id`, so upstream identity is lost |
+| Same content reached under **different transformation rules** | one path | The key has no transformation dimension, so changing a projection rule silently rewrites an existing object |
+
+The tuple key fixes all three: `normalized_content_digest` separates content,
+`upstream_id` separates upstream identity, and `transformation_version` separates
+projection rules.
 
 `normalized_content_digest` is a Library-computed digest over normalized content
 bytes, and it is the **only** integrity proof the Library relies on. A
@@ -804,13 +871,27 @@ below sound:
 
 | Capability | Governed by | Meaning |
 |---|---|---|
-| **Retain in cache** | `fetch_authorization` | Authorized bytes are held in the content-addressed cache. No projection exists. Nothing is on a harness path |
+| **Retrieve (transient)** | `fetch_authorization` | Bytes are requested from the provider and held only for the duration of the operation |
+| **Retain durably in cache** | `install_rights` | Authorized bytes are kept in the content-addressed cache across sessions and are available for offline repair. No projection exists; nothing is on a harness path |
 | **Install (project a machine-local copy)** | `install_rights` | Bytes are materialized into a usable machine-local target |
 | **Redistribute (project into a committed tree)** | `redistribution_rights` | Bytes enter a tree that others receive |
 
-A lawfully fetched artifact may therefore sit `verified` in the cache while it is
-neither installable nor projectable. Cache retention is not a projection and never
-requires `install_rights`.
+**Retrieval authorization is not retention authorization.** A credential proving
+endpoint access proves that the provider will serve the bytes now; it says nothing
+about a right to keep an indefinite offline copy. Durable cache retention of
+third-party content is therefore governed by `install_rights`, not by
+`fetch_authorization`. This was corrected after review, which observed that
+treating a subscriber token as a retention grant is exactly the conflation the
+rest of the rights model exists to prevent.
+
+`install_rights: unknown` does not forbid durable retention outright — it makes it
+an **operator-acknowledged** act, under the same explicit opt-in as a machine-local
+projection, and the rights state is shown first. `install_rights: denied` forbids
+durable retention; only transient retrieval remains.
+
+A lawfully fetched and lawfully retained artifact may therefore sit `verified` in
+the cache while its committed projection stays blocked. Cache retention is not a
+projection — but it is also not free of rights.
 
 ### Invariant 13 binding
 
@@ -941,11 +1022,11 @@ from `mattpocock`, from a first-party catalog, or from a hand copy. Slice 7
 
 | Projection group | Count | Location | Receipt | Rights | Disposition |
 |---|---|---|---|---|---|
-| Directories whose names match upstream `mattpocock/skills` items — including `implement`, `ask-matt`, `tdd`, `code-review`, `research`, `resolving-merge-conflicts`, `codebase-design`, `diagnosing-bugs`, `domain-modeling`, `grilling`, `prototype`, `triage`, `wayfinder`, `to-spec`, `to-tickets`, `teach`, `handoff`, `improve-codebase-architecture`, `grill-me`, `grill-with-docs`, `setup-matt-pocock-skills`, `claude-handoff`, `loop-me` | **23** | `~/.claude/skills/<name>` — 11 real directories and 12 symlinks into `~/.agents/skills/<name>` (themselves real directories) | **none** — 0 of 23 | `granted` **if** upstream is `mattpocock` (MIT); **unverified** per item until provenance is re-derived | Machine-local global scope, not a committed tree, so nothing is currently non-compliant. Re-derive provenance by content digest, then either adopt under the ADR-0010 exact-digest adoption path once the provider is registered, or leave as untracked operator-owned content |
+| Directories whose names match upstream `mattpocock/skills` items — including `implement`, `ask-matt`, `tdd`, `code-review`, `research`, `resolving-merge-conflicts`, `codebase-design`, `diagnosing-bugs`, `domain-modeling`, `grilling`, `prototype`, `triage`, `wayfinder`, `to-spec`, `to-tickets`, `teach`, `handoff`, `improve-codebase-architecture`, `grill-me`, `grill-with-docs`, `setup-matt-pocock-skills`, `claude-handoff`, `loop-me` | **23** | `~/.claude/skills/<name>` — 12 real directories and 11 symlinks into `~/.agents/skills/<name>` (themselves real directories) | **none** — 0 of 23 | `granted` **if** upstream is `mattpocock` (MIT); **unverified** per item until provenance is re-derived | Machine-local global scope, not a committed tree, so nothing is currently non-compliant. Re-derive provenance by content digest, then either adopt under the ADR-0010 exact-digest adoption path once the provider is registered, or leave as untracked operator-owned content |
 | Workflow specs `bead-context-pack.js`, `bead-review.js`, `quick-fix.js`, `stream-review.js` | **4** | `~/.claude/workflows/` | **none** — 0 of 4 | first-party | Re-materialize from catalog on next install so a receipt exists. First-party, so no rights issue — but an unreceipted projection is unreproducible regardless of who wrote it |
 
 A Library-**shaped** bridge without a Library receipt is not Library-owned; the
-shape does not confer ownership. Twelve of the 23 have exactly that shape, which
+shape does not confer ownership. Eleven of the 23 have exactly that shape, which
 is why shape is not accepted as evidence anywhere in this ADR.
 
 Rules that follow:
@@ -968,14 +1049,36 @@ Rules that follow:
 
 1. **Active receipts protect their cache objects.** An object referenced by any
    active receipt in any scope is ineligible for garbage collection.
-2. **Re-fetchability is also a retention input.** Automatic garbage collection
-   **fails closed** for an unreferenced foreign object while its provider is
-   unavailable, access is revoked, or the upstream item no longer exists
-   (`upstream-vanished`).
+2. **Re-fetchability is also a retention input, and it must be *proven*, not
+   inferred from provider health.** Automatic garbage collection **fails closed**
+   for an unreferenced foreign object whenever exact re-fetchability is not
+   proven. It is not proven when:
+   - the provider is unavailable; or
+   - access is revoked; or
+   - the upstream item no longer exists (`upstream-vanished`); or
+   - **the object came from a revisionless provider** and a digest-verified
+     re-fetch has not confirmed that the pinned digest is still what the provider
+     serves.
 
 The second input is what makes an outage survivable. A cache that discards
 unreferenced objects during an outage discards exactly the bytes that cannot be
 re-fetched, at exactly the moment they became irreplaceable.
+
+**The revisionless clause is not an edge case, and omitting it was an internal
+contradiction.** A revisionless provider has no immutable revision to request by;
+`Trust on first use` decides that such providers are pin-only, and that a changed
+digest on re-fetch is fail-closed drift. A provider can therefore be `available`,
+authorized, and still listing an item while serving **different bytes** than the
+pin. "Provider healthy" says nothing about whether *these* bytes can be retrieved
+again. Deleting the object under that assumption would destroy the last copy of
+the pinned content, and a later reinstall would record a fresh first-use pin —
+converting detectable drift into undetectable silent substitution, which is the
+outcome this ADR forbids everywhere else.
+
+Therefore, for a revisionless-provider object, automatic garbage collection may
+delete only after a **digest-verified re-fetch** proves the provider currently
+serves the pinned digest. Without that proof, the object is retained and its
+deletion is available only through the operator-explicit purge below.
 
 ### Operator-explicit purge
 
@@ -1063,7 +1166,7 @@ acceptance surface and could ship alone.
 | 4 | `CL-uliw` | Retention, fail-closed GC, and operator-explicit purge | GC refuses an unreferenced object during simulated outage; purge requires a digest and an acknowledgement | `CL-y5z4` |
 | 5 | `CL-dbam` | Workspace schema v2 qualified roots and cross-catalog resolution | v2 manifest resolves across two catalogs; unpinned catalog, URL-in-root, and undeclared-alias cases fail | `CL-coif`, `CL-n7ex` |
 | 6 | `CL-mvet` | Reference provider adapters: `git-repo`, `git-org` allowlist, `mcp-content` | Each reference provider enumerates and installs through the generic contract only | `CL-coif`, `CL-n7ex`, `CL-y5z4` |
-| 7 | `CL-m6cc` | Cache and lock migration, legacy projection disposition | Legacy receipts re-materialize; unresolvable receipts are retained and prune-blocked; no deletion authority is granted | `CL-y5z4`, `CL-uliw` |
+| 7 | `CL-m6cc` | Cache and lock migration, legacy projection disposition | Legacy receipts re-materialize; unresolvable receipts are retained and prune-blocked; no deletion authority is granted | `CL-y5z4`, `CL-uliw`, `CL-n7ex` |
 
 The dependency edges above are live in the Beads graph, not narrative ordering.
 `bd dep tree CL-2p73` shows this ADR's own dependencies, not its dependents, so
@@ -1073,6 +1176,7 @@ verify the slice edges from the slice side:
 bd dep list CL-coif --json   # -> CL-2p73
 bd dep list CL-dbam --json   # -> CL-coif, CL-n7ex
 bd dep list CL-mvet --json   # -> CL-coif, CL-n7ex, CL-y5z4
+bd dep list CL-m6cc --json   # -> CL-y5z4, CL-uliw, CL-n7ex
 bd dep cycles                # -> no dependency cycles detected
 ```
 

@@ -365,12 +365,40 @@ def _materialized_workflow_projections(roots: tuple[Path, ...]) -> list[Path]:
     return found
 
 
+def _receipted_workflow_names(locks: list[Path]) -> set[str]:
+    """Workflow receipt names, parsed per receipt entry rather than by line count.
+
+    A receipt is recognized from either serialization the lockfile uses: a
+    `- id: workflow:<name>` list item, or a `- name: <name>` entry whose block
+    also declares `type: workflow`.
+    """
+    names: set[str] = set()
+    for lock in locks:
+        try:
+            text = lock.read_text(encoding="utf-8", errors="ignore")
+        except OSError:  # pragma: no cover - env dependent
+            continue
+        for match in re.finditer(r"^\s*-\s*id:\s*workflow:([^\s@]+)", text, re.MULTILINE):
+            names.add(match.group(1))
+        # Block form: split on list-item boundaries and keep blocks typed workflow.
+        for block in re.split(r"^\s*-\s+(?=\w)", text, flags=re.MULTILINE):
+            if re.search(r"^\s*type:\s*workflow\s*$", block, re.MULTILINE):
+                found = re.search(r"^\s*name:\s*(\S+)", block, re.MULTILINE)
+                if found:
+                    names.add(found.group(1))
+    return names
+
+
 def _check_receipt_migration(ctx: Context, shared: dict[str, Any]) -> tuple[str, str]:
     """Do installed workflow receipts have a defined Pi migration?
 
-    Passes when the workflow primitive declares a Pi install target (so there is
-    somewhere to migrate TO) and every materialized projection carries a lockfile
-    receipt (so there is something to migrate FROM).
+    Passes when the workflow primitive declares a Pi install target (somewhere to
+    migrate TO) and **every materialized projection is individually matched to a
+    receipt by name** (something to migrate FROM).
+
+    The identity match is the point. An earlier version compared the *count* of
+    projections against the *count* of receipts found in unrelated lock files,
+    which could certify coverage that no projection actually had.
     """
     primitives = ctx.repo_root / "scripts" / "lib" / "primitives.py"
     if not primitives.is_file():
@@ -383,32 +411,26 @@ def _check_receipt_migration(ctx: Context, shared: dict[str, Any]) -> tuple[str,
     pi_target = bool(re.search(r"pi[_-]?(install_subdir|target|projection)", workflow_block, re.I))
 
     locks = _iter_lock_files(ctx.repo_root, ctx.lock_search_roots)
-    receipts: list[str] = []
-    for lock in locks:
-        try:
-            lock_text = lock.read_text(encoding="utf-8", errors="ignore")
-        except OSError:  # pragma: no cover - env dependent
-            continue
-        for found in re.finditer(r"^\s*-\s*id:\s*(workflow:\S+)", lock_text, re.MULTILINE):
-            receipts.append(f"{lock}:{found.group(1)}")
-
-    catalogued = _count_catalogued_workflows(ctx.repo_root / "library.yaml")
+    receipted = _receipted_workflow_names(locks)
     materialized = _materialized_workflow_projections(ctx.projection_roots)
-    unreceipted = len(materialized) - len(receipts)
+    uncovered = sorted(path.stem for path in materialized if path.stem not in receipted)
+    catalogued = _count_catalogued_workflows(ctx.repo_root / "library.yaml")
 
-    if pi_target and unreceipted <= 0:
+    if pi_target and not uncovered:
         return PASS, (
-            f"The workflow primitive declares a Pi target and all {len(materialized)} materialized "
-            f"projections carry lockfile receipts ({len(receipts)} found), so every installed "
-            "receipt has a defined migration source and destination."
+            f"The workflow primitive declares a Pi target, and each of the {len(materialized)} "
+            f"materialized projections is matched by name to a workflow receipt "
+            f"(receipted names: {sorted(receipted)}). Every installed receipt therefore has a "
+            "defined migration source and destination."
         )
     return FAIL, (
-        f"{catalogued} workflow catalog entries, {len(receipts)} lockfile workflow receipts, and "
-        f"{len(materialized)} materialized harness projections "
-        f"({[path.name for path in materialized][:8]}) were found. A Pi target path is declared "
-        f"for the workflow primitive: {pi_target} (the entry still uses "
-        "`install_subdir='workflows'` as Claude workflow JavaScript). Unreceipted projections: "
-        f"{max(unreceipted, 0)}. Migration is therefore undefined in both directions: no Pi "
+        f"{catalogued} workflow catalog entries and {len(materialized)} materialized harness "
+        f"projections ({[path.name for path in materialized][:8]}) were found. A Pi target path "
+        f"is declared for the workflow primitive: {pi_target} (the entry still uses "
+        "`install_subdir='workflows'` as Claude workflow JavaScript). Projections with **no "
+        f"matching workflow receipt by name**: {uncovered[:8]} ({len(uncovered)} of "
+        f"{len(materialized)}); receipted workflow names found across {len(locks)} lock files: "
+        f"{sorted(receipted)[:8]}. Migration is therefore undefined in both directions: no Pi "
         "destination is declared, and the projections that exist have nothing to migrate FROM in "
         "lock terms."
     )
@@ -427,12 +449,25 @@ def _check_deploy_gate_replacement(ctx: Context, shared: dict[str, Any]) -> tupl
     code_only = re.sub(r"#.*$", "", text, flags=re.MULTILINE)
     code_only = re.sub(r'"""(?:.|\n)*?"""', "", code_only)
     has_native_gate = "export const meta" in text and "node --check" in text
-    pi_gate_defs = re.findall(r"^\s*def\s+(\w*pi\w*(?:gate|check|validate)\w*)", code_only, re.I | re.M)
-    pi_gate_calls = re.findall(r"\b(\w*pi_\w*(?:gate|parse|validate)\w*)\s*\(", code_only, re.I)
-    if pi_gate_defs or pi_gate_calls:
+    pi_gate_defs = set(
+        re.findall(r"^\s*def\s+(\w*pi\w*(?:gate|check|validate)\w*)", code_only, re.I | re.M)
+    )
+    # Remove definition sites so `def foo(` is not mistaken for a call to `foo`.
+    call_surface = re.sub(r"^\s*def\s+\w+\s*\(", "", code_only, flags=re.M)
+    called = set(
+        re.findall(r"\b(\w*pi\w*(?:gate|parse|check|validate)\w*)\s*\(", call_surface, re.I)
+    )
+    # A defined-but-never-called gate is dead code, not a deploy gate.
+    reachable = called
+    if reachable:
         return PASS, (
-            f"{installer} carries a Pi-side gate code path: definitions={sorted(set(pi_gate_defs))}, "
-            f"calls={sorted(set(pi_gate_calls))}."
+            f"{installer} carries a Pi-side gate code path that is actually invoked: "
+            f"definitions={sorted(pi_gate_defs)}, call sites={sorted(called)}."
+        )
+    if pi_gate_defs:
+        return FAIL, (
+            f"{installer} defines {sorted(pi_gate_defs)} but never calls it. A defined-but-unreached "
+            "gate is dead code, not a deploy gate."
         )
     return FAIL, (
         f"{installer} enforces the ADR-0006 native parse gate (meta-first textual check plus "

@@ -1,7 +1,7 @@
 {
   "schema": "cognovis.pi-workflow-executor-evidence.v1",
   "bead_id": "CL-2p73",
-  "generated_at": "2026-08-08T19:28:20Z",
+  "generated_at": "2026-08-08T19:50:11Z",
   "runtime": {
     "pi_executable": "/Users/malte/.local/bin/pi",
     "pi_version": "0.84.1"
@@ -58,7 +58,7 @@
       "title": "Installed workflow receipts have a defined Pi migration",
       "method": "Require a declared Pi target on the workflow primitive and a lockfile receipt for every materialized projection.",
       "result": "fail",
-      "evidence": "5 workflow catalog entries, 0 lockfile workflow receipts, and 4 materialized harness projections (['bead-context-pack.js', 'bead-review.js', 'quick-fix.js', 'stream-review.js']) were found. A Pi target path is declared for the workflow primitive: False (the entry still uses `install_subdir='workflows'` as Claude workflow JavaScript). Unreceipted projections: 4. Migration is therefore undefined in both directions: no Pi destination is declared, and the projections that exist have nothing to migrate FROM in lock terms."
+      "evidence": "5 workflow catalog entries and 4 materialized harness projections (['bead-context-pack.js', 'bead-review.js', 'quick-fix.js', 'stream-review.js']) were found. A Pi target path is declared for the workflow primitive: False (the entry still uses `install_subdir='workflows'` as Claude workflow JavaScript). Projections with **no matching workflow receipt by name**: ['bead-context-pack', 'bead-review', 'quick-fix', 'stream-review'] (4 of 4); receipted workflow names found across 17 lock files: []. Migration is therefore undefined in both directions: no Pi destination is declared, and the projections that exist have nothing to migrate FROM in lock terms."
     },
     {
       "check_id": "PWE-7",

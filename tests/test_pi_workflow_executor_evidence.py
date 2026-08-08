@@ -153,7 +153,12 @@ def _fake_repo(tmp_path: Path, *, pi_target: bool, pi_gate: bool, verified_adapt
         '    ),\n    PrimitiveInfo(\n        name="pi-extension",\n    ),\n)\n',
         encoding="utf-8",
     )
-    gate = "def _pi_parse_gate(name):\n    return True\n" if pi_gate else ""
+    gate = (
+        "def _pi_parse_gate(name):\n    return True\n\n\n"
+        "def install(name):\n    return _pi_parse_gate(name)\n"
+        if pi_gate
+        else ""
+    )
     (root / "scripts" / "lib" / "installers" / "simple_file.py").write_text(
         '"""Workflow installer."""\n'
         "# export const meta and node --check are mentioned only in this comment\n"
@@ -209,7 +214,13 @@ def _passing_fixture(check_id: str, tmp_path: Path):
         return _context(repo_root=_design_doc(tmp_path, inert=True)), {}
     if check_id == "PWE-6":
         root = _fake_repo(tmp_path, pi_target=True, pi_gate=False, verified_adapter=False)
-        return _context(repo_root=root), {}
+        projections = tmp_path / "projections"
+        projections.mkdir(exist_ok=True)
+        (projections / "alpha.js").write_text("// alpha\n", encoding="utf-8")
+        (root / ".library.lock").write_text(
+            "receipts:\n- id: workflow:alpha\n  type: workflow\n  name: alpha\n", encoding="utf-8"
+        )
+        return _context(repo_root=root, projection_roots=(projections,)), {}
     if check_id == "PWE-7":
         root = _fake_repo(tmp_path, pi_target=False, pi_gate=True, verified_adapter=False)
         return _context(repo_root=root), {}
@@ -349,3 +360,49 @@ def test_committed_artifact_matches_the_recorded_adr_verdict() -> None:
     assert recomputed["verdict"] == payload["verdict"]
     assert recomputed["failed_checks"] == payload["failed_checks"]
     assert recomputed["threshold"] == payload["threshold"]
+
+
+def test_pwe6_rejects_receipt_counts_that_do_not_cover_the_projections(tmp_path) -> None:
+    """Coverage must be per projection, not a count comparison.
+
+    Regression guard for the round-2 finding that `len(materialized) - len(receipts)`
+    could certify coverage no projection actually had: five receipts for unrelated
+    workflows in other repositories must not cover four uncovered projections.
+    """
+    root = _fake_repo(tmp_path, pi_target=True, pi_gate=False, verified_adapter=False)
+    projections = tmp_path / "projections"
+    projections.mkdir()
+    for name in ("bead-review", "quick-fix", "stream-review", "bead-context-pack"):
+        (projections / f"{name}.js").write_text("// x\n", encoding="utf-8")
+    other = tmp_path / "other-repo"
+    other.mkdir()
+    (other / ".library.lock").write_text(
+        "receipts:\n"
+        + "".join(
+            f"- id: workflow:unrelated-{i}\n  type: workflow\n  name: unrelated-{i}\n"
+            for i in range(5)
+        ),
+        encoding="utf-8",
+    )
+    ctx = _context(
+        repo_root=root,
+        projection_roots=(projections,),
+        lock_search_roots=(tmp_path,),
+    )
+    result, evidence = _run("PWE-6", ctx)
+    assert result == pwe.FAIL
+    assert "no matching workflow receipt by name" in evidence
+    assert "bead-review" in evidence
+
+
+def test_pwe7_rejects_a_gate_that_is_defined_but_never_called(tmp_path) -> None:
+    """A defined-but-unreached gate is dead code, not a deploy gate."""
+    root = _fake_repo(tmp_path, pi_target=False, pi_gate=False, verified_adapter=False)
+    installer = root / "scripts" / "lib" / "installers" / "simple_file.py"
+    installer.write_text(
+        installer.read_text(encoding="utf-8") + "def _pi_parse_gate(name):\n    return True\n",
+        encoding="utf-8",
+    )
+    result, evidence = _run("PWE-7", _context(repo_root=root))
+    assert result == pwe.FAIL
+    assert "never calls it" in evidence

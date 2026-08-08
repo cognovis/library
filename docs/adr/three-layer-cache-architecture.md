@@ -33,11 +33,14 @@ Two elements are replaced:
   `<type>/<marketplace>/<name>@<commit14>` key (`scripts/lib/cache.py`
   `compute_cache_path`) is replaced by a tuple of provider identity, upstream
   item identity, upstream revision *or null*, normalized content digest,
-  primitive type, and transformation version. The old key cannot express a
-  revisionless provider — it degrades every one to the literal tag `local` and
-  collides them — and cannot express a transformation. Legacy objects are
-  **re-materialized**, never renamed into the new key space; renaming would
-  fabricate a digest identity they never had.
+  primitive type, and transformation version. The old key keeps different
+  marketplaces apart correctly, but *within* a provider it degrades every
+  revisionless item to the literal tag `local`, so changed upstream bytes
+  overwrite the cache object in place; it carries `name` rather than
+  `upstream_id`, so two upstream items normalizing to one name collide; and it
+  has no transformation dimension. Legacy objects are **re-materialized**, never
+  renamed into the new key space; renaming would fabricate a digest identity they
+  never had.
 - **Decision 5's adapter-per-marketplace-`type`.** Its intent is fulfilled by
   ADR-0011's provider capability contract, which covers `git-repo`, `git-org`
   with an allowlist, `mcp-content`, and `hosted-index`. The deferred hosted
