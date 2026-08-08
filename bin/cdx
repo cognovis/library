@@ -517,7 +517,7 @@ launch_bead_implementation_loop() {
     local worktree_dir
     worktree_dir="$(ensure_bead_worktree "$active_bead")" || return $?
 
-    local prompt="Bead ID: ${active_bead}. Invoke the installed bead-implementation-loop skill directly with execution_mode=${execution_mode}. Keep this Codex session as the active harness. Load the live bead through direct bd, reject direct-child containers before claim, claim it through direct bd, and inject repository instructions and required standards. Use exactly one native Core subagent for implementation and reuse that native implementation path for repairs. Use the provider-neutral gateway only for opposite-family review. After CLEAN and applicable Means of Compliance evidence, invoke the canonical Session Close owner; do not reproduce merge, push, close, sync, or cleanup mechanics inline."
+    local prompt="Bead ID: ${active_bead}. Invoke the installed bead-loop-implementer agent exactly once with execution_mode=${execution_mode}, review_preset=standard, and the supplied worktree. That agent owns the complete one-Bead lifecycle: claim, context admission, the shared bead-execution-loop, focused evidence, and canonical Session Close. Run its one opposite-family review through the installed acpx-dispatch.py transport owned by the acpx-dispatch skill, and do not select or reconstruct another review transport. Do not reproduce merge, push, close, sync, or cleanup mechanics outside the lifecycle owner."
 
     if [[ "$execution_mode" == "quick" ]]; then
         prompt+=" This is unconditional explicit Quick for every executable leaf and starts with the minimal capability set. Do not run a preliminary bead review or add optional ceremony unless new acceptance evidence requires a named capability."

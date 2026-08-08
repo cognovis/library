@@ -880,7 +880,7 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
         (["-bq", "CL-smoke"], "quick"),
     ],
 )
-def test_cdx_bead_modes_invoke_implementation_loop_directly(
+def test_cdx_bead_modes_invoke_active_loop_through_acpx_only(
     tmp_path: Path,
     args: list[str],
     execution_mode: str,
@@ -893,8 +893,18 @@ def test_cdx_bead_modes_invoke_implementation_loop_directly(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert "bead-implementation-loop" in prompt
+    assert "bead-loop-implementer" in prompt
+    assert "bead-implementation-loop" not in prompt
     assert f"execution_mode={execution_mode}" in prompt
+    assert "acpx-dispatch.py" in prompt
+    for retired_gateway_term in (
+        "agent_session_start",
+        "agent_session_continue",
+        "cognovis-tools",
+        "provider-neutral gateway",
+        "native Core subagent",
+    ):
+        assert retired_gateway_term not in prompt
     assert "canonical Session Close" in prompt
     if execution_mode == "quick":
         assert "unconditional explicit Quick" in prompt
