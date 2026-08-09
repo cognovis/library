@@ -423,6 +423,26 @@ class ProjectionStillActive(RuntimeError):
     """
 
 
+def _record_list(payload: Mapping[str, Any], field_name: str) -> list[Mapping[str, Any]]:
+    """One strictly typed list of receipt records, or a refusal.
+
+    `payload.get(field) or []` read `null`, `false`, and `""` as "this store
+    holds no receipts". Absence of receipts is deletion authority everywhere
+    that consumes this store, so a damaged file must never be indistinguishable
+    from an empty one: review corrupted `receipts` to `null` and an object a
+    live receipt referenced was collected.
+    """
+    records = payload.get(field_name, [])
+    if not isinstance(records, list) or not all(
+        isinstance(record, Mapping) for record in records
+    ):
+        raise ValueError(
+            f"receipt store field {field_name!r} must be a list of records; a "
+            "malformed store is never read as an empty one"
+        )
+    return records
+
+
 class ReceiptStore:
     """Durable foreign receipts, plus the retired ones removal archives.
 
@@ -441,12 +461,10 @@ class ReceiptStore:
         payload = json.loads(self.path.read_text(encoding="utf-8"))
         if payload.get("schema") != RECEIPT_STORE_SCHEMA:
             raise ValueError(f"unexpected receipt store schema: {payload.get('schema')}")
-        active = {
-            record["id"]: ForeignReceipt.from_dict(record)
-            for record in payload.get("receipts") or []
-        }
+        records = _record_list(payload, "receipts")
+        active = {record["id"]: ForeignReceipt.from_dict(record) for record in records}
         retired = [
-            ForeignReceipt.from_dict(record) for record in payload.get("retired") or []
+            ForeignReceipt.from_dict(record) for record in _record_list(payload, "retired")
         ]
         return active, retired
 

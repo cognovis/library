@@ -51,7 +51,7 @@ import re
 import shutil
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -91,6 +91,7 @@ RETENTION_REFUSALS: tuple[str, ...] = (
     "access-revoked",
     "inventory-incomplete",
     "upstream-vanished",
+    "provider-observation-stale",
     "refetch-digest-drift",
     "refetch-proof-stale",
     "re-fetchability-not-proven",
@@ -274,6 +275,26 @@ class ReferenceIndex:
             )
         return tuple(found)
 
+    @contextlib.contextmanager
+    def locked(self) -> "Iterator[None]":
+        """Hold every scope's receipt-file lock across a proof and its deletion.
+
+        The install identity lock excludes an install transaction. It does not
+        exclude a bare `ReceiptStore.put`, which is a public writer guarded only
+        by the receipt file's own lock. Review committed a receipt in exactly
+        that window -- after the final reference read, before the tree was
+        renamed away -- and the object it referenced was deleted anyway.
+
+        Locks are taken in a fixed path order so two collectors cannot deadlock
+        against each other, and a writer holding a single scope lock cannot
+        deadlock against a holder of all of them.
+        """
+        ordered = sorted(self._scopes, key=lambda scope: str(scope.store.path.resolve()))
+        with contextlib.ExitStack() as stack:
+            for scope in ordered:
+                stack.enter_context(exclusive_lock(scope.store.path))
+            yield
+
     def receipts_for_digest(
         self, cache_key_digest: str
     ) -> tuple[tuple[str, ForeignReceipt], ...]:
@@ -415,30 +436,66 @@ def _proofs_by_identity(
     return {identity: tuple(values) for identity, values in indexed.items()}
 
 
+def _out_of_window(
+    label: str, at: str, *, run: datetime, max_age: timedelta
+) -> str | None:
+    """Why one piece of evidence does not describe the state at run time.
+
+    Evidence gathered long before the run does not prove anything about now, and
+    review demonstrated the consequence with a source observation and a matching
+    proof that were *both* twenty-six years old: they agreed with each other, so
+    nothing refused, and a revisionless object's last copy was deleted. The
+    window is a required caller decision rather than a default invented here,
+    because how stale a re-fetch may be is operator policy.
+    """
+    moment = _timestamp(at)
+    if moment is None:
+        return f"{label} is timed {at!r}, which cannot be ordered against the run"
+    if moment > run:
+        return f"{label} is timed {at}, which is after the run at {run.isoformat()}"
+    if run - moment > max_age:
+        return (
+            f"{label} is timed {at}, which is older than the {max_age} evidence window "
+            f"for a run at {run.isoformat()}"
+        )
+    return None
+
+
 def _stale_proofs(
-    offered: Sequence[RefetchProof], observation: ResolutionEvidence | None
+    offered: Sequence[RefetchProof],
+    observation: ResolutionEvidence | None,
+    *,
+    run: datetime,
+    max_age: timedelta,
 ) -> tuple[str, ...]:
     """Why an otherwise matching proof cannot describe the current source state.
 
-    A proof is about what the source serves *now*, so it has to be at least as
-    recent as the source observation this run is acting on. When the observation
-    carries no orderable time the two cannot be related at all, and an
-    unorderable pair fails closed rather than defaulting to "recent enough".
+    A proof is about what the source serves *now*, so it has to fall inside the
+    run's evidence window and be at least as recent as the source observation
+    this run is acting on. An unorderable pair fails closed rather than
+    defaulting to "recent enough".
     """
+    reasons: list[str] = []
+    for proof in offered:
+        expired = _out_of_window("the re-fetch proof", proof.observed_at, run=run, max_age=max_age)
+        if expired:
+            reasons.append(expired)
     if observation is None:
-        return ("no source observation accompanies it",)
+        return (*reasons, "no source observation accompanies it")
     observed = _timestamp(observation.availability.observed_at)
     if observed is None:
         return (
+            *reasons,
             f"the source observation is timed {observation.availability.observed_at!r}, "
             "which cannot be ordered against the proof",
         )
-    return tuple(
+    reasons.extend(
         f"the proof was taken at {proof.observed_at} but the source was observed at "
         f"{observation.availability.observed_at}"
         for proof in offered
         if (_timestamp(proof.observed_at) or observed) < observed
     )
+    return tuple(dict.fromkeys(reasons))
 
 
 def _completeness_evidence(known: Sequence[tuple[str, ForeignReceipt]]) -> set[str]:
@@ -453,6 +510,8 @@ def _evaluate_object(
     references: ReferenceIndex,
     observations: Mapping[str, ResolutionEvidence],
     proofs: Mapping[str, tuple[RefetchProof, ...]],
+    run: datetime,
+    evidence_max_age: timedelta,
 ) -> RetentionDecision:
     """Apply both retention inputs to one object and name every unmet one."""
     key = cache_object.key
@@ -517,6 +576,15 @@ def _evaluate_object(
                 f"the offline table refuses automatic garbage collection: "
                 f"{verdict.evidence}"
             )
+        expired = _out_of_window(
+            "the source observation",
+            observation.availability.observed_at,
+            run=run,
+            max_age=evidence_max_age,
+        )
+        if expired:
+            conditions.append("provider-observation-stale")
+            details.append(expired)
         if verdict.allowed and identity not in observation.listed_identities:
             conditions.append("upstream-vanished")
             details.append(
@@ -578,7 +646,9 @@ def _evaluate_object(
                 "deleting would destroy the last copy of the pinned content"
             )
         else:
-            stale = _stale_proofs(offered, observation)
+            stale = _stale_proofs(
+                offered, observation, run=run, max_age=evidence_max_age
+            )
             if stale:
                 conditions.append("refetch-proof-stale")
                 details.append(
@@ -613,6 +683,7 @@ def plan_garbage_collection(
     observations: Mapping[str, ResolutionEvidence],
     refetch_proofs: Sequence[RefetchProof] = (),
     observed_at: str,
+    evidence_max_age: timedelta,
 ) -> GarbageCollectionPlan:
     """Decide, without mutating anything, what automatic collection may delete.
 
@@ -623,11 +694,30 @@ def plan_garbage_collection(
         refetch_proofs: Digest-verified re-fetches, keyed by qualified identity.
             Required for every revisionless object and for every object whose
             completeness rests only on the adapter's word.
+        observed_at: When this collection is deciding, as an ISO-8601 instant.
+        evidence_max_age: How old a source observation or a re-fetch proof may
+            be and still describe the present. Required, with no default,
+            because it is operator policy and because the failure it prevents is
+            silent: review supplied an observation and a proof that agreed with
+            each other and were both twenty-six years old, and the last copy of
+            a revisionless object's pinned bytes was deleted.
 
     Quarantined objects are not considered: they are retained evidence a repair
     set aside, and `ObjectStore.objects()` already excludes them.
     """
     _text(observed_at, "observed_at")
+    run = _timestamp(observed_at)
+    if run is None:
+        raise ValueError(
+            f"observed_at {observed_at!r} is not an ISO-8601 timestamp; a collection "
+            "that cannot say when it is running cannot judge whether its evidence is "
+            "current"
+        )
+    if not isinstance(evidence_max_age, timedelta) or evidence_max_age <= timedelta(0):
+        raise ValueError(
+            "evidence_max_age must be a positive timedelta stating how old a source "
+            "observation or re-fetch proof may be and still describe the present"
+        )
     proofs = _proofs_by_identity(refetch_proofs)
     for identity, observation in observations.items():
         if not isinstance(observation, ResolutionEvidence):
@@ -647,6 +737,8 @@ def plan_garbage_collection(
             references=references,
             observations=observations,
             proofs=proofs,
+            run=run,
+            evidence_max_age=evidence_max_age,
         )
         for cache_object in object_store.objects()
     )
@@ -660,6 +752,7 @@ def collect_garbage(
     observations: Mapping[str, ResolutionEvidence],
     refetch_proofs: Sequence[RefetchProof] = (),
     observed_at: str,
+    evidence_max_age: timedelta,
     pin_store: TofuPinStore,
 ) -> GarbageCollectionResult:
     """Delete only what the plan proved collectable, re-proving it under the lock.
@@ -680,12 +773,18 @@ def collect_garbage(
         observations=observations,
         refetch_proofs=refetch_proofs,
         observed_at=observed_at,
+        evidence_max_age=evidence_max_age,
     )
     proofs = _proofs_by_identity(refetch_proofs)
+    run = _timestamp(observed_at)
+    assert run is not None  # plan_garbage_collection has already refused otherwise
     deleted: list[RetentionDecision] = []
     raced: list[RetentionDecision] = []
     for decision in plan.collectable:
-        with pin_store.identity_lock(decision.qualified_identity):
+        # Two locks, because they exclude two different writers: the identity
+        # lock excludes the install transaction, and the scope locks exclude
+        # every other receipt writer for the whole proof-to-deletion window.
+        with pin_store.identity_lock(decision.qualified_identity), references.locked():
             cache_object = _object_for_digest(object_store, decision.key_digest)
             if cache_object is None:
                 raced.append(decision)
@@ -695,6 +794,8 @@ def collect_garbage(
                 references=references,
                 observations=observations,
                 proofs=proofs,
+                run=run,
+                evidence_max_age=evidence_max_age,
             )
             if not confirmed.collectable:
                 raced.append(confirmed)
@@ -719,22 +820,28 @@ def _object_for_digest(object_store: ObjectStore, digest: str) -> CacheObject | 
     return None
 
 
-def _member_paths(cache_object: CacheObject) -> tuple[str, ...]:
-    root = cache_object.content_path
+def _tree_files(root: Path) -> tuple[Path, ...]:
+    """Every file a deletion of this tree would remove, in a stable order."""
     if not root.is_dir():
         return ()
-    return tuple(
-        sorted(
-            str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()
-        )
-    )
+    return tuple(sorted(path for path in root.rglob("*") if path.is_file()))
+
+
+def _member_paths(cache_object: CacheObject) -> tuple[str, ...]:
+    """Every file the object holds, relative to the object directory.
+
+    The object directory, not its `content/` subdirectory: a deletion removes
+    the whole directory, including the self-describing descriptor. Reporting
+    only the content members made the dry run understate what it would delete --
+    review measured 45 reported bytes against 665 actually removed -- and AC7
+    requires the plan to report exactly what would go.
+    """
+    root = cache_object.path
+    return tuple(str(path.relative_to(root)) for path in _tree_files(root))
 
 
 def _byte_count(cache_object: CacheObject) -> int:
-    root = cache_object.content_path
-    if not root.is_dir():
-        return 0
-    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+    return sum(path.stat().st_size for path in _tree_files(cache_object.path))
 
 
 def _discard_tree(object_store: ObjectStore, path: Path) -> None:
@@ -773,35 +880,61 @@ def _discard_tree(object_store: ObjectStore, path: Path) -> None:
 
 
 def _assert_deletable(object_store: ObjectStore, path: Path) -> Path:
-    """Prove a path is this store's own object before removing it."""
-    resolved = Path(path).resolve()
-    root = object_store.objects_root.resolve()
-    if root not in resolved.parents:
+    """Prove a path is this store's own directory, following no link, before removing it.
+
+    The path is validated **as written**, never as resolved. Resolving first and
+    validating the result accepts a symbolic link whose target is also a valid
+    object: review placed a quarantine-shaped link beside one object, pointed it
+    at another object's canonical directory, and the purge deleted the object an
+    active receipt was protecting. Every component from the object root down is
+    therefore required to be a real directory.
+    """
+    literal = Path(path)
+    root = object_store.objects_root
+    try:
+        relative = literal.relative_to(root)
+    except ValueError:
         raise RetentionError(
-            f"{resolved} is not inside this cache's object root {root}; deletion is "
+            f"{literal} is not inside this cache's object root {root}; deletion is "
             "refused rather than resolved"
+        ) from None
+    if not relative.parts:
+        raise RetentionError("the cache object root itself is never deleted")
+    prefix = root
+    for part in relative.parts:
+        prefix = prefix / part
+        if prefix.is_symlink():
+            raise RetentionError(
+                f"{prefix} is a symbolic link; a deletion follows no link, because a "
+                "link can address another object's bytes while carrying this one's name"
+            )
+    if not literal.is_dir():
+        raise RetentionError(f"{literal} is not a stored object directory")
+    real_root = Path(os.path.realpath(root))
+    real = Path(os.path.realpath(literal))
+    if real_root not in real.parents:  # pragma: no cover - defense in depth
+        raise RetentionError(
+            f"{literal} resolves to {real}, which is outside {real_root}"
         )
-    if not resolved.is_dir():
-        raise RetentionError(f"{resolved} is not a stored object directory")
-    return resolved
+    return literal
 
 
 def _discard_object(object_store: ObjectStore, cache_object: CacheObject) -> tuple[str, ...]:
     """Delete one canonical cache object and report the members it held."""
     expected = object_store.path_for(cache_object.key)
-    resolved = _assert_deletable(object_store, cache_object.path)
-    if resolved != expected:
+    literal = _assert_deletable(object_store, cache_object.path)
+    if Path(os.path.realpath(literal)) != expected:
         raise RetentionError(
-            f"object {cache_object.key.digest()} is stored at {resolved} but its key "
+            f"object {cache_object.key.digest()} is stored at {literal} but its key "
             f"addresses {expected}; deletion is refused rather than reconciled"
         )
-    if QUARANTINE_SUFFIX in resolved.name:
+    if QUARANTINE_SUFFIX in literal.name:
         raise RetentionError(
-            f"{resolved} is quarantined evidence a repair set aside; it is never "
+            f"{literal} is quarantined evidence a repair set aside; it is never "
             "removed as part of an object deletion"
         )
     members = _member_paths(cache_object)
-    _discard_tree(object_store, resolved)
+    _discard_tree(object_store, literal)
     return members
 
 
@@ -815,14 +948,14 @@ def _delete_quarantine(object_store: ObjectStore, digest: str, path: Path) -> Pa
     a directory nested inside another object's content and destroy bytes an
     active receipt was protecting.
     """
-    resolved = _assert_deletable(object_store, path)
-    if resolved not in _quarantine_paths(object_store, digest):
+    literal = _assert_deletable(object_store, path)
+    if literal not in _quarantine_paths(object_store, digest):
         raise RetentionError(
-            f"{resolved} is not a quarantined sibling of cache object {digest}; only "
+            f"{literal} is not a quarantined sibling of cache object {digest}; only "
             "set-aside evidence for this exact object is removed through this path"
         )
-    _discard_tree(object_store, resolved)
-    return resolved
+    _discard_tree(object_store, literal)
+    return literal
 
 
 # -- operator-explicit purge --------------------------------------------------
@@ -1076,23 +1209,28 @@ def _quarantine_paths(object_store: ObjectStore, digest: str) -> tuple[Path, ...
     root = object_store.objects_root
     if not root.is_dir():
         return ()
-    resolved_root = root.resolve()
+    marker = f"{digest}{QUARANTINE_SUFFIX}"
     found: list[Path] = []
     for bucket in sorted(root.iterdir()):
-        if not bucket.is_dir():
+        if bucket.is_symlink() or not bucket.is_dir():
             continue
         for candidate in sorted(bucket.iterdir()):
-            if not candidate.is_dir():
+            # A link is never a quarantined tree. Review pointed one at another
+            # object's canonical directory: the name said "quarantine of digest
+            # A" and the bytes were object B, which an active receipt protected.
+            if candidate.is_symlink() or not candidate.is_dir():
                 continue
-            marker = f"{digest}{QUARANTINE_SUFFIX}"
             if not candidate.name.startswith(marker) or candidate.name == marker:
                 continue
-            resolved = candidate.resolve()
-            # A bucket sibling and nothing deeper: exactly two levels below the
-            # object root, and inside it.
-            if resolved.parent.parent != resolved_root:
+            # A name is a claim; the descriptor is the evidence. A tree that
+            # names a *different* object is not this digest's quarantine, whatever
+            # its directory is called. An unreadable descriptor keeps the tree in
+            # the plan and makes the plan unidentifiable, which is refused rather
+            # than deleted.
+            key = _quarantine_key(candidate)
+            if key is not None and key.digest() != digest:
                 continue
-            found.append(resolved)
+            found.append(candidate)
     return tuple(sorted(found))
 
 
@@ -1243,7 +1381,7 @@ def purge_object(
     # derived from the digest serialized against nothing: review installed the
     # item under the real identity lock after the final reference check, and the
     # purge deleted the last quarantined bytes and recorded success anyway.
-    with pin_store.identity_lock(str(plan.identity)):
+    with pin_store.identity_lock(str(plan.identity)), references.locked():
         confirmed = plan_purge(
             object_store=object_store,
             references=references,

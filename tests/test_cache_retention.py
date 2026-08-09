@@ -16,11 +16,15 @@ Covers AC1, AC2, and AC3.
 from __future__ import annotations
 
 import ast
+import errno
+import fcntl
 import hashlib
+import os
 import shutil
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from datetime import timedelta
 from typing import Iterator, Mapping, Sequence
 
 import pytest
@@ -71,6 +75,11 @@ OTHER_PROVIDER = "second-provider-under-test"
 NOW = "2026-08-09T09:00:00Z"
 LATER = "2026-08-09T12:00:00Z"
 MIT = "upstream LICENSE (MIT), read from the fetched item on 2026-08-09"
+
+#: How old this suite lets deletion-authorizing evidence be. Required at every
+#: call site with no default (wave-2 F4): an observation and a proof that agree
+#: with each other prove nothing if both were taken long before the run.
+WINDOW = timedelta(hours=6)
 
 GRANTED = Rights(
     fetch_authorization="granted",
@@ -291,6 +300,7 @@ def test_referenced_object_is_protected(tmp_path: Path) -> None:
         observations={PROVIDER: observation},
         refetch_proofs=(_proof(project), _proof(globally)),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
 
     assert not plan.collectable
@@ -308,6 +318,7 @@ def test_referenced_object_is_protected(tmp_path: Path) -> None:
         observations={PROVIDER: observation},
         refetch_proofs=(_proof(project), _proof(globally)),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert result.deleted == ()
@@ -379,6 +390,7 @@ def test_gc_fails_closed_when_unavailable(tmp_path: Path) -> None:
         },
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, digest)
     assert decision.references == ()
@@ -400,6 +412,7 @@ def test_gc_fails_closed_when_unavailable(tmp_path: Path) -> None:
         },
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     assert _decision(degraded, digest).reason == "provider-unavailable"
     assert not degraded.collectable
@@ -416,6 +429,7 @@ def test_gc_fails_closed_when_unavailable(tmp_path: Path) -> None:
         },
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert result.deleted == ()
@@ -439,6 +453,7 @@ def test_gc_fails_closed_when_revoked(tmp_path: Path) -> None:
         observations={PROVIDER: observation},
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert not decision.collectable
@@ -451,6 +466,7 @@ def test_gc_fails_closed_when_revoked(tmp_path: Path) -> None:
         observations={PROVIDER: observation},
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert result.deleted == ()
@@ -477,6 +493,7 @@ def test_gc_fails_closed_when_upstream_vanished(tmp_path: Path) -> None:
         observations={PROVIDER: _observation(identities=())},
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert not decision.collectable
@@ -489,6 +506,7 @@ def test_gc_fails_closed_when_upstream_vanished(tmp_path: Path) -> None:
         observations={PROVIDER: _observation(identities=())},
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert result.deleted == ()
@@ -512,6 +530,7 @@ def test_gc_fails_closed_for_revisionless_without_refetch_proof(tmp_path: Path) 
         observations={PROVIDER: _observation(identities=(identity,))},
         refetch_proofs=(),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert not decision.collectable
@@ -531,6 +550,7 @@ def test_gc_fails_closed_for_revisionless_without_refetch_proof(tmp_path: Path) 
         observations={PROVIDER: _observation(identities=(identity, other.receipt.qualified_identity()))},
         refetch_proofs=(_proof(other),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     assert _decision(borrowed, outcome.cache_object.key.digest()).reason == (
         "re-fetchability-not-proven"
@@ -557,6 +577,7 @@ def test_gc_refuses_revisionless_digest_drift(tmp_path: Path) -> None:
         observations={PROVIDER: observation},
         refetch_proofs=(_proof(outcome, digest=served),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert not decision.collectable
@@ -570,6 +591,7 @@ def test_gc_refuses_revisionless_digest_drift(tmp_path: Path) -> None:
         observations={PROVIDER: observation},
         refetch_proofs=(_proof(outcome, digest=served),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert result.deleted == ()
@@ -592,6 +614,7 @@ def test_gc_requires_an_observation_for_the_objects_own_provider(tmp_path: Path)
         },
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert not decision.collectable
@@ -614,6 +637,7 @@ def test_gc_fails_closed_on_an_incomplete_inventory(tmp_path: Path) -> None:
         },
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert not decision.collectable
@@ -642,6 +666,7 @@ def test_gc_fails_closed_when_completeness_rests_on_the_adapters_word(
         },
         refetch_proofs=(),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert not decision.collectable
@@ -672,6 +697,7 @@ def test_gc_collects_only_when_every_precondition_is_proven(tmp_path: Path) -> N
         observations={PROVIDER: _observation(identities=identities)},
         refetch_proofs=(_proof(keeper), _proof(goner)),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert [decision.key_digest for decision in result.deleted] == [
@@ -705,6 +731,7 @@ def test_gc_never_collects_quarantined_evidence(tmp_path: Path) -> None:
         },
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert [decision.key_digest for decision in result.deleted] == [
@@ -744,6 +771,7 @@ def test_gc_rechecks_references_under_the_install_lock(tmp_path: Path) -> None:
         observations={PROVIDER: _observation(identities=(identity,))},
         refetch_proofs=(_proof(goner),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert result.deleted == ()
@@ -796,6 +824,7 @@ def test_gc_never_invokes_purge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
                 observations={PROVIDER: observation},
                 refetch_proofs=proofs,
                 observed_at=LATER,
+                evidence_max_age=WINDOW,
             )
             assert plan.decisions
             collect_garbage(
@@ -804,6 +833,7 @@ def test_gc_never_invokes_purge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
                 observations={PROVIDER: observation},
                 refetch_proofs=proofs,
                 observed_at=LATER,
+                evidence_max_age=WINDOW,
                 pin_store=cache.pins,
             )
     assert calls == []
@@ -922,6 +952,7 @@ def test_conflicting_refetch_proofs_fail_closed(tmp_path: Path, stale_last: bool
         observations={PROVIDER: _observation(identities=(identity,))},
         refetch_proofs=proofs,
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert decision.reason == "refetch-digest-drift"
@@ -933,6 +964,7 @@ def test_conflicting_refetch_proofs_fail_closed(tmp_path: Path, stale_last: bool
         observations={PROVIDER: _observation(identities=(identity,))},
         refetch_proofs=proofs,
         observed_at=LATER,
+        evidence_max_age=WINDOW,
         pin_store=cache.pins,
     )
     assert result.deleted == ()
@@ -963,6 +995,7 @@ def test_a_refetch_proof_older_than_its_observation_is_stale(tmp_path: Path) -> 
         },
         refetch_proofs=(ancient,),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert decision.reason == "refetch-proof-stale"
@@ -997,6 +1030,7 @@ def test_simultaneous_degraded_conditions_are_all_named(tmp_path: Path) -> None:
         },
         refetch_proofs=(_proof(outcome),),
         observed_at=LATER,
+        evidence_max_age=WINDOW,
     )
     decision = _decision(plan, outcome.cache_object.key.digest())
     assert set(decision.conditions) >= {
@@ -1040,6 +1074,7 @@ def test_a_failed_removal_is_never_reported_as_a_deletion(
             },
             refetch_proofs=(_proof(outcome),),
             observed_at=LATER,
+            evidence_max_age=WINDOW,
             pin_store=cache.pins,
         )
     assert "not deleted" in str(failed.value) or "still present" in str(failed.value)
@@ -1047,3 +1082,190 @@ def test_a_failed_removal_is_never_reported_as_a_deletion(
     # The bytes are still on disk, staged and reclaimable rather than lost.
     monkeypatch.undo()
     assert cache.objects.temporary_entries() != ()
+
+
+# -- wave-2 adversarial review regressions (gpt-5.6-sol) ----------------------
+
+
+def test_a_corrupt_receipt_scope_is_never_read_as_empty(tmp_path: Path) -> None:
+    """Wave-2 F3: `receipts: null` parsed as "this scope holds nothing".
+
+    The index trusted the store to raise on a damaged file, and the store's own
+    parser turned a falsey value into an empty active set. Absence of receipts is
+    deletion authority, so the two must never be the same answer.
+    """
+    cache = _Cache(tmp_path)
+    outcome = cache.install(scope="global", revision="v1.0.0")
+    digest = outcome.cache_object.key.digest()
+    assert cache.index().references(digest)
+
+    for broken in ("null", "false", '""', '"[]"', "0"):
+        cache.global_.path.write_text(
+            '{"schema": "cognovis.foreign-receipt-store.v1", "receipts": '
+            + broken
+            + "}",
+            encoding="utf-8",
+        )
+        index = cache.index()
+        with pytest.raises(ScopeUnreadable):
+            index.references(digest)
+        with pytest.raises(ScopeUnreadable):
+            collect_garbage(
+                object_store=cache.objects,
+                references=cache.index(),
+                observations={
+                    PROVIDER: _observation(
+                        identities=(outcome.receipt.qualified_identity(),)
+                    )
+                },
+                refetch_proofs=(_proof(outcome),),
+                observed_at=LATER,
+                evidence_max_age=WINDOW,
+                pin_store=cache.pins,
+            )
+        assert cache.objects.verify(outcome.cache_object.key).verified
+
+    # A damaged `retired` list is the same fact: it carries the completeness and
+    # upstream-state evidence an unreferenced object is judged on.
+    cache.global_.path.write_text(
+        '{"schema": "cognovis.foreign-receipt-store.v1", "receipts": [], '
+        '"retired": null}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ScopeUnreadable):
+        cache.index().receipts_for_digest(digest)
+
+
+def test_evidence_older_than_the_run_window_fails_closed(tmp_path: Path) -> None:
+    """Wave-2 F4: an observation and a proof that agree can both be decades old."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    identity = outcome.receipt.qualified_identity()
+    ancient = "2000-01-01T00:00:00Z"
+
+    plan = plan_garbage_collection(
+        object_store=cache.objects,
+        references=cache.index(),
+        observations={
+            PROVIDER: _observation(
+                availability=ProviderAvailability(state="available", observed_at=ancient),
+                identities=(identity,),
+            )
+        },
+        refetch_proofs=(
+            RefetchProof(
+                provider_identity=PROVIDER,
+                qualified_identity=identity,
+                observed_digest=outcome.receipt.normalized_content_digest,
+                observed_at=ancient,
+            ),
+        ),
+        observed_at=LATER,
+        evidence_max_age=WINDOW,
+    )
+    decision = _decision(plan, outcome.cache_object.key.digest())
+    assert not decision.collectable
+    assert decision.reason == "provider-observation-stale"
+    assert set(decision.conditions) >= {"provider-observation-stale", "refetch-proof-stale"}
+
+    # Evidence from after the run is equally unusable.
+    future = plan_garbage_collection(
+        object_store=cache.objects,
+        references=cache.index(),
+        observations={
+            PROVIDER: _observation(
+                availability=ProviderAvailability(
+                    state="available", observed_at="2099-01-01T00:00:00Z"
+                ),
+                identities=(identity,),
+            )
+        },
+        refetch_proofs=(_proof(outcome),),
+        observed_at=LATER,
+        evidence_max_age=WINDOW,
+    )
+    assert _decision(future, outcome.cache_object.key.digest()).reason == (
+        "provider-observation-stale"
+    )
+
+    # The window is a required decision, not a defaulted one.
+    with pytest.raises(TypeError, match="evidence_max_age"):
+        plan_garbage_collection(  # type: ignore[call-arg]
+            object_store=cache.objects,
+            references=cache.index(),
+            observations={PROVIDER: _observation(identities=(identity,))},
+            observed_at=LATER,
+        )
+    with pytest.raises(ValueError, match="positive timedelta"):
+        plan_garbage_collection(
+            object_store=cache.objects,
+            references=cache.index(),
+            observations={PROVIDER: _observation(identities=(identity,))},
+            observed_at=LATER,
+            evidence_max_age=timedelta(0),
+        )
+    with pytest.raises(ValueError, match="ISO-8601"):
+        plan_garbage_collection(
+            object_store=cache.objects,
+            references=cache.index(),
+            observations={PROVIDER: _observation(identities=(identity,))},
+            observed_at="now",
+            evidence_max_age=WINDOW,
+        )
+
+
+def test_collection_holds_every_receipt_scope_lock_while_it_deletes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave-2 F2: a receipt committed after the final read still lost its object.
+
+    The install identity lock excludes an install transaction and nothing else.
+    A bare `ReceiptStore.put` is guarded only by the receipt file's own lock, so
+    the proof and the deletion have to hold that lock too. `flock` is per open
+    file description, so a second non-blocking attempt from this same process
+    fails exactly when the lock is held.
+    """
+    cache = _Cache(tmp_path)
+    outcome = cache.install(revision="v1.0.0")
+    cache.unreference(outcome)
+
+    def _scope_lock_is_held(store: ReceiptStore) -> bool:
+        handle = os.open(
+            str(store.path.with_name(f"{store.path.name}.lock")),
+            os.O_CREAT | os.O_RDWR,
+            0o600,
+        )
+        try:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                return exc.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK)
+            fcntl.flock(handle, fcntl.LOCK_UN)
+            return False
+        finally:
+            os.close(handle)
+
+    observed: list[tuple[bool, bool]] = []
+    real_discard = retention._discard_object
+
+    def _watching_discard(object_store, cache_object):
+        observed.append(
+            (_scope_lock_is_held(cache.project), _scope_lock_is_held(cache.global_))
+        )
+        return real_discard(object_store, cache_object)
+
+    monkeypatch.setattr(retention, "_discard_object", _watching_discard)
+    result = collect_garbage(
+        object_store=cache.objects,
+        references=cache.index(),
+        observations={
+            PROVIDER: _observation(identities=(outcome.receipt.qualified_identity(),))
+        },
+        refetch_proofs=(_proof(outcome),),
+        observed_at=LATER,
+        evidence_max_age=WINDOW,
+        pin_store=cache.pins,
+    )
+    assert len(result.deleted) == 1
+    assert observed == [(True, True)]

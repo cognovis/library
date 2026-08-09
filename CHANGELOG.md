@@ -73,8 +73,16 @@
   object's content; a re-fetch proof set is evaluated whole and must be at least as
   recent as the source observation, so argument order and stale evidence can no
   longer authorize a deletion; and a removal that does not complete raises instead
-  of recording success. Cache core only — no production CLI, installer, or sync
-  path calls it yet (`CL-mvet`).
+  of recording success. A deletion follows no symbolic link and validates its path
+  as written, and a quarantined tree must prove through its own descriptor that it
+  belongs to the digest that named it; the proof-to-deletion window holds every
+  receipt scope's lock, so a receipt committed by any writer after the final check
+  still protects its object; a malformed receipt store raises instead of reading as
+  an empty one; collection takes a required evidence window, so a source observation
+  and a re-fetch proof that merely agree with each other can no longer authorize a
+  deletion long after they were taken; and the dry run accounts for the whole object
+  directory rather than its payload alone. Cache core only — no production CLI,
+  installer, or sync path calls it yet (`CL-mvet`).
 
 - *(CL-y5z4, marketplace)* Every installed foreign artifact is now reproducible
   from a complete, immutable cache object while its source is unreachable. Cache

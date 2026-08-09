@@ -15,7 +15,10 @@ Covers AC4, AC5, AC6, and AC7.
 
 from __future__ import annotations
 
+import errno
+import fcntl
 import hashlib
+import os
 import shutil
 import sys
 from contextlib import contextmanager
@@ -434,7 +437,13 @@ def test_purge_requires_acknowledgement(tmp_path: Path) -> None:
     assert entry["reason"].startswith("the source is permanently gone")
     assert entry["status"] == "purged"
     assert entry["id"] == outcome_of_purge.ledger_entry_id
-    assert sorted(entry["member_paths"]) == ["SKILL.md", "reference.md"]
+    # Every file the deletion removes, including the object's own descriptor
+    # (wave-2 F5), relative to the object directory.
+    assert sorted(entry["member_paths"]) == [
+        "content/SKILL.md",
+        "content/reference.md",
+        "object.json",
+    ]
 
 
 def test_purge_deletes_under_degraded_conditions(tmp_path: Path) -> None:
@@ -491,16 +500,20 @@ def test_purge_dry_run_is_inert(tmp_path: Path) -> None:
     before = _fingerprint(tmp_path)
     plan = plan_purge(object_store=cache.objects, references=cache.index(), digest=digest)
 
-    content_root = outcome.cache_object.content_path
+    # Exactly what the deletion removes: the whole object directory, which is
+    # its content members *and* its descriptor. Measuring only `content/` let
+    # the plan report 45 bytes where 665 were removed (wave-2 F5).
+    object_root = outcome.cache_object.path
     on_disk = sorted(
-        str(path.relative_to(content_root))
-        for path in content_root.rglob("*")
+        str(path.relative_to(object_root))
+        for path in object_root.rglob("*")
         if path.is_file()
     )
     assert sorted(plan.member_paths) == on_disk
+    assert "object.json" in plan.member_paths
     assert plan.object_path == outcome.cache_object.path
     assert plan.byte_count == sum(
-        path.stat().st_size for path in content_root.rglob("*") if path.is_file()
+        path.stat().st_size for path in object_root.rglob("*") if path.is_file()
     )
     assert plan.deletable and plan.blocked_reason is None
     assert plan.references == ()
@@ -809,3 +822,137 @@ def test_a_malformed_purge_ledger_is_never_read_as_an_empty_one(tmp_path: Path) 
         '{"schema": "cognovis.cache-purge-ledger.v1", "entries": []}', encoding="utf-8"
     )
     assert ledger.entries() == ()
+
+
+def test_purge_follows_no_link_out_of_the_object_it_names(tmp_path: Path) -> None:
+    """Wave-2 F1: a quarantine-shaped symlink resolved to another object.
+
+    The name claimed to be a quarantine of the named digest; the link pointed at
+    a different object's canonical directory, which an active receipt protected,
+    and the purge deleted it.
+    """
+    cache = _Cache(tmp_path)
+    victim = cache.install()
+    keeper = cache.install(
+        scope="global",
+        upstream_id="kits/keeper",
+        name="keeper",
+        body=b"---\nname: keeper\n---\nkeeper body\n",
+    )
+    cache.unreference(victim)
+    digest = victim.cache_object.key.digest()
+
+    link = victim.cache_object.path.with_name(
+        f"{digest}{QUARANTINE_SUFFIX}pointing-elsewhere"
+    )
+    link.symlink_to(keeper.cache_object.path, target_is_directory=True)
+
+    plan = plan_purge(
+        object_store=cache.objects,
+        references=cache.index(),
+        digest=digest,
+        include_quarantined=True,
+    )
+    assert plan.quarantine_paths == ()
+    assert not plan.includes_quarantine
+
+    purge_object(
+        object_store=cache.objects,
+        references=cache.index(),
+        pin_store=cache.pins,
+        ledger=cache.ledger,
+        acknowledgement=_acknowledgement(digest),
+        include_quarantined=True,
+    )
+    assert not victim.cache_object.path.exists()
+    assert keeper.cache_object.path.is_dir()
+    assert cache.objects.verify(keeper.cache_object.key).verified
+
+    # The link itself is never followed, whichever door it is offered at.
+    with pytest.raises(RetentionError, match="symbolic link"):
+        retention._delete_quarantine(cache.objects, digest, link)
+
+
+def test_a_quarantine_naming_another_object_is_not_this_objects_evidence(
+    tmp_path: Path,
+) -> None:
+    """Wave-2 F1: the directory name is a claim; the descriptor is the evidence."""
+    cache = _Cache(tmp_path)
+    victim = cache.install()
+    keeper = cache.install(
+        scope="global",
+        upstream_id="kits/keeper",
+        name="keeper",
+        body=b"---\nname: keeper\n---\nkeeper body\n",
+    )
+    cache.unreference(victim)
+    digest = victim.cache_object.key.digest()
+
+    # A real directory, correctly placed and correctly named, whose descriptor
+    # says it holds the keeper's bytes.
+    impostor = victim.cache_object.path.with_name(f"{digest}{QUARANTINE_SUFFIX}impostor")
+    shutil.copytree(keeper.cache_object.path, impostor)
+
+    plan = plan_purge(
+        object_store=cache.objects,
+        references=cache.index(),
+        digest=digest,
+        include_quarantined=True,
+    )
+    assert plan.quarantine_paths == ()
+    purge_object(
+        object_store=cache.objects,
+        references=cache.index(),
+        pin_store=cache.pins,
+        ledger=cache.ledger,
+        acknowledgement=_acknowledgement(digest),
+        include_quarantined=True,
+    )
+    assert impostor.is_dir()
+    assert cache.objects.verify(keeper.cache_object.key).verified
+
+
+def test_purge_holds_every_receipt_scope_lock_while_it_deletes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave-2 F2: a receipt committed after the final proof still lost its object."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    digest = outcome.cache_object.key.digest()
+
+    def _scope_lock_is_held(store: ReceiptStore) -> bool:
+        handle = os.open(
+            str(store.path.with_name(f"{store.path.name}.lock")),
+            os.O_CREAT | os.O_RDWR,
+            0o600,
+        )
+        try:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                return exc.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK)
+            fcntl.flock(handle, fcntl.LOCK_UN)
+            return False
+        finally:
+            os.close(handle)
+
+    observed: list[tuple[bool, bool]] = []
+    real_discard = retention._discard_object
+
+    def _watching_discard(object_store, cache_object):
+        observed.append(
+            (_scope_lock_is_held(cache.project), _scope_lock_is_held(cache.global_))
+        )
+        return real_discard(object_store, cache_object)
+
+    monkeypatch.setattr(retention, "_discard_object", _watching_discard)
+    purge_object(
+        object_store=cache.objects,
+        references=cache.index(),
+        pin_store=cache.pins,
+        ledger=cache.ledger,
+        acknowledgement=_acknowledgement(digest),
+    )
+    assert observed == [(True, True)]
+    assert not outcome.cache_object.path.exists()

@@ -1400,6 +1400,37 @@ implemented contract now states them:
     one of the three, so an operator repairing it would fix one third of the
     problem. Precedence orders the primary reason; it does not hide the others.
 
+A second adversarial round demonstrated five more, and they are stated too:
+
+12. **A deletion follows no link, and a name is not evidence.** A
+    quarantine-shaped symbolic link beside one object pointed at another
+    object's canonical directory; validating the *resolved* path accepted it,
+    because a canonical object sits at the same depth. Paths are now validated
+    as written, every component from the object root down must be a real
+    directory, and a quarantined tree must additionally prove through its own
+    descriptor that it belongs to the digest that named it.
+13. **The proof-to-deletion window is serialized against every receipt writer.**
+    The install identity lock excludes the install transaction and nothing else;
+    a bare receipt write is guarded only by the receipt file's own lock. A
+    receipt committed after the final reference read and before the rename lost
+    its object. Both deleting paths now hold every scope's receipt lock across
+    the proof and the deletion, taken in a fixed path order.
+14. **A malformed receipt store is never an empty one.** `receipts: null` parsed
+    as "this scope holds nothing", and absence of receipts is deletion authority
+    everywhere that consumes the store. Receipt and retired records must be
+    strictly typed lists, so a damaged scope refuses instead of authorizing.
+15. **Evidence has to describe the present, and how recent is operator policy.**
+    A source observation and a re-fetch proof that agree with each other prove
+    nothing if both were taken long before the run; review supplied a matching
+    pair twenty-six years old and the last copy of a revisionless object's
+    pinned bytes was deleted. Collection now takes a required
+    `evidence_max_age`, with no default, and evidence outside that window — or
+    dated after the run — is typed and fails closed.
+16. **The dry run reports the whole object, not only its payload.** A deletion
+    removes the object directory including its self-describing descriptor, while
+    the plan measured `content/` alone and reported 45 bytes where 665 were
+    removed. AC7 says *exactly* what would be deleted.
+
 **Scope boundary.** This slice ships the retention core and its contracts. No
 production CLI, installer, or sync path calls them yet; CLI wiring is `CL-mvet`.
 
