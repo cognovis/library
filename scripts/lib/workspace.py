@@ -3,6 +3,23 @@
 Workspace manifests are metadata-only requested roots. This module contains the
 pure graph and lockfile operations; filesystem materialization remains owned by
 the existing primitive installers.
+
+Schema v2 adds cross-catalog roots (ADR-0011 `Cross-Catalog Resolution`). The
+whole redirection surface is one reviewable block: a manifest's `catalogs:`
+entries are the only place it may name a source, every entry carries a typed
+immutable pin, and a root references one of them by manifest-local alias. A root
+that could name its own source, or an alias that could resolve to an undeclared
+source, would hand an external publisher the ability to point a trusted root
+somewhere else -- which is the failure the whole slice exists to prevent.
+
+Two consequences are deliberate and look like missing features:
+
+- **Composition collides, it does not layer.** Two catalogs supplying the same
+  projection target fail before mutation. An overlay across a trust boundary is
+  the same redirection wearing a convenience name.
+- **An undeclared catalog fails the resolution.** A dependency may not pull the
+  closure into a source nobody pinned, even when that source is registered on
+  this machine.
 """
 
 from __future__ import annotations
@@ -12,16 +29,32 @@ import json
 import os
 import re
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping, Sequence
 
-from .catalog import get_catalogs, get_entries, normalize_catalog_identity
+from .catalog import (
+    get_catalog_identity,
+    get_catalogs,
+    get_entries,
+    normalize_catalog_identity,
+)
 from .errors import EXIT_AMBIGUOUS, LibraryError
 from .lockfile import compute_checksum, root_id
+from .providers.executable_admission import (
+    ExecutableAdmissionLedger,
+    gate_resolution,
+)
+from .providers.inventory import NormalizedItem
+from .providers.offline import ResolutionEvidence, evaluate_operation
+from .providers.receipts import ReceiptStore
 from .resolver import resolve_requires, resolve_requires_bound
 
 WORKSPACE_SCHEMA_VERSION = 1
+#: Every manifest schema version this module resolves. v1 manifests remain valid
+#: v1 manifests; v2 is additive and never rewrites one.
+WORKSPACE_SCHEMA_VERSIONS = (1, 2)
+CROSS_CATALOG_SCHEMA_VERSION = 2
 PROJECT_RECEIPT_LIMIT = 30
 GLOBAL_ROOT_LIMIT = 5
 GLOBAL_RECEIPT_LIMIT = 15
@@ -45,6 +78,94 @@ ARTIFACT_ROOT_TYPES = {
 INTRINSICALLY_GLOBAL_TYPES = {"mcp"}
 SEMVER_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
 ROOT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+CATALOG_ALIAS_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
+
+#: A pin is typed because not every source has a commit. An `inventory-snapshot`
+#: pin is a trust-on-first-use pin over the catalog listing, which is what makes
+#: a revisionless source usable as a Workspace catalog at all.
+PIN_KINDS = ("commit", "inventory-snapshot")
+_PIN_VALUE_PATTERNS = {
+    "commit": re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$"),
+    "inventory-snapshot": re.compile(r"^[0-9a-f]{64}$"),
+}
+
+#: Fields through which a root could name its own source. Rejecting them by name
+#: rather than by the closed key set alone is what makes the diagnostic say
+#: *why* -- a closed-key message reads like a typo, and this is not a typo.
+ROOT_SOURCE_FIELDS = ("source", "url", "identity", "catalog_identity", "repository")
+
+#: The legacy `catalog_identity` value observed in a committed consumer lock. It
+#: records that provenance was never established, so it can never be read as
+#: registration in this scope's closure.
+LEGACY_UNKNOWN_IDENTITY = "unknown"
+
+#: Suffix of the foreign-receipt store folded onto one lock scope.
+FOREIGN_RECEIPT_SUFFIX = ".foreign-receipts.json"
+
+
+@dataclass(frozen=True)
+class CatalogPin:
+    """One typed, immutable pin for a declared catalog."""
+
+    kind: str
+    value: str
+
+    def describe(self) -> str:
+        return f"{self.kind}:{self.value}"
+
+
+@dataclass(frozen=True)
+class DeclaredCatalog:
+    """One `catalogs:` entry: a manifest-local alias bound to a pinned identity."""
+
+    alias: str
+    identity: str
+    pin: CatalogPin
+
+
+@dataclass(frozen=True)
+class ResolvedNode:
+    """One resolved closure member with its canonical provenance.
+
+    The alias never appears here. ADR-0011 keeps alias mapping manifest-local
+    precisely so two Workspaces may spell the same alias differently without
+    interfering, which only works if everything downstream of resolution --
+    locks, plans, diagnostics -- speaks canonical identity.
+    """
+
+    primitive: str
+    name: str
+    catalog_name: str
+    catalog_identity: str
+    role: str
+    pin: CatalogPin | None = None
+
+    @property
+    def id(self) -> str:
+        return root_id(self.primitive, self.name)
+
+
+@dataclass(frozen=True)
+class CatalogClosure:
+    """Which catalogs the selected scope's fresh resolution registers.
+
+    `complete` is the fail-closed switch of ADR-0011's foreign-catalog prune
+    guard. When registration cannot be determined -- an unresolvable root, a
+    catalog nobody declared, or a source in the closure that was not observed
+    conclusively -- every receipt in the scope is treated as foreign rather than
+    as one this scope may delete.
+    """
+
+    identities: frozenset[str] = frozenset()
+    complete: bool = True
+    reasons: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "identities": sorted(self.identities),
+            "complete": self.complete,
+            "reasons": list(self.reasons),
+        }
 
 
 @dataclass
@@ -72,6 +193,27 @@ class WorkspaceClosure:
     prerequisites: tuple[tuple[str, str], ...]
     artifact_bindings: tuple[tuple[str, str, str], ...] = ()
     prerequisite_bindings: tuple[tuple[str, str, str], ...] = ()
+    nodes: tuple[ResolvedNode, ...] = ()
+    declared_catalogs: tuple[DeclaredCatalog, ...] = ()
+    steward_identity: str = ""
+
+    @property
+    def registered_identities(self) -> frozenset[str]:
+        """Canonical identities this Workspace registers in a scope closure.
+
+        A v1 Workspace registers only its own steward catalog; a v2 Workspace
+        registers every catalog it declares. This is the set ADR-0011's prune
+        guard means by "registered in the resolved Workspace closure".
+        """
+        identities = {entry.identity for entry in self.declared_catalogs}
+        if self.steward_identity:
+            identities.add(self.steward_identity)
+        return frozenset(identity for identity in identities if identity)
+
+    @property
+    def cross_catalog(self) -> bool:
+        """Whether this closure reaches sources through a v2 `catalogs:` block."""
+        return bool(self.declared_catalogs)
 
 
 def workspace_policy(catalog: dict[str, Any], scope: str) -> dict[str, float | int]:
@@ -112,10 +254,128 @@ def workspace_root_id(catalog_identity: str, name: str) -> str:
     return f"workspace:{normalize_catalog_identity(catalog_identity)}#{name}"
 
 
+def _validate_catalog_pin(alias: str, raw: Any) -> CatalogPin:
+    """Validate one typed pin, or refuse.
+
+    An unpinned catalog resolves from whatever the source serves today, which is
+    exactly the moving reference the `catalogs:` block exists to replace. A
+    branch name in the `value` position is the same defect with a pin-shaped
+    field around it, so the value is checked against the shape its kind implies.
+    """
+    if not isinstance(raw, dict) or not raw:
+        raise LibraryError(
+            f"Workspace catalog '{alias}' declares no pin; every declared catalog "
+            f"carries a typed pin ({', '.join(PIN_KINDS)})"
+        )
+    unexpected = sorted(set(raw) - {"kind", "value"})
+    if unexpected:
+        raise LibraryError(
+            f"Workspace catalog '{alias}' pin contains unsupported fields: "
+            f"{', '.join(unexpected)}"
+        )
+    kind = raw.get("kind")
+    value = raw.get("value")
+    if kind not in PIN_KINDS:
+        raise LibraryError(
+            f"Workspace catalog '{alias}' pin kind {kind!r} is not one of "
+            f"{list(PIN_KINDS)}"
+        )
+    if not isinstance(value, str) or not _PIN_VALUE_PATTERNS[kind].fullmatch(value):
+        raise LibraryError(
+            f"Workspace catalog '{alias}' pin value {value!r} is not an immutable "
+            f"{kind} pin; resolution uses the pin, never a moving reference"
+        )
+    return CatalogPin(kind=kind, value=value)
+
+
+def declared_catalogs(manifest: dict[str, Any]) -> tuple[DeclaredCatalog, ...]:
+    """Return the manifest's validated `catalogs:` block, empty for v1."""
+    entries = manifest.get("catalogs")
+    if entries is None:
+        return ()
+    if not isinstance(entries, list) or not 1 <= len(entries) <= 10:
+        raise LibraryError("Workspace catalogs must declare 1-10 pinned entries")
+    declared: list[DeclaredCatalog] = []
+    seen_aliases: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise LibraryError("Every Workspace catalog entry must be a mapping")
+        unexpected = sorted(set(entry) - {"alias", "identity", "pin"})
+        if unexpected:
+            raise LibraryError(
+                "Workspace catalog entry contains unsupported fields: "
+                + ", ".join(unexpected)
+            )
+        alias = entry.get("alias")
+        if not isinstance(alias, str) or not CATALOG_ALIAS_PATTERN.fullmatch(alias):
+            raise LibraryError(
+                f"Workspace catalog alias {alias!r} must be lowercase kebab-case"
+            )
+        if alias in seen_aliases:
+            raise LibraryError(f"Workspace declares duplicate catalog alias '{alias}'")
+        seen_aliases.add(alias)
+        identity = entry.get("identity")
+        if not isinstance(identity, str) or not identity.strip():
+            raise LibraryError(
+                f"Workspace catalog '{alias}' must declare a canonical identity"
+            )
+        declared.append(
+            DeclaredCatalog(
+                alias=alias,
+                identity=normalize_catalog_identity(identity),
+                pin=_validate_catalog_pin(alias, entry.get("pin")),
+            )
+        )
+    identities = [entry.identity for entry in declared]
+    duplicates = sorted({value for value in identities if identities.count(value) > 1})
+    if duplicates:
+        raise LibraryError(
+            "Workspace declares one catalog identity under several aliases: "
+            + ", ".join(duplicates)
+        )
+    return tuple(declared)
+
+
+def _validate_root_fields(item: dict[str, Any], version: int) -> None:
+    """Refuse a root that names a source, nests a Workspace, or invents a field."""
+    naming = sorted(field for field in ROOT_SOURCE_FIELDS if field in item)
+    if naming:
+        raise LibraryError(
+            "Workspace root may not carry a source reference "
+            f"({', '.join(naming)}); a Workspace names sources only in its "
+            "catalogs block and roots reference them by alias"
+        )
+    allowed = {"type", "name", "constraint"}
+    if version >= CROSS_CATALOG_SCHEMA_VERSION:
+        allowed.add("catalog")
+    unsupported = sorted(set(item) - allowed)
+    if "catalog" in unsupported:
+        raise LibraryError(
+            "Workspace root field 'catalog' requires schema_version 2; a v1 "
+            "manifest declares no catalogs block for it to reference"
+        )
+    if unsupported:
+        raise LibraryError(
+            "Workspace roots reject nested or unsupported fields: "
+            + ", ".join(unsupported)
+        )
+    if item.get("type") == "workspace":
+        raise LibraryError(
+            "Nested Workspace roots remain deferred; ADR-0011 admits cross-catalog "
+            "roots and nothing else"
+        )
+
+
 def validate_workspace_manifest(manifest: dict[str, Any]) -> None:
-    """Validate the constitutive v1 Workspace manifest contract."""
+    """Validate the constitutive Workspace manifest contract for v1 and v2."""
     if not isinstance(manifest, dict):
         raise LibraryError("Workspace manifest must be a mapping")
+    schema_version = manifest.get("schema_version")
+    if schema_version not in WORKSPACE_SCHEMA_VERSIONS:
+        raise LibraryError(
+            f"Unsupported Workspace schema_version {schema_version!r}; supported "
+            f"versions are {list(WORKSPACE_SCHEMA_VERSIONS)}"
+        )
     allowed = {
         "schema_version",
         "name",
@@ -128,16 +388,20 @@ def validate_workspace_manifest(manifest: dict[str, Any]) -> None:
         "metadata",
         "tags",
     }
+    if schema_version >= CROSS_CATALOG_SCHEMA_VERSION:
+        allowed.add("catalogs")
     unexpected = sorted(set(manifest) - allowed)
     if unexpected:
         raise LibraryError(
             f"Workspace manifest contains unsupported fields: {', '.join(unexpected)}"
         )
-    if manifest.get("schema_version") != WORKSPACE_SCHEMA_VERSION:
+    catalogs = declared_catalogs(manifest)
+    if schema_version >= CROSS_CATALOG_SCHEMA_VERSION and not catalogs:
         raise LibraryError(
-            f"Unsupported Workspace schema_version {manifest.get('schema_version')!r}; "
-            f"expected {WORKSPACE_SCHEMA_VERSION}"
+            "Workspace schema_version 2 requires a pinned catalogs block; it is the "
+            "only place a Workspace may name a source"
         )
+    aliases = {entry.alias for entry in catalogs}
     name = manifest.get("name")
     if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", name):
         raise LibraryError("Workspace name must use lowercase kebab-case")
@@ -156,25 +420,41 @@ def validate_workspace_manifest(manifest: dict[str, Any]) -> None:
     for item in roots:
         if not isinstance(item, dict):
             raise LibraryError("Every Workspace root must be a mapping")
-        unsupported = sorted(set(item) - {"type", "name", "constraint"})
-        if unsupported:
-            raise LibraryError(
-                "Workspace v1 roots reject nested or cross-catalog fields: "
-                + ", ".join(unsupported)
-            )
+        _validate_root_fields(item, int(schema_version))
         primitive = item.get("type")
         member_name = item.get("name")
         if primitive not in ARTIFACT_ROOT_TYPES:
             raise LibraryError(
-                f"Workspace v1 root type {primitive!r} is not an artifact primitive"
+                f"Workspace root type {primitive!r} is not an artifact primitive"
             )
         if not isinstance(member_name, str) or not ROOT_NAME_PATTERN.fullmatch(
             member_name
         ):
             raise LibraryError("Workspace root name has invalid characters")
-        member_id = root_id(str(primitive), member_name)
+        qualifier = item.get("catalog")
+        if qualifier is not None:
+            if not isinstance(qualifier, str) or not CATALOG_ALIAS_PATTERN.fullmatch(
+                qualifier
+            ):
+                raise LibraryError(
+                    f"Workspace root catalog {qualifier!r} must be a manifest-local "
+                    "alias, never a source"
+                )
+            if qualifier not in aliases:
+                raise LibraryError(
+                    f"Workspace root catalog alias '{qualifier}' is not declared in "
+                    f"the catalogs block; declared aliases are {sorted(aliases)}"
+                )
+        # A root's manifest identity includes its qualifier. Two roots that name
+        # the same member in two catalogs are not a duplicate declaration; they
+        # are a projection-target collision, and resolution refuses them with
+        # both canonical identities named.
+        member_id = f"{qualifier or ''}|{root_id(str(primitive), member_name)}"
         if member_id in seen:
-            raise LibraryError(f"Workspace contains duplicate root {member_id}")
+            raise LibraryError(
+                f"Workspace contains duplicate root "
+                f"{root_id(str(primitive), member_name)}"
+            )
         seen.add(member_id)
         constraint = item.get("constraint")
         if constraint is not None:
@@ -256,25 +536,66 @@ def resolve_workspace(catalog: dict[str, Any], reference: str) -> ResolvedWorksp
     )
 
 
-def _assert_same_catalog_member(
-    catalog: dict[str, Any], workspace: ResolvedWorkspace, primitive: str, name: str
+def _assert_catalog_member(
+    catalog: dict[str, Any],
+    source_catalog: str,
+    source_identity: str,
+    primitive: str,
+    name: str,
 ) -> dict[str, Any]:
+    """Return the member published by exactly this catalog, or refuse.
+
+    A root binds to one steward. Falling back to "some catalog publishes this
+    name" is the redirection the qualifier exists to close: an unrelated
+    publisher could then satisfy a root a reviewer approved for a specific one.
+    """
     entries = [
         entry for entry in get_entries(catalog, primitive) if entry.get("name") == name
     ]
     if not entries:
         raise LibraryError(f"Workspace root {primitive}:{name} does not exist")
     source_names = {_entry_catalog_name(entry) for entry in entries}
-    if workspace.catalog_name not in source_names:
+    if source_catalog not in source_names:
         raise LibraryError(
-            f"Workspace root {primitive}:{name} is not published by "
-            f"same catalog {workspace.catalog_name}"
+            f"Workspace root {primitive}:{name} is not published by catalog "
+            f"{source_catalog} ({source_identity}); it is published by "
+            f"{sorted(source_names)}"
         )
-    return next(
-        entry
-        for entry in entries
-        if _entry_catalog_name(entry) == workspace.catalog_name
-    )
+    matching = [
+        entry for entry in entries if _entry_catalog_name(entry) == source_catalog
+    ]
+    if len(matching) > 1:
+        raise LibraryError(
+            f"Ambiguous Workspace root {primitive}:{name} in catalog "
+            f"{source_catalog} ({source_identity}); the catalog publishes it "
+            f"{len(matching)} times"
+        )
+    return matching[0]
+
+
+def _alias_catalog_names(
+    catalog: dict[str, Any], declared: Sequence[DeclaredCatalog]
+) -> dict[str, str]:
+    """Bind each declared identity to exactly one registered catalog name."""
+    registry = _catalog_identities(catalog)
+    by_identity: dict[str, list[str]] = {}
+    for name, identity in registry.items():
+        by_identity.setdefault(identity, []).append(name)
+    bindings: dict[str, str] = {}
+    for entry in declared:
+        candidates = sorted(by_identity.get(entry.identity, []))
+        if not candidates:
+            raise LibraryError(
+                f"Workspace catalog '{entry.alias}' ({entry.identity}) is not a "
+                "registered source catalog in this repository"
+            )
+        if len(candidates) > 1:
+            raise LibraryError(
+                f"Ambiguous Workspace catalog '{entry.alias}' ({entry.identity}); "
+                f"registered under several names: {candidates}"
+            )
+        bindings[entry.alias] = candidates[0]
+    return bindings
 
 
 def _version_tuple(version: str) -> tuple[int, int, int]:
@@ -335,26 +656,72 @@ def resolve_workspace_closure(
                 "Global lobby exceeds the configured standing-context budget"
             )
 
+    declared = declared_catalogs(workspace.entry)
+    alias_names = _alias_catalog_names(catalog, declared)
+    pins_by_identity = {entry.identity: entry.pin for entry in declared}
+    registry = _catalog_identities(catalog)
+
     ordered_artifacts: list[tuple[str, str]] = []
     prerequisites: list[tuple[str, str]] = []
     artifact_bindings: list[tuple[str, str, str]] = []
     prerequisite_bindings: list[tuple[str, str, str]] = []
+    nodes: list[ResolvedNode] = []
     seen_artifacts: set[tuple[str, str]] = set()
     seen_prerequisites: set[tuple[str, str]] = set()
+    # Every projection target the closure has already bound, with the source it
+    # was bound to. A second source claiming the same target is a collision.
+    bound_sources: dict[tuple[str, str], tuple[str, str]] = {}
+
+    def _pin_for(member_source: str, member_label: str) -> CatalogPin | None:
+        identity = registry.get(member_source, "")
+        if not declared:
+            return None
+        pin = pins_by_identity.get(identity)
+        if pin is None:
+            raise LibraryError(
+                f"Workspace resolution reached {member_label} in catalog "
+                f"{member_source} ({identity}), which this manifest does not "
+                "declare; every resolved catalog carries a pin in the catalogs "
+                "block"
+            )
+        return pin
+
+    def _bind(member_source: str, member_primitive: str, member_name: str) -> None:
+        member_label = root_id(member_primitive, member_name)
+        identity = registry.get(member_source, "")
+        previous = bound_sources.get((member_primitive, member_name))
+        if previous is not None and previous != (member_source, identity):
+            raise LibraryError(
+                f"Workspace target collision for {member_label}: catalog "
+                f"{previous[0]} ({previous[1]}) and catalog {member_source} "
+                f"({identity}) both supply it. Composition is an unordered set "
+                "union with no overlay, exclusion, or precedence; split the "
+                "Workspace instead"
+            )
+        bound_sources[(member_primitive, member_name)] = (member_source, identity)
+
     for root in roots:
         primitive = str(root["type"])
         name = str(root["name"])
-        member_entry = _assert_same_catalog_member(catalog, workspace, primitive, name)
+        qualifier = root.get("catalog")
+        source_catalog = (
+            alias_names[str(qualifier)] if qualifier is not None else workspace.catalog_name
+        )
+        source_identity = registry.get(source_catalog, "")
+        member_entry = _assert_catalog_member(
+            catalog, source_catalog, source_identity, primitive, name
+        )
         root_scope = member_entry.get("default_scope")
         if primitive in INTRINSICALLY_GLOBAL_TYPES and scope == "project":
             raise LibraryError(
                 f"Workspace scope project conflicts with intrinsically global root "
-                f"{primitive}:{name}"
+                f"{primitive}:{name} from catalog {source_catalog} ({source_identity})"
             )
         if root_scope in {"project", "global"} and root_scope != scope:
             raise LibraryError(
                 f"Workspace scope {scope} conflicts with {primitive}:{name} "
-                f"default_scope {root_scope}"
+                f"default_scope {root_scope} from catalog {source_catalog} "
+                f"({source_identity})"
             )
         constraint = root.get("constraint")
         if constraint is not None:
@@ -364,13 +731,14 @@ def resolve_workspace_closure(
             ):
                 raise LibraryError(
                     f"Workspace constraint {constraint!r} is unsatisfied for "
-                    f"{primitive}:{name} at version {version!r}"
+                    f"{root_id(primitive, name)} at version {version!r} from "
+                    f"catalog {source_catalog} ({source_identity})"
                 )
         closure = resolve_requires_bound(
             catalog,
             primitive,
             name,
-            source_catalog=workspace.catalog_name,
+            source_catalog=source_catalog,
         )
         for member_primitive, member_name, member_source in closure:
             member = (member_primitive, member_name)
@@ -380,6 +748,8 @@ def resolve_workspace_closure(
                 if entry.get("name") == member_name
                 and _entry_catalog_name(entry) == member_source
             )
+            _bind(member_source, member_primitive, member_name)
+            member_pin = _pin_for(member_source, root_id(member_primitive, member_name))
             declared_scope = member_catalog_entry.get("default_scope")
             if scope == "project" and (
                 member[0] in INTRINSICALLY_GLOBAL_TYPES or declared_scope == "global"
@@ -389,16 +759,37 @@ def resolve_workspace_closure(
                     prerequisite_bindings.append(
                         (member_primitive, member_name, member_source)
                     )
+                    nodes.append(
+                        ResolvedNode(
+                            primitive=member_primitive,
+                            name=member_name,
+                            catalog_name=member_source,
+                            catalog_identity=registry.get(member_source, ""),
+                            role="prerequisite",
+                            pin=member_pin,
+                        )
+                    )
                     seen_prerequisites.add(member)
                 continue
             if declared_scope in {"project", "global"} and declared_scope != scope:
                 raise LibraryError(
                     f"Workspace scope {scope} conflicts with {member[0]}:{member[1]} "
-                    f"default_scope {declared_scope}"
+                    f"default_scope {declared_scope} from catalog {member_source} "
+                    f"({registry.get(member_source, '')})"
                 )
             if member not in seen_artifacts:
                 ordered_artifacts.append(member)
                 artifact_bindings.append((member_primitive, member_name, member_source))
+                nodes.append(
+                    ResolvedNode(
+                        primitive=member_primitive,
+                        name=member_name,
+                        catalog_name=member_source,
+                        catalog_identity=registry.get(member_source, ""),
+                        role="artifact",
+                        pin=member_pin,
+                    )
+                )
                 seen_artifacts.add(member)
 
     limit = int(policy["max_receipts"])
@@ -411,7 +802,85 @@ def resolve_workspace_closure(
         tuple(prerequisites),
         tuple(artifact_bindings),
         tuple(prerequisite_bindings),
+        tuple(nodes),
+        declared,
+        workspace.catalog_identity,
     )
+
+
+def gate_workspace_mutation(
+    closure: WorkspaceClosure,
+    items: Sequence[NormalizedItem],
+    ledger: ExecutableAdmissionLedger,
+    contents: Mapping[str, Mapping[str, bytes]],
+    *,
+    mutate: Callable[[Mapping[str, Mapping[str, bytes]]], Any] | None = None,
+) -> tuple[NormalizedItem, ...]:
+    """Admit a completed resolution to mutation, or refuse the whole of it.
+
+    Two independent gates, in this order:
+
+    1. **Selection binding.** Every item must be a member the resolution
+       actually selected, *from the source it selected*. An item the closure
+       does not contain, or one that carries a resolved member's name under a
+       different provider identity, is refused. Without this, a provider that
+       returns one extra item -- or the same name from somewhere else -- writes
+       content no Workspace root ever requested.
+    2. **Executable admission** (`CL-n7ex`). A root reaching a `pending` or
+       `refused` executable member fails the whole resolution before any
+       mutation, and no partial selection is returned.
+
+    The writer never sources its own bytes: `mutate` is called by the admission
+    gate with the exact frozen content the gate digested, restricted to the
+    gated items. An item omitted from `items` is therefore absent from the
+    mutation rather than admitted by it.
+
+    Raises:
+        LibraryError: when an item is not part of this resolution.
+        ResolutionRefused: when an executable member is not admitted.
+    """
+    selected = {
+        (node.primitive, node.name): node
+        for node in closure.nodes
+        if node.role == "artifact"
+    }
+    for item in items:
+        node = selected.get((item.library_type, item.library_name))
+        identity = normalize_catalog_identity(item.provider_identity)
+        if node is None:
+            raise LibraryError(
+                f"{root_id(item.library_type, item.library_name)} is not resolved by "
+                "this Workspace closure; a mutation may only write members the "
+                "resolution selected"
+            )
+        if node.catalog_identity and node.catalog_identity != identity:
+            raise LibraryError(
+                f"{root_id(item.library_type, item.library_name)} is not resolved "
+                f"from {identity}; this closure binds it to {node.catalog_identity}"
+            )
+    return gate_resolution(items, ledger, contents, mutate=mutate)
+
+
+def workspace_receipt_store_path(lock_path: Path) -> Path:
+    """The foreign-receipt store bound to one lock scope.
+
+    ADR-0011 folds foreign receipts onto the v2 lock. The fold is a relocation:
+    the records already carry the lock's documented foreign-receipt field names,
+    so nothing is translated, and what moves is which scope owns them. They stay
+    in their own document rather than inside the lock body because the lock body
+    is written by `save_lockfile` and filtered by `apply_post_prune_lock`, and
+    routing receipts through either would drop one of the three properties the
+    store exists to hold: one cross-process lock around the whole
+    load-modify-save, planned targets durable before a projection is activated,
+    and retirement reachable only through an explicit named removal.
+    """
+    path = Path(lock_path)
+    return path.with_name(f"{path.name}{FOREIGN_RECEIPT_SUFFIX}")
+
+
+def workspace_receipt_store(lock_path: Path) -> ReceiptStore:
+    """The foreign receipts of one lock scope."""
+    return ReceiptStore(workspace_receipt_store_path(lock_path))
 
 
 def make_workspace_requested_root(
@@ -448,16 +917,64 @@ def upsert_workspace_root(lock: dict[str, Any], root: dict[str, Any]) -> None:
     roots.append(root)
 
 
+@dataclass(frozen=True)
+class _RootResolution:
+    """One requested root's freshly resolved contribution to the scope."""
+
+    artifacts: list[tuple[str, str]]
+    prerequisites: list[tuple[str, str]]
+    requirements: dict[str, dict[str, str]]
+    #: Canonical catalog identities this root registers in the scope closure.
+    registered: frozenset[str] = frozenset()
+    #: Identities that reach the scope through a v2 `catalogs:` block, and
+    #: therefore need a conclusive observation before deletion authority exists.
+    cross_catalog: frozenset[str] = frozenset()
+    #: Projection target to the canonical identity it was bound to, so a second
+    #: root claiming the same target from elsewhere is visible at scope level.
+    bindings: dict[str, str] = field(default_factory=dict)
+
+
+def _root_registration(
+    catalog: dict[str, Any], root: dict[str, Any]
+) -> tuple[frozenset[str], frozenset[str]] | None:
+    """Which catalogs this root registers, independently of its members.
+
+    Called when a root's closure failed to resolve. ADR-0011 makes an
+    **unresolvable catalog** undeterminable registration, not an unresolvable
+    member: a direct root still records the catalog it was installed from, and a
+    Workspace root still declares its catalogs even when one of its members has
+    since disappeared. Collapsing the two would let one stale entry suspend the
+    whole scope's ability to remove anything, which is a shipped behavior with
+    its own test.
+
+    Returns:
+        `(registered, cross_catalog)`, or `None` when the catalogs themselves
+        could not be determined.
+    """
+    if str(root.get("type") or "") == "workspace":
+        catalog_name = str(root.get("catalog_name") or "")
+        name = str(root.get("name") or "")
+        reference = str(root.get("requested_ref") or f"{catalog_name}:{name}")
+        try:
+            workspace = resolve_workspace(catalog, reference)
+            declared = declared_catalogs(workspace.entry)
+        except LibraryError:
+            return None
+        identities = frozenset(entry.identity for entry in declared)
+        return (
+            frozenset({workspace.catalog_identity}) | identities,
+            identities,
+        )
+    identity = normalize_catalog_identity(str(root.get("catalog_identity") or ""))
+    return (frozenset({identity}) if identity else frozenset(), frozenset())
+
+
 def _resolve_requested_root(
     catalog: dict[str, Any],
     root: dict[str, Any],
     repo_root: Path,
     scope: str,
-) -> tuple[
-    list[tuple[str, str]],
-    list[tuple[str, str]],
-    dict[str, dict[str, str]],
-]:
+) -> _RootResolution:
     primitive = str(root.get("type") or "")
     name = str(root.get("name") or "")
     if primitive == "workspace":
@@ -474,7 +991,18 @@ def _resolve_requested_root(
         requirements = _prerequisite_requirements(
             catalog, closure.prerequisite_bindings
         )
-        return list(closure.artifacts), list(closure.prerequisites), requirements
+        return _RootResolution(
+            list(closure.artifacts),
+            list(closure.prerequisites),
+            requirements,
+            closure.registered_identities,
+            frozenset(entry.identity for entry in closure.declared_catalogs),
+            {
+                node.id: node.catalog_identity
+                for node in closure.nodes
+                if node.catalog_identity
+            },
+        )
     if primitive not in ARTIFACT_ROOT_TYPES:
         raise LibraryError(f"Unsupported requested root {primitive}:{name}")
     closure = resolve_requires(catalog, primitive, name, repo_root, scope)
@@ -503,10 +1031,14 @@ def _resolve_requested_root(
                     _entry_catalog_name(candidate),
                 )
             )
-    return (
+    # A direct root registers the catalog it was installed from. A root without
+    # a recorded identity registers nothing; it does not invent one.
+    identity = normalize_catalog_identity(str(root.get("catalog_identity") or ""))
+    return _RootResolution(
         artifacts,
         prerequisites,
         _prerequisite_requirements(catalog, tuple(direct_bindings)),
+        frozenset({identity}) if identity else frozenset(),
     )
 
 
@@ -535,41 +1067,179 @@ def _stable_digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _configured_catalog_identities(catalog: dict[str, Any]) -> set[str]:
+    """First-party identities this scope's catalog document already attests.
+
+    The audited catalog itself plus its registered source catalogs. Marketplaces
+    are excluded: a provider becomes registered by being declared with a pin in
+    a v2 Workspace manifest, never by appearing in configuration.
+    """
+    identities = set(_catalog_identities(catalog).values())
+    declared = get_catalog_identity(catalog)
+    if declared:
+        identities.add(normalize_catalog_identity(declared))
+    return {identity for identity in identities if identity}
+
+
+def catalog_registration(
+    catalog_identity: Any, closure: CatalogClosure
+) -> tuple[str, str | None]:
+    """Whether one receipt's owner is registered in the resolved scope closure.
+
+    Returns `("registered", None)` or `("foreign", reason)`. Every path that is
+    not a positive match returns `foreign`, including the three ways provenance
+    can simply be missing. ADR-0011 is explicit that the fail-closed default is
+    the authoritative one: `unknown` is not "probably ours", and a scope that
+    treated it that way would delete content it never installed.
+    """
+    if not closure.complete:
+        reason = closure.reasons[0] if closure.reasons else "the resolution is incomplete"
+        return (
+            "foreign",
+            f"catalog registration is undeterminable in this scope: {reason}",
+        )
+    raw = str(catalog_identity or "").strip()
+    if not raw:
+        return ("foreign", "receipt records no catalog identity")
+    identity = normalize_catalog_identity(raw)
+    if identity == LEGACY_UNKNOWN_IDENTITY:
+        return (
+            "foreign",
+            "receipt records the legacy catalog identity 'unknown', which never "
+            "established provenance",
+        )
+    if identity not in closure.identities:
+        return (
+            "foreign",
+            f"catalog {identity} is not registered in the resolved Workspace "
+            "closure of this scope",
+        )
+    return ("registered", None)
+
+
+def _observation_verdict(
+    identity: str, observation: ResolutionEvidence | None
+) -> str | None:
+    """Why this source cannot support deletion authority right now, or None."""
+    if observation is None:
+        return (
+            f"catalog {identity} in the resolved closure was not observed; "
+            "reachability was never established, which is not the same as "
+            "established reachability"
+        )
+    if not isinstance(observation, ResolutionEvidence):
+        return (
+            f"catalog {identity} supplied no source-scoped inventory observation; "
+            "reachability alone is not a complete resolution"
+        )
+    if normalize_catalog_identity(observation.provider_identity) != identity:
+        return (
+            f"catalog {identity} was answered by an observation of "
+            f"{observation.provider_identity}; one source's resolution says "
+            "nothing about another's"
+        )
+    verdict = evaluate_operation("prune-apply", observation)
+    return None if verdict.allowed else verdict.evidence
+
+
 def build_workspace_plan(
     catalog: dict[str, Any],
     lock: dict[str, Any],
     repo_root: Path,
     scope: str,
+    *,
+    catalog_observations: Mapping[str, ResolutionEvidence] | None = None,
 ) -> dict[str, Any]:
-    """Recompute reachability and return an ownership-aware selected-scope plan."""
+    """Recompute reachability and return an ownership-aware selected-scope plan.
+
+    Args:
+        catalog_observations: Source-scoped inventory observations, keyed by
+            canonical catalog identity, for the catalogs a v2 Workspace declares
+            in this scope. Absent or non-conclusive observations do not block
+            additive work; they make the scope's prune fail closed, which is the
+            ADR-0011 rule that deletion authority derives from a complete
+            resolution over a reachable source.
+    """
     owners: dict[str, list[str]] = {}
     prerequisite_owners: dict[str, list[str]] = {}
     prerequisite_requirements: dict[str, dict[str, str]] = {}
     blockers: list[str] = []
+    # What "registered in the resolved Workspace closure" means, in full:
+    #
+    # 1. the catalog this scope is reconciled against, and the first-party
+    #    source catalogs it configures -- this is ADR-0010's shipped provenance
+    #    comparison and is why an operator can still remove content installed
+    #    from their own catalog after the last root referencing it is gone;
+    # 2. every canonical identity a resolved Workspace registers: its steward
+    #    catalog and, for a v2 manifest, each entry of its pinned `catalogs:`
+    #    block.
+    #
+    # A marketplace or provider is deliberately absent from (1). Configuring one
+    # is not registration; reaching it requires a pinned declaration in a v2
+    # manifest, which is the reviewable act ADR-0011 puts the trust boundary on.
+    registered: set[str] = _configured_catalog_identities(catalog)
+    cross_catalog: set[str] = set()
+    registration_reasons: list[str] = []
+    bound_identities: dict[str, tuple[str, str]] = {}
     for requested_root in lock.get("requested_roots", []):
         if requested_root.get("scope", scope) != scope:
             continue
         owner_id = str(requested_root.get("id") or "")
         try:
-            artifacts, prerequisites, root_prerequisite_requirements = (
-                _resolve_requested_root(catalog, requested_root, repo_root, scope)
+            resolution = _resolve_requested_root(
+                catalog, requested_root, repo_root, scope
             )
         except LibraryError as exc:
             blockers.append(f"{owner_id}: {exc}")
+            fallback = _root_registration(catalog, requested_root)
+            if fallback is None:
+                registration_reasons.append(
+                    f"the catalogs of {owner_id} could not be determined: {exc}"
+                )
+            else:
+                registered.update(fallback[0])
+                cross_catalog.update(fallback[1])
             continue
-        for primitive, name in artifacts:
+        registered.update(resolution.registered)
+        cross_catalog.update(resolution.cross_catalog)
+        for member_id, identity in resolution.bindings.items():
+            previous = bound_identities.get(member_id)
+            if previous is not None and previous[1] != identity:
+                blockers.append(
+                    f"{member_id}: target collision between {previous[0]} "
+                    f"({previous[1]}) and {owner_id} ({identity}); composition is "
+                    "an unordered set union with no overlay or precedence"
+                )
+            else:
+                bound_identities[member_id] = (owner_id, identity)
+        for primitive, name in resolution.artifacts:
             owners.setdefault(root_id(primitive, name), []).append(owner_id)
-        for primitive, name in prerequisites:
+        for primitive, name in resolution.prerequisites:
             prerequisite_id = root_id(primitive, name)
             prerequisite_owners.setdefault(prerequisite_id, []).append(owner_id)
             current = prerequisite_requirements.get(prerequisite_id)
-            requirement = root_prerequisite_requirements.get(prerequisite_id, {})
+            requirement = resolution.requirements.get(prerequisite_id, {})
             if current and current != requirement:
                 blockers.append(
                     f"{prerequisite_id}: requested with conflicting catalog provenance"
                 )
             else:
                 prerequisite_requirements[prerequisite_id] = requirement
+
+    # A source reached through a v2 catalogs block must be observed
+    # conclusively before this scope has deletion authority over anything.
+    # ADR-0011 fails the whole scope closed, not only that source's receipts.
+    for identity in sorted(cross_catalog):
+        reason = _observation_verdict(
+            identity, (catalog_observations or {}).get(identity)
+        )
+        if reason is not None:
+            registration_reasons.append(reason)
+    closure_registry = CatalogClosure(
+        identities=frozenset(registered),
+        complete=not registration_reasons,
+        reasons=tuple(registration_reasons),
+    )
 
     receipt_by_id = {
         str(
@@ -629,14 +1299,30 @@ def build_workspace_plan(
             and str(receipt.get("resolved_version") or "") != catalog_version
         ):
             updates.append(receipt_id)
+    registrations: dict[str, tuple[str, str | None]] = {
+        receipt_id: catalog_registration(
+            receipt.get("catalog_identity"), closure_registry
+        )
+        for receipt_id, receipt in receipt_by_id.items()
+    }
     prune_candidates: list[dict[str, Any]] = []
     for receipt_id in sorted(receipt_ids - desired_ids):
         receipt = receipt_by_id[receipt_id]
+        registration, registration_reason = registrations[receipt_id]
         prune_candidates.append(
             {
                 "id": receipt_id,
                 "verified": bool(receipt.get("verified", False)),
-                "blocked_reason": receipt.get("prune_blocked_reason"),
+                "blocked_reason": (
+                    receipt.get("prune_blocked_reason")
+                    or (
+                        f"foreign catalog owner: {registration_reason}"
+                        if registration_reason
+                        else None
+                    )
+                ),
+                "catalog_registration": registration,
+                "registration_reason": registration_reason,
                 "targets": receipt.get("targets") or [],
                 "scope": receipt.get("scope", scope),
                 "install_target": receipt.get("install_target"),
@@ -648,6 +1334,8 @@ def build_workspace_plan(
             "owners": sorted(set(owners.get(receipt_id, []))),
             "shared": len(set(owners.get(receipt_id, []))) > 1,
             "catalog_identity": receipt.get("catalog_identity"),
+            "catalog_registration": registrations[receipt_id][0],
+            "registration_reason": registrations[receipt_id][1],
             "resolved_version": receipt.get("resolved_version"),
             "scope": receipt.get("scope", scope),
             "verified": bool(receipt.get("verified", False)),
@@ -680,6 +1368,7 @@ def build_workspace_plan(
             for prerequisite_id, root_ids in sorted(prerequisite_owners.items())
         ],
         "prune_candidates": prune_candidates,
+        "catalog_closure": closure_registry.to_dict(),
         "blockers": blockers,
         "digest": _stable_digest(payload),
     }

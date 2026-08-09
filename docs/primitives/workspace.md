@@ -75,7 +75,7 @@ rather than copying their content or inlining routing, context-budget,
 state-owner, or harness-runtime schemas. Schema v1 rejects nested Workspace and
 cross-catalog roots.
 
-**Schema v2 — cross-catalog roots (contract accepted, approval final since 2026-08-09).**
+**Schema v2 — cross-catalog roots (implemented by `CL-dbam`; approval final since 2026-08-09).**
 [ADR-0011](../adr/heterogeneous-marketplace-workspaces.md) defines schema v2, in
 which a manifest may declare a pinned `catalogs:` block of alias-to-identity
 mappings and each root may carry a `catalog:` alias qualifier. Rules: the
@@ -85,6 +85,40 @@ resolves from the Workspace's own steward catalog, and alias-to-identity mapping
 is manifest-local while locks and diagnostics use canonical identity throughout.
 v1 manifests remain valid and unchanged; a `catalog:` qualifier in a v1 manifest
 is a validation error.
+
+A pin is a typed mapping, not a bare string:
+
+```yaml
+catalogs:
+  - alias: upstream
+    identity: https://example.invalid/upstream
+    pin:
+      kind: commit            # or inventory-snapshot, for a revisionless source
+      value: 4f2c1e9a8b7d6c5e4f3a2b1c0d9e8f7a6b5c4d3e
+```
+
+`kind: commit` takes a 40- or 64-character hexadecimal revision;
+`kind: inventory-snapshot` takes a 64-character digest over the source's
+normalized inventory listing. A branch name in the `value` position is refused:
+resolution uses the pin, never a moving reference.
+
+Two resolution rules follow from the block being the whole trust boundary:
+
+- **Every resolved catalog must be declared.** A dependency may not pull the
+  closure into a source the manifest does not pin, even one this repository
+  registers. The diagnostic names the member and the undeclared identity.
+- **Two catalogs supplying one projection target collide.** They do not layer.
+  The refusal names both canonical identities and both stewards, before any
+  mutation.
+
+Every resolved node records its canonical catalog identity and the pin of the
+catalog it came from, regardless of the display alias the manifest used.
+
+**Mutation gate.** A completed cross-catalog resolution reaches the filesystem
+only through `gate_workspace_mutation`, which refuses an item the resolution did
+not select or one that carries a selected member's name from a different source,
+and then applies the ADR-0011 executable-admission gate. The writer receives the
+exact immutable content the gate digested; it never sources its own bytes.
 
 > **This approval is FINAL as of 2026-08-09.** The ADR-0010 two-consumer evidence
 > gate was **amended, not satisfied** — a Human Decision by Malte Sussdorff
@@ -103,20 +137,48 @@ redirection mechanism, reintroducing at the composition layer exactly what the
 pinned `catalogs:` block prevents at the manifest layer.
 
 **Foreign-catalog prune guard.** A catalog is *registered in the resolved
-Workspace closure* when its canonical identity appears in the `catalogs:` block of
-a Workspace in the selected scope's freshly resolved root set. A receipt whose
-`catalog_identity` is not in that closure is a foreign owner and is never pruned
-by this scope. When closure registration cannot be determined — unresolvable
-catalog, degraded provider, missing identity, or a legacy `catalog_identity:
-unknown` — the receipt is treated as foreign. The fail-closed default is
-authoritative.
+Workspace closure* when either of two things holds:
+
+1. it is the catalog this scope reconciles against, or one of the first-party
+   source catalogs that catalog configures — ADR-0010's shipped provenance
+   comparison, which is why removing content installed from your own catalog
+   keeps working after the last root referencing it is gone; or
+2. its canonical identity appears in the pinned `catalogs:` block of a Workspace
+   in the selected scope's freshly resolved root set, or is that Workspace's own
+   steward — ADR-0011's addition.
+
+A marketplace or provider is deliberately outside (1). Configuring one is not
+registration; it becomes registered by being declared with a pin in a v2
+manifest, which is the reviewable act the trust boundary rests on.
+
+A receipt whose `catalog_identity` is not registered is a foreign owner and is
+never pruned by this scope. When closure registration cannot be determined —
+unresolvable catalog, degraded provider, missing identity, or a legacy
+`catalog_identity: unknown` — the receipt is treated as foreign. The fail-closed
+default is authoritative.
+
+"Unresolvable catalog" means the catalogs themselves could not be read, not that
+a member vanished. A registered Workspace whose manifest can no longer be
+resolved suspends the whole scope's prune; a stale direct root whose member left
+the catalog is reported as a blocker but still registers the catalog it records.
+
+**Prune under a cross-catalog closure fails closed on provider health.** When a
+scope's resolved closure reaches a source through a v2 `catalogs:` block, every
+such identity needs a conclusive, source-scoped inventory observation before
+this scope has deletion authority. A missing observation, an observation of a
+different source, an unreachable source, and a reachable source that answered
+incompletely are all refusals, and one refusal fails the scope's whole prune —
+not only that source's receipts. Additive work is unaffected: offline operation
+stays additive and repair-only.
 
 **Composition.** A project or global scope may register several Workspaces. The
 effective desired state is their unordered set union together with direct roots
-and all `requires:` dependencies. Cross-catalog composition uses several direct
-Workspace registrations at the scope boundary. There are no overlay, exclusion,
-precedence, or last-writer-wins semantics: version conflicts, target collisions,
-and scope mismatches fail before mutation.
+and all `requires:` dependencies. Cross-catalog composition uses qualified roots
+inside one v2 manifest; composing at the scope boundary with one Workspace per
+catalog remains valid and is what v1 consumers do. There are no overlay,
+exclusion, precedence, or last-writer-wins semantics: version conflicts, target
+collisions, and scope mismatches fail before mutation, whether the collision
+arises inside one manifest or between two Workspaces in the same scope.
 
 **Scope.** One Workspace use is either project-scoped or global-scoped, and its
 entire closure stays in that scope. A project Workspace cannot own global

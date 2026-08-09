@@ -604,10 +604,14 @@ description: Engineering navigator and procedure skills across first-party and u
 catalogs:
   - alias: mattpocock
     identity: https://github.com/mattpocock/skills
-    pin: 4f2c1e9a8b7d6c5e4f3a2b1c0d9e8f7a6b5c4d3e
+    pin:
+      kind: commit
+      value: 4f2c1e9a8b7d6c5e4f3a2b1c0d9e8f7a6b5c4d3e
   - alias: core
     identity: https://github.com/cognovis/library-core
-    pin: dee0415f47d8ae4ccfa7e166bdd682c29f94c33b
+    pin:
+      kind: commit
+      value: dee0415f47d8ae4ccfa7e166bdd682c29f94c33b
 roots:
   - type: skill
     name: implement
@@ -628,7 +632,10 @@ Rules:
 2. **Every declared catalog carries a `pin`.** Resolution uses the pin, not a
    moving branch. An unpinned catalog entry is a schema error.
 
-   A pin is **typed**, because not every provider has a commit:
+   A pin is **typed**, and the type is written out — the mapping above, never a
+   bare string. A bare string would have to be interpreted as one kind by
+   default, and defaulting a revisionless source's snapshot digest to `commit`
+   is exactly the silent mis-typing the table below exists to prevent:
 
    | `pin.kind` | Value | Used by |
    |---|---|---|
@@ -711,6 +718,47 @@ provider in the resolved scope closure is unavailable, returns an inventory that
 is incomplete, truncated, or reduced by changed authorization, or no longer lists
 a previously installed item. See `Offline Semantics` for the full behavior and for
 the `upstream-vanished` receipt state.
+
+### Implementation record (slice 5, `CL-dbam`)
+
+Delivered: schema v2 validation in both `docs/schema/workspace.schema.json` and
+`scripts/lib/workspace.py`, cross-catalog closure resolution with per-node
+canonical identity and pin, the mutation gate, and the restated foreign-catalog
+prune guard. v1 manifests validate unchanged.
+
+Three points where the implementation is more specific than the text above, each
+because the text alone admitted a reading that would have broken something:
+
+1. **Registration has two sources, not one.** Read literally, "registered in the
+   resolved Workspace closure" would mean *only* a v2 `catalogs:` block, and a
+   v1-only scope would register nothing and could never prune. The implemented
+   rule is the union of ADR-0010's shipped provenance comparison — the audited
+   catalog and its configured first-party source catalogs — with this ADR's
+   addition: every identity a resolved Workspace registers, meaning its steward
+   and its declared catalogs. A marketplace or provider is deliberately excluded
+   from the first source: configuring one is not registration, and reaching one
+   requires the pinned declaration this section is about.
+2. **"Unresolvable catalog" is not "unresolvable member."** A registered
+   Workspace whose manifest can no longer be read makes registration
+   undeterminable and suspends the scope's prune. A stale direct root whose
+   member left the catalog does not: it is reported as a blocker, and the
+   catalog it records still counts. Collapsing the two would let one stale entry
+   suspend an operator's ability to remove anything, which contradicts shipped,
+   tested behavior.
+3. **Every resolved catalog must be declared, in v2.** The ADR requires a pin on
+   every resolved node; a dependency resolving into a catalog the manifest does
+   not declare therefore has no pin available, and the resolution fails naming
+   the member and the undeclared identity rather than recording an unpinned
+   node. This also closes a redirection path the qualifier alone leaves open: a
+   published item's `requires:` cannot pull the closure into an unreviewed
+   source.
+
+`gate_workspace_mutation` is the single door from a completed resolution to a
+mutation. It refuses an item the resolution did not select, and an item carrying
+a selected member's name under a different provider identity, before applying
+`executable_admission.gate_resolution`. The writer is called by that gate with
+the frozen content the gate digested, so an item omitted from the gated set is
+absent from the mutation rather than admitted by it.
 
 ### Nested Workspace disposition
 

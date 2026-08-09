@@ -38,6 +38,34 @@
 
 ### Added
 
+- *(CL-dbam, Workspace)* Workspace schema v2 composes pinned roots across several
+  catalogs in one manifest. A manifest declares a `catalogs:` block of
+  alias-to-identity mappings, each carrying a typed immutable pin (`commit` or
+  `inventory-snapshot`), and each root may qualify itself with one of those
+  aliases. That block is the only place a Workspace may name a source: a root
+  carrying a URL, an undeclared alias, an unpinned catalog, a branch name in a
+  pin, a `catalog:` qualifier in a v1 manifest, and a nested Workspace root are
+  each refused with a named diagnostic by both the JSON Schema and the resolver.
+  v1 manifests remain valid and unchanged. Resolution completes before any target
+  mutation and records canonical catalog identity plus the resolving catalog's
+  pin on every node, while display aliases stay manifest-local. Composition stays
+  an unordered set union: two catalogs supplying one projection target collide —
+  inside a manifest or between two Workspaces in a scope — and fail naming both
+  identities and stewards, rather than layering. A dependency may not pull the
+  closure into a catalog the manifest does not declare. Mutation is reachable
+  only through a gate that refuses items the resolution did not select, refuses a
+  selected member offered from a different source, and then applies the
+  executable-admission gate, handing the writer the exact content it digested.
+  The foreign-catalog prune guard is restated on the resolved closure: an
+  unregistered owner, a missing identity, the legacy `unknown` value, and an
+  unresolvable catalog are all foreign and never pruned, and a scope whose
+  closure reaches a source through a v2 `catalogs:` block fails its whole prune
+  closed unless every such source was observed conclusively. Foreign receipts are
+  folded onto their lock scope as `<lock>.foreign-receipts.json`; they stay out
+  of the lock body because inlining would drop one of the store's three
+  invariants, and `retention.REQUIRED_SCOPES` is unchanged because a
+  cross-catalog Workspace reconciles one existing scope rather than a new one.
+
 - *(CL-uliw, marketplace)* Unreferenced cache objects now survive provider loss
   until an operator purges them by digest. Automatic garbage collection takes two
   retention inputs, not one: an object referenced by any active receipt in any
