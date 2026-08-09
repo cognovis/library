@@ -33,18 +33,35 @@ binding only. Cache identity, materialization keys, and offline verification are
 `CL-y5z4`; that slice may adopt this function or supersede it with a broader
 cache key, and if it does, the admission binding follows the same bytes it does
 today. What must not change is the *binding*: admission follows content.
+
+**The operator act (`CL-2wqz`).** Slice 2 shipped this state and no way to write
+it, so every externally sourced executable artifact was refused permanently: the
+gate was correct and nothing could ever pass it. `AdmissionLedgerStore` is the
+durable, cross-process form of the ledger, and the `ADMISSION_COMMAND` constants
+below are the single place the CLI words are written down -- the shipped parser
+registers from them and the install-time refusal renders a command from them, so
+a renamed subcommand cannot leave a diagnostic pointing at nothing.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import shlex
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .classification import EXECUTABLE_TYPES
-from .inventory import EXECUTABLE_ADMISSION_STATES, NormalizedItem
+from .inventory import (
+    EVIDENCE_PLACEHOLDERS,
+    EXECUTABLE_ADMISSION_STATES,
+    MIN_EVIDENCE_LENGTH,
+    NormalizedItem,
+)
+from .state_files import atomic_write_text, exclusive_lock
 
 DIGEST_PREFIX = "sha256:"
 _DIGEST_RE = re.compile(rf"^{DIGEST_PREFIX}[0-9a-f]{{64}}$")
@@ -53,6 +70,25 @@ INERT = "inert"
 ADMITTED = "admitted"
 PENDING = "pending"
 REFUSED = "refused"
+
+#: The CLI words that record an executable-admission decision. They live beside
+#: the state they write so that the registration and the refusal diagnostic have
+#: one source: `scripts/library.py` builds its subparsers from these values, and
+#: `admission_refusal` renders its remedy from the same ones.
+ADMISSION_COMMAND = "admission"
+GRANT_VERB = "grant"
+DENY_VERB = "deny"
+SHOW_VERB = "show"
+LIST_VERB = "list"
+
+#: Schema of the durable decision file.
+ADMISSION_LEDGER_SCHEMA = "cognovis.executable-admission-ledger.v1"
+
+#: What a rendered remedy command puts where the operator's own words belong.
+#: Refused on the way in, so pasting the template unchanged records nothing.
+OPERATOR_PLACEHOLDER = "<your operator identity>"
+REASON_PLACEHOLDER = "<why you reviewed these exact bytes and trust them>"
+PERMISSION_PLACEHOLDER = "<a permission this artifact requests>"
 
 
 class InertContentNotAdmissible(ValueError):
@@ -154,6 +190,154 @@ def is_executable_type(library_type: str) -> bool:
     return library_type in EXECUTABLE_TYPES
 
 
+def _is_template(value: str) -> bool:
+    """Whether this text is a rendered placeholder rather than an answer.
+
+    A remedy command has to be complete enough to read, which means it carries
+    placeholders where the operator's own words belong. Recording one verbatim
+    would file a decision whose stated reason is the instruction to state a
+    reason, so the placeholder shape is refused on the way in.
+    """
+    stripped = value.strip()
+    return stripped.startswith("<") and stripped.endswith(">")
+
+
+def validated_operator(value: str) -> str:
+    """The declared identity of the operator making this decision, or a refusal.
+
+    The identity is a **declared string**, exactly as `CL-n7ex` left it: nothing
+    here authenticates it, because verifying an operator is credential handling
+    and is held behind a human security review. What this refuses is an absent
+    or template answer, which is the difference between a weak attribution and
+    no attribution at all.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            "an admission decision records who made it; pass the operator identity"
+        )
+    if _is_template(value):
+        raise ValueError(
+            f"{value!r} is the placeholder from a rendered remedy command, not an "
+            "operator identity; record who is deciding"
+        )
+    return value.strip()
+
+
+def validated_reason(value: str) -> str:
+    """The operator's stated reason for this decision, or a refusal.
+
+    The floor is the one `inventory.BlockReason` already applies to block-reason
+    evidence, adopted rather than forked: long enough to be a sentence, not one
+    of the phrases that admit they say nothing, and never a rendered template.
+    It checks shape and not truth -- no validator can tell a considered reason
+    from a fluent one, and pretending otherwise would be the more dangerous
+    claim.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("an admission decision records why it was made")
+    stripped = value.strip()
+    if _is_template(stripped):
+        raise ValueError(
+            f"{stripped!r} is the placeholder from a rendered remedy command; the "
+            "reason has to be your own words, so the template is refused"
+        )
+    if (
+        len(stripped) < MIN_EVIDENCE_LENGTH
+        or " " not in stripped
+        or stripped.lower().rstrip(".") in EVIDENCE_PLACEHOLDERS
+    ):
+        raise ValueError(
+            f"the reason {value!r} is a placeholder; record what you reviewed and "
+            "what it led you to decide"
+        )
+    return stripped
+
+
+def admission_command_line(
+    qualified_identity: str,
+    content_digest_value: str,
+    library_type: str,
+    *,
+    verb: str = GRANT_VERB,
+    supersede: bool = False,
+) -> str:
+    """The exact command that records one decision, rendered from the CLI words.
+
+    Rendered here rather than written out at the refusal site, because a
+    diagnostic that names a command is only useful while the command still
+    exists. `scripts/library.py` registers `ADMISSION_COMMAND` and its verbs
+    from these same constants, and the test parses this string back through the
+    shipped parser, so a rename breaks the build instead of the operator.
+    """
+    words = [
+        "library",
+        ADMISSION_COMMAND,
+        verb,
+        "--identity",
+        shlex.quote(qualified_identity),
+        "--digest",
+        content_digest_value,
+        "--type",
+        library_type,
+        "--operator",
+        shlex.quote(OPERATOR_PLACEHOLDER),
+        "--reason",
+        shlex.quote(REASON_PLACEHOLDER),
+    ]
+    if verb == GRANT_VERB:
+        words += ["--permission", shlex.quote(PERMISSION_PLACEHOLDER)]
+    if supersede:
+        words.append("--supersede")
+    return " ".join(words)
+
+
+def admission_refusal(
+    qualified_identity: str,
+    content_digest_value: str,
+    library_type: str,
+    state: str,
+) -> str:
+    """The install-time refusal for an executable artifact nobody decided about.
+
+    It carries the digest it refused and both commands that would change the
+    answer. Before `CL-2wqz` this message named the state and stopped there,
+    which was accurate and useless: there was no command to name, so an operator
+    reading it had no way forward at all.
+    """
+    already_decided = state == REFUSED
+    grant = admission_command_line(
+        qualified_identity,
+        content_digest_value,
+        library_type,
+        verb=GRANT_VERB,
+        supersede=already_decided,
+    )
+    deny = admission_command_line(
+        qualified_identity,
+        content_digest_value,
+        library_type,
+        verb=DENY_VERB,
+        supersede=already_decided,
+    )
+    standing = (
+        "a recorded refusal stands until it is explicitly superseded"
+        if already_decided
+        else "nothing has decided about these bytes yet"
+    )
+    return (
+        f"{qualified_identity} is an executable artifact whose admission state is "
+        f"{state!r} for these exact bytes ({content_digest_value}). The content is "
+        "cached and receipted; caching is not installing, and no harness path "
+        f"receives it until the scope operator decides -- {standing}. Record the "
+        "decision and re-run the install:\n"
+        f"  {grant}\n"
+        f"  {deny}\n"
+        "Both need your own operator identity and your own reason; the "
+        "placeholders above are refused, and a grant that requests no permissions "
+        "declares that with --no-permissions."
+    )
+
+
 @dataclass(frozen=True)
 class AdmissionRecord:
     """One executable-admission decision, bound to the bytes it was made about."""
@@ -174,6 +358,13 @@ class AdmissionRecord:
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"AdmissionRecord.{name} is required")
         validated_digest(self.content_digest)
+        # Enforced on the record rather than at the CLI, because a control that
+        # every call site has to remember is already off somewhere. The ledger
+        # is the authority for executable trust; a decision it holds with no
+        # attributable operator and no stated reason is an audit trail that
+        # looks complete and proves nothing.
+        validated_operator(self.reviewer)
+        validated_reason(self.evidence)
         surface = tuple(self.permission_surface)
         # An empty surface is a legitimate declaration: this artifact requests
         # nothing. A blank *entry* is not -- it is a declaration shaped like one,
@@ -356,6 +547,169 @@ class ExecutableAdmissionLedger:
         if record is None:
             return PENDING
         return record.state
+
+
+class AdmissionLedgerStore:
+    """The scope operator's admission decisions, durable across processes.
+
+    `ExecutableAdmissionLedger` is the in-memory authority and stays exactly
+    that: one current decision per `(identity, digest)` key. This store is the
+    file it is read from and written to, and it differs in one deliberate way --
+    it is **append-only**. A superseding decision does not replace the record it
+    supersedes, it follows it, because the whole reason a decision is protected
+    from silent overwrite is that somebody may later need to see what was
+    decided before and by whom.
+
+    Writes are one locked load-modify-save, for the reason `state_files`
+    documents: atomic replacement makes a write indivisible for readers and does
+    nothing for the read that decided what to write. Two operators deciding at
+    once would otherwise each save a history that omits the other's decision.
+
+    A malformed file refuses rather than reading as an empty ledger. "We cannot
+    parse the decisions" must never be more permissive than "there are none".
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = Path(path)
+
+    def _load(self) -> list[dict[str, Any]]:
+        if not self.path.is_file():
+            return []
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("schema") != ADMISSION_LEDGER_SCHEMA:
+            raise ValueError(
+                f"unexpected executable-admission ledger schema at {self.path}: "
+                f"{payload.get('schema') if isinstance(payload, dict) else type(payload).__name__}"
+            )
+        decisions = payload.get("decisions")
+        if not isinstance(decisions, list) or not all(
+            isinstance(entry, dict) for entry in decisions
+        ):
+            raise ValueError(
+                f"executable-admission decisions at {self.path} must be a list of "
+                "records; a malformed ledger is never read as an empty one"
+            )
+        return decisions
+
+    def _save(self, decisions: Sequence[Mapping[str, Any]]) -> None:
+        atomic_write_text(
+            self.path,
+            json.dumps(
+                {"schema": ADMISSION_LEDGER_SCHEMA, "decisions": list(decisions)},
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+        )
+
+    @staticmethod
+    def _record(entry: Mapping[str, Any]) -> AdmissionRecord:
+        # Every stored entry is revalidated on the way out, through the same
+        # constructor the writer used. A file is editable by anyone who can
+        # reach it, and this store is the only thing between an edited file and
+        # the gate that consults it.
+        return AdmissionRecord(
+            qualified_identity=str(entry.get("qualified_identity", "")),
+            content_digest=str(entry.get("content_digest", "")),
+            state=str(entry.get("state", "")),
+            reviewer=str(entry.get("reviewer", "")),
+            permission_surface=tuple(entry.get("permission_surface") or ()),
+            decided_at=str(entry.get("decided_at", "")),
+            evidence=str(entry.get("evidence", "")),
+        )
+
+    def records(self) -> tuple[AdmissionRecord, ...]:
+        """Every decision ever recorded here, in the order it was recorded."""
+        return tuple(self._record(entry) for entry in self._load())
+
+    @staticmethod
+    def _standing(records: Iterable[AdmissionRecord]) -> tuple[AdmissionRecord, ...]:
+        """The last decision recorded for each key.
+
+        The history holds every decision, so it holds several for a superseded
+        key. `ExecutableAdmissionLedger` refuses duplicates by construction --
+        correctly, since it models what stands -- so the history is folded here
+        rather than handed to it raw.
+        """
+        standing: dict[tuple[str, str], AdmissionRecord] = {}
+        for record in records:
+            standing[(record.qualified_identity, record.content_digest)] = record
+        return tuple(standing.values())
+
+    def current(self) -> tuple[AdmissionRecord, ...]:
+        """The decision that stands for each `(identity, digest)` key."""
+        return self._standing(self.records())
+
+    def ledger(self) -> ExecutableAdmissionLedger:
+        """The in-memory ledger the gate consults, built from what stands now."""
+        return ExecutableAdmissionLedger(self.current())
+
+    def audit(
+        self, qualified_identity: str | None = None, content_digest_value: str | None = None
+    ) -> tuple[dict[str, Any], ...]:
+        """Every recorded decision, each marked with whether it still stands.
+
+        `superseded` is derived from position rather than stored, so it cannot
+        disagree with the history it describes.
+        """
+        records = self.records()
+        last_index: dict[tuple[str, str], int] = {}
+        for index, record in enumerate(records):
+            last_index[(record.qualified_identity, record.content_digest)] = index
+        rows = []
+        for index, record in enumerate(records):
+            key = (record.qualified_identity, record.content_digest)
+            if qualified_identity is not None and record.qualified_identity != qualified_identity:
+                continue
+            if content_digest_value is not None and record.content_digest != content_digest_value:
+                continue
+            row = record.to_dict()
+            row["superseded"] = last_index[key] != index
+            rows.append(row)
+        return tuple(rows)
+
+    def decide(
+        self,
+        state: str,
+        qualified_identity: str,
+        content_digest_value: str,
+        *,
+        library_type: str,
+        reviewer: str,
+        permission_surface: Sequence[str],
+        decided_at: str,
+        evidence: str,
+        supersedes: bool = False,
+    ) -> AdmissionRecord:
+        """Record one decision, through the in-memory ledger's own rules.
+
+        The validation, the inert refusal, and the refusal to overwrite an
+        existing decision without an explicit supersede are not re-implemented
+        here: the standing decisions are loaded into an `ExecutableAdmissionLedger`
+        and the write goes through `admit`/`refuse`. A second copy of those rules
+        is a second place for them to drift.
+        """
+        if state not in (ADMITTED, REFUSED):
+            raise ValueError("an admission decision is either admitted or refused")
+        with exclusive_lock(self.path):
+            entries = self._load()
+            ledger = ExecutableAdmissionLedger(
+                self._standing(self._record(entry) for entry in entries)
+            )
+            write = ledger.admit if state == ADMITTED else ledger.refuse
+            record = write(
+                qualified_identity,
+                content_digest_value,
+                library_type=library_type,
+                reviewer=reviewer,
+                permission_surface=tuple(permission_surface),
+                decided_at=decided_at,
+                evidence=evidence,
+                supersedes=supersedes,
+            )
+            entries.append(record.to_dict())
+            self._save(entries)
+        return record
 
 
 def executable_admission_for_item(

@@ -440,6 +440,35 @@ Inert Prompt, Standard, and documentation content is `executable_admission:
 inert` and never silently inherits executable trust by sharing a bundle,
 collection, or provider with an executable artifact.
 
+#### The operator act (slice 7, `CL-2wqz`)
+
+Slice 2 delivered the ledger and the gate that reads it, and nothing that could
+write to it. The state machine was correct and the artifact was refused forever,
+which is the failure mode of a fail-closed control with no door: an operator
+reading "this is `pending`" had no act available that would make it anything
+else. `library admission` is that act.
+
+| Element | Decision |
+|---|---|
+| Surface | `library admission grant`, `library admission deny`, `library admission show`, `library admission list`, each with `--json` |
+| Subject | `--digest`, or `--receipt <id>` which resolves an installed or cached item's digest and **displays** identity, type, and digest before recording. A decision is never bound to a name |
+| Required evidence | `--operator` (a declared string; see below), `--reason`, and for a grant a stated permission surface — `--permission` per entry, or `--no-permissions` to state that the artifact requests none |
+| Replacing a decision | `--supersede`, explicitly. The ledger file is append-only, so the superseded decision and the one that replaced it are both readable, with their operators and reasons |
+| Durability | `<cache root>/executable-admission.json`, addressed from the cache rather than from a lock: admission is a decision about *bytes*, and the bytes are held once no matter which project's lock referenced them |
+| Refusal diagnostic | The install-time refusal renders the exact command from the same constants the CLI registers, carrying the real digest it refused. A test parses that string back through the shipped parser, so a renamed subcommand fails the build instead of leaving operators a command that does not exist |
+| No bulk act | There is no `--all` and no bulk verb. A surface that admits many things at once is the surface people use to admit things they did not read |
+
+Two limits are stated rather than implied:
+
+- **The operator identity is declared, not verified.** Nothing authenticates it,
+  because authenticating an operator is credential handling and is held behind a
+  human security review. What is refused is an *absent* or template identity,
+  which is the difference between a weak attribution and none.
+- **The reason is checked for shape, not for truth.** It must be a sentence
+  rather than a placeholder, using the same floor `BlockReason` applies to
+  block-reason evidence. No validator can tell a considered reason from a fluent
+  one, and claiming otherwise would be the more dangerous statement.
+
 ### Mixed external bundles
 
 An external bundle is **decomposed** into its typed members — Skills, Workflows,
@@ -1786,10 +1815,16 @@ assumes the real gate is still there.
    still read from the local checkout rather than fetched at the pin. A catalog
    document edited between the pin check and the read can still describe a member
    the pinned revision does not.
-2. A v2 closure containing an executable member fails the whole resolution until
-   a scope operator admits that member's exact bytes, and this slice ships no CLI
-   for recording that decision. Inert closures install now; an executable one is
-   refused, which is the correct ADR behavior and an incomplete operator surface.
+2. ~~A v2 closure containing an executable member fails the whole resolution
+   until a scope operator admits that member's exact bytes, and this slice ships
+   no CLI for recording that decision.~~ **Closed by `CL-2wqz`.** The operator
+   surface is `library admission` (see `Executable admission` above). Both write
+   paths now consult the operator's durable ledger rather than an empty one —
+   `install_marketplace_item` locates it from the `ForeignState` it was already
+   given, and `library workspace use` passes it into `gate_workspace_mutation` —
+   and both refusals name the exact command that would decide the member. The
+   gate's semantics are unchanged: it still fails the whole resolution before any
+   mutation and never returns a filtered selection.
 3. **The v2 mutation gate detects source drift; it does not prevent its effects.**
    The gate digests an immutable snapshot and admits a decision about it, and the
    legacy installers resolve their own source rather than consuming that

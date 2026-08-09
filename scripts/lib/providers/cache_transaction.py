@@ -49,7 +49,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from .contract import FetchedItem
-from .executable_admission import ExecutableAdmissionLedger
+from .executable_admission import ExecutableAdmissionLedger, admission_refusal
 from .foreign_cache import (
     IDENTITY_TRANSFORMATION,
     CacheKey,
@@ -542,12 +542,18 @@ def _install_locked(
 
     # 5. Only then activate the projection.
     if admission_state in ("pending", "refused"):
+        # The remedy is rendered from the CLI's own words rather than written
+        # out here. Until `CL-2wqz` this refusal named the state and stopped,
+        # which was accurate and a dead end: no command existed that could
+        # change the answer, so the artifact was refused permanently.
         raise TransactionAborted(
             "project",
-            f"{identity} is an executable artifact whose admission state is "
-            f"{admission_state!r} for these exact bytes. The content is cached and "
-            "receipted; caching is not installing, and no harness path receives it "
-            "until the scope operator decides.",
+            admission_refusal(
+                identity,
+                normalized_content_digest(projected_files),
+                item.library_type,
+                admission_state,
+            ),
         )
 
     decision = evaluate_projection(item.rights, target, subject=identity)

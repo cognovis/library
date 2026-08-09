@@ -48,7 +48,7 @@ from .cache_transaction import (
     reinstall_from_cache,
 )
 from .contract import SourceProvider
-from .executable_admission import ExecutableAdmissionLedger
+from .executable_admission import AdmissionLedgerStore, ExecutableAdmissionLedger
 from .foreign_cache import (
     IDENTITY_TRANSFORMATION,
     ObjectStore,
@@ -626,7 +626,18 @@ def install_marketplace_item(
     `denied`; they may not be re-materialized by any later sync. The activation
     enforces that per member path, and this earlier check enforces it for the
     target root as a whole, so the refusal costs no retrieval.
+
+    **The admission ledger is located, not passed.** `ledger` defaults to the
+    operator's durable decisions in `state`, and a caller that supplies one is
+    substituting a different operator's ledger deliberately. The alternative --
+    `None` meaning "trust the item's own `executable_admission` field" -- put the
+    decision in the hands of whoever produced the item, which is exactly the
+    producer-asserted trust `admission.evaluate_item` already refuses to
+    consult. Before `CL-2wqz` the shipped CLI passed nothing at all here, so the
+    ledger the gate consulted was never the one an operator could write to.
     """
+    if ledger is None:
+        ledger = state.admission_ledger()
     blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(blocks, paths=[str(Path(target_root))])
     retention = evaluate_cache_retention(item.rights, subject=item.qualified_identity())
@@ -714,6 +725,12 @@ class ForeignState:
     #: call site remembering an argument is a control that is already off
     #: somewhere. A caller now acquires the block by locating its stores.
     non_compliance_path: Path | None = None
+    #: Where the `CL-2wqz` executable-admission decisions live. Derived from the
+    #: cache root for the same reason as the register above, and addressed from
+    #: the cache rather than from a lock: admission is the scope operator's
+    #: decision about *bytes*, and those bytes are held once here no matter which
+    #: project's lock happens to reference them.
+    admission_ledger_path: Path | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "cache_root", Path(self.cache_root))
@@ -725,6 +742,13 @@ class ForeignState:
             Path(self.non_compliance_path)
             if self.non_compliance_path is not None
             else Path(self.cache_root) / "non-compliant-projections.json",
+        )
+        object.__setattr__(
+            self,
+            "admission_ledger_path",
+            Path(self.admission_ledger_path)
+            if self.admission_ledger_path is not None
+            else Path(self.cache_root) / "executable-admission.json",
         )
         paths = {str(name): Path(value) for name, value in self.receipt_paths.items()}
         missing = sorted(set(REQUIRED_SCOPES) - set(paths))
@@ -755,6 +779,7 @@ class ForeignState:
                 "global": Path(f"{global_lock}{FOREIGN_RECEIPT_SUFFIX}"),
             },
             non_compliance_path=root / "non-compliant-projections.json",
+            admission_ledger_path=root / "executable-admission.json",
         )
 
     def object_store(self) -> ObjectStore:
@@ -778,6 +803,15 @@ class ForeignState:
     def purge_ledger(self) -> PurgeLedger:
         self.purge_ledger_path.parent.mkdir(parents=True, exist_ok=True)
         return PurgeLedger(self.purge_ledger_path)
+
+    def admission_ledger_store(self) -> AdmissionLedgerStore:
+        """The durable store of this operator's executable-admission decisions."""
+        self.admission_ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        return AdmissionLedgerStore(self.admission_ledger_path)
+
+    def admission_ledger(self) -> ExecutableAdmissionLedger:
+        """The decisions that stand right now, as the gate consults them."""
+        return self.admission_ledger_store().ledger()
 
     def non_compliance_register(self) -> NonComplianceRegister:
         """The register of projections no sync or repair may write.

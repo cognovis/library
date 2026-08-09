@@ -522,8 +522,135 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_sync_parser.add_argument("--json", action="store_true", help="Output JSON")
 
     _add_marketplace_verbs(subparsers)
+    _add_admission_verbs(subparsers)
 
     return parser
+
+
+def _add_admission_verbs(subparsers: argparse._SubParsersAction) -> None:
+    """The operator act that decides whether foreign executable content may run.
+
+    `CL-n7ex` delivered the digest-bound ledger and the gate that reads it, and
+    no way to write a decision into it, so every externally sourced Workflow, Pi
+    extension, hook, guardrail, and script was refused permanently. This group
+    is that missing act, and it is deliberately small and deliberately tedious:
+
+    - a decision names **bytes**, never a name or a version, so `--digest` is
+      required (or `--receipt`, which resolves one and shows it before writing);
+    - there is no `--all` and no bulk verb, because a surface that admits many
+      things at once is a surface people use to admit things they did not read;
+    - `--operator` and `--reason` are required, and a grant states its permission
+      surface even when that surface is empty.
+
+    The verb words come from `lib.providers.executable_admission`, which is also
+    where the install-time refusal renders the command it tells operators to run.
+    """
+    from lib.providers.executable_admission import (
+        ADMISSION_COMMAND,
+        DENY_VERB,
+        GRANT_VERB,
+        LIST_VERB,
+        SHOW_VERB,
+    )
+
+    admission_parser = subparsers.add_parser(
+        ADMISSION_COMMAND,
+        help="Record and audit executable-admission decisions for foreign content",
+    )
+    verb_sub = admission_parser.add_subparsers(
+        dest="verb", metavar="verb", help="Admission action"
+    )
+
+    for verb, description in (
+        (GRANT_VERB, "Admit exactly these bytes to run in this scope"),
+        (DENY_VERB, "Refuse exactly these bytes; the refusal stands until superseded"),
+    ):
+        decide_parser = verb_sub.add_parser(verb, help=description)
+        subject = decide_parser.add_mutually_exclusive_group(required=True)
+        subject.add_argument(
+            "--digest",
+            help=(
+                "The sha256 content digest this decision is about. A decision "
+                "never transfers to different bytes"
+            ),
+        )
+        subject.add_argument(
+            "--receipt",
+            help=(
+                "A foreign receipt id whose digest and identity are resolved and "
+                "displayed before anything is recorded"
+            ),
+        )
+        decide_parser.add_argument(
+            "--identity",
+            help="Qualified identity (<provider>#<upstream id>); implied by --receipt",
+        )
+        decide_parser.add_argument(
+            "--type",
+            dest="library_type",
+            help="Library type of the artifact; implied by --receipt",
+        )
+        decide_parser.add_argument(
+            "--operator",
+            required=True,
+            help=(
+                "The declared identity of whoever is deciding. Recorded, never "
+                "verified: authenticating an operator is credential handling"
+            ),
+        )
+        decide_parser.add_argument(
+            "--reason",
+            required=True,
+            help="What you reviewed and what it led you to decide",
+        )
+        decide_parser.add_argument(
+            "--permission",
+            action="append",
+            dest="permissions",
+            default=None,
+            help=(
+                "One permission this artifact requests; repeatable. Required for a "
+                "grant unless --no-permissions states that it requests none"
+            ),
+        )
+        decide_parser.add_argument(
+            "--no-permissions",
+            action="store_true",
+            help="State that this artifact requests no permissions at all",
+        )
+        decide_parser.add_argument(
+            "--supersede",
+            action="store_true",
+            help=(
+                "Replace an existing decision for these exact bytes. Both stay in "
+                "the ledger history"
+            ),
+        )
+        decide_parser.add_argument(
+            "--scope",
+            choices=["project", "global"],
+            default="project",
+            help="Receipt scope searched by --receipt",
+        )
+        decide_parser.add_argument(
+            "--project",
+            type=Path,
+            default=None,
+            help="Project root whose receipts --receipt searches",
+        )
+        decide_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    show_parser = verb_sub.add_parser(
+        SHOW_VERB, help="Show the decisions recorded for one identity, with history"
+    )
+    show_parser.add_argument("--identity", required=True, help="Qualified identity")
+    show_parser.add_argument("--digest", default=None, help="Narrow to one digest")
+    show_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    list_parser = verb_sub.add_parser(
+        LIST_VERB, help="List every executable-admission decision that stands"
+    )
+    list_parser.add_argument("--json", action="store_true", help="Output JSON")
 
 
 def _add_marketplace_verbs(subparsers: argparse._SubParsersAction) -> None:
@@ -3464,6 +3591,198 @@ def cmd_marketplace_gc(
     return EXIT_SUCCESS
 
 
+# -- executable admission (ADR-0011, CL-2wqz) ---------------------------------
+
+
+def _admission_row(record: dict) -> dict:
+    """One decision as an operator reads it.
+
+    `reviewer` and `evidence` are the ledger's field names, from the ADR's
+    "reviewer identity and recorded evidence". At the CLI they are the operator
+    and the reason they gave, and calling them that here is the difference
+    between an audit line somebody understands and one they skim.
+    """
+    return {
+        "qualified_identity": record["qualified_identity"],
+        "content_digest": record["content_digest"],
+        "state": record["state"],
+        "operator": record["reviewer"],
+        "reason": record["evidence"],
+        "permission_surface": list(record["permission_surface"]),
+        "decided_at": record["decided_at"],
+        "superseded": bool(record.get("superseded", False)),
+    }
+
+
+def _admission_store(args: argparse.Namespace):
+    """The durable decision store, located without loading a catalog.
+
+    An admission decision is about bytes this machine already holds, so it needs
+    no catalog, no network, and no provider. Requiring one would make the remedy
+    for a refused install depend on more working infrastructure than the install
+    itself.
+    """
+    return _foreign_state(_resolve_lifecycle_project_root(args)).admission_ledger_store()
+
+
+def _admission_subject(args: argparse.Namespace) -> tuple[str, str, str, str | None]:
+    """Resolve which bytes this decision is about, from a digest or a receipt.
+
+    Returns `(identity, digest, library_type, resolved_from)`. A `--receipt`
+    reference is resolved here and the caller displays what it resolved to
+    **before** the write, because a name reference that quietly binds different
+    bytes than the operator had in mind is the exact failure digest-binding
+    exists to prevent.
+    """
+    from lib.providers.executable_admission import validated_digest
+
+    if args.receipt:
+        if args.identity or args.library_type:
+            raise LibraryError(
+                "--receipt already names the identity and type of the bytes it "
+                "resolves; pass --digest instead to decide about different ones",
+                exit_code=3,
+            )
+        state = _foreign_state(_resolve_lifecycle_project_root(args))
+        receipt = state.receipt_store(args.scope).get(args.receipt)
+        if receipt is None:
+            raise LibraryError(
+                f"no foreign receipt {args.receipt!r} in the {args.scope} scope; a "
+                "decision is never recorded against a reference nothing resolves",
+                exit_code=3,
+            )
+        return (
+            receipt.qualified_identity(),
+            receipt.projected_content_digest,
+            receipt.library_type,
+            receipt.id,
+        )
+    if not args.identity or not args.library_type:
+        raise LibraryError(
+            "--digest needs the --identity and --type of the artifact it belongs "
+            "to; a digest alone does not say what the bytes are",
+            exit_code=3,
+        )
+    try:
+        digest = validated_digest(args.digest)
+    except ValueError as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+    return args.identity, digest, args.library_type, None
+
+
+def cmd_admission_decide(args: argparse.Namespace, state_name: str) -> int:
+    """Record one grant or one denial, about exactly one set of bytes."""
+    from lib.providers.executable_admission import (
+        ADMITTED,
+        InertContentNotAdmissible,
+        REFUSED,
+    )
+
+    identity, digest, library_type, resolved_from = _admission_subject(args)
+    permissions = list(args.permissions or [])
+    if state_name == ADMITTED and not permissions and not args.no_permissions:
+        raise LibraryError(
+            "a grant states the permission surface the artifact requests; pass "
+            "--permission for each one, or --no-permissions to state that it "
+            "requests none. An unstated surface is not the same claim as an "
+            "empty one",
+            exit_code=3,
+        )
+    if permissions and args.no_permissions:
+        raise LibraryError(
+            "--no-permissions states that this artifact requests none, which "
+            "contradicts the --permission entries given with it",
+            exit_code=3,
+        )
+
+    if resolved_from is not None and not args.json:
+        # Shown before the write, never reported after it.
+        print(f"Resolved {resolved_from} to:")
+        print(f"  identity: {identity}")
+        print(f"  type:     {library_type}")
+        print(f"  digest:   {digest}")
+
+    try:
+        record = _admission_store(args).decide(
+            state_name,
+            identity,
+            digest,
+            library_type=library_type,
+            reviewer=args.operator,
+            permission_surface=tuple(permissions),
+            decided_at=_utc_now(),
+            evidence=args.reason,
+            supersedes=args.supersede,
+        )
+    except InertContentNotAdmissible as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+    except ValueError as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+
+    row = _admission_row(record.to_dict())
+    if args.json:
+        print_json(
+            success({"decision": row, "resolved_from": resolved_from})
+        )
+        return EXIT_SUCCESS
+    verb = "Admitted" if state_name == ADMITTED else "Refused"
+    print(f"{verb} {identity}")
+    print(f"  digest:   {digest}")
+    print(f"  operator: {row['operator']}")
+    print(f"  reason:   {row['reason']}")
+    print(f"  decided:  {row['decided_at']}")
+    if state_name == REFUSED:
+        print("  This refusal stands until it is explicitly superseded.")
+    return EXIT_SUCCESS
+
+
+def cmd_admission_show(args: argparse.Namespace) -> int:
+    """Every decision recorded for one identity, superseded ones included."""
+    store = _admission_store(args)
+    history = [_admission_row(row) for row in store.audit(args.identity, args.digest)]
+    standing = [row for row in history if not row["superseded"]]
+    if args.json:
+        print_json(
+            success(
+                {
+                    "qualified_identity": args.identity,
+                    "decisions": standing,
+                    "history": history,
+                }
+            )
+        )
+        return EXIT_SUCCESS
+    if not history:
+        print(f"No executable-admission decision recorded for {args.identity}.")
+        return EXIT_SUCCESS
+    for row in history:
+        marker = " (superseded)" if row["superseded"] else ""
+        print(f"{row['state']}{marker}: {row['content_digest']}")
+        print(f"  operator: {row['operator']}")
+        print(f"  reason:   {row['reason']}")
+        print(f"  decided:  {row['decided_at']}")
+        print(f"  permissions requested: {row['permission_surface'] or 'none declared'}")
+    return EXIT_SUCCESS
+
+
+def cmd_admission_list(args: argparse.Namespace) -> int:
+    """Every decision that currently stands, across every identity."""
+    store = _admission_store(args)
+    rows = [
+        _admission_row(row) for row in store.audit() if not row.get("superseded", False)
+    ]
+    if args.json:
+        print_json(success({"decisions": rows}))
+        return EXIT_SUCCESS
+    if not rows:
+        print("No executable-admission decisions are recorded on this machine.")
+        return EXIT_SUCCESS
+    for row in rows:
+        print(f"{row['state']}: {row['qualified_identity']}")
+        print(f"  {row['content_digest']} — {row['operator']} — {row['decided_at']}")
+    return EXIT_SUCCESS
+
+
 def cmd_catalog_sync(
     args: argparse.Namespace, catalog_root: Path, catalog: dict
 ) -> int:
@@ -4359,6 +4678,38 @@ def _workspace_normalized_members(
     return items, contents
 
 
+def _workspace_admission_remedies(refusal, items, contents) -> list[str]:
+    """The command that would decide each executable member the gate refused.
+
+    Rendered at the CLI boundary rather than inside `gate_resolution`: the gate's
+    job is to fail the whole resolution before any mutation, and it keeps doing
+    exactly that. What it cannot know is which program the operator ran, so the
+    remedy is composed here from the same registration the refusal names.
+    """
+    from lib.providers.executable_admission import (
+        admission_command_line,
+        content_digest,
+    )
+
+    by_identity = {item.qualified_identity(): item for item in items}
+    remedies: list[str] = []
+    for identity, state in refusal.refusals:
+        item = by_identity.get(identity)
+        files = contents.get(identity)
+        if item is None or not files:
+            continue
+        remedies.append(
+            f"{identity} is {state}; record a decision about these exact bytes: "
+            + admission_command_line(
+                identity,
+                content_digest(files),
+                item.library_type,
+                supersede=state == "refused",
+            )
+        )
+    return remedies
+
+
 def _workspace_gated_content_drift(
     catalog: dict, closure, repo_root: Path, admitted
 ) -> list[str]:
@@ -4602,10 +4953,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         return 3 if preview["blockers"] else 0
 
     from lib.catalog import get_catalogs
-    from lib.providers.executable_admission import (
-        ExecutableAdmissionLedger,
-        ResolutionRefused,
-    )
+    from lib.providers.executable_admission import ResolutionRefused
     from lib.workspace import (
         clear_workspace_journal,
         gate_workspace_mutation,
@@ -4768,12 +5116,25 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                 gate_workspace_mutation(
                     closure,
                     items,
-                    ExecutableAdmissionLedger(),
+                    # The operator's own decisions, not an empty ledger. Slice 6
+                    # constructed one inline, which made every executable member
+                    # of a cross-catalog Workspace permanently unresolvable: the
+                    # gate was correct and the ledger it consulted could not be
+                    # written to by anything.
+                    _foreign_state(repo_root).admission_ledger(),
                     contents,
                     mutate=_install_members,
                 )
             except ResolutionRefused as exc:
-                result.update({"status": "blocked", "blockers": [str(exc)]})
+                result.update(
+                    {
+                        "status": "blocked",
+                        "blockers": [
+                            str(exc),
+                            *_workspace_admission_remedies(exc, items, contents),
+                        ],
+                    }
+                )
                 _print_workspace_result(result, json_mode=args.json)
                 return 3
         else:
@@ -5760,6 +6121,44 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_FAILURE
 
         print("Error: Unknown marketplace verb.", file=sys.stderr)
+        return EXIT_FAILURE
+
+    # Top-level executable-admission decisions (ADR-0011, CL-2wqz). No catalog is
+    # loaded: the decision is about bytes this machine already holds, and the
+    # remedy for a refused install must not need more infrastructure than the
+    # install did.
+    from lib.providers.executable_admission import (
+        ADMISSION_COMMAND,
+        ADMITTED,
+        DENY_VERB,
+        GRANT_VERB,
+        LIST_VERB,
+        REFUSED,
+        SHOW_VERB,
+    )
+
+    if args.primitive == ADMISSION_COMMAND:
+        verb = getattr(args, "verb", None)
+        if not verb:
+            parser.parse_args([ADMISSION_COMMAND, "--help"])
+            return EXIT_FAILURE
+        use_json = getattr(args, "json", False)
+        try:
+            if verb == GRANT_VERB:
+                return cmd_admission_decide(args, ADMITTED)
+            if verb == DENY_VERB:
+                return cmd_admission_decide(args, REFUSED)
+            if verb == SHOW_VERB:
+                return cmd_admission_show(args)
+            if verb == LIST_VERB:
+                return cmd_admission_list(args)
+        except LibraryError as exc:
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+        print("Error: Unknown admission verb.", file=sys.stderr)
         return EXIT_FAILURE
 
     if args.primitive == "catalog":

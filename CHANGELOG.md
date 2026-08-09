@@ -84,6 +84,37 @@
 
 ### Added
 
+- *(CL-2wqz, admission)* `library admission` records the executable-admission
+  decision ADR-0011 requires, closing the residual the ADR itself recorded: slice
+  2 shipped the digest-bound ledger and the gate that reads it, and nothing that
+  could write to it, so every externally sourced Workflow, Pi extension, hook,
+  guardrail, and script was refused permanently. `grant`, `deny`, `show`, and
+  `list` all take `--json`. A decision names **bytes**: `--digest`, or
+  `--receipt <id>` which resolves an installed or cached item and displays its
+  identity, type, and digest *before* recording, so a name reference cannot
+  quietly bind content the operator did not mean. `--operator` and `--reason` are
+  required, a grant states the permission surface the artifact requests
+  (`--permission` per entry, or `--no-permissions` to state that it requests
+  none), and replacing an existing decision for the same bytes needs an explicit
+  `--supersede` — the ledger file is append-only, so the superseded decision and
+  the one that replaced it stay readable with their operators and reasons. There
+  is no `--all` and no bulk verb. Both write paths now consult the operator's
+  durable ledger instead of an empty one: `install_marketplace_item` locates it
+  from the `ForeignState` it was already given rather than accepting it as an
+  argument every call site has to remember, and `library workspace use` passes it
+  into `gate_workspace_mutation`, which previously constructed an empty ledger
+  inline and therefore refused every executable member of a cross-catalog
+  Workspace forever. Both refusals now name the exact command that would decide
+  the artifact, carrying the real digest they refused; the command is rendered
+  from the same constants the CLI registers and is parsed back through the
+  shipped parser by test, so a renamed subcommand breaks the build instead of
+  leaving operators a command that does not exist. Gate semantics are unchanged —
+  the resolution still fails whole, before any mutation, and never returns a
+  filtered selection. Two limits are stated rather than implied: the operator
+  identity is a **declared** string that nothing authenticates, because
+  authenticating an operator is credential handling and stays behind a human
+  security review, and the reason is checked for shape, not truth, using the same
+  placeholder floor `BlockReason` applies to block-reason evidence.
 - *(CL-m6cc, migration)* Legacy cache objects, lock receipts, and already-materialized
   projections now carry honest identity and rights, and the migration that gives them
   one can delete nothing. Receipt migration is **additive and readable**: an unmigrated
