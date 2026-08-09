@@ -20,53 +20,27 @@
     "scripts/lib/compat.py": {
       "provider-host-literal:agentskills.io": 1
     },
-    "scripts/lib/installed.py": {
-      "provider-name:github": 1
-    },
     "scripts/lib/installers/agent.py": {
-      "provider-kind-conditional:git": 1,
-      "provider-name:github": 3
+      "provider-kind-conditional:git": 1
     },
     "scripts/lib/installers/mcp_installer.py": {
       "provider-host-literal:github.com": 1,
       "provider-kind-conditional:git": 4,
-      "provider-name:github": 3,
+      "provider-name:github": 2,
       "upstream-url:https://[^/]+/([^/]+": 1,
       "upstream-url:https://github.com/cognovis/library-core.git": 1
     },
     "scripts/lib/installers/simple_file.py": {
-      "provider-kind-conditional:git": 1,
-      "provider-name:github": 3
-    },
-    "scripts/lib/installers/skill.py": {
-      "provider-kind-conditional:git": 1,
-      "provider-name:github": 5
-    },
-    "scripts/lib/installers/standard.py": {
-      "provider-kind-conditional:git": 1,
-      "provider-name:github": 4
+      "provider-kind-conditional:git": 1
     },
     "scripts/lib/installers/uv_tool.py": {
-      "provider-kind-conditional:git": 1,
-      "provider-name:github": 3
+      "provider-kind-conditional:git": 1
     },
     "scripts/lib/manager_inventory.py": {
       "provider-kind-conditional:git": 1
     },
     "scripts/lib/runtime_config.py": {
       "provider-name:github": 1
-    },
-    "scripts/lib/source.py": {
-      "provider-host-literal:github.com": 8,
-      "provider-host-literal:raw.githubusercontent.com": 1,
-      "provider-kind-conditional:git": 4,
-      "provider-name:github": 26,
-      "upstream-url:https://github.com/": 5,
-      "upstream-url:https://github.com/org/repo/blob/branch/path/to/file": 1,
-      "upstream-url:https://github.com/org/repo/tree/branch/path/to/directory": 1,
-      "upstream-url:https://github\\.com/([^/]+": 2,
-      "upstream-url:https://raw.githubusercontent.com/org/repo/branch/path/to/file": 1,
-      "upstream-url:https://raw\\.githubusercontent\\.com/([^/]+": 1
     },
     "scripts/lib/status.py": {
       "provider-host-literal:github.com": 4,

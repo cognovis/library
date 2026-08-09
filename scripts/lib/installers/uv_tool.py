@@ -22,7 +22,7 @@ from ..lockfile import (
 from ..output import dry_run_result, success
 from ..source import (
     ParsedSource,
-    clone_github_repo,
+    clone_source_repo,
     get_local_commit_sha,
     parse_source,
     resolve_marketplace,
@@ -273,9 +273,9 @@ def _fetch_distribution_source(
             raise InstallError(f"uv-tool Script '{name}' source is not a directory.")
         return local, get_local_commit_sha(local), None
 
-    if parsed.is_github():
+    if parsed.is_remote_repository():
         try:
-            temporary = clone_github_repo(parsed.clone_url or "", branch=parsed.branch)
+            temporary = clone_source_repo(parsed.clone_url or "", branch=parsed.branch)
         except Exception as exc:
             raise InstallError(str(exc)) from exc
         source_root = temporary / parsed.file_path if parsed.file_path else temporary

@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -81,6 +82,7 @@ from lib.errors import (
     EXIT_DRIFT,
     EXIT_FAILURE,
     EXIT_NOT_FOUND,
+    EXIT_SUCCESS,
     LibraryError,
 )
 from lib.lockfile import (
@@ -519,7 +521,103 @@ def build_parser() -> argparse.ArgumentParser:
     )
     catalog_sync_parser.add_argument("--json", action="store_true", help="Output JSON")
 
+    _add_marketplace_verbs(subparsers)
+
     return parser
+
+
+def _add_marketplace_verbs(subparsers: argparse._SubParsersAction) -> None:
+    """The ADR-0011 foreign-content surface.
+
+    This is the production caller the provider slices were built for. Before it,
+    the capability contract, the durable cache transaction, the rights gate and
+    the retention planner all existed and nothing invoked them.
+    """
+    marketplace_parser = subparsers.add_parser(
+        "marketplace",
+        help="Inspect and install content from registered source providers",
+    )
+    verb_sub = marketplace_parser.add_subparsers(
+        dest="verb", metavar="verb", help="Marketplace action"
+    )
+
+    list_parser = verb_sub.add_parser("list", help="List registered source providers")
+    list_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    inventory_parser = verb_sub.add_parser(
+        "inventory", help="Normalize one provider's inventory (installs nothing)"
+    )
+    inventory_parser.add_argument("name", help="Registered marketplace name")
+    inventory_parser.add_argument(
+        "--selector", default=None, help="Provider-native selector passed to enumerate"
+    )
+    inventory_parser.add_argument(
+        "--admitted-maturity",
+        action="append",
+        dest="admitted_maturities",
+        default=None,
+        help=(
+            "Maturity this scope promotes to installable; repeatable. Default is "
+            "the stable maturity alone"
+        ),
+    )
+    inventory_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    install_parser = verb_sub.add_parser(
+        "install", help="Install one foreign item through the durable cache transaction"
+    )
+    install_parser.add_argument("name", help="Registered marketplace name")
+    install_parser.add_argument("upstream_id", help="Upstream item id to install")
+    install_parser.add_argument(
+        "--scope", choices=["project", "global"], default="project"
+    )
+    install_parser.add_argument(
+        "--target",
+        choices=["project_committed", "machine_local"],
+        default="machine_local",
+        help=(
+            "Projection target. A committed project projection needs granted "
+            "redistribution rights; the machine-local one is gitignored"
+        ),
+    )
+    install_parser.add_argument(
+        "--target-root", default=None, help="Directory the item is projected into"
+    )
+    install_parser.add_argument(
+        "--accept-rights",
+        action="store_true",
+        help=(
+            "Acknowledge the rights statement this command prints before it "
+            "mutates anything. Required for an opt-in-required target"
+        ),
+    )
+    install_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    status_parser = verb_sub.add_parser(
+        "status", help="Report foreign receipts and their cache state"
+    )
+    status_parser.add_argument(
+        "--scope", choices=["project", "global"], default="project"
+    )
+    status_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    gc_parser = verb_sub.add_parser(
+        "gc", help="Plan (or perform) automatic collection of unreferenced objects"
+    )
+    gc_parser.add_argument(
+        "--evidence-max-age-days",
+        type=float,
+        required=True,
+        help=(
+            "How old a source observation or re-fetch proof may be and still "
+            "describe the present. Required, with no default: it is operator "
+            "policy, and stale evidence deletes the last copy of pinned bytes"
+        ),
+    )
+    gc_parser.add_argument(
+        "--apply", action="store_true", help="Delete what the plan proved collectable"
+    )
+    gc_parser.add_argument("--json", action="store_true", help="Output JSON")
 
 
 def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
@@ -2126,7 +2224,13 @@ def _safe_receipted_remove(
                 and root.get("scope", scope) == scope
             )
         ]
-        plan = build_workspace_plan(catalog, working, repo_root, scope)
+        plan = build_workspace_plan(
+            catalog,
+            working,
+            repo_root,
+            scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
         requested_roots_by_id = {
             str(root.get("id") or ""): root
             for root in working.get("requested_roots", [])
@@ -3040,6 +3144,326 @@ def cmd_catalog_match(args: argparse.Namespace, catalog: dict) -> int:
     return 0
 
 
+def _utc_now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _foreign_state(repo_root: Path | None):
+    """Locate every durable store the foreign-content path writes to.
+
+    Both receipt scopes are located, always. `ReferenceIndex` refuses a partial
+    scope set by construction, and that refusal is the point: a collector that
+    reads one scope answers "unreferenced" for objects the other scope is
+    holding.
+    """
+    from lib.cache import _LIBRARY_HOME
+    from lib.lockfile import GLOBAL_LOCKFILE, LOCKFILE_NAME
+    from lib.providers.wiring import ForeignState
+
+    project_root = repo_root or Path.cwd()
+    return ForeignState.for_locks(
+        cache_root=_LIBRARY_HOME / "foreign",
+        project_lock=project_root / LOCKFILE_NAME,
+        global_lock=Path(GLOBAL_LOCKFILE),
+    )
+
+
+def _marketplace_entry(catalog: dict, name: str) -> dict:
+    from lib.catalog import get_marketplaces
+
+    for entry in get_marketplaces(catalog):
+        if isinstance(entry, dict) and str(entry.get("name")) == name:
+            return entry
+    raise LibraryError(f"No registered marketplace named '{name}'.")
+
+
+def cmd_marketplace_list(args: argparse.Namespace, catalog: dict) -> int:
+    from lib.catalog import get_marketplaces
+
+    rows = [
+        {
+            "name": entry.get("name"),
+            "source": entry.get("source"),
+            "provider_kind": entry.get("provider_kind"),
+            "allowlist": entry.get("allowlist") or [],
+            "auth_ref": entry.get("auth_ref"),
+        }
+        for entry in get_marketplaces(catalog)
+        if isinstance(entry, dict)
+    ]
+    if args.json:
+        print_json(success({"marketplaces": rows}))
+        return EXIT_SUCCESS
+    for row in rows:
+        kind = row["provider_kind"] or "legacy (no provider_kind)"
+        print(f"{row['name']}: {kind}")
+        print(f"  source: {row['source']}")
+        if row["allowlist"]:
+            print(f"  allowlist: {', '.join(row['allowlist'])}")
+        if row["auth_ref"]:
+            print(f"  credential reference: {row['auth_ref']}")
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_inventory(args: argparse.Namespace, catalog: dict) -> int:
+    from lib.providers.admission import AdmissionContext, evaluate_inventory
+    from lib.providers.wiring import marketplace_inventory
+
+    entry = _marketplace_entry(catalog, args.name)
+    _, result = marketplace_inventory(entry, selector=args.selector)
+    context = AdmissionContext(
+        admitted_maturities=tuple(args.admitted_maturities)
+        if args.admitted_maturities
+        else AdmissionContext().admitted_maturities
+    )
+    report = evaluate_inventory(result.inventory, context)
+
+    rows = [
+        {
+            "qualified_identity": item.qualified_identity(),
+            "library_type": item.library_type,
+            "library_name": item.library_name,
+            "upstream_name": item.upstream_name,
+            "collection": list(item.collection_membership),
+            "revision": item.upstream_revision,
+            "maturity": item.classification.get("maturity"),
+            "admission_state": item.admission_state,
+            "block_reasons": [reason.describe() for reason in item.block_reasons],
+            "rights": item.rights.to_dict(),
+        }
+        for item in report.inventory
+    ]
+    payload = {
+        "provider_identity": result.provider_identity,
+        "availability": result.provider_availability.to_dict(),
+        "absent_capabilities": list(result.absent_capabilities),
+        "costs": [cost.path for cost in result.costs],
+        "items": rows,
+    }
+    if args.json:
+        print_json(success(payload))
+        return EXIT_SUCCESS
+    print(f"{result.provider_identity} ({result.provider_availability.state})")
+    for row in rows:
+        marker = {"installable": "+", "discoverable": "-", "blocked": "x"}[
+            row["admission_state"]
+        ]
+        print(f"  {marker} {row['library_type']}:{row['library_name']} [{row['maturity']}]")
+        for reason in row["block_reasons"]:
+            print(f"      {reason}")
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_install(
+    args: argparse.Namespace, repo_root: Path | None, catalog: dict
+) -> int:
+    from lib.providers.admission import AdmissionContext, evaluate_item
+    from lib.providers.classification import is_unclassified
+    from lib.providers.rights import ProjectionRefused, RightsPresentation
+    from lib.providers.wiring import install_marketplace_item, marketplace_inventory
+
+    entry = _marketplace_entry(catalog, args.name)
+    provider, result = marketplace_inventory(entry)
+    identity = f"{provider.identity()}#{args.upstream_id}"
+    try:
+        item = result.inventory.resolve(identity)
+    except KeyError as exc:
+        raise LibraryError(str(exc)) from exc
+
+    # Only `installable` installs. Accepting `discoverable` would silently undo
+    # both non-promotion rules the inventory enforces: an `in-progress` item is
+    # discoverable precisely because promoting it is an explicit scope decision,
+    # and an unclassified member is discoverable precisely because the Library
+    # has no type to install it as. Rejecting only `blocked` treated both as
+    # installable and projected them.
+    context = AdmissionContext()
+    decision = evaluate_item(item, context)
+    if decision.admission_state != "installable":
+        reasons = [reason.describe() for reason in decision.block_reasons]
+        if not reasons:
+            maturity = str(item.classification.get("maturity") or "stable")
+            if not context.admits_maturity(maturity):
+                reasons = [
+                    f"maturity {maturity!r} is not promoted by this scope; promoting it "
+                    f"is an explicit decision (admitted maturities: "
+                    f"{list(context.admitted_maturities)})"
+                ]
+            elif is_unclassified(item.library_type):
+                reasons = [
+                    "the member fits no existing Library primitive type, so there is "
+                    "no type to install it as; it is listed, not installable"
+                ]
+            else:
+                reasons = [
+                    "no projection target is eligible under the recorded rights"
+                ]
+        payload = {
+            "status": decision.admission_state,
+            "qualified_identity": identity,
+            "reasons": reasons,
+        }
+        if args.json:
+            print_json(error_result(json.dumps(payload), 3))
+        else:
+            print(f"Not installable ({decision.admission_state}): {identity}", file=sys.stderr)
+            for reason in reasons:
+                print(f"  {reason}", file=sys.stderr)
+        return 3
+
+    shown: list[str] = []
+
+    def present(presentation: RightsPresentation):
+        # Displayed before the mutation, never discovered afterwards. The
+        # acknowledgement carries this presentation's own token, so it cannot be
+        # produced without the statement having been rendered here.
+        shown.append(presentation.statement)
+        print(presentation.statement)
+        if not args.accept_rights:
+            raise LibraryError(
+                "This target requires an explicit operator opt-in for the rights "
+                "state shown above. Re-run with --accept-rights to accept it.",
+                exit_code=3,
+            )
+        return presentation.acknowledge(
+            operator=os.environ.get("USER", "operator"),
+            acknowledged_at=_utc_now(),
+        )
+
+    default_root = (
+        (repo_root or Path.cwd()) / ".agents" / "foreign" / item.library_type / item.library_name
+    )
+    target_root = Path(args.target_root).expanduser() if args.target_root else default_root
+
+    try:
+        outcome = install_marketplace_item(
+            item,
+            provider=provider,
+            state=_foreign_state(repo_root),
+            scope=args.scope,
+            target=args.target,
+            target_root=target_root,
+            present=present,
+        )
+    except ProjectionRefused as exc:
+        if args.json:
+            print_json(error_result(str(exc), 3))
+        else:
+            print(f"Refused: {exc}", file=sys.stderr)
+        return 3
+
+    payload = {
+        "status": "installed",
+        "qualified_identity": identity,
+        "receipt_id": outcome.receipt.id,
+        "cache_object": str(outcome.cache_object.path),
+        "completeness_evidence": outcome.receipt.completeness_evidence,
+        "events": list(outcome.events),
+        "targets": [target.path for target in outcome.receipt.targets],
+        "rights_statement_shown": bool(shown),
+    }
+    if args.json:
+        print_json(success(payload))
+    else:
+        print(f"Installed {identity}")
+        print(f"  receipt: {outcome.receipt.id}")
+        print(f"  completeness: {outcome.receipt.completeness_evidence}")
+        for target in outcome.receipt.targets:
+            print(f"  target: {target.path}")
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_status(args: argparse.Namespace, repo_root: Path | None) -> int:
+    state = _foreign_state(repo_root)
+    store = state.receipt_store(args.scope)
+    rows = [
+        {
+            "id": receipt.id,
+            "qualified_identity": receipt.qualified_identity(),
+            "library_type": receipt.library_type,
+            "library_name": receipt.library_name,
+            "upstream_state": receipt.upstream_state,
+            "verified": receipt.verified,
+            "revision": receipt.upstream_revision,
+            "completeness_evidence": receipt.completeness_evidence,
+            "targets": [target.path for target in receipt.targets],
+        }
+        for receipt in store.all()
+    ]
+    if args.json:
+        print_json(success({"scope": args.scope, "receipts": rows}))
+        return EXIT_SUCCESS
+    if not rows:
+        print(f"No foreign receipts in the {args.scope} scope.")
+        return EXIT_SUCCESS
+    for row in rows:
+        # Local integrity and remote freshness are never merged into one "ok".
+        print(f"{row['id']}: {row['qualified_identity']}")
+        print(
+            f"  upstream: {row['upstream_state']}; local integrity recorded: "
+            f"{row['verified']}; remote freshness: unknown until re-observed"
+        )
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_gc(
+    args: argparse.Namespace, repo_root: Path | None, catalog: dict
+) -> int:
+    from datetime import timedelta
+
+    from lib.catalog import get_marketplaces
+    from lib.providers.wiring import build_provider, collect, resolution_observations
+
+    providers = []
+    for entry in get_marketplaces(catalog):
+        if isinstance(entry, dict) and entry.get("provider_kind"):
+            try:
+                providers.append(build_provider(entry))
+            except Exception as exc:  # noqa: BLE001 - an unbuildable source is unobserved
+                print(
+                    f"Warning: {entry.get('name')} could not be observed: {exc}",
+                    file=sys.stderr,
+                )
+
+    observations = resolution_observations(providers)
+    state = _foreign_state(repo_root)
+    outcome = collect(
+        state,
+        observations=observations,
+        evidence_max_age=timedelta(days=args.evidence_max_age_days),
+        apply=args.apply,
+    )
+
+    decisions = outcome.plan.decisions if args.apply else outcome.decisions
+    rows = [
+        {
+            "cache_key_digest": decision.key_digest,
+            "qualified_identity": decision.qualified_identity,
+            "collectable": decision.collectable,
+            "reason": decision.reason or decision.detail,
+        }
+        for decision in decisions
+    ]
+    payload = {
+        "applied": bool(args.apply),
+        "observed_sources": sorted(observations),
+        "evidence_max_age_days": args.evidence_max_age_days,
+        "decisions": rows,
+    }
+    if args.json:
+        print_json(success(payload))
+        return EXIT_SUCCESS
+    print(
+        f"Observed {len(observations)} source(s); evidence window "
+        f"{args.evidence_max_age_days} day(s)."
+    )
+    for row in rows:
+        state_text = "collectable" if row["collectable"] else "retained"
+        print(f"  {row['cache_key_digest'][:16]}: {state_text} — {row['reason']}")
+    return EXIT_SUCCESS
+
+
 def cmd_catalog_sync(
     args: argparse.Namespace, catalog_root: Path, catalog: dict
 ) -> int:
@@ -3468,7 +3892,7 @@ def _entry_source_path_changed(
         return None
 
     parsed = parse_source(source)
-    if not parsed.is_github() or not parsed.clone_url:
+    if not parsed.is_remote_repository() or not parsed.clone_url:
         return None
 
     source_path = _entry_git_source_scope(entry, parsed)
@@ -3828,6 +4252,143 @@ def _workspace_local_source(catalog: dict, entry: dict, primitive: str) -> Path 
     return source if source.exists() else None
 
 
+def _workspace_pin_verifier(catalog: dict):
+    """Answer what each declared Workspace catalog currently serves.
+
+    ADR-0011 slice 5 shipped cross-catalog resolution that refused to produce a
+    closure without this seam, and had no production implementation of it. This
+    is that implementation: it reads the source through the provider layer, so
+    the Workspace layer still knows nothing about how a source is read.
+
+    A pin that cannot be answered is a refusal, not a pass. `assert_declared_pins`
+    treats a raised exception as an unverified pin and refuses the whole closure,
+    which is the fail-closed half of the same guarantee.
+    """
+    from lib.providers.wiring import source_revision
+
+    def verify(entry) -> str:
+        if entry.pin.kind != "commit":
+            raise LibraryError(
+                f"Workspace catalog {entry.identity} declares a "
+                f"{entry.pin.kind!r} pin; this platform verifies commit pins "
+                "against their source and refuses to report an unverified pin "
+                "as verified"
+            )
+        return source_revision(entry.identity, catalog=catalog)
+
+    return verify
+
+
+def _workspace_normalized_members(
+    catalog: dict, closure, repo_root: Path
+) -> tuple[list, dict[str, dict[str, bytes]]]:
+    """Normalize a resolved closure's members into inventory items and content.
+
+    The Workspace layer resolves *catalog entries*; the admission gate judges
+    *normalized items* bound to their exact bytes. This is the translation
+    between the two, and it is deliberately strict: a member whose local content
+    cannot be read produces no item, which makes the gate's whole-closure
+    coverage check refuse the mutation rather than let a member through
+    undigested.
+    """
+    from lib.providers.classification import (
+        classification_for,
+        executable_admission_for,
+        library_name_for,
+    )
+    from lib.providers.inventory import NormalizedItem, ProviderAvailability, Rights
+
+    observed_at = _utc_now()
+    items: list = []
+    contents: dict[str, dict[str, bytes]] = {}
+
+    for node in closure.nodes:
+        if node.role != "artifact":
+            continue
+        entry = lookup_entry(
+            catalog,
+            node.primitive,
+            node.name,
+            fuzzy=False,
+            source_catalog=node.catalog_name,
+        )
+        source = _workspace_local_source(catalog, entry, node.primitive)
+        if source is None:
+            continue
+        files: dict[str, bytes] = {}
+        if source.is_file():
+            files[source.name] = source.read_bytes()
+        else:
+            for path in sorted(source.rglob("*")):
+                if path.is_file() and not path.is_symlink():
+                    files[path.relative_to(source).as_posix()] = path.read_bytes()
+        if not files:
+            continue
+
+        item = NormalizedItem(
+            provider_identity=node.catalog_identity or node.catalog_name,
+            upstream_id=f"{node.primitive}/{node.name}",
+            upstream_name=node.name,
+            collection_membership=(node.catalog_name,),
+            upstream_revision=node.pin.value if node.pin else None,
+            library_type=node.primitive,
+            library_name=library_name_for(node.name),
+            classification=classification_for(
+                node.primitive, "workspace-resolution", None, None, (node.catalog_name,)
+            ),
+            runtime_compatibility=("unknown",),
+            rights=Rights(
+                fetch_authorization="granted",
+                install_rights="granted",
+                redistribution_rights="granted",
+                derivative_rights="granted",
+                evidence_source=(
+                    "first-party catalog content resolved from a registered source "
+                    f"catalog ({node.catalog_identity or node.catalog_name}) at "
+                    f"{observed_at}"
+                ),
+            ),
+            provider_availability=ProviderAvailability(
+                state="available", observed_at=observed_at
+            ),
+            executable_admission=executable_admission_for(node.primitive),
+        )
+        items.append(item)
+        contents[item.qualified_identity()] = files
+
+    return items, contents
+
+
+def _workspace_gated_content_drift(
+    catalog: dict, closure, repo_root: Path, admitted
+) -> list[str]:
+    """Members whose source no longer matches the content the gate admitted.
+
+    The admission gate freezes and digests an immutable snapshot, and hands it to
+    the mutation. The legacy installers cannot consume that snapshot — they
+    resolve their own source — so without this comparison the gate binds a
+    decision to bytes nobody guarantees are the ones written. Review demonstrated
+    it end to end: editing a member's source between the snapshot and the install
+    produced a successful run whose installed file contained the edited bytes.
+
+    Returns:
+        The qualified identities whose current content differs, in a stable
+        order. Empty means every admitted member still matches its source.
+    """
+    from lib.providers.executable_admission import content_digest
+
+    _, current = _workspace_normalized_members(catalog, closure, repo_root)
+    drifted: list[str] = []
+    for identity, files in dict(admitted).items():
+        observed = current.get(identity)
+        if observed is None or content_digest(dict(observed)) != content_digest(dict(files)):
+            drifted.append(identity)
+    for identity in current:
+        if identity not in dict(admitted):
+            drifted.append(identity)
+    return sorted(set(drifted))
+
+
 def _workspace_content_matches(source: Path, target: Path) -> bool:
     """Return whether an unreceipted target is byte-exact catalog content."""
     from lib.lockfile import compute_checksum
@@ -3976,7 +4537,13 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     )
 
     workspace = resolve_workspace(catalog, args.reference)
-    closure = resolve_workspace_closure(catalog, workspace, repo_root, args.scope)
+    closure = resolve_workspace_closure(
+        catalog,
+        workspace,
+        repo_root,
+        args.scope,
+        pin_verifier=_workspace_pin_verifier(catalog),
+    )
     artifact_sources = {
         (primitive, name): source_catalog
         for primitive, name, source_catalog in closure.artifact_bindings
@@ -3990,7 +4557,13 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     upsert_workspace_root(preview_lock, requested_root)
     from lib.workspace import build_workspace_plan
 
-    preview = build_workspace_plan(catalog, preview_lock, repo_root, args.scope)
+    preview = build_workspace_plan(
+        catalog,
+        preview_lock,
+        repo_root,
+        args.scope,
+        pin_verifier=_workspace_pin_verifier(catalog),
+    )
     prerequisite_blockers = _workspace_prerequisite_blockers(preview)
     if prerequisite_blockers:
         preview["blockers"].extend(prerequisite_blockers)
@@ -4029,19 +4602,17 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         return 3 if preview["blockers"] else 0
 
     from lib.catalog import get_catalogs
+    from lib.providers.executable_admission import (
+        ExecutableAdmissionLedger,
+        ResolutionRefused,
+    )
     from lib.workspace import (
-        assert_materializable,
         clear_workspace_journal,
+        gate_workspace_mutation,
         recover_workspace_journal,
         workspace_write_lock,
         write_workspace_journal,
     )
-
-    # A cross-catalog closure resolves and previews, and stops here. The current
-    # installer path would fetch each member from the live catalog and ignore the
-    # declared pin, which is worse than not installing: it would present a pinned
-    # manifest whose install honored no pin.
-    assert_materializable(closure)
 
     with workspace_write_lock(lock_path):
         recover_workspace_journal(lock_path, repo_root)
@@ -4049,7 +4620,11 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         locked_preview = json.loads(json.dumps(current_lock))
         upsert_workspace_root(locked_preview, requested_root)
         locked_plan = build_workspace_plan(
-            catalog, locked_preview, repo_root, args.scope
+            catalog,
+            locked_preview,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
         )
         locked_prerequisite_blockers = _workspace_prerequisite_blockers(locked_plan)
         if locked_prerequisite_blockers:
@@ -4095,32 +4670,127 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                 ],
             },
         )
-        for primitive, name in closure.artifacts:
-            output_buffer = io.StringIO()
-            with redirect_stdout(output_buffer):
-                rc = _dispatch_use(
-                    args,
-                    repo_root,
-                    catalog,
-                    primitive,
-                    name,
-                    args.scope,
-                    args.harness,
-                    False,
-                    True,
-                    "vendor",
-                    source_catalog=artifact_sources[(primitive, name)],
+        member_failure: list[tuple[str, int, str]] = []
+
+        def _install_members(frozen_content=None) -> None:
+            """Install every resolved member, recording the first that failed.
+
+            The failure is recorded rather than returned because this callable is
+            invoked by the admission gate, which owns its own return value. A
+            returned code would be swallowed there and the run would report
+            success over a member that never installed.
+
+            `frozen_content` is the exact immutable content the gate digested and
+            admitted. The legacy installers cannot be handed bytes -- they resolve
+            their own source -- so the binding is enforced instead of assumed:
+            every member's source is re-read and compared against the admitted
+            snapshot immediately before anything is written, and again after the
+            last member is installed. A source that changed inside that window
+            fails the whole operation, because the decision was made about
+            different bytes than the ones on disk.
+            """
+            if frozen_content is not None:
+                drifted = _workspace_gated_content_drift(
+                    catalog, closure, repo_root, frozen_content
                 )
-            if rc != 0:
-                message = output_buffer.getvalue().strip()
-                failure = {
+                if drifted:
+                    raise LibraryError(
+                        "Workspace source content changed after the admission gate "
+                        f"digested it: {drifted}. The gate admitted different bytes "
+                        "than the installer would read, so nothing is written",
+                        exit_code=3,
+                    )
+            for primitive, name in closure.artifacts:
+                if frozen_content is not None:
+                    # Per member, immediately before its own installer runs, so
+                    # the unguarded window is one installer's read rather than
+                    # the whole loop. It does not become zero: the installers
+                    # resolve their own source, so a change made and undone
+                    # inside a single read stays invisible. That residual is
+                    # recorded in the ADR rather than papered over.
+                    drifted = _workspace_gated_content_drift(
+                        catalog, closure, repo_root, frozen_content
+                    )
+                    if drifted:
+                        raise LibraryError(
+                            "Workspace source content changed while its members were "
+                            f"being installed: {drifted}. The gate admitted different "
+                            "bytes than the installer would read; nothing further is "
+                            "written",
+                            exit_code=3,
+                        )
+                output_buffer = io.StringIO()
+                with redirect_stdout(output_buffer):
+                    rc = _dispatch_use(
+                        args,
+                        repo_root,
+                        catalog,
+                        primitive,
+                        name,
+                        args.scope,
+                        args.harness,
+                        False,
+                        True,
+                        "vendor",
+                        source_catalog=artifact_sources[(primitive, name)],
+                    )
+                if rc != 0:
+                    member_failure.append(
+                        (f"{primitive}:{name}", rc, output_buffer.getvalue().strip())
+                    )
+                    return
+            if frozen_content is not None:
+                drifted = _workspace_gated_content_drift(
+                    catalog, closure, repo_root, frozen_content
+                )
+                if drifted:
+                    raise LibraryError(
+                        "Workspace source content changed while its members were "
+                        f"being installed: {drifted}. What was installed is not what "
+                        "the gate admitted; re-run to install the current content",
+                        exit_code=3,
+                    )
+
+        if closure.cross_catalog:
+            # ADR-0011 slice 5 refused to materialize a v2 closure because three
+            # things were missing: the declared pin verified against its source,
+            # the members normalized into inventory items, and the executable
+            # admission gate in the write path. All three are here now, so the
+            # refusal is replaced by the gate it was standing in for.
+            #
+            # The gate is the single door from a completed resolution to a
+            # mutation. It refuses a selection that is not exactly this closure,
+            # then refuses any executable member with no admission decision for
+            # its current bytes -- failing the whole resolution rather than
+            # skipping the member.
+            items, contents = _workspace_normalized_members(catalog, closure, repo_root)
+            try:
+                gate_workspace_mutation(
+                    closure,
+                    items,
+                    ExecutableAdmissionLedger(),
+                    contents,
+                    mutate=_install_members,
+                )
+            except ResolutionRefused as exc:
+                result.update({"status": "blocked", "blockers": [str(exc)]})
+                _print_workspace_result(result, json_mode=args.json)
+                return 3
+        else:
+            _install_members()
+
+        if member_failure:
+            member, rc, message = member_failure[0]
+            _print_workspace_result(
+                {
                     **result,
                     "status": "failed",
-                    "failed_member": f"{primitive}:{name}",
+                    "failed_member": member,
                     "installer_output": message,
-                }
-                _print_workspace_result(failure, json_mode=args.json)
-                return rc
+                },
+                json_mode=args.json,
+            )
+            return rc
 
         lock = load_lockfile(lock_path)
         closure_ids = {f"{primitive}:{name}" for primitive, name in closure.artifacts}
@@ -4163,7 +4833,13 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             or str(root.get("id") or "") in preexisting_direct_ids
         ]
         upsert_workspace_root(lock, requested_root)
-        applied_plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        applied_plan = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
         apply_plan_ownership(
             lock,
             applied_plan,
@@ -4205,7 +4881,13 @@ def _workspace_status(args: argparse.Namespace, repo_root: Path, catalog: dict) 
             raise LibraryError(
                 f"Workspace {args.reference} is not registered", exit_code=2
             )
-    plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+    plan = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
     plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
     status_artifacts: list[tuple[str, str, str | None]] = []
     seen_artifacts: set[tuple[str, str, str | None]] = set()
@@ -4224,7 +4906,11 @@ def _workspace_status(args: argparse.Namespace, repo_root: Path, catalog: dict) 
                 ),
             )
             closure = resolve_workspace_closure(
-                catalog, registered, repo_root, args.scope
+                catalog,
+                registered,
+                repo_root,
+                args.scope,
+                pin_verifier=_workspace_pin_verifier(catalog),
             )
         except LibraryError:
             continue
@@ -4320,7 +5006,13 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
     if args.prune and args.verify_receipts:
         raise LibraryError("--verify-receipts and --prune are separate operations")
     if args.prune:
-        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        plan = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
         plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
         result = {"operation": "sync-prune", "status": "preview", **plan}
         if not args.apply:
@@ -4329,7 +5021,13 @@ def _workspace_sync(args: argparse.Namespace, repo_root: Path, catalog: dict) ->
         with workspace_write_lock(lock_path):
             recover_workspace_journal(lock_path, repo_root)
             lock = load_lockfile(lock_path)
-            plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+            plan = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
             plan["blockers"].extend(_workspace_prerequisite_blockers(plan))
             managed = collect_managed_paths(
                 workspace_manager_adapters(
@@ -4594,7 +5292,13 @@ def _workspace_adopt(args: argparse.Namespace, repo_root: Path, catalog: dict) -
                 {"operation": "adopt", "kind": "from-direct", **plan},
             )
             apply_direct_root_demotion(lock, plan, args.acknowledge_plan or "")
-            refreshed = build_workspace_plan(catalog, lock, repo_root, args.scope)
+            refreshed = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
             apply_plan_ownership(
                 lock,
                 refreshed,
@@ -4640,7 +5344,13 @@ def _workspace_adopt(args: argparse.Namespace, repo_root: Path, catalog: dict) -
             managed_paths=managed,
             allowed_roots=workspace_allowed_roots(catalog, repo_root, args.scope),
         )
-        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        plan = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
         if owner_id not in next(
             (item["owners"] for item in plan["receipts"] if item["id"] == args.member),
             [],
@@ -4692,7 +5402,13 @@ def _workspace_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) 
             raise LibraryError(
                 f"Workspace {args.reference} is not registered", exit_code=2
             )
-        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        plan = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
         apply_plan_ownership(
             lock,
             plan,
@@ -4832,7 +5548,13 @@ def cmd_workspace(args: argparse.Namespace, repo_root: Path, catalog: dict) -> i
         return 0
     if args.verb == "show":
         workspace = resolve_workspace(catalog, args.reference)
-        closure = resolve_workspace_closure(catalog, workspace, repo_root, args.scope)
+        closure = resolve_workspace_closure(
+        catalog,
+        workspace,
+        repo_root,
+        args.scope,
+        pin_verifier=_workspace_pin_verifier(catalog),
+    )
         result = {
             "operation": "show",
             "status": "ok",
@@ -4870,7 +5592,13 @@ def cmd_workspace(args: argparse.Namespace, repo_root: Path, catalog: dict) -> i
         return _workspace_status(args, repo_root, catalog)
     if args.verb == "explain":
         _lock_path, lock = _workspace_lock(repo_root, args.scope)
-        plan = build_workspace_plan(catalog, lock, repo_root, args.scope)
+        plan = build_workspace_plan(
+            catalog,
+            lock,
+            repo_root,
+            args.scope,
+            pin_verifier=_workspace_pin_verifier(catalog),
+        )
         receipt = next(
             (item for item in plan["receipts"] if item["id"] == args.member), None
         )
@@ -4979,6 +5707,61 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_sync_all(args, repo_root, catalog)
 
     # Top-level catalog source commands
+    # Top-level foreign-content commands (ADR-0011)
+    if args.primitive == "marketplace":
+        verb = getattr(args, "verb", None)
+        if not verb:
+            parser.parse_args(["marketplace", "--help"])
+            return EXIT_FAILURE
+        use_json = getattr(args, "json", False)
+        try:
+            catalog_root = _resolve_catalog_root()
+            catalog = load_catalog(catalog_root)
+            repo_root = _resolve_lifecycle_project_root(args) or catalog_root
+            if verb == "list":
+                return cmd_marketplace_list(args, catalog)
+            if verb == "inventory":
+                return cmd_marketplace_inventory(args, catalog)
+            if verb == "install":
+                return cmd_marketplace_install(args, repo_root, catalog)
+            if verb == "status":
+                return cmd_marketplace_status(args, repo_root)
+            if verb == "gc":
+                return cmd_marketplace_gc(args, repo_root, catalog)
+        except LibraryError as exc:
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+        except (RuntimeError, ValueError, KeyError, OSError) as exc:
+            # A provider refusal is a typed fact, not a stack trace. Every one of
+            # them names what was refused and why, so the message is the report.
+            message = f"{type(exc).__name__}: {exc}"
+            if type(exc).__name__ == "ProviderUnauthenticated":
+                # Stated rather than left as a puzzle: this CLI has no way to
+                # supply a token-scoped provider's client, because resolving a
+                # credential reference into a session is credential handling and
+                # is held for a human security review. The provider is reachable
+                # only through a caller that owns the connection.
+                message = (
+                    f"{message}\n"
+                    "This command cannot supply a client for a token-scoped "
+                    "provider: resolving a credential reference into a session is "
+                    "credential handling, which is deliberately not implemented "
+                    "here. Registration, inventory schema, rights, and receipts "
+                    "for this provider all work; only the transport is missing, "
+                    "and no other source is substituted for it."
+                )
+            if use_json:
+                print_json(error_result(message, EXIT_FAILURE))
+            else:
+                print(f"Error: {message}", file=sys.stderr)
+            return EXIT_FAILURE
+
+        print("Error: Unknown marketplace verb.", file=sys.stderr)
+        return EXIT_FAILURE
+
     if args.primitive == "catalog":
         verb = getattr(args, "verb", None)
         if not verb:

@@ -1,23 +1,41 @@
 """
-source.py — Local/GitHub source parsing, temp clone, tree-SHA/source provenance.
+source.py — Catalog `source` parsing and marketplace resolution.
 
-Handles parsing catalog `source` and `sources` fields, fetching content from
-GitHub repos, and computing source commit SHAs.
+This module answers "what does this catalog entry's `source` field address, and
+which marketplace does it belong to". It is the **legacy** resolution path: it
+predates the ADR-0011 provider capability contract and still resolves content by
+cloning, which is what `providers.git_repo` exists to stop requiring.
+
+It carries no hosting-service knowledge any more. Every URL shape, host name,
+clone form, and SSH fallback moved to `providers/git_url.py` under the ADR-0011
+drawdown (slice 6, `CL-mvet`), which is the remedy
+`scripts/checks/provider_neutrality.py` names for exactly this: provider
+knowledge belongs in a provider adapter. What is left here is catalog logic —
+which marketplace an entry names, and which path inside it — and that is
+genuinely this module's own.
 """
 
 from __future__ import annotations
 
-import re
-import shutil
-import subprocess
-import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
 
 from .catalog import get_marketplaces
 from .errors import SourceError
+from .providers.git_url import (
+    KIND_LOCAL,
+    KIND_UNKNOWN,
+    LEGACY_MARKETPLACE_TYPE,
+    PATH_BEARING_KINDS,
+    REMOTE_KINDS,
+    clone_repository,
+    head_commit,
+    parse_git_source,
+    resolve_owner_repository_url,
+    tree_url_for,
+    url_belongs_to,
+)
 
 
 @dataclass
@@ -25,12 +43,12 @@ class ParsedSource:
     """Parsed representation of a library entry source field."""
 
     kind: str
-    """'local', 'github_browser', 'github_raw', 'github_repo', or 'unknown'."""
+    """One of the `providers.git_url` kind values, `local`, or `unknown`."""
 
     raw: str
     """Original source string."""
 
-    # GitHub-specific fields
+    # Remote-repository fields
     org: Optional[str] = None
     repo: Optional[str] = None
     branch: Optional[str] = None
@@ -42,11 +60,16 @@ class ParsedSource:
     # Local-specific fields
     local_path: Optional[Path] = None
 
-    def is_github(self) -> bool:
-        return self.kind in ("github_browser", "github_raw", "github_repo")
+    def is_remote_repository(self) -> bool:
+        """Whether this source addresses a remote repository."""
+        return self.kind in REMOTE_KINDS
+
+    def addresses_path_in_repository(self) -> bool:
+        """Whether this source addresses a path inside a repository."""
+        return self.kind in PATH_BEARING_KINDS
 
     def is_local(self) -> bool:
-        return self.kind == "local"
+        return self.kind == KIND_LOCAL
 
     def parent_dir_in_repo(self) -> Optional[str]:
         """Return the directory containing the file within the repo."""
@@ -59,17 +82,13 @@ class ParsedSource:
 def parse_source(source: str) -> ParsedSource:
     """Parse a `source:` field value into a ParsedSource.
 
-    Supports:
-    - /absolute/local/path
-    - ~/home/relative/path
-    - https://github.com/org/repo/blob/branch/path/to/file
-    - https://github.com/org/repo/tree/branch/path/to/directory
-    - https://raw.githubusercontent.com/org/repo/branch/path/to/file
+    Supports an absolute or home-relative local path, and the remote repository
+    URL shapes `providers.git_url` understands. An unrecognized value returns
+    `kind: unknown` rather than a guess.
     """
     if not source:
         raise SourceError("Source field is empty.")
 
-    # Local path
     if source.startswith("/") or source.startswith("~"):
         local = Path(source).expanduser()
         if local.is_dir():
@@ -79,80 +98,25 @@ def parse_source(source: str) -> ParsedSource:
         else:
             path_type = "unknown"
         return ParsedSource(
-            kind="local",
+            kind=KIND_LOCAL,
             raw=source,
             local_path=local,
             path_type=path_type,
         )
 
-    # GitHub browser URL
-    m = re.match(
-        r"https://github\.com/([^/]+)/([^/]+)/(blob|tree)/([^/]+)/(.+)",
-        source,
+    parsed = parse_git_source(source)
+    if parsed["kind"] == KIND_UNKNOWN:
+        return ParsedSource(kind=KIND_UNKNOWN, raw=source)
+    return ParsedSource(
+        kind=parsed["kind"],
+        raw=source,
+        org=parsed["org"],
+        repo=parsed["repo"],
+        branch=parsed["branch"],
+        file_path=parsed["file_path"],
+        clone_url=parsed["clone_url"],
+        path_type=parsed["path_type"],
     )
-    if m:
-        org, repo, browser_kind, branch, file_path = m.groups()
-        file_path = file_path.rstrip("/")
-        return ParsedSource(
-            kind="github_browser",
-            raw=source,
-            org=org,
-            repo=repo,
-            branch=branch,
-            file_path=file_path,
-            clone_url=f"https://github.com/{org}/{repo}.git",
-            path_type="directory" if browser_kind == "tree" else "file",
-        )
-
-    # GitHub raw URL
-    m = re.match(
-        r"https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/([^/]+)/(.+)",
-        source,
-    )
-    if m:
-        org, repo, branch, file_path = m.groups()
-        file_path = file_path.rstrip("/")
-        return ParsedSource(
-            kind="github_raw",
-            raw=source,
-            org=org,
-            repo=repo,
-            branch=branch,
-            file_path=file_path,
-            clone_url=f"https://github.com/{org}/{repo}.git",
-            path_type="file",
-        )
-
-    # Plain GitHub repository URLs
-    m = re.match(r"https://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", source)
-    if m:
-        org, repo = m.groups()
-        return ParsedSource(
-            kind="github_repo",
-            raw=source,
-            org=org,
-            repo=repo,
-            branch=None,
-            clone_url=f"https://github.com/{org}/{repo}.git",
-            path_type="directory",
-        )
-
-    # SSH GitHub repository URLs
-    m = re.match(r"git@github\.com:([^/]+)/([^/]+?)(?:\.git)?/?$", source)
-    if m:
-        org, repo = m.groups()
-        return ParsedSource(
-            kind="github_repo",
-            raw=source,
-            org=org,
-            repo=repo,
-            branch=None,
-            clone_url=f"git@github.com:{org}/{repo}.git",
-            path_type="directory",
-        )
-
-    # Unrecognized
-    return ParsedSource(kind="unknown", raw=source)
 
 
 def resolve_marketplace(
@@ -165,8 +129,8 @@ def resolve_marketplace(
     `sources.marketplaces` in library.yaml, with legacy root fallback.
 
     Returns:
-        Marketplace name string (e.g. 'cognovis-core'), or 'local' for local paths,
-        or 'unknown' if not resolvable.
+        Marketplace name string, `local` for local paths, or `unknown` if not
+        resolvable.
     """
     marketplaces = get_marketplaces(catalog_data)
     marketplace_names = {
@@ -179,20 +143,18 @@ def resolve_marketplace(
         if mp_name in marketplace_names or mp_name:
             return mp_name
 
-    # Check source field for known GitHub orgs
     source = entry.get("source") or ""
     if source.startswith("/") or source.startswith("~"):
-        return "local"
+        return KIND_LOCAL
 
-    # Try to match source URL against registered marketplace clone URLs
+    # Try to match the source URL against registered marketplace clone URLs
     for mp in marketplaces:
         if not isinstance(mp, dict):
             continue
         clone_url = mp.get("clone_url") or mp.get("repo") or ""
-        if clone_url and _url_matches_marketplace(source, clone_url):
+        if clone_url and url_belongs_to(source, clone_url):
             return mp.get("id") or mp.get("name") or "unknown"
 
-    # Fallback
     return "unknown"
 
 
@@ -202,7 +164,7 @@ def resolve_marketplace_source(
     *,
     default_branch: str = "main",
 ) -> Optional[str]:
-    """Resolve a from_marketplace catalog entry to a GitHub tree URL."""
+    """Resolve a from_marketplace catalog entry to a repository tree URL."""
     marketplace_name = entry.get("from_marketplace")
     source_path = entry.get("path")
     if not marketplace_name or not source_path:
@@ -215,8 +177,8 @@ def resolve_marketplace_source(
             f"'{marketplace_name}'."
         )
 
-    marketplace_type = marketplace.get("type", "git")
-    if marketplace_type != "git":
+    marketplace_type = marketplace.get("type", LEGACY_MARKETPLACE_TYPE)
+    if marketplace_type != LEGACY_MARKETPLACE_TYPE:
         raise SourceError(
             f"Marketplace '{marketplace_name}' uses unsupported type "
             f"'{marketplace_type}' for direct installs."
@@ -231,11 +193,11 @@ def resolve_marketplace_source(
     if not base_source:
         raise SourceError(f"Marketplace '{marketplace_name}' has no source URL.")
 
-    repo_url = _resolve_github_marketplace_repo_url(
-        base_source,
-        entry.get("repo"),
-        marketplace_name,
-    )
+    try:
+        repo_url = resolve_owner_repository_url(base_source, entry.get("repo"))
+    except ValueError as exc:
+        raise SourceError(f"Marketplace '{marketplace_name}' {exc}") from exc
+
     branch = (
         entry.get("branch")
         or entry.get("ref")
@@ -249,7 +211,7 @@ def resolve_marketplace_source(
             f"Catalog entry '{entry.get('name')}' has an empty marketplace path."
         )
 
-    return f"{repo_url}/tree/{branch}/{normalized_path}"
+    return tree_url_for(repo_url, branch, normalized_path)
 
 
 def _find_marketplace(catalog_data: dict, marketplace_name: str) -> Optional[dict]:
@@ -262,111 +224,20 @@ def _find_marketplace(catalog_data: dict, marketplace_name: str) -> Optional[dic
     return None
 
 
-def _resolve_github_marketplace_repo_url(
-    base_source: str,
-    repo_name: Optional[str],
-    marketplace_name: str,
-) -> str:
-    """Resolve a marketplace source URL and optional repo name to a GitHub repo URL."""
-    parsed = urlparse(base_source)
-    if parsed.scheme not in ("http", "https") or parsed.netloc.lower() != "github.com":
-        raise SourceError(
-            f"Marketplace '{marketplace_name}' source is not a GitHub URL: {base_source}"
-        )
-
-    path_parts = [part for part in parsed.path.strip("/").split("/") if part]
-    if not path_parts:
-        raise SourceError(
-            f"Marketplace '{marketplace_name}' source has no GitHub owner: {base_source}"
-        )
-
-    owner = path_parts[0]
-    if len(path_parts) == 1:
-        if not repo_name:
-            raise SourceError(
-                f"Marketplace '{marketplace_name}' source points to an owner; "
-                "the catalog entry must provide a repo."
-            )
-        repository = repo_name
-    elif len(path_parts) == 2:
-        repository = path_parts[1].removesuffix(".git")
-        if repo_name and repository != repo_name:
-            raise SourceError(
-                f"Marketplace '{marketplace_name}' source already points to "
-                f"repository '{repository}', cannot resolve repo '{repo_name}'."
-            )
-    else:
-        raise SourceError(
-            f"Marketplace '{marketplace_name}' source must be a GitHub owner or "
-            f"repository URL: {base_source}"
-        )
-
-    return f"https://github.com/{owner}/{repository}"
-
-
-def _url_matches_marketplace(source_url: str, marketplace_url: str) -> bool:
-    """Check if a source URL belongs to a marketplace's repo."""
-    # Strip .git suffix for comparison
-    mp = marketplace_url.rstrip("/").rstrip(".git")
-    return source_url.startswith(mp)
-
-
-def clone_github_repo(clone_url: str, branch: Optional[str] = None) -> Path:
+def clone_source_repo(clone_url: str, branch: Optional[str] = None) -> Path:
     """Shallow-clone `clone_url` into a fresh temp dir, falling back to SSH.
 
     Returns the temp directory. The caller owns it and must clean it up.
 
-    The SSH fallback exists because the cognovis remotes are private and HTTPS
-    has no credentials. It has to start from an empty directory: git creates and
-    partially populates the target before it fails, so retrying into the same
-    path made git refuse with "already exists and is not an empty directory" --
-    which masked the real HTTPS error and meant the fallback could never
-    succeed. That broke every GitHub-sourced install (CL-k33k).
-
-    Raises SourceError naming both failures when neither transport works.
+    Raises:
+        SourceError: naming both transport failures when neither works.
     """
-    tmp = Path(tempfile.mkdtemp())
-
-    def _clone(url: str) -> subprocess.CompletedProcess:
-        cmd = ["git", "clone", "--quiet", "--depth", "1"]
-        if branch:
-            cmd += ["--branch", branch]
-        cmd += [url, str(tmp)]
-        return subprocess.run(cmd, capture_output=True, text=True)
-
-    result = _clone(clone_url)
-    if result.returncode == 0:
-        return tmp
-
-    https_error = result.stderr.strip()
-    # Reset the target: the failed attempt left it non-empty.
-    shutil.rmtree(str(tmp), ignore_errors=True)
-    tmp.mkdir(parents=True, exist_ok=True)
-
-    ssh_url = clone_url.replace("https://github.com/", "git@github.com:")
-    result = _clone(ssh_url)
-    if result.returncode == 0:
-        return tmp
-
-    ssh_error = result.stderr.strip()
-    shutil.rmtree(str(tmp), ignore_errors=True)
-    raise SourceError(
-        f"Failed to clone {clone_url} over https ({https_error}) "
-        f"and {ssh_url} over ssh ({ssh_error})"
-    )
+    try:
+        return clone_repository(clone_url, branch)
+    except RuntimeError as exc:
+        raise SourceError(str(exc)) from exc
 
 
 def get_local_commit_sha(path: Path) -> str:
-    """Return the git HEAD commit SHA for a local path, or 'local' if not git-tracked."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=str(path.parent if path.is_file() else path),
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pass
-    return "local"
+    """Return the git HEAD commit SHA for a local path, or 'local'."""
+    return head_commit(path)

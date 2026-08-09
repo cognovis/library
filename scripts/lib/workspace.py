@@ -974,30 +974,22 @@ def gate_workspace_mutation(
 
 
 def assert_materializable(closure: WorkspaceClosure) -> None:
-    """Refuse to materialize a closure this Library cannot yet gate.
+    """Retained no-op: the conditions this refusal stood in for now hold.
 
-    A cross-catalog closure resolves today, and that is the whole of slice 5. It
-    is deliberately **not** installable through the current CLI: materializing it
-    safely needs the pin verified against the source, the members normalized into
-    inventory items, and `gate_workspace_mutation` in the write path -- provider
-    work that belongs to the reference-adapter slice.
+    Slice 5 (`CL-dbam`) refused to materialize a cross-catalog closure, because
+    doing it safely needed the declared pin verified against its source, the
+    members normalized into inventory items, and `gate_workspace_mutation` in the
+    write path. All three are supplied by slice 6 (`CL-mvet`): the CLI resolves
+    every closure with a provider-backed pin verifier, normalizes the resolved
+    members, and routes a v2 mutation through the gate.
 
-    Refusing is not caution for its own sake. The alternative is worse than
-    incomplete: the existing installer path would fetch each member from the
-    current catalog, ignoring the declared pin entirely, and write it with no
-    admission decision. That would ship a `catalogs:` block that looks pinned and
-    is not, which is precisely the false assurance the block exists to remove.
+    The function survives as a no-op rather than being deleted so that a caller
+    still holding the old contract fails at import review rather than at run
+    time. There is deliberately no residual check here: a second, weaker version
+    of the same refusal would be the thing that gets relaxed later without anyone
+    noticing the real gate had been bypassed.
     """
-    if not closure.cross_catalog:
-        return
-    identities = sorted(entry.identity for entry in closure.declared_catalogs)
-    raise LibraryError(
-        "Workspace schema v2 resolves but is not yet installable: materializing "
-        f"the pinned catalogs {identities} requires provider pin verification and "
-        "the executable-admission gate in the write path. Resolution, validation, "
-        "and status are available now; installation lands with the reference "
-        "provider adapters"
-    )
+    return None
 
 
 def workspace_receipt_store_path(lock_path: Path) -> Path:

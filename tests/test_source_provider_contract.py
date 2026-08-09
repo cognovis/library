@@ -637,6 +637,15 @@ def test_optional_capability_absence_is_declared() -> None:
         "revision_of",
         "verify",
         "rights_evidence",
+        # Slice 6 (CL-mvet) adds per-item rights evidence as a declared optional
+        # capability. A provider that does not declare it is stating that one
+        # rights answer covers every item it lists.
+        "item_rights_evidence",
+        # Slice 6 also adds the member manifest: a source-read list of an item's
+        # files. Its absence means an install's completeness rests on the
+        # adapter's own declaration, recorded as the weakest evidence rather
+        # than as the quiet default.
+        "member_manifest",
     }
     # describe absent -> the costlier fetch-then-classify path, recorded as cost.
     assert [cost.capability for cost in result.costs] == ["describe"]

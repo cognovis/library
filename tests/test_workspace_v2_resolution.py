@@ -336,16 +336,23 @@ def test_fails_before_mutation() -> None:
         handed[identity]["deploy.yaml"] = b"tampered"
 
 
-def test_a_cross_catalog_closure_is_not_installable_yet() -> None:
-    """Resolution ships in this slice; materialization waits for the adapters."""
+def test_the_materialization_refusal_is_retired_not_weakened() -> None:
+    """Slice 5 refused materialization; slice 6 supplies the checks it stood for.
+
+    The refusal is now a no-op, and that is asserted rather than left implicit:
+    a retained second, weaker version of the same check is exactly the thing that
+    gets relaxed later while everyone assumes the real gate is still there. The
+    real gate is `gate_workspace_mutation`, exercised by the tests above and by
+    `tests/test_workspace_v2_cli_boundary.py` through the CLI an operator runs.
+    """
     catalog = catalog_document()
     closure = _closure(catalog, f"{CORE_NAME}:engineering")
 
-    with pytest.raises(LibraryError, match="not yet installable"):
-        assert_materializable(closure)
+    assert closure.cross_catalog
+    assert assert_materializable(closure) is None
 
     v1 = catalog_document(workspaces=[v1_manifest()])
-    assert_materializable(_closure(v1, f"{CORE_NAME}:python-cli"))
+    assert assert_materializable(_closure(v1, f"{CORE_NAME}:python-cli")) is None
 
 
 def test_a_v2_closure_is_not_produced_without_pin_verification() -> None:
@@ -386,14 +393,18 @@ def test_a_v2_closure_is_not_produced_without_pin_verification() -> None:
 
 
 def test_a_verified_pin_does_not_yet_bind_the_local_catalog_document() -> None:
-    """The documented residual of the pin contract, asserted so nobody assumes more.
+    """The residual of the pin contract, asserted so nobody assumes more.
 
     Verifying a declared pin proves the *source* has not moved. It does not prove
     that this repository's catalog document describes that revision, because
-    members are still read locally until an adapter fetches at the pin. That gap
-    is why a cross-catalog closure is refused materialization, and closing it is
-    the provider slice's work. This test exists so the limitation is discovered
-    by reading the suite rather than by trusting a pin that does not bind.
+    members are still read from the local checkout rather than fetched at the pin.
+
+    Slice 6 narrowed this residual rather than closing it. What it removed was
+    the blanket refusal: a resolved closure is now verified against its source,
+    normalized into inventory items, and admitted through the mutation gate. What
+    remains is that a catalog document editable between the pin check and the
+    read can still describe a member the pinned revision does not — which is why
+    this test still exists and still passes.
     """
     catalog = catalog_document()
     catalog["library"]["skills"].append(
@@ -410,9 +421,9 @@ def test_a_verified_pin_does_not_yet_bind_the_local_catalog_document() -> None:
 
     closure = _closure(catalog, f"{CORE_NAME}:engineering")
 
+    # The injected member entered the closure without moving either pin. The pin
+    # check cannot see it, which is precisely the residual being recorded.
     assert ("skill", "injected") in closure.artifacts
-    with pytest.raises(LibraryError, match="not yet installable"):
-        assert_materializable(closure)
 
 
 def test_a_failed_resolution_names_its_root_identity_and_steward() -> None:

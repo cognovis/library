@@ -246,7 +246,7 @@ def _derive_deploy_path(entry: dict, mcp_name: str) -> tuple[str | None, str | N
     except Exception:
         return None, None, None
 
-    if not parsed.is_github() or not parsed.clone_url:
+    if not parsed.is_remote_repository() or not parsed.clone_url:
         return None, None, None
 
     # Derive <org>-<repo> slug from clone URL
@@ -696,7 +696,7 @@ def _resolve_source_commit(name: str, source: str | None) -> str:
         )
         return "local"
 
-    if parsed.kind not in ("github_browser", "github_raw", "github_repo"):
+    if not parsed.is_remote_repository():
         return "local"
 
     clone_url = parsed.clone_url

@@ -12,6 +12,7 @@ The degradation rules, all of them declaration-driven:
 | `revision_of` | `upstream_revision` is `None` — the provider is revisionless |
 | `verify` | Recorded as absent; the Library normalized digest is the only integrity proof |
 | `rights_evidence` | Recorded rights are used unchanged; no evidence source is invented |
+| `item_rights_evidence` | The provider is uniform; one rights answer covers every item |
 
 Nothing here catches an exception to discover a capability. A capability that
 is declared but missing raises through this module on purpose: a lying
@@ -34,6 +35,7 @@ from .classification import (
 from .contract import (
     ItemDescription,
     OPTIONAL_CAPABILITIES,
+    RightsEvidence,
     SourceProvider,
     validate_capability_declaration,
 )
@@ -88,8 +90,79 @@ class NormalizationResult:
     provider_availability: ProviderAvailability
 
 
+#: Grants a licence answers. `fetch_authorization` is deliberately absent: it
+#: rests on endpoint access, not on a licence, and ADR-0011 draws exactly that
+#: line in the other direction ("a subscriber token proves the first and says
+#: nothing about the second"). A missing LICENSE is silent about fetchability
+#: for the same reason, so downgrading fetch here would be inventing a fact.
+LICENCE_DERIVED_GRANTS = (
+    "install_rights",
+    "redistribution_rights",
+    "derivative_rights",
+)
+
+
 def _now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _rights_with_located_evidence(rights: Rights, source: str) -> Rights:
+    """The recorded rights, with this observation named as their source.
+
+    Rebuilt through `to_dict`/`from_dict` rather than field by field: a
+    hand-listed rebuild silently drops any field a later slice adds, and slice 2
+    added per-grant evidence to exactly this value.
+    """
+    payload = rights.to_dict()
+    payload["evidence_source"] = source
+    return Rights.from_dict(payload)
+
+
+def _rights_without_located_evidence(rights: Rights, detail: str) -> Rights:
+    """Every licence-derived grant relaxed to `unknown`, with the reason recorded.
+
+    This is the rule that stops a sibling's grant from covering an item that has
+    none. ADR-0011 records the organization reference provider's grant as *per
+    repository*, and names a repository in the same organization with no observed
+    licence file. Carrying the provider-wide grant onto that repository's items
+    would be the single most convenient falsehood in the model: it reads as a
+    resolved grant, it has a named evidence source, and the source describes a
+    different repository.
+    """
+    payload = rights.to_dict()
+    for grant in LICENCE_DERIVED_GRANTS:
+        payload[grant] = "unknown"
+    # Evidence that justified a grant no longer held would describe a state that
+    # no longer exists, so it is discarded with the grant it supported.
+    payload["grant_evidence"] = {
+        name: source
+        for name, source in dict(payload.get("grant_evidence") or {}).items()
+        if name not in LICENCE_DERIVED_GRANTS
+    }
+    payload["evidence_source"] = detail
+    return Rights.from_dict(payload)
+
+
+def _item_rights(
+    provider: SourceProvider,
+    declared: frozenset[str],
+    upstream_id: str,
+    recorded: Rights,
+) -> Rights:
+    """Rights for one item, resolved per item when the provider is not uniform."""
+    if "item_rights_evidence" not in declared:
+        return recorded
+    evidence: RightsEvidence = provider.item_rights_evidence(upstream_id)
+    if evidence.located and evidence.source:
+        return _rights_with_located_evidence(recorded, evidence.source)
+    return _rights_without_located_evidence(
+        recorded,
+        evidence.detail
+        or (
+            f"no licensing evidence located for {upstream_id!r}; a sibling unit's "
+            "grant is not this unit's grant"
+        ),
+    )
 
 
 def _observed_availability(provider: SourceProvider) -> ProviderAvailability:
@@ -144,12 +217,9 @@ def normalize_inventory(
     if "rights_evidence" in declared:
         evidence = provider.rights_evidence()
         if evidence.located and evidence.source:
-            # Rebuilt through `to_dict`/`from_dict` rather than field by field:
-            # a hand-listed rebuild silently drops any field a later slice adds,
-            # and slice 2 added per-grant evidence to exactly this value.
-            payload = recorded_rights.to_dict()
-            payload["evidence_source"] = recorded_rights.evidence_source or evidence.source
-            recorded_rights = Rights.from_dict(payload)
+            recorded_rights = _rights_with_located_evidence(
+                recorded_rights, recorded_rights.evidence_source or evidence.source
+            )
 
     costs: list[NormalizationCost] = []
     items: list[NormalizedItem] = []
@@ -168,7 +238,9 @@ def normalize_inventory(
             str(description.classification.get("type_basis", "provider-described")),
             content,
             (curated_skill_classes or {}).get(raw.upstream_id),
+            raw.collection_membership,
         )
+        item_rights = _item_rights(provider, declared, raw.upstream_id, recorded_rights)
         classification.update(
             {
                 key: value
@@ -190,7 +262,7 @@ def normalize_inventory(
                 library_name=library_name_for(raw.upstream_name),
                 classification=classification,
                 runtime_compatibility=description.runtime_compatibility,
-                rights=recorded_rights,
+                rights=item_rights,
                 provider_availability=availability,
                 executable_admission=executable_admission_for(description.library_type),
                 trust_state=trust_state,

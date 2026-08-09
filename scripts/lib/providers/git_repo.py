@@ -24,7 +24,15 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 from urllib.parse import urlparse
 
-from .classification import ITEM_MARKERS, library_type_for
+from .decompose import (
+    AmbiguousItemLayout,
+    ItemLayout,
+    LAYOUTS,
+    MARKER_LAYOUT,
+    ROOT_ITEM_ID,
+    decompose_tree,
+)
+
 from .contract import (
     AuthRequirement,
     Availability,
@@ -43,25 +51,25 @@ DEFAULT_RAW_BASE = "https://raw.githubusercontent.com"
 DEFAULT_TIMEOUT = 30
 _HEX40 = 40
 
+#: Re-exported so existing importers keep working after the decomposition rules
+#: moved to `decompose`. They are that module's definitions, not this one's.
+__all__ = [
+    "AmbiguousItemLayout",
+    "GitRepoProvider",
+    "HttpTransport",
+    "LICENSE_FILENAMES",
+    "ProviderInventoryIncomplete",
+    "ProviderTransportError",
+    "ROOT_ITEM_ID",
+    "UrllibTransport",
+]
+
 #: Basenames that carry a repository's licensing evidence, in preference order.
 LICENSE_FILENAMES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
-
-#: Upstream id for an item whose marker file sits at the repository root. The
-#: upstream id is a repository-relative directory, and the root directory has no
-#: name; `.` is that directory's name and keeps the id non-empty and unique.
-ROOT_ITEM_ID = "."
 
 
 class ProviderTransportError(RuntimeError):
     """The provider could not be reached or answered with an error."""
-
-
-class AmbiguousItemLayout(RuntimeError):
-    """A repository-level item coexists with nested items.
-
-    Their content overlaps, so which item owns which bytes is undefined. Slice 3
-    would cache the same bytes under two identities. Fail loudly here instead.
-    """
 
 
 class ProviderInventoryIncomplete(RuntimeError):
@@ -138,12 +146,23 @@ class GitRepoProvider(SourceProvider):
     #: header. Credentials are the caller's to resolve; this adapter records the
     #: named reference and never reads a credential store itself.
     headers: Mapping[str, str] = field(default_factory=dict)
+    #: `marker` (one item per marker directory) or `bundle` (also one item per
+    #: remaining file). Registration chooses it; nothing here infers it, because
+    #: a repository that happens to contain no marker file is not thereby a
+    #: bundle -- it may simply be a repository with nothing to install.
+    layout: str = MARKER_LAYOUT
 
     def __post_init__(self) -> None:
         self._owner, self._repository = _split_repository(self.repository_url)
         self._identity = f"https://{urlparse(self.repository_url).netloc}/{self._owner}/{self._repository}"
+        if self.layout not in LAYOUTS:
+            raise ValueError(
+                f"unknown layout {self.layout!r} for {self._identity}; "
+                f"expected {list(LAYOUTS)}"
+            )
         self._commit: str | None = None
         self._trees: dict[str, dict[str, dict[str, Any]]] = {}
+        self._layouts: dict[str, dict[str, ItemLayout]] = {}
         self._items: tuple[ProviderItem, ...] | None = None
 
     # -- Required capabilities ------------------------------------------------
@@ -152,8 +171,42 @@ class GitRepoProvider(SourceProvider):
         return self._identity
 
     def capabilities(self) -> frozenset[str]:
-        """This adapter offers the full contract, including every optional part."""
-        return REQUIRED_CAPABILITIES | OPTIONAL_CAPABILITIES
+        """Every capability except per-item rights, which this provider cannot have.
+
+        One repository publishes one licence for everything it contains, so
+        `rights_evidence` is the complete answer and a per-item variant would be
+        the same answer repeated. Declaring `item_rights_evidence` here would
+        tell a consumer to ask a question this provider has no second answer to.
+        """
+        return REQUIRED_CAPABILITIES | (
+            OPTIONAL_CAPABILITIES - {"item_rights_evidence"}
+        )
+
+    def current_revision(self) -> str:
+        """The commit this adapter's ref currently resolves to.
+
+        Repository-level and item-free, which is what a pin verification asks:
+        "has this source moved", not "where is this item".
+        """
+        return self._resolve_commit()
+
+    def member_manifest(
+        self, upstream_id: str, revision: str | None = None
+    ) -> Sequence[str]:
+        """The item-relative paths this item consists of, read from the tree.
+
+        Read from the tree of the revision being asked about, not from a fetch:
+        the point of the manifest is to be an independent list the retrieval is
+        checked against, and a manifest derived from the retrieval would agree
+        with it by construction.
+        """
+        commit = revision or self._resolve_commit()
+        layout = self._layout(commit).get(upstream_id)
+        if layout is None:
+            raise KeyError(
+                f"{self._identity} has no item {upstream_id!r} at revision {commit}"
+            )
+        return tuple(sorted(layout.relative(path) for path in layout.member_paths))
 
     def enumerate(self, selector: Any = None) -> Sequence[ProviderItem]:
         """List every marker-identified item in the tree, at any depth.
@@ -184,34 +237,25 @@ class GitRepoProvider(SourceProvider):
         """
         self._entry(upstream_id)  # refuse an item this provider does not list
         commit = revision or self._resolve_commit()
-        directory = "" if upstream_id == ROOT_ITEM_ID else f"{upstream_id}/"
 
         # Paths and blob identities come from the tree of the revision actually
-        # being fetched, never from the adapter's ref.
+        # being fetched, never from the adapter's ref. The decomposition is
+        # recomputed there too: an item's member set is a property of a tree, and
+        # reusing the ref's member list would report one revision's files under
+        # another revision's identity.
         entries = self._tree_entries(commit)
-        member_paths = sorted(
-            path for path in entries if (path.startswith(directory) if directory else True)
-        )
-        marker_path = next(
-            (
-                path
-                for path in member_paths
-                if path.rsplit("/", 1)[-1].lower() in ITEM_MARKERS
-                and path[len(directory) :].count("/") == 0
-            ),
-            None,
-        )
-        if marker_path is None:
+        layout = self._layout(commit).get(upstream_id)
+        if layout is None:
             raise ProviderInventoryIncomplete(
                 f"{self._identity} has no item {upstream_id!r} at revision {commit}"
             )
 
         files = []
-        for path in member_paths:
+        for path in layout.member_paths:
             url = f"{self.raw_base}/{self._owner}/{self._repository}/{commit}/{path}"
             files.append(
                 FetchedFile(
-                    path=path[len(directory) :] if directory else path,
+                    path=layout.relative(path),
                     content=self.transport.get_bytes(url, self._headers()),
                     upstream_content_identity=entries[path].get("sha"),
                 )
@@ -220,7 +264,7 @@ class GitRepoProvider(SourceProvider):
             upstream_id=upstream_id,
             revision=commit,
             files=tuple(files),
-            primary_path=marker_path[len(directory) :] if directory else marker_path,
+            primary_path=layout.relative(layout.primary_path),
         )
 
     def auth_requirements(self) -> Sequence[AuthRequirement]:
@@ -251,11 +295,14 @@ class GitRepoProvider(SourceProvider):
         inspection and pays the recorded cost.
         """
         entry = self._entry(upstream_id)
-        library_type, basis = library_type_for(entry["path"])
+        layout = self._layout()[upstream_id]
         return ItemDescription(
             upstream_id=upstream_id,
-            library_type=library_type,
-            classification={"type_basis": basis, "upstream_path": entry["path"]},
+            library_type=layout.library_type,
+            classification={
+                "type_basis": layout.type_basis,
+                "upstream_path": entry["path"],
+            },
             runtime_compatibility=("unknown",),
             content_identity=entry.get("sha"),
         )
@@ -346,50 +393,36 @@ class GitRepoProvider(SourceProvider):
         self._trees[commit] = entries
         return entries
 
+    def _layout(self, commit: str | None = None) -> dict[str, ItemLayout]:
+        """The decomposed items of one commit's tree, keyed by upstream id."""
+        commit = commit or self._resolve_commit()
+        cached = self._layouts.get(commit)
+        if cached is not None:
+            return cached
+        try:
+            items = decompose_tree(
+                sorted(self._tree_entries(commit)),
+                layout=self.layout,
+                root_name=self._repository,
+            )
+        except AmbiguousItemLayout as exc:
+            raise AmbiguousItemLayout(f"{self._identity}: {exc}") from exc
+        resolved = {item.upstream_id: item for item in items}
+        self._layouts[commit] = resolved
+        return resolved
+
     def _enumerate_all(self) -> tuple[ProviderItem, ...]:
         if self._items is not None:
             return self._items
-        items: list[ProviderItem] = []
-        root_marker: str | None = None
-        for path in sorted(self._tree_entries()):
-            basename = path.rsplit("/", 1)[-1].lower()
-            if basename not in ITEM_MARKERS:
-                continue
-            if "/" not in path:
-                # A marker at the repository root means the repository *is* the
-                # item. Skipping it would drop an item silently, which is the
-                # failure mode the truncation guard also exists to prevent.
-                root_marker = path
-                items.append(
-                    ProviderItem(
-                        upstream_id=ROOT_ITEM_ID,
-                        upstream_name=self._repository,
-                        collection_membership=(),
-                        content_hint=path,
-                    )
-                )
-                continue
-            directory = path.rsplit("/", 1)[0]
-            segments = directory.split("/")
-            items.append(
-                ProviderItem(
-                    upstream_id=directory,
-                    upstream_name=segments[-1],
-                    collection_membership=tuple(segments[:-1]),
-                    content_hint=path,
-                )
+        self._items = tuple(
+            ProviderItem(
+                upstream_id=item.upstream_id,
+                upstream_name=item.upstream_name,
+                collection_membership=item.collection_membership,
+                content_hint=item.primary_path,
             )
-        if root_marker is not None and len(items) > 1:
-            # Ownership would be ambiguous: the root item's content is the whole
-            # repository, which contains the nested items' bytes as well. Two
-            # items owning the same bytes would give the slice-3 cache two
-            # receipts for one artifact. Refuse, and say why.
-            raise AmbiguousItemLayout(
-                f"{self._identity} declares a repository-level {root_marker} and "
-                f"{len(items) - 1} nested item(s); the root item's content would "
-                "contain the nested items' bytes, so item ownership is undefined"
-            )
-        self._items = tuple(items)
+            for item in self._layout().values()
+        )
         return self._items
 
     def _entry(self, upstream_id: str) -> dict[str, Any]:

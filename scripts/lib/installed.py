@@ -281,7 +281,7 @@ def _short_source(source: str, repo_root: Path | None) -> str:
     except Exception:
         parsed = None
 
-    if parsed and parsed.is_github() and parsed.org and parsed.repo:
+    if parsed and parsed.is_remote_repository() and parsed.org and parsed.repo:
         branch = parsed.branch or "HEAD"
         return f"{parsed.org}/{parsed.repo}@{branch}"
 

@@ -1,0 +1,2190 @@
+{
+ "bytes": {
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/SKILL.md": "---\nname: planf3\ndescription: Creates a concise engineering implementation plan based on user requirements and saves it to specs directory\nargument-hint: \"[user-prompt] [questionable]\"\n---\n\n# Plan F3\n\n## Purpose\n\nCreate a detailed, **HTML-first** implementation plan based on the `USER_PROMPT` variable. The plan is authored as a single self-contained `.html` page so it can be opened in a browser, embed focused images with a synced visual identity, and be created/updated/consumed by the agent trifecta (engineer, team, AI agents). Analyze the request, think through the implementation approach, follow the `## Instructions`, and work through the `## Workflow` to produce the plan from the `## Plan Template`.\n\n## Variables\n\nUSER_PROMPT: $1\nQUESTIONABLE: $2 - default false\nPLAN_OUTPUT_DIRECTORY: `specs/`\nPLAN_FILE: `PLAN_OUTPUT_DIRECTORY/<descriptive-kebab-name>.html`\nIMAGES_OUTPUT_DIR: `PLAN_OUTPUT_DIRECTORY/<plan-name>/`\nAI_DOCS: `AI_DOCS/`\nAPP_DOCS: `APP_DOCS/`\nIDE: `code`\nBROWSER: `chrome`\n\n## Instructions\n\n- IMPORTANT: If no `USER_PROMPT` is provided, stop and ask the user to provide it\n- Carefully analyze the user's requirements provided in the `USER_PROMPT` variable\n- Think deeply (ultrathink) about the best approach to implement the requested functionality or solve the problem\n- Explore the codebase to understand existing patterns, documentation, previous specs and architecture\n- The plan is **HTML-first**: produce a single self-contained `.html` document from the `## Plan Template` below\n- The template uses `{{PLACEHOLDER}}` variables \u2014 replace EVERY `{{...}}` with real content. Do not leave any `{{}}` token in the final file\n- Blocks marked with `<!-- repeat -->` are repeatable: duplicate them as many times as the plan needs (e.g. one block per phase, task, file, or Q&A entry) and delete the comment markers\n- Keep the document self-contained: all CSS lives in the single `<style>` block; do not link external stylesheets or scripts\n- Maintain a **synced visual identity** between the html styling and the generated images. We want a professional, focused, minimal theme based on the original `USER_PROMPT` that created the plan. The CSS custom properties in `:root` define the palette/typography. Any embedded image must be generated to match this same identity.\n- For every image created keep them professional and focused on one or two primary ideas. Keep text bloat down by minimizing the total number of sets of words requested in the image prompt under 10. The goal is to build images that aid the plan and convey the core information throughout the plan given the section the image was created for. \n- Build images for professional software engineers to convey exactly what is going to be built. Be sure to center and space images properly. \n- Embed images via the `{{...IMAGE}}` slots. During Create, leave them as commented placeholders noting the intended subject; the Image Generation workflow fills them later\n- Populate the metadata header (`created`, `modified`, `commits`, `agent`, `session`, back/forward references) \u2014 these are updatable across the plan's lifecycle. Every metadata field except `CREATED_ISO` is a comma-separated list that must only ever be appended to \u2014 never overwrite or remove existing entries\n- If `QUESTIONABLE` is true, actively surface open questions/assumptions in the toggleable Q&A section rather than silently deciding\n- Ensure the plan is detailed enough that another developer (or agent) could follow it to implement the solution\n- Include code examples or pseudo-code where appropriate to clarify complex concepts\n- Consider edge cases, error handling, and scalability concerns\n- Save the complete plan to `PLAN_FILE` using a descriptive kebab-case filename\n\n## Workflow\n\nBased on the `USER_PROMPT`, select the single best-matching workflow below and read its file for the step-by-step instructions before acting.\n\n| Workflow | When to call it | File to read |\n| --- | --- | --- |\n| Create Plan | The prompt asks to plan, spec, or design new work and no existing plan is referenced | `workflows/create-plan.md` |\n| Update Plan | The prompt asks to change, extend, or revise the content of an existing plan | `workflows/update-plan.md` |\n| Update References | The prompt asks to refresh plan metadata or back/forward references (created, modified, commits, agent, session) | `workflows/update-references.md` |\n| Build Plan | The prompt asks to implement, execute, or carry out the work described in an existing plan | `workflows/build-plan.md` |\n\n### Subworkflow\n\nCalled by other workflows rather than selected directly from the `USER_PROMPT`.\n\n| Subworkflow | When it's called | File to read |\n| --- | --- | --- |\n| Image Generation | Invoked by other workflows (e.g. Create Plan) to generate, fill, or regenerate the embedded images in a plan | `workflows/image-generation.md` |\n\n## Plan Template\n\n```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Plan: {{PLAN_TITLE}}</title>\n</head>\n<body>\n<main>\n\n  <!-- ===== HEADER + UPDATABLE METADATA ===== -->\n  <header>\n    <h1>Plan: {{PLAN_TITLE}}</h1>\n    <details class=\"meta\">\n      <summary>Metadata</summary>\n      <dl>\n        <dt>created</dt>      <dd>{{CREATED_ISO}}</dd>\n        <dt>modified</dt>     <dd>{{MODIFIED_ISO_LIST}}</dd>\n        <dt>commits</dt>      <dd>{{COMMIT_SHA_LIST}}</dd>\n        <dt>agent name</dt>        <dd>{{AGENT_NAME_LIST}}</dd>\n        <dt>session id</dt>      <dd>{{SESSION_ID_LIST}}</dd>\n        <dt>back refs</dt>    <dd>{{BACK_REFERENCES}}</dd>\n        <dt>forward refs</dt> <dd>{{FORWARD_REFERENCES}}</dd>\n      </dl>\n    </details>\n  </header>\n\n  <!-- Hero image \u2014 synced to the :root visual identity. Replace with <img> once generated. -->\n  <figure>\n    <!-- {{HERO_IMAGE: subject describing the plan at a glance}} -->\n    <figcaption>{{HERO_IMAGE_CAPTION}}</figcaption>\n  </figure>\n\n  <!-- ===== PURPOSE / PROBLEM / SOLUTION ===== -->\n  <section id=\"purpose\">\n    <h2>Purpose</h2>\n    <p>{{PURPOSE}}</p>\n  </section>\n\n  <section id=\"problem\">\n    <h2>Problem</h2>\n    <p>{{PROBLEM}}</p>\n    <figure>\n      <!-- {{PROBLEM_IMAGE: subject visualizing the problem this plan addresses}} -->\n      <figcaption>{{PROBLEM_IMAGE_CAPTION}}</figcaption>\n    </figure>\n  </section>\n\n  <section id=\"solution\">\n    <h2>Solution</h2>\n    <p>{{SOLUTION}}</p>\n    <figure>\n      <!-- {{SOLUTION_IMAGE: subject visualizing the proposed solution}} -->\n      <figcaption>{{SOLUTION_IMAGE_CAPTION}}</figcaption>\n    </figure>\n  </section>\n\n  <!-- ===== RELEVANT FILES ===== -->\n  <section id=\"files\" class=\"files\">\n    <h2>Relevant Files</h2>\n\n    <h3>Existing Files</h3>\n    <ul>\n      <!-- repeat -->\n      <li><span class=\"tag existing\">existing</span> <code>{{EXISTING_FILE_PATH}}</code> \u2014 {{WHY_RELEVANT}}</li>\n    </ul>\n\n    <h3>New Files</h3>\n    <ul>\n      <!-- repeat -->\n      <li><span class=\"tag new\">new</span> <code>{{NEW_FILE_PATH}}</code> \u2014 {{WHY_NEEDED}}</li>\n    </ul>\n  </section>\n\n  <!-- ===== IMPLEMENTATION PHASES ===== -->\n  <section id=\"phases\">\n    <h2>Implementation Phases</h2>\n    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>\n    <p>Status markers: <code>[]</code> idle \u00b7 <code>[wip]</code> in progress \u00b7 <code>[x]</code> complete \u00b7 <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>\n\n    <!-- repeat: one .phase block per phase -->\n    <div class=\"phase\">\n      <h3><code class=\"status\">[]</code> Phase {{PHASE_NUMBER}}: {{PHASE_NAME}}</h3>\n      <p>{{PHASE_DESCRIPTION}}</p>\n\n      <!-- Optional focused image for this phase, synced to :root identity -->\n      <figure>\n        <!-- {{PHASE_IMAGE: subject describing this phase's architecture/flow}} -->\n        <figcaption>{{PHASE_IMAGE_CAPTION}}</figcaption>\n      </figure>\n\n      <!-- repeat: one <h4> + checklist per task -->\n      <h4>{{TASK_NUMBER}}. {{TASK_NAME}}</h4>\n      <ul class=\"checklist\">\n        <!-- repeat -->\n        <li><code class=\"status\">[]</code> {{SPECIFIC_ACTION}}</li>\n      </ul>\n\n      <!-- Final task of every phase: Testing Strategy + validation loop -->\n      <h4>{{LAST_TASK_NUMBER}}. Testing Strategy</h4>\n      <p>{{TESTING_APPROACH: technology used to test/validate, including edge cases}}</p>\n      <ul class=\"checklist\">\n        <!-- repeat -->\n        <li><code class=\"status\">[]</code> <code>{{VALIDATION_COMMAND}}</code> \u2014 {{WHAT_IT_PROVES}}</li>\n      </ul>\n      <div class=\"loop\">\n        \ud83d\udd01 <strong>Do not exit this phase until every box above is checked.</strong>\n        If any command fails, fix the cause and re-run \u2014 loop until all pass.\n      </div>\n    </div>\n  </section>\n\n  <!-- ===== GLOBAL VALIDATION ===== -->\n  <section id=\"validation\">\n    <h2>Validation Commands</h2>\n    <p>Execute these commands to validate the entire plan is complete:</p>\n    <ul class=\"checklist\">\n      <!-- repeat -->\n      <li><code class=\"status\">[]</code> <code>{{VALIDATION_COMMAND}}</code> \u2014 {{WHAT_IT_PROVES}}</li>\n    </ul>\n    <div class=\"loop\">\n      \ud83d\udd01 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>\n    </div>\n  </section>\n\n  <!-- ===== QUESTIONABLES (only include this section if QUESTIONABLE is true) ===== -->\n  <section id=\"questionables\">\n    <h2>Questionables</h2>\n    <!-- Optional image for this section, synced to :root identity -->\n    <figure>\n      <!-- {{QUESTIONABLES_IMAGE: subject visualizing the key open question/risk}} -->\n      <figcaption>{{QUESTIONABLES_IMAGE_CAPTION}}</figcaption>\n    </figure>\n    <!-- repeat: one <details> per questionable decision / assumption / risk -->\n    <details>\n      <summary>{{QUESTIONABLE}}</summary>\n      <p class=\"qa-answer\">{{ASSUMPTION_OR_RATIONALE}}</p>\n    </details>\n  </section>\n\n  <!-- ===== NOTES ===== -->\n  <!-- Open canvas \u2014 the planning agent runs free here. There is no fixed shape:\n       use whatever HTML best serves the plan (prose, lists, tables, code blocks,\n       diagrams, callouts, decision logs, alternatives considered, open threads,\n       links, anything). Embed as many image slots as the plan benefits from. -->\n  <section id=\"notes\">\n    <h2>Notes</h2>\n    {{NOTES: free-form. Capture anything that helps the trifecta understand, build,\n      or extend this plan \u2014 context, dependencies (new libraries via `uv add`),\n      tradeoffs, rejected approaches, risks, future work, references. Author rich,\n      bespoke HTML as needed.}}\n    <!-- repeat: add as many of these image slots as the notes warrant including the image block below -->\n    <figure>\n      <!-- {{NOTES_IMAGE: subject for a note worth visualizing}} -->\n      <figcaption>{{NOTES_IMAGE_CAPTION}}</figcaption>\n    </figure>\n  </section>\n\n  <!-- ===== AMENDMENTS ===== -->\n  <!-- Running history of changes made AFTER the plan was first executed. Append-only.\n       Populated by the Update Plan and Update References workflows \u2014 never edited during Create. -->\n  <section id=\"amendments\">\n    <h2>Amendments</h2>\n    <!-- repeat: one entry per amendment, newest at the bottom -->\n    <details>\n      <summary>{{AMEND_ISO}} \u2014 {{AMEND_SUMMARY}}</summary>\n      <p>{{AMEND_DETAIL: what changed and why}}</p>\n    </details>\n  </section>\n\n</main>\n</body>\n</html>\n```",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/scripts/edit_gpt_image.py": "#!/usr/bin/env -S uv run\n# /// script\n# requires-python = \">=3.10\"\n# dependencies = [\n#     \"openai>=1.50.0\",\n#     \"python-dotenv>=1.0.0\",\n# ]\n# ///\n\"\"\"\nEdit existing images using OpenAI's gpt-image-2 (ChatGPT Images 2.0).\n\nPass one or more input images. With multiple inputs, gpt-image-2 composes them.\n\nUsage:\n    python edit_gpt_image.py input.png \"edit instruction\" output.png [options]\n    python edit_gpt_image.py \"Put cat on couch\" result.png cat.png couch.png [options]\n\nExamples:\n    python edit_gpt_image.py photo.png \"Add a rainbow in the sky\" edited.png\n    python edit_gpt_image.py \"Make a group photo\" group.png p1.png p2.png p3.png\n\nEnvironment:\n    OPENAI_API_KEY - Required API key\n\"\"\"\n\nimport argparse\nimport base64\nimport os\nimport shutil\nimport sys\nfrom datetime import datetime\nfrom pathlib import Path\n\nfrom dotenv import load_dotenv\nfrom openai import OpenAI\n\nload_dotenv(Path.cwd() / \".env\")\n\n\nVALID_QUALITY = [\"auto\", \"low\", \"medium\", \"high\"]\nVALID_FORMATS = [\"png\", \"jpeg\", \"webp\"]\n# gpt-image-2 does NOT support \"transparent\" \u2014 only opaque/auto.\nVALID_BACKGROUND = [\"auto\", \"opaque\"]\n\n\ndef backup_if_exists(output_path: str) -> None:\n    \"\"\"Copy an existing output file into ./backup/ before it gets overwritten.\n\n    Edits often target a path that already holds an image (sometimes the input\n    itself), so back the original up first \u2014 losing it to an edit is silent and\n    unrecoverable. backup/ self-ignores via a backup/.gitignore of \"*\".\n    \"\"\"\n    out = Path(output_path)\n    if not out.exists():\n        return\n    backup_dir = Path.cwd() / \"backup\"\n    backup_dir.mkdir(exist_ok=True)\n    gitignore = backup_dir / \".gitignore\"\n    if not gitignore.exists():\n        gitignore.write_text(\"*\\n\")\n    ts = datetime.now().strftime(\"%Y%m%d-%H%M%S\")\n    dest = backup_dir / f\"{out.stem}_{ts}{out.suffix}\"\n    counter = 1\n    while dest.exists():\n        dest = backup_dir / f\"{out.stem}_{ts}_{counter}{out.suffix}\"\n        counter += 1\n    shutil.copy2(out, dest)\n    print(f\"Backed up existing {output_path} -> {dest}\")\n\n\ndef edit_gpt_image(\n    input_paths: list[str],\n    instruction: str,\n    output_path: str,\n    model: str = \"gpt-image-2\",\n    size: str = \"auto\",\n    quality: str = \"auto\",\n    output_format: str = \"png\",\n    output_compression: int | None = None,\n    mask_path: str | None = None,\n    background: str = \"auto\",\n) -> None:\n    \"\"\"Edit/compose images using gpt-image-2.\"\"\"\n    api_key = os.environ.get(\"OPENAI_API_KEY\")\n    if not api_key:\n        raise EnvironmentError(\"OPENAI_API_KEY environment variable not set\")\n\n    for p in input_paths:\n        if not os.path.exists(p):\n            raise FileNotFoundError(f\"Input image not found: {p}\")\n\n    client = OpenAI(api_key=api_key)\n\n    image_files = [open(p, \"rb\") for p in input_paths]\n    try:\n        kwargs = {\n            \"model\": model,\n            \"image\": image_files if len(image_files) > 1 else image_files[0],\n            \"prompt\": instruction,\n            \"size\": size,\n            \"quality\": quality,\n            \"output_format\": output_format,\n            \"background\": background,\n        }\n        if output_compression is not None and output_format in {\"jpeg\", \"webp\"}:\n            kwargs[\"output_compression\"] = output_compression\n        if mask_path:\n            if not os.path.exists(mask_path):\n                raise FileNotFoundError(f\"Mask not found: {mask_path}\")\n            kwargs[\"mask\"] = open(mask_path, \"rb\")\n\n        print(f\"Model:      {model}\")\n        print(f\"Inputs:     {', '.join(input_paths)}\")\n        print(f\"Size:       {size}\")\n        print(f\"Quality:    {quality}\")\n        print(f\"Format:     {output_format}\")\n        print(f\"Background: {background}\")\n        print(f\"Prompt:     {instruction[:120]}{'...' if len(instruction) > 120 else ''}\")\n        print()\n        print(\"Editing image...\")\n\n        result = client.images.edit(**kwargs)\n    finally:\n        for f in image_files:\n            f.close()\n        if mask_path and \"mask\" in kwargs:\n            kwargs[\"mask\"].close()\n\n    item = result.data[0]\n    backup_if_exists(output_path)\n    Path(output_path).write_bytes(base64.b64decode(item.b64_json))\n    print(f\"Saved: {output_path}\")\n\n    if getattr(result, \"usage\", None):\n        print(f\"Usage: {result.usage}\")\n\n\ndef main():\n    parser = argparse.ArgumentParser(\n        description=\"Edit/compose images using OpenAI gpt-image-2\",\n        formatter_class=argparse.RawDescriptionHelpFormatter,\n        epilog=__doc__,\n    )\n    parser.add_argument(\"instruction\", help=\"Edit/compose instruction\")\n    parser.add_argument(\"output\", help=\"Output file path\")\n    parser.add_argument(\n        \"inputs\",\n        nargs=\"+\",\n        help=\"One or more input image paths (multiple = composition)\",\n    )\n    parser.add_argument(\n        \"--model\",\n        \"-m\",\n        default=\"gpt-image-2\",\n        help=\"Model ID (default: gpt-image-2)\",\n    )\n    parser.add_argument(\n        \"--size\",\n        \"-s\",\n        default=\"auto\",\n        help=\"Image size WxH (default: auto). E.g. 1024x1024, 1536x1024, 2048x2048.\",\n    )\n    parser.add_argument(\n        \"--quality\",\n        \"-q\",\n        default=\"auto\",\n        choices=VALID_QUALITY,\n        help=\"Quality tier (default: auto)\",\n    )\n    parser.add_argument(\n        \"--format\",\n        \"-f\",\n        default=\"png\",\n        choices=VALID_FORMATS,\n        help=\"Output format (default: png)\",\n    )\n    parser.add_argument(\n        \"--compression\",\n        type=int,\n        default=None,\n        help=\"Output compression 0-100 (jpeg/webp only)\",\n    )\n    parser.add_argument(\n        \"--mask\",\n        default=None,\n        help=\"Optional mask PNG (transparent areas = regions to edit)\",\n    )\n    parser.add_argument(\n        \"--background\",\n        default=\"auto\",\n        choices=VALID_BACKGROUND,\n        help=(\n            \"Background mode (default: auto). gpt-image-2 supports only \"\n            \"'auto' or 'opaque' \u2014 'transparent' is NOT supported by this model.\"\n        ),\n    )\n\n    args = parser.parse_args()\n\n    try:\n        edit_gpt_image(\n            input_paths=args.inputs,\n            instruction=args.instruction,\n            output_path=args.output,\n            model=args.model,\n            size=args.size,\n            quality=args.quality,\n            output_format=args.format,\n            output_compression=args.compression,\n            mask_path=args.mask,\n            background=args.background,\n        )\n    except Exception as e:\n        print(f\"Error: {e}\", file=sys.stderr)\n        sys.exit(1)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/scripts/generate_gpt_image.py": "#!/usr/bin/env -S uv run\n# /// script\n# requires-python = \">=3.10\"\n# dependencies = [\n#     \"openai>=1.50.0\",\n#     \"python-dotenv>=1.0.0\",\n# ]\n# ///\n\"\"\"\nGenerate images using OpenAI's gpt-image-2 (ChatGPT Images 2.0).\n\nUsage:\n    python generate_gpt_image.py \"prompt\" output.png [options]\n\nExamples:\n    python generate_gpt_image.py \"A sunset over mountains\" sunset.png\n    python generate_gpt_image.py \"Company logo\" logo.png --size 1024x1024 --quality high\n    python generate_gpt_image.py \"Wide cinematic shot\" wide.png --size 2048x1152\n\nEnvironment:\n    OPENAI_API_KEY - Required API key\n\"\"\"\n\nimport argparse\nimport base64\nimport os\nimport sys\nfrom pathlib import Path\n\nfrom dotenv import load_dotenv\nfrom openai import OpenAI\n\nload_dotenv(Path.cwd() / \".env\")\n\n\nVALID_QUALITY = [\"auto\", \"low\", \"medium\", \"high\"]\nVALID_FORMATS = [\"png\", \"jpeg\", \"webp\"]\nVALID_MODERATION = [\"auto\", \"low\"]\n# gpt-image-2 does NOT support \"transparent\" \u2014 only opaque/auto.\nVALID_BACKGROUND = [\"auto\", \"opaque\"]\n\n# Popular sizes \u2014 gpt-image-2 also accepts any custom size meeting:\n#   max edge \u2264 3840, both edges multiples of 16, aspect \u2264 3:1, 655360\u20138294400 total px\nPOPULAR_SIZES = [\n    \"auto\",\n    \"1024x1024\",\n    \"1536x1024\",\n    \"1024x1536\",\n    \"2048x2048\",\n    \"2048x1152\",\n    \"1152x2048\",\n    \"3840x2160\",\n    \"2160x3840\",\n]\n\n\ndef generate_gpt_image(\n    prompt: str,\n    output_path: str,\n    model: str = \"gpt-image-2\",\n    size: str = \"auto\",\n    quality: str = \"auto\",\n    n: int = 1,\n    output_format: str = \"png\",\n    output_compression: int | None = None,\n    moderation: str = \"auto\",\n    background: str = \"auto\",\n) -> None:\n    \"\"\"Generate one or more images using gpt-image-2.\"\"\"\n    api_key = os.environ.get(\"OPENAI_API_KEY\")\n    if not api_key:\n        raise EnvironmentError(\"OPENAI_API_KEY environment variable not set\")\n\n    client = OpenAI(api_key=api_key)\n\n    kwargs = {\n        \"model\": model,\n        \"prompt\": prompt,\n        \"size\": size,\n        \"quality\": quality,\n        \"n\": n,\n        \"output_format\": output_format,\n        \"moderation\": moderation,\n        \"background\": background,\n    }\n    if output_compression is not None and output_format in {\"jpeg\", \"webp\"}:\n        kwargs[\"output_compression\"] = output_compression\n\n    print(f\"Model:      {model}\")\n    print(f\"Size:       {size}\")\n    print(f\"Quality:    {quality}\")\n    print(f\"Format:     {output_format}\")\n    print(f\"Background: {background}\")\n    print(f\"Count:      {n}\")\n    print(f\"Prompt:     {prompt[:120]}{'...' if len(prompt) > 120 else ''}\")\n    print()\n    print(\"Generating image...\")\n\n    result = client.images.generate(**kwargs)\n\n    out = Path(output_path)\n    for i, item in enumerate(result.data):\n        if n == 1:\n            target = out\n        else:\n            target = out.with_name(f\"{out.stem}_{i + 1}{out.suffix}\")\n        target.write_bytes(base64.b64decode(item.b64_json))\n        print(f\"Saved: {target}\")\n\n    if getattr(result, \"usage\", None):\n        print(f\"Usage: {result.usage}\")\n\n\ndef main():\n    parser = argparse.ArgumentParser(\n        description=\"Generate images using OpenAI gpt-image-2\",\n        formatter_class=argparse.RawDescriptionHelpFormatter,\n        epilog=__doc__,\n    )\n    parser.add_argument(\"prompt\", help=\"Text prompt describing the image\")\n    parser.add_argument(\"output\", help=\"Output file path (e.g., output.png)\")\n    parser.add_argument(\n        \"--model\",\n        \"-m\",\n        default=\"gpt-image-2\",\n        help=\"Model ID (default: gpt-image-2; pin a snapshot e.g. gpt-image-2-2026-04-21)\",\n    )\n    parser.add_argument(\n        \"--size\",\n        \"-s\",\n        default=\"auto\",\n        help=(\n            \"Image size WxH (default: auto). Popular: \"\n            + \", \".join(POPULAR_SIZES)\n            + \". Custom sizes allowed: max edge \u22643840, multiples of 16, aspect \u22643:1.\"\n        ),\n    )\n    parser.add_argument(\n        \"--quality\",\n        \"-q\",\n        default=\"auto\",\n        choices=VALID_QUALITY,\n        help=\"Quality tier (default: auto)\",\n    )\n    parser.add_argument(\n        \"--count\",\n        \"-n\",\n        type=int,\n        default=1,\n        help=\"Number of images to generate (default: 1; suffixes _1, _2, ... when >1)\",\n    )\n    parser.add_argument(\n        \"--format\",\n        \"-f\",\n        default=\"png\",\n        choices=VALID_FORMATS,\n        help=\"Output format (default: png)\",\n    )\n    parser.add_argument(\n        \"--compression\",\n        type=int,\n        default=None,\n        help=\"Output compression 0-100 (jpeg/webp only)\",\n    )\n    parser.add_argument(\n        \"--moderation\",\n        default=\"auto\",\n        choices=VALID_MODERATION,\n        help=\"Moderation strictness (default: auto)\",\n    )\n    parser.add_argument(\n        \"--background\",\n        default=\"auto\",\n        choices=VALID_BACKGROUND,\n        help=(\n            \"Background mode (default: auto). gpt-image-2 supports only \"\n            \"'auto' or 'opaque' \u2014 'transparent' is NOT supported by this model.\"\n        ),\n    )\n\n    args = parser.parse_args()\n\n    try:\n        generate_gpt_image(\n            prompt=args.prompt,\n            output_path=args.output,\n            model=args.model,\n            size=args.size,\n            quality=args.quality,\n            n=args.count,\n            output_format=args.format,\n            output_compression=args.compression,\n            moderation=args.moderation,\n            background=args.background,\n        )\n    except Exception as e:\n        print(f\"Error: {e}\", file=sys.stderr)\n        sys.exit(1)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/workflows/build-plan.md": "# Build Plan\n\nTask status markers: `[]` idle \u00b7 `[wip]` in progress \u00b7 `[x]` complete \u00b7 `[f]` failed.\n\n1. Locate the Plan - From the `USER_PROMPT`, resolve the path to the target plan `.html` file; if no path is given, infer the most likely plan from `PLAN_OUTPUT_DIRECTORY` and confirm before building\n2. Absorb Context - Read the full plan: all embedded images, the metadata header, and every back reference (depth 1) so you fully understand prior/related work before writing code\n3. Execute Phases - For each phase in order, top to bottom:\n   - Announce the phase you are starting\n   - Set the phase and current task marker to `[wip]` in the plan file\n   - Implement the task's specific actions\n   - Run that phase's Testing Strategy commands; loop on failure until they pass\n   - Mark each task `[x]` when complete or `[f]` if it cannot be made to pass, then move on\n   - Do not start the next phase until the current phase's tasks and tests resolve\n4. Final Validation - Run the global Validation Commands and confirm every box passes\n5. Update Metadata - Append the current ISO timestamp to `modified`, append agent name / session id, and append the relevant commit SHA(s) to the metadata header\n6. Report - Summarize what was built per phase, the final status of every task, and any `[f]` failures that need attention\n",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/workflows/create-plan.md": "# Create Plan\n\n1. Analyze Requirements - THINK HARD and parse the `USER_PROMPT` to understand the core problem and desired outcome\n2. Explore Codebase - Understand existing patterns, architecture, relevant files, and prior specs to back-reference. Read `AI_DOCS` for AI/agent-facing documentation and `APP_DOCS` for application documentation to ground the plan.\n3. Design Solution - Develop technical approach including architecture decisions and implementation strategy\n4. Author HTML Plan - Fill the `## Plan Template`, replacing every `{{PLACEHOLDER}}` and repeating `<!-- repeat -->` blocks as needed\n5. Generate Images - Run the Create sub-workflow in `workflows/image-generation.md` to fill the `{{...IMAGE` slots. Parallelize the image generation as there's no reason to block here.\n6. Surface Questionables - If `QUESTIONABLE` is true, populate the conditional Questionables section with open decisions/assumptions/risks; otherwise omit the section\n7. Generate Filename - Create a descriptive kebab-case filename based on the plan's main topic\n8. Save - Write the plan to `PLAN_FILE` and provide a summary of key components\n9. Open in Browser - Open the saved plan in `BROWSER` (e.g. `open -a \"Google Chrome\" PLAN_FILE`)\n",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/workflows/image-generation.md": "# Image Generation\n\nFill or update the embedded images in an existing plan `.html` file. Pick the sub-workflow based on the incoming `USER_PROMPT`:\n\n| Sub-workflow | When to call it |\n| --- | --- |\n| Create | The prompt asks to generate, fill, or add the plan's images from scratch (empty `{{...IMAGE` slots) |\n| Update | The prompt asks to change, refine, regenerate, or replace images that already exist in the plan |\n\nScripts (run with `uv run`, needs `OPENAI_API_KEY`):\n- Create image: `uv run scripts/generate_gpt_image.py \"<prompt>\" <output.png> --size 1536x1024 --quality high`\n- Edit image: `uv run scripts/edit_gpt_image.py \"<instruction>\" <output.png> <input.png> --size 1536x1024 --quality high`\n\nShared rules for every image prompt:\n- always generate in wide format (`--size 1536x1024`) at high quality (`--quality high`)\n- convey the one or two core ideas of that section for a professional software engineer\n- match the plan's synced visual identity (professional, focused, minimal)\n- keep total words shown in the image under 10\n- save images to `IMAGES_OUTPUT_DIR` (create it if missing)\n\n## Create\n\n1. Find slots - Grep the plan for `{{...IMAGE` placeholders (hero + per-phase). Each comment names the intended subject.\n2. Write prompts - For each slot, write a prompt following the shared rules above.\n3. Generate - Run `generate_gpt_image.py` once per slot, writing to `IMAGES_OUTPUT_DIR`.\n4. Embed - Replace each `<!-- {{...IMAGE: ...}} -->` placeholder with `<img src=\"<plan-name>/<file>.png\" alt=\"...\">`, keeping the existing `<figure>`/`<figcaption>`.\n5. Report - List the images generated and the slots filled.\n\n## Update\n\n1. Identify targets - From the `USER_PROMPT`, determine which embedded `<img>` images to change.\n2. Write instruction - Write an edit instruction describing the change, following the shared rules above.\n3. Edit - Run `edit_gpt_image.py` with the existing PNG as input, overwriting it (the script backs up the original first).\n4. Verify embed - Confirm the `<img>` still points at the updated file; update `src`/`alt`/`<figcaption>` if the change warrants it.\n5. Report - List the images updated and what changed.\n",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/workflows/update-plan.md": "# Update Plan\n\n1. Identify the Plan - From the `USER_PROMPT`, locate the target plan `.html` file to modify\n2. Scope the Change - THINK HARD about exactly what the prompt asks to change, extend, or revise; keep the edit surgical and touch only the affected sections\n3. Apply the Change - Edit the relevant plan sections in place, preserving existing structure, content, and `{{...}}` conventions\n4. Update Metadata - Append the current ISO timestamp to `modified` and append the agent name / session id to their lists; never overwrite existing metadata entries\n5. Record Amendment - Append a new entry to the Amendments section (newest at the bottom) summarizing what changed and why\n6. Report - Summarize the change made and the amendment recorded\n",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/.claude/skills/planf3/workflows/update-references.md": "# Update References\n\n1. Identify the Plan - From the `USER_PROMPT`, locate the target plan `.html` file to update\n2. Identify Related Work - Determine the other plan(s)/doc(s) and the link direction: back reference (work this plan builds on or depends on) or forward reference (work that builds on or extends this plan)\n3. Update This Plan - Edit the target plan's metadata header, adding the link to `{{BACK_REFERENCES}}` or `{{FORWARD_REFERENCES}}` (relative path + short label) without duplicating an existing reference\n4. Update the Other Side - For each related plan, add the reciprocal reference so links stay bidirectional, then append the current ISO timestamp to `modified` on every plan touched\n5. Record Amendment - Append a new entry to the Amendments section of each plan touched (newest at the bottom) noting the references added\n6. Report - List each plan touched and the references added in each direction\n",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/prompts/pi-iroh-coms.md": "# Task\n\nReimplement `github: disler: disler/pi-vs-claude-code: extensions/coms-net` using `iroh`\n\n## Requirements\n\nReach feature parity one to one.\n\nThe most important piece is to make sure its a 1 step 1 time configuration. So we need static resources.\n\nWe don't want to have to point any agent to any resource aside from the 1 time env variable setup.\n\nThis lets our pi agents communicate via fast, secure peer-to-peer-to-peer network thanks to iroh.\n\nUse Python SDK. \n\nUse /firecrawl to research.\n\nKeep all work (git clone) minus your final plan output in a tmp dir.\n\n## Documentation\n\nhttps://docs.iroh.computer/what-is-iroh\nhttps://docs.iroh.computer/languages/python\nhttps://n0-computer.github.io/iroh-ffi/python/iroh/iroh_ffi.html",
+  "https://raw.githubusercontent.com/disler/planf3/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0/specs/pi-iroh-coms-net.html": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Plan: coms-net on iroh \u2014 Serverless P2P Agent Mesh</title>\n<style>\n  :root {\n    /* \u2500\u2500 Synced visual identity (shared by CSS + generated images) \u2500\u2500 */\n    --bg:        #0E1116;   /* deep slate, near-black            */\n    --surface:   #161B22;   /* raised panels                    */\n    --surface-2: #1C2230;   /* nested panels                    */\n    --border:    #2A3344;   /* hairline borders                 */\n    --text:      #E6EAF2;   /* primary text                     */\n    --muted:     #9AA7BD;   /* secondary text                   */\n    --dim:       #5C6B85;   /* tertiary text                    */\n    --violet:    #8B7FF7;   /* primary accent (iroh-ish)        */\n    --cyan:      #2DD4BF;   /* secondary accent (mesh links)    */\n    --amber:     #F5B547;   /* highlight / warnings             */\n    --green:     #4ADE80;   /* success / complete               */\n    --red:       #F87171;   /* failure                          */\n    --radius:    14px;\n    --mono: ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, monospace;\n    --sans: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, Roboto, sans-serif;\n  }\n\n  * { box-sizing: border-box; }\n  html { scroll-behavior: smooth; }\n  body {\n    margin: 0;\n    background:\n      radial-gradient(1200px 600px at 80% -10%, rgba(139,127,247,0.10), transparent 60%),\n      radial-gradient(1000px 500px at -10% 10%, rgba(45,212,191,0.07), transparent 55%),\n      var(--bg);\n    color: var(--text);\n    font-family: var(--sans);\n    line-height: 1.65;\n    font-size: 16px;\n    -webkit-font-smoothing: antialiased;\n  }\n  main { max-width: 920px; margin: 0 auto; padding: 56px 24px 120px; }\n\n  /* \u2500\u2500 Header \u2500\u2500 */\n  header h1 {\n    font-size: clamp(1.9rem, 4vw, 2.7rem);\n    line-height: 1.12;\n    margin: 0 0 6px;\n    letter-spacing: -0.02em;\n    background: linear-gradient(100deg, var(--text) 30%, var(--violet) 70%, var(--cyan));\n    -webkit-background-clip: text; background-clip: text;\n    -webkit-text-fill-color: transparent;\n  }\n  .tagline { color: var(--muted); font-size: 1.05rem; margin: 0 0 18px; }\n\n  details.meta {\n    background: var(--surface);\n    border: 1px solid var(--border);\n    border-radius: var(--radius);\n    padding: 10px 16px;\n    margin-bottom: 8px;\n    font-size: 0.86rem;\n  }\n  details.meta summary {\n    cursor: pointer; color: var(--violet); font-weight: 600;\n    font-family: var(--mono); letter-spacing: 0.02em;\n  }\n  details.meta dl {\n    display: grid; grid-template-columns: 130px 1fr;\n    gap: 4px 14px; margin: 12px 0 4px;\n  }\n  details.meta dt { color: var(--dim); font-family: var(--mono); font-size: 0.8rem; }\n  details.meta dd { margin: 0; color: var(--muted); font-family: var(--mono); font-size: 0.8rem; word-break: break-word; }\n\n  /* \u2500\u2500 Sections \u2500\u2500 */\n  section { margin-top: 52px; scroll-margin-top: 24px; }\n  h2 {\n    font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 14px;\n    padding-bottom: 8px; border-bottom: 1px solid var(--border);\n  }\n  h2::before { content: \"\u259a \"; color: var(--violet); }\n  h3 { font-size: 1.18rem; margin: 26px 0 10px; color: var(--text); }\n  h4 { font-size: 1rem; margin: 20px 0 8px; color: var(--cyan); font-family: var(--mono); }\n  p { color: var(--text); }\n  a { color: var(--cyan); }\n\n  /* \u2500\u2500 Figures / images \u2500\u2500 */\n  figure { margin: 22px 0; text-align: center; }\n  figure img {\n    max-width: 100%; height: auto; border-radius: var(--radius);\n    border: 1px solid var(--border);\n    box-shadow: 0 10px 40px rgba(0,0,0,0.45);\n  }\n  figcaption { color: var(--dim); font-size: 0.82rem; margin-top: 10px; font-style: italic; }\n  .img-placeholder {\n    border: 1px dashed var(--border); border-radius: var(--radius);\n    padding: 30px; color: var(--dim); font-family: var(--mono); font-size: 0.8rem;\n    background: var(--surface);\n  }\n\n  /* \u2500\u2500 Code \u2500\u2500 */\n  code {\n    font-family: var(--mono); font-size: 0.86em;\n    background: var(--surface-2); color: var(--cyan);\n    padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border);\n  }\n  pre {\n    background: var(--surface); border: 1px solid var(--border);\n    border-radius: var(--radius); padding: 16px 18px; overflow-x: auto;\n    font-size: 0.84rem; line-height: 1.55;\n  }\n  pre code { background: none; border: none; padding: 0; color: var(--text); }\n  .tok-k { color: var(--violet); }\n  .tok-s { color: var(--green); }\n  .tok-c { color: var(--dim); font-style: italic; }\n  .tok-f { color: var(--cyan); }\n\n  /* \u2500\u2500 Lists \u2500\u2500 */\n  ul, ol { padding-left: 22px; }\n  li { margin: 5px 0; }\n  ul.checklist { list-style: none; padding-left: 4px; }\n  ul.checklist > li { margin: 7px 0; }\n\n  /* \u2500\u2500 Tags \u2500\u2500 */\n  .tag {\n    font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase;\n    letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px;\n    border: 1px solid var(--border); vertical-align: middle;\n  }\n  .tag.existing { color: var(--amber); border-color: rgba(245,181,71,0.4); background: rgba(245,181,71,0.08); }\n  .tag.new { color: var(--green); border-color: rgba(74,222,128,0.4); background: rgba(74,222,128,0.08); }\n\n  .status { font-weight: 700; color: var(--dim); }\n\n  /* \u2500\u2500 Phase blocks \u2500\u2500 */\n  .phase {\n    background: var(--surface);\n    border: 1px solid var(--border);\n    border-left: 3px solid var(--violet);\n    border-radius: var(--radius);\n    padding: 4px 22px 22px;\n    margin: 22px 0;\n  }\n  .phase h3 { color: var(--text); }\n  .phase h3 .status { margin-right: 6px; }\n\n  .loop {\n    margin-top: 16px; padding: 12px 16px;\n    background: rgba(45,212,191,0.06);\n    border: 1px solid rgba(45,212,191,0.3);\n    border-radius: 10px; font-size: 0.9rem; color: var(--text);\n  }\n\n  /* \u2500\u2500 Callouts \u2500\u2500 */\n  .callout {\n    border-radius: var(--radius); padding: 14px 18px; margin: 18px 0;\n    border: 1px solid var(--border); background: var(--surface-2);\n  }\n  .callout.warn { border-color: rgba(245,181,71,0.4); background: rgba(245,181,71,0.06); }\n  .callout.key  { border-color: rgba(139,127,247,0.45); background: rgba(139,127,247,0.07); }\n  .callout .lbl { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--violet); display:block; margin-bottom: 4px; }\n  .callout.warn .lbl { color: var(--amber); }\n\n  /* \u2500\u2500 Tables \u2500\u2500 */\n  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 0.88rem; }\n  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }\n  th { color: var(--violet); font-family: var(--mono); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }\n  td code { font-size: 0.82em; }\n  .yes { color: var(--green); } .no { color: var(--red); } .chg { color: var(--amber); }\n\n  details.qa, details.amend {\n    background: var(--surface); border: 1px solid var(--border);\n    border-radius: 10px; padding: 10px 16px; margin: 10px 0;\n  }\n  details.qa summary, details.amend summary { cursor: pointer; color: var(--cyan); font-weight: 600; }\n  .qa-answer { color: var(--muted); margin-top: 10px; }\n\n  hr.soft { border: none; border-top: 1px solid var(--border); margin: 34px 0; }\n  .pill { font-family: var(--mono); font-size: 0.72rem; color: var(--cyan); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; }\n</style>\n</head>\n<body>\n<main>\n\n  <!-- ===== HEADER + UPDATABLE METADATA ===== -->\n  <header>\n    <h1>coms-net on iroh</h1>\n    <p class=\"tagline\">Reimplement the pi agent communication network as a <strong>serverless, peer-to-peer-to-peer</strong> mesh on <strong>iroh</strong> \u2014 one env var, zero servers, zero tokens, full feature parity.</p>\n    <details class=\"meta\">\n      <summary>Metadata</summary>\n      <dl>\n        <dt>created</dt>      <dd>2026-06-16T13:39:57-05:00</dd>\n        <dt>modified</dt>     <dd>2026-06-16T13:39:57-05:00</dd>\n        <dt>commits</dt>      <dd>4235190</dd>\n        <dt>agent name</dt>   <dd>claude-opus-4-8[1m]</dd>\n        <dt>session id</dt>   <dd>planf3-pi-iroh-coms-net</dd>\n        <dt>back refs</dt>    <dd>pi-iroh-coms.md, github:disler/pi-vs-claude-code (extensions/coms-net.ts, scripts/coms-net-server.ts)</dd>\n        <dt>forward refs</dt> <dd>\u2014</dd>\n      </dl>\n    </details>\n  </header>\n\n  <!-- Hero image \u2014 synced to the :root visual identity. -->\n  <figure>\n    <img src=\"pi-iroh-coms-net/hero.png\" alt=\"A decentralized mesh of glowing pi agent nodes connected peer-to-peer over iroh, no central server.\">\n\n    <figcaption>pi agents forming a direct iroh gossip mesh \u2014 the swarm <em>is</em> the hub.</figcaption>\n  </figure>\n\n  <!-- ===== PURPOSE ===== -->\n  <section id=\"purpose\">\n    <h2>Purpose</h2>\n    <p>\n      Port <code>extensions/coms-net.ts</code> (the pi agent-to-agent communication network) off its central\n      <strong>Bun HTTP/SSE hub</strong> and onto <strong>iroh</strong> \u2014 a fast, secure, NAT-traversing peer-to-peer\n      transport \u2014 using the <strong>iroh Python SDK</strong>. The new system reaches <strong>1:1 feature parity</strong>\n      with the existing tool surface (<code>coms_net_list</code>, <code>coms_net_send</code>, <code>coms_net_get</code>,\n      <code>coms_net_await</code>, the <code>/coms-net</code> command, the pool widget, heartbeats, hop limits, TTLs, and\n      the auto-reply-at-end-of-turn behaviour) while deleting everything that made setup multi-step: the standalone server\n      process, the <code>server.json</code> discovery file, the <code>server.secret.json</code> bearer token, and the\n      <code>--server-url</code> / <code>PI_COMS_NET_SERVER_URL</code> plumbing.\n    </p>\n    <div class=\"callout key\">\n      <span class=\"lbl\">North-star requirement</span>\n      <strong>1 step, 1 time configuration.</strong> An operator sets at most one env var\n      (<code>PI_COMS_NET_PROJECT</code>, default <code>\"default\"</code>) once. No agent is ever pointed at a URL, a token,\n      or a running resource. The only shared resources are <em>static and derived</em>: the gossip <em>topic id</em> is a\n      pure function of the project name, and identity is a persisted key on disk.\n    </div>\n  </section>\n\n  <!-- ===== PROBLEM ===== -->\n  <section id=\"problem\">\n    <h2>Problem</h2>\n    <p>\n      The current <code>coms-net</code> is a hub-and-spoke design. A dedicated <code>scripts/coms-net-server.ts</code>\n      Bun process holds all state and exposes a REST + Server-Sent-Events API; every pi agent is a client that must be\n      told <em>where the hub is</em> and <em>how to authenticate</em>. That creates real configuration friction and\n      operational fragility:\n    </p>\n    <ul>\n      <li><strong>Multi-step setup.</strong> Start the server \u2192 it writes <code>~/.pi/coms-net/projects/&lt;project&gt;/server.json</code> + <code>server.secret.json</code> (mode 0600) \u2192 each agent reads/derives a URL + bearer token. Three moving parts before two agents can talk.</li>\n      <li><strong>A single point of failure.</strong> If the hub dies, the whole mesh is dark; clients fall into SSE reconnect backoff (<code>scheduleReconnect</code>) until it returns.</li>\n      <li><strong>Bound to one host.</strong> The default bind is loopback <code>127.0.0.1</code>; cross-machine use forces a non-loopback bind, an explicit token, and exposed ports \u2014 i.e. <em>more</em> config, plus your own NAT/firewall problem.</li>\n      <li><strong>Bearer-token surface.</strong> A long-lived secret on disk that must never be logged and must be redacted from every error string (<code>safeError</code>).</li>\n    </ul>\n    <figure>\n      <img src=\"pi-iroh-coms-net/problem.png\" alt=\"A central hub server as a single point of failure, spokes labeled server.json, token, url.\">\n\n      <figcaption>Hub-and-spoke today: a central process plus URL + token config every client must resolve.</figcaption>\n    </figure>\n  </section>\n\n  <!-- ===== SOLUTION ===== -->\n  <section id=\"solution\">\n    <h2>Solution</h2>\n    <p>\n      Replace the central hub with an <strong>iroh gossip swarm</strong>. Each pi agent embeds a tiny iroh node and\n      subscribes to one <strong>topic derived from the project name</strong>. Presence and messaging both flow as signed,\n      encrypted gossip messages over that topic \u2014 so <em>the swarm itself is the hub</em>. There is nothing to start and\n      nothing to point at.\n    </p>\n    <p>\n      Because pi extensions run in TypeScript/Bun and the gossip-capable iroh bindings are Python, the design is a\n      <strong>two-process pair per agent</strong>:\n    </p>\n    <ol>\n      <li>A <strong>Python iroh sidecar</strong> (<code>scripts/coms_net_iroh.py</code>) owns the iroh node, joins the topic, runs presence + messaging, and speaks newline-delimited JSON over <strong>stdio</strong>.</li>\n      <li>The <strong>TS pi extension</strong> (<code>extensions/coms-net-iroh.ts</code>) keeps the <em>exact</em> tool/command/widget surface but spawns and owns that sidecar as a child process \u2014 so the operator does literally nothing extra.</li>\n    </ol>\n    <p>The \u201cstatic resources\u201d that make this 1-time-config:</p>\n    <ul>\n      <li><span class=\"pill\">topic</span> <code>topic = SHA-256(\"pi.coms-net.v1.\" + project)</code> \u2192 a deterministic 32-byte id. Same project \u21d2 same swarm, computed identically by every agent. No registry lookup.</li>\n      <li><span class=\"pill\">identity</span> a persisted 32-byte secret key at <code>~/.pi/coms-net-iroh/identity/&lt;project&gt;.key</code> \u21d2 a stable <code>NodeId</code> across restarts.</li>\n      <li><span class=\"pill\">rendezvous</span> a well-known dir <code>~/.pi/coms-net-iroh/projects/&lt;project&gt;/peers/</code> where each node drops its <code>NodeId</code>; peers read it as the gossip <em>bootstrap list</em>. A path, not a process.</li>\n      <li><span class=\"pill\">discovery</span> iroh\u2019s default n0 discovery (pkarr/DNS on <code>iroh.link</code> + LAN mDNS) resolves <code>NodeId \u2192 address</code>, so only node ids are exchanged \u2014 NAT traversal and relay fallback are automatic.</li>\n    </ul>\n    <p>\n      Security gets <em>simpler and stronger</em>: iroh gives QUIC transport encryption and cryptographic node identity for\n      free, so the bearer token disappears entirely. Knowledge of the project name (hence the topic) is the capability.\n    </p>\n    <figure>\n      <img src=\"pi-iroh-coms-net/solution.png\" alt=\"A serverless gossip ring of equal peer nodes on a shared topic with a single '1 env var' badge.\">\n\n      <figcaption>Serverless gossip swarm: one derived topic, persisted identities, peers discover by NodeId.</figcaption>\n    </figure>\n  </section>\n\n  <!-- ===== RELEVANT FILES ===== -->\n  <section id=\"files\" class=\"files\">\n    <h2>Relevant Files</h2>\n\n    <h3>Existing Files (reference \u2014 cloned to a tmp dir, not edited)</h3>\n    <ul>\n      <li><span class=\"tag existing\">existing</span> <code>extensions/coms-net.ts</code> \u2014 the client to port: identity resolution, tools, widget, slash command, <code>agent_end</code> auto-reply, shutdown. Surface must be reproduced 1:1.</li>\n      <li><span class=\"tag existing\">existing</span> <code>scripts/coms-net-server.ts</code> \u2014 the hub whose <em>semantics</em> (register/heartbeat/list/send/get/await/response, stale &amp; TTL scans, hop limit, inbox cap, name uniqueness) move into the peer-local sidecar.</li>\n      <li><span class=\"tag existing\">existing</span> <code>extensions/coms.ts</code> \u2014 the v1 (Unix-socket) ancestor; source of the <code>ulid</code>, <code>hexFg</code>, <code>fallbackColor</code>, <code>parseFrontmatter</code> helpers reused verbatim by coms-net.</li>\n      <li><span class=\"tag existing\">existing</span> <code>extensions/themeMap.ts</code> \u2014 <code>applyExtensionDefaults()</code>; reused unchanged by the new extension.</li>\n      <li><span class=\"tag existing\">existing</span> <code>specs/coms-net-v1.md</code> \u2014 the canonical HTTP protocol spec; the parity checklist is derived from it.</li>\n    </ul>\n\n    <h3>New Files</h3>\n    <ul>\n      <li><span class=\"tag new\">new</span> <code>scripts/coms_net_iroh.py</code> \u2014 the iroh sidecar: node lifecycle, topic subscribe, presence loop, message engine, stdio JSON line protocol. The heart of the port.</li>\n      <li><span class=\"tag new\">new</span> <code>scripts/iroh_gossip_poc.py</code> \u2014 throwaway two-node gossip proof-of-concept used in Phase 1 to validate the binding before building on it.</li>\n      <li><span class=\"tag new\">new</span> <code>scripts/pyproject.toml</code> \u2014 pins <code>iroh==0.35.0</code> (the last release with gossip) for reproducible <code>uv</code> runs.</li>\n      <li><span class=\"tag new\">new</span> <code>extensions/coms-net-iroh.ts</code> \u2014 the TS pi extension: spawns/owns the sidecar, bridges stdio events to the existing handlers, identical tools/command/widget.</li>\n      <li><span class=\"tag new\">new</span> <code>extensions/coms-net-iroh.README.md</code> \u2014 operator docs: the one env var, how discovery works, cross-machine notes, troubleshooting.</li>\n    </ul>\n  </section>\n\n  <!-- ===== IMPLEMENTATION PHASES ===== -->\n  <section id=\"phases\">\n    <h2>Implementation Phases</h2>\n    <p><strong>IMPORTANT:</strong> Execute every phase and task step by step, in order, top to bottom.</p>\n    <p>Status markers: <code>[]</code> idle \u00b7 <code>[wip]</code> in progress \u00b7 <code>[x]</code> complete \u00b7 <code>[f]</code> failed. All start as <code>[]</code>; the Build Plan workflow updates them as it works.</p>\n\n    <!-- \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 PHASE 1 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 -->\n    <div class=\"phase\">\n      <h3><code class=\"status\">[]</code> Phase 1: Foundation &amp; iroh gossip proof-of-concept</h3>\n      <p>\n        De-risk the single hardest dependency first: confirm two iroh Python nodes can exchange gossip messages on this\n        machine. Establish the project skeleton, pin the gossip-capable version, and lock in the static-resource\n        primitives (topic derivation, persistent identity, peers-dir rendezvous) before any protocol work.\n      </p>\n      <figure>\n        <img src=\"pi-iroh-coms-net/phase1.png\" alt=\"Two iroh nodes exchanging a gossip hello message over a shared 32-byte topic.\">\n\n        <figcaption>Phase 1 \u2014 prove the gossip primitive: two nodes, one topic, a message round-trips.</figcaption>\n      </figure>\n\n      <h4>1. Project skeleton &amp; pinned dependency</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Create <code>scripts/pyproject.toml</code> declaring <code>requires-python &gt;= 3.10</code> and <code>dependencies = [\"iroh==0.35.0\"]</code> (1.0 dropped gossip \u2014 see Notes/Risks).</li>\n        <li><code class=\"status\">[]</code> Verify the wheel installs on this platform: <code>uv run --with iroh==0.35.0 python -c \"import iroh; print(iroh.__file__)\"</code>.</li>\n        <li><code class=\"status\">[]</code> Decide IPC = newline-delimited JSON over the sidecar\u2019s stdin/stdout (no ports, no token \u2014 the extension owns the child).</li>\n      </ul>\n\n      <h4>2. Static-resource primitives</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Implement <code>topic_for(project)</code> = <code>hashlib.sha256(f\"pi.coms-net.v1.{project}\".encode()).digest()</code> (exactly 32 bytes; iroh validates length).</li>\n        <li><code class=\"status\">[]</code> Implement persistent identity: load/create 32-byte secret at <code>~/.pi/coms-net-iroh/identity/&lt;project&gt;.key</code> (mode 0600, <code>os.urandom(32)</code> if absent); pass via <code>NodeOptions.secret_key</code> for a stable <code>NodeId</code>.</li>\n        <li><code class=\"status\">[]</code> Implement the peers-dir rendezvous: write self <code>NodeId</code>/<code>NodeAddr</code> to <code>~/.pi/coms-net-iroh/projects/&lt;project&gt;/peers/&lt;short&gt;.json</code>; read sibling files \u2192 bootstrap list for <code>subscribe</code>.</li>\n      </ul>\n\n      <h4>3. Two-node gossip PoC</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Write <code>scripts/iroh_gossip_poc.py</code> modeled on iroh-ffi <code>python/gossip_test.py</code>: <code>iroh.iroh_ffi.uniffi_set_event_loop(asyncio.get_running_loop())</code> first, two <code>Iroh.memory()</code> nodes, cross-seed via <code>add_node_addr</code>, <code>gossip().subscribe(topic, [peer_id], cb)</code>, wait for <code>MessageType.JOINED</code>, broadcast, assert <code>RECEIVED</code> with matching <code>content</code> + <code>delivered_from</code>.</li>\n        <li><code class=\"status\">[]</code> Confirm the receive model: a <code>GossipMessageCallback</code> subclass whose <code>async def on_message(self, msg)</code> pushes to an <code>asyncio.Queue</code> (never block in the callback).</li>\n      </ul>\n\n      <h4>4. Testing Strategy</h4>\n      <p>Run the PoC end-to-end on this machine; a single deterministic script proves the binding, the event loop bridge, topic length, and the JOINED\u2192broadcast\u2192RECEIVED sequence. This is the gate for all later work.</p>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> <code>uv run scripts/iroh_gossip_poc.py</code> \u2014 exits 0 and prints the round-tripped \"hello\" with the sender NodeId.</li>\n        <li><code class=\"status\">[]</code> <code>uv run python -c \"import hashlib; print(len(hashlib.sha256(b'pi.coms-net.v1.default').digest()))\"</code> \u2014 prints <code>32</code>.</li>\n      </ul>\n      <div class=\"loop\">\n        \ud83d\udd01 <strong>Do not exit this phase until every box above is checked.</strong>\n        If the PoC cannot round-trip a message, stop and resolve the binding/version/discovery issue before proceeding \u2014 everything downstream assumes it.\n      </div>\n    </div>\n\n    <!-- \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 PHASE 2 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 -->\n    <div class=\"phase\">\n      <h3><code class=\"status\">[]</code> Phase 2: The iroh sidecar \u2014 presence + messaging engine</h3>\n      <p>\n        Build <code>scripts/coms_net_iroh.py</code>: a long-lived process that joins the swarm and re-implements the hub\u2019s\n        semantics <em>peer-locally</em>. Every former HTTP route + SSE event becomes either a gossip envelope or a stdio\n        line to the extension.\n      </p>\n      <figure>\n        <img src=\"pi-iroh-coms-net/phase2.png\" alt=\"A python iroh sidecar with a stdio pipe and presence, prompt, response envelopes flowing to a topic.\">\n\n        <figcaption>Phase 2 \u2014 the sidecar: stdio on one side, signed gossip envelopes (presence / prompt / response) on the other.</figcaption>\n      </figure>\n\n      <h4>1. Node lifecycle &amp; envelope schema</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Boot the node with persisted <code>secret_key</code> + default discovery; subscribe to <code>topic_for(project)</code> with the peers-dir bootstrap list; emit a <code>ready</code> stdio line carrying our <code>NodeId</code>.</li>\n        <li><code class=\"status\">[]</code> Define the gossip envelope: <code>{ v, kind, from, ts, ... }</code> where <code>kind \u2208 {presence, presence_bye, prompt, response}</code>; serialize as UTF-8 JSON bytes for <code>sink.broadcast(...)</code>.</li>\n        <li><code class=\"status\">[]</code> Define the stdio line protocol \u2014 <strong>in</strong> (extension\u2192sidecar): <code>identity</code>, <code>send</code>, <code>list</code>, <code>get</code>, <code>await</code>, <code>response</code>, <code>shutdown</code>; <strong>out</strong> (sidecar\u2192extension): <code>ready</code>, <code>peer_joined</code>, <code>peer_updated</code>, <code>peer_stale</code>, <code>peer_left</code>, <code>prompt</code>, <code>response</code>, <code>status</code>, <code>error</code>.</li>\n      </ul>\n\n      <h4>2. Presence (replaces register + heartbeat + pool snapshot)</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Broadcast a <code>presence</code> envelope (the <code>AgentCard</code>: name, purpose, model, color, cwd, project, explicit, started_at, context_used_pct, queue_depth, status) on join and every <code>HEARTBEAT_MS</code> (default 10s).</li>\n        <li><code class=\"status\">[]</code> Maintain a local <code>peers: dict[NodeId, AgentCard]</code>; on each inbound <code>presence</code> upsert + emit <code>peer_joined</code>/<code>peer_updated</code> to the extension (diff to suppress no-op renders, like <code>poolSnapshotKey</code>).</li>\n        <li><code class=\"status\">[]</code> Run the local stale scan: no presence within <code>STALE_AFTER_MS</code> (30s) \u2192 <code>peer_stale</code>; within <code>OFFLINE_AFTER_MS</code> (60s) \u2192 drop + <code>peer_left</code>. Broadcast <code>presence_bye</code> on clean shutdown.</li>\n      </ul>\n\n      <h4>3. Messaging (send / get / await / response, hops, TTL, inbox)</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> <code>send</code>: resolve <code>target</code> (peer name \u2192 NodeId via the local <code>peers</code> map; ambiguous-name and not-found errors as in the server); mint a ULID <code>msg_id</code>; enforce <code>hops &lt; MAX_HOPS</code> (5) and per-target inbox cap (<code>MAX_INBOX</code> 100); broadcast a <code>prompt</code> envelope carrying <code>target_node</code>; reply to the extension with <code>{ msg_id, target_node }</code>.</li>\n        <li><code class=\"status\">[]</code> Inbound <code>prompt</code>: ignore unless <code>target_node == self</code>; otherwise enqueue + emit a <code>prompt</code> stdio line (the extension turns it into a follow-up turn). Track outbound msg_ids \u2192 pending, resolved by matching <code>response</code> (powers <code>get</code>/<code>await</code>).</li>\n        <li><code class=\"status\">[]</code> <code>response</code> from extension: broadcast a <code>response</code> envelope (<code>msg_id</code>, payload, error) addressed back to the original sender NodeId; sender side resolves the pending entry and emits <code>response</code> + terminal <code>status</code>. Enforce message TTL (<code>MESSAGE_TTL_MS</code> 30min) with a local scan \u2192 <code>timeout</code>.</li>\n      </ul>\n\n      <h4>4. Testing Strategy</h4>\n      <p>Drive two sidecars directly over stdio with a Python harness (no pi involved) and assert the full message lifecycle and presence transitions \u2014 the sidecar must be correct in isolation before the TS bridge is added.</p>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> <code>uv run python -m py_compile scripts/coms_net_iroh.py</code> \u2014 sidecar compiles.</li>\n        <li><code class=\"status\">[]</code> <code>uv run scripts/test_two_sidecars.py</code> \u2014 spawn two sidecars, feed <code>identity</code> + <code>send</code>, assert a <code>prompt</code> arrives at the target and a matching <code>response</code> returns to the sender; assert <code>peer_joined</code> then <code>peer_left</code> after a kill.</li>\n        <li><code class=\"status\">[]</code> Assert hop-limit, ambiguous-target, and TTL-timeout paths each return the correct <code>status</code>/<code>error</code>.</li>\n      </ul>\n      <div class=\"loop\">\n        \ud83d\udd01 <strong>Do not exit this phase until every box above is checked.</strong>\n        If any lifecycle assertion fails, fix the engine and re-run the two-sidecar harness \u2014 loop until green.\n      </div>\n    </div>\n\n    <!-- \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 PHASE 3 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 -->\n    <div class=\"phase\">\n      <h3><code class=\"status\">[]</code> Phase 3: The TS pi extension \u2014 identical surface, sidecar-backed</h3>\n      <p>\n        Write <code>extensions/coms-net-iroh.ts</code> by transplanting <code>coms-net.ts</code> and swapping its\n        HTTP/SSE transport for a spawned Python sidecar. Identity resolution, the four tools, the <code>/coms-net</code>\n        command, the pool widget, and the <code>agent_end</code> auto-reply stay behaviourally identical.\n      </p>\n      <figure>\n        <img src=\"pi-iroh-coms-net/phase3.png\" alt=\"A pi extension box bridged by stdio to an iroh node, with four coms_net tools and the pool widget.\">\n\n        <figcaption>Phase 3 \u2014 the bridge: pi extension \u21c4 stdio \u21c4 iroh sidecar, same four tools, same widget.</figcaption>\n      </figure>\n\n      <h4>1. Sidecar process management (replaces SSE connection)</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> On <code>session_start</code>, resolve identity exactly as before (CLI <code>--cname/--purpose/--project/--color/--explicit</code> &gt; frontmatter &gt; defaults) and spawn <code>uv run scripts/coms_net_iroh.py</code> as a child; send the <code>identity</code> line.</li>\n        <li><code class=\"status\">[]</code> Parse the sidecar\u2019s newline-JSON stdout; route each event to the existing handlers (<code>peer_*</code> \u2192 <code>peerCards</code> + widget; <code>prompt</code> \u2192 <code>handleInboundPrompt</code>; <code>response</code>/<code>status</code> \u2192 <code>handleInboundResponse</code>).</li>\n        <li><code class=\"status\">[]</code> Respawn-with-backoff if the child exits unexpectedly (mirror <code>scheduleReconnect</code>\u2019s 500ms\u219210s backoff + the ceiling notify); drop <code>--server-url</code>/<code>--auth-token</code> flags and all token/redaction code.</li>\n      </ul>\n\n      <h4>2. Tools, command, widget, auto-reply (parity)</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Reimplement <code>coms_net_list</code> (sidecar <code>list</code>), <code>coms_net_send</code> (<code>send</code> \u2192 returns <code>msg_id</code>), <code>coms_net_get</code> (non-blocking poll of pending), <code>coms_net_await</code> (block on the pending promise / <code>await</code> with timeout) \u2014 same descriptions, params, and <code>renderCall</code>/<code>renderResult</code>.</li>\n        <li><code class=\"status\">[]</code> Reinstall the <code>coms-net-pool</code> belowEditor widget (<code>renderPool</code> unchanged) and the <code>/coms-net</code> command (<code>--all</code> toggle explicit, <code>--reconnect</code> \u2192 respawn sidecar, <code>--project</code> filter, bare \u2192 refresh; replace <code>--server</code> health with <code>--node</code> showing our <code>NodeId</code> + peer count).</li>\n        <li><code class=\"status\">[]</code> Keep <code>agent_end</code> auto-reply: capture the last assistant text, JSON-parse when a <code>response_schema</code> was attached, send a <code>response</code> line for the open inbound <code>msg_id</code>; keep the audit log channel <code>coms-net-log</code> and the <code>coms-net</code> status key.</li>\n      </ul>\n\n      <h4>3. Testing Strategy</h4>\n      <p>Validate inside real pi sessions: two agents in the same project must list each other and complete a send\u2192reply round-trip with the operator setting nothing but (optionally) <code>PI_COMS_NET_PROJECT</code>.</p>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> <code>bun build extensions/coms-net-iroh.ts --target node</code> (or <code>tsc --noEmit</code>) \u2014 extension type-checks/builds.</li>\n        <li><code class=\"status\">[]</code> Launch two <code>pi -e extensions/coms-net-iroh.ts --cname planner</code> / <code>--cname worker</code>; confirm each appears in the other\u2019s pool widget and <code>coms_net_list</code> with <strong>zero</strong> URL/token config.</li>\n        <li><code class=\"status\">[]</code> From <code>planner</code>, <code>coms_net_send</code> to <code>worker</code> + <code>coms_net_await</code>; confirm <code>worker</code>\u2019s end-of-turn text returns as the reply.</li>\n      </ul>\n      <div class=\"loop\">\n        \ud83d\udd01 <strong>Do not exit this phase until every box above is checked.</strong>\n        If a round-trip fails, trace the stdio line at the boundary (extension log vs sidecar stderr) and fix \u2014 loop until two live agents converse.\n      </div>\n    </div>\n\n    <!-- \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 PHASE 4 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 -->\n    <div class=\"phase\">\n      <h3><code class=\"status\">[]</code> Phase 4: Parity verification, resilience &amp; docs</h3>\n      <p>\n        Prove 1:1 parity against the original, harden the failure modes that change when the substrate becomes p2p, and\n        write the operator docs that make the one-step promise real.\n      </p>\n      <figure>\n        <img src=\"pi-iroh-coms-net/phase4.png\" alt=\"A parity checklist with green checks beside two agents completing a prompt-response round trip.\">\n\n        <figcaption>Phase 4 \u2014 parity matrix green, resilience proven, one-env-var setup documented.</figcaption>\n      </figure>\n\n      <h4>1. Parity matrix &amp; resilience</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Walk the <a href=\"#parity\">parity matrix</a> below; for every original capability confirm an equivalent exists or is consciously dropped with rationale.</li>\n        <li><code class=\"status\">[]</code> Resilience: kill a peer mid-conversation \u2192 sender sees <code>timeout</code> at TTL; kill+restart the sidecar \u2192 stable <code>NodeId</code> (persisted key) and auto-rejoin; offline-then-online peer reappears via presence.</li>\n        <li><code class=\"status\">[]</code> Confirm the deny-by-default posture: an agent in project <code>A</code> never sees or is addressable by project <code>B</code> (different topic).</li>\n      </ul>\n\n      <h4>2. Documentation &amp; cross-machine notes</h4>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Write <code>extensions/coms-net-iroh.README.md</code>: the single env var, how the topic/identity/peers-dir work, the optional <code>PI_COMS_NET_IROH_BOOTSTRAP</code> (comma-sep NodeIds) escape hatch for cross-machine swarms, and troubleshooting (no peers \u2192 check discovery/topic).</li>\n        <li><code class=\"status\">[]</code> Document all env knobs and their defaults (<code>PI_COMS_NET_PROJECT</code>, <code>*_HEARTBEAT_MS</code>, <code>*_MAX_HOPS</code>, <code>*_MESSAGE_TTL_MS</code>, <code>*_STALE_AFTER_MS</code>, <code>*_OFFLINE_AFTER_MS</code>, <code>*_MAX_INBOX</code>) \u2014 same names/semantics as the server, minus URL/TOKEN.</li>\n      </ul>\n\n      <h4>3. Testing Strategy</h4>\n      <p>Final acceptance: a clean-machine run with no prior state reaches a working two-agent conversation using only the default project, and the parity matrix is fully accounted for.</p>\n      <ul class=\"checklist\">\n        <li><code class=\"status\">[]</code> Fresh-state run: delete <code>~/.pi/coms-net-iroh/</code>, launch two agents with no env vars, confirm discovery \u2192 list \u2192 round-trip.</li>\n        <li><code class=\"status\">[]</code> Three-agent relay (<code>peer-to-peer-to-peer</code>): A\u2192B\u2192C forwarding increments <code>hops</code> and the chain halts at <code>MAX_HOPS</code>.</li>\n      </ul>\n      <div class=\"loop\">\n        \ud83d\udd01 <strong>Do not exit this phase until every box above is checked.</strong>\n        Any parity gap must be either closed or explicitly recorded as an intentional drop in Amendments before completion.\n      </div>\n    </div>\n  </section>\n\n  <!-- ===== GLOBAL VALIDATION ===== -->\n  <section id=\"validation\">\n    <h2>Validation Commands</h2>\n    <p>Execute these commands to validate the entire plan is complete:</p>\n    <ul class=\"checklist\">\n      <li><code class=\"status\">[]</code> <code>uv run scripts/iroh_gossip_poc.py</code> \u2014 the iroh gossip primitive round-trips on this machine.</li>\n      <li><code class=\"status\">[]</code> <code>uv run python -m py_compile scripts/coms_net_iroh.py</code> \u2014 the sidecar compiles cleanly.</li>\n      <li><code class=\"status\">[]</code> <code>uv run scripts/test_two_sidecars.py</code> \u2014 full send\u2192prompt\u2192response lifecycle + presence join/leave pass at the sidecar layer.</li>\n      <li><code class=\"status\">[]</code> <code>tsc --noEmit -p extensions</code> (or <code>bun build extensions/coms-net-iroh.ts</code>) \u2014 the extension type-checks.</li>\n      <li><code class=\"status\">[]</code> Two live <code>pi -e extensions/coms-net-iroh.ts</code> agents in the default project list each other and complete a <code>coms_net_send</code>/<code>coms_net_await</code> round-trip with no URL/token configuration.</li>\n      <li><code class=\"status\">[]</code> Fresh-state run (no <code>~/.pi/coms-net-iroh/</code>, no env vars) reaches a working conversation \u2014 proves 1-step / 1-time config.</li>\n    </ul>\n    <div class=\"loop\">\n      \ud83d\udd01 <strong>The plan is not complete until every box is checked and every command passes. If for some reason a step is not possible to complete, mark it with [f] and move on if possible.</strong>\n    </div>\n  </section>\n\n  <!-- ===== NOTES ===== -->\n  <section id=\"notes\">\n    <h2>Notes</h2>\n\n    <h3 id=\"parity\">Feature-parity matrix (original \u2192 iroh)</h3>\n    <table>\n      <thead>\n        <tr><th>Original (HTTP/SSE hub)</th><th>iroh port</th><th>Status</th></tr>\n      </thead>\n      <tbody>\n        <tr><td><code>POST /v1/agents/register</code> + name uniqueness</td><td>First <code>presence</code> broadcast; names deduped locally for display (NodeId is the true key)</td><td class=\"yes\">parity</td></tr>\n        <tr><td><code>POST /v1/agents/:id/heartbeat</code></td><td>Periodic <code>presence</code> re-broadcast (same <code>HEARTBEAT_MS</code>)</td><td class=\"yes\">parity</td></tr>\n        <tr><td><code>GET /v1/agents</code> (+ <code>include_explicit</code>)</td><td>Local <code>peers</code> map snapshot; <code>explicit</code> hidden unless requested</td><td class=\"yes\">parity</td></tr>\n        <tr><td>SSE <code>pool_snapshot/agent_joined/updated/stale/left</code></td><td><code>presence</code>/<code>presence_bye</code> + local stale scan \u2192 <code>peer_*</code> stdio events</td><td class=\"yes\">parity</td></tr>\n        <tr><td><code>POST /v1/messages</code> (send, hops, inbox cap)</td><td><code>prompt</code> envelope addressed to <code>target_node</code>; hop + inbox checks peer-local</td><td class=\"yes\">parity</td></tr>\n        <tr><td><code>GET /v1/messages/:id</code> / <code>/await</code></td><td>Pending-reply map resolved by matching <code>response</code> envelope; <code>get</code>=poll, <code>await</code>=block+timeout</td><td class=\"yes\">parity</td></tr>\n        <tr><td><code>POST /v1/messages/:id/response</code></td><td><code>response</code> envelope back to sender NodeId; <code>agent_end</code> auto-submit unchanged</td><td class=\"yes\">parity</td></tr>\n        <tr><td>Stale/TTL scan loops on server</td><td>Identical loops run inside each sidecar (state is peer-local)</td><td class=\"yes\">parity</td></tr>\n        <tr><td>Bearer token + <code>server.secret.json</code> + redaction</td><td><strong>Dropped</strong> \u2014 QUIC encryption + NodeId auth are intrinsic; topic name is the capability</td><td class=\"chg\">simplified</td></tr>\n        <tr><td><code>server.json</code> discovery + <code>--server-url</code></td><td><strong>Dropped</strong> \u2014 topic derived from project; discovery by NodeId via n0/mDNS</td><td class=\"chg\">simplified</td></tr>\n        <tr><td>Central <code>scripts/coms-net-server.ts</code> process</td><td><strong>Dropped</strong> \u2014 no central process; per-agent sidecar joins the swarm</td><td class=\"chg\">simplified</td></tr>\n      </tbody>\n    </table>\n\n    <h3>End-to-end data flow</h3>\n    <figure>\n      <img src=\"pi-iroh-coms-net/notes.png\" alt=\"End-to-end data flow pipeline: pi extension, stdio, iroh node, gossip topic, peer.\">\n\n      <figcaption>One message\u2019s journey: tool call \u2192 stdio line \u2192 gossip broadcast \u2192 peer sidecar \u2192 follow-up turn \u2192 response home.</figcaption>\n    </figure>\n\n    <h3>Reference: the proven gossip primitive (iroh-ffi 0.35)</h3>\n    <pre><code><span class=\"tok-c\"># the load-bearing lines, verbatim from iroh-ffi python/gossip_test.py</span>\niroh.iroh_ffi.<span class=\"tok-f\">uniffi_set_event_loop</span>(asyncio.get_running_loop())   <span class=\"tok-c\"># MUST be first</span>\n\n<span class=\"tok-k\">class</span> <span class=\"tok-f\">Callback</span>(GossipMessageCallback):\n    <span class=\"tok-k\">async def</span> <span class=\"tok-f\">on_message</span>(self, msg):\n        <span class=\"tok-k\">await</span> self.chan.put(msg)                 <span class=\"tok-c\"># never block here</span>\n\ntopic  = hashlib.sha256(<span class=\"tok-s\">b\"pi.coms-net.v1.default\"</span>).digest()  <span class=\"tok-c\"># 32 bytes</span>\nsink   = <span class=\"tok-k\">await</span> node.<span class=\"tok-f\">gossip</span>().<span class=\"tok-f\">subscribe</span>(topic, [peer_id], cb)\n<span class=\"tok-k\">await</span> sink.<span class=\"tok-f\">broadcast</span>(<span class=\"tok-s\">b'{\"kind\":\"presence\",...}'</span>)\n<span class=\"tok-c\"># inbound: event.type()==MessageType.RECEIVED -> event.as_received().content / .delivered_from</span></code></pre>\n\n    <h3>Dependencies &amp; tooling</h3>\n    <ul>\n      <li><strong>Python:</strong> <code>iroh==0.35.0</code> via <code>uv</code> (PEP-723 inline metadata or <code>scripts/pyproject.toml</code>). No Rust toolchain needed \u2014 prebuilt wheels ship for macOS arm64/x86_64, manylinux, win amd64.</li>\n      <li><strong>TS/Bun:</strong> reuses <code>@mariozechner/pi-coding-agent</code>, <code>@mariozechner/pi-tui</code>, <code>@sinclair/typebox</code> \u2014 same imports as <code>coms-net.ts</code>; no new TS deps.</li>\n      <li><strong>Process model:</strong> the extension spawns the sidecar with the project workspace\u2019s <code>uv</code>; sidecar stderr is surfaced to the audit log for debugging.</li>\n    </ul>\n\n    <div class=\"callout warn\">\n      <span class=\"lbl\">Risk \u2014 gossip lives only on the 0.x line</span>\n      iroh-ffi <strong>1.0 removed gossip, blobs, and docs</strong> from the Python bindings (endpoints/connections only). This port pins <code>iroh==0.35.0</code>, which is feature-frozen. <strong>Mitigation / fallback:</strong> if forced to 1.0, reimplement pubsub over raw <code>Endpoint</code> QUIC streams (the peers-dir already gives the member list), or build custom bindings to the Rust <code>iroh-gossip</code> crate. Keep the envelope schema transport-agnostic so the substrate can swap without touching the extension.\n    </div>\n\n    <div class=\"callout\">\n      <span class=\"lbl\">Open decisions (folded here since QUESTIONABLE=false)</span>\n      <ul style=\"margin:6px 0 0;\">\n        <li><strong>Broadcast-and-filter vs unicast.</strong> Prompts go to the whole topic and non-targets ignore them \u2014 simplest, fine for the small per-project swarms pi uses. If swarms grow, switch directed messages to a unicast iroh QUIC connection keyed by NodeId; presence stays gossip.</li>\n        <li><strong>Cross-machine bootstrap.</strong> The peers-dir rendezvous assumes a shared filesystem (the common single-machine multi-agent case). Cross-machine relies on the optional <code>PI_COMS_NET_IROH_BOOTSTRAP</code> env (one known NodeId is enough; gossip + n0 discovery handle the rest).</li>\n        <li><strong>Private swarms.</strong> Optionally fold a shared passphrase into the topic hash (<code>sha256(\"pi.coms-net.v1.\" + project + \":\" + secret)</code>) so the project name alone is not the capability \u2014 still 1-time config (one extra env var).</li>\n      </ul>\n    </div>\n  </section>\n\n  <!-- ===== AMENDMENTS ===== -->\n  <section id=\"amendments\">\n    <h2>Amendments</h2>\n    <details class=\"amend\">\n      <summary>\u2014  no amendments yet</summary>\n      <p>Running history of post-execution changes will be appended here (newest at the bottom) by the Update Plan / Update References workflows.</p>\n    </details>\n  </section>\n\n</main>\n</body>\n</html>\n"
+ },
+ "capture": {
+  "captured_at": "2026-08-09T12:33:17Z",
+  "commits": {
+   "fusion-harness": "5852f2ed4f5f064a368d83d2dabad84fe6bfa0b4",
+   "live-bench": "bb3ca3569d16970db469025ac24cebf36ce9f249",
+   "pi-vs-claude-code": "0ed11f44932fdef29bd98467700019762298f50d",
+   "planf3": "f34b7ba5ff8167ef6283791763f4b578bfb3a2c0"
+  },
+  "note": "tests/test_provider_disler.py::test_capture_matches_live_organization re-verifies the repository listing and per-repository commits against the live provider when NETWORK_TESTS=1.",
+  "provider_identity": "https://github.com/disler",
+  "provider_kind": "git-org",
+  "schema": "cognovis.provider-capture.v1",
+  "source": "local checkouts at the commits pinned in cognovis-pi/docs/research/indydevdan-pi-repos.md; tree listings are git ls-tree output and blob identities are the objects' own Git shas"
+ },
+ "json": {
+  "https://api.github.com/repos/disler/fusion-harness/git/ref/heads/main": {
+   "object": {
+    "sha": "5852f2ed4f5f064a368d83d2dabad84fe6bfa0b4"
+   }
+  },
+  "https://api.github.com/repos/disler/fusion-harness/git/trees/5852f2ed4f5f064a368d83d2dabad84fe6bfa0b4?recursive=1": {
+   "tree": [
+    {
+     "mode": "100644",
+     "path": ".claude/commands/install.md",
+     "sha": "4e94cceead49aa4e4c15caf8704de1179b575c9a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/commands/prime.md",
+     "sha": "90afe84f8985efd1600e4a9a3eab5db84b7e0f67",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".gitignore",
+     "sha": "d18c32234d44f091ab80bcc581d0fafd9207b776",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "LICENSE",
+     "sha": "acc8f9543a768856cadb374c7989080d032de051",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "README.md",
+     "sha": "2b20c1ced974dad43c8be78f023982bdbf7ad61d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/SYSTEM_PROMPT_TRIAGE.md",
+     "sha": "9f83882075a83c00282d3d7ab42e9b310bb7d256",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/SYSTEM_PROMPT_VALIDATOR.md",
+     "sha": "a1e1bc98afba602f55080f8cee96d84dda0405b6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_BUILDER.md",
+     "sha": "d1c2c62c1a95414f59c54cc47b3e5338208762a4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_CORRECTION.md",
+     "sha": "318067524c25d9a72fa7a10f1d1382440e400394",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_FUSION_DEFAULT_INSTRUCTION.md",
+     "sha": "17e41dbdd5253d5039fefd368c3515f756bce82a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_FUSION_MERGE.md",
+     "sha": "fc38d9436c1d39a685dc378e1737c79cf3a4092b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_FUSION_WORKER.md",
+     "sha": "c34aa029fad7b353ada47a42ebdd8ae4842a434d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_OPINION.md",
+     "sha": "662cd4966c72a92440c87c19978d5ce45ac09427",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_TRIAGE.md",
+     "sha": "932c883aea903016f93957d517b02b26e50e9e93",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/USER_PROMPT_VALIDATOR.md",
+     "sha": "3a2e24aa74306c982913ccb3aa30dd6468e45fce",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/fusion-harness/fusion-harness.ts",
+     "sha": "27a07737a0324513707c5016e63dfbd9a77278e8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/hero.png",
+     "sha": "ee75e516b4851fb02f5c1f412258f47c6f5abd90",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/svg-01-fusion-hero-animated.svg",
+     "sha": "d431f1c5162099a98c7c4890aaac82f6096d1a1d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/svg-03-three-commands.svg",
+     "sha": "3d603bb485e8a96b1c499130d8285dec64019a83",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/svg-04-host-as-builder.svg",
+     "sha": "9cb7da8eb010637282da54a59253109b1bb17e49",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/svg-05-gate-first-loop-animated.svg",
+     "sha": "76d8830e72eb9c916adce359c57e4aeb5c006749",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/svg-06-two-column-dx.svg",
+     "sha": "3843659c8684e14eda63614572f3c415e591407c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/and-not-or.png",
+     "sha": "8f03f11dcb46566207fbf7bc00b56de29c41aa01",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/blind-spot-coverage-matrix.png",
+     "sha": "d889ff9a7fc3023bc1da4ba0d935662dfc997a54",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/combined-context-window.png",
+     "sha": "ac566e04398f1a81748289e7497b522dff65a979",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/fusion-command-flow.png",
+     "sha": "77f992d78e4694d90e8658faf30afdfdf60d6cc0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/fusion-core.png",
+     "sha": "2e23fe8b7f5d37061563d1ab68fe54c1ffb78060",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/fusion-patterns-gallery.png",
+     "sha": "703667983391bdaae438b5d9a963df861f149926",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/fusion-provenance-resolver.png",
+     "sha": "bf2160bf28a9b8a15a4ab0760db2b17c958df754",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/fusion-value-ladder-switchboard.png",
+     "sha": "f08bfc963373e00f18aeed1b08f6af8375db243f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/harness-to-factory-zoom.png",
+     "sha": "c5c905ad2530bb03d1e82019355d843e6adf564f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/model-slot-rack.png",
+     "sha": "07ed421296459295a83fd842a3bc9aeea016d75e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/opinion-flow.png",
+     "sha": "6115d8776eaa8047206ab3aa131286b4a88092d1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/sota-max-artifact-pipeline.png",
+     "sha": "34fb4040233c3b65695ead73eefe5740098c3cf4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/video-frames/team-vs-lone-wolf.png",
+     "sha": "aac547bf6081c30d2930d460c38d39b84b50ce8e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "justfile",
+     "sha": "9f7fdd9433c24e6b3b301b399e609fe0f26bbbb8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/MANIFEST-claude-fable-5-gpt-5.6-sol.md",
+     "sha": "1d55ca4de148eae121eb88ecde0f89d361dc9ae9",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/fused-sqlite-bench-claude-fable-5-gpt-5.6-sol.py",
+     "sha": "0f922dc6b2706e4db5ce69d2ef7319d89d20f47d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/builder-round-1.md",
+     "sha": "a44c2bc16e8d9439b65a4222884458e8cb28948e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/builder-round-2.md",
+     "sha": "5291ada901eec1abfbee82b13138242c2ec95bb9",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/builder-round-3.md",
+     "sha": "0daa6c7a36d7fcac3a40b18521dc21e0f4b355c1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/builder-round-4.md",
+     "sha": "7ac8eccaa573542be71dd02db75ced1c00da70a7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/builder-round-5.md",
+     "sha": "d44392da8976d3798ae9dc8858404814516ca05e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/gate-baseline.txt",
+     "sha": "4a5d9e69b4fffac2b06537c702a56eafe21d8fd4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/gate-round-1.txt",
+     "sha": "0065f055447a2ba114ee9ba07ff4f924ccbbef75",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/gate-round-2.txt",
+     "sha": "38df2c66cf3593fcd93b4e7880c23f9625698442",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/gate-round-3.txt",
+     "sha": "e4748db8ee8edb68541cce8bf1d8aa5e9422308f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/gate-round-4.txt",
+     "sha": "a36a5820994982f32403d0a04cd47f38298d7e14",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/gate-round-5.txt",
+     "sha": "2dddec16352e92ac6651e28016361ce9d9d1536c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/gate.py",
+     "sha": "86b66b97356e378577af36808a23275203f954af",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/prompt.md",
+     "sha": "262958b35910262c814aaee2b0111ca2afce45fb",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/triage-round-3.md",
+     "sha": "dd654a43d71d5a40471fce5e8094cd7e7d7dc6ba",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/triage-round-4.md",
+     "sha": "a6aa2f18d8a33173bebf2f408bd10eceeaf4e8b0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/harness-artifacts/validator.md",
+     "sha": "7a4a0c790a651c9e5b64795676db0c5aaf2a472e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/project-root/BENCH_PLAN.md",
+     "sha": "5aa14979533c3b8a4b887696e5018ccb9925cb1e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/project-root/RESULTS.md",
+     "sha": "7125cad6e5606a87be96315f50f70f4e4c07ebf5",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/project-root/bench-sqlite-bulk-ARCHITECT-anthropic-claude-fable-5.py",
+     "sha": "fd50e8db76b2cd04ad69d97f85be4280357ea953",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/project-root/bench.py",
+     "sha": "f2ce755bd3cf10ede8655b7eca14834bedadec1a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "live_final_generation/project-root/sqlite-bulk-benchmark-BUILDER-openai-gpt-5.6-sol.py",
+     "sha": "b1a351aaf29743789ef20b755adcfb056896ce95",
+     "type": "blob"
+    }
+   ],
+   "truncated": false
+  },
+  "https://api.github.com/repos/disler/live-bench/git/ref/heads/main": {
+   "object": {
+    "sha": "bb3ca3569d16970db469025ac24cebf36ce9f249"
+   }
+  },
+  "https://api.github.com/repos/disler/live-bench/git/trees/bb3ca3569d16970db469025ac24cebf36ce9f249?recursive=1": {
+   "tree": [
+    {
+     "mode": "100644",
+     "path": ".claude/commands/build.md",
+     "sha": "f2fd1cd94cc6abe746b9f267bffcfa790bfbfa65",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/commands/commit-push.md",
+     "sha": "0929369b4aaed389b1fcc5251852a4aee21ea87e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/commands/install.md",
+     "sha": "92ac0e74291ad4db07fd49ef3a539f3047e9964b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/commands/plan-w-team.md",
+     "sha": "3daf508634dccf40917f2cfd7aad0c48e4fb6f46",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/commands/prime.md",
+     "sha": "0d1cd2a282599f75a88772a6990406f9916bddd7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/SKILL.md",
+     "sha": "f0e8c09b8a01dc95a956cc6f5fb70101f03d4ec3",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/__init__.py",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/fanout.py",
+     "sha": "44da8089c329b091fd18f237c32e4285cadaffb7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/logs.py",
+     "sha": "9d9d1216a19201536bb3d1a2136a3f1a976c30d0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/poll.py",
+     "sha": "1909418864c91f08c77b9b476708bcc664f6270d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/proc.py",
+     "sha": "08ea8d5c7eb6907889a2e4e1166bf5432e7402f5",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/run.py",
+     "sha": "835bdcf8ea322d79bf96f006019da3ad8d05c852",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/screenshot.py",
+     "sha": "4e8af2cb8a2c8b7ed43f1c96c50d1c2368b4cdfb",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/send.py",
+     "sha": "cbc63c17c8897b9301351ac9db5fe45a9040f7fc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/commands/session.py",
+     "sha": "9c3074e38cd43e2f2eafd9fa328751f36870dfda",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/main.py",
+     "sha": "494909ecaf6d9842d8e4262a4733d9f1db4bd917",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/modules/__init__.py",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/modules/errors.py",
+     "sha": "3f63e623e3b9fdf30edaeb3207d03a2187d2964f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/modules/output.py",
+     "sha": "c11adc31fce67f91746a4fb24902cb73117bed4e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/modules/proc.py",
+     "sha": "eecdab2ba4c75c1bada5eb2fa86c4c188764f6a1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/modules/sentinel.py",
+     "sha": "76c885a3341251db3e13c2db9a761828d698e34c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/modules/tmux.py",
+     "sha": "258f83cf51fae36830b7c357824af260dd339267",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/pyproject.toml",
+     "sha": "90a15cf2ea96401978c28ee9feb5e05d02d69b07",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/drive/app/uv.lock",
+     "sha": "62a55343d77b60200655e4629c27d3591026d843",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".env.sample",
+     "sha": "13782c7890f9f758a9130a8130971b755971a7aa",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".gitignore",
+     "sha": "b71534e239e0cb53dc4a74e76ad0959f73dd9b23",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "CLAUDE.md",
+     "sha": "c0098edf5b9fc80f6586851912130a28a90b9c55",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "README.md",
+     "sha": "f8b764d2d7f28abd78bb8a6cf1619abb53474a09",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/README.md",
+     "sha": "dfe53d9e4f28119ef11a59a6c82da95e38a6800a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/pyproject.toml",
+     "sha": "7d1687020f7b12ba620853f7752ed95e1b03df5e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/__init__.py",
+     "sha": "a1fec6e41123331f7248d4b29e62fbcca5dddbfe",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/broker.py",
+     "sha": "559ee682d92e99ab738688afbb5861ba14250f44",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/config.py",
+     "sha": "1b34ad15d10f045fe4c73f2f9adea4118144cb45",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/db.py",
+     "sha": "6c418c9adf3d08d36a268c1b4bde8ebb7e5fe609",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/http_ingest.py",
+     "sha": "dd43745e36375ccf483ee7943d05d38dae251da5",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/logging.py",
+     "sha": "00f01fdb5640bbed296b916e61ff84ad1f510947",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/main.py",
+     "sha": "41f8a69614ee6552d84b3addbf3582b1da9342b7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/models.py",
+     "sha": "f559d7d02f5dd7090f8afab4c4f54cfb06273ac7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/rest.py",
+     "sha": "b290c894495efac65b8aa16b1880278ff5a56c63",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/sse_stream.py",
+     "sha": "3695bf749e7978d2925b995b9afbd2cb600a232d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/src/live_bench_server/store.py",
+     "sha": "73699f88529bc4385260712be6f6839326ae9093",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/tests/__init__.py",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/tests/conftest.py",
+     "sha": "5ecd24d459f22df2d57e43814ab42625f8d82144",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/tests/fixtures_export.py",
+     "sha": "25982a69df697645d87a056326c8b58636d74204",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/tests/test_http_ingest.py",
+     "sha": "7cd3c68db8285afb1dda920651380f498a92213c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/tests/test_sse_stream.py",
+     "sha": "8f0276d98be7893197027cbea60e660ddaa0c353",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/tests/test_store.py",
+     "sha": "c576ea59c1160ae13c928ef896bb3a0c879350b5",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/backend/uv.lock",
+     "sha": "975bc746c26a95d5a0bb37bccfd31a3dbd310bcb",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling-3way/_harness.py",
+     "sha": "c1c800d17526354e73e4b03c5db60ff38a8e2bab",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling-3way/_mlx_runner.py",
+     "sha": "91129f2d8810d0c7137ea2e9e8f1b55503b9f3df",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling-3way/bench.py",
+     "sha": "bae13f8fe1b1c671a23936d1a4e5d703ac7950ab",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling-3way/extract_fixtures.py",
+     "sha": "c1d501457e730f84f5822388b06141a0e9718189",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling-3way/fixtures.json",
+     "sha": "8c656e7d6d8afbf8898c100b303f552af91f06fc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling/_harness.py",
+     "sha": "c1c800d17526354e73e4b03c5db60ff38a8e2bab",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling/_mlx_runner.py",
+     "sha": "91129f2d8810d0c7137ea2e9e8f1b55503b9f3df",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling/bench.py",
+     "sha": "38e2163c1a18e912ffe513ed9419f3681ff07225",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling/extract_fixtures.py",
+     "sha": "c1d501457e730f84f5822388b06141a0e9718189",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/context-scaling/fixtures.json",
+     "sha": "8c656e7d6d8afbf8898c100b303f552af91f06fc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/memory_test.py",
+     "sha": "66be64864db0ad8c90c59b471178d810d9ce02bb",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/mock-test/run.py",
+     "sha": "9d378f2ecb95bd98c4256b8cedc264f7e76e72d0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/peak_rss_test.py",
+     "sha": "38526dc0034f63385b2d3717d1fa1b1735149f4c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent-3way/_pi_runner.py",
+     "sha": "3c32db3e66e189ab72f32e078e076eeba506bb58",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent-3way/_tasks.py",
+     "sha": "c87e21cf97733d073f16819585073f50544295d2",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent-3way/bench.py",
+     "sha": "09d1390bc28654d004f3fd2f4c616965d156ce4b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent-3way/fixtures/data.csv",
+     "sha": "02b51cc27ca9ef0811734efe8851332d0fd1888e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent-3way/fixtures/sample.txt",
+     "sha": "40ad3e3eb7313045647db2b02ca1bfe8fd91cbca",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent-3way/run_all.py",
+     "sha": "bf84462d80e208b7deced8fba1baaf10527683c8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent/_pi_runner.py",
+     "sha": "3c32db3e66e189ab72f32e078e076eeba506bb58",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent/_tasks.py",
+     "sha": "c87e21cf97733d073f16819585073f50544295d2",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent/bench.py",
+     "sha": "d5d0157bfc684ae54b3e076bd6e3101b447300f2",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent/fixtures/data.csv",
+     "sha": "02b51cc27ca9ef0811734efe8851332d0fd1888e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent/fixtures/sample.txt",
+     "sha": "40ad3e3eb7313045647db2b02ca1bfe8fd91cbca",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/pi-coding-agent/run_all.py",
+     "sha": "a3de5003abad424eb96a8f35c128260e2953e5a6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/ping/run.py",
+     "sha": "465decc1d4dd6e91265b1ef401d187f5f2ac8d8b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen35-vs-gemma4/_harness.py",
+     "sha": "c1c800d17526354e73e4b03c5db60ff38a8e2bab",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen35-vs-gemma4/_mlx_runner.py",
+     "sha": "91129f2d8810d0c7137ea2e9e8f1b55503b9f3df",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen35-vs-gemma4/bench.py",
+     "sha": "4296820a43034f0e1d9ddd107f5c7f9ef664d508",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen35-vs-gemma4/run_all.py",
+     "sha": "c50c07840b55baf2a9cfe052f2c040311cc107a4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen36-vs-qwen35-vs-gemma4/_harness.py",
+     "sha": "c1c800d17526354e73e4b03c5db60ff38a8e2bab",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen36-vs-qwen35-vs-gemma4/_mlx_runner.py",
+     "sha": "91129f2d8810d0c7137ea2e9e8f1b55503b9f3df",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen36-vs-qwen35-vs-gemma4/bench.py",
+     "sha": "9652088a053662a97a6ab29db585d3e1c07b7c32",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/benchmarks/qwen36-vs-qwen35-vs-gemma4/run_all.py",
+     "sha": "38eca5bf5a28fde40b1b6565eed18e27091068f1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/README.md",
+     "sha": "da619b7ff2f2d2002b537f7d163794b327b956e3",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/pyproject.toml",
+     "sha": "82812750d73cf064c0e3f41eed85124b72ae4f02",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/__init__.py",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/cli.py",
+     "sha": "f366ad41eeaea1b40dc78acbfde9c7a7be64a358",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/client.py",
+     "sha": "91cf8276baab8e28dd67fb21c179bb384733955c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/__init__.py",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/complete_cmd.py",
+     "sha": "acffb7d9c82f19541a381640b45acdcd6acb54e9",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/emit_cmd.py",
+     "sha": "e8cf529c41a157db81fe3be9d4c9ab79db44e1bd",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/list_cmd.py",
+     "sha": "7cf9252f2d7f263451f45b0fbed5d05af49a68c6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/meta_cmd.py",
+     "sha": "120d99fcf25a413e62251d6ca66b975277adc5da",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/ping_cmd.py",
+     "sha": "73df565716e80e6f5eee2094b6d1af0c9a478076",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/reset_cmd.py",
+     "sha": "36de88f34346b3dab3dd8927d0647a712133c72b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/show_cmd.py",
+     "sha": "5d96c9b9c070014ef359a842873315a9ae920b78",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/stream_cmd.py",
+     "sha": "7fe6122f547cfeb3b116844f7410e89e79a0362c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/commands/tail_cmd.py",
+     "sha": "042f60280f477192a43a5c84753502c03f8553b9",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/dev/__init__.py",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/dev/fake_stream.py",
+     "sha": "cf6d3042537dc474d0ca68676df15235ad7dc42c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/src/live_bench_cli/models.py",
+     "sha": "1e9cd3d46f87ddc1483bc6bcd0535fa6704d1965",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/tests/__init__.py",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/tests/test_client.py",
+     "sha": "4d893f6d11ab485c4cc0d185f687a58fb0012ef4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/tests/test_commands.py",
+     "sha": "42502c892246ae01ed38dba44cdd0d493aee3e69",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/cli/uv.lock",
+     "sha": "95b206020af424774eca53b08be46428e53404f8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/README.md",
+     "sha": "9f2a1990778b2a086fda54be780ff4d72b9f7c7e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/bun.lock",
+     "sha": "2ca12d288538a4b3223bf73291928fcc4928160c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/index.html",
+     "sha": "31a0b2af471a600b8b864d9ac0eb81fd85fdcb39",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/package.json",
+     "sha": "93aee1ec218e00a15973b06f18156a830bf14a1f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/alibaba.png",
+     "sha": "33fb207ec3bcae96b8aee85fba613e5f6e27c4d5",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/alibaba.svg",
+     "sha": "f753720e22e36c162cbb79d2af877e0c20da7ed0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/apple.png",
+     "sha": "db112f94dbd8811adcf75c321cea937e8ed696a8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/apple.svg",
+     "sha": "f3e0596136d0477491c4bff0d20eb39daf30ccc6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/google.png",
+     "sha": "5b9f28c884ae43241f055aec43e2872e9fd59338",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/google.svg",
+     "sha": "7bc4a38ce7a089e88f3eb3a91cc8b31961e8127c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/nvidia-logo-vert-blk_6390c37f-960b-42bd-a176-b51cfa6d7ba4-prv.png",
+     "sha": "b332f18118edcabeb92c00f20795d2dea546f6f2",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/nvidia-mark.png",
+     "sha": "1e53b42c01402501fe6e2c976ec7b3a75b3f1401",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/nvidia.png",
+     "sha": "9d721a39088272f9cbb6f762f90b475dcd71a22d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/nvidia.svg",
+     "sha": "798cbad1d93162698f5810601f79c8ded48a8a52",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/ollama.png",
+     "sha": "209991c6c83560e4c2add97f1e98d9f60d2440fd",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/ollama.svg",
+     "sha": "48e685cfad31bb0838ec1f6f418c0ab1c5798aac",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/pi.png",
+     "sha": "38a13d04ea3a7e54d8495e15a0ddc6e60b3bb81e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/public/icons/pi.svg",
+     "sha": "27bc6218fa7b1cfd5457951be20e1f7b319ecbc0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/.gitkeep",
+     "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/App.vue",
+     "sha": "63e66609925d9bd8bfa872c045cb1af2bc1182fb",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/api/rest.ts",
+     "sha": "c441cd3aa3c775983ef96565063cf892509e6089",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/api/stream.ts",
+     "sha": "6c192a240c04cdc5f2cce1bb6e406ce4ef364a17",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/AnimatedBar.test.ts",
+     "sha": "aab40fbacadcc3e462cb34c7469f104c4c4af4b1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/AnimatedBar.vue",
+     "sha": "aee82564d7e7e8cda0ab7b9de3a4e768a93894e6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/BarGradientDefs.vue",
+     "sha": "d068efff270fb41c3ae892bbffbac0919dc3902b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/BenchmarkCard.vue",
+     "sha": "8780b8ac35db2d7d85b5d5fd5845063fca9f5578",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/BenchmarkGrid.vue",
+     "sha": "fdf5bf5140dd01882ca8b75a2774b6a4c4e3f12f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/ConnectionBadge.vue",
+     "sha": "2adedf13e543032f6f227745189cb295240117ed",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/DatasetStatusBar.vue",
+     "sha": "fee7ccc8cdcce80bfa16bf7751f42f8d15b5a7c3",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/EmptyState.vue",
+     "sha": "b4ec906b16a5a6ba4b7c4473805e1e9d007295dc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/GroupedBarChart.vue",
+     "sha": "b1a00ed7eb53f0bf24308318e93e81b94c4113d1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/LayoutSwitcher.vue",
+     "sha": "eeed4f0fa47b00e8ed88b94019f3c30b0aad5ddd",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/NavBar.vue",
+     "sha": "784305babf1f7ed6e673b0f421f63ec2cb443720",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/PromptModal.vue",
+     "sha": "1f299445dce8d0c29a4bfbe225527ee927563e8c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/TagBar.vue",
+     "sha": "6038f4d053da6dc79d01172dd17c758c850d9cda",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/ThemeSwitcher.vue",
+     "sha": "f20205944376ad96f6df137b00012e33721e8acb",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/components/gradient.ts",
+     "sha": "58413d5f409334f8c9197cbf50b8a38dec6427dc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/main.ts",
+     "sha": "a921db4a0fc35c4bf8d8ac98e5c77a422943c833",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/pages/BenchmarkPage.vue",
+     "sha": "ceb50fad454b7bf7394a8a6fc7939edec2c59035",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/pages/LandingPage.test.ts",
+     "sha": "79e77bf3f8bf7bcb5c8a20d6f3fd916e8724152f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/pages/LandingPage.vue",
+     "sha": "683c640f2359e74a99298e74db5a97211005ecc2",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/router.ts",
+     "sha": "63b735a3fe71f0654a5a7141b2ca8f3389f60a5f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/schemas.test.ts",
+     "sha": "b8499a007b3d747438a7be8f0881df7e1910120c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/schemas.ts",
+     "sha": "be3ebcdc78bcf7800210a8d375cfee9cb21105d6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/stores/benchmarks.ts",
+     "sha": "958e1c427910d26bc64dbcf5adddcd13ab3b5f31",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/stores/connection.ts",
+     "sha": "2fe3f1100ae07d1c9910f92a998f8b46419a34ff",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/stores/prefs.ts",
+     "sha": "c77167929ac613a4b060690ba6f54b57e59a0d57",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/stores/session.test.ts",
+     "sha": "c1105ed14e804adc95158c3241ae8d6147d8b82b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/stores/session.ts",
+     "sha": "634a9ffa62e00ca81f8a2b1747075a682101d2e6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/styles/main.css",
+     "sha": "83d0b797649b7fad5d8c8e8100657755ab7c96ec",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/styles/themes.css",
+     "sha": "63e8935485b1d288feb16b6d6a083e6534098d76",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/src/themes.ts",
+     "sha": "27b42e2e0edb8b8f98d6c653a16ade70720d109a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/tsconfig.json",
+     "sha": "e2968e8460eadc0e15a79ceaf928f2bccb1590a8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/vite.config.smoke.ts",
+     "sha": "f9fc49b5a8addc099ce5479440431a14bdbe6c43",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "apps/frontend/vite.config.ts",
+     "sha": "efec52ba748dc2e224efd21103d733f60b74ad07",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "benchmarks/context-scaling-3way.yaml",
+     "sha": "c2cecb39ea4a25eeb8c53775103c9b7b9af1ff1b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "benchmarks/context-scaling.yaml",
+     "sha": "870069593c49c6e4fa3cd1a8c688643780ec9b6e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "benchmarks/mock-test.yaml",
+     "sha": "99b78c20b8cb02b55ebf419d9327c8844c9296cd",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "benchmarks/pi-coding-agent-3way.yaml",
+     "sha": "83d22743b7ccd56ea21e26fa938c24d3b6d63a83",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "benchmarks/pi-coding-agent.yaml",
+     "sha": "81a78c8c1093dfa948bc27ff8de44135cc24a7fc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "benchmarks/qwen35-vs-gemma4.yaml",
+     "sha": "307ecc4abe95c2f28cc6c9e0a327a7c9c7e606fe",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "benchmarks/qwen36-vs-qwen35-vs-gemma4.yaml",
+     "sha": "33624080efd5219fc5f4b96a61dbe3ed6f71a8ba",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/hero.svg",
+     "sha": "61b929f9872d193eebd5d1d3d36d4338ffef523e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "justfile",
+     "sha": "19c14745fc0561e3d76308e97cd5f9c315a4a406",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/brand-icons-tags-metrics.md",
+     "sha": "60524b4692c2faba9f41f197e55d888b3f45ad58",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/context-scaling-benchmark.md",
+     "sha": "b7464ff8db5b43843c16a6e94a530970d30eaab3",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/init_live_bench.md",
+     "sha": "302f05718db07bb0934c87531d5c3756011db848",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/live-bench-build-plan.md",
+     "sha": "56ee8ced110e4a25ca1507d6382487bb46f9b3fa",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/per-chart-groups-refactor.md",
+     "sha": "eb2221a91ea8ca262e1840ee2b3a0febf8e20a0c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/per-group-metadata-modal.md",
+     "sha": "af2fa71ab1a2bbbf94af3c9ff5ee009577bc9ab7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-coding-agent-benchmark.md",
+     "sha": "79b2780fded311e979dd7e63f388c49d639b57c1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/qwen35-vs-gemma4-live-benchmark.md",
+     "sha": "b9cf324b323c6fb6ffd5018e207ae0d5a7077072",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/qwen36-trio-benchmarks.md",
+     "sha": "2857f50251d1383568fcdf53ba91c8e671f0bccc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/single-benchmark-many-charts-validation.md",
+     "sha": "bc07cb01a4d194d94133bee7e524585988261c4e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/single-benchmark-many-charts.md",
+     "sha": "afe2a38236b37fe4d10104ebea4be5114ae90af4",
+     "type": "blob"
+    }
+   ],
+   "truncated": false
+  },
+  "https://api.github.com/repos/disler/pi-vs-claude-code/git/ref/heads/main": {
+   "object": {
+    "sha": "0ed11f44932fdef29bd98467700019762298f50d"
+   }
+  },
+  "https://api.github.com/repos/disler/pi-vs-claude-code/git/trees/0ed11f44932fdef29bd98467700019762298f50d?recursive=1": {
+   "tree": [
+    {
+     "mode": "100755",
+     "path": ".claude/commands/plan_w_team.md",
+     "sha": "3daf508634dccf40917f2cfd7aad0c48e4fb6f46",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/commands/prime.md",
+     "sha": "95b630fee03b0bae6836b9d92ec76fde44210ab4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/settings.json",
+     "sha": "e5eb201840cb5af033505614834657f717de2afa",
+     "type": "blob"
+    },
+    {
+     "mode": "100755",
+     "path": ".claude/status_lines/status_line.py",
+     "sha": "97a2c05a6c1bac5bef7ccef7586e5dec405b9e94",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".env.sample",
+     "sha": "d7a984b80a5363adee2e46fea98a62b6d8ff1a2b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".gitignore",
+     "sha": "063aec032e27e2a66cf3e3e93d51b91764a3c030",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/agent-chain.yaml",
+     "sha": "4ee407d1c8746c76def19e5bca061b63b56513c8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/bowser.md",
+     "sha": "68315daa87f32987f70a8b69422e8d1bdce5d9f6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/builder.md",
+     "sha": "b92a7ed4420a15ef9ca14768b095831a20d8a619",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/documenter.md",
+     "sha": "bccbe8dd2f1bcf29dc5ff34e1dd3a64ffebc61f7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/agent-expert.md",
+     "sha": "68fa9d05fc137b0b78675dfee0c2e224d2ea2322",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/cli-expert.md",
+     "sha": "59d006a9dfdbe88aa730af432f6d590fa580cae4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/config-expert.md",
+     "sha": "5a7d945fee1bafdb9c8a3b5bf96fc7f51f146670",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/ext-expert.md",
+     "sha": "ff046165a11e6866a7adebbc1928bdd2d629d5b3",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/keybinding-expert.md",
+     "sha": "369bb892a5c8a0361a899b19b84d3328c6928908",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/pi-orchestrator.md",
+     "sha": "e1148d12c40b771e80b9c08c50e13b0010154a57",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/prompt-expert.md",
+     "sha": "87f2b482a408ce2616afd765b15f8ec7578937d9",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/skill-expert.md",
+     "sha": "c206a9fc057d0563d6697e16b7a26b3676add38c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/theme-expert.md",
+     "sha": "68be1ccb9cf339bf463d8f47348ff18564cce99e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/pi-pi/tui-expert.md",
+     "sha": "7024283b6a74bd113bcd38f67394f340803811bb",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/plan-reviewer.md",
+     "sha": "e720ac7288e1567f479c0442ecea61ec755b983a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/planner.md",
+     "sha": "e442c069df09d466828b47e3c17b760b5794d152",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/red-team.md",
+     "sha": "be75846c7218f192d3196db8162818259c021e7d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/reviewer.md",
+     "sha": "b130a3d8e37eee8e6d28c4e64da829539399854f",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/scout.md",
+     "sha": "5f16b22f9922cd0456631c3179e603b3f431fc8b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/agents/teams.yaml",
+     "sha": "ce8bc75acb43d36c94c7a4de43b5ac2a79869fc8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/damage-control-rules.yaml",
+     "sha": "b7c5af171bfc5419fb5eb2406df3db50d2996ffe",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/settings.json",
+     "sha": "b6bdc353e0da7ac1c4b585082dd69974c455c406",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/skills/bowser/SKILL.md",
+     "sha": "ab42c1d7aa2a19a2d47bd96f68306044d9a4dc34",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/catppuccin-mocha.json",
+     "sha": "27819b34e343865b42362b5faaea85ebe1d47647",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/cyberpunk.json",
+     "sha": "09ad7dfd7b618645c8f693a9a38f322f894a1121",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/dracula.json",
+     "sha": "d42a72c0b8a4d052492f300997ce960c9ee6ede6",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/everforest.json",
+     "sha": "3131378abdcaa8758dcc5be393881291ab938137",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/gruvbox.json",
+     "sha": "dbed3aa29cc7c0b6bcfb1da1e9803284ea636f03",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/midnight-ocean.json",
+     "sha": "a00cc0fd68173f3437b7f1d07500306e58806712",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/nord.json",
+     "sha": "86f494c09932b844e422d9496e028471cccfc239",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/ocean-breeze.json",
+     "sha": "462d9f298841943600b531395462128a2164b4c5",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/rose-pine.json",
+     "sha": "fa7f21173dc24595ccad24085a2ba5b1eb941bce",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/synthwave.json",
+     "sha": "7f5657a91f8f9ba15994cc7e4fddf081ad6cff08",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".pi/themes/tokyo-night.json",
+     "sha": "1db95bf4c452724111719745c146a9839454e472",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "CLAUDE.md",
+     "sha": "7f119f903f52ec4d8229621010baea7520383465",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "COMPARISON.md",
+     "sha": "98ff42032ba1869e4dadfcbc8ff3b9dc199b27ae",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "LICENSE",
+     "sha": "acc8f9543a768856cadb374c7989080d032de051",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "PI_VS_OPEN_CODE.md",
+     "sha": "c8101127c48d15efea72487b9cb091400e58dc6d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "README.md",
+     "sha": "8e45fe030dd07797dbc277339f92c4dff064101d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "RESERVED_KEYS.md",
+     "sha": "19604eab37810573653ed2582bdb92826d6e94a0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "THEME.md",
+     "sha": "9ea21c11b73a219bd6b669e6756498c5a44f1849",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "TOOLS.md",
+     "sha": "c9d850431154c1f9e0ab6a02130fe65c0c41c6f4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "bun.lock",
+     "sha": "bfda2e8530ee15871f43e6a531bfd0482e7241a1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/agent-chain.ts",
+     "sha": "8cf7d2ad4eae7608744eef47fe127530c1698d3a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/agent-team.ts",
+     "sha": "66ecbef114966767ad29e72330536dde7842141d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/coms-net.ts",
+     "sha": "1ed8a7639ae709953a6b944e0fd18fc0fd4abf8b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/coms.ts",
+     "sha": "b98713d68e1b530faa5e6d2905f021cbe0b77437",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/cross-agent.ts",
+     "sha": "252f9e000438d79251335ee15b3b8acc410f52df",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/damage-control-continue.ts",
+     "sha": "fb1ac25021601ba5420ad8bccb5a9110840c7a94",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/damage-control.ts",
+     "sha": "0544ab42fa4b3c517103a92ca9d096fbdf11bbca",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/minimal.ts",
+     "sha": "5fed8620b4f575a05fe9a76dd0d4ba0618c5f9fe",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/pi-pi.ts",
+     "sha": "97c46d278e58a701ff4d3a5240633685108f18d2",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/pure-focus.ts",
+     "sha": "8d8dea543220d1f46e4f722c1670bea678ebd569",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/purpose-gate.ts",
+     "sha": "cb9a4c3b5dfa8071774c39a68b156cf9d30fe83a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/session-replay.ts",
+     "sha": "d26b320b496d43fe9fd8bbf4b330a2b7a4c8945b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/subagent-widget.ts",
+     "sha": "46523a1f5644f1622a7a4e2b4da2134addbf50bc",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/system-select.ts",
+     "sha": "89916584807cf2485cf8bbe2a2dc3f3dbb0dffd9",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/theme-cycler.ts",
+     "sha": "3b16d4c357ad1a12973960cb62edd5c590889494",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/themeMap.ts",
+     "sha": "501275b4b6f0a38b3fc4518b989f61657722ca11",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/tilldone.ts",
+     "sha": "66eae0dc292545c380380943f8e8fcfdd1e62e10",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/tool-counter-widget.ts",
+     "sha": "0cee9b2a23f5ae69d887609f198e3aa9cfbb4154",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "extensions/tool-counter.ts",
+     "sha": "db02ba58a07b36f08165b24b8c7d5c0d40c663b8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/01-hero.png",
+     "sha": "313cc376cb1e8ce2b01b87db6ad15da0b6dca3b0",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/08-the-shift.png",
+     "sha": "cbdcbcbc0b5bd093cf118735c658aba18bc42aa1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/14-four-tools.png",
+     "sha": "cd3f5daa98cfcc66edb6952698b1256575453986",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/21-scale-2.png",
+     "sha": "8b71c45661e7e0a91625bf1abc718c6eb6651768",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/27-flat-org-info-over-titles.png",
+     "sha": "510754947b65fd6e50dfe68db32d48f7de39b27e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/pi-logo.png",
+     "sha": "6b7fc49a53f9c0dc756cbc064f9b6d30d4a11e88",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/pi-logo.svg",
+     "sha": "ed14b63805790cd1931f34f7dcef8ccbc10d762d",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "justfile",
+     "sha": "9e511c1012df8a4425cbc98c368a584be3c95ed7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "package.json",
+     "sha": "ea5834f04de5a979dd065155fdd3f43f9e3c66c4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "scripts/coms-net-server.ts",
+     "sha": "b7e7a2d06f9814fe075299bcc626053c8410eaf8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/agent-forge.md",
+     "sha": "48f12789936d94e2b97f3a556f53375df4b5c22b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/agent-workflow.md",
+     "sha": "f01b38dfe793fb535b88d3db7243ac86577844e7",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/damage-control.md",
+     "sha": "c70872f602dfa9702ad498a32773a9468d57910c",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-pi.md",
+     "sha": "cd40be31affaa9b7adb47f506c55e277bd33468d",
+     "type": "blob"
+    }
+   ],
+   "truncated": false
+  },
+  "https://api.github.com/repos/disler/planf3/git/ref/heads/main": {
+   "object": {
+    "sha": "f34b7ba5ff8167ef6283791763f4b578bfb3a2c0"
+   }
+  },
+  "https://api.github.com/repos/disler/planf3/git/trees/f34b7ba5ff8167ef6283791763f4b578bfb3a2c0?recursive=1": {
+   "tree": [
+    {
+     "mode": "100644",
+     "path": ".claude/skills/planf3/SKILL.md",
+     "sha": "0936a6f1bca202b31638051871ed7c4c1b1b060c",
+     "type": "blob"
+    },
+    {
+     "mode": "100755",
+     "path": ".claude/skills/planf3/scripts/edit_gpt_image.py",
+     "sha": "c3b44d38c94091137f90af80bf1331c86c49f142",
+     "type": "blob"
+    },
+    {
+     "mode": "100755",
+     "path": ".claude/skills/planf3/scripts/generate_gpt_image.py",
+     "sha": "3eb9bcb154475fe2cb66054146b2cbdfe26be037",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/planf3/workflows/build-plan.md",
+     "sha": "45236ac2e38d7dc1afdc3a96e07c2344359934e1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/planf3/workflows/create-plan.md",
+     "sha": "5b8b4d91cd1fe6061745f19691b4232ea84e3a15",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/planf3/workflows/image-generation.md",
+     "sha": "0dc56ff9ee06274b63aa6965f62b5adf3298400a",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/planf3/workflows/update-plan.md",
+     "sha": "9518ab08ff256e6485876d1bc14c19a6e7e2ce37",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".claude/skills/planf3/workflows/update-references.md",
+     "sha": "ab4551197cbce6411c6726078ca8756abfd5485e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".env.sample",
+     "sha": "9847a1df18c1ff8797ad55b83f8c3fc2afaedef8",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": ".gitignore",
+     "sha": "60550788529cfb46fcfa267bc89ca013e4908a35",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "LICENSE",
+     "sha": "acc8f9543a768856cadb374c7989080d032de051",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "RAW.md",
+     "sha": "344c30fd285aabe51029830ca01b047de8470fc3",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "README.md",
+     "sha": "c28334eb96b94241e8b62f22c058b4d1da86a2ad",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/02_outsourced_planning.png",
+     "sha": "f014692c422250224a3a0d151e00056167e72602",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/03_templated_engineering.png",
+     "sha": "222eb96e947f10584e84a0f834299eab72c4fdf1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/04_plan_anatomy.png",
+     "sha": "baf9e352f48a28fb3b76c05cdad74dcf3d405a3e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/05_five_workflows.png",
+     "sha": "815619171adc2039714d8606d46e862b89bacdbd",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/06_priorities.png",
+     "sha": "fb29ede0c5035e803cc1d24b2fdb1aba828db78e",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/07_trifecta.png",
+     "sha": "0fc144be529a5795bad9c19fc0b035b478f44d06",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "images/meta-skill-v5-multiplier-grid.png",
+     "sha": "7bd95042683bdf00573c28b9ba9fc0bffeee84e4",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "legacy_v1_meta_plan.md",
+     "sha": "21e85696ac05299d6bee074cd098ad124a06c861",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "prompts/pi-iroh-coms.md",
+     "sha": "659dd947d96f9246c74b1a7fd6bfa7a5d14866bf",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net.html",
+     "sha": "a6d6baa8cf65353f572ec0a530e6ac382f291d1b",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/hero.png",
+     "sha": "5060704f0d6b80fc58e9d5923e07459032601faf",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/notes.png",
+     "sha": "7658e762e767dbd36f5b1f161354e7c1aaf0ed74",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/phase1.png",
+     "sha": "9c76eebf6e0cfd6778aa0e5f2a283bb7911efeda",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/phase2.png",
+     "sha": "d4d06a61ed40e2714f55f0044dbd5dfd6c3a20df",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/phase3.png",
+     "sha": "a66002cc3986c234509ac3af8d0ca7a4b04c05c1",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/phase4.png",
+     "sha": "b0937eb4f04a0181da07abf478a7c8b5131b0208",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/problem.png",
+     "sha": "941466287a0a2eb8eff56e29b7518698fba58122",
+     "type": "blob"
+    },
+    {
+     "mode": "100644",
+     "path": "specs/pi-iroh-coms-net/solution.png",
+     "sha": "5e4f76242b33472a3c815feb6f053332902eecbf",
+     "type": "blob"
+    }
+   ],
+   "truncated": false
+  },
+  "https://api.github.com/users/disler/repos?per_page=100": [
+   {
+    "name": "pi-vs-claude-code"
+   },
+   {
+    "name": "fusion-harness"
+   },
+   {
+    "name": "planf3"
+   },
+   {
+    "name": "live-bench"
+   }
+  ]
+ }
+}

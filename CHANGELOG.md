@@ -26,6 +26,19 @@
 
 ### Fixed
 
+- *(CL-mvet, provider neutrality)* `scripts/lib/source.py` no longer carries any
+  hosting-service knowledge. Its URL shapes, clone forms, SSH fallback, and
+  owner-or-repository resolution moved to `scripts/lib/providers/git_url.py`,
+  which is the remedy the neutrality check's own report names. The legacy
+  provider-aware set falls from 15 modules and 126 findings to 11 modules and 55;
+  `source.py`, previously the largest at 50 findings, now measures zero and drops
+  out of the baseline entirely. The certified core grows from 12 modules to 17,
+  adding the normalization layer, the inventory schema, the Library-owned
+  classification and decomposition rules, and catalog-derived routing. The
+  drawdown removes provider *knowledge* from `source.py`, not provider
+  *dependence*: it still resolves through the Git adapter and still handles one
+  hosting service, and the zero should not be read as the module having become
+  provider-independent.
 - *(clc-mfaz, cdx/cld)* A fresh bead worktree now carries the gitignored harness
   overlays of its main checkout. A linked worktree checks out tracked content
   only, so `.agents/`, `.claude/skills/`, and `.env` were missing and hygiene
@@ -55,6 +68,49 @@
 
 ### Added
 
+- *(CL-mvet, marketplace)* Three structurally different reference marketplaces
+  install through one generic provider contract, and the contract now has a
+  production caller. The `git-repo` adapter installs `implement` and `ask-matt`
+  from their nested `skills/engineering/<name>/` layout with upstream names
+  preserved and the curated `skill_class` (`procedure` and `navigator`) that no
+  upstream field distinguishes. The `git-org` adapter enumerates only its
+  Library-owned allowlist: an organization repository that is not allowlisted is
+  absent from inventory, a registration without an allowlist is refused at the
+  catalog validator, the adapter constructor, and the provider factory alike, and
+  an allowlisted repository the organization does not serve is a loud refusal
+  rather than a quietly smaller inventory. Its rights resolve **per repository** —
+  a repository with no observed licence relaxes the licence-derived grants to
+  `unknown` and never inherits a sibling's grant, while `fetch_authorization` is
+  left alone because a missing licence says nothing about fetchability. The
+  `mcp-content` adapter is transport only: a fetched prompt kit produces a Prompt
+  receipt for its own type and scope and creates no `mcp:` dependency edge, no
+  global ownership edge, and no harness MCP registration. It is revisionless, so
+  it is trust-on-first-use pinned with fail-closed drift, has no digest-polling
+  freshness, and its committed projection is blocked by default; it holds a
+  credential *reference* and never a value, and unauthenticated access is a typed
+  availability refusal rather than a fallback to some other source. Mixed bundles
+  decompose into existing typed primitives, and a member fitting no existing type
+  is recorded as `unclassified` and stays `discoverable` rather than being forced
+  onto the nearest type or into the generic bundle primitive ADR-0011 refuses.
+  Maturity (`in-progress`, `deprecated`) is classification and never a filter:
+  those items stay in the inventory as `discoverable`, and promoting one is an
+  explicit scope decision. `library marketplace list|inventory|install|status|gc`
+  is the production caller the cache, rights, and retention cores were built for,
+  supplying stated completeness evidence, a two-phase projection activation, a
+  reference index over both receipt scopes, per-source resolution observations,
+  an explicit evidence window, and a durable purge ledger.
+- *(CL-mvet, routing)* Catalog-derived routing (`scripts/lib/routing.py`) answers
+  "which installed capability handles this request" from registered sources and
+  canonical context pointers only, and refuses its own rendered answer if it
+  names a source the run did not read. On a machine with fewer catalogs it
+  returns a narrower answer instead of a confidently wrong one.
+- *(CL-mvet, Workspace)* A Workspace schema v2 manifest now installs. Slice 5
+  refused materialization pending three things and all three are here: declared
+  pins are verified against what the source currently serves through the provider
+  layer, resolved members are normalized into inventory items bound to their exact
+  bytes, and every v2 mutation passes through `gate_workspace_mutation` and the
+  executable-admission gate. A source that cannot say what it serves, and a pin
+  that no longer matches, each refuse the whole closure and write nothing.
 - *(CL-dbam, Workspace)* Workspace schema v2 composes pinned roots across several
   catalogs in one manifest. A manifest declares a `catalogs:` block of
   alias-to-identity mappings, each carrying a typed immutable pin (`commit` or
