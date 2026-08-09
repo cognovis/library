@@ -3553,18 +3553,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: x-isynet-mssql-adapter
-      description: Schema-verification, NULL-handling, JOIN-scope, query-pattern, and billing-domain facts for the x.isynet MSSQL adapter (Mira PVS sync).
-      source: https://github.com/cognovis/library-core/tree/main/standards/x-isynet-mssql-adapter/
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard-bundle
   guardrails:
     - name: block-destructive-bash
       description: Blocks destructive bash commands (force-pushes, recursive deletes, DROP TABLE, etc.) that cannot be undone. The only deterministic safety layer — runs outside the LLM loop and cannot be bypassed by the model.
