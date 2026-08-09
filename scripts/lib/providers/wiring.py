@@ -587,7 +587,8 @@ def install_marketplace_item(
     enforces that per member path, and this earlier check enforces it for the
     target root as a whole, so the refusal costs no retrieval.
     """
-    guard_rematerialization(non_compliance, paths=[str(Path(target_root))])
+    blocks = state.non_compliance_register() if non_compliance is None else non_compliance
+    guard_rematerialization(blocks, paths=[str(Path(target_root))])
     retention = evaluate_cache_retention(item.rights, subject=item.qualified_identity())
     project(retention, lambda: None, present=present)
     return install_foreign_item(
@@ -597,7 +598,7 @@ def install_marketplace_item(
         pin_store=state.pin_store(),
         receipt_store=state.receipt_store(scope),
         target=target,
-        activate=filesystem_activation(target_root, non_compliance=non_compliance),
+        activate=filesystem_activation(target_root, non_compliance=blocks),
         observed_at=observed_at or _now(),
         completeness=completeness_for(provider, item),
         transformation=transformation,
@@ -626,8 +627,9 @@ def repair_projection(
     repair**, so the block is checked here against the receipt's own recorded
     and planned targets, and again inside the activation.
     """
+    blocks = state.non_compliance_register() if non_compliance is None else non_compliance
     guard_rematerialization(
-        non_compliance,
+        blocks,
         paths=[
             str(Path(target_root)),
             *[target.path for target in receipt.targets],
@@ -640,7 +642,7 @@ def repair_projection(
         object_store=state.object_store(),
         receipt_store=state.receipt_store(scope),
         availability=availability,
-        activate=filesystem_activation(target_root, non_compliance=non_compliance),
+        activate=filesystem_activation(target_root, non_compliance=blocks),
         observed_at=observed_at or _now(),
     )
 
@@ -664,11 +666,26 @@ class ForeignState:
     #: Receipt store location per scope name. Every scope in
     #: `retention.REQUIRED_SCOPES` must be present and at a distinct location.
     receipt_paths: Mapping[str, Path] = field(default_factory=dict)
+    #: Where the `CL-m6cc` non-compliant-projection register lives. Derived from
+    #: the cache root rather than configured separately, and **not** optional:
+    #: review found the register implemented as an optional keyword that the
+    #: shipped CLI never passed, so the durable block existed and the one caller
+    #: that could honor it did not. A control whose enforcement depends on every
+    #: call site remembering an argument is a control that is already off
+    #: somewhere. A caller now acquires the block by locating its stores.
+    non_compliance_path: Path | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "cache_root", Path(self.cache_root))
         object.__setattr__(self, "pin_path", Path(self.pin_path))
         object.__setattr__(self, "purge_ledger_path", Path(self.purge_ledger_path))
+        object.__setattr__(
+            self,
+            "non_compliance_path",
+            Path(self.non_compliance_path)
+            if self.non_compliance_path is not None
+            else Path(self.cache_root) / "non-compliant-projections.json",
+        )
         paths = {str(name): Path(value) for name, value in self.receipt_paths.items()}
         missing = sorted(set(REQUIRED_SCOPES) - set(paths))
         if missing:
@@ -697,6 +714,7 @@ class ForeignState:
                 "project": Path(f"{project_lock}{FOREIGN_RECEIPT_SUFFIX}"),
                 "global": Path(f"{global_lock}{FOREIGN_RECEIPT_SUFFIX}"),
             },
+            non_compliance_path=root / "non-compliant-projections.json",
         )
 
     def object_store(self) -> ObjectStore:
@@ -720,6 +738,15 @@ class ForeignState:
     def purge_ledger(self) -> PurgeLedger:
         self.purge_ledger_path.parent.mkdir(parents=True, exist_ok=True)
         return PurgeLedger(self.purge_ledger_path)
+
+    def non_compliance_register(self) -> NonComplianceRegister:
+        """The register of projections no sync or repair may write.
+
+        Always present, never optional. An empty or absent register blocks
+        nothing, which is the correct pre-migration state; a *damaged* one
+        refuses, which is the fail-closed state.
+        """
+        return NonComplianceRegister(self.non_compliance_path)
 
 
 def reference_index(state: ForeignState) -> ReferenceIndex:

@@ -125,7 +125,21 @@
   neutrality gate now certifies 19 core modules, adding both new ones: a migration that
   recognized a provider by name could re-key one source's legacy objects and leave
   another's, and a disposition that did could mark one source's unattributed projections
-  compliant.
+  compliant. Adversarial review hardened six of these controls before delivery: the
+  migration lost its re-materialization callback entirely, because a census taken after
+  an arbitrary caller ran found the damage and refused with the bytes already gone —
+  a refusal is not a rollback, so the callback is gone and re-materialization is a
+  separate act through a store with no deletion path; the unresolvable predicate now
+  requires a well-formed digest, since it previously accepted the literal `unknown` the
+  migration itself writes, which made migrating an unresolvable receipt turn it
+  resolvable; the non-compliance register moved from an optional keyword the shipped CLI
+  never passed onto `ForeignState`, and now matches resolved paths as well as literal
+  ones, so a symlink alias for a blocked root no longer bypasses either writer; a
+  register missing its `entries` field refuses instead of reporting nothing blocked; the
+  remediation statement is re-derived at the moment of the act, so a tampered plan can no
+  longer show one projection and delete another; and a relocation names its destination
+  in the statement it presents and refuses any pre-existing destination, closing a
+  `shutil.move` that followed a destination symlink out of the machine-local root.
 - *(CL-mvet, marketplace)* Three structurally different reference marketplaces
   install through one generic provider contract, and the contract now has a
   production caller. The `git-repo` adapter installs `implement` and `ask-matt`

@@ -241,10 +241,26 @@ class LegacyResolution:
             raise ValueError("a legacy receipt is always retained")
 
 
+#: A reconstructed content digest is a sha256 hex value, optionally prefixed.
+#: Requiring the shape rather than "some non-empty text" is the repair for wave-1
+#: F4: the migration writes the literal `unknown` into this very field, so a
+#: non-blank check made migrating an unresolvable receipt turn it resolvable and
+#: silently drop the retention and prune block that state exists to give it.
+_DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-fA-F]{64}$")
+
+
+def _is_digest(value: Any) -> bool:
+    return isinstance(value, str) and bool(_DIGEST_RE.match(value.strip()))
+
+
 def _has_content_digest(entry: Mapping[str, Any]) -> bool:
-    if not _blank(entry.get("normalized_content_digest")):
+    if _is_digest(entry.get("normalized_content_digest")):
         return True
-    if not _blank(entry.get("checksum")):
+    if _is_digest(entry.get("checksum")):
+        return True
+    if _is_digest(entry.get("checksum_sha256")):
+        return True
+    if _is_digest(entry.get("content_sha256")):
         return True
     targets = entry.get("targets")
     if not isinstance(targets, (list, tuple)) or not targets:
@@ -252,9 +268,9 @@ def _has_content_digest(entry: Mapping[str, Any]) -> bool:
     for target in targets:
         if not isinstance(target, Mapping):
             return False
-        if target.get("kind") == "file" and _blank(target.get("content_sha256")):
-            return False
         if target.get("kind") != "file":
+            return False
+        if not _is_digest(target.get("content_sha256")):
             return False
     return True
 
@@ -368,31 +384,41 @@ def migrate_lock_receipts(
 def census(roots: Sequence[Path]) -> dict[str, str]:
     """A content fingerprint of every path under `roots`.
 
-    Files are hashed, directories are marked, and a symlink is recorded by its
-    **literal** target rather than followed. Following would census a
-    destination twice and would report a re-pointed link as unchanged whenever
-    both destinations happened to match -- and eleven of the legacy projections
-    ADR-0011 inventories are symlinks.
+    Files are hashed, directories are marked, and a symlink **found during the
+    walk** is recorded by its literal target rather than followed. Following
+    would census a destination twice and would report a re-pointed link as
+    unchanged whenever both destinations happened to match -- and most of the
+    legacy projections ADR-0011 inventories are symlinks.
+
+    A symlink named as a **root** is the opposite case and is followed: naming a
+    root means "inventory this tree". Recording only the link meant a witness
+    root inventoried nothing at all, so a deletion beneath it read as no change
+    (wave-1 F3). The paths are recorded under the root the caller named, so the
+    census answers about the tree the caller asked about.
     """
     recorded: dict[str, str] = {}
     for root in roots:
-        _census_into(Path(root), recorded)
+        named = Path(root)
+        # Resolve only the root itself, so `roots=[link-to-tree]` inventories
+        # the tree. Every path inside is still walked without following links.
+        start = Path(os.path.realpath(named)) if named.is_symlink() else named
+        _census_into(start, named, recorded)
     return recorded
 
 
-def _census_into(path: Path, recorded: dict[str, str]) -> None:
+def _census_into(path: Path, label: Path, recorded: dict[str, str]) -> None:
     if path.is_symlink():
-        recorded[str(path)] = f"symlink:{os.readlink(path)}"
+        recorded[str(label)] = f"symlink:{os.readlink(path)}"
         return
     if not path.exists():
         return
     if path.is_dir():
-        recorded[str(path)] = "directory"
+        recorded[str(label)] = "directory"
         with os.scandir(path) as entries:
             for entry in sorted(entries, key=lambda item: item.name):
-                _census_into(Path(entry.path), recorded)
+                _census_into(Path(entry.path), label / entry.name, recorded)
         return
-    recorded[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+    recorded[str(label)] = hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 # -- legacy cache objects ------------------------------------------------------
@@ -554,59 +580,33 @@ def apply_cache_migration(
     plan: CacheMigrationPlan,
     *,
     state_path: Path,
-    witness_roots: Sequence[Path],
-    rematerialize: Callable[[RematerializationRequest], str | None] | None = None,
     observed_at: str,
 ) -> CacheMigrationOutcome:
-    """Run one migration, proving by census that it destroyed nothing.
+    """Record what every legacy object is owed. Touch nothing else.
 
-    Args:
-        witness_roots: The surfaces this run must not damage -- cache roots,
-            projection roots, anything an operator would notice missing. They
-            are a **required** argument with no default: a run that chose its own
-            witnesses could choose none, and the guarantee would be a comment.
-        rematerialize: Retrieves one legacy object's content again and returns
-            the recomputed cache key digest, or `None` when it could not. Absent
-            (the offline case), every request stays pending and the legacy
-            objects stay exactly as they are.
+    **This function takes no callback**, and that is the repair for a real
+    defect rather than a simplification. The first version accepted a
+    `rematerialize` callable, ran it, and then censused the witness roots to
+    prove nothing was lost. Review supplied a callable that deleted a witnessed
+    file: the census found it and the run refused -- with the file already gone,
+    because a refusal is not a rollback. A guarantee enforced by inspection
+    *after* an arbitrary caller has run is not a guarantee, it is a report.
 
-    Raises:
-        MigrationRefused: when any path present before the run is missing or
-            changed afterwards. The refusal names the paths, so a cleanup step
-            added inside a re-materialization hook fails the run that added it
-            rather than the audit six months later.
+    Migration therefore plans and records intent, and nothing more. The actual
+    re-materialization is a separate act, performed by
+    `rematerialize_legacy_object` through an `ObjectStore` that has no deletion
+    path at all by construction. There is no window in which this function hands
+    control to something that could destroy the thing it is protecting.
+
+    The recorded intent is durable so a later `sync` or repair knows what is
+    owed without re-deriving it from a directory layout that will disappear.
     """
     if not isinstance(observed_at, str) or not observed_at.strip():
         raise ValueError("a migration run records the time it observed the cache")
-    witnesses = [Path(root) for root in witness_roots]
-    before = census(witnesses)
-
-    pending: list[RematerializationRequest] = []
-    recomputed: list[str] = []
-    for request in plan.requests:
-        if rematerialize is None:
-            pending.append(request)
-            continue
-        digest = rematerialize(request)
-        if digest:
-            recomputed.append(str(digest))
-        else:
-            pending.append(request)
-
-    after = census(witnesses)
-    damaged = sorted(
-        path for path, fingerprint in before.items() if after.get(path) != fingerprint
-    )
-    if damaged:
-        raise MigrationRefused(
-            "the migration changed or lost content it was required to preserve: "
-            f"{', '.join(damaged)}. Migration grants no deletion authority, for "
-            "cache objects, receipts, or projected files alike"
-        )
 
     outcome = CacheMigrationOutcome(
-        pending=tuple(pending),
-        rematerialized=tuple(recomputed),
+        pending=tuple(plan.requests),
+        rematerialized=(),
         retained_legacy_paths=tuple(request.legacy_path for request in plan.requests),
     )
     atomic_write_text(
@@ -625,6 +625,57 @@ def apply_cache_migration(
         + "\n",
     )
     return outcome
+
+
+def rematerialize_legacy_object(
+    request: RematerializationRequest,
+    *,
+    cache_key: Any,
+    content: Mapping[str, bytes],
+    object_store: Any,
+    observed_at: str,
+) -> str:
+    """Give one legacy object an honest identity, leaving it exactly where it is.
+
+    The content is written into the content-addressed object store under a key
+    the caller computed from the bytes it retrieved. The store has no deletion
+    API, so this path cannot destroy anything even in principle -- which is the
+    property that lets the legacy directory stay in place and stay usable while
+    its replacement is built beside it.
+
+    Args:
+        cache_key: The tuple key, computed from the **retrieved** bytes. A legacy
+            object records no normalized digest and no transformation version, so
+            this key cannot be derived from what is on disk; deriving it from the
+            path is the rename this whole section refuses.
+        content: The retrieved bytes. Whatever produced them is the caller's
+            business; nothing here reads the legacy directory as a source.
+
+    Returns:
+        The recomputed cache key digest.
+
+    Raises:
+        MigrationRefused: when the legacy object is not byte-identical
+            afterwards. This is a verification of an invariant this function
+            cannot violate on its own, not a guard around an untrusted callback:
+            it catches a store implementation or a concurrent process that
+            damaged the retained copy.
+    """
+    legacy = Path(request.legacy_path)
+    before = census([legacy])
+    object_store.materialize(cache_key, dict(content), created_at=observed_at)
+    after = census([legacy])
+    if after != before:
+        changed = sorted(
+            path for path, fingerprint in before.items() if after.get(path) != fingerprint
+        ) or sorted(set(after) - set(before))
+        raise MigrationRefused(
+            f"the retained legacy object at {legacy} is no longer byte-identical "
+            f"after re-materialization: {', '.join(changed)}. A legacy object is "
+            "retained and usable until its replacement exists; nothing in this "
+            "path may alter it"
+        )
+    return cache_key.digest()
 
 
 __all__ = [
@@ -648,6 +699,7 @@ __all__ = [
     "migrate_foreign_receipt_fields",
     "migrate_lock_receipts",
     "plan_cache_migration",
+    "rematerialize_legacy_object",
     "prune_blocked",
     "read_foreign_fields",
     "scan_legacy_cache",

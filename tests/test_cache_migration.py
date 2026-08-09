@@ -43,6 +43,7 @@ from lib.providers.migration import (  # noqa: E402
     census,
     migrate_lock_receipts,
     plan_cache_migration,
+    rematerialize_legacy_object,
     scan_legacy_cache,
 )
 
@@ -73,6 +74,11 @@ def test_rematerialize_not_rename(tmp_path: Path) -> None:
     not from anything readable off the legacy path. The test proves it by
     re-materializing content that differs from the legacy directory's content
     and requiring the new digest to describe the retrieved bytes.
+
+    Planning and re-materializing are two separate calls, which is itself part
+    of the repair for wave-1 F3: `apply_cache_migration` records what is owed
+    and hands control to nothing, and `rematerialize_legacy_object` writes
+    through a store that has no deletion path at all.
     """
     legacy_root = tmp_path / "legacy"
     legacy = _legacy_object(legacy_root, "cognovis-core", "anchor", "local", b"# v1\n")
@@ -94,44 +100,41 @@ def test_rematerialize_not_rename(tmp_path: Path) -> None:
     assert request.requires_provider is True
     assert request.usable_meanwhile is True
 
-    # The provider now serves different bytes than the legacy directory holds --
-    # which is precisely the situation a revisionless `@local` tag hides.
-    retrieved = {"SKILL.md": b"# v2\n", "reference.md": b"# reference\n"}
-    store = ObjectStore(tmp_path / "objects")
-
-    def rematerialize(pending: RematerializationRequest) -> str:
-        key = CacheKey(
-            provider_identity="provider-under-test",
-            upstream_id=f"skills/{pending.name}",
-            upstream_revision=None,
-            normalized_content_digest=normalized_content_digest(retrieved),
-            library_type=pending.library_type,
-            transformation_version=TRANSFORMATION,
-        )
-        store.materialize(key, retrieved, created_at=NOW)
-        return key.digest()
-
     outcome = apply_cache_migration(
-        plan,
-        state_path=tmp_path / "legacy-migration.json",
-        witness_roots=[legacy_root],
-        rematerialize=rematerialize,
-        observed_at=NOW,
+        plan, state_path=tmp_path / "legacy-migration.json", observed_at=NOW
     )
     assert isinstance(outcome, CacheMigrationOutcome)
     assert outcome.renamed == ()
     assert outcome.deleted == ()
+    assert str(legacy) in outcome.retained_legacy_paths
+
+    # The provider now serves different bytes than the legacy directory holds --
+    # which is precisely the situation a revisionless `@local` tag hides.
+    retrieved = {"SKILL.md": b"# v2\n", "reference.md": b"# reference\n"}
+    store = ObjectStore(tmp_path / "objects")
+    key = CacheKey(
+        provider_identity="provider-under-test",
+        upstream_id=f"skills/{request.name}",
+        upstream_revision=None,
+        normalized_content_digest=normalized_content_digest(retrieved),
+        library_type=request.library_type,
+        transformation_version=TRANSFORMATION,
+    )
+    new_digest = rematerialize_legacy_object(
+        request,
+        cache_key=key,
+        content=retrieved,
+        object_store=store,
+        observed_at=NOW,
+    )
 
     # 1. The legacy directory is the same directory, in the same place.
     assert legacy.is_dir()
     assert legacy.stat().st_ino == legacy_inode
     assert (legacy / "SKILL.md").read_bytes() == b"# v1\n"
     assert census([legacy_root]) == legacy_census
-    assert str(legacy) in outcome.retained_legacy_paths
 
     # 2. A new object exists, and it was created by materialization.
-    assert len(outcome.rematerialized) == 1
-    new_digest = outcome.rematerialized[0]
     objects = store.objects()
     assert len(objects) == 1
 
@@ -162,8 +165,6 @@ def test_a_legacy_object_stays_usable_until_it_is_rematerialized(tmp_path: Path)
     outcome = apply_cache_migration(
         plan_cache_migration(legacy_root),
         state_path=tmp_path / "legacy-migration.json",
-        witness_roots=[legacy_root],
-        rematerialize=None,
         observed_at=NOW,
     )
 
@@ -264,8 +265,6 @@ def test_migration_grants_no_deletion_authority(tmp_path: Path) -> None:
     cache_outcome = apply_cache_migration(
         plan_cache_migration(legacy_root),
         state_path=tmp_path / "legacy-migration.json",
-        witness_roots=witness,
-        rematerialize=None,
         observed_at=NOW,
     )
 
@@ -296,32 +295,53 @@ def test_migration_grants_no_deletion_authority(tmp_path: Path) -> None:
     )
 
 
-def test_a_migration_that_loses_a_byte_refuses_rather_than_reports(
+def test_a_full_migration_run_writes_only_its_own_state_file(
     tmp_path: Path,
 ) -> None:
-    """The no-deletion rule is self-checked, not merely documented.
+    """AC4, at the strongest reading available: it writes nothing else at all.
 
-    A future cleanup step inside a re-materialization hook would otherwise pass
-    every test above by deleting something none of them names. The census
-    witness makes the run itself fail.
+    The first version of this test policed a caller-supplied re-materialization
+    callback with a before/after census. Wave-1 F3 showed why that is not a
+    guarantee: the callback deleted a witnessed file, the census found it, the
+    run refused -- and the file was already gone, because a refusal is not a
+    rollback.
+
+    The repair removed the callback, so the property is now much simpler and
+    much stronger. A migration run touches its own state file and nothing else,
+    which no later cleanup step can weaken without changing this test.
     """
     legacy_root = tmp_path / "legacy"
-    legacy = _legacy_object(legacy_root, "cognovis-core", "anchor", "local", b"# v1\n")
+    _legacy_object(legacy_root, "cognovis-core", "anchor", "local", b"# v1\n")
+    _legacy_object(legacy_root, "abandoned", "ghost", "local", b"# nobody\n")
+    projections = tmp_path / "projections"
+    (projections / "skills" / "orphaned").mkdir(parents=True)
+    (projections / "skills" / "orphaned" / "SKILL.md").write_bytes(b"# unreceipted\n")
 
-    def destructive(pending: RematerializationRequest) -> str:
-        (Path(pending.legacy_path) / "reference.md").unlink()
-        return "0" * 64
+    witness = [legacy_root, projections]
+    before = census(witness)
 
-    with pytest.raises(MigrationRefused) as excinfo:
-        apply_cache_migration(
-            plan_cache_migration(legacy_root),
-            state_path=tmp_path / "legacy-migration.json",
-            witness_roots=[legacy_root],
-            rematerialize=destructive,
-            observed_at=NOW,
-        )
-    assert "reference.md" in str(excinfo.value)
-    assert legacy.is_dir()
+    apply_cache_migration(
+        plan_cache_migration(legacy_root),
+        state_path=tmp_path / "state" / "legacy-migration.json",
+        observed_at=NOW,
+    )
+
+    assert census(witness) == before
+    # The only thing that appeared is the state file the run exists to write.
+    assert (tmp_path / "state" / "legacy-migration.json").is_file()
+
+
+def test_the_migration_run_exposes_no_mutation_hook(tmp_path: Path) -> None:
+    """There is no parameter through which a caller could destroy anything.
+
+    Asserting on the signature rather than on behavior is deliberate here: a
+    behavioral test can only cover the callback somebody thought to pass, and
+    the defect was that the callback existed at all.
+    """
+    import inspect
+
+    parameters = set(inspect.signature(apply_cache_migration).parameters)
+    assert parameters == {"plan", "state_path", "observed_at"}
 
 
 def test_census_records_content_not_merely_presence(tmp_path: Path) -> None:

@@ -175,9 +175,17 @@ def declared_provenance_from_lock(
     for entry in entries:
         if not isinstance(entry, Mapping):
             continue
-        catalog = str(entry.get("catalog_identity") or entry.get("source") or "").strip()
+        # Every field below is required, and none of them substitutes for
+        # another. Review supplied an entry carrying only `source` and the
+        # generator turned it into `receipt-declared` provenance with `granted`
+        # first-party rights: `catalog_identity` was allowed to fall back to
+        # `source`, and `source_commit` was never checked at all. A declaration
+        # that cannot be reconstructed is not weak evidence, it is the absence
+        # of evidence with a URL attached.
+        catalog = str(entry.get("catalog_identity") or "").strip()
         name = str(entry.get("name") or "").strip()
-        if not catalog or not name:
+        commit = str(entry.get("source_commit") or "").strip()
+        if not catalog or not name or not commit:
             continue
         receipt_id = f"{entry.get('type')}:{name}:{entry.get('scope')}"
         provenance = DeclaredProvenance(
@@ -186,7 +194,7 @@ def declared_provenance_from_lock(
             upstream_id=str(entry.get("source") or name),
             evidence_source=(
                 f"lock receipt {receipt_id} in {path} records catalog_identity "
-                f"{catalog} and source_commit {entry.get('source_commit')}"
+                f"{catalog} and source_commit {commit}"
             ),
         )
         claimed = [entry.get("install_target")]

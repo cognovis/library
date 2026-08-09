@@ -1336,13 +1336,24 @@ alternative:
   evidence source, and a migration has looked at nothing, so all four grants
   migrate to `unknown` with no evidence. That is the only state it can honestly
   reach.
-- **The no-deletion rule is self-checked.** `apply_cache_migration` takes a
-  required `witness_roots`, censuses their content before and after the run
-  (hashing files, marking directories, recording a symlink by its literal target
-  rather than following it), and refuses the whole run naming the paths if
-  anything it saw is gone or changed. The module additionally references no
-  deletion or rename primitive at all, and a test asserts that over its AST — so
+- **The no-deletion rule is structural, not policed.** The first implementation
+  took a `rematerialize` callback, ran it, and censused witness roots afterwards
+  to prove nothing was lost. Adversarial review supplied a callback that deleted
+  a witnessed file: the census found it and the run refused — with the file
+  already gone, because **a refusal is not a rollback**. A guarantee enforced by
+  inspection after an arbitrary caller has run is a report, not a guarantee.
+  `apply_cache_migration` now takes no callback at all; it records what each
+  legacy object is owed and hands control to nothing. Re-materialization is a
+  separate act, `rematerialize_legacy_object`, performed through an `ObjectStore`
+  that has no deletion path by slice-3 construction. The module additionally
+  references no deletion or rename primitive, asserted over its AST — so
   acquiring deletion authority means importing a name that test names.
+
+The unresolvable predicate required a **well-formed** digest only after review.
+It first accepted any non-blank string, and the migration writes the literal
+`unknown` into that very field, so migrating an unresolvable receipt made it
+resolvable and silently dropped the retention and prune block that state exists
+to grant.
 
 The unresolvable case is a closed set of three facts — `source`,
 `content-digest`, `catalog-identity` — and all missing ones are reported
@@ -1442,13 +1453,37 @@ passes through. Both production writers therefore refuse before writing:
 one an enforcement check written for install quietly misses, because it makes no
 remote claim and reads as recovery rather than as installation.
 
-**Remediation is issued, not asserted.** `apply_remediation` renders the
-statement, issues a single-use presentation, and accepts only a confirmation
-carrying that presentation's token, digest, subject, and chosen path. A
-confirmation therefore cannot exist unless the statement was shown, and it
-authorizes exactly one act on exactly one projection. This is the shape
-`CL-n7ex` arrived at after review broke a boolean flag and then broke a
-digest-only token.
+The register is a property of `ForeignState`, not an optional argument. It began
+as a keyword the shipped CLI never passed, so the durable block existed and the
+only caller that could honor it did not — a control whose enforcement depends on
+every call site remembering an argument is already off somewhere. Matching also
+compares **resolved** paths as well as literal ones: review registered a
+directory, pointed a symlink at it, and installed through the symlink, where the
+strings differed and the filesystem did not.
+
+**Remediation is issued, not asserted.** `apply_remediation` re-derives the
+statement from the plan's own fields, issues a single-use presentation, and
+accepts only a confirmation carrying that presentation's token, digest, subject,
+and chosen path. A confirmation therefore cannot exist unless the statement was
+shown, and it authorizes exactly one act on exactly one projection. This is the
+shape `CL-n7ex` arrived at after review broke a boolean flag and then broke a
+digest-only token, and two further holes were closed here:
+
+- The statement is **re-rendered at the moment of the act**. It was previously a
+  stored field beside `subject`, and only its digest was bound; replacing
+  `subject` alone showed the operator a statement naming one projection while
+  the confirmed act deleted another.
+- A relocation's **destination is inside the presented statement**, and any
+  pre-existing destination is refused. Neither was true at first, so an operator
+  confirmed a move without being told where it went, and `shutil.move` followed
+  a pre-created destination symlink out of the machine-local root while the
+  outcome reported the in-root path.
+
+The provenance threshold was tightened for the same reason: `catalog_identity`
+no longer falls back to `source`, and `source_commit` is required, because a
+lock entry carrying neither produced `receipt-declared` provenance with
+`granted` first-party rights. A declaration that cannot be reconstructed is not
+weak evidence; it is the absence of evidence with a URL attached.
 
 **What is still owed, and stated rather than implied.** The digest index is
 empty, so no projection is `attributed` today. Populating it means retrieving the

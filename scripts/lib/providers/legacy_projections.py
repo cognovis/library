@@ -572,7 +572,19 @@ class NonComplianceRegister:
                 if isinstance(payload, Mapping)
                 else "a non-compliance register is a mapping"
             )
-        records = payload.get("entries", [])
+        if "entries" not in payload:
+            # `payload.get("entries", [])` returned the default for a *missing*
+            # key, so a register that lost one field read as "nothing is
+            # blocked" and re-permitted every prohibited write. Review filed
+            # exactly that file. `CL-uliw` found the identical shape in the
+            # receipt store; the lesson did not transfer on its own, so it is
+            # now checked rather than remembered.
+            raise ValueError(
+                "the non-compliance register has no `entries` field; a damaged "
+                "register is never read as an empty one, because an empty one "
+                "re-permits every blocked projection"
+            )
+        records = payload["entries"]
         if not isinstance(records, list) or not all(
             isinstance(record, Mapping) for record in records
         ):
@@ -636,18 +648,24 @@ class NonComplianceRegister:
         blocked directory whose members would be rewritten member by member is
         the same act as rewriting the directory, and matching only exact strings
         would let it through.
+
+        Comparison is made on **both** the literal path and its resolved form.
+        Review registered a directory, pointed a symlink at it, and installed
+        through the symlink: the strings differed, the filesystem did not, and
+        the blocked projection was overwritten by both the sync and the repair
+        path. A lexical check alone answers a question about names when the act
+        is about inodes.
         """
-        wanted = [Path(item) for item in paths]
+        wanted = [(Path(item), _resolved(item)) for item in paths]
         found: list[BlockedProjection] = []
         for entry in self.blocked():
             registered = Path(entry.path)
+            registered_real = _resolved(entry.path)
             if digest is not None and entry.content_digest == digest:
                 found.append(entry)
                 continue
-            for candidate in wanted:
-                if candidate == registered or _is_within(candidate, registered) or _is_within(
-                    registered, candidate
-                ):
+            for literal, real in wanted:
+                if _collides(literal, registered) or _collides(real, registered_real):
                     found.append(entry)
                     break
         return tuple(found)
@@ -656,6 +674,25 @@ class NonComplianceRegister:
         return bool(
             self.matches(paths=[path] if path is not None else [], digest=digest)
         )
+
+
+def _resolved(path_value: str | Path) -> Path:
+    """The real path, resolving every existing component and following links.
+
+    `os.path.realpath` resolves a non-existent leaf against its existing
+    ancestors rather than failing, which is what a projection target usually is:
+    a path that does not exist yet under a directory that does.
+    """
+    return Path(os.path.realpath(str(path_value)))
+
+
+def _collides(candidate: Path, registered: Path) -> bool:
+    """Whether writing `candidate` would touch the tree `registered` names."""
+    return (
+        candidate == registered
+        or _is_within(candidate, registered)
+        or _is_within(registered, candidate)
+    )
 
 
 def _is_within(candidate: Path, root: Path) -> bool:
@@ -789,6 +826,7 @@ class RemediationPlan:
     name: str
     content_digest: str
     redistribution_state: str
+    redistribution_evidence: str
     pending_reason: str | None
     options: tuple[RemediationOption, ...]
     statement: str
@@ -823,32 +861,102 @@ def plan_remediation(classification: ProjectionClassification) -> RemediationPla
             "from this module to removing content that is not in question"
         )
     projection = classification.projection
-    lines = [
-        f"subject: {projection.path}",
-        f"content digest: {projection.content_digest}",
-        f"redistribution rights: {classification.redistribution_state}",
-        f"evidence source: {classification.redistribution_evidence}",
-    ]
-    if classification.pending_reason:
-        lines.append(f"state: {classification.pending_reason}")
-    lines.append(
-        "this projection is retained and is blocked from re-materialization. "
-        "Choose one remediation path:"
-    )
-    lines.extend(
-        f"  {option.path_id}: {option.description}"
-        + ("  [destroys bytes]" if option.destructive else "")
-        for option in _OPTIONS
-    )
-    return RemediationPlan(
+    plan = RemediationPlan(
         subject=projection.path,
         name=projection.name,
         content_digest=projection.content_digest,
         redistribution_state=classification.redistribution_state,
+        redistribution_evidence=classification.redistribution_evidence,
         pending_reason=classification.pending_reason,
         options=_OPTIONS,
-        statement="\n".join(lines),
+        statement="",
     )
+    return replace(plan, statement=render_remediation_statement(plan))
+
+
+def render_remediation_statement(
+    plan: "RemediationPlan", *, choice: str | None = None, destination: str | None = None
+) -> str:
+    """The operator-facing statement, derived from the plan's own fields.
+
+    Deriving it is the point. `statement` and `subject` used to be two
+    independent fields with only the former's digest bound into a confirmation,
+    so review replaced `subject` alone and the operator was shown a statement
+    naming one projection while the confirmed act deleted another. Re-rendering
+    at the moment of the act means what is displayed and what is acted on cannot
+    diverge.
+
+    When a `choice` is supplied the statement names that act specifically, and
+    for a relocation it names the exact `destination` -- so an operator cannot
+    confirm a move without having been told where it goes, and the destination
+    is inside the digest the confirmation carries.
+    """
+    lines = [
+        f"subject: {plan.subject}",
+        f"content digest: {plan.content_digest}",
+        f"redistribution rights: {plan.redistribution_state}",
+        f"evidence source: {plan.redistribution_evidence}",
+    ]
+    if plan.pending_reason:
+        lines.append(f"state: {plan.pending_reason}")
+    if choice is None:
+        lines.append(
+            "this projection is retained and is blocked from re-materialization. "
+            "Choose one remediation path:"
+        )
+        lines.extend(
+            f"  {option.path_id}: {option.description}"
+            + ("  [destroys bytes]" if option.destructive else "")
+            for option in _OPTIONS
+        )
+        return "\n".join(lines)
+
+    option = next(item for item in _OPTIONS if item.path_id == choice)
+    lines.append(f"remediation: {option.path_id}")
+    lines.append(f"effect: {option.description}")
+    if option.destructive:
+        lines.append(
+            "this removes the bytes at the subject path. They may not be "
+            "re-fetchable, and nothing else is touched."
+        )
+    else:
+        lines.append(f"destination: {destination}")
+    lines.append("confirming this statement authorizes exactly this one act.")
+    return "\n".join(lines)
+
+
+def _relocation_destination(relocate_root: Path, name: str) -> Path:
+    """The one path a relocation may write, proven absent and contained.
+
+    Three refusals, and the middle one is the defect review demonstrated:
+    `shutil.move` follows an existing destination symlink, so a pre-created
+    `machine-local/<name> -> /somewhere/else` turned a confirmed in-root
+    relocation into a write outside operator policy while the outcome reported
+    the in-root path. Refusing any pre-existing destination removes the class,
+    rather than special-casing the symlink that showed it.
+    """
+    if not name or name in (".", "..") or os.sep in name or "/" in name:
+        raise RemediationRefused(
+            f"{name!r} is not a single path segment; a relocation destination is "
+            "one name beneath the machine-local root, never a path"
+        )
+    root = Path(relocate_root)
+    destination = root / name
+    if destination.is_symlink() or destination.exists():
+        raise RemediationRefused(
+            f"the relocation destination {destination} already exists. It is never "
+            "written through or replaced: an existing destination may be a symlink "
+            "that places the bytes outside the machine-local root while this "
+            "operation reports the in-root path. Clear it explicitly first."
+        )
+    real_root = Path(os.path.realpath(root)) if root.exists() else root
+    real_parent = Path(os.path.realpath(destination.parent))
+    if real_parent != real_root:
+        raise RemediationRefused(
+            f"the relocation destination {destination} resolves to {real_parent}, "
+            f"which is outside the declared machine-local root {real_root}"
+        )
+    return destination
 
 
 def apply_remediation(
@@ -881,9 +989,36 @@ def apply_remediation(
             "exist without one, and nothing is removed or moved without it."
         )
 
+    # The plan is re-derived before it is trusted. A `RemediationPlan` is a
+    # value a caller holds, and review mutated one field of it: the operator saw
+    # a statement naming projection A while the confirmed act deleted projection
+    # B. Re-rendering from the plan's own fields and comparing makes a tampered
+    # plan visible instead of effective.
+    if plan.statement != render_remediation_statement(plan):
+        raise RemediationRefused(
+            "this remediation plan's statement no longer matches the fields it "
+            "was derived from, so what an operator would be shown and what would "
+            "be acted on are not the same thing. Re-plan from the classification."
+        )
+
+    subject = Path(plan.subject)
+    destination: Path | None = None
+    if choice == "relocate-machine-local":
+        if relocate_root is None:
+            raise RemediationRefused(
+                "relocation needs the machine-local root to move this projection "
+                "into; the destination is operator policy and has no default"
+            )
+        destination = _relocation_destination(Path(relocate_root), plan.name)
+
+    # Act-specific and destination-specific, so the operator confirms the exact
+    # act -- and for a relocation, the exact place it goes.
+    statement = render_remediation_statement(
+        plan, choice=choice, destination=str(destination) if destination else None
+    )
     presentation = RemediationPresentation(
-        statement=plan.statement,
-        statement_digest=plan.statement_digest(),
+        statement=statement,
+        statement_digest=hashlib.sha256(statement.encode("utf-8")).hexdigest(),
         subject=plan.subject,
         # Fresh per call, so a confirmation authorizes exactly one act. A
         # replayed confirmation carries an earlier token and is refused.
@@ -914,15 +1049,13 @@ def apply_remediation(
             f"the operator confirmed {confirmation.choice!r}, not {choice!r}"
         )
 
-    subject = Path(plan.subject)
-    if choice == "relocate-machine-local":
-        if relocate_root is None:
-            raise RemediationRefused(
-                "relocation needs the machine-local root to move this projection "
-                "into; the destination is operator policy and has no default"
-            )
-        destination = Path(relocate_root) / plan.name
+    if destination is not None:
         destination.parent.mkdir(parents=True, exist_ok=True)
+        # Re-check after the confirmation round-trip: the destination was proven
+        # absent and contained before the statement was rendered, and an
+        # interactive confirmation is an arbitrary amount of wall-clock time
+        # during which something could have created it.
+        _relocation_destination(Path(str(relocate_root)), plan.name)
         shutil.move(str(subject), str(destination))
         return RemediationOutcome(
             choice=choice,
@@ -1142,6 +1275,7 @@ __all__ = [
     "plan_receipt_backfill",
     "plan_remediation",
     "receipt_index_for",
+    "render_remediation_statement",
     "scan_projection",
     "scan_projections",
 ]
