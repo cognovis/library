@@ -48,7 +48,11 @@ from .cache_transaction import (
     reinstall_from_cache,
 )
 from .contract import SourceProvider
-from .executable_admission import AdmissionLedgerStore, ExecutableAdmissionLedger
+from .executable_admission import (
+    AdmissionAuthority,
+    AdmissionLedgerStore,
+    ExecutableAdmissionLedger,
+)
 from .foreign_cache import (
     IDENTITY_TRANSFORMATION,
     ObjectStore,
@@ -307,7 +311,7 @@ def admitted_inventory(
     result: NormalizationResult,
     context: AdmissionContext,
     *,
-    ledger: ExecutableAdmissionLedger | None = None,
+    ledger: AdmissionAuthority | None = None,
     contents: Mapping[str, Mapping[str, bytes]] | None = None,
 ) -> AdmissionReport:
     """Evaluate a normalized inventory against one scope policy."""
@@ -598,7 +602,7 @@ def install_marketplace_item(
     scope: str,
     target: str,
     target_root: Path,
-    ledger: ExecutableAdmissionLedger | None = None,
+    ledger: AdmissionAuthority | None = None,
     transformation: Transformation = IDENTITY_TRANSFORMATION,
     present: Callable[[Any], Any] | None = None,
     observed_at: str | None = None,
@@ -627,17 +631,24 @@ def install_marketplace_item(
     enforces that per member path, and this earlier check enforces it for the
     target root as a whole, so the refusal costs no retrieval.
 
-    **The admission ledger is located, not passed.** `ledger` defaults to the
-    operator's durable decisions in `state`, and a caller that supplies one is
-    substituting a different operator's ledger deliberately. The alternative --
-    `None` meaning "trust the item's own `executable_admission` field" -- put the
-    decision in the hands of whoever produced the item, which is exactly the
-    producer-asserted trust `admission.evaluate_item` already refuses to
-    consult. Before `CL-2wqz` the shipped CLI passed nothing at all here, so the
-    ledger the gate consulted was never the one an operator could write to.
+    **The admission authority is located, not passed.** `ledger` defaults to the
+    operator's durable decision *store* in `state`, and a caller that supplies
+    one is substituting a different authority deliberately. Two things follow.
+
+    The store rather than a snapshot of it, because the transaction takes the
+    decision that authorizes the write at the moment it writes: review recorded a
+    denial while an install was still retrieving and watched the artifact project
+    anyway under the grant the install had read on the way in.
+
+    Located rather than passed, because `None` used to mean "trust the item's own
+    `executable_admission` field", which put the decision in the hands of whoever
+    produced the item -- the producer-asserted trust `admission.evaluate_item`
+    already refuses to consult. Before `CL-2wqz` the shipped CLI passed nothing
+    at all here, so the ledger the gate consulted was never the one an operator
+    could write to.
     """
     if ledger is None:
-        ledger = state.admission_ledger()
+        ledger = state.admission_ledger_store()
     blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(blocks, paths=[str(Path(target_root))])
     retention = evaluate_cache_retention(item.rights, subject=item.qualified_identity())

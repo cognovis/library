@@ -503,6 +503,292 @@ def test_a_name_reference_resolves_and_displays_the_digest_it_records(
     assert _install(state, ORIGINAL).receipt.executable_admission == "admitted"
 
 
+# -- wave-1 review regressions ------------------------------------------------
+#
+# Each of these reproduces an adversarial reviewer's proof of concept against the
+# delivered code. They are kept as tests rather than as notes because the second
+# reviewer of this wave could not run -- the kimi route is not configured on this
+# machine -- and a proof of concept that only ever ran once is not a control.
+
+
+def test_an_omitted_ledger_never_trusts_the_items_own_admission_claim(
+    tmp_path: Path,
+) -> None:
+    """Wave-1 F1. The producer of an item is not an authority over running it.
+
+    Review constructed an external `workflow` carrying
+    `executable_admission="admitted"`, called `install_foreign_item` with no
+    ledger, and watched it project: the omitted ledger fell back to the item's
+    own field, so whoever produced the item decided whether it could execute.
+    """
+    from lib.providers.cache_transaction import (
+        CompletenessEvidence,
+        ProjectionActivation,
+        install_foreign_item,
+    )
+    from lib.providers.foreign_cache import (
+        IDENTITY_TRANSFORMATION,
+        ObjectStore,
+        TofuPinStore,
+    )
+    from lib.providers.receipts import ReceiptStore
+
+    claimed = NormalizedItem.from_dict(
+        {**_item().to_dict(), "executable_admission": "admitted"}
+    )
+    assert claimed.executable_admission == "admitted"
+
+    written: list[str] = []
+    activation = ProjectionActivation(
+        plan=lambda content: sorted(content),
+        apply=lambda content: written.extend(sorted(content)) or [],
+    )
+
+    with pytest.raises(TransactionAborted) as refused:
+        install_foreign_item(
+            claimed,
+            retrieve=lambda: _Provider(ORIGINAL).fetch(UPSTREAM_ID, None),
+            object_store=ObjectStore(tmp_path / "cache"),
+            pin_store=TofuPinStore(tmp_path / "pins.json"),
+            receipt_store=ReceiptStore(tmp_path / "receipts.json"),
+            target="machine_local",
+            activate=activation,
+            observed_at=NOW,
+            completeness=CompletenessEvidence.from_manifest(sorted(ORIGINAL)),
+            transformation=IDENTITY_TRANSFORMATION,
+        )
+    assert refused.value.step == "project"
+    assert "pending" in str(refused.value)
+    assert written == []
+
+
+def test_a_denial_recorded_during_an_install_is_not_overtaken_by_it(
+    tmp_path: Path,
+) -> None:
+    """Wave-1 F2. A completed denial is never followed by a projection.
+
+    Review recorded a grant, paused the provider inside `fetch` so the install
+    was holding a ledger it had already read, recorded a superseding denial that
+    returned success, and released the fetch: the artifact was projected under
+    the superseded grant. An operator whose `deny` completed had every reason to
+    believe it had taken effect.
+    """
+    import threading
+
+    from lib.providers.executable_admission import AdmissionLedgerStore
+
+    state = _state_for_home(tmp_path)
+    digest = content_digest(ORIGINAL)
+    assert _grant(tmp_path, digest).returncode == 0
+
+    retrieving = threading.Event()
+    denied = threading.Event()
+
+    class _PausingProvider(_Provider):
+        def fetch(self, upstream_id: str, revision: str | None) -> FetchedItem:
+            retrieving.set()
+            assert denied.wait(timeout=30)
+            return super().fetch(upstream_id, revision)
+
+    outcome: list[object] = []
+
+    def _run_install() -> None:
+        try:
+            outcome.append(
+                install_marketplace_item(
+                    _item(),
+                    provider=_PausingProvider(ORIGINAL),
+                    state=state,
+                    scope="project",
+                    target="machine_local",
+                    target_root=state.cache_root.parent / "projection",
+                    observed_at=NOW,
+                )
+            )
+        except BaseException as exc:  # noqa: BLE001 - the refusal is the result
+            outcome.append(exc)
+
+    installer = threading.Thread(target=_run_install)
+    installer.start()
+    try:
+        assert retrieving.wait(timeout=30)
+        AdmissionLedgerStore(state.admission_ledger_path).decide(
+            "refused",
+            IDENTITY,
+            digest,
+            library_type="workflow",
+            reviewer=OPERATOR,
+            permission_surface=(),
+            decided_at="2026-08-09T16:00:00Z",
+            evidence="a second reading found an unreviewed destructive command",
+            supersedes=True,
+        )
+        assert (
+            state.admission_ledger().state_for(
+                IDENTITY, digest, library_type="workflow"
+            )
+            == "refused"
+        )
+    finally:
+        denied.set()
+        installer.join(timeout=60)
+
+    assert not installer.is_alive()
+    assert isinstance(outcome[0], TransactionAborted), outcome[0]
+    assert "refused" in str(outcome[0])
+    assert not (state.cache_root.parent / "projection").exists()
+
+
+def test_a_denial_recorded_after_the_receipt_still_stops_the_projection(
+    tmp_path: Path,
+) -> None:
+    """Wave-1 F2, at the narrowest window there is.
+
+    The previous test denies while the install is still retrieving, which the
+    early check catches. This one denies after the receipt is durable and while
+    the projection is being planned -- the last moment at which a re-read could
+    still be overtaken. The decisions are held still across the activation
+    itself, so the denial either lands before the write and refuses it, or waits
+    for a write that was authorized when it happened.
+    """
+    import threading
+
+    from lib.providers.cache_transaction import (
+        CompletenessEvidence,
+        ProjectionActivation,
+        install_foreign_item,
+    )
+    from lib.providers.foreign_cache import (
+        IDENTITY_TRANSFORMATION,
+        ObjectStore,
+        TofuPinStore,
+    )
+    from lib.providers.receipts import ReceiptStore
+
+    state = _state_for_home(tmp_path)
+    store = state.admission_ledger_store()
+    digest = content_digest(ORIGINAL)
+    assert _grant(tmp_path, digest).returncode == 0
+
+    planning = threading.Event()
+    denied = threading.Event()
+    written: list[str] = []
+
+    def _plan(content):
+        planning.set()
+        assert denied.wait(timeout=30)
+        return sorted(content)
+
+    def _apply(content):
+        written.extend(sorted(content))
+        return []
+
+    outcome: list[object] = []
+
+    def _run_install() -> None:
+        try:
+            outcome.append(
+                install_foreign_item(
+                    _item(),
+                    retrieve=lambda: _Provider(ORIGINAL).fetch(UPSTREAM_ID, None),
+                    object_store=ObjectStore(tmp_path / "cache"),
+                    pin_store=TofuPinStore(tmp_path / "pins.json"),
+                    receipt_store=ReceiptStore(tmp_path / "receipts.json"),
+                    target="machine_local",
+                    activate=ProjectionActivation(plan=_plan, apply=_apply),
+                    observed_at=NOW,
+                    completeness=CompletenessEvidence.from_manifest(sorted(ORIGINAL)),
+                    transformation=IDENTITY_TRANSFORMATION,
+                    ledger=store,
+                )
+            )
+        except BaseException as exc:  # noqa: BLE001 - the refusal is the result
+            outcome.append(exc)
+
+    installer = threading.Thread(target=_run_install)
+    installer.start()
+    try:
+        assert planning.wait(timeout=30)
+        store.decide(
+            "refused",
+            IDENTITY,
+            digest,
+            library_type="workflow",
+            reviewer=OPERATOR,
+            permission_surface=(),
+            decided_at="2026-08-09T16:30:00Z",
+            evidence="withdrawn after a second reading of the deploy step",
+            supersedes=True,
+        )
+    finally:
+        denied.set()
+        installer.join(timeout=60)
+
+    assert not installer.is_alive()
+    assert isinstance(outcome[0], TransactionAborted), outcome[0]
+    assert "refused" in str(outcome[0])
+    assert written == []
+
+
+def test_a_hand_edited_ledger_entry_is_refused_rather_than_coerced(
+    tmp_path: Path,
+) -> None:
+    """Wave-1 F3. Malformed durable state fails closed, it is not repaired.
+
+    Review hand-wrote a ledger whose `reviewer` was the integer 12345, whose
+    `decided_at` was an object, whose `evidence` was a list, and whose
+    permission surface was a bare string. Every one of them was coerced by
+    `str()`/`tuple()` into a well-formed record, and the gate answered
+    `admitted` over it -- with a permission surface of sixteen single
+    characters.
+    """
+    from lib.providers.executable_admission import (
+        ADMISSION_LEDGER_SCHEMA,
+        AdmissionLedgerStore,
+    )
+
+    store = AdmissionLedgerStore(tmp_path / "executable-admission.json")
+    digest = content_digest(ORIGINAL)
+    base = {
+        "qualified_identity": IDENTITY,
+        "content_digest": digest,
+        "state": "admitted",
+        "reviewer": OPERATOR,
+        "permission_surface": ["filesystem:write"],
+        "decided_at": NOW,
+        "evidence": REASON,
+    }
+
+    def _write(entry: dict) -> None:
+        store.path.write_text(
+            json.dumps({"schema": ADMISSION_LEDGER_SCHEMA, "decisions": [entry]}),
+            encoding="utf-8",
+        )
+
+    for field, value in (
+        ("reviewer", 12345),
+        ("decided_at", {"not": "a timestamp"}),
+        ("evidence", ["not", "an operator sentence but coerced into one"]),
+        ("permission_surface", "filesystem:write"),
+        ("state", None),
+    ):
+        _write({**base, field: value})
+        with pytest.raises(ValueError) as refused:
+            store.ledger()
+        assert field in str(refused.value)
+
+    # A timestamp that is a string but not an instant is refused too: the field
+    # exists to be ordered against other events.
+    _write({**base, "decided_at": "some time last week"})
+    with pytest.raises(ValueError):
+        store.ledger()
+
+    _write(base)
+    assert store.ledger().state_for(IDENTITY, digest, library_type="workflow") == (
+        "admitted"
+    )
+
+
 def test_there_is_no_bulk_grant_surface(tmp_path: Path) -> None:
     """No `--all`, and no way to admit an identity without naming its bytes."""
     for flag in ("--all", "--every", "--recursive"):

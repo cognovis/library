@@ -458,6 +458,36 @@ else. `library admission` is that act.
 | Refusal diagnostic | The install-time refusal renders the exact command from the same constants the CLI registers, carrying the real digest it refused. A test parses that string back through the shipped parser, so a renamed subcommand fails the build instead of leaving operators a command that does not exist |
 | No bulk act | There is no `--all` and no bulk verb. A surface that admits many things at once is the surface people use to admit things they did not read |
 
+Three further rules came out of adversarial review of this slice, each closing a
+way for executable bytes to reach disk with no standing decision about them:
+
+- **An omitted admission authority is an empty one, never the item's own claim.**
+  `install_foreign_item` used to read the item's `executable_admission` field
+  when no ledger was passed, which made the *producer* of an item the authority
+  over whether it may run. An external `workflow` carrying
+  `executable_admission: admitted` installed and projected through it with no
+  decision behind it. An omitted authority now resolves an executable to
+  `pending`.
+- **The decision is held still across the write, not merely read before it.** The
+  authority an install receives is the durable *store*, and the activation runs
+  inside `AdmissionLedgerStore.decisions()`, which holds the same lock `decide`
+  takes. Without it a `deny` could complete and return success while an install
+  was still retrieving, and the artifact was then projected under the grant the
+  install had read on the way in.
+- **A malformed durable decision is refused, not coerced.** The store validates
+  stored field *types* rather than calling `str()` on them: a hand-edited ledger
+  whose reviewer was an integer, whose timestamp was an object, and whose
+  permission surface was a bare string otherwise produced a well-formed
+  `admitted` record with a sixteen-character permission surface.
+
+First-party catalog content is the one exemption, and it is explicit. The
+decision above asks the operator whether to trust an *externally sourced*
+artifact, and the Library re-materializing its own workflow specs is not that
+question. `FirstPartyAdmission` states that at the call site:
+`apply_receipt_backfill` constructs it with the exact `(identity, digest)` pairs
+it is about to install, so it authorizes that backfill and nothing else, and it
+is never inferred from a field the item carries.
+
 Two limits are stated rather than implied:
 
 - **The operator identity is declared, not verified.** Nothing authenticates it,

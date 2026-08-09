@@ -49,7 +49,13 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from .contract import FetchedItem
-from .executable_admission import ExecutableAdmissionLedger, admission_refusal
+from .executable_admission import (
+    ADMITTED,
+    AdmissionAuthority,
+    ExecutableAdmissionLedger,
+    admission_refusal,
+    is_executable_type,
+)
 from .foreign_cache import (
     IDENTITY_TRANSFORMATION,
     CacheKey,
@@ -325,9 +331,27 @@ def _retrieve(retrieve: Callable[[], FetchedItem], item: NormalizedItem) -> Fetc
     return fetched
 
 
+def _admission_authority(ledger: Any) -> Any:
+    """The admission authority for one install. Never the item's own claim.
+
+    An omitted ledger used to mean "believe the item's `executable_admission`
+    field", which made the *producer* of an item the authority over whether it
+    may execute -- the exact substitution ADR-0011 forbids and that
+    `admission.evaluate_item` already refuses. Review walked through it: an
+    external `workflow` carrying `executable_admission="admitted"` installed and
+    projected through this shared primitive with no ledger and no decision
+    behind it.
+
+    An omitted authority is now an **empty** one. Inert content is unaffected --
+    it short-circuits before any record is consulted -- and an executable item
+    resolves to `pending`, which is what "nobody decided" has to mean.
+    """
+    return ledger if ledger is not None else ExecutableAdmissionLedger()
+
+
 def _executable_admission_state(
     item: NormalizedItem,
-    ledger: ExecutableAdmissionLedger | None,
+    ledger: ExecutableAdmissionLedger,
     installed_files: Mapping[str, bytes],
 ) -> str:
     """The admission state for the bytes that will actually be installed.
@@ -338,8 +362,6 @@ def _executable_admission_state(
     mutation were about two different payloads, which is precisely the binding
     slice 2's gate exists to hold.
     """
-    if ledger is None:
-        return item.executable_admission
     return ledger.state_for(
         item.qualified_identity(),
         normalized_content_digest(installed_files),
@@ -359,7 +381,7 @@ def install_foreign_item(
     observed_at: str,
     completeness: CompletenessEvidence,
     transformation: Transformation = IDENTITY_TRANSFORMATION,
-    ledger: ExecutableAdmissionLedger | None = None,
+    ledger: AdmissionAuthority | None = None,
     present: Callable[[Any], Any] | None = None,
 ) -> InstallOutcome:
     """Install or adopt one foreign item through the ordered transaction.
@@ -436,7 +458,7 @@ def _install_locked(
     observed_at: str,
     completeness: CompletenessEvidence,
     transformation: Transformation,
-    ledger: ExecutableAdmissionLedger | None,
+    ledger: AdmissionAuthority | None,
     present: Callable[[Any], Any] | None,
     events: list[str],
     identity: str,
@@ -479,7 +501,9 @@ def _install_locked(
     events.append("cache-object-materialized")
 
     # 4. Write the receipt, and prove it is durable by reading it back.
-    admission_state = _executable_admission_state(item, ledger, projected_files)
+    authority = _admission_authority(ledger)
+    with authority.decisions() as standing:
+        admission_state = _executable_admission_state(item, standing, projected_files)
     receipt = ForeignReceipt(
         id=receipt_id_for(item, key),
         provider_identity=item.provider_identity,
@@ -559,6 +583,38 @@ def _install_locked(
     decision = evaluate_projection(item.rights, target, subject=identity)
     created: list[ReceiptTarget] = []
 
+    def _activate_under_the_standing_decision() -> tuple[ReceiptTarget, ...]:
+        """Write only while the decision that authorized the write still stands.
+
+        The check above reads a decision and the write happens later, and review
+        walked through the gap: a `deny` for these exact bytes was recorded and
+        returned success while this install was still retrieving, and the
+        artifact was projected anyway on the grant read on the way in. An
+        operator whose denial completed had every reason to believe it had taken
+        effect.
+
+        Re-reading is not enough on its own, because a re-read is another check
+        with another gap after it. The decisions are therefore held still across
+        the activation itself, which is the only window where the difference is
+        observable. Inert content skips all of it: no decision governs it, so
+        there is nothing to hold still.
+        """
+        if not is_executable_type(item.library_type):
+            return tuple(activate.apply(projected_files))
+        with authority.decisions() as decisions:
+            state_now = _executable_admission_state(item, decisions, projected_files)
+            if state_now != ADMITTED:
+                raise TransactionAborted(
+                    "project",
+                    admission_refusal(
+                        identity,
+                        normalized_content_digest(projected_files),
+                        item.library_type,
+                        state_now,
+                    ),
+                )
+            return tuple(activate.apply(projected_files))
+
     def _mutate() -> tuple[ReceiptTarget, ...]:
         # The intent is durable before the mutation. A crash after activation
         # and before finalization then leaves a receipt that already names the
@@ -578,7 +634,7 @@ def _install_locked(
                 planned_targets=list(planned),
             )
         )
-        produced = tuple(activate.apply(projected_files))
+        produced = _activate_under_the_standing_decision()
         created.extend(produced)
         produced_paths = tuple(entry.path for entry in produced)
         divergent = set(produced_paths) != set(planned)

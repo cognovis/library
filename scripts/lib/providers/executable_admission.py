@@ -45,6 +45,8 @@ a renamed subcommand cannot leave a diagnostic pointing at nothing.
 
 from __future__ import annotations
 
+import contextlib
+import datetime as _dt
 import hashlib
 import json
 import re
@@ -52,7 +54,7 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence, Union
 
 from .classification import EXECUTABLE_TYPES
 from .inventory import (
@@ -223,6 +225,28 @@ def validated_operator(value: str) -> str:
     return value.strip()
 
 
+def validated_decided_at(value: str) -> str:
+    """When this decision was made, as a parseable instant, or a refusal.
+
+    An unparseable timestamp is not a cosmetic defect in an audit record. "When
+    was this admitted, and was that before or after the incident" is the first
+    question anyone asks of one, and a field that holds `{'not': 'a timestamp'}`
+    stringified answers it with something that reads like an answer.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("an admission decision records when it was made")
+    candidate = value.strip()
+    try:
+        _dt.datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(
+            f"{value!r} is not an ISO-8601 instant; an admission decision has to "
+            "say when it was made in a form that can be ordered against other "
+            "events"
+        ) from exc
+    return candidate
+
+
 def validated_reason(value: str) -> str:
     """The operator's stated reason for this decision, or a refusal.
 
@@ -365,6 +389,7 @@ class AdmissionRecord:
         # looks complete and proves nothing.
         validated_operator(self.reviewer)
         validated_reason(self.evidence)
+        validated_decided_at(self.decided_at)
         surface = tuple(self.permission_surface)
         # An empty surface is a legitimate declaration: this artifact requests
         # nothing. A blank *entry* is not -- it is a declaration shaped like one,
@@ -518,6 +543,19 @@ class ExecutableAdmissionLedger:
             supersedes=supersedes,
         )
 
+    @contextlib.contextmanager
+    def decisions(self) -> Iterator["ExecutableAdmissionLedger"]:
+        """This ledger, held still for the length of one mutation.
+
+        An in-memory ledger has no other writer to be raced by, so holding it
+        still is nothing. The method exists so that a caller about to write
+        executable bytes can ask *any* admission authority for the decisions
+        that stand right now, without knowing whether it is holding a snapshot
+        or a durable store -- see `AdmissionLedgerStore.decisions`, where the
+        same call is a real lock.
+        """
+        yield self
+
     def record_for(
         self, qualified_identity: str, content_digest_value: str
     ) -> AdmissionRecord | None:
@@ -603,19 +641,50 @@ class AdmissionLedgerStore:
         )
 
     @staticmethod
-    def _record(entry: Mapping[str, Any]) -> AdmissionRecord:
+    def _text(entry: Mapping[str, Any], field: str) -> str:
+        """One stored text field, refused rather than coerced.
+
+        `str(value)` looked like defensive parsing and was the opposite of it:
+        review hand-edited a ledger whose `reviewer` was the integer `12345` and
+        whose `decided_at` was an object, and both arrived as perfectly
+        well-formed strings that satisfied every downstream check. A record that
+        was never written by this store is not a record, and the gate consults
+        this file.
+        """
+        value = entry.get(field)
+        if not isinstance(value, str):
+            raise ValueError(
+                f"executable-admission entry field {field!r} must be text, not "
+                f"{type(value).__name__}; a malformed decision is refused rather "
+                "than coerced into a valid-looking one"
+            )
+        return value
+
+    @classmethod
+    def _record(cls, entry: Mapping[str, Any]) -> AdmissionRecord:
         # Every stored entry is revalidated on the way out, through the same
         # constructor the writer used. A file is editable by anyone who can
         # reach it, and this store is the only thing between an edited file and
         # the gate that consults it.
+        surface = entry.get("permission_surface", [])
+        if not isinstance(surface, list) or not all(
+            isinstance(item, str) for item in surface
+        ):
+            # A bare string satisfies `tuple(...)` by decomposing into its
+            # characters, which review turned into a sixteen-entry permission
+            # surface that looked deliberate.
+            raise ValueError(
+                "executable-admission entry field 'permission_surface' must be a "
+                "list of permission names; a bare string is not one"
+            )
         return AdmissionRecord(
-            qualified_identity=str(entry.get("qualified_identity", "")),
-            content_digest=str(entry.get("content_digest", "")),
-            state=str(entry.get("state", "")),
-            reviewer=str(entry.get("reviewer", "")),
-            permission_surface=tuple(entry.get("permission_surface") or ()),
-            decided_at=str(entry.get("decided_at", "")),
-            evidence=str(entry.get("evidence", "")),
+            qualified_identity=cls._text(entry, "qualified_identity"),
+            content_digest=cls._text(entry, "content_digest"),
+            state=cls._text(entry, "state"),
+            reviewer=cls._text(entry, "reviewer"),
+            permission_surface=tuple(surface),
+            decided_at=cls._text(entry, "decided_at"),
+            evidence=cls._text(entry, "evidence"),
         )
 
     def records(self) -> tuple[AdmissionRecord, ...]:
@@ -641,8 +710,35 @@ class AdmissionLedgerStore:
         return self._standing(self.records())
 
     def ledger(self) -> ExecutableAdmissionLedger:
-        """The in-memory ledger the gate consults, built from what stands now."""
+        """The in-memory ledger the gate consults, built from what stands now.
+
+        This is a **snapshot**. Anything that will write executable bytes on the
+        strength of it must take those bytes' decision from `decisions()`
+        instead, because "what stood when we started" and "what stands now" are
+        different questions and only the second one authorizes a write.
+        """
         return ExecutableAdmissionLedger(self.current())
+
+    @contextlib.contextmanager
+    def decisions(self) -> Iterator[ExecutableAdmissionLedger]:
+        """The decisions that stand right now, held still until the block ends.
+
+        This is the linearization point for admission, and review demonstrated
+        why one is needed. An install loaded the ledger, paused in its provider
+        fetch, and a `deny` for those exact bytes was recorded and returned
+        success in the meantime; the install then projected the artifact anyway,
+        because it was still holding the grant it read on the way in. An
+        operator whose denial completed had every reason to believe it had taken
+        effect.
+
+        The lock is the same one `decide` takes, so a decision recorded during
+        this block waits for it, and the decision this block reads is the one
+        that stands for the whole of it. It is held across a local write of one
+        item's files -- deliberately not across retrieval, which is the slow
+        part and needs no decision to be frozen.
+        """
+        with exclusive_lock(self.path):
+            yield self.ledger()
 
     def audit(
         self, qualified_identity: str | None = None, content_digest_value: str | None = None
@@ -710,6 +806,51 @@ class AdmissionLedgerStore:
             entries.append(record.to_dict())
             self._save(entries)
         return record
+
+
+class FirstPartyAdmission:
+    """Admission for content the Library itself serves, named byte by byte.
+
+    ADR-0011's executable-admission decision governs an **externally sourced**
+    executable artifact: the operator is being asked whether to trust somebody
+    else's code. The Library re-materializing its own catalog's workflow specs is
+    not that case, and requiring an operator decision for it would not make the
+    backfill safer, it would make it impossible.
+
+    This is nevertheless not a blanket exemption, and it is deliberately awkward
+    to reach for. It is never a default, it is never inferred from a field on the
+    item -- the producer of an item does not get to say it is first-party -- and
+    it is constructed with the exact `(identity, digest)` pairs its caller is
+    about to install. Anything else is `pending`, so handing this authority to an
+    unrelated install waves nothing through.
+    """
+
+    def __init__(self, admitted: Mapping[str, str]) -> None:
+        self._admitted = {
+            str(identity): validated_digest(digest)
+            for identity, digest in dict(admitted).items()
+        }
+
+    @contextlib.contextmanager
+    def decisions(self) -> Iterator["FirstPartyAdmission"]:
+        """This authority is a fixed set, so holding it still is nothing."""
+        yield self
+
+    def state_for(
+        self,
+        qualified_identity: str,
+        content_digest_value: str | None,
+        *,
+        library_type: str,
+    ) -> str:
+        if not is_executable_type(library_type):
+            return INERT
+        if not content_digest_value:
+            return PENDING
+        expected = self._admitted.get(qualified_identity)
+        if expected is None or expected != validated_digest(content_digest_value):
+            return PENDING
+        return ADMITTED
 
 
 def executable_admission_for_item(
@@ -798,3 +939,13 @@ def _with_admission(item: NormalizedItem, state: str) -> NormalizedItem:
     payload = item.to_dict()
     payload["executable_admission"] = state
     return NormalizedItem.from_dict(payload)
+
+
+#: Anything that can answer "which decisions stand right now, and hold that
+#: answer still while I write" through `decisions()`. A caller about to project
+#: executable bytes takes this type rather than a ledger, so a snapshot and a
+#: durable store are interchangeable at the call site and only the store pays
+#: for the lock.
+AdmissionAuthority = Union[
+    ExecutableAdmissionLedger, AdmissionLedgerStore, FirstPartyAdmission
+]

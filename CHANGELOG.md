@@ -114,7 +114,23 @@
   identity is a **declared** string that nothing authenticates, because
   authenticating an operator is credential handling and stays behind a human
   security review, and the reason is checked for shape, not truth, using the same
-  placeholder floor `BlockReason` applies to block-reason evidence.
+  placeholder floor `BlockReason` applies to block-reason evidence. Adversarial
+  review closed three further ways executable bytes could reach disk with no
+  standing decision: an omitted admission authority read the item's own
+  `executable_admission` field, so an external `workflow` carrying
+  `admitted` installed through the shared primitive with nothing behind it, and
+  an omitted authority is now an empty one; a `deny` could complete and return
+  success while an install was retrieving, and the artifact was projected anyway
+  under the grant read on the way in, so the activation now runs while the
+  decisions are held still under the same lock `decide` takes; and a hand-edited
+  ledger whose reviewer was an integer, whose timestamp was an object, and whose
+  permission surface was a bare string was coerced into a well-formed `admitted`
+  record with a sixteen-character permission surface, so stored field types are
+  now validated rather than stringified. First-party catalog content is the one
+  exemption and it is explicit: `apply_receipt_backfill` passes a
+  `FirstPartyAdmission` built from the exact `(identity, digest)` pairs it is
+  about to re-materialize, rather than the Library's own workflow specs becoming
+  unrestorable.
 - *(CL-m6cc, migration)* Legacy cache objects, lock receipts, and already-materialized
   projections now carry honest identity and rights, and the migration that gives them
   one can delete nothing. Receipt migration is **additive and readable**: an unmigrated

@@ -42,6 +42,7 @@ from .cache_transaction import (
     install_foreign_item,
 )
 from .contract import FetchedFile, FetchedItem
+from .executable_admission import FirstPartyAdmission
 from .foreign_cache import normalized_content_digest
 from .inventory import (
     NormalizedItem,
@@ -1322,6 +1323,18 @@ def apply_receipt_backfill(
             completeness=CompletenessEvidence.from_manifest(
                 sorted(content),
                 detail="first-party catalog entry declares this item's members",
+            ),
+            # The admission authority is stated, not omitted. ADR-0011's
+            # executable-admission decision asks the operator whether to trust an
+            # *externally sourced* artifact; the Library re-materializing its own
+            # catalog's workflow specs is not that question, and demanding an
+            # operator decision for it would make the backfill impossible rather
+            # than safe. The exemption is nevertheless bound to exactly these
+            # bytes of exactly this item, so it authorizes this backfill and
+            # nothing else -- and it is written here at the call site rather than
+            # inferred from a field the item carries.
+            ledger=FirstPartyAdmission(
+                {item.qualified_identity(): normalized_content_digest(content)}
             ),
         )
         outcomes.append(outcome)
