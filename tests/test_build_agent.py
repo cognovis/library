@@ -44,7 +44,7 @@ def write_unified_source(tmp_path: Path, body: str | None = None) -> Path:
         "agent_base: auto\n"
         "model_standards: []\n"
         "codex:\n"
-        "  model: gpt-5.4\n"
+        "  model: gpt-5.6-terra\n"
         "  model_reasoning_effort: high\n"
         "  sandbox_mode: workspace-write\n"
         "  nickname_candidates:\n"
@@ -261,7 +261,7 @@ def test_build_agent_emits_claude_md_and_codex_toml(tmp_path: Path) -> None:
     source = write_unified_source(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.6-terra"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
 
@@ -278,7 +278,7 @@ def test_build_agent_emits_claude_md_and_codex_toml(tmp_path: Path) -> None:
     assert claude.startswith("---\nname: unified-agent\n")
 
     assert codex["name"] == "unified-agent"
-    assert codex["model"] == "gpt-5.4"
+    assert codex["model"] == "gpt-5.6-terra"
     assert codex["model_reasoning_effort"] == "high"
     assert codex["sandbox_mode"] == "workspace-write"
     assert codex["nickname_candidates"] == ["unified agent"]
@@ -316,13 +316,13 @@ def test_build_agent_derives_codex_defaults_without_override(tmp_path: Path) -> 
     source = write_source_without_codex_override(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.6-terra"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="codex")
 
     assert result.returncode == 0, result.stderr
     codex = tomllib.loads((output_dir / "plain-agent.toml").read_text())
-    assert codex["model"] == "gpt-5.4"
+    assert codex["model"] == "gpt-5.6-terra"
     assert codex["model_reasoning_effort"] == "high"
     assert codex["sandbox_mode"] == "read-only"
     assert codex["nickname_candidates"] == ["plain-agent"]
@@ -333,7 +333,7 @@ def test_build_agent_resolves_models_and_capabilities_per_harness(tmp_path: Path
     source = write_capability_source(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.6-terra"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
 
@@ -348,11 +348,11 @@ def test_build_agent_resolves_models_and_capabilities_per_harness(tmp_path: Path
     assert "mcpServers:\n- open-brain" in claude
     assert "SONNET_LAYER3_MARKER" in claude
 
-    assert codex["model"] == "gpt-5.4"
+    assert codex["model"] == "gpt-5.6-terra"
     assert codex["model_reasoning_effort"] == "high"
     assert codex["sandbox_mode"] == "workspace-write"
     assert '# mcp_servers: ["open-brain"]' in codex_text
-    assert "GPT-5.4_LAYER3_MARKER" in codex["developer_instructions"]
+    assert "GPT-5.6-TERRA_LAYER3_MARKER" in codex["developer_instructions"]
 
 
 def test_pair_loop_read_only_constraints_override_run_shell_codex_sandbox(
@@ -362,7 +362,7 @@ def test_pair_loop_read_only_constraints_override_run_shell_codex_sandbox(
     source = write_pair_loop_reviewer_source(tmp_path, include_constraints=True)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.6-terra"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
 
@@ -388,7 +388,7 @@ def test_run_shell_without_pair_loop_constraints_keeps_workspace_write(
     source = write_pair_loop_reviewer_source(tmp_path, include_constraints=False)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.6-terra"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="codex")
 
@@ -468,7 +468,7 @@ def test_build_agent_rejects_resolved_model_without_standard(tmp_path: Path) -> 
     source = write_source_without_codex_override(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["gpt-5.6-terra"])
 
     result = run_build(source, output_dir, agent_bases_dir, model_standards_dir, harness="claude")
 
@@ -530,7 +530,7 @@ def test_build_agent_is_idempotent(tmp_path: Path) -> None:
     source = write_unified_source(tmp_path)
     output_dir = tmp_path / "out"
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.6-terra"])
 
     first = run_build(source, output_dir, agent_bases_dir, model_standards_dir)
     assert first.returncode == 0, first.stderr
@@ -553,7 +553,7 @@ def test_library_agent_use_builds_single_source_for_both_harnesses(tmp_path: Pat
     """agent use --harness all builds Claude and Codex artifacts from one source."""
     source = write_unified_source(tmp_path)
     agent_bases_dir = make_agent_bases(tmp_path)
-    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.4"])
+    model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.6-terra"])
     project = tmp_path / "project"
     project.mkdir()
     (project / "library.yaml").write_text(

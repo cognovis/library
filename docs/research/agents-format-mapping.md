@@ -16,7 +16,7 @@
 | Tool scoping | Per-agent allowlist (`tools:`) and blocklist (`disallowedTools:`) | Coarse `sandbox_mode` + `mcp_servers` | **Lossy** — granular → coarse |
 | MCP integration | Per-agent `mcpServers:` frontmatter list | Global `~/.codex/config.toml`, no per-agent override | **Lossy** — explicit → inherited |
 | System prompt | Inline Markdown body below `---` | `developer_instructions` TOML string | **1:1** — structural transform only |
-| Model | `haiku`, `sonnet`, `opus` | `gpt-5.4`, `gpt-5.5`, etc. | **Vocabulary gap** — requires mapping table |
+| Model | `haiku`, `sonnet`, `opus` | `gpt-5.6-terra`, `gpt-5.5`, etc. | **Vocabulary gap** — requires mapping table |
 | Reasoning effort | No equivalent | `model_reasoning_effort: high/xhigh/medium/low` | **Codex-only** — dropped on reverse |
 | Color hint | `color: cyan` | No equivalent | **Claude-only** — dropped on forward |
 | Invocation targeting | `system_prompt_file:` (external file) | Always inline in `developer_instructions` | **Lossy** — must inline on forward |
@@ -53,7 +53,7 @@ Every Claude Code frontmatter field vs. its Codex TOML counterpart.
 |-------------------|------|------------------|------|---------|-------|
 | `name` | string | `name` | string | **1:1** | Identical semantics. NORMATIVE. |
 | `description` | string / block scalar | `description` | multi-line string | **1:1** | Content identical; formatting differs (YAML block scalar → TOML multi-line string). |
-| `model` | string (`haiku`, `sonnet`, `opus`) | `model` | string (`gpt-5.4`, `gpt-5.5`) | **Vocabulary gap** | No universal mapping — requires explicit lookup table (see §4). INFERRED — model identifiers are harness-specific. |
+| `model` | string (`haiku`, `sonnet`, `opus`) | `model` | string (`gpt-5.6-terra`, `gpt-5.5`) | **Vocabulary gap** | No universal mapping — requires explicit lookup table (see §4). INFERRED — model identifiers are harness-specific. |
 | `tools` | comma-separated string | `sandbox_mode` | string enum | **Lossy forward** | Claude tool allowlists are granular per-tool. Codex sandbox modes are coarse (`read-only` / `workspace-write` / `danger-full-access`). Fine-grained tool grants cannot be preserved. NORMATIVE — confirmed from bead-orchestrator.toml and session-close.toml Tool Capability Gaps sections. |
 | `disallowedTools` | comma-separated string | `sandbox_mode` | string enum | **Lossy forward** | Block-list semantics have no direct Codex equivalent. Must infer `sandbox_mode` from presence of write-capable tools in the blocklist. If `Write, Edit` are blocked, consider `read-only`. INFERRED — architectural best-guess. |
 | `mcpServers` | YAML list of server names | *(inherited from global config)* | N/A | **Lossy forward** | Claude Code allows per-agent MCP server scoping. Codex inherits from `~/.codex/config.toml` globally — no per-agent `mcp_servers` override field exists (NORMATIVE — confirmed from all three production agents). Translation: document as comment; no runtime enforcement. |
@@ -125,7 +125,7 @@ model: sonnet
 color: purple
 
 # Codex-specific metadata (preserved for sync-codex-agents round-trip)
-codex_model: gpt-5.4          # TARGET Codex model identifier (Codex vocabulary, e.g. gpt-5.4)
+codex_model: gpt-5.6-terra          # TARGET Codex model identifier (Codex vocabulary, e.g. gpt-5.6-terra)
 codex_claude_model: sonnet    # Original Claude model name for reverse translation (Claude vocabulary)
 codex_model_reasoning_effort: high
 codex_sandbox_mode: workspace-write
@@ -140,8 +140,8 @@ codex_nickname_candidates:
 The `codex_*` prefix namespace isolates Codex-specific fields from Claude Code frontmatter, preventing Claude Code from attempting to interpret them. INFERRED — this pattern is not yet in use but follows the extended frontmatter convention.
 
 **Field vocabulary contract:**
-- `codex_model` — stores the **Codex** model identifier (e.g. `gpt-5.4`, `gpt-5.5`). This is Codex vocabulary, not Claude vocabulary.
-- `codex_claude_model` — stores the **original Claude** model name (e.g. `haiku`, `sonnet`, `opus`) for lossless reverse translation. Without this field, reverse translation from `gpt-5.4` always falls back to `sonnet` (see §5 Step 3).
+- `codex_model` — stores the **Codex** model identifier (e.g. `gpt-5.6-terra`, `gpt-5.5`). This is Codex vocabulary, not Claude vocabulary.
+- `codex_claude_model` — stores the **original Claude** model name (e.g. `haiku`, `sonnet`, `opus`) for lossless reverse translation. Without this field, reverse translation from `gpt-5.6-terra` always falls back to `sonnet` (see §5 Step 3).
 - Do NOT store Claude model names in `codex_model` — that would mix vocabularies and break both forward and reverse translation.
 
 ---
@@ -173,23 +173,23 @@ If `system_prompt_file` is set in frontmatter, read the referenced file — that
 
 ### Step 3: Map model
 
-If `codex_model` is set in the frontmatter, use that value directly as the Codex `model` field — it already contains the Codex model identifier (e.g. `gpt-5.4`).
+If `codex_model` is set in the frontmatter, use that value directly as the Codex `model` field — it already contains the Codex model identifier (e.g. `gpt-5.6-terra`).
 
-If `codex_model` is absent, use the following lookup table. INFERRED — no official mapping exists. The `sonnet → gpt-5.4` mapping is observed in three production agents; `haiku` and `opus` mappings are best-guess and have no observed precedent:
+If `codex_model` is absent, use the following lookup table. INFERRED — no official mapping exists. The current Codex generation uses Luna for lightweight work and Terra for standard work; the `opus` mapping remains a best-guess:
 
 | Claude Code `model` | Codex `model` | Notes |
 |--------------------|--------------|-------|
-| `haiku` | `gpt-5.4` | INFERRED — best-guess, no observed precedent. Haiku = lightweight; mapped to `gpt-5.4` (same as sonnet) as the closest available Codex model. May be revisited as Codex model identifiers stabilize and a distinct lightweight model becomes available. |
-| `sonnet` | `gpt-5.4` | Default production model |
+| `haiku` | `gpt-5.6-luna` | Lightweight execution maps to the current economy model. |
+| `sonnet` | `gpt-5.6-terra` | Default production model |
 | `opus` | `gpt-5.5` | Heavy reasoning tasks; map to most capable Codex model |
-| *(unset)* | `gpt-5.4` | Default |
+| *(unset)* | `gpt-5.6-terra` | Default |
 
-Also store the original Claude model name in `codex_claude_model` extended frontmatter (if not already set) to enable lossless reverse translation. This is especially important when `model: haiku` is set, because both `haiku` and `sonnet` map to `gpt-5.4` and the reverse translation cannot distinguish them without this field.
+Also store the original Claude model name in `codex_claude_model` extended frontmatter (if not already set) to preserve the caller's explicit selection independently of future mapping changes.
 
 Emit a translation comment in the generated TOML:
 ```toml
-# model translated from Claude 'sonnet' → Codex 'gpt-5.4' (see agents-format-mapping.md §4)
-model = "gpt-5.4"
+# model translated from Claude 'sonnet' → Codex 'gpt-5.6-terra' (see agents-format-mapping.md §4)
+model = "gpt-5.6-terra"
 ```
 
 ### Step 4: Derive `sandbox_mode`
@@ -328,7 +328,8 @@ If `codex_claude_model` is absent, fall back to the lookup table below:
 
 | Codex `model` | Claude Code `model` | Notes |
 |--------------|-------------------|-------|
-| `gpt-5.4` | `sonnet` (default) | Both `haiku` and `sonnet` forward to `gpt-5.4`, so the reverse is always `sonnet` when `codex_claude_model` is not set. To preserve a `haiku` selection, set `codex_claude_model: haiku` in the canonical `.md` frontmatter — the forward algorithm (§4 Step 3) should set this automatically. |
+| `gpt-5.6-luna` | `haiku` | Current lightweight-model mapping. |
+| `gpt-5.6-terra` | `sonnet` (default) | Current standard-model mapping. |
 | `gpt-5.5` | `opus` | |
 | *(any other)* | `sonnet` (default; emit warning) | |
 
@@ -430,7 +431,7 @@ optimized for speed and result quality over token efficiency.
 - `description` block scalar → `description = """..."""`
 
 **Step 3 — Model:**
-- `sonnet` → `gpt-5.4`
+- `sonnet` → `gpt-5.6-terra`
 - Emit translation comment
 
 **Step 4 — Derive `sandbox_mode`:**
@@ -469,8 +470,8 @@ and speed matter more than token cost. Returns structured research summaries.
 """
 nickname_candidates = ["research", "web research", "investigate", "research topic"]
 
-# model translated from Claude 'sonnet' → Codex 'gpt-5.4' (see agents-format-mapping.md §4)
-model = "gpt-5.4"
+# model translated from Claude 'sonnet' → Codex 'gpt-5.6-terra' (see agents-format-mapping.md §4)
+model = "gpt-5.6-terra"
 
 # model_reasoning_effort: INFERRED from model mapping (sonnet → high)
 model_reasoning_effort = "high"
@@ -585,7 +586,7 @@ This agent handles research ONLY. It does not:
 | `disallowedTools: Write, Edit, Agent` | Per-tool blocklist | Encoded as `sandbox_mode = "read-only"` | **Structural loss** — `Agent` blocking is document-only in Codex |
 | `mcpServers: [searxng, ...]` | Explicit scope | Comment only | **Enforcement loss** — global inheritance cannot per-agent scope |
 | `system_prompt_file: malte/...` | External file path | Inlined | **Reference lost** — personalized overlay not preserved |
-| `model: sonnet` | Claude model alias | `gpt-5.4` | **Vocabulary mapping** — functionality preserved |
+| `model: sonnet` | Claude model alias | `gpt-5.6-terra` | **Vocabulary mapping** — functionality preserved |
 
 ---
 
@@ -607,7 +608,7 @@ This agent handles research ONLY. It does not:
 
 2. **`model_reasoning_effort`.** Chain-of-thought depth control has no Claude Code equivalent field. Claude Code manages reasoning depth via model selection (`sonnet` vs `opus`) rather than a separate effort parameter. NORMATIVE — confirmed in Codex documentation.
 
-3. **`haiku` → `gpt-5.4` → `sonnet` round-trip model loss.** Because both `haiku` and `sonnet` forward-translate to `gpt-5.4`, the reverse mapping always produces `sonnet`. An agent originally configured with `model: haiku` silently loses its model selection on round-trip. This loss CAN be avoided by setting `codex_claude_model: haiku` in the canonical `.md` frontmatter — `codex_claude_model` stores the original Claude model name (Claude vocabulary) and is used by §5 Step 3 for lossless reverse mapping. Note: `codex_model` stores the Codex model identifier (e.g. `gpt-5.4`) and must NOT be set to a Claude model name like `haiku`. INFERRED — no observed production agent uses `haiku`.
+3. **Model mappings still require explicit round-trip metadata.** Luna and Terra currently preserve the lightweight/standard distinction, but `codex_claude_model` remains the durable source for reverse translation if model generations or aliases change again.
 
 ---
 

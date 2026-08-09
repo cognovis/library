@@ -3880,26 +3880,6 @@ library:
       tags:
         - origin:original
       version: 2026.08.01
-    - name: gpt-5.4
-      description: Model-standard for GPT-5.4 in Codex agents — direct execution and concise verification discipline.
-      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.4.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-      version: 2026.05.15
-      tags:
-        - origin:original
-    - name: gpt-5.4-mini
-      description: Model-standard for GPT-5.4 Mini in Codex agents — fast routine execution with explicit uncertainty escalation.
-      source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.4-mini.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-      version: 2026.05.15
-      tags:
-        - origin:original
     - name: gpt-5.5
       description: Model-standard for GPT-5.5 in Codex agents — deeper reasoning, pre-mortem, and explicit trade-off analysis.
       source: https://github.com/cognovis/library-core/blob/main/model-standards/gpt-5.5.md

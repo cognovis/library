@@ -434,7 +434,7 @@ def test_quality_checks_reject_prompt_file_stub() -> None:
     stub_toml = (
         'name = "quick-fix"\n'
         'description = "Lightweight quick fix orchestrator."\n'
-        'model = "gpt-5.4"\n'
+        'model = "gpt-5.6-terra"\n'
         'prompt_file = "agents/quick-fix.md"\n'
     )
     parsed = tomllib.loads(stub_toml)
@@ -446,7 +446,7 @@ def test_quality_checks_reject_prompt_file_stub() -> None:
 def test_quality_checks_reject_empty_developer_instructions() -> None:
     """Quality helper rejects a .toml with absent or trivially short developer_instructions."""
     # No developer_instructions at all
-    stub_toml = 'name = "thin-agent"\ndescription = "stub"\nmodel = "gpt-5.4"\n'
+    stub_toml = 'name = "thin-agent"\ndescription = "stub"\nmodel = "gpt-5.6-terra"\n'
     with pytest.raises(AssertionError, match="developer_instructions"):
         _assert_codex_artifact_quality("thin-agent", tomllib.loads(stub_toml), stub_toml)
 
@@ -454,7 +454,7 @@ def test_quality_checks_reject_empty_developer_instructions() -> None:
     short_toml = (
         'name = "thin-agent"\n'
         'description = "stub"\n'
-        'model = "gpt-5.4"\n'
+        'model = "gpt-5.6-terra"\n'
         f'developer_instructions = "{"x" * 10}"\n'
     )
     with pytest.raises(AssertionError, match="developer_instructions"):

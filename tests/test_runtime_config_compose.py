@@ -63,7 +63,7 @@ bead_claim:
   effort_classifier:
     adapter: codex-exec
     provider: codex
-    model: gpt-5.4-mini
+    model: gpt-5.6-luna
     reasoning_effort: medium
     timeout_sec: 120
 """
@@ -230,7 +230,7 @@ def test_deploy_preserves_bead_claim(catalog, tmp_path):
         scope="project", target_override=target,
     )
     data = yaml.safe_load(target.read_text())
-    assert data["bead_claim"]["effort_classifier"]["model"] == "gpt-5.4-mini"
+    assert data["bead_claim"]["effort_classifier"]["model"] == "gpt-5.6-luna"
 
 
 def test_audit_clean_after_deploy(catalog, tmp_path):

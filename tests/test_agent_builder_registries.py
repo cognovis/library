@@ -52,7 +52,33 @@ def test_runtime_model_registry_has_distinct_capability_namespace_and_variants()
     assert len(model_ids) == len(set(model_ids))
     assert {"claude-code", "codex"} <= {model["harness"] for model in data["models"]}
     assert {"haiku", "sonnet", "opus"} <= set(model_ids)
-    assert {"gpt-5.4-mini", "gpt-5.4"} <= set(model_ids)
+    retired_models = {"gpt-5." + "4", "gpt-5." + "4-mini"}
+    assert retired_models.isdisjoint(model_ids)
+
+
+def test_regression_codex_cost_tiers_resolve_to_current_generation() -> None:
+    """Economy and standard requests must resolve to Luna and Terra, never retired models."""
+    economy = _resolve_against_real_registry(
+        {
+            "tier": "economy",
+            "reasoning": "low",
+            "context": "small",
+            "cost_priority": "cheapest",
+        },
+        harness="codex",
+    )
+    standard = _resolve_against_real_registry(
+        {
+            "tier": "standard",
+            "reasoning": "high",
+            "context": "large",
+            "cost_priority": "balanced",
+        },
+        harness="codex",
+    )
+
+    assert economy == ("gpt-5.6-luna", "low")
+    assert standard == ("gpt-5.6-terra", "high")
 
 
 def test_capabilities_yaml_validates_against_schema() -> None:
@@ -79,14 +105,16 @@ def test_capabilities_yaml_validates_against_schema() -> None:
     } <= set(capability_names)
 
 
-def _resolve_against_real_registry(requirements: dict) -> tuple[str, str | None] | None:
+def _resolve_against_real_registry(
+    requirements: dict, *, harness: str = "claude"
+) -> tuple[str, str | None] | None:
     """Resolve a requirement block through build-agent.py against the live registry."""
     spec = importlib.util.spec_from_file_location("build_agent_registry_probe", BUILD_AGENT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     registry = _load_yaml(MODELS_YAML)["models"]
-    return module.resolve_model(requirements, "claude", registry)
+    return module.resolve_model(requirements, harness, registry)
 
 
 def test_claude_code_resolves_a_frontier_reviewer() -> None:

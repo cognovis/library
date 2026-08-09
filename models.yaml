@@ -69,40 +69,6 @@ models:
     cost:
       input: 10.0
       output: 50.0
-  - id: gpt-5.4-mini
-    harness: codex
-    family: openai
-    provider: codex
-    adapter: codex-exec
-    runtime_model: gpt-5.4-mini
-    suitability_capabilities: [fast-turnaround, repository-analysis]
-    quality_rank: 55
-    cost_rank: 15
-    tier: economy
-    reasoning_levels: [low, medium, high]
-    default_reasoning: medium
-    context: medium
-    vision: true
-    cost:
-      input: 0.4
-      output: 1.6
-  - id: gpt-5.4
-    harness: codex
-    family: openai
-    provider: codex
-    adapter: codex-exec
-    runtime_model: gpt-5.4
-    suitability_capabilities: [implementation, repository-analysis, spec-review]
-    quality_rank: 75
-    cost_rank: 45
-    tier: standard
-    reasoning_levels: [low, medium, high, xhigh]
-    default_reasoning: high
-    context: large
-    vision: true
-    cost:
-      input: 2.0
-      output: 8.0
   - id: gpt-5.6-sol
     harness: codex
     family: openai
@@ -142,8 +108,8 @@ models:
     suitability_capabilities: [fast-turnaround, repository-analysis, spec-review]
     quality_rank: 75
     cost_rank: 20
-    tier: standard
-    reasoning_levels: [medium, high]
+    tier: economy
+    reasoning_levels: [low, medium, high]
     default_reasoning: medium
     context: large
     vision: true

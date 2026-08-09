@@ -64,10 +64,10 @@ CODEX_TOML_FIELDS = {
     "nickname_candidates",
 }
 CODEX_MODEL_MAP = {
-    "haiku": "gpt-5.4",
-    "sonnet": "gpt-5.4",
+    "haiku": "gpt-5.6-luna",
+    "sonnet": "gpt-5.6-terra",
     "opus": "gpt-5.5",
-    "inherit": "gpt-5.4",
+    "inherit": "gpt-5.6-terra",
 }
 CODEX_REASONING_BY_MODEL = {
     "haiku": "medium",
