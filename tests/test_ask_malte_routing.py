@@ -170,7 +170,7 @@ def test_absent_context_pointers_are_reported_not_substituted(tmp_path: Path) ->
     )
     rendered = answer.render()
     assert "absent" in rendered
-    assert any("contributed nothing" in note for note in answer.notes)
+    assert any("contributed nothing" in note.render() for note in answer.notes)
 
 
 def test_routing_reads_the_real_catalog_without_naming_anything_unread() -> None:

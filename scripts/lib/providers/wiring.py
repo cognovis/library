@@ -30,6 +30,7 @@ scope" is answerable from the lock path with no scan.
 from __future__ import annotations
 
 import datetime as _dt
+import errno
 import hashlib
 import os
 from dataclasses import dataclass, field
@@ -397,6 +398,87 @@ def _contained_path(root: Path, relative: str) -> Path:
     return candidate
 
 
+def _write_beneath(root: Path, relative: str, payload: bytes) -> Path:
+    """Create one file strictly beneath `root`, resolving nothing by name.
+
+    Checking a path and then writing it cannot be made safe by checking harder.
+    Whatever the check saw, any component can be replaced before the write opens
+    it — review demonstrated it twice, first on the final component and then, once
+    `O_NOFOLLOW` closed that, on an intermediate directory replaced inside the
+    `os.open` call itself.
+
+    The fix is to stop naming the path at all after the first component. Every
+    directory is opened relative to the descriptor of the one above it, with
+    `O_NOFOLLOW` and `O_DIRECTORY`, and the file is created relative to the last
+    of those descriptors. A component swapped for a symlink after it has been
+    opened changes nothing: the descriptor already refers to the real directory,
+    and a component swapped *before* it is opened fails the `O_NOFOLLOW` open.
+    There is no window between resolution and use because the resolution is the
+    use.
+
+    Returns:
+        The path that was written, for the receipt.
+
+    Raises:
+        ProjectionEscape: when any component is or becomes a symlink.
+    """
+    parts = Path(relative).parts
+    if not parts:
+        raise ProjectionEscape("a projection member needs a path")
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    # The root is the destination the caller declared, so it is created and
+    # followed deliberately. Everything below it is opened no-follow: the
+    # containment guarantee is "beneath this root", not "this root exists".
+    root.mkdir(parents=True, exist_ok=True)
+    descriptors: list[int] = [os.open(root, os.O_RDONLY | directory)]
+    try:
+        for part in parts[:-1]:
+            try:
+                os.mkdir(part, 0o755, dir_fd=descriptors[-1])
+            except FileExistsError:
+                pass
+            try:
+                descriptors.append(
+                    os.open(
+                        part,
+                        os.O_RDONLY | directory | nofollow,
+                        dir_fd=descriptors[-1],
+                    )
+                )
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.EMLINK, errno.ENOTDIR):
+                    raise ProjectionEscape(
+                        f"projection path {relative!r} traverses {part!r}, which is "
+                        "not a real directory beneath the target root; the write is "
+                        "refused rather than redirected"
+                    ) from exc
+                raise
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | nofollow
+        try:
+            target = os.open(parts[-1], flags, 0o644, dir_fd=descriptors[-1])
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.EMLINK):
+                raise ProjectionEscape(
+                    f"projection target {relative!r} is a symlink; the write is "
+                    "refused rather than redirected"
+                ) from exc
+            raise
+        try:
+            handle = os.fdopen(target, "wb")
+        except BaseException:
+            # `fdopen` takes ownership only once it succeeds, so a failure here
+            # leaves the descriptor ours to close.
+            os.close(target)
+            raise
+        with handle:
+            handle.write(payload)
+    finally:
+        for descriptor in descriptors:
+            os.close(descriptor)
+    return root.joinpath(*parts)
+
+
 def filesystem_activation(target_root: Path) -> ProjectionActivation:
     """A two-phase filesystem projection into one directory.
 
@@ -416,20 +498,18 @@ def filesystem_activation(target_root: Path) -> ProjectionActivation:
         return sorted(str(_contained_path(root, relative)) for relative in content)
 
     def apply(content: Mapping[str, bytes]) -> Sequence[ReceiptTarget]:
-        # Every path is validated before any byte is written, so a member that
-        # would escape refuses the whole activation rather than leaving the
-        # earlier members installed.
-        paths = {relative: _contained_path(root, relative) for relative in content}
+        # Every path is shape-checked before any byte is written, so a member
+        # that could not be contained refuses the whole activation rather than
+        # leaving the earlier members installed. The containment that matters is
+        # then enforced by `_write_beneath`, which never resolves a component by
+        # name a second time: a check whose result is used later is a check that
+        # can be invalidated in between, and review invalidated this one twice.
+        for relative in content:
+            _contained_path(root, relative)
         created: list[ReceiptTarget] = []
         for relative in sorted(content):
-            path = paths[relative]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            # The parent may have been created through a symlink planted between
-            # validation and here, so containment is re-checked once the parent
-            # actually exists.
-            _contained_path(root, relative)
             payload = content[relative]
-            path.write_bytes(payload)
+            path = _write_beneath(root, relative, payload)
             created.append(
                 ReceiptTarget(
                     path=str(path),

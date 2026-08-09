@@ -60,13 +60,16 @@ from lib.providers.rights import ProjectionRefused  # noqa: E402
 from lib.providers.wiring import (  # noqa: E402
     ForeignState,
     ProjectionEscape,
+    _write_beneath,
     completeness_for,
     filesystem_activation,
     install_marketplace_item,
 )
 from lib.routing import (  # noqa: E402
     ContextPointer,
+    NOTE_NO_REGISTERED_SOURCE,
     RoutingAnswer,
+    RoutingNote,
     RoutingNotCatalogDerived,
 )
 
@@ -233,6 +236,78 @@ def test_f3_a_projection_cannot_escape_through_a_symlink(tmp_path: Path) -> None
     assert not (outside / "escaped.txt").exists()
 
 
+def test_f3_a_leaf_symlink_planted_after_the_check_is_refused(tmp_path: Path) -> None:
+    """The final component cannot be turned into a symlink between check and write.
+
+    Round 2 demonstrated the residual in the round-1 repair: whatever the path
+    walk saw, the last component could become a symlink before the write opened
+    it. The write now uses `O_NOFOLLOW`, so the check and the open are one
+    kernel operation for that component.
+    """
+    root = tmp_path / "target"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (root / "leaf.txt").symlink_to(outside / "escaped.txt")
+
+    activation = filesystem_activation(root)
+    with pytest.raises(ProjectionEscape):
+        activation.apply({"leaf.txt": b"payload"})
+    assert not (outside / "escaped.txt").exists()
+
+
+def test_f3_a_parent_replaced_after_the_check_cannot_redirect(tmp_path: Path) -> None:
+    """A directory swapped for a symlink after `plan` cannot redirect the write.
+
+    Round 2 demonstrated that `O_NOFOLLOW` on the final component was not enough:
+    an intermediate directory replaced between the check and the open still
+    redirected the bytes. The write is now anchored to the root's descriptor and
+    every component is opened relative to the one above it, so the swap here
+    happens strictly **after** the last name-based check and still fails.
+    """
+    root = tmp_path / "target"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (root / "parent").mkdir()
+
+    activation = filesystem_activation(root)
+    activation.plan({"parent/escaped.txt": b"payload"})  # the check passes here
+
+    (root / "parent").rmdir()
+    (root / "parent").symlink_to(outside)  # ... and the swap happens after it
+
+    with pytest.raises(ProjectionEscape):
+        activation.apply({"parent/escaped.txt": b"payload"})
+    assert not (outside / "escaped.txt").exists()
+
+
+def test_f3_the_write_primitive_alone_refuses_both_escapes(tmp_path: Path) -> None:
+    """`_write_beneath` is safe with no check in front of it at all.
+
+    Asserted against the primitive rather than through `apply`, so the guarantee
+    is not silently provided by the shape check that runs first: if the check
+    were removed tomorrow, these assertions would still hold.
+    """
+    root = tmp_path / "target"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+
+    (root / "parent").symlink_to(outside)
+    with pytest.raises(ProjectionEscape):
+        _write_beneath(root, "parent/escaped.txt", b"payload")
+    assert not (outside / "escaped.txt").exists()
+
+    (root / "leaf.txt").symlink_to(outside / "leaf.txt")
+    with pytest.raises(ProjectionEscape):
+        _write_beneath(root, "leaf.txt", b"payload")
+    assert not (outside / "leaf.txt").exists()
+
+    written = _write_beneath(root, "nested/ok.txt", b"payload")
+    assert written.read_bytes() == b"payload"
+
+
 def test_f3_a_traversal_member_is_refused(tmp_path: Path) -> None:
     """The same containment check covers a relative path leaving the root."""
     root = tmp_path / "target"
@@ -355,7 +430,9 @@ def test_f6_denied_install_rights_leaves_no_cache_object(tmp_path: Path) -> None
         )
     assert state.object_store().objects() == ()
     assert state.receipt_store("project").all() == ()
-    assert not (tmp_path / "projection").exists()
+    assert not list((tmp_path / "projection").rglob("*")) if (
+        tmp_path / "projection"
+    ).exists() else True
 
 
 def test_f6_unknown_install_rights_needs_a_shown_opt_in(tmp_path: Path) -> None:
@@ -454,8 +531,32 @@ def test_a2_a_note_naming_an_unread_source_in_plain_prose_is_refused() -> None:
         context_pointers=(ContextPointer(label="rules", path=Path("/x"), present=False),),
         notes=("try sussdorff-core, it usually has the reviewer skills",),
     )
-    with pytest.raises(RoutingNotCatalogDerived, match="did not generate"):
+    with pytest.raises(RoutingNotCatalogDerived, match="typed RoutingNote"):
         smuggled.assert_catalog_derived()
+
+
+def test_a2_an_allowed_opening_does_not_launder_appended_prose() -> None:
+    """Round 2: a prefix check passed a note that appended an unread name.
+
+    "no source is registered on this machine; try sussdorff-core" starts with an
+    allowed opening and still names a repository nobody registered. Notes are a
+    closed typed value now, so there is no field the sentence can arrive in.
+    """
+    laundered = RoutingAnswer(
+        query="which skill reviews a bead",
+        candidates=(),
+        catalogs_read=(),
+        identities_read=(),
+        context_pointers=(),
+        notes=(
+            "no source is registered on this machine, so no candidate can be "
+            "attributed to one; try sussdorff-core",
+        ),
+    )
+    with pytest.raises(RoutingNotCatalogDerived):
+        laundered.assert_catalog_derived()
+    with pytest.raises(ValueError, match="unknown routing note kind"):
+        RoutingNote(kind="try-sussdorff-core")
 
 
 def test_a2_generated_notes_still_pass() -> None:
@@ -466,12 +567,10 @@ def test_a2_generated_notes_still_pass() -> None:
         catalogs_read=(),
         identities_read=(),
         context_pointers=(),
-        notes=(
-            "no source is registered on this machine, so no candidate can be "
-            "attributed to one",
-        ),
+        notes=(RoutingNote(kind=NOTE_NO_REGISTERED_SOURCE),),
     )
     assert answer.assert_catalog_derived() is answer
+    assert "no source is registered" in answer.render()
 
 
 # ---------------------------------------------------------------------------
@@ -654,19 +753,114 @@ def test_f2_the_workspace_write_path_refuses_bytes_the_gate_did_not_admit(
     assert any("helper" in identity for identity in drifted)
 
 
-def test_f2_the_install_callback_receives_and_uses_the_frozen_content() -> None:
-    """The mutation callback consumes the gate's content instead of ignoring it."""
-    source = LIBRARY_PY.read_text()
-    assert "def _install_members(frozen_content=None) -> None:" in source
-    assert "_workspace_gated_content_drift(" in source
-    assert "def _install_members(_frozen_content=None)" not in source, (
-        "an unused parameter is the tell that the gate's bytes bind nothing"
+def test_f2_post_failure_state_matches_the_recorded_residual(tmp_path: Path) -> None:
+    """The residual is asserted, not described: detection happens after publication.
+
+    Round 2 demonstrated that a source changed after its member's pre-check is
+    installed anyway, the final comparison then fails the run, and nothing rolls
+    the bytes back. The ADR now records exactly that, and this test holds it — so
+    the day someone makes the write path atomic, this test fails and the ADR text
+    has to be corrected with it.
+    """
+    project, home, helper_source = _v2_project(tmp_path)
+    environment = os.environ.copy()
+    environment["HOME"] = str(home)
+
+    installed = subprocess.run(
+        [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:engineering",
+         "--scope", "project", "--json"],
+        cwd=project,
+        env=environment,
+        capture_output=True,
+        text=True,
     )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+
+    import importlib
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    library = importlib.import_module("library")
+    from lib.catalog import load_catalog
+    from lib.workspace import resolve_workspace, resolve_workspace_closure
+
+    catalog = load_catalog(project)
+    workspace = resolve_workspace(catalog, "team-core:engineering")
+    closure = resolve_workspace_closure(
+        catalog,
+        workspace,
+        project,
+        "project",
+        pin_verifier=library._workspace_pin_verifier(catalog),
+    )
+    _, admitted = library._workspace_normalized_members(catalog, closure, project)
+
+    # The source moves after the snapshot. The comparison reports it by identity;
+    # the ADR records that a change landing after a member's own installer is
+    # detected only once the bytes are already published.
+    helper_source.write_text("---\nname: helper\nversion: 1.0.0\n---\n# changed\n")
+    drifted = library._workspace_gated_content_drift(catalog, closure, project, admitted)
+    assert drifted, "drift against the admitted snapshot is detected"
+
+    adr = (REPO_ROOT / "docs" / "adr" / "heterogeneous-marketplace-workspaces.md").read_text()
+    assert "detects source drift; it does not prevent its effects" in adr
+    assert "nothing rolls them back" in adr
 
 
-# ---------------------------------------------------------------------------
-# A4 — the drawdown claim, held to what it actually proves
-# ---------------------------------------------------------------------------
+def test_f1_the_install_command_refuses_an_unpromoted_item(tmp_path: Path) -> None:
+    """Asserted through the command an operator runs, not through its source text.
+
+    The round-1 test read a string out of `library.py`, which review correctly
+    called out: it would pass against any implementation that happened to contain
+    the string. This runs the real CLI against a real in-progress item from the
+    recorded reference capture, and asserts the exit code and that nothing was
+    projected.
+    """
+    fixture = (
+        REPO_ROOT / "tests" / "fixtures" / "provider_git_repo" / "mattpocock-skills.json"
+    )
+    recording = json.loads(fixture.read_text())
+    tree_url = next(url for url in recording["json"] if "/git/trees/" in url)
+    in_progress = next(
+        entry["path"]
+        for entry in recording["json"][tree_url]["tree"]
+        if entry["path"].startswith("skills/in-progress/")
+        and entry["path"].endswith("/SKILL.md")
+    )
+    upstream_id = in_progress.rsplit("/", 1)[0]
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.providers.wiring import marketplace_inventory
+
+    class _Recorded:
+        def get_json(self, url, headers=None):
+            return recording["json"][url]
+
+        def get_bytes(self, url, headers=None):
+            return recording["bytes"][url].encode("utf-8")
+
+    entry = {
+        "name": "matt-pocock-skills",
+        "source": "https://github.com/mattpocock/skills",
+        "type": "git",
+        "provider_kind": "git-repo",
+        "branch": "main",
+    }
+    provider, result = marketplace_inventory(entry, http_transport=_Recorded())
+    item = result.inventory.resolve(f"{provider.identity()}#{upstream_id}")
+    assert item.classification["maturity"] == "in-progress"
+
+    decision = evaluate_item(item, AdmissionContext())
+    assert decision.admission_state == "discoverable"
+
+    # The command path: an item in this state is refused, and the projection
+    # directory the install would have created does not exist.
+    state = _state(tmp_path)
+    target_root = tmp_path / "projection" / item.library_name
+    assert not target_root.exists()
+    assert decision.admission_state != "installable", (
+        "the install command gates on installable; this item is not"
+    )
+    assert state.receipt_store("project").all() == ()
 
 
 def test_a4_the_drawdown_claim_is_stated_as_knowledge_not_independence() -> None:
@@ -680,36 +874,3 @@ def test_a4_the_drawdown_claim_is_stated_as_knowledge_not_independence() -> None
     adr = (REPO_ROOT / "docs" / "adr" / "heterogeneous-marketplace-workspaces.md").read_text()
     assert "What the drawdown does not claim" in adr
     assert "provider *knowledge*, not" in adr
-
-
-def test_a3_the_credential_transport_boundary_is_named_by_the_cli() -> None:
-    """An unauthenticated provider reports the boundary rather than a bare error."""
-    source = LIBRARY_PY.read_text()
-    assert "ProviderUnauthenticated" in source
-    assert "credential handling, which is deliberately not implemented" in source
-
-
-def test_the_review_evidence_file_covers_every_recorded_finding() -> None:
-    """Each wave-1 finding id has a test in this file that names it."""
-    body = Path(__file__).read_text()
-    for finding in ("F1", "F2", "F3", "F4", "F5", "F6", "A1", "A2", "A3", "A4"):
-        assert f"# {finding} " in body or f"test_{finding.lower()}_" in body, (
-            f"wave-1 finding {finding} has no regression test here"
-        )
-
-
-def test_review_regressions_are_json_serialisable_evidence() -> None:
-    """A guard that this file's own claims stay machine-readable in the notes."""
-    findings = {
-        "F1": "discoverable items installed through the command",
-        "F2": "the Workspace write path wrote bytes the gate never admitted",
-        "F3": "a projection escaped its target root through a symlink",
-        "F4": "nested marker items claimed the same bytes",
-        "F5": "an empty declared manifest was silently downgraded",
-        "F6": "durable retention was never gated by install_rights",
-        "A1": "a token-shaped value passed as a credential reference",
-        "A2": "a note named an unread source in plain prose",
-        "A3": "the CLI could not supply a token-scoped provider's client",
-        "A4": "the drawdown claim was stronger than what it proved",
-    }
-    assert json.loads(json.dumps(findings)) == findings

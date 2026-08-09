@@ -1628,6 +1628,38 @@ assumes the real gate is still there.
    a scope operator admits that member's exact bytes, and this slice ships no CLI
    for recording that decision. Inert closures install now; an executable one is
    refused, which is the correct ADR behavior and an incomplete operator surface.
+3. **The v2 mutation gate detects source drift; it does not prevent its effects.**
+   The gate digests an immutable snapshot and admits a decision about it, and the
+   legacy installers resolve their own source rather than consuming that
+   snapshot. The gap is bridged by comparison — the admitted content is
+   re-derived and compared before the first write, before every member's own
+   installer, and after the last one, and any difference fails the operation with
+   exit 3.
+
+   What that buys and what it does not, stated exactly, because two successively
+   weaker claims were written here first and adversarial review broke both:
+
+   - A source that differs *before* a member's installer runs stops the run
+     before that member is written.
+   - A source that changes *after* its member's pre-check is detected by the
+     final comparison, and the run fails — **but the installer has already
+     published the unadmitted bytes, and nothing rolls them back.** The Workspace
+     journal records the operation; it does not undo a member's projection.
+     Review demonstrated this end to end: exit 3 was returned and
+     `.agents/skills/helper/SKILL.md` still contained content the gate never
+     admitted.
+   - A source changed and changed back inside a single installer's read is
+     invisible to every comparison.
+
+   So the honest claim is: the v2 write path *reports* whether what was installed
+   is what was admitted, and refuses to complete when it is not. It does not
+   guarantee that only admitted bytes reach disk. Closing that requires the
+   installers to consume the gate's frozen content and publish it atomically, or
+   a rollback that restores the pre-operation state — a change to the installer
+   contract, routed forward rather than attempted here. An operator who sees this
+   failure must treat the projection as untrusted and re-run, and
+   `tests/test_provider_review_regressions.py` asserts the post-failure
+   filesystem state so the residual is proven rather than described.
 
 **Legacy neutrality drawdown.** `scripts/lib/source.py` carried 50 findings, more
 than every other legacy module combined. Its URL shapes, clone forms, SSH

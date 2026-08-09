@@ -4701,6 +4701,24 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                         exit_code=3,
                     )
             for primitive, name in closure.artifacts:
+                if frozen_content is not None:
+                    # Per member, immediately before its own installer runs, so
+                    # the unguarded window is one installer's read rather than
+                    # the whole loop. It does not become zero: the installers
+                    # resolve their own source, so a change made and undone
+                    # inside a single read stays invisible. That residual is
+                    # recorded in the ADR rather than papered over.
+                    drifted = _workspace_gated_content_drift(
+                        catalog, closure, repo_root, frozen_content
+                    )
+                    if drifted:
+                        raise LibraryError(
+                            "Workspace source content changed while its members were "
+                            f"being installed: {drifted}. The gate admitted different "
+                            "bytes than the installer would read; nothing further is "
+                            "written",
+                            exit_code=3,
+                        )
                 output_buffer = io.StringIO()
                 with redirect_stdout(output_buffer):
                     rc = _dispatch_use(

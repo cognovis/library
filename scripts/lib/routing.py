@@ -57,13 +57,14 @@ _SOURCE_TOKEN_RE = re.compile(
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
-#: The opening words of every note this module generates. A note not starting
-#: with one of these was written by a caller, and a caller's prose is outside
-#: what the run can attest to.
-_GENERATED_NOTE_PREFIXES = (
-    "context pointers not present on this machine",
-    "no source is registered on this machine",
-)
+#: The closed set of notes this module can produce. A prefix check was tried
+#: first and review walked straight through it: a note reading
+#: "no source is registered on this machine; try sussdorff-core" starts with an
+#: allowed prefix and still names an unread repository. `startswith` proves the
+#: opening words, and the claim being made is about the whole sentence.
+NOTE_NO_CONTEXT_POINTERS = "absent-context-pointers"
+NOTE_NO_REGISTERED_SOURCE = "no-registered-source"
+NOTE_KINDS = (NOTE_NO_CONTEXT_POINTERS, NOTE_NO_REGISTERED_SOURCE)
 
 
 class RoutingNotCatalogDerived(RuntimeError):
@@ -77,6 +78,36 @@ class RoutingNotCatalogDerived(RuntimeError):
 
 def _words(text: str) -> set[str]:
     return set(_WORD_RE.findall(str(text).lower()))
+
+
+@dataclass(frozen=True)
+class RoutingNote:
+    """One note this module produced, identified by kind rather than by wording.
+
+    A note is a typed value, not free text, because the guarantee is about
+    provenance: the run can attest to what it read, and it cannot attest to a
+    sentence a caller wrote. Rendering happens here, from the kind and its own
+    data, so there is no text a caller can supply at all.
+    """
+
+    kind: str
+    detail: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.kind not in NOTE_KINDS:
+            raise ValueError(f"unknown routing note kind: {self.kind!r}")
+        object.__setattr__(self, "detail", tuple(str(item) for item in self.detail))
+
+    def render(self) -> str:
+        if self.kind == NOTE_NO_CONTEXT_POINTERS:
+            return (
+                "context pointers not present on this machine, so they contributed "
+                f"nothing: {sorted(self.detail)}"
+            )
+        return (
+            "no source is registered on this machine, so no candidate can be "
+            "attributed to one"
+        )
 
 
 @dataclass(frozen=True)
@@ -120,7 +151,7 @@ class RoutingAnswer:
     identities_read: tuple[str, ...]
     context_pointers: tuple[ContextPointer, ...]
     unmatched: bool = False
-    notes: tuple[str, ...] = field(default_factory=tuple)
+    notes: tuple[RoutingNote, ...] = field(default_factory=tuple)
 
     def named_sources(self) -> tuple[str, ...]:
         """Every catalog name and identity this answer mentions."""
@@ -145,7 +176,7 @@ class RoutingAnswer:
         )
         lines.append("Context pointers:")
         lines.extend(f"  - {pointer.describe()}" for pointer in self.context_pointers)
-        lines.extend(f"Note: {note}" for note in self.notes)
+        lines.extend(f"Note: {note.render()}" for note in self.notes)
         return "\n".join(lines)
 
     def assert_catalog_derived(self) -> "RoutingAnswer":
@@ -155,21 +186,22 @@ class RoutingAnswer:
         rendered text is what a reader acts on. A structured check would pass an
         answer whose prose named a repository nobody registered.
 
-        Free prose is checked by **provenance, not by pattern**. A URL scan
-        cannot recognize a bare repository name — review put `sussdorff-core`
-        into a note and the scan passed it, which is precisely the failure this
-        method exists to prevent, since a plain sibling name is the most likely
-        way a routing table would leak. So every note has to be one this module
-        generated: prose whose wording is not the module's own cannot be
-        attributed to what the run read, and is refused rather than scanned.
+        Prose is checked by **provenance, not by pattern**. A URL scan cannot
+        recognize a bare repository name — review put `sussdorff-core` into a
+        note and the scan passed it, since a plain sibling name is the most
+        likely way a routing table would leak. A prefix check was the next
+        attempt and review walked through that too, by appending the sibling
+        name to an allowed opening. So a note is not text at all: it is a typed
+        value whose wording this module renders, and there is no field for a
+        caller's sentence to arrive in.
         """
         read = {name for name in (*self.catalogs_read, *self.identities_read) if name}
         for note in self.notes:
-            if not note.startswith(_GENERATED_NOTE_PREFIXES):
+            if not isinstance(note, RoutingNote):
                 raise RoutingNotCatalogDerived(
-                    f"routing answer carries a note this module did not generate: "
-                    f"{note!r}. Free prose cannot be attributed to what the run "
-                    "read, and a bare repository name in it would read as fact"
+                    f"routing answer carries a note that is not a typed RoutingNote: "
+                    f"{note!r}. Free prose cannot be attributed to what the run read, "
+                    "and a bare repository name in it would read as fact"
                 )
         rendered = self.render()
         for match in _SOURCE_TOKEN_RE.finditer(rendered):
@@ -314,18 +346,12 @@ def route(
     scored.sort(key=lambda candidate: (-candidate.score, candidate.primitive, candidate.name))
     selected = tuple(scored[: max(0, int(limit))])
 
-    notes: list[str] = []
+    notes: list[RoutingNote] = []
     absent = [pointer.label for pointer in pointers if not pointer.present]
     if absent:
-        notes.append(
-            "context pointers not present on this machine, so they contributed "
-            f"nothing: {sorted(absent)}"
-        )
+        notes.append(RoutingNote(kind=NOTE_NO_CONTEXT_POINTERS, detail=tuple(sorted(absent))))
     if not catalog_names:
-        notes.append(
-            "no source is registered on this machine, so no candidate can be "
-            "attributed to one"
-        )
+        notes.append(RoutingNote(kind=NOTE_NO_REGISTERED_SOURCE))
 
     answer = RoutingAnswer(
         query=query,
