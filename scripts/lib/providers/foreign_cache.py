@@ -44,18 +44,23 @@ cache stores another.
 
 from __future__ import annotations
 
+import contextlib
+import errno
+import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from types import MappingProxyType
+from typing import Any, Callable, Iterable, Iterator, Mapping
 
 from .executable_admission import content_digest, validated_digest
 from .inventory import ProviderAvailability
-from .offline import OfflineRefusal, require_operation
+from .offline import OfflineRefusal, ResolutionEvidence, require_operation
 
 CACHE_OBJECT_SCHEMA = "cognovis.foreign-cache-object.v1"
 PIN_STORE_SCHEMA = "cognovis.trust-on-first-use-pins.v1"
@@ -68,6 +73,11 @@ DESCRIPTOR_NAME = "object.json"
 STAGING_DIRECTORY = "incoming"
 #: Where completed objects live.
 OBJECTS_DIRECTORY = "objects"
+#: A storage bucket segment. The bucket is derived from `library_type`, which is
+#: caller-supplied text, so it is constrained to one safe path segment. Review
+#: materialized an object outside the cache root by supplying an absolute
+#: `library_type`; a value that can address the filesystem is not a type name.
+_SAFE_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 def normalized_content_digest(files: Mapping[str, bytes]) -> str:
@@ -91,6 +101,26 @@ class CacheObjectConflict(ValueError):
     An object is immutable. Reaching this means two different contents claim one
     identity, which is a key defect and not a race to be resolved by overwriting.
     """
+
+
+class CacheObjectCorrupt(RuntimeError):
+    """A stored object's bytes no longer match its recorded digest.
+
+    Fail-closed rather than self-healing. Review demonstrated the alternative:
+    an install that found an existing descriptor reused a corrupted object and
+    then reported the receipt as verified, so a damaged cache became an
+    installed artifact with a clean status. Repair exists, but it is
+    `ObjectStore.repair_object` and it is explicit.
+    """
+
+    def __init__(self, key_digest: str, detail: str) -> None:
+        super().__init__(
+            f"cache object {key_digest} failed verification and was not reused: "
+            f"{detail}. Repair it explicitly, or delete nothing and investigate; "
+            "a corrupt object is never silently replaced."
+        )
+        self.key_digest = key_digest
+        self.detail = detail
 
 
 @dataclass(frozen=True)
@@ -163,10 +193,26 @@ class CacheKey:
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"CacheKey.{name} is required")
-        if self.upstream_revision is not None and not str(self.upstream_revision).strip():
+        if self.upstream_revision is not None:
+            # Strictly text or null. Review filed the integer 1 and the string
+            # "1" as two unequal keys with one identity: every member is
+            # stringified before framing, so a non-text member produces a second
+            # key value that addresses the first key's object.
+            if not isinstance(self.upstream_revision, str):
+                raise ValueError(
+                    "CacheKey.upstream_revision must be text or None, not "
+                    f"{type(self.upstream_revision).__name__}; a value that only "
+                    "becomes an identity after stringification is two identities"
+                )
+            if not self.upstream_revision.strip():
+                raise ValueError(
+                    "CacheKey.upstream_revision is either an identity or None; an "
+                    "empty string would make a revisionless item look pinned"
+                )
+        if not _SAFE_SEGMENT_RE.match(self.library_type):
             raise ValueError(
-                "CacheKey.upstream_revision is either an identity or None; an empty "
-                "string would make a revisionless item look pinned"
+                f"CacheKey.library_type {self.library_type!r} is not a safe storage "
+                "segment; a Library type is a lowercase name, never a path"
             )
         validated_digest(self.normalized_content_digest)
 
@@ -272,6 +318,46 @@ def _as_pairs(files: Mapping[str, bytes] | Iterable[tuple[str, bytes]]):
     return iter(files)
 
 
+def _staging_owner(name: str) -> int | None:
+    """The writing process id encoded in a staging entry name, if any."""
+    head, separator, _ = name.partition("-")
+    if not separator or not head.isdigit():
+        return None
+    return int(head)
+
+
+def _process_is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except OSError as exc:
+        # EPERM means the process exists and belongs to somebody else, which is
+        # still "alive". Only ESRCH proves it is gone.
+        return exc.errno != errno.ESRCH
+    return True
+
+
+@contextlib.contextmanager
+def _exclusive(path: Path) -> Iterator[None]:
+    """Serialize a read-modify-write across processes on one state file.
+
+    Atomic replacement makes the *write* indivisible; it does nothing for the
+    read that decided what to write. Review ran two first-use pins concurrently
+    and both succeeded with different digests, so the identity a source is
+    trusted at was chosen by whichever process finished last. The whole
+    compare-and-write therefore runs under one lock.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(f"{path.name}.lock")
+    handle = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            fcntl.flock(handle, fcntl.LOCK_UN)
+        os.close(handle)
+
+
 class ObjectStore:
     """Content-addressed storage for complete foreign cache objects.
 
@@ -295,16 +381,56 @@ class ObjectStore:
         return self.base / STAGING_DIRECTORY
 
     def path_for(self, key: CacheKey) -> Path:
-        return self.objects_root / f"{key.library_type}s" / key.digest()
+        """The object path for one key, proven to stay beneath the cache root.
+
+        `CacheKey` already refuses a path-bearing `library_type`, and this is the
+        second half of the same guarantee: the resolved destination is checked
+        rather than assumed, so a future key member can never address the
+        filesystem even if its own validation is relaxed.
+        """
+        candidate = (self.objects_root / f"{key.library_type}s" / key.digest()).resolve()
+        root = self.objects_root.resolve()
+        if root != candidate and root not in candidate.parents:
+            raise ValueError(
+                f"cache object path for {key.digest()} resolves outside the cache "
+                f"root: {candidate}"
+            )
+        return candidate
 
     def exists(self, key: CacheKey) -> bool:
         return (self.path_for(key) / DESCRIPTOR_NAME).is_file()
 
     def temporary_entries(self) -> tuple[str, ...]:
-        """Staging entries left behind. A healthy store has none."""
+        """Staging entries present right now. A healthy store has none."""
         if not self.staging_root.is_dir():
             return ()
         return tuple(sorted(entry.name for entry in self.staging_root.iterdir()))
+
+    def sweep_staging(self) -> tuple[str, ...]:
+        """Remove staging entries whose writer is gone, and name what was removed.
+
+        A staging entry is by construction a never-visible partial object, so
+        discarding it destroys nothing an operator could reference. What it must
+        not destroy is a *live* writer's work, which is why each entry carries
+        the writing process id and only entries whose writer no longer exists are
+        swept.
+
+        This exists because a `finally` block does not run after a hard kill.
+        Review killed a materializer mid-write and left permanent residue that no
+        later run would ever clean up, which turns AC2's "leaves no partial
+        object behind" into a promise that holds only for tidy failures.
+        """
+        if not self.staging_root.is_dir():
+            return ()
+        swept: list[str] = []
+        for entry in sorted(self.staging_root.iterdir()):
+            owner = _staging_owner(entry.name)
+            if owner is None or owner == os.getpid() or _process_is_alive(owner):
+                continue
+            shutil.rmtree(entry, ignore_errors=True)
+            swept.append(entry.name)
+        self._prune_empty_staging_root()
+        return tuple(swept)
 
     def objects(self) -> tuple[CacheObject, ...]:
         """Every complete object in the store."""
@@ -338,11 +464,24 @@ class ObjectStore:
 
         Raises:
             CacheObjectConflict: when the key already holds different bytes.
+            CacheObjectCorrupt: when the key already holds an object whose bytes
+                no longer match its own recorded digest. Reuse is refused rather
+                than repaired, because an install that silently reuses damaged
+                bytes reports success over content nobody verified.
         """
         if not isinstance(created_at, str) or not created_at.strip():
             raise ValueError("materialize requires the observation time of the write")
 
-        staged = self.staging_root / uuid.uuid4().hex
+        self.sweep_staging()
+        if self.exists(key):
+            # Verify the stored bytes before reusing them. Comparing descriptors
+            # alone proved insufficient: a corrupted object kept its descriptor
+            # and was reused, and the resulting receipt claimed verification.
+            report = self.verify(key)
+            if not report.verified:
+                raise CacheObjectCorrupt(key.digest(), report.detail)
+
+        staged = self.staging_root / f"{os.getpid()}-{uuid.uuid4().hex}"
         try:
             written = self._stage(staged, files)
             projected_digest = normalized_content_digest(written)
@@ -405,8 +544,67 @@ class ObjectStore:
                     f"{existing.projected_content_digest}, offered "
                     f"{descriptor.projected_content_digest}"
                 ) from None
+            report = self.verify(descriptor.key)
+            if not report.verified:
+                raise CacheObjectCorrupt(descriptor.key.digest(), report.detail) from None
             return existing
         del written
+        return descriptor
+
+    def repair_object(
+        self,
+        key: CacheKey,
+        files: Mapping[str, bytes],
+        *,
+        created_at: str,
+        operator: str,
+    ) -> CacheObject:
+        """Replace a corrupt object with bytes that prove the same identity.
+
+        This is the only path that replaces stored bytes, and it is deliberately
+        not reachable from `materialize`: silent self-healing is
+        indistinguishable from silent substitution at the moment it matters.
+
+        The damaged object is moved aside before the replacement is moved in, so
+        a crash mid-repair leaves the damaged copy under a `.corrupt-` suffix
+        rather than leaving nothing at all.
+
+        Raises:
+            ValueError: when the offered bytes do not reproduce the stored
+                object's recorded digest, or when no operator is named.
+            CacheObjectMissing: when there is nothing to repair.
+        """
+        if not isinstance(operator, str) or not operator.strip():
+            raise ValueError("a cache repair records the operator who authorized it")
+        stored = self.load(key)
+        offered = normalized_content_digest(files)
+        if offered != stored.projected_content_digest:
+            raise ValueError(
+                f"repair refused: the offered bytes digest to {offered} but the "
+                f"stored object records {stored.projected_content_digest}; a repair "
+                "restores the recorded object, it does not redefine it"
+            )
+        staged = self.staging_root / f"{os.getpid()}-{uuid.uuid4().hex}"
+        quarantine = stored.path.with_name(f"{stored.path.name}.corrupt-{uuid.uuid4().hex}")
+        try:
+            written = self._stage(staged, files)
+            descriptor = CacheObject(
+                key=key,
+                path=stored.path,
+                projected_content_digest=normalized_content_digest(written),
+                created_at=created_at,
+                native_verification=stored.native_verification,
+            )
+            (staged / DESCRIPTOR_NAME).write_text(
+                json.dumps(descriptor.to_dict(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            os.rename(stored.path, quarantine)
+            os.rename(staged, stored.path)
+        finally:
+            shutil.rmtree(staged, ignore_errors=True)
+            self._prune_empty_staging_root()
+        shutil.rmtree(quarantine, ignore_errors=True)
         return descriptor
 
     def _prune_empty_staging_root(self) -> None:
@@ -461,14 +659,29 @@ class ObjectStore:
         local integrity and remote freshness as separate reported facts and an
         operator needs to see what was expected next to what was found.
         """
+        return self.read_verified(key)[1]
+
+    def read_verified(
+        self, key: CacheKey
+    ) -> tuple[Mapping[str, bytes], IntegrityReport]:
+        """Read the object **once** and verify exactly the bytes that were read.
+
+        The returned snapshot is immutable and is the only content a caller
+        should install. Reading twice -- once to verify, once to use -- is a
+        check-to-use window, and review walked through it: the stored file was
+        replaced between a `verify` that returned true and the read that
+        produced the installed bytes, so an unverified payload was installed
+        under a verified report.
+        """
         stored = self.load(key)
-        observed = normalized_content_digest(self.read_content(key))
+        snapshot = MappingProxyType(dict(self.read_content(key)))
+        observed = normalized_content_digest(snapshot)
         verified = observed == stored.projected_content_digest
         detail = (
             f"expected {stored.projected_content_digest}, observed {observed} "
             f"at {stored.path}"
         )
-        return IntegrityReport(
+        report = IntegrityReport(
             key_digest=key.digest(),
             path=stored.path,
             expected_digest=stored.projected_content_digest,
@@ -476,6 +689,7 @@ class ObjectStore:
             verified=verified,
             detail=("integrity verified: " if verified else "integrity failed: ") + detail,
         )
+        return snapshot, report
 
 
 class TofuDrift(RuntimeError):
@@ -610,22 +824,23 @@ class TofuPinStore:
                 a failed comparison must hit the same refusal.
         """
         validated_digest(digest)
-        pins = self._load()
-        existing = pins.get(qualified_identity)
-        if existing is not None:
-            if existing.normalized_content_digest != digest:
-                raise TofuDrift(
-                    qualified_identity, existing.normalized_content_digest, digest
-                )
-            return existing
-        recorded = TofuPin(
-            qualified_identity=qualified_identity,
-            normalized_content_digest=digest,
-            first_observed_at=observed_at,
-        )
-        pins[qualified_identity] = recorded
-        self._save(pins)
-        return recorded
+        with _exclusive(self.path):
+            pins = self._load()
+            existing = pins.get(qualified_identity)
+            if existing is not None:
+                if existing.normalized_content_digest != digest:
+                    raise TofuDrift(
+                        qualified_identity, existing.normalized_content_digest, digest
+                    )
+                return existing
+            recorded = TofuPin(
+                qualified_identity=qualified_identity,
+                normalized_content_digest=digest,
+                first_observed_at=observed_at,
+            )
+            pins[qualified_identity] = recorded
+            self._save(pins)
+            return recorded
 
     def verify(self, qualified_identity: str, digest: str) -> TofuPin:
         """Compare a freshly observed digest against the pin.
@@ -649,13 +864,38 @@ class TofuPinStore:
     ) -> tuple[TofuPin, bool]:
         """Verify against an existing pin, or record the first-use pin.
 
+        The decision and the write happen under one lock, so two concurrent
+        first uses cannot each decide they are the first one.
+
         Returns:
             The pin and whether this call created it.
         """
-        existing = self.pin_for(qualified_identity)
-        if existing is None:
-            return self.pin(qualified_identity, digest, observed_at=observed_at), True
-        return self.verify(qualified_identity, digest), False
+        validated_digest(digest)
+        with _exclusive(self.path):
+            existing = self._load().get(qualified_identity)
+            if existing is None:
+                recorded = self._pin_locked(
+                    qualified_identity, digest, observed_at=observed_at
+                )
+                return recorded, True
+            if existing.normalized_content_digest != digest:
+                raise TofuDrift(
+                    qualified_identity, existing.normalized_content_digest, digest
+                )
+            return existing, False
+
+    def _pin_locked(
+        self, qualified_identity: str, digest: str, *, observed_at: str
+    ) -> TofuPin:
+        pins = self._load()
+        recorded = TofuPin(
+            qualified_identity=qualified_identity,
+            normalized_content_digest=digest,
+            first_observed_at=observed_at,
+        )
+        pins[qualified_identity] = recorded
+        self._save(pins)
+        return recorded
 
     def repin(
         self,
@@ -665,7 +905,7 @@ class TofuPinStore:
         operator: str,
         acknowledged_drift: tuple[str, str],
         decided_at: str,
-        availability: ProviderAvailability,
+        availability: ProviderAvailability | ResolutionEvidence,
     ) -> TofuPin:
         """Replace a pin after an explicit operator decision about named drift.
 
@@ -689,30 +929,31 @@ class TofuPinStore:
         validated_digest(digest)
         if not isinstance(operator, str) or not operator.strip():
             raise ValueError("a re-pin records the operator who decided it")
-        pins = self._load()
-        existing = pins.get(qualified_identity)
-        if existing is None:
-            raise KeyError(f"no trust-on-first-use pin for {qualified_identity}")
-        if tuple(acknowledged_drift) != (existing.normalized_content_digest, digest):
-            raise ValueError(
-                "the acknowledged drift does not match this pin and these bytes: "
-                f"recorded {(existing.normalized_content_digest, digest)}, "
-                f"acknowledged {tuple(acknowledged_drift)}"
+        with _exclusive(self.path):
+            pins = self._load()
+            existing = pins.get(qualified_identity)
+            if existing is None:
+                raise KeyError(f"no trust-on-first-use pin for {qualified_identity}")
+            if tuple(acknowledged_drift) != (existing.normalized_content_digest, digest):
+                raise ValueError(
+                    "the acknowledged drift does not match this pin and these bytes: "
+                    f"recorded {(existing.normalized_content_digest, digest)}, "
+                    f"acknowledged {tuple(acknowledged_drift)}"
+                )
+            replacement = TofuPin(
+                qualified_identity=qualified_identity,
+                normalized_content_digest=digest,
+                first_observed_at=existing.first_observed_at,
+                superseded_digests=(
+                    *existing.superseded_digests,
+                    existing.normalized_content_digest,
+                ),
+                repinned_by=operator,
+                repinned_at=decided_at,
             )
-        replacement = TofuPin(
-            qualified_identity=qualified_identity,
-            normalized_content_digest=digest,
-            first_observed_at=existing.first_observed_at,
-            superseded_digests=(
-                *existing.superseded_digests,
-                existing.normalized_content_digest,
-            ),
-            repinned_by=operator,
-            repinned_at=decided_at,
-        )
-        pins[qualified_identity] = replacement
-        self._save(pins)
-        return replacement
+            pins[qualified_identity] = replacement
+            self._save(pins)
+            return replacement
 
 
 __all__ = [
@@ -721,6 +962,7 @@ __all__ = [
     "CacheKey",
     "CacheObject",
     "CacheObjectConflict",
+    "CacheObjectCorrupt",
     "CacheObjectMissing",
     "IntegrityReport",
     "ObjectStore",

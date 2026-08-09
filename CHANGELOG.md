@@ -63,8 +63,24 @@
   installed item puts its receipt into the durable, queryable `upstream-vanished`
   state, which grants no deletion authority; explicit named removal of a named
   receipt works under every degraded-inventory condition, records the degraded
-  state and the operator's intent in receipt history, and never deletes the
-  underlying cache object.
+  state and the operator's intent in receipt history, deactivates the projection
+  it retires, and never deletes the underlying cache object. Destructive verdicts
+  require a **source-scoped, conclusive** inventory observation: transport
+  reachability alone, a truncated listing, and a listing narrowed by changed
+  authorization all fail closed, and one source's resolution never changes
+  another source's receipts. Projection is two-phase — the receipt declares its
+  intended targets before anything is written — so an installed target is always
+  described by a durable receipt; executable admission binds the projected bytes
+  that are installed rather than the upstream bytes; a repair reads the cache
+  object once and installs exactly the snapshot it verified; a damaged object is
+  never silently reused or self-healed; concurrent first uses serialize so one
+  pin wins and the other is drift; and a materialization killed mid-write leaves
+  residue that the next write scavenges.
+  **Scope boundary:** this slice delivers the cache core and its contracts. No
+  production CLI, installer, or sync path calls them yet — the consuming install,
+  status, repair, and removal commands arrive with the Workspace and
+  reference-marketplace slices (`CL-dbam`, `CL-mvet`), and retention, garbage
+  collection, and operator-explicit purge with `CL-uliw`.
 
 - *(CL-n7ex, marketplace)* Gate every foreign projection on distribution rights
   and admission state. The four grants are recorded and queried independently,

@@ -21,6 +21,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from lib.providers.cache_transaction import (  # noqa: E402
+    CompletenessEvidence,
+    ProjectionActivation,
     cache_status,
     install_foreign_item,
     reinstall_from_cache,
@@ -49,6 +51,7 @@ from lib.providers.offline import (  # noqa: E402
 from lib.providers.receipts import (  # noqa: E402
     DeletionAuthorityRefused,
     InventoryObservation,
+    ProjectionStillActive,
     ReceiptStore,
     ReceiptTarget,
     deletion_authority,
@@ -107,6 +110,22 @@ class _Projector:
         self.root = root
         self.activations = 0
 
+    def plan(self, files: Mapping[str, bytes]) -> Sequence[str]:
+        return tuple(str(self.root / path) for path in sorted(files))
+
+    @property
+    def activation(self) -> ProjectionActivation:
+        return ProjectionActivation(plan=self.plan, apply=self)
+
+    def deactivate(self, targets: Sequence[ReceiptTarget]) -> Sequence[str]:
+        removed = []
+        for target in targets:
+            path = Path(target.path)
+            if path.is_file():
+                path.unlink()
+                removed.append(target.path)
+        return tuple(removed)
+
     def __call__(self, files: Mapping[str, bytes]) -> Sequence[ReceiptTarget]:
         self.activations += 1
         targets = []
@@ -144,7 +163,8 @@ def _installed(tmp_path: Path):
         receipt_store=receipts,
         transformation=IDENTITY_TRANSFORMATION,
         target="project_committed",
-        activate=projector,
+        activate=projector.activation,
+        completeness=CompletenessEvidence.from_manifest(sorted(UPSTREAM)),
         observed_at=NOW,
     )
     return outcome, objects, pins, receipts, projector
@@ -167,7 +187,7 @@ def test_offline_reinstall_and_verify(tmp_path: Path) -> None:
         object_store=objects,
         receipt_store=receipts,
         availability=UNAVAILABLE,
-        activate=projector,
+        activate=projector.activation,
         observed_at=LATER,
     )
     assert (projector.root / "SKILL.md").read_bytes() == UPSTREAM["SKILL.md"]
@@ -250,6 +270,7 @@ def test_upstream_vanished_state(tmp_path: Path) -> None:
 
     # A degraded observation changes nothing: absence is not information yet.
     degraded = InventoryObservation(
+        provider_identity=PROVIDER,
         availability=DEGRADED, listed_identities=frozenset(), complete=False
     )
     unchanged = reconcile_upstream_state(receipts, degraded, observed_at=LATER)
@@ -258,6 +279,7 @@ def test_upstream_vanished_state(tmp_path: Path) -> None:
     assert ReceiptStore(receipts.path).get(outcome.receipt.id).upstream_state == "present"
 
     complete = InventoryObservation(
+        provider_identity=PROVIDER,
         availability=AVAILABLE, listed_identities=frozenset({f"{PROVIDER}#kits/other"}), complete=True
     )
     result = reconcile_upstream_state(receipts, complete, observed_at=LATER)
@@ -271,13 +293,20 @@ def test_upstream_vanished_state(tmp_path: Path) -> None:
     assert "upstream-vanished" in tuple(event.event for event in vanished.history)
 
     # It grants no deletion authority, and the cached bytes stay put.
+    back_in_scope = InventoryObservation(
+        provider_identity=PROVIDER,
+        availability=AVAILABLE,
+        listed_identities=frozenset({f"{PROVIDER}#kits/other"}),
+        complete=True,
+    )
     with pytest.raises(DeletionAuthorityRefused) as excinfo:
-        deletion_authority(vanished)
+        deletion_authority(vanished, back_in_scope)
     assert "upstream-vanished" in str(excinfo.value)
     assert objects.verify(outcome.cache_object.key).verified
 
     # It remains until the upstream identity reappears.
     back = InventoryObservation(
+        provider_identity=PROVIDER,
         availability=AVAILABLE, listed_identities=frozenset({IDENTITY}), complete=True
     )
     reconcile_upstream_state(reloaded, back, observed_at="2026-08-09T13:00:00Z")
@@ -289,18 +318,20 @@ def test_upstream_vanished_state(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "observation",
     [
-        InventoryObservation(availability=UNAVAILABLE, listed_identities=frozenset(), complete=False),
-        InventoryObservation(availability=DEGRADED, listed_identities=frozenset(), complete=False),
+        InventoryObservation(provider_identity=PROVIDER, availability=UNAVAILABLE, listed_identities=frozenset(), complete=False),
+        InventoryObservation(provider_identity=PROVIDER, availability=DEGRADED, listed_identities=frozenset(), complete=False),
         InventoryObservation(
+            provider_identity=PROVIDER,
             availability=AVAILABLE, listed_identities=frozenset(), complete=False
         ),
         InventoryObservation(
+            provider_identity=PROVIDER,
             availability=AVAILABLE,
             listed_identities=frozenset(),
             complete=True,
             reduced_by_authorization=True,
         ),
-        InventoryObservation(availability=AVAILABLE, listed_identities=frozenset(), complete=True),
+        InventoryObservation(provider_identity=PROVIDER, availability=AVAILABLE, listed_identities=frozenset(), complete=True),
     ],
     ids=["unavailable", "degraded", "incomplete", "authorization-reduced", "vanished"],
 )
@@ -308,7 +339,7 @@ def test_named_removal_under_degraded_inventory(
     observation: InventoryObservation, tmp_path: Path
 ) -> None:
     """Named removal always works, records why, and destroys no bytes (AC8)."""
-    outcome, objects, _, receipts, _ = _installed(tmp_path)
+    outcome, objects, _, receipts, projector = _installed(tmp_path)
 
     removal = remove_named_receipt(
         receipts,
@@ -317,6 +348,7 @@ def test_named_removal_under_degraded_inventory(
         intent="retiring the anchor kit from this machine",
         observation=observation,
         removed_at=LATER,
+        deactivate=projector.deactivate,
     )
 
     assert ReceiptStore(receipts.path).get(outcome.receipt.id) is None
@@ -332,10 +364,121 @@ def test_named_removal_under_degraded_inventory(
     assert observation.availability.state in final.provider_state
 
 
+def test_named_removal_deactivates_the_projection_it_retires(tmp_path: Path) -> None:
+    """Retiring a receipt never leaves its projection installed (wave-1 F1).
+
+    Removing the receipt alone recreated the exact unreceipted active projection
+    this cache exists to end: the files stayed on disk and nothing described
+    them any more.
+    """
+    outcome, objects, _, receipts, projector = _installed(tmp_path)
+    observation = InventoryObservation(
+        provider_identity=PROVIDER, availability=UNAVAILABLE, complete=False
+    )
+    installed = projector.root / "SKILL.md"
+    assert installed.is_file()
+
+    # Without a deactivation, the removal refuses rather than orphaning it.
+    with pytest.raises(ProjectionStillActive):
+        remove_named_receipt(
+            receipts,
+            outcome.receipt.id,
+            operator="malte",
+            intent="retire the anchor kit",
+            observation=observation,
+            removed_at=LATER,
+        )
+    assert installed.is_file()
+    assert ReceiptStore(receipts.path).get(outcome.receipt.id) is not None
+
+    removal = remove_named_receipt(
+        receipts,
+        outcome.receipt.id,
+        operator="malte",
+        intent="retire the anchor kit",
+        observation=observation,
+        removed_at=LATER,
+        deactivate=projector.deactivate,
+    )
+    assert not installed.exists()
+    assert removal.deactivated == (str(installed),)
+    assert ReceiptStore(receipts.path).get(outcome.receipt.id) is None
+    assert objects.verify(outcome.cache_object.key).verified, "bytes are never deleted"
+
+
+def test_reconciliation_is_source_scoped(tmp_path: Path) -> None:
+    """One source's listing says nothing about another source's items (wave-1 F9)."""
+    outcome, _, pins, receipts, _ = _installed(tmp_path)
+    other = outcome.receipt.to_dict()
+    other["id"] = "skill:other@0000000000000000"
+    other["provider_identity"] = "other-source"
+    other["upstream_id"] = "kits/other"
+    receipts.put(type(outcome.receipt).from_dict(other))
+
+    complete = InventoryObservation(
+        provider_identity=PROVIDER,
+        availability=AVAILABLE,
+        listed_identities=frozenset({f"{PROVIDER}#kits/anchor"}),
+        complete=True,
+    )
+    result = reconcile_upstream_state(receipts, complete, observed_at=LATER)
+    assert result.changed == ()
+    assert [receipt.id for receipt in result.out_of_scope] == [other["id"]]
+
+    reloaded = ReceiptStore(receipts.path)
+    assert reloaded.get(other["id"]).upstream_state == "present"
+    assert reloaded.with_upstream_state("upstream-vanished") == ()
+
+
+def test_an_incomplete_inventory_never_authorizes_deletion(tmp_path: Path) -> None:
+    """Reachability is not a complete resolution (wave-1 F10)."""
+    outcome, _, _, receipts, _ = _installed(tmp_path)
+    verified = ReceiptStore(receipts.path).get(outcome.receipt.id)
+    assert verified.verified
+
+    truncated = InventoryObservation(
+        provider_identity=PROVIDER,
+        availability=AVAILABLE,
+        listed_identities=frozenset({IDENTITY}),
+        complete=False,
+    )
+    assert truncated.degraded_reason() == "inventory is incomplete or truncated"
+    for operation in ("ownership-derived-prune", "prune-apply", "upgrade", "re-pin"):
+        assert not evaluate_operation(operation, truncated).allowed, operation
+    with pytest.raises(DeletionAuthorityRefused, match="incomplete resolution"):
+        deletion_authority(verified, truncated)
+
+    # Transport reachability with no observation at all is the absence of
+    # evidence, not its presence.
+    assert not evaluate_operation("ownership-derived-prune", AVAILABLE).allowed
+    with pytest.raises(DeletionAuthorityRefused, match="source-scoped"):
+        deletion_authority(verified, AVAILABLE)
+
+    # Another source's complete resolution is not this receipt's.
+    foreign = InventoryObservation(
+        provider_identity="other-source",
+        availability=AVAILABLE,
+        listed_identities=frozenset({IDENTITY}),
+        complete=True,
+    )
+    with pytest.raises(DeletionAuthorityRefused, match="says nothing about another"):
+        deletion_authority(verified, foreign)
+
+    conclusive = InventoryObservation(
+        provider_identity=PROVIDER,
+        availability=AVAILABLE,
+        listed_identities=frozenset({IDENTITY}),
+        complete=True,
+    )
+    assert evaluate_operation("ownership-derived-prune", conclusive).allowed
+    assert deletion_authority(verified, conclusive) is verified
+
+
 def test_named_removal_is_never_reached_by_ownership_derived_prune(tmp_path: Path) -> None:
     """The one path that may remove a receipt is not the prune path (AC8)."""
     outcome, _, _, receipts, _ = _installed(tmp_path)
     observation = InventoryObservation(
+        provider_identity=PROVIDER,
         availability=UNAVAILABLE, listed_identities=frozenset(), complete=False
     )
 

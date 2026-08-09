@@ -23,7 +23,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from lib.providers.cache_transaction import (  # noqa: E402
+    CompletenessEvidence,
     IncompleteRetrieval,
+    ProjectionActivation,
     TransactionAborted,
     install_foreign_item,
 )
@@ -38,6 +40,7 @@ from lib.providers.foreign_cache import (  # noqa: E402
     ObjectStore,
     TofuPinStore,
 )
+from lib.providers.foreign_cache import TofuDrift as TofuDriftError  # noqa: E402
 from lib.providers.inventory import (  # noqa: E402
     NormalizedItem,
     ProviderAvailability,
@@ -101,6 +104,9 @@ class _Projector:
         self.root = root
         self.activations = 0
 
+    def plan(self, files: Mapping[str, bytes]) -> Sequence[str]:
+        return tuple(str(self.root / path) for path in sorted(files))
+
     def __call__(self, files: Mapping[str, bytes]) -> Sequence[ReceiptTarget]:
         self.activations += 1
         targets = []
@@ -118,8 +124,19 @@ class _Projector:
         return tuple(targets)
 
     @property
+    def activation(self) -> ProjectionActivation:
+        return ProjectionActivation(plan=self.plan, apply=self)
+
+    @property
     def is_active(self) -> bool:
         return any(self.root.rglob("*")) if self.root.exists() else False
+
+
+ADAPTER_DECLARED = CompletenessEvidence.adapter_declared(
+    "the reference adapter returns a complete FetchedItem and publishes no member "
+    "manifest for this item"
+)
+MANIFEST = CompletenessEvidence.from_manifest(sorted(UPSTREAM))
 
 
 def _stores(tmp_path: Path) -> tuple[ObjectStore, TofuPinStore, ReceiptStore]:
@@ -140,8 +157,9 @@ def _install(tmp_path: Path, **overrides: object):
         receipt_store=receipts,
         transformation=IDENTITY_TRANSFORMATION,
         target="project_committed",
-        activate=projector,
+        activate=projector.activation,
         observed_at=NOW,
+        completeness=MANIFEST,
     )
     kwargs.update(overrides)
     outcome = install_foreign_item(_item(), **kwargs)
@@ -164,7 +182,8 @@ def test_partial_retrieval_leaves_no_object(tmp_path: Path) -> None:
             pin_store=pins,
             receipt_store=receipts,
             target="project_committed",
-            activate=projector,
+            activate=projector.activation,
+            completeness=MANIFEST,
             observed_at=NOW,
         )
     assert excinfo.value.step == "retrieve"
@@ -218,7 +237,8 @@ def test_no_projection_before_receipt(tmp_path: Path) -> None:
             pin_store=pins,
             receipt_store=receipts,
             target="project_committed",
-            activate=projector,
+            activate=projector.activation,
+            completeness=MANIFEST,
             observed_at=NOW,
         )
     assert excinfo.value.step == "receipt"
@@ -292,7 +312,8 @@ def test_a_blocked_committed_projection_still_caches_and_receipts(tmp_path: Path
             pin_store=pins,
             receipt_store=receipts,
             target="project_committed",
-            activate=projector,
+            activate=projector.activation,
+            completeness=MANIFEST,
             observed_at=NOW,
         )
 
@@ -324,13 +345,205 @@ def test_unadmitted_executable_content_is_cached_but_never_projected(tmp_path: P
             pin_store=pins,
             receipt_store=receipts,
             target="project_committed",
-            activate=projector,
+            activate=projector.activation,
+            completeness=MANIFEST,
             observed_at=NOW,
             ledger=ExecutableAdmissionLedger(),
         )
     assert excinfo.value.step == "project"
     assert projector.activations == 0
     assert ReceiptStore(receipts.path).all()[0].executable_admission == "pending"
+
+
+def test_a_failed_finalization_leaves_a_receipt_that_names_its_targets(
+    tmp_path: Path,
+) -> None:
+    """An active projection is always described by a durable receipt (wave-1 F2).
+
+    Recording the target inventory only after activation left a live projection
+    behind a zero-target receipt when the finalizing write failed. The plan is
+    now durable before the mutation, so the crash window records intent instead
+    of hiding an installed target.
+    """
+    writes = {"count": 0}
+
+    class FailAfterPlan(ReceiptStore):
+        def put(self, receipt):  # type: ignore[override]
+            writes["count"] += 1
+            if writes["count"] == 3:  # install -> plan -> finalize
+                raise OSError("no space left on device")
+            return super().put(receipt)
+
+    objects, pins, _ = _stores(tmp_path)
+    receipts = FailAfterPlan(tmp_path / "receipts.json")
+    projector = _Projector(tmp_path / "harness")
+
+    with pytest.raises(OSError):
+        install_foreign_item(
+            _item(),
+            retrieve=_fetched,
+            object_store=objects,
+            pin_store=pins,
+            receipt_store=receipts,
+            target="project_committed",
+            activate=projector.activation,
+            completeness=MANIFEST,
+            observed_at=NOW,
+        )
+
+    assert projector.activations == 1, "the projection did happen"
+    stored = ReceiptStore(tmp_path / "receipts.json").all()
+    assert len(stored) == 1
+    receipt = stored[0]
+    assert not receipt.verified
+    assert receipt.targets == ()
+    # The paths that exist are exactly the paths the receipt declared it would
+    # create, so nothing installed is unattributable.
+    assert set(receipt.planned_targets) == {
+        str(projector.root / path) for path in sorted(UPSTREAM)
+    }
+    assert all(Path(path).exists() for path in receipt.planned_targets)
+    assert "projection-planned" in tuple(event.event for event in receipt.history)
+
+
+def test_a_truncated_item_is_refused_against_its_manifest(tmp_path: Path) -> None:
+    """A structurally valid fragment is not a complete item (wave-1 F3)."""
+    objects, pins, receipts = _stores(tmp_path)
+    projector = _Projector(tmp_path / "harness")
+
+    with pytest.raises(IncompleteRetrieval) as excinfo:
+        install_foreign_item(
+            _item(),
+            retrieve=lambda: _fetched({"SKILL.md": UPSTREAM["SKILL.md"]}),
+            object_store=objects,
+            pin_store=pins,
+            receipt_store=receipts,
+            target="project_committed",
+            activate=projector.activation,
+            completeness=MANIFEST,
+            observed_at=NOW,
+        )
+    assert "agents/openai.yaml" in str(excinfo.value)
+    assert objects.objects() == ()
+    assert receipts.all() == ()
+    assert pins.pins() == ()
+    assert projector.activations == 0
+
+
+def test_completeness_evidence_is_stated_and_recorded(tmp_path: Path) -> None:
+    """The weakest completeness claim is named on the receipt, never implied."""
+    with pytest.raises(TypeError):
+        # No default: a caller has to say what it has.
+        install_foreign_item(_item())  # type: ignore[call-arg]
+    with pytest.raises(ValueError, match="state why"):
+        CompletenessEvidence.adapter_declared("   ")
+
+    outcome, _, pins, receipts, _ = _install(tmp_path, completeness=ADAPTER_DECLARED)
+    assert outcome.receipt.completeness_evidence == "adapter-declaration"
+
+    # A second install of the same item is checked against the pin, which a
+    # truncated retrieval cannot reproduce -- so the recorded evidence improves.
+    second = install_foreign_item(
+        _item(),
+        retrieve=_fetched,
+        object_store=ObjectStore(tmp_path / "cache"),
+        pin_store=pins,
+        receipt_store=receipts,
+        target="project_committed",
+        activate=_Projector(tmp_path / "harness2").activation,
+        completeness=ADAPTER_DECLARED,
+        observed_at=NOW,
+    )
+    assert second.receipt.completeness_evidence == "pinned-digest"
+
+    with pytest.raises(TofuDriftError):
+        install_foreign_item(
+            _item(),
+            retrieve=lambda: _fetched({"SKILL.md": UPSTREAM["SKILL.md"]}),
+            object_store=ObjectStore(tmp_path / "cache"),
+            pin_store=pins,
+            receipt_store=receipts,
+            target="project_committed",
+            activate=_Projector(tmp_path / "harness3").activation,
+            completeness=ADAPTER_DECLARED,
+            observed_at=NOW,
+        )
+
+
+def test_admission_binds_the_projected_bytes(tmp_path: Path) -> None:
+    """A decision is about the bytes that get installed (wave-1 F8).
+
+    Review admitted an upstream digest, supplied a transformation producing
+    different executable bytes, and installed successfully -- the reviewed
+    content and the materialized content were never the same object.
+    """
+    from lib.providers.foreign_cache import Transformation
+
+    rewriting = Transformation(
+        version="harness-bridge/1",
+        rule=lambda files: {path: content + b"# injected\n" for path, content in files.items()},
+        description="append a line the reviewer never saw",
+    )
+    ledger = ExecutableAdmissionLedger()
+    ledger.admit(
+        f"{PROVIDER}#kits/anchor",
+        content_digest(UPSTREAM),
+        library_type="workflow",
+        reviewer="malte",
+        permission_surface=("read-only",),
+        decided_at=NOW,
+        evidence="reviewed the upstream bytes on 2026-08-09",
+    )
+
+    objects, pins, receipts = _stores(tmp_path)
+    projector = _Projector(tmp_path / "harness")
+    workflow = _item(library_type="workflow", library_name="anchor-flow", classification={})
+
+    with pytest.raises(TransactionAborted) as excinfo:
+        install_foreign_item(
+            workflow,
+            retrieve=_fetched,
+            object_store=objects,
+            pin_store=pins,
+            receipt_store=receipts,
+            target="project_committed",
+            activate=projector.activation,
+            completeness=MANIFEST,
+            transformation=rewriting,
+            observed_at=NOW,
+            ledger=ledger,
+        )
+    assert excinfo.value.step == "project"
+    assert projector.activations == 0
+    stored = ReceiptStore(receipts.path).all()[0]
+    assert stored.executable_admission == "pending"
+    assert stored.projected_content_digest != stored.normalized_content_digest
+
+    # Admitting the bytes that will actually be installed lets it through.
+    ledger.admit(
+        f"{PROVIDER}#kits/anchor",
+        content_digest(rewriting.apply(UPSTREAM)),
+        library_type="workflow",
+        reviewer="malte",
+        permission_surface=("read-only",),
+        decided_at=NOW,
+        evidence="reviewed the projected bytes on 2026-08-09",
+    )
+    outcome = install_foreign_item(
+        workflow,
+        retrieve=_fetched,
+        object_store=objects,
+        pin_store=pins,
+        receipt_store=receipts,
+        target="project_committed",
+        activate=projector.activation,
+        completeness=MANIFEST,
+        transformation=rewriting,
+        observed_at=NOW,
+        ledger=ledger,
+    )
+    assert outcome.receipt.executable_admission == "admitted"
+    assert projector.activations == 1
 
 
 def test_drift_on_reinstall_never_overwrites_the_pinned_object(tmp_path: Path) -> None:
@@ -349,7 +562,8 @@ def test_drift_on_reinstall_never_overwrites_the_pinned_object(tmp_path: Path) -
             pin_store=pins,
             receipt_store=receipts,
             target="project_committed",
-            activate=projector,
+            activate=projector.activation,
+            completeness=MANIFEST,
             observed_at="2026-08-09T11:00:00Z",
         )
     assert excinfo.value.pinned_digest == pinned_digest

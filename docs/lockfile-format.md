@@ -219,6 +219,16 @@ never becomes a project receipt, and creates no project ownership edge.
 | `upstream_state` | YES | `present` or `upstream-vanished`. A durable, queryable state entered when a reachable and complete provider no longer lists a previously installed item. Never converted into deletion authority |
 | `provider_availability` | YES | Last observed provider state with its observation timestamp. Freshness is reported as `unknown` when the provider is unreachable; never as current |
 
+Three further fields are added by the slice-3 implementation (`CL-y5z4`), for
+the same reason as the rest: each answers a question that was otherwise
+answerable only by guessing.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `projected_content_digest` | For foreign content | Digest of the bytes actually stored and installed, after the transformation. `normalized_content_digest` remains the upstream identity and the trust-on-first-use pin subject; this is what an executable-admission decision and a target inventory are about. Under the identity transformation the two are equal |
+| `planned_targets` | For foreign content | Target paths this receipt declared **before** its projection was activated. A failure between activation and finalization therefore leaves an intent on record instead of an installed target that no receipt describes |
+| `completeness_evidence` | For foreign content | How the retrieval's completeness was established: `member-manifest`, `pinned-digest`, or `adapter-declaration`. The last is the honest name for "nothing but the adapter's contract", recorded so an operator can query which installs rest on it |
+
 Rules that bind these fields:
 
 - **No projection is activated before its cache object and receipt are complete.**

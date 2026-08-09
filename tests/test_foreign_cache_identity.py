@@ -17,7 +17,9 @@ Covers AC1, AC6, AC9.
 
 from __future__ import annotations
 
+import os
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -29,6 +31,7 @@ from lib.cache import compute_cache_path  # noqa: E402
 from lib.providers.foreign_cache import (  # noqa: E402
     IDENTITY_TRANSFORMATION,
     CacheKey,
+    CacheObjectCorrupt,
     ObjectStore,
     TofuDrift,
     TofuPinStore,
@@ -191,6 +194,150 @@ def test_materialize_never_overwrites_an_existing_object(tmp_path: Path) -> None
     with pytest.raises(ValueError, match="differ"):
         store.materialize(key, {"SKILL.md": b"substituted"}, created_at=LATER)
     assert store.read_content(key) == {"SKILL.md": b"anchor v1"}
+
+
+def test_cache_key_refuses_a_non_text_revision() -> None:
+    """A revision that only becomes an identity after stringification is two.
+
+    Wave-1 review filed `upstream_revision=1` and `upstream_revision="1"` as two
+    unequal keys with one digest and one path, so a pinned object could be
+    addressed by a key that does not equal the key that created it.
+    """
+    with pytest.raises(ValueError, match="text or None"):
+        _key(upstream_revision=1)
+    with pytest.raises(ValueError, match="text or None"):
+        _key(upstream_revision=True)
+
+
+@pytest.mark.parametrize(
+    "library_type", ["/absolute", "../escape", "skill/nested", "", "Skill"]
+)
+def test_cache_object_path_cannot_escape_the_cache_root(
+    library_type: str, tmp_path: Path
+) -> None:
+    """A Library type is a name, never a path. Review materialized outside the root."""
+    with pytest.raises(ValueError):
+        _key(library_type=library_type)
+
+    store = ObjectStore(tmp_path / "cache")
+    root = store.objects_root.resolve()
+    path = store.path_for(_key())
+    assert root in path.parents
+
+
+def test_concurrent_first_use_serializes_on_one_pin(tmp_path: Path) -> None:
+    """Two first uses cannot both decide they are the first one (wave-1 F5).
+
+    Atomic replacement makes the write indivisible and does nothing for the read
+    that decided what to write. Review ran the two concurrently and both
+    succeeded with different digests, so the trusted identity was chosen by
+    whichever process finished last.
+    """
+    store = TofuPinStore(tmp_path / "pins.json")
+    identity = f"{PROVIDER}#kits/anchor"
+    first = normalized_content_digest({"SKILL.md": b"anchor v1"})
+    second = normalized_content_digest({"SKILL.md": b"anchor v2"})
+
+    start = threading.Barrier(2)
+    results: list[object] = []
+    lock = threading.Lock()
+
+    def attempt(digest: str) -> None:
+        start.wait(timeout=10)
+        try:
+            outcome: object = store.pin(identity, digest, observed_at=NOW)
+        except TofuDrift as drift:
+            outcome = drift
+        with lock:
+            results.append(outcome)
+
+    threads = [
+        threading.Thread(target=attempt, args=(first,)),
+        threading.Thread(target=attempt, args=(second,)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+
+    assert len(results) == 2
+    drifts = [item for item in results if isinstance(item, TofuDrift)]
+    pins = [item for item in results if not isinstance(item, TofuDrift)]
+    assert len(pins) == 1 and len(drifts) == 1
+    assert store.pin_for(identity).normalized_content_digest == pins[0].normalized_content_digest
+
+
+def test_a_corrupt_existing_object_is_never_reused(tmp_path: Path) -> None:
+    """An install that meets a damaged object fails closed (wave-1 F6).
+
+    Comparing descriptors alone let a corrupted object be reused and then
+    reported as verified, so a damaged cache became an installed artifact with a
+    clean status.
+    """
+    store = ObjectStore(tmp_path / "cache")
+    key = _key()
+    stored = store.materialize(key, {"SKILL.md": b"anchor v1"}, created_at=NOW)
+    (stored.path / "content" / "SKILL.md").write_bytes(b"corrupted")
+
+    with pytest.raises(CacheObjectCorrupt):
+        store.materialize(key, {"SKILL.md": b"anchor v1"}, created_at=LATER)
+    assert store.read_content(key) == {"SKILL.md": b"corrupted"}, "nothing is replaced"
+
+    # Repair is explicit, proves the same identity, and refuses different bytes.
+    with pytest.raises(ValueError, match="repair refused"):
+        store.repair_object(key, {"SKILL.md": b"something else"}, created_at=LATER, operator="malte")
+    store.repair_object(key, {"SKILL.md": b"anchor v1"}, created_at=LATER, operator="malte")
+    assert store.verify(key).verified
+    assert store.read_content(key) == {"SKILL.md": b"anchor v1"}
+
+
+def test_staging_residue_from_a_dead_writer_is_swept(tmp_path: Path) -> None:
+    """A hard kill leaves residue; the next materialization removes it (wave-1 F4).
+
+    A `finally` block does not run after `SIGKILL`, so "leaves no partial object
+    behind" held only for tidy failures until the store learned to scavenge.
+    """
+    store = ObjectStore(tmp_path / "cache")
+    store.staging_root.mkdir(parents=True, exist_ok=True)
+
+    child = os.fork()
+    if child == 0:  # pragma: no cover - the child never returns to pytest
+        residue = store.staging_root / f"{os.getpid()}-abandoned"
+        (residue / "content").mkdir(parents=True)
+        (residue / "content" / "SKILL.md").write_bytes(b"half a file")
+        os._exit(0)
+    os.waitpid(child, 0)
+
+    assert store.temporary_entries() == (f"{child}-abandoned",)
+
+    live = store.staging_root / f"{os.getpid()}-in-flight"
+    live.mkdir(parents=True)
+
+    swept = store.materialize(_key(), {"SKILL.md": b"anchor v1"}, created_at=NOW)
+    assert swept.path.is_dir()
+    remaining = store.temporary_entries()
+    assert f"{child}-abandoned" not in remaining
+    assert f"{os.getpid()}-in-flight" in remaining, "a live writer's work is untouched"
+
+
+def test_read_verified_hands_back_the_bytes_it_verified(tmp_path: Path) -> None:
+    """One read, one digest, one payload (wave-1 F7).
+
+    Review replaced the stored file between a successful `verify` and the read
+    that produced the installed bytes, so an unverified payload was installed
+    under a verified report.
+    """
+    store = ObjectStore(tmp_path / "cache")
+    key = _key()
+    stored = store.materialize(key, {"SKILL.md": b"anchor v1"}, created_at=NOW)
+
+    snapshot, report = store.read_verified(key)
+    assert report.verified
+    (stored.path / "content" / "SKILL.md").write_bytes(b"substituted after verification")
+    assert snapshot["SKILL.md"] == b"anchor v1", "the snapshot is not a live view"
+    with pytest.raises(TypeError):
+        snapshot["SKILL.md"] = b"tampered"
+    assert not store.read_verified(key)[1].verified
 
 
 def test_integrity_verification_reports_both_digests(tmp_path: Path) -> None:

@@ -942,6 +942,40 @@ call site.
    history; discarding the record with the receipt would destroy the one entry
    nobody can reconstruct afterwards.
 
+Adversarial review then demonstrated, by execution, six further gaps that the
+ADR text implies but does not say, and the implemented contract now states them:
+
+7. **A removal deactivates the projection it retires.** Retiring the receipt
+   alone left the installed files in place with nothing describing them —
+   recreating the exact unreceipted projection this section exists to end.
+   Deactivation happens *before* the receipt is retired, which is the reverse of
+   the install order and for the same reason: the recoverable failure is a
+   receipt without its targets, never a target without its receipt.
+8. **Projection is two-phase.** The receipt declares its intended target paths
+   before anything is written and records the install-time proofs afterwards.
+   Recording the inventory only after activation leaves a window in which a live
+   projection is described by a zero-target receipt.
+9. **Executable admission binds the projected bytes.** A transformation that
+   rewrites content produces bytes no reviewer saw, so admitting the upstream
+   digest and installing the transformed one repeats precisely the divergence
+   `Executable admission` forbids. The upstream digest remains the
+   trust-on-first-use identity.
+10. **Completeness is proven or named.** A first retrieval's completeness is not
+    decidable from its own bytes: a truncated item is a valid item of a
+    different shape. It is established against a member manifest, against an
+    existing pin, or on the adapter's contract alone — and the receipt records
+    which, so `adapter-declaration` is a queryable fact rather than a silence.
+11. **Reachability is not a complete resolution.** Every destructive verdict
+    requires a source-scoped observation that is complete and not narrowed by
+    changed authorization. An observation also may only change receipts of the
+    source it describes; one source's complete listing marked another source's
+    receipts as vanished before this was explicit.
+12. **A verified read and an installed read are one read.** A repair takes one
+    immutable snapshot, digests that snapshot, and installs that snapshot.
+    Reading twice is a check-to-use window, and it was walked through. For the
+    same reason a corrupt object is never reused or silently replaced: repair is
+    an explicit act that must reproduce the recorded digest.
+
 ## Offline Semantics
 
 Offline operation is **additive and repair-only**.

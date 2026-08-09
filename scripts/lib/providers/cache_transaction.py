@@ -14,16 +14,33 @@ complete. The historic failure this prevents is a live projection whose bytes
 cannot be reproduced once its source disappears -- which is the present state of
 four materialized workflow projections carrying zero receipts.
 
-Two orderings inside step 5 are decisions, not accidents:
+Four orderings inside steps 4 and 5 are decisions, not accidents:
 
 - **The receipt is re-read from storage before anything is projected.** An
   in-memory object that a write never reached is exactly the state that produces
   an unreceipted projection, and it is indistinguishable from success unless
   somebody looks.
+- **The receipt declares its intended targets before they exist.** Recording the
+  target inventory only after activation leaves a window in which a live
+  projection is described by a zero-target receipt; review injected a failure
+  there and produced exactly that state. The plan is durable first, the mutation
+  happens second, and the install-time proofs finalize the record third.
+- **Executable admission is decided over the bytes that will be installed.** The
+  transformation runs before the admission check, because a rule that rewrites
+  content produces bytes no reviewer ever saw. The upstream digest stays the
+  trust-on-first-use identity; the projected digest is what a decision is about.
 - **A refused projection keeps its cache object and its receipt.** Caching is
   not installing: bytes that were lawfully fetched and verified stay durable and
   recorded even when no target may receive them. `cache_state: verified` beside
   a blocked committed projection is a normal state, not a contradiction.
+
+**What completeness can and cannot be proven from.** A first retrieval's
+completeness is not decidable from its own bytes: a truncated item is a valid
+item of a different shape. It is therefore established one of three ways and the
+way is recorded on the receipt -- against a member manifest the source supplied,
+against an existing pin, or on nothing but the adapter's contract. The third is
+recorded as `adapter-declaration` rather than left as an unnamed default, so
+"we never checked" is a queryable fact instead of a silence.
 """
 
 from __future__ import annotations
@@ -44,9 +61,14 @@ from .foreign_cache import (
     Transformation,
     normalized_content_digest,
 )
-from .inventory import NormalizedItem
-from .offline import require_operation, status_freshness
+from .inventory import NormalizedItem, ProviderAvailability
+from .offline import (
+    ResolutionEvidence,
+    require_operation,
+    status_freshness,
+)
 from .receipts import (
+    COMPLETENESS_METHODS,
     ForeignReceipt,
     ReceiptEvent,
     ReceiptStore,
@@ -88,6 +110,87 @@ class IncompleteRetrieval(TransactionAborted):
 
     def __init__(self, detail: str, cause: BaseException | None = None) -> None:
         super().__init__("retrieve", detail, cause)
+
+
+@dataclass(frozen=True)
+class ProjectionActivation:
+    """A two-phase projection: declare the paths, then create them.
+
+    A single "write it and tell me what you wrote" callable cannot be made
+    recoverable, because the only record of what exists is produced after it
+    already exists. Review injected a failure in exactly that window and found a
+    live projection behind a zero-target receipt.
+
+    `plan` answers "which paths am I about to touch" without touching them;
+    `apply` performs the mutation and returns the targets with their
+    install-time proofs. Both take the same projected content.
+    """
+
+    plan: Callable[[Mapping[str, bytes]], Sequence[str]]
+    apply: Callable[[Mapping[str, bytes]], Sequence[ReceiptTarget]]
+
+    def __post_init__(self) -> None:
+        if not callable(self.plan) or not callable(self.apply):
+            raise ValueError("a projection activation needs both a plan and an apply")
+
+
+@dataclass(frozen=True)
+class CompletenessEvidence:
+    """How a retrieval's completeness was established, stated by the caller.
+
+    There is no default. A caller has to say which of the three it has, because
+    the weakest one is invisible when it is the fallback: review returned one
+    file of a two-file item and the install pinned, cached, receipted, and
+    projected the fragment without a word.
+    """
+
+    method: str
+    expected_paths: tuple[str, ...] = ()
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if self.method not in COMPLETENESS_METHODS:
+            raise ValueError(
+                f"completeness method must be one of {list(COMPLETENESS_METHODS)}"
+            )
+        object.__setattr__(self, "expected_paths", tuple(self.expected_paths))
+        if self.method == "member-manifest" and not self.expected_paths:
+            raise ValueError("a member manifest names the item's expected members")
+        if self.method == "adapter-declaration" and not self.detail.strip():
+            raise ValueError(
+                "an adapter declaration must state why no independent completeness "
+                "evidence is available; it is the weakest claim in the vocabulary "
+                "and it is not allowed to be the quiet one"
+            )
+
+    @classmethod
+    def from_manifest(cls, paths: Sequence[str], detail: str = "") -> "CompletenessEvidence":
+        return cls(method="member-manifest", expected_paths=tuple(paths), detail=detail)
+
+    @classmethod
+    def adapter_declared(cls, detail: str) -> "CompletenessEvidence":
+        return cls(method="adapter-declaration", detail=detail)
+
+    def check(self, fetched_paths: Sequence[str], identity: str) -> str:
+        """Validate a retrieval against this evidence, or refuse it.
+
+        Returns:
+            The recorded completeness method. A pinned identity upgrades an
+            adapter declaration to `pinned-digest`, because the digest
+            comparison that follows is a real completeness proof.
+        """
+        if self.method != "member-manifest":
+            return self.method
+        expected = set(self.expected_paths)
+        observed = set(fetched_paths)
+        if expected != observed:
+            missing = sorted(expected - observed)
+            extra = sorted(observed - expected)
+            raise IncompleteRetrieval(
+                f"retrieval of {identity} does not match its member manifest: "
+                f"missing {missing}, unexpected {extra}"
+            )
+        return self.method
 
 
 @dataclass(frozen=True)
@@ -198,13 +301,21 @@ def _retrieve(retrieve: Callable[[], FetchedItem], item: NormalizedItem) -> Fetc
 def _executable_admission_state(
     item: NormalizedItem,
     ledger: ExecutableAdmissionLedger | None,
-    files: Mapping[str, bytes],
+    installed_files: Mapping[str, bytes],
 ) -> str:
+    """The admission state for the bytes that will actually be installed.
+
+    `installed_files` is the **projected** content, not the upstream content.
+    Review admitted an upstream digest, supplied a transformation that produced
+    different executable bytes, and installed successfully: the decision and the
+    mutation were about two different payloads, which is precisely the binding
+    slice 2's gate exists to hold.
+    """
     if ledger is None:
         return item.executable_admission
     return ledger.state_for(
         item.qualified_identity(),
-        normalized_content_digest(files),
+        normalized_content_digest(installed_files),
         library_type=item.library_type,
     )
 
@@ -217,8 +328,9 @@ def install_foreign_item(
     pin_store: TofuPinStore,
     receipt_store: ReceiptStore,
     target: str,
-    activate: Callable[[Mapping[str, bytes]], Sequence[ReceiptTarget]],
+    activate: ProjectionActivation,
     observed_at: str,
+    completeness: CompletenessEvidence,
     transformation: Transformation = IDENTITY_TRANSFORMATION,
     ledger: ExecutableAdmissionLedger | None = None,
     present: Callable[[Any], Any] | None = None,
@@ -230,12 +342,15 @@ def install_foreign_item(
         retrieve: Produces the item's **complete** content, or raises.
         target: The projection target class this install is for.
         activate: Writes the projected bytes and returns the targets it created.
-            Called at most once, only after the receipt is durable.
+            Called at most once, only after the receipt is durable and its
+            intended targets are on record.
+        completeness: How this retrieval's completeness is established. Required,
+            with no default, because the weakest option is exactly the one that
+            disappears when it is implicit.
         transformation: The projection rule applied to upstream bytes. Its
             version is part of the cache key.
         ledger: The scope operator's executable-admission decisions. When given,
-            the recorded state is recomputed from the retrieved bytes rather
-            than trusted from the item.
+            the recorded state is recomputed from the **projected** bytes.
         present: Operator presenter for an opt-in-required projection.
 
     Raises:
@@ -245,12 +360,23 @@ def install_foreign_item(
             an executable artifact has no admission decision for these bytes.
         ProjectionRefused: when the recorded rights do not permit this target.
     """
+    if not isinstance(completeness, CompletenessEvidence):
+        raise ValueError(
+            "install requires stated completeness evidence; construct one with "
+            "CompletenessEvidence.from_manifest(...) or .adapter_declared(...)"
+        )
+    if not isinstance(activate, ProjectionActivation):
+        raise ValueError(
+            "install requires a two-phase ProjectionActivation; a bare write "
+            "callable cannot declare its targets before it creates them"
+        )
     events: list[str] = []
     identity = item.qualified_identity()
 
-    # 1. Retrieve complete content.
+    # 1. Retrieve complete content, and check it against the stated evidence.
     fetched = _retrieve(retrieve, item)
     upstream_files = _fetched_files(fetched)
+    completeness_method = completeness.check(sorted(upstream_files), identity)
     events.append("retrieved")
 
     # 2. Verify against the pin, or record the first-use pin. A revisionless
@@ -260,7 +386,12 @@ def install_foreign_item(
     digest = normalized_content_digest(upstream_files)
     pin: TofuPin | None = None
     if item.upstream_revision is None:
+        existing_pin = pin_store.pin_for(identity)
         pin, first_use = pin_store.verify_or_pin(identity, digest, observed_at=observed_at)
+        if existing_pin is not None and completeness_method == "adapter-declaration":
+            # A digest that matched an existing pin *is* a completeness proof:
+            # a truncated item cannot reproduce the pinned digest.
+            completeness_method = "pinned-digest"
         events.append("first-use-pinned" if first_use else "content-verified")
     else:
         events.append("content-verified")
@@ -279,7 +410,7 @@ def install_foreign_item(
     events.append("cache-object-materialized")
 
     # 4. Write the receipt, and prove it is durable by reading it back.
-    admission_state = _executable_admission_state(item, ledger, upstream_files)
+    admission_state = _executable_admission_state(item, ledger, projected_files)
     receipt = ForeignReceipt(
         id=receipt_id_for(item, key),
         provider_identity=item.provider_identity,
@@ -301,6 +432,8 @@ def install_foreign_item(
         upstream_state="present",
         verified=False,
         targets=(),
+        projected_content_digest=cache_object.projected_content_digest,
+        completeness_evidence=completeness_method,
         history=(
             ReceiptEvent(
                 event="installed",
@@ -345,27 +478,47 @@ def install_foreign_item(
     created: list[ReceiptTarget] = []
 
     def _mutate() -> tuple[ReceiptTarget, ...]:
-        produced = tuple(activate(projected_files))
+        # The intent is durable before the mutation. A crash after activation
+        # and before finalization then leaves a receipt that already names the
+        # paths it was about to create, instead of an installed target that no
+        # receipt describes.
+        planned = tuple(str(path) for path in activate.plan(projected_files))
+        planned_receipt = receipt_store.put(
+            durable.with_event(
+                ReceiptEvent(
+                    event="projection-planned",
+                    recorded_at=observed_at,
+                    detail=(
+                        f"declared {len(planned)} intended target path(s) for {target} "
+                        "before activating anything"
+                    ),
+                ),
+                planned_targets=list(planned),
+            )
+        )
+        produced = tuple(activate.apply(projected_files))
         created.extend(produced)
+        receipt_store.put(
+            planned_receipt.with_event(
+                ReceiptEvent(
+                    event="projection-activated",
+                    recorded_at=observed_at,
+                    detail=(
+                        f"{len(produced)} target(s) activated for {target} after the "
+                        "cache object, the receipt, and the declared target plan were "
+                        "durable"
+                    ),
+                ),
+                targets=[entry.to_dict() for entry in produced],
+                verified=bool(produced),
+            )
+        )
         return produced
 
     outcome = project(decision, _mutate, present=present)
     events.append("projection-activated")
 
-    receipt = receipt_store.put(
-        durable.with_event(
-            ReceiptEvent(
-                event="projection-activated",
-                recorded_at=observed_at,
-                detail=(
-                    f"{len(created)} target(s) activated for {target} after the cache "
-                    "object and receipt were complete"
-                ),
-            ),
-            targets=[entry.to_dict() for entry in created],
-            verified=bool(created),
-        )
-    )
+    receipt = receipt_store.get(durable.id) or durable
     return InstallOutcome(
         receipt=receipt,
         cache_object=cache_object,
@@ -380,8 +533,8 @@ def reinstall_from_cache(
     receipt: ForeignReceipt,
     object_store: ObjectStore,
     receipt_store: ReceiptStore,
-    availability,
-    activate: Callable[[Mapping[str, bytes]], Sequence[ReceiptTarget]],
+    availability: ProviderAvailability | ResolutionEvidence,
+    activate: ProjectionActivation,
     observed_at: str,
 ) -> ReinstallOutcome:
     """Repair a projection from the verified cache, with no remote claim.
@@ -391,14 +544,27 @@ def reinstall_from_cache(
     freshness is a separate fact from the returned integrity, and it is never
     `current` for an unreachable source.
 
+    The object is read **once**. The snapshot that was digested is the snapshot
+    that is installed, because review substituted the stored file between a
+    successful `verify` and the read that produced the installed bytes.
+
     Raises:
         TransactionAborted: when the cache object fails verification. A repair
             that installs unverified bytes is the substitution this whole slice
             exists to prevent.
     """
     require_operation("reinstall-from-cache", availability)
+    if not isinstance(activate, ProjectionActivation):
+        raise ValueError(
+            "reinstall requires a two-phase ProjectionActivation; a repair that "
+            "cannot declare its targets first is not recoverable either"
+        )
+    observation = availability if isinstance(availability, ResolutionEvidence) else None
+    observed_availability = (
+        observation.availability if observation is not None else availability
+    )
     key = cache_key_for_receipt(receipt)
-    integrity = object_store.verify(key)
+    content, integrity = object_store.read_verified(key)
     if not integrity.verified:
         raise TransactionAborted(
             "verify",
@@ -406,10 +572,23 @@ def reinstall_from_cache(
             f"{integrity.detail}",
         )
 
-    content = object_store.read_content(key)
-    targets = tuple(activate(content))
-    updated = receipt_store.put(
+    planned = tuple(str(path) for path in activate.plan(content))
+    planned_receipt = receipt_store.put(
         receipt.with_event(
+            ReceiptEvent(
+                event="projection-planned",
+                recorded_at=observed_at,
+                detail=(
+                    f"declared {len(planned)} intended target path(s) before repairing "
+                    f"from cache object {key.digest()}"
+                ),
+            ),
+            planned_targets=list(planned),
+        )
+    )
+    targets = tuple(activate.apply(content))
+    updated = receipt_store.put(
+        planned_receipt.with_event(
             ReceiptEvent(
                 event="reinstalled-from-cache",
                 recorded_at=observed_at,
@@ -418,14 +597,16 @@ def reinstall_from_cache(
                     f"{key.digest()}; no remote claim was made"
                 ),
                 provider_state=(
-                    f"source state {availability.state!r} at {availability.observed_at}"
+                    f"source state {observed_availability.state!r} at "
+                    f"{observed_availability.observed_at}"
                 ),
             ),
             targets=[entry.to_dict() for entry in targets],
             verified=bool(targets),
-            provider_availability=availability.to_dict(),
+            provider_availability=observed_availability.to_dict(),
         )
     )
+    availability = observed_availability
     return ReinstallOutcome(
         receipt=updated,
         integrity=integrity,
@@ -437,10 +618,18 @@ def reinstall_from_cache(
 
 
 def cache_status(
-    *, receipt: ForeignReceipt, object_store: ObjectStore, availability
+    *,
+    receipt: ForeignReceipt,
+    object_store: ObjectStore,
+    availability: ProviderAvailability | ResolutionEvidence,
 ) -> StatusReport:
     """Report local integrity and remote freshness as two separate facts."""
     require_operation("status", availability)
+    observed = (
+        availability.availability
+        if isinstance(availability, ResolutionEvidence)
+        else availability
+    )
     key = cache_key_for_receipt(receipt)
     try:
         integrity = object_store.verify(key)
@@ -452,11 +641,11 @@ def cache_status(
     return StatusReport(
         local_integrity=local,
         freshness=status_freshness(
-            availability, revisionless=receipt.upstream_revision is None
+            observed, revisionless=receipt.upstream_revision is None
         ),
         upstream_state=receipt.upstream_state,
         provider_state=(
-            f"source state {availability.state!r} observed at {availability.observed_at}"
+            f"source state {observed.state!r} observed at {observed.observed_at}"
         ),
         detail=detail,
     )
@@ -464,8 +653,10 @@ def cache_status(
 
 __all__ = [
     "TRANSACTION_STEPS",
+    "CompletenessEvidence",
     "IncompleteRetrieval",
     "InstallOutcome",
+    "ProjectionActivation",
     "ReinstallOutcome",
     "StatusReport",
     "TransactionAborted",

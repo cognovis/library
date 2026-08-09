@@ -22,6 +22,15 @@ facts and are never merged into one "ok". `status_freshness` therefore never
 returns `current` for a source whose currency has not actually been compared,
 and never returns it at all for a pin-only source.
 
+**Reachability is not a complete resolution.** A refused operation is permitted
+only against a `ResolutionEvidence` observation that is *conclusive*: the source
+answered, the answer was complete, and no part of it was withheld by changed
+authorization. A bare `ProviderAvailability` carries no completeness evidence at
+all, so it can never satisfy a destructive verdict. Review demonstrated the
+alternative: an observation whose own `degraded_reason` said "inventory is
+incomplete or truncated" passed the prune gate, because the gate saw only the
+transport state beside it.
+
 **Boundary.** This module decides whether the offline table refuses an
 operation. It does not implement retention, garbage collection, or purge; those
 are `CL-uliw`, and garbage collection carries further fail-closed preconditions
@@ -106,6 +115,61 @@ _ADDITIONAL_PRECONDITIONS: Mapping[str, tuple[str, ...]] = {
 FRESHNESS_STATES: tuple[str, ...] = ("current", "unknown", "pin-only")
 
 
+@dataclass(frozen=True)
+class ResolutionEvidence:
+    """One source-scoped observation of an inventory, with its completeness.
+
+    `complete` and `reduced_by_authorization` are separate from availability
+    because a reachable source can still answer partially -- a truncated listing
+    or one narrowed by changed credentials -- and treating that answer as
+    complete is how an item gets recorded as vanished when it never went
+    anywhere, and how a prune acquires authority it was never granted.
+
+    `provider_identity` is required. An observation without it cannot say
+    *whose* inventory it describes, and review demonstrated the consequence: one
+    source's complete listing marked another source's receipts as vanished.
+    """
+
+    provider_identity: str
+    availability: ProviderAvailability
+    listed_identities: frozenset[str] = field(default_factory=frozenset)
+    complete: bool = False
+    reduced_by_authorization: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.provider_identity, str) or not self.provider_identity.strip():
+            raise ValueError("ResolutionEvidence.provider_identity is required")
+        if not isinstance(self.availability, ProviderAvailability):
+            raise ValueError("ResolutionEvidence.availability must be observed")
+        object.__setattr__(self, "listed_identities", frozenset(self.listed_identities))
+
+    def degraded_reason(self) -> str | None:
+        """Why this observation cannot support a destructive conclusion, or None."""
+        if self.availability.state != "available":
+            return (
+                f"source is {self.availability.state}"
+                f"{': ' + self.availability.reason if self.availability.reason else ''}"
+            )
+        if not self.complete:
+            return "inventory is incomplete or truncated"
+        if self.reduced_by_authorization:
+            return "inventory is reduced by changed authorization"
+        return None
+
+    @property
+    def conclusive(self) -> bool:
+        """True when absence from this listing actually means absence upstream."""
+        return self.degraded_reason() is None
+
+    def describe(self) -> str:
+        reason = self.degraded_reason()
+        state = (
+            f"source {self.provider_identity!r} state {self.availability.state!r} "
+            f"at {self.availability.observed_at}"
+        )
+        return state if reason is None else f"{state}; {reason}"
+
+
 class OfflineRefusal(RuntimeError):
     """One refused operation, carrying its operation and typed reason.
 
@@ -154,43 +218,67 @@ def _availability_text(availability: ProviderAvailability) -> str:
     return f"source state {availability.state!r} observed at {availability.observed_at}{reason}"
 
 
+def _as_evidence(
+    value: ProviderAvailability | ResolutionEvidence,
+) -> tuple[ProviderAvailability, ResolutionEvidence | None]:
+    if isinstance(value, ResolutionEvidence):
+        return value.availability, value
+    if isinstance(value, ProviderAvailability):
+        return value, None
+    raise ValueError(
+        "evidence must be an observed ProviderAvailability or a source-scoped "
+        "ResolutionEvidence value"
+    )
+
+
 def evaluate_operation(
-    operation: str, availability: ProviderAvailability
+    operation: str, evidence: ProviderAvailability | ResolutionEvidence
 ) -> OperationVerdict:
     """Apply the offline table to one operation.
 
-    Only `available` is available. `degraded` is refused for the same reason
-    `unavailable` is: a truncated or partial answer is not a complete resolution,
-    and deletion authority and remote comparison both require one.
+    Only a *conclusive* observation permits a refused-row operation. Transport
+    reachability alone does not: `degraded` is refused for the same reason
+    `unavailable` is, and so is an `available` source whose listing was
+    truncated or narrowed by changed authorization. A bare
+    `ProviderAvailability` carries no completeness evidence, so it is treated as
+    the absence of evidence rather than as its presence.
     """
     if operation not in OPERATIONS:
         raise ValueError(
             f"unknown operation {operation!r}; the table records {list(OPERATIONS)}"
         )
-    if not isinstance(availability, ProviderAvailability):
-        raise ValueError("availability must be an observed ProviderAvailability value")
-
-    evidence = _availability_text(availability)
+    availability, observation = _as_evidence(evidence)
+    text = observation.describe() if observation is not None else _availability_text(availability)
     extra = _ADDITIONAL_PRECONDITIONS.get(operation, ())
 
     if operation in ALLOWED_OFFLINE_OPERATIONS:
-        return OperationVerdict(operation, True, None, evidence, extra)
-    if availability.state == "available":
-        return OperationVerdict(operation, True, None, evidence, extra)
+        return OperationVerdict(operation, True, None, text, extra)
+
+    if observation is None:
+        return OperationVerdict(
+            operation,
+            False,
+            _REASON_FOR[operation],
+            f"{_RATIONALE[operation]}; no source-scoped inventory observation was "
+            f"supplied, and reachability alone is not a complete resolution ({text})",
+            extra,
+        )
+    if observation.conclusive:
+        return OperationVerdict(operation, True, None, text, extra)
     return OperationVerdict(
         operation,
         False,
         _REASON_FOR[operation],
-        f"{_RATIONALE[operation]} ({evidence})",
+        f"{_RATIONALE[operation]} ({text})",
         extra,
     )
 
 
 def require_operation(
-    operation: str, availability: ProviderAvailability
+    operation: str, evidence: ProviderAvailability | ResolutionEvidence
 ) -> OperationVerdict:
     """Return the verdict, or raise `OfflineRefusal` when the table refuses."""
-    return evaluate_operation(operation, availability).raise_for_refusal()
+    return evaluate_operation(operation, evidence).raise_for_refusal()
 
 
 def status_freshness(

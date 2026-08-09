@@ -33,7 +33,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from .inventory import (
     PROJECTION_TARGETS,
@@ -41,7 +41,13 @@ from .inventory import (
     Rights,
     qualified_identity,
 )
-from .offline import OfflineRefusal, require_operation
+from .offline import OfflineRefusal, ResolutionEvidence, require_operation
+
+#: An inventory observation is source-scoped resolution evidence. The type lives
+#: in `offline` because the offline table has to read its completeness before it
+#: can permit anything destructive; the name stays here because an inventory
+#: observation is what a caller of this module actually holds.
+InventoryObservation = ResolutionEvidence
 
 RECEIPT_STORE_SCHEMA = "cognovis.foreign-receipt-store.v1"
 
@@ -52,6 +58,7 @@ UPSTREAM_STATES: tuple[str, ...] = ("present", "upstream-vanished")
 #: install and under what conditions", so each entry names an event, not prose.
 RECEIPT_EVENTS: tuple[str, ...] = (
     "installed",
+    "projection-planned",
     "projection-activated",
     "reinstalled-from-cache",
     "integrity-verified",
@@ -62,6 +69,17 @@ RECEIPT_EVENTS: tuple[str, ...] = (
 )
 
 TARGET_KINDS: tuple[str, ...] = ("file", "directory", "symlink")
+
+#: How a retrieval's completeness was established. `adapter-declaration` is the
+#: honest name for the weakest one: the adapter's contract says a `FetchedItem`
+#: is complete and nothing independent confirmed it. It is a recorded value
+#: rather than an unrecorded default, because review truncated a fetch and the
+#: install pinned, cached, receipted, and projected the fragment in silence.
+COMPLETENESS_METHODS: tuple[str, ...] = (
+    "member-manifest",
+    "pinned-digest",
+    "adapter-declaration",
+)
 
 
 class DeletionAuthorityRefused(RuntimeError):
@@ -184,6 +202,21 @@ class ForeignReceipt:
     verified: bool = False
     targets: tuple[ReceiptTarget, ...] = field(default_factory=tuple)
     history: tuple[ReceiptEvent, ...] = field(default_factory=tuple)
+    #: The digest of the bytes actually stored and installed, after the
+    #: transformation. `normalized_content_digest` stays the upstream identity
+    #: and the pin subject; this is what an admission decision and a target
+    #: inventory are about, and conflating the two let a projection install
+    #: bytes nobody had reviewed.
+    projected_content_digest: str | None = None
+    #: Target paths this receipt declared **before** its projection was
+    #: activated. A crash between activation and finalization therefore leaves
+    #: an intent on record rather than an undescribed installed target.
+    planned_targets: tuple[str, ...] = field(default_factory=tuple)
+    #: How the retrieval's completeness was established: `member-manifest`,
+    #: `pinned-digest`, or `adapter-declaration`. The last one is the honest
+    #: name for "nothing but the adapter's word", and it is recorded so an
+    #: operator can query which installs rest on it.
+    completeness_evidence: str | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -212,8 +245,16 @@ class ForeignReceipt:
             raise ValueError(
                 "ForeignReceipt.provider_availability must be an observed value"
             )
+        if self.completeness_evidence is not None and (
+            self.completeness_evidence not in COMPLETENESS_METHODS
+        ):
+            raise ValueError(
+                f"completeness_evidence must be one of {list(COMPLETENESS_METHODS)}, "
+                f"got {self.completeness_evidence!r}"
+            )
         object.__setattr__(self, "collection_membership", tuple(self.collection_membership))
         object.__setattr__(self, "targets", tuple(self.targets))
+        object.__setattr__(self, "planned_targets", tuple(self.planned_targets))
         object.__setattr__(self, "history", tuple(self.history))
         object.__setattr__(self, "projection_eligibility", dict(self.projection_eligibility))
         if sorted(self.projection_eligibility) != sorted(PROJECTION_TARGETS):
@@ -258,6 +299,9 @@ class ForeignReceipt:
             "verified": self.verified,
             "targets": [target.to_dict() for target in self.targets],
             "history": [entry.to_dict() for entry in self.history],
+            "projected_content_digest": self.projected_content_digest,
+            "planned_targets": list(self.planned_targets),
+            "completeness_evidence": self.completeness_evidence,
         }
 
     @classmethod
@@ -274,6 +318,7 @@ class ForeignReceipt:
             else ProviderAvailability.from_dict(payload["provider_availability"])
         )
         payload["collection_membership"] = tuple(payload.get("collection_membership") or ())
+        payload["planned_targets"] = tuple(payload.get("planned_targets") or ())
         payload["targets"] = tuple(
             target if isinstance(target, ReceiptTarget) else ReceiptTarget.from_dict(target)
             for target in payload.get("targets") or ()
@@ -285,14 +330,40 @@ class ForeignReceipt:
         return cls(**payload)
 
 
-def deletion_authority(receipt: ForeignReceipt) -> ForeignReceipt:
+def deletion_authority(
+    receipt: ForeignReceipt, observation: "InventoryObservation"
+) -> ForeignReceipt:
     """Refuse to convert a receipt's state into permission to delete.
 
+    Args:
+        observation: Source-scoped resolution evidence for *this receipt's*
+            source. It is required, and it must be conclusive: review obtained
+            deletion authority from an observation whose own `degraded_reason`
+            said the inventory was truncated, because only the transport state
+            beside it was consulted.
+
     Raises:
-        DeletionAuthorityRefused: always, for `upstream-vanished` and for an
-            unverified receipt. Both are states in which the local bytes may be
-            the last copy.
+        DeletionAuthorityRefused: for a non-conclusive observation, for an
+            observation of a different source, for `upstream-vanished`, and for
+            an unverified receipt. Each is a state in which the local bytes may
+            be the last copy.
     """
+    if not isinstance(observation, ResolutionEvidence):
+        raise DeletionAuthorityRefused(
+            "deletion authority requires a source-scoped inventory observation; "
+            "reachability alone is not a complete resolution"
+        )
+    if observation.provider_identity != receipt.provider_identity:
+        raise DeletionAuthorityRefused(
+            f"{receipt.id} belongs to {receipt.provider_identity!r} but the "
+            f"observation describes {observation.provider_identity!r}; one source's "
+            "resolution says nothing about another's"
+        )
+    if not observation.conclusive:
+        raise DeletionAuthorityRefused(
+            f"{receipt.id} cannot be deleted from an incomplete resolution: "
+            f"{observation.describe()}"
+        )
     if receipt.upstream_state == "upstream-vanished":
         raise DeletionAuthorityRefused(
             f"{receipt.id} is upstream-vanished: the upstream item no longer exists, "
@@ -309,66 +380,33 @@ def deletion_authority(receipt: ForeignReceipt) -> ForeignReceipt:
 
 
 @dataclass(frozen=True)
-class InventoryObservation:
-    """One observation of a source's inventory, with its completeness.
-
-    `complete` and `reduced_by_authorization` are separate from availability
-    because a reachable source can still answer partially -- a truncated listing
-    or one narrowed by changed credentials -- and treating that answer as
-    complete is how an item gets recorded as vanished when it never went
-    anywhere.
-    """
-
-    availability: ProviderAvailability
-    listed_identities: frozenset[str]
-    complete: bool
-    reduced_by_authorization: bool = False
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.availability, ProviderAvailability):
-            raise ValueError("InventoryObservation.availability must be observed")
-        object.__setattr__(self, "listed_identities", frozenset(self.listed_identities))
-
-    def degraded_reason(self) -> str | None:
-        """Why this observation cannot support an absence conclusion, or None."""
-        if self.availability.state != "available":
-            return (
-                f"source is {self.availability.state}"
-                f"{': ' + self.availability.reason if self.availability.reason else ''}"
-            )
-        if not self.complete:
-            return "inventory is incomplete or truncated"
-        if self.reduced_by_authorization:
-            return "inventory is reduced by changed authorization"
-        return None
-
-    @property
-    def conclusive(self) -> bool:
-        """True when absence from this listing actually means absence upstream."""
-        return self.degraded_reason() is None
-
-    def describe(self) -> str:
-        reason = self.degraded_reason()
-        state = f"source state {self.availability.state!r} at {self.availability.observed_at}"
-        return state if reason is None else f"{state}; {reason}"
-
-
-@dataclass(frozen=True)
 class ReconciliationResult:
-    """What one inventory observation changed, and what stopped it."""
+    """What one inventory observation changed, what it skipped, and what stopped it."""
 
     changed: tuple[ForeignReceipt, ...]
     unchanged: tuple[ForeignReceipt, ...]
     degraded_reason: str | None
+    out_of_scope: tuple[ForeignReceipt, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
 class RemovalOutcome:
-    """One removed receipt and the bytes deliberately left behind."""
+    """One removed receipt, what it deactivated, and the bytes it left behind."""
 
     receipt: ForeignReceipt
     retained_cache_path: Path
-    observation: InventoryObservation
+    observation: "InventoryObservation"
+    deactivated: tuple[str, ...] = field(default_factory=tuple)
+    retained_targets: tuple[str, ...] = field(default_factory=tuple)
+
+
+class ProjectionStillActive(RuntimeError):
+    """A receipt with live targets was asked to retire without deactivating them.
+
+    Retiring the receipt alone recreates the exact defect this whole slice
+    exists to end: an active harness projection with no receipt, whose bytes
+    nobody can attribute or reproduce. Review demonstrated it end to end.
+    """
 
 
 class ReceiptStore:
@@ -452,10 +490,16 @@ class ReceiptStore:
             receipt for receipt in self.all() if receipt.cache_key_digest == cache_key_digest
         )
 
-    def _retire(self, receipt: ForeignReceipt) -> None:
+    def retire(self, receipt: ForeignReceipt) -> ForeignReceipt:
+        """Move one receipt out of the active set and into the archive.
+
+        Reached only through `remove_named_receipt`, which is where the operator
+        gate, the deactivation, and the history entry live.
+        """
         active, retired = self._load()
         active.pop(receipt.id, None)
         self._save(active, [*retired, receipt])
+        return receipt
 
 
 def reconcile_upstream_state(
@@ -463,15 +507,33 @@ def reconcile_upstream_state(
 ) -> ReconciliationResult:
     """Move receipts into or out of `upstream-vanished` from one observation.
 
+    An observation is **source-scoped**: it may only change receipts whose
+    `provider_identity` matches the source that was observed. Review installed
+    two sources and reconciled one of them; every receipt of the other was
+    marked `upstream-vanished`, because the observation carried no identity and
+    the loop carried no filter. One source's complete listing says nothing at
+    all about another source's items.
+
     A degraded observation changes nothing at all. That is not caution for its
     own sake: an incomplete listing that marks items vanished would then have
     them "reappear" on the next complete listing, and a state that flaps is a
     state nobody can act on.
     """
     reason = observation.degraded_reason()
-    receipts = store.all()
+    everything = store.all()
+    receipts = tuple(
+        receipt
+        for receipt in everything
+        if receipt.provider_identity == observation.provider_identity
+    )
+    out_of_scope = tuple(receipt for receipt in everything if receipt not in receipts)
     if reason is not None:
-        return ReconciliationResult(changed=(), unchanged=receipts, degraded_reason=reason)
+        return ReconciliationResult(
+            changed=(),
+            unchanged=receipts,
+            degraded_reason=reason,
+            out_of_scope=out_of_scope,
+        )
 
     changed: list[ForeignReceipt] = []
     unchanged: list[ForeignReceipt] = []
@@ -517,7 +579,10 @@ def reconcile_upstream_state(
         else:
             unchanged.append(receipt)
     return ReconciliationResult(
-        changed=tuple(changed), unchanged=tuple(unchanged), degraded_reason=None
+        changed=tuple(changed),
+        unchanged=tuple(unchanged),
+        degraded_reason=None,
+        out_of_scope=out_of_scope,
     )
 
 
@@ -527,23 +592,38 @@ def remove_named_receipt(
     *,
     operator: str,
     intent: str,
-    observation: InventoryObservation,
+    observation: "InventoryObservation",
     removed_at: str,
+    deactivate: Callable[[Sequence[ReceiptTarget]], Sequence[str]] | None = None,
     origin: str = "operator-explicit",
 ) -> RemovalOutcome:
     """Remove one named receipt, under any inventory condition, deleting no bytes.
 
+    The order is deliberate and is the opposite of the install order: the
+    receipt's recorded targets are deactivated **first**, and the receipt is
+    retired only afterwards. A crash between the two leaves a receipt describing
+    targets that are gone, which is recoverable; the reverse leaves an active
+    projection with no receipt, which is the unattributable state this slice
+    exists to end.
+
     Args:
+        deactivate: Removes the receipt's recorded targets and returns the paths
+            it actually removed. Required whenever the receipt records targets.
+            It is a caller-supplied callable because *what* a harness projection
+            is belongs to the harness, not to the receipt store.
         origin: How this removal was reached. Only an operator naming the receipt
             may reach it. Ownership-derived prune is refused here as well as in
             the offline table, so a reconciler cannot obtain through this door
             what fail-closed pruning denied it at the front.
 
     Returns:
-        The retired receipt and the cache path deliberately left in place.
+        The retired receipt, what was deactivated, what was deliberately kept,
+        and the cache path left in place.
 
     Raises:
         OfflineRefusal: when the removal did not originate from an operator.
+        ProjectionStillActive: when the receipt records targets and no
+            deactivation was supplied.
         KeyError: when no active receipt carries that id.
     """
     if origin != "operator-explicit":
@@ -561,33 +641,55 @@ def remove_named_receipt(
     if receipt is None:
         raise KeyError(f"no active receipt with id {receipt_id!r}")
 
+    active_targets = receipt.targets
+    if active_targets and deactivate is None:
+        raise ProjectionStillActive(
+            f"{receipt.id} records {len(active_targets)} active target(s). Retiring "
+            "the receipt without deactivating them would leave an installed "
+            "projection that no receipt describes -- exactly the unreproducible "
+            "state this cache exists to end. Supply a deactivation for the "
+            "recorded targets; the cache object is retained either way."
+        )
+
+    removed = tuple(deactivate(active_targets)) if active_targets else ()
+    retained = tuple(
+        target.path for target in active_targets if target.path not in set(removed)
+    )
+
     retired = receipt.with_event(
         ReceiptEvent(
             event="explicit-removal",
             recorded_at=removed_at,
             detail=(
-                f"operator intent: {intent}. The underlying cache object at "
-                f"{receipt.cache_path} is retained; removal of a receipt never "
-                "deletes bytes that may not be re-fetchable."
+                f"operator intent: {intent}. Deactivated {len(removed)} target(s) "
+                f"before retiring the receipt; retained {len(retained)} target(s) "
+                "that no longer matched their recorded install-time proof. The "
+                f"underlying cache object at {receipt.cache_path} is retained; "
+                "removal of a receipt never deletes bytes that may not be "
+                "re-fetchable."
             ),
             operator=operator,
             provider_state=observation.describe(),
         )
     )
-    store._retire(retired)
+    store.retire(retired)
     return RemovalOutcome(
         receipt=retired,
         retained_cache_path=Path(receipt.cache_path),
         observation=observation,
+        deactivated=removed,
+        retained_targets=retained,
     )
 
 
 __all__ = [
+    "COMPLETENESS_METHODS",
     "RECEIPT_EVENTS",
     "UPSTREAM_STATES",
     "DeletionAuthorityRefused",
     "ForeignReceipt",
     "InventoryObservation",
+    "ProjectionStillActive",
     "ReceiptEvent",
     "ReceiptStore",
     "ReceiptTarget",
