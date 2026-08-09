@@ -2918,6 +2918,32 @@ library:
         - category:standard-bundle
         - healthcare
         - ai
+    - name: aidbox-bulk-import
+      description: Aidbox bulk-import and terminology-loading facts — bundle types, size limits, $import variants, and seed-data ID verification.
+      source: https://github.com/cognovis/library-core/tree/main/standards/aidbox-bulk-import/
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: anonymization
+      description: Anonymization conventions for ETL exports — row-level anonymization before mapping, seeded deterministic fake PII, and bucketing that preserves analytical value.
+      source: https://github.com/cognovis/library-core/blob/main/standards/anonymization/anonymization.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: classification
       description: Bead Classification
       source: https://github.com/cognovis/library-core/blob/main/standards/beads/classification.md
@@ -2954,6 +2980,20 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+    - name: db-migrations
+      description: Conventions for schema migration immutability, tracking keys, backfill predicates, Postgres function identity, and adjudicating schema disputes.
+      source: https://github.com/cognovis/library-core/blob/main/standards/db-migrations/db-migrations.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: dev-tools
       description: Agent tooling conventions — tool selection and command substitutions, file-reading thresholds, hook exit codes, and subagent discipline.
       source: https://github.com/cognovis/library-core/tree/main/standards/dev-tools/
@@ -2968,6 +3008,18 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: ephemeral-compose-stacks
+      description: Ephemeral Docker Resource Ownership
+      source: https://github.com/cognovis/library-core/blob/main/standards/containers/ephemeral-compose-stacks.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
     - name: execution-result-envelope
       description: Execution-Result Envelope Contract
       source: https://github.com/cognovis/library-core/blob/main/standards/execution-result-envelope.md
@@ -2977,6 +3029,21 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: executive-pack
+      description: Ownership and identity boundaries for simple bead delivery, repository-scoped Executive Packs, and cross-repository Topics.
+      source: https://github.com/cognovis/library-core/tree/main/standards/executive-pack/
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+        - workflow:beads
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -3143,8 +3210,22 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: mcp-client-timeout
+      description: Client-side MCP idle timeouts on long-running delegated sessions are transport artifacts, not work failures — never retry the dispatch, recover the handle, and poll external state instead.
+      source: https://github.com/cognovis/library-core/blob/main/standards/mcp-client-timeout/mcp-client-timeout.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: model-routing
-      description: Model Routing Standard
+      description: Model Routing
       source: https://github.com/cognovis/library-core/blob/main/standards/dispatch/model-routing.md
       metadata:
         library:
@@ -3289,6 +3370,20 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: review-governance
+      description: Empirically grounded governance rules for multi-layer bead review — layer independence, finding adjudication, the evidence contract, and documented test blind spots.
+      source: https://github.com/cognovis/library-core/tree/main/standards/review-governance/
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: review-quality-signals
       description: Review Quality Signals Provider Contract
       source: https://github.com/cognovis/library-core/blob/main/standards/orchestrator/review-quality-signals.md
@@ -3340,7 +3435,7 @@ library:
         - tier:domain
         - category:standard-bundle
     - name: security
-      description: Security conventions for agent flows — capability isolation when untrusted external content enters an unattended pipeline.
+      description: Security conventions for agent flows and application code — capability isolation, agent boundaries, secure coding patterns, and telemetry data minimization.
       source: https://github.com/cognovis/library-core/tree/main/standards/security/
       tier: domain
       default_scope: ask
@@ -3348,6 +3443,32 @@ library:
         - origin:original
         - tier:domain
         - category:standard-bundle
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: session-close-scoping
+      description: Bead-scoping conventions for Session Close — which beads a close may touch and when the beadless path applies.
+      source: https://github.com/cognovis/library-core/tree/main/standards/session-close-scoping/
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+    - name: shell-hardening
+      description: Empirically confirmed shell scripting hazards on macOS — bash 3.2 portability, NUL-safe filename handling, jq argument passing, git pathspec-commit behavior, and exit-code capture traps.
+      source: https://github.com/cognovis/library-core/blob/main/standards/shell-hardening/shell-hardening.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -3464,7 +3585,7 @@ library:
         - healthcare
         - security
     - name: workflow
-      description: 'The shared development workflow — bead specification and hygiene, review and verification discipline, engineering practice, and the agent collaboration patterns that run them.'
+      description: 'The shared development workflow — bead specification and hygiene, review and verification discipline, engineering practice, and the cross-cutting rules that apply to every repository tracking work in beads.'
       source: https://github.com/cognovis/library-core/tree/main/standards/workflow/
       tier: domain
       default_scope: ask
@@ -3477,16 +3598,15 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: executive-pack
-      description: Ownership boundaries for one-Bead delivery, repository-scoped Executive Packs, and cross-repository Topic finalization.
-      source: https://github.com/cognovis/library-core/blob/main/standards/executive-pack/executive-pack.md
+    - name: worktree-subagent-discipline
+      description: Empirically grounded discipline rules for multi-worktree layouts and delegated subagent work — checkout targeting, worktree mechanics, acceptance gates, parallel orchestration, and diff-scope integrity.
+      source: https://github.com/cognovis/library-core/tree/main/standards/worktree-subagent-discipline/
       tier: domain
       default_scope: ask
       tags:
         - origin:original
         - tier:domain
-        - category:standard
-        - workflow:beads
+        - category:standard-bundle
       metadata:
         library:
           source_catalog: cognovis-library-core
