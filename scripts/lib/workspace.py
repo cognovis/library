@@ -30,6 +30,7 @@ import os
 import re
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -818,7 +819,7 @@ def gate_workspace_mutation(
 ) -> tuple[NormalizedItem, ...]:
     """Admit a completed resolution to mutation, or refuse the whole of it.
 
-    Two independent gates, in this order:
+    Three gates, in this order:
 
     1. **Selection binding.** Every item must be a member the resolution
        actually selected, *from the source it selected*. An item the closure
@@ -826,17 +827,22 @@ def gate_workspace_mutation(
        different provider identity, is refused. Without this, a provider that
        returns one extra item -- or the same name from somewhere else -- writes
        content no Workspace root ever requested.
-    2. **Executable admission** (`CL-n7ex`). A root reaching a `pending` or
+    2. **Whole-closure coverage.** Every resolved artifact must be supplied,
+       exactly once, with content. Review demonstrated the alternative: calling
+       the gate with an empty selection returned success and invoked the writer,
+       so the closure's unadmitted executable was skipped rather than refused.
+       Checking only that supplied items belong to the closure proves nothing
+       about the members that were left out, and leaving one out is exactly the
+       silent skip `CL-n7ex` forbids.
+    3. **Executable admission** (`CL-n7ex`). A root reaching a `pending` or
        `refused` executable member fails the whole resolution before any
        mutation, and no partial selection is returned.
 
     The writer never sources its own bytes: `mutate` is called by the admission
-    gate with the exact frozen content the gate digested, restricted to the
-    gated items. An item omitted from `items` is therefore absent from the
-    mutation rather than admitted by it.
+    gate with the exact frozen content the gate digested.
 
     Raises:
-        LibraryError: when an item is not part of this resolution.
+        LibraryError: when the selection is not exactly this resolution.
         ResolutionRefused: when an executable member is not admitted.
     """
     selected = {
@@ -844,8 +850,10 @@ def gate_workspace_mutation(
         for node in closure.nodes
         if node.role == "artifact"
     }
+    supplied: dict[tuple[str, str], NormalizedItem] = {}
     for item in items:
-        node = selected.get((item.library_type, item.library_name))
+        key = (item.library_type, item.library_name)
+        node = selected.get(key)
         identity = normalize_catalog_identity(item.provider_identity)
         if node is None:
             raise LibraryError(
@@ -858,7 +866,54 @@ def gate_workspace_mutation(
                 f"{root_id(item.library_type, item.library_name)} is not resolved "
                 f"from {identity}; this closure binds it to {node.catalog_identity}"
             )
+        if key in supplied:
+            raise LibraryError(
+                f"{root_id(item.library_type, item.library_name)} is supplied twice; "
+                "a resolved member has exactly one normalized item"
+            )
+        if not contents.get(item.qualified_identity()):
+            raise LibraryError(
+                f"{root_id(item.library_type, item.library_name)} has no content to "
+                "materialize; a member with no bytes cannot be digested, admitted, "
+                "or written"
+            )
+        supplied[key] = item
+    missing = sorted(root_id(*key) for key in set(selected) - set(supplied))
+    if missing:
+        raise LibraryError(
+            "this resolution selected members that the mutation does not cover: "
+            f"{missing}. A Workspace mutation covers the whole resolved closure or "
+            "none of it; dropping a member would resolve a selection that is "
+            "quietly missing what an operator asked for"
+        )
     return gate_resolution(items, ledger, contents, mutate=mutate)
+
+
+def assert_materializable(closure: WorkspaceClosure) -> None:
+    """Refuse to materialize a closure this Library cannot yet gate.
+
+    A cross-catalog closure resolves today, and that is the whole of slice 5. It
+    is deliberately **not** installable through the current CLI: materializing it
+    safely needs the pin verified against the source, the members normalized into
+    inventory items, and `gate_workspace_mutation` in the write path -- provider
+    work that belongs to the reference-adapter slice.
+
+    Refusing is not caution for its own sake. The alternative is worse than
+    incomplete: the existing installer path would fetch each member from the
+    current catalog, ignoring the declared pin entirely, and write it with no
+    admission decision. That would ship a `catalogs:` block that looks pinned and
+    is not, which is precisely the false assurance the block exists to remove.
+    """
+    if not closure.cross_catalog:
+        return
+    identities = sorted(entry.identity for entry in closure.declared_catalogs)
+    raise LibraryError(
+        "Workspace schema v2 resolves but is not yet installable: materializing "
+        f"the pinned catalogs {identities} requires provider pin verification and "
+        "the executable-admission gate in the write path. Resolution, validation, "
+        "and status are available now; installation lands with the reference "
+        "provider adapters"
+    )
 
 
 def workspace_receipt_store_path(lock_path: Path) -> Path:
@@ -900,11 +955,62 @@ def make_workspace_requested_root(
         "requested_ref": requested_ref,
         "resolved_version": workspace.version,
         "definition_commit": definition_commit,
+        # The pins this registration was made against. Recorded so a later
+        # resolution can prove the manifest still points at the same sources: a
+        # changed pin is drift the operator must see, never something the next
+        # sync silently adopts.
+        "catalogs": [
+            {
+                "identity": entry.identity,
+                "pin_kind": entry.pin.kind,
+                "pin_value": entry.pin.value,
+            }
+            for entry in sorted(
+                declared_catalogs(workspace.entry), key=lambda item: item.identity
+            )
+        ],
         "roots": [
             root_id(str(item["type"]), str(item["name"]))
             for item in workspace.entry["roots"]
         ],
     }
+
+
+def assert_recorded_pins(
+    root: Mapping[str, Any], declared: Sequence[DeclaredCatalog]
+) -> None:
+    """Refuse a manifest whose pins moved since this root was registered.
+
+    ADR-0011 is explicit that a changed pin is fail-closed drift naming both
+    values, never a silent re-pin. Without this, the `catalogs:` block would be
+    reviewable exactly once: an upstream edit to the pin would be adopted by the
+    next resolution with nothing said.
+    """
+    recorded = root.get("catalogs")
+    if recorded is None:
+        # Registered before pins were recorded, or a v1 root. There is nothing to
+        # compare against, and inventing a comparison would be worse than none.
+        return
+    previous = {
+        str(entry.get("identity") or ""): (
+            str(entry.get("pin_kind") or ""),
+            str(entry.get("pin_value") or ""),
+        )
+        for entry in recorded
+        if isinstance(entry, dict)
+    }
+    current = {entry.identity: (entry.pin.kind, entry.pin.value) for entry in declared}
+    for identity in sorted(set(previous) | set(current)):
+        was = previous.get(identity)
+        now = current.get(identity)
+        if was == now:
+            continue
+        raise LibraryError(
+            f"Workspace catalog pin drift for {identity or '(unnamed catalog)'}: "
+            f"registered as {was}, the manifest now declares {now}. A changed pin "
+            "is never silently re-pinned; re-register the Workspace explicitly "
+            "after reviewing the new pin"
+        )
 
 
 def upsert_workspace_root(lock: dict[str, Any], root: dict[str, Any]) -> None:
@@ -987,6 +1093,7 @@ def _resolve_requested_root(
             raise LibraryError(
                 f"Workspace {reference} catalog identity changed; explicit re-registration required"
             )
+        assert_recorded_pins(root, declared_catalogs(workspace.entry))
         closure = resolve_workspace_closure(catalog, workspace, repo_root, scope)
         requirements = _prerequisite_requirements(
             catalog, closure.prerequisite_bindings
@@ -1117,29 +1224,130 @@ def catalog_registration(
     return ("registered", None)
 
 
-def _observation_verdict(
-    identity: str, observation: ResolutionEvidence | None
-) -> str | None:
-    """Why this source cannot support deletion authority right now, or None."""
-    if observation is None:
-        return (
-            f"catalog {identity} in the resolved closure was not observed; "
-            "reachability was never established, which is not the same as "
-            "established reachability"
-        )
-    if not isinstance(observation, ResolutionEvidence):
-        return (
-            f"catalog {identity} supplied no source-scoped inventory observation; "
-            "reachability alone is not a complete resolution"
-        )
-    if normalize_catalog_identity(observation.provider_identity) != identity:
-        return (
-            f"catalog {identity} was answered by an observation of "
-            f"{observation.provider_identity}; one source's resolution says "
-            "nothing about another's"
-        )
-    verdict = evaluate_operation("prune-apply", observation)
-    return None if verdict.allowed else verdict.evidence
+def receipt_provenance_reason(receipt: Mapping[str, Any]) -> str | None:
+    """Why this receipt's provenance is too incomplete to delete it, or None.
+
+    ADR-0010 Decision 8 condition 2: catalog identity, resolved version, **and**
+    source pin must all be known. The pin was the one nothing enforced, and a
+    receipt without it cannot say which bytes it is a receipt for -- so "this is
+    ours and it is clean" is a claim about an artifact nobody can identify.
+    """
+    missing = [
+        field_name
+        for field_name in ("catalog_identity", "resolved_version")
+        if not str(receipt.get(field_name) or "").strip()
+    ]
+    pin = str(
+        receipt.get("source_commit") or receipt.get("definition_commit") or ""
+    ).strip()
+    if not pin:
+        missing.append("source_commit")
+    if not missing:
+        return None
+    return (
+        "provenance is incomplete for deletion (ADR-0010 Decision 8 condition 2): "
+        f"{sorted(missing)} unknown"
+    )
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+@dataclass(frozen=True)
+class CatalogObservations:
+    """Source-scoped inventory observations, and the window that makes them now.
+
+    Constructed with all three parts or not at all. An observation and the run
+    that acts on it can agree with each other perfectly and still prove nothing
+    if the observation was taken long before the run: deletion authority derives
+    from a resolution over a source that is reachable *now*. The cache slice
+    learned this the same way, which is why `evidence_max_age` has no default
+    there either.
+    """
+
+    observations: Mapping[str, ResolutionEvidence]
+    observed_at: str
+    max_age: timedelta
+
+    def __post_init__(self) -> None:
+        normalized: dict[str, ResolutionEvidence] = {}
+        for identity, observation in dict(self.observations).items():
+            if not isinstance(observation, ResolutionEvidence):
+                raise LibraryError(
+                    f"catalog observation for {identity} must be a source-scoped "
+                    "ResolutionEvidence value; reachability alone is not a "
+                    "complete resolution"
+                )
+            normalized[normalize_catalog_identity(str(identity))] = observation
+        object.__setattr__(self, "observations", normalized)
+        if _parse_timestamp(self.observed_at) is None:
+            raise LibraryError(
+                f"catalog observations need an ISO-8601 observed_at, not "
+                f"{self.observed_at!r}; a run that cannot locate itself in time "
+                "cannot say whether its evidence is current"
+            )
+        if not isinstance(self.max_age, timedelta) or self.max_age <= timedelta(0):
+            raise LibraryError(
+                "catalog observations need a positive evidence window; without one "
+                "an observation taken years ago authorizes today's deletion"
+            )
+
+    def verdict(self, identity: str) -> str | None:
+        """Why this source cannot support deletion authority now, or None."""
+        observation = self.observations.get(identity)
+        if observation is None:
+            return (
+                f"catalog {identity} in the resolved closure was not observed; "
+                "reachability was never established, which is not the same as "
+                "established reachability"
+            )
+        if normalize_catalog_identity(observation.provider_identity) != identity:
+            return (
+                f"catalog {identity} was answered by an observation of "
+                f"{observation.provider_identity}; one source's resolution says "
+                "nothing about another's"
+            )
+        verdict = evaluate_operation("prune-apply", observation)
+        if not verdict.allowed:
+            return verdict.evidence
+        if not observation.listed_identities:
+            # A source that supplies this scope's roots and answers with nothing
+            # has not produced a complete inventory of anything; review used
+            # exactly this observation to obtain authority to delete a receipt
+            # whose upstream had vanished.
+            return (
+                f"catalog {identity} answered with an empty inventory while it "
+                "supplies this scope's roots; an empty listing is not a complete "
+                "one, and absence from it is not evidence of removal"
+            )
+        observed = _parse_timestamp(observation.availability.observed_at)
+        now = _parse_timestamp(self.observed_at)
+        if observed is None:
+            return (
+                f"catalog {identity} was observed at an unreadable time "
+                f"({observation.availability.observed_at!r})"
+            )
+        if now is not None and now - observed > self.max_age:
+            return (
+                f"catalog {identity} was observed at {observation.availability.observed_at}, "
+                f"which is older than the {self.max_age} evidence window; a stale "
+                "observation does not establish that the source is reachable now"
+            )
+        return None
+
+    def listing_for(self, identity: str) -> frozenset[str]:
+        observation = self.observations.get(identity)
+        return observation.listed_identities if observation is not None else frozenset()
 
 
 def build_workspace_plan(
@@ -1148,17 +1356,17 @@ def build_workspace_plan(
     repo_root: Path,
     scope: str,
     *,
-    catalog_observations: Mapping[str, ResolutionEvidence] | None = None,
+    catalog_observations: CatalogObservations | None = None,
 ) -> dict[str, Any]:
     """Recompute reachability and return an ownership-aware selected-scope plan.
 
     Args:
-        catalog_observations: Source-scoped inventory observations, keyed by
-            canonical catalog identity, for the catalogs a v2 Workspace declares
-            in this scope. Absent or non-conclusive observations do not block
-            additive work; they make the scope's prune fail closed, which is the
-            ADR-0011 rule that deletion authority derives from a complete
-            resolution over a reachable source.
+        catalog_observations: Source-scoped inventory observations, with the
+            evidence window that makes them current, for the catalogs a v2
+            Workspace declares in this scope. Absent or non-conclusive
+            observations do not block additive work; they make the scope's prune
+            fail closed, which is the ADR-0011 rule that deletion authority
+            derives from a complete resolution over a reachable source.
     """
     owners: dict[str, list[str]] = {}
     prerequisite_owners: dict[str, list[str]] = {}
@@ -1230,9 +1438,14 @@ def build_workspace_plan(
     # conclusively before this scope has deletion authority over anything.
     # ADR-0011 fails the whole scope closed, not only that source's receipts.
     for identity in sorted(cross_catalog):
-        reason = _observation_verdict(
-            identity, (catalog_observations or {}).get(identity)
-        )
+        if catalog_observations is None:
+            registration_reasons.append(
+                f"catalog {identity} in the resolved closure was not observed; "
+                "reachability was never established, which is not the same as "
+                "established reachability"
+            )
+            continue
+        reason = catalog_observations.verdict(identity)
         if reason is not None:
             registration_reasons.append(reason)
     closure_registry = CatalogClosure(
@@ -1299,30 +1512,62 @@ def build_workspace_plan(
             and str(receipt.get("resolved_version") or "") != catalog_version
         ):
             updates.append(receipt_id)
-    registrations: dict[str, tuple[str, str | None]] = {
-        receipt_id: catalog_registration(
+    def _protection(receipt: Mapping[str, Any]) -> tuple[str, str | None]:
+        """This receipt's registration, and the first reason it may not be pruned."""
+        registration, reason = catalog_registration(
             receipt.get("catalog_identity"), closure_registry
         )
+        if reason is not None:
+            return registration, reason
+        provenance = receipt_provenance_reason(receipt)
+        if provenance is not None:
+            return registration, provenance
+        identity = normalize_catalog_identity(
+            str(receipt.get("catalog_identity") or "")
+        )
+        provider = str(receipt.get("provider_identity") or "").strip()
+        upstream = str(receipt.get("upstream_id") or "").strip()
+        if (
+            catalog_observations is not None
+            and identity in cross_catalog
+            and provider
+            and upstream
+        ):
+            listing = catalog_observations.listing_for(identity)
+            if f"{provider}#{upstream}" not in listing:
+                # The observation itself proves the item is gone. ADR-0011 turns
+                # that into `upstream-vanished`, which is exactly when the local
+                # copy is most valuable and is never deletion authority.
+                return registration, (
+                    f"{provider}#{upstream} is absent from the complete inventory "
+                    f"of {identity}, which makes it upstream-vanished; a vanished "
+                    "upstream is never converted into deletion authority"
+                )
+        return registration, None
+
+    registrations: dict[str, tuple[str, str | None]] = {
+        receipt_id: _protection(receipt)
         for receipt_id, receipt in receipt_by_id.items()
     }
     prune_candidates: list[dict[str, Any]] = []
     for receipt_id in sorted(receipt_ids - desired_ids):
         receipt = receipt_by_id[receipt_id]
-        registration, registration_reason = registrations[receipt_id]
+        registration, protection_reason = registrations[receipt_id]
+        if protection_reason and registration == "foreign":
+            protection_reason = f"foreign catalog owner: {protection_reason}"
         prune_candidates.append(
             {
                 "id": receipt_id,
                 "verified": bool(receipt.get("verified", False)),
                 "blocked_reason": (
-                    receipt.get("prune_blocked_reason")
-                    or (
-                        f"foreign catalog owner: {registration_reason}"
-                        if registration_reason
-                        else None
-                    )
+                    receipt.get("prune_blocked_reason") or protection_reason or None
                 ),
                 "catalog_registration": registration,
-                "registration_reason": registration_reason,
+                "registration_reason": protection_reason,
+                "catalog_identity": receipt.get("catalog_identity"),
+                "resolved_version": receipt.get("resolved_version"),
+                "source_commit": receipt.get("source_commit")
+                or receipt.get("definition_commit"),
                 "targets": receipt.get("targets") or [],
                 "scope": receipt.get("scope", scope),
                 "install_target": receipt.get("install_target"),
@@ -1471,6 +1716,16 @@ def prepare_prune_plan(
     """Verify a prune plan completely without mutating lock or filesystem."""
     if acknowledge_digest != plan.get("digest"):
         raise LibraryError("Prune plan digest is missing or stale")
+    if "catalog_closure" not in plan:
+        # A plan produced before the closure guard existed, or assembled by hand,
+        # carries no evidence about who owns its candidates. Reading that silence
+        # as "every owner is registered" is the fail-open this guard exists to
+        # remove, so the plan is refused rather than interpreted.
+        raise LibraryError(
+            "Prune is blocked: this plan records no resolved catalog closure, so "
+            "foreign owners cannot be distinguished from registered ones. Rebuild "
+            "the plan with library workspace sync --prune"
+        )
     if plan.get("blockers"):
         raise LibraryError("Prune is blocked because root resolution is incomplete")
     if lock.get("migration", {}).get("prune_ack_required"):
@@ -1503,6 +1758,12 @@ def prepare_prune_plan(
             raise LibraryError(
                 f"Prune blocked for {candidate_id}: {candidate['blocked_reason']}"
             )
+        # Re-derived here rather than trusted from the plan: the preflight is the
+        # last check before deletion, and ADR-0010 Decision 8 condition 2 is not
+        # satisfied by a plan field that says it was satisfied.
+        provenance = receipt_provenance_reason(candidate)
+        if provenance is not None:
+            raise LibraryError(f"Prune blocked for {candidate_id}: {provenance}")
         targets = candidate.get("targets") or []
         if not targets:
             raise LibraryError(f"Prune blocked for {candidate_id}: no exact targets")

@@ -754,11 +754,38 @@ because the text alone admitted a reading that would have broken something:
    source.
 
 `gate_workspace_mutation` is the single door from a completed resolution to a
-mutation. It refuses an item the resolution did not select, and an item carrying
-a selected member's name under a different provider identity, before applying
-`executable_admission.gate_resolution`. The writer is called by that gate with
-the frozen content the gate digested, so an item omitted from the gated set is
-absent from the mutation rather than admitted by it.
+mutation. It refuses an item the resolution did not select, an item carrying a
+selected member's name under a different provider identity, a duplicate item, an
+item with no content, and a selection that does not cover every resolved
+artifact, before applying `executable_admission.gate_resolution`. The writer is
+called by that gate with the frozen content the gate digested.
+
+**Materialization is staged behind the adapters, deliberately.** A v2 Workspace
+resolves, validates, and previews in this slice; `library workspace use` refuses
+to materialize a closure with declared catalogs. The reason is not incompleteness
+but honesty: the existing installer path fetches each member from the live
+catalog and would ignore the declared pin entirely, so installing now would ship
+a `catalogs:` block that looks pinned and is not. Verifying the pin against the
+source, normalizing members into inventory items, and putting the gate in the
+write path is `CL-mvet`'s work.
+
+**Adversarial review of this slice produced five accepted blocking findings**, all
+repaired before delivery, and each is a place the first implementation looked
+correct while a probe walked through it:
+
+| Finding | Repair |
+|---|---|
+| Pins were recorded on every node and never verified against anything, and the mutation gate had no production caller | Declared pins are recorded on the requested root at registration and a changed pin is fail-closed drift naming both values; materialization of a cross-catalog closure is refused outright until the adapters land |
+| The gate accepted a strict subset of the closure, so calling it with an empty selection returned success and invoked the writer | The gate now requires every resolved artifact to be supplied exactly once with content |
+| An observation with `complete: true` and an empty listing authorized deletion of a receipt whose upstream had vanished | An empty listing is not a complete inventory; a receipt absent from a complete listing is `upstream-vanished` and is never deletion authority |
+| No production path supplies catalog observations, so a healthy cross-catalog prune was unreachable | Resolved by the staging boundary above: a scope cannot hold v2 receipts until materialization lands with the observations that authorize pruning them |
+| ADR-0010 Decision 8 condition 2 (catalog identity, resolved version, **and** source pin known) was not enforced anywhere | Enforced in the plan and re-derived in the preflight immediately before deletion; a plan with no recorded catalog closure is refused outright |
+
+Two further hardenings were made without a reviewer asking, because the cache
+slice had already paid for both lessons: catalog observations carry the run's own
+timestamp and an explicit evidence window, with no default, so a stale
+observation cannot authorize today's deletion; and an observation attributed to a
+different source is refused.
 
 ### Nested Workspace disposition
 

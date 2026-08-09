@@ -18,7 +18,7 @@ from __future__ import annotations
 import sys
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import pytest
 
@@ -27,6 +27,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lib.errors import LibraryError  # noqa: E402
+from lib.providers.classification import EXECUTABLE_TYPES  # noqa: E402
 from lib.providers.executable_admission import (  # noqa: E402
     ExecutableAdmissionLedger,
     ResolutionRefused,
@@ -38,8 +39,10 @@ from lib.providers.inventory import (  # noqa: E402
     Rights,
 )
 from lib.workspace import (  # noqa: E402
+    assert_materializable,
     build_workspace_plan,
     gate_workspace_mutation,
+    make_workspace_requested_root,
     resolve_workspace,
     resolve_workspace_closure,
     workspace_root_id,
@@ -57,6 +60,7 @@ from workspace_v2_fixtures import (  # noqa: E402
     empty_lock,
     executable_v2_manifest,
     second_v2_manifest,
+    v1_manifest,
     v2_manifest,
     workspace_root_record,
 )
@@ -170,78 +174,179 @@ def test_resolution_refuses_an_undeclared_catalog() -> None:
 # -- AC3: complete resolution before any mutation ----------------------------
 
 
+def _full_selection(closure) -> tuple[list[NormalizedItem], dict[str, dict[str, bytes]]]:
+    """One normalized item and its content for every artifact the closure selected."""
+    items: list[NormalizedItem] = []
+    contents: dict[str, dict[str, bytes]] = {}
+    for node in closure.nodes:
+        if node.role != "artifact":
+            continue
+        item = _item(
+            provider_identity=node.catalog_identity,
+            upstream_id=f"{node.primitive}s/{node.name}",
+            upstream_name=node.name,
+            library_type=node.primitive,
+            library_name=node.name,
+        )
+        items.append(item)
+        contents[item.qualified_identity()] = {f"{node.name}.yaml": b"content"}
+    return items, contents
+
+
+def _admit_executables(
+    items: Sequence[NormalizedItem], contents: Mapping[str, Mapping[str, bytes]]
+) -> ExecutableAdmissionLedger:
+    ledger = ExecutableAdmissionLedger()
+    for item in items:
+        if item.library_type not in EXECUTABLE_TYPES:
+            continue
+        ledger.admit(
+            item.qualified_identity(),
+            content_digest(contents[item.qualified_identity()]),
+            library_type=item.library_type,
+            reviewer="operator",
+            permission_surface=(),
+            decided_at=NOW,
+            evidence="reviewed in test",
+        )
+    return ledger
+
+
 def test_fails_before_mutation() -> None:
     catalog = catalog_document(workspaces=[executable_v2_manifest()])
     closure = _closure(catalog, f"{CORE_NAME}:deployment")
-    files = {"workflow.yaml": b"steps: []"}
-    identity = _item().qualified_identity()
+    items, contents = _full_selection(closure)
+    executable = next(item for item in items if item.library_type == "workflow")
+    identity = executable.qualified_identity()
 
     # 1. An unadmitted executable member fails the whole resolution and writes
     #    nothing. It is never silently skipped.
     writer = _Writer()
     with pytest.raises(ResolutionRefused) as refusal:
         gate_workspace_mutation(
-            closure,
-            [_item()],
-            ExecutableAdmissionLedger(),
-            {identity: files},
-            mutate=writer,
+            closure, items, ExecutableAdmissionLedger(), contents, mutate=writer
         )
     assert identity in str(refusal.value)
     assert writer.calls == []
 
-    # 2. An item the resolution never selected cannot ride along with one it
+    # 2. Leaving the unadmitted member out of the selection is not a way past
+    #    the gate. A mutation covers the whole resolved closure or none of it.
+    writer = _Writer()
+    with pytest.raises(LibraryError, match="does not cover"):
+        gate_workspace_mutation(
+            closure,
+            [item for item in items if item.library_type != "workflow"],
+            ExecutableAdmissionLedger(),
+            contents,
+            mutate=writer,
+        )
+    assert writer.calls == []
+
+    writer = _Writer()
+    with pytest.raises(LibraryError, match="does not cover"):
+        gate_workspace_mutation(
+            closure, [], ExecutableAdmissionLedger(), {}, mutate=writer
+        )
+    assert writer.calls == []
+
+    ledger = _admit_executables(items, contents)
+
+    # 3. An item the resolution never selected cannot ride along with ones it
     #    did. That is the redirection this whole slice exists to refuse.
-    ledger = ExecutableAdmissionLedger()
-    ledger.admit(
-        identity,
-        content_digest(files),
-        library_type="workflow",
-        reviewer="operator",
-        permission_surface=(),
-        decided_at=NOW,
-        evidence="reviewed in test",
-    )
     smuggled = _item(
         upstream_id="workflows/other", upstream_name="other", library_name="other"
     )
-    smuggled_files = {"workflow.yaml": b"steps: [rm]"}
     writer = _Writer()
     with pytest.raises(LibraryError, match="not resolved"):
         gate_workspace_mutation(
             closure,
-            [_item(), smuggled],
+            [*items, smuggled],
             ledger,
-            {identity: files, smuggled.qualified_identity(): smuggled_files},
+            {**contents, smuggled.qualified_identity(): {"w.yaml": b"steps: [rm]"}},
             mutate=writer,
         )
     assert writer.calls == []
 
-    # 3. An item claiming a resolved member's name from a source the resolution
+    # 4. An item claiming a resolved member's name from a source the resolution
     #    did not select is refused for the same reason.
+    redirected = _item(
+        provider_identity=THIRD_IDENTITY,
+        upstream_id="workflows/deploy",
+        upstream_name="deploy",
+        library_type="workflow",
+        library_name="deploy",
+    )
     writer = _Writer()
-    redirected = _item(provider_identity=THIRD_IDENTITY)
     with pytest.raises(LibraryError, match="not resolved"):
         gate_workspace_mutation(
             closure,
-            [redirected],
+            [
+                *(item for item in items if item.library_type != "workflow"),
+                redirected,
+            ],
             ledger,
-            {redirected.qualified_identity(): files},
+            {**contents, redirected.qualified_identity(): {"w.yaml": b"steps: []"}},
             mutate=writer,
         )
     assert writer.calls == []
 
-    # 4. The admitted path writes once, with the exact bytes the gate digested.
+    # 5. A member with no content cannot be digested, so it cannot be admitted.
     writer = _Writer()
-    resolved = gate_workspace_mutation(
-        closure, [_item()], ledger, {identity: files}, mutate=writer
-    )
-    assert [node.executable_admission for node in resolved] == ["admitted"]
+    with pytest.raises(LibraryError, match="no content"):
+        gate_workspace_mutation(
+            closure,
+            items,
+            ledger,
+            {key: value for key, value in contents.items() if key != identity},
+            mutate=writer,
+        )
+    assert writer.calls == []
+
+    # 6. The admitted path writes once, with the exact bytes the gate digested,
+    #    for the whole closure.
+    writer = _Writer()
+    resolved = gate_workspace_mutation(closure, items, ledger, contents, mutate=writer)
+    assert {node.qualified_identity() for node in resolved} == set(contents)
     assert len(writer.calls) == 1
     handed = writer.calls[0]
-    assert dict(handed[identity]) == files
+    assert set(handed) == set(contents)
+    assert dict(handed[identity]) == contents[identity]
     with pytest.raises(TypeError):
-        handed[identity]["workflow.yaml"] = b"tampered"
+        handed[identity]["deploy.yaml"] = b"tampered"
+
+
+def test_a_cross_catalog_closure_is_not_installable_yet() -> None:
+    """Resolution ships in this slice; materialization waits for the adapters."""
+    catalog = catalog_document()
+    closure = _closure(catalog, f"{CORE_NAME}:engineering")
+
+    with pytest.raises(LibraryError, match="not yet installable"):
+        assert_materializable(closure)
+
+    v1 = catalog_document(workspaces=[v1_manifest()])
+    assert_materializable(_closure(v1, f"{CORE_NAME}:python-cli"))
+
+
+def test_a_changed_catalog_pin_is_drift_not_a_silent_re_pin() -> None:
+    catalog = catalog_document()
+    workspace = resolve_workspace(catalog, f"{CORE_NAME}:engineering")
+    root = make_workspace_requested_root(
+        workspace, "project", "d" * 40, f"{CORE_NAME}:engineering"
+    )
+    assert [entry["identity"] for entry in root["catalogs"]] == sorted(
+        [CORE_IDENTITY, UPSTREAM_IDENTITY]
+    )
+
+    moved = catalog_document()
+    moved["library"]["workspaces"][0]["catalogs"][1]["pin"]["value"] = "e" * 64
+    lock = empty_lock()
+    lock["requested_roots"] = [{**root, "scope": "project"}]
+
+    plan = build_workspace_plan(moved, lock, Path.cwd(), "project")
+
+    blocker = next(item for item in plan["blockers"] if "pin drift" in item)
+    assert UPSTREAM_PIN["value"] in blocker
+    assert "e" * 64 in blocker
 
 
 def test_incomplete_resolution_never_reaches_the_admission_gate() -> None:

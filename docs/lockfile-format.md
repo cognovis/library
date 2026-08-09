@@ -163,6 +163,7 @@ prerequisites:
 | `constraint` | Optional | User-requested compatible version range or pin. |
 | `resolved_version` | YES | Version selected by the last complete resolution. |
 | `definition_commit` | YES | Exact catalog or definition pin used for that resolution. |
+| `catalogs` | Workspace roots registered from a schema v2 manifest | The identity, pin kind, and pin value of every catalog the manifest declared **at registration**. A later resolution that finds a different pin fails naming both values; a changed pin is never silently adopted. Absent on v1 roots and on roots registered before this field existed, which are compared against nothing rather than against an invented baseline. |
 
 Direct artifact primitives and Workspaces use the same root model. Transitive
 artifact dependencies are graph nodes, not implicit direct roots.
@@ -353,6 +354,13 @@ into a consistent lock view before fresh re-resolution.
 Workspace deletion additionally requires `--prune --apply`. Drifted,
 unverified, foreign, ambiguous, project-authored, or externally managed targets
 remain untouched and are surfaced by Workspace status.
+
+The prune preflight enforces ADR-0010 Decision 8 condition 2 directly: a
+candidate whose catalog identity, resolved version, or source pin is unknown is
+refused immediately before deletion, re-derived from the candidate rather than
+trusted from the plan that produced it. A prune plan that records no resolved
+catalog closure is refused outright, because a plan carrying no ownership
+evidence must not be read as one whose owners are all registered.
 
 If journal replay encounters drift, `library workspace recover --scope <scope>`
 reports the journal digest and makes no further changes. An operator may repair

@@ -20,6 +20,7 @@ this scope to delete content it never installed.
 from __future__ import annotations
 
 import sys
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,7 @@ from lib.errors import LibraryError  # noqa: E402
 from lib.providers.inventory import ProviderAvailability  # noqa: E402
 from lib.providers.offline import ResolutionEvidence  # noqa: E402
 from lib.workspace import (  # noqa: E402
+    CatalogObservations,
     build_workspace_plan,
     prepare_prune_plan,
     workspace_root_id,
@@ -49,20 +51,44 @@ from workspace_v2_fixtures import (  # noqa: E402
 )
 
 NOW = "2026-08-09T09:00:00Z"
+EARLIER = "2026-08-01T09:00:00Z"
+WINDOW = timedelta(hours=6)
 AVAILABLE = ProviderAvailability(state="available", observed_at=NOW)
 UNAVAILABLE = ProviderAvailability(
     state="unavailable", observed_at=NOW, reason="source did not answer"
 )
 
+#: What a complete inventory of the fixture catalogs actually lists. An empty
+#: listing is not a complete one, so a suite that always passed `frozenset()`
+#: would be asserting deletion authority nobody has.
+LISTINGS: dict[str, frozenset[str]] = {
+    CORE_IDENTITY: frozenset({f"{CORE_IDENTITY}#skills/python-dev"}),
+    UPSTREAM_IDENTITY: frozenset(
+        {
+            f"{UPSTREAM_IDENTITY}#skills/helper",
+            f"{UPSTREAM_IDENTITY}#skills/retired",
+        }
+    ),
+}
+
 
 def _conclusive(identity: str) -> ResolutionEvidence:
     return ResolutionEvidence(
-        provider_identity=identity, availability=AVAILABLE, complete=True
+        provider_identity=identity,
+        availability=AVAILABLE,
+        complete=True,
+        listed_identities=LISTINGS.get(identity, frozenset({f"{identity}#anchor"})),
     )
 
 
-def _observations(*identities: str) -> dict[str, ResolutionEvidence]:
-    return {identity: _conclusive(identity) for identity in identities}
+def _observed(observations: dict[str, ResolutionEvidence]) -> CatalogObservations:
+    return CatalogObservations(
+        observations=observations, observed_at=NOW, max_age=WINDOW
+    )
+
+
+def _observations(*identities: str) -> CatalogObservations:
+    return _observed({identity: _conclusive(identity) for identity in identities})
 
 
 def _receipt(receipt_id: str, catalog_identity: Any) -> dict[str, Any]:
@@ -73,6 +99,7 @@ def _receipt(receipt_id: str, catalog_identity: Any) -> dict[str, Any]:
         "name": name,
         "scope": "project",
         "resolved_version": "1.0.0",
+        "source_commit": "f" * 40,
         "verified": True,
         "targets": [{"path": "content.md", "kind": "file", "content_sha256": "0" * 64}],
     }
@@ -238,14 +265,16 @@ def test_prune_fails_closed_offline() -> None:
     partial = _plan(
         catalog,
         lock,
-        {
-            CORE_IDENTITY: _conclusive(CORE_IDENTITY),
-            UPSTREAM_IDENTITY: ResolutionEvidence(
-                provider_identity=UPSTREAM_IDENTITY,
-                availability=UNAVAILABLE,
-                complete=False,
-            ),
-        },
+        _observed(
+            {
+                CORE_IDENTITY: _conclusive(CORE_IDENTITY),
+                UPSTREAM_IDENTITY: ResolutionEvidence(
+                    provider_identity=UPSTREAM_IDENTITY,
+                    availability=UNAVAILABLE,
+                    complete=False,
+                ),
+            }
+        ),
     )
     assert _candidate(partial, "skill:retired")["blocked_reason"]
 
@@ -254,20 +283,140 @@ def test_prune_fails_closed_offline() -> None:
     truncated = _plan(
         catalog,
         lock,
-        {
-            CORE_IDENTITY: _conclusive(CORE_IDENTITY),
-            UPSTREAM_IDENTITY: ResolutionEvidence(
-                provider_identity=UPSTREAM_IDENTITY,
-                availability=AVAILABLE,
-                complete=False,
-            ),
-        },
+        _observed(
+            {
+                CORE_IDENTITY: _conclusive(CORE_IDENTITY),
+                UPSTREAM_IDENTITY: ResolutionEvidence(
+                    provider_identity=UPSTREAM_IDENTITY,
+                    availability=AVAILABLE,
+                    complete=False,
+                ),
+            }
+        ),
     )
     assert _candidate(truncated, "skill:retired")["blocked_reason"]
+
+    # A "complete" answer that lists nothing is not a complete inventory of a
+    # source that supplies this scope's roots.
+    empty = _plan(
+        catalog,
+        lock,
+        _observed(
+            {
+                CORE_IDENTITY: _conclusive(CORE_IDENTITY),
+                UPSTREAM_IDENTITY: ResolutionEvidence(
+                    provider_identity=UPSTREAM_IDENTITY,
+                    availability=AVAILABLE,
+                    complete=True,
+                ),
+            }
+        ),
+    )
+    assert "empty inventory" in str(
+        _candidate(empty, "skill:retired")["blocked_reason"]
+    )
+
+    # An observation older than the evidence window says nothing about now.
+    stale = _plan(
+        catalog,
+        lock,
+        _observed(
+            {
+                CORE_IDENTITY: _conclusive(CORE_IDENTITY),
+                UPSTREAM_IDENTITY: ResolutionEvidence(
+                    provider_identity=UPSTREAM_IDENTITY,
+                    availability=ProviderAvailability(
+                        state="available", observed_at=EARLIER
+                    ),
+                    complete=True,
+                    listed_identities=LISTINGS[UPSTREAM_IDENTITY],
+                ),
+            }
+        ),
+    )
+    assert "evidence window" in str(_candidate(stale, "skill:retired")["blocked_reason"])
+
+    # An observation of a different source cannot answer for this one.
+    misattributed = _plan(
+        catalog,
+        lock,
+        _observed(
+            {
+                CORE_IDENTITY: _conclusive(CORE_IDENTITY),
+                UPSTREAM_IDENTITY: _conclusive(CORE_IDENTITY),
+            }
+        ),
+    )
+    assert _candidate(misattributed, "skill:retired")["blocked_reason"]
 
     # Every catalog in the closure observed conclusively: the guard permits it.
     observed = _plan(catalog, lock, ALL_OBSERVED)
     assert _candidate(observed, "skill:retired")["blocked_reason"] is None
+
+
+def test_observations_require_a_window_and_a_run_time() -> None:
+    """Evidence with no window is evidence about no particular moment."""
+    with pytest.raises(LibraryError, match="evidence window"):
+        CatalogObservations(
+            observations={CORE_IDENTITY: _conclusive(CORE_IDENTITY)},
+            observed_at=NOW,
+            max_age=timedelta(0),
+        )
+    with pytest.raises(LibraryError, match="observed_at"):
+        CatalogObservations(
+            observations={CORE_IDENTITY: _conclusive(CORE_IDENTITY)},
+            observed_at="whenever",
+            max_age=WINDOW,
+        )
+    with pytest.raises(LibraryError, match="ResolutionEvidence"):
+        CatalogObservations(
+            observations={CORE_IDENTITY: AVAILABLE},
+            observed_at=NOW,
+            max_age=WINDOW,
+        )
+
+
+def test_a_vanished_upstream_is_never_deletion_authority() -> None:
+    """A complete listing that omits the item proves loss, not permission."""
+    receipt = _receipt("skill:retired", UPSTREAM_IDENTITY)
+    receipt["provider_identity"] = UPSTREAM_IDENTITY
+    receipt["upstream_id"] = "skills/gone"
+    catalog, lock = _scope(receipts=[receipt])
+
+    plan = _plan(catalog, lock, ALL_OBSERVED)
+
+    assert "upstream-vanished" in str(
+        _candidate(plan, "skill:retired")["blocked_reason"]
+    )
+
+
+def test_prune_requires_the_decision_8_provenance_triple(tmp_path: Path) -> None:
+    """Catalog identity, resolved version, and source pin must all be known."""
+    for field_name in ("resolved_version", "source_commit"):
+        receipt = _receipt("skill:retired", UPSTREAM_IDENTITY)
+        receipt.pop(field_name)
+        catalog, lock = _scope(receipts=[receipt])
+
+        plan = _plan(catalog, lock, ALL_OBSERVED)
+
+        candidate = _candidate(plan, "skill:retired")
+        assert field_name in str(candidate["blocked_reason"]), field_name
+        with pytest.raises(LibraryError, match="Decision 8 condition 2"):
+            prepare_prune_plan(
+                lock, plan, tmp_path, plan["digest"], allowed_roots=[tmp_path]
+            )
+
+
+def test_a_plan_without_a_recorded_closure_is_refused(tmp_path: Path) -> None:
+    """A plan that carries no ownership evidence is not read as "all mine"."""
+    catalog, lock = _scope(receipts=[_receipt("skill:retired", UPSTREAM_IDENTITY)])
+    plan = _plan(catalog, lock, ALL_OBSERVED)
+    plan.pop("catalog_closure")
+
+    with pytest.raises(LibraryError, match="no resolved catalog closure"):
+        prepare_prune_plan(
+            lock, plan, tmp_path, plan["digest"], allowed_roots=[tmp_path]
+        )
 
 
 def test_v1_only_scope_needs_no_cross_catalog_observation() -> None:

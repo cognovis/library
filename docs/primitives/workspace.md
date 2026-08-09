@@ -114,11 +114,28 @@ Two resolution rules follow from the block being the whole trust boundary:
 Every resolved node records its canonical catalog identity and the pin of the
 catalog it came from, regardless of the display alias the manifest used.
 
+**Pin drift is never silent.** Registering a v2 Workspace records the identity
+and pin of every catalog it declared. A later resolution that finds a different
+pin fails naming both values and requires explicit re-registration. Without this
+the `catalogs:` block would be reviewable exactly once.
+
 **Mutation gate.** A completed cross-catalog resolution reaches the filesystem
 only through `gate_workspace_mutation`, which refuses an item the resolution did
-not select or one that carries a selected member's name from a different source,
-and then applies the ADR-0011 executable-admission gate. The writer receives the
-exact immutable content the gate digested; it never sources its own bytes.
+not select, an item carrying a selected member's name from a different source, a
+duplicate item, an item with no content, and — critically — a selection that
+does not cover every resolved artifact. A mutation covers the whole resolved
+closure or none of it; a partial selection is the silent skip the
+executable-admission gate exists to refuse. The writer receives the exact
+immutable content the gate digested; it never sources its own bytes.
+
+**A v2 Workspace resolves, validates, and previews; it does not install yet.**
+`library workspace use` refuses to materialize a closure with declared catalogs.
+Installing it safely needs the declared pin verified against the source, its
+members normalized into inventory items, and the mutation gate in the write
+path, which is reference-adapter work. The current installer would instead fetch
+each member from the live catalog and ignore the pin entirely — shipping a
+`catalogs:` block that looks pinned and is not, which is worse than not
+installing.
 
 > **This approval is FINAL as of 2026-08-09.** The ADR-0010 two-consumer evidence
 > gate was **amended, not satisfied** — a Human Decision by Malte Sussdorff
@@ -165,11 +182,25 @@ the catalog is reported as a blocker but still registers the catalog it records.
 **Prune under a cross-catalog closure fails closed on provider health.** When a
 scope's resolved closure reaches a source through a v2 `catalogs:` block, every
 such identity needs a conclusive, source-scoped inventory observation before
-this scope has deletion authority. A missing observation, an observation of a
-different source, an unreachable source, and a reachable source that answered
-incompletely are all refusals, and one refusal fails the scope's whole prune —
-not only that source's receipts. Additive work is unaffected: offline operation
-stays additive and repair-only.
+this scope has deletion authority. Refusals: a missing observation, an
+observation of a different source, an unreachable source, a reachable source
+that answered incompletely, a "complete" answer that lists nothing, and an
+observation older than the caller's declared evidence window. Observations are
+supplied as one value carrying the observations, the run's own timestamp, and
+that window — all three or none, because an observation and the run acting on it
+can agree perfectly and still prove nothing if the observation is old. One
+refusal fails the scope's whole prune, not only that source's receipts. Additive
+work is unaffected: offline operation stays additive and repair-only.
+
+A receipt that records its provider identity and upstream id and is absent from
+that source's complete listing is `upstream-vanished`. That is when the local
+copy is most valuable, and it is never converted into deletion authority.
+
+**ADR-0010 Decision 8 condition 2 is enforced, not assumed.** A receipt is
+prunable only when its catalog identity, resolved version, and source pin are
+all known. The check runs in the plan and again in the preflight immediately
+before deletion, and a prune plan that records no resolved catalog closure at all
+is refused rather than read as "every owner is registered".
 
 **Composition.** A project or global scope may register several Workspaces. The
 effective desired state is their unordered set union together with direct roots
