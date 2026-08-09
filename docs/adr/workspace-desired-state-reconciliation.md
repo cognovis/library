@@ -642,8 +642,8 @@ cycle handling, hidden removal semantics, and nickname-to-canonical-catalog
 resolution from the first deletion-capable release. A later ADR may add them when
 at least two real consumers require the same nested or cross-catalog lifecycle.
 
-> **Amended for cross-catalog manifest roots only — TENTATIVE (CL-2p73,
-> 2026-08-08).** [ADR-0011](heterogeneous-marketplace-workspaces.md) defines
+> **Amended for cross-catalog manifest roots only — FINAL (CL-2p73,
+> 2026-08-08; finalized 2026-08-09).** [ADR-0011](heterogeneous-marketplace-workspaces.md) defines
 > Workspace schema v2 with pinned, alias-qualified cross-catalog roots. The
 > two-consumer evidence gate above was **amended, not satisfied**: the three
 > committed locks that compose across catalogs (`library/meta`,
@@ -652,10 +652,9 @@ at least two real consumers require the same nested or cross-catalog lifecycle.
 > requirement. The amendment is an explicit Human Decision by Malte Sussdorff with
 > its rationale recorded in ADR-0011 `Consumer Lock Evidence`.
 >
-> The amendment is **provisional**. It becomes final only after ADR-0011
-> implementation slice 1 delivers the evidence listed in its `Approval
-> Finalization` section. If that evidence fails, the amendment lapses and this
-> gate is restored unamended.
+> The amendment is **final** as of 2026-08-09: ADR-0011 implementation slice 1
+> (`CL-coif`) delivered all four evidence items listed in its `Approval
+> Finalization` section, which records the finalization and its artifacts.
 >
 > **Nested Workspaces are not amended.** They remain deferred under this gate
 > exactly as written, with their original cycle-handling, ownership-visibility,

@@ -24,8 +24,8 @@ cross-catalog Workspace composition.
 Two sub-decisions carry a qualified status and say so in their own sections:
 
 - The **Workspace v2 composition contract** (`Cross-Catalog Resolution`) is
-  normative as a contract, and its ADR-0010 consumer-evidence gate is amended
-  **tentatively**. See `Approval Finalization`.
+  normative as a contract, and its ADR-0010 consumer-evidence gate amendment is
+  **final** (finalized 2026-08-09 on slice-1 evidence). See `Approval Finalization`.
 - The **Workflow executor authority** branch (`Workflow Executor Evidence and
   Authority`) records a **failed** supersession attempt. ADR-0006 remains
   authoritative.
@@ -717,7 +717,7 @@ composition as manifest-root evidence would be reading the gate to pass itself.
 
 **Therefore the gate is amended, not satisfied.**
 
-**Amendment (Human Decision, Malte Sussdorff, 2026-08-08, TENTATIVE).** The
+**Amendment (Human Decision, Malte Sussdorff, 2026-08-08, FINAL since 2026-08-09).** The
 ADR-0010 two-consumer evidence gate is waived for cross-catalog manifest roots
 only. Rationale on record: the gate was written to prevent speculative lifecycle
 complexity, and the complexity here is no longer speculative — three committed
@@ -727,8 +727,8 @@ providers this ADR admits (`mattpocock`, `mcp:executive-circle`, `disler`) canno
 reached by a first-party Workspace at all without qualified roots. Nested
 Workspaces, the other half of the original deferral, keep the gate unchanged.
 
-The amendment is **tentative**. It is not final approval, and it must not be cited
-as settled. See `Approval Finalization`.
+The amendment is **final** as of 2026-08-09. The finalizing slice-1 evidence is
+recorded in `Approval Finalization`.
 
 ### Approval Finalization
 
@@ -738,7 +738,7 @@ slice 1.
 
 | Element | Value |
 |---|---|
-| Current state | `tentative` — provisionally approved by Malte Sussdorff, 2026-08-08 |
+| Current state | `final` — finalized by Malte Sussdorff, 2026-08-09, on delivered slice-1 evidence (`CL-coif`, merged as `2b16f5d`) |
 | Finalizing slice | Slice 1, provider core and normalized inventory (`Implementation Slices`) |
 | Final state on success | `final` — the amendment stands and later slices unblock |
 | Final state on failure | `withdrawn` — the amendment lapses, ADR-0010's gate is restored unamended, and Workspace v2 returns to deferred |
@@ -763,9 +763,26 @@ cache-identity-to-receipt round trip remain required, but they are **acceptance
 criteria of the slices that own them** (`CL-dbam` AC2 and `CL-y5z4` AC3), not
 inputs to this gate. They are gated *by* this approval; they cannot also gate it.
 
-Until all four hold, this section's status field is the authoritative answer to
-"is cross-catalog Workspace composition approved?" and the answer is
-"provisionally".
+All four held on the delivered slice-1 candidate (`CL-coif`, delivered `2ebf699`,
+merged `2b16f5d`, closed 2026-08-09 after a CLEAN two-reviewer adversarial gate):
+
+1. 35 normalized items enumerated live from `https://github.com/mattpocock/skills`
+   with no local checkout, enforced in-test by blocking `subprocess` and
+   `tempfile` (`tests/test_source_provider_contract.py`).
+2. `scripts/checks/provider_neutrality.py` PASS, wired into CI
+   (`.github/workflows/provider-contract.yml`) and failing on every injected
+   violation class (`tests/test_provider_neutrality.py`).
+3. The catalog validator accepts `provider_kind`, `allowlist`, `auth_ref`, and
+   `rights` and rejects the negative cases
+   (`tests/test_library_yaml_provider_fields.py`, `scripts/validate-library.py`).
+4. Lossless qualified-identity round trip
+   (`tests/test_normalized_inventory.py::test_qualified_identity_round_trip`).
+
+Known bounded caveat, accepted at finalization: the neutrality proof covers the
+three ADR-named core modules; 15 legacy modules (foremost `scripts/lib/source.py`)
+remain provider-aware under a ratcheted baseline and are driven to zero by
+`CL-mvet`. This section's status field remains the authoritative answer to "is
+cross-catalog Workspace composition approved?" and the answer is "yes, final".
 
 ## Cache Transaction
 
@@ -1155,12 +1172,12 @@ act with a digest in their hand.
 | ADR-0004 (frontmatter dependency resolution) | **Unchanged.** `requires:` remains the hard-dependency mechanism, including for foreign items |
 | ADR-0005 (plane vocabulary) | **Unchanged.** Placement Records use its plane vocabulary |
 | ADR-0006 (Workflow primitive) | **Retained, unamended.** Supersession attempted and failed on evidence; see `Workflow Executor Evidence and Authority`. A `Status` note pointing at that evidence is added to ADR-0006 |
-| ADR-0010 (Workspace desired state) | **Amended in one place only**, tentatively: the two-consumer evidence gate is waived for cross-catalog manifest roots. Nested Workspaces stay deferred with the gate intact. Every other decision, including fail-before-mutation, the prune conditions, and no-overlay, is restated unchanged |
+| ADR-0010 (Workspace desired state) | **Amended in one place only** (amendment finalized 2026-08-09): the two-consumer evidence gate is waived for cross-catalog manifest roots. Nested Workspaces stay deferred with the gate intact. Every other decision, including fail-before-mutation, the prune conditions, and no-overlay, is restated unchanged |
 | `docs/PRIMITIVES.md` | **Amended.** No new primitive is added. The Skill entry gains the `skill_class` classification; the Quick Decision Tree gains an explicit Runbook terminator so the question is not re-litigated |
 | `docs/policy/name-collision.md` | **Amended.** No `runbook-` prefix is reserved. A rule is added for upstream name preservation and qualified identity under cross-catalog composition |
 | `standards/agentic-primitives/agentic-primitives.md` | **Amended.** Runbook is added to the counter-examples table with its rejection rationale |
 | `docs/primitives/marketplace.md` | **Amended.** Provider kinds, remote-only enumeration, and the rights fields are described; the convention scan is scoped to local writable sources |
-| `docs/primitives/workspace.md` | **Amended.** Schema v2 qualified roots, the tentative approval state, and the nested-Workspace deferral |
+| `docs/primitives/workspace.md` | **Amended.** Schema v2 qualified roots, the approval state (final since 2026-08-09), and the nested-Workspace deferral |
 | `docs/primitives/workflow.md` | **Amended.** Records the failed Pi supersession and the retained ADR-0006 authority |
 | `docs/lockfile-format.md` | **Amended.** Rights, admission, transformation, cache-digest, and `upstream-vanished` receipt fields |
 | Source metadata (`library.yaml` `sources.marketplaces`) | **Amended by slice 1**, not here. Entries gain `provider_kind`, `allowlist`, `auth_ref`, and `rights` fields. No content is installed by a registration |
@@ -1240,8 +1257,8 @@ because "cache the bytes" and "decide when bytes may be destroyed" have differen
 failure modes and different reviewers.
 
 **Slice 1 (`CL-coif`) is pre-approved to execute** without further approval
-(Human Decision HD-3, Malte Sussdorff, 2026-08-08). Slices 2 through 7 are gated
-on `Approval Finalization` reaching `final`.
+(Human Decision HD-3, Malte Sussdorff, 2026-08-08). Slices 2 through 7 were gated
+on `Approval Finalization` reaching `final`, which it did on 2026-08-09.
 
 ## Human Decisions
 
@@ -1251,7 +1268,7 @@ re-litigated by a later reader; they are to be *found* by one.
 | # | Decision | Maker, date | Status | Rationale |
 |---|---|---|---|---|
 | HD-1 | The Library Platform is the durable discovery, cache, projection, and desired-state authority. The retirement direction is reversed | Malte Sussdorff, 2026-08-07 | Final | Open Skills is the portable source format; it does not answer provenance, rights, caching, or desired state. Something must, and nothing else does |
-| HD-2 | The ADR-0010 consumer-evidence gate is amended for cross-catalog manifest roots | Malte Sussdorff, 2026-08-08 | **Tentative** — finalized by slice 1 evidence, see `Approval Finalization` | Strategic. Observed lock evidence is real but proves scope-boundary composition, not manifest-root need. The amendment is recorded honestly as a waiver rather than dressed up as a satisfied gate |
+| HD-2 | The ADR-0010 consumer-evidence gate is amended for cross-catalog manifest roots | Malte Sussdorff, 2026-08-08 | **Final** — finalized 2026-08-09 on slice-1 evidence, see `Approval Finalization` | Strategic. Observed lock evidence is real but proves scope-boundary composition, not manifest-root need. The amendment is recorded honestly as a waiver rather than dressed up as a satisfied gate |
 | HD-3 | Implementation slice 1 is pre-approved to execute without further approval | Malte Sussdorff, 2026-08-08 | Final | Slice 1 is exactly the work that produces the evidence finalizing HD-2, so gating it on HD-2 would deadlock |
 | HD-4 | The CL-yism subtree is rewritten or closed in the same delivery as this ADR | Malte Sussdorff, 2026-08-08 | Final | A body that contradicts its own note hands out the superseded instruction silently |
 
@@ -1342,9 +1359,9 @@ type needs separate evidence and its own ADR.
 - Re-materialization rather than re-keying means the first operation after
   migration is slower and requires provider availability. Legacy objects remain
   usable meanwhile.
-- Cross-catalog manifest roots ship on a **tentative** amendment. If slice 1's
-  evidence fails, Workspace v2 returns to deferred and the `catalogs:` schema work
-  is reverted. This is a real risk, deliberately taken, with a defined off-ramp.
+- Cross-catalog manifest roots shipped on a **tentative** amendment with a
+  defined off-ramp (revert to deferred). Slice 1's evidence held and the
+  amendment was finalized on 2026-08-09; the off-ramp was not needed.
 - `executive-circle` content will be blocked from committed project projection by
   default, which will look like a bug to someone who has a working subscription.
   The rights state, not the ability to fetch, is the reason, and the message must
@@ -1359,7 +1376,8 @@ type needs separate evidence and its own ADR.
 2. **The tentative amendment is quietly treated as final.** Someone cites the
    Workspace v2 section without reading `Approval Finalization`. Mitigation: the
    status is stated in the ADR `Status` block, in the section itself, and in
-   `docs/primitives/workspace.md`.
+   `docs/primitives/workspace.md`. (Moot since 2026-08-09: the amendment is
+   final.)
 3. **`unknown` rights get treated as permissive under delivery pressure.** The
    blocked default is inconvenient exactly when someone wants content. Mitigation:
    the default is fail-closed in the contract, the opt-in is explicit and

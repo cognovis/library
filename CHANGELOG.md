@@ -13,8 +13,8 @@
   reserved. A Pi-only Workflow executor target was tested by re-runnable executable
   checks and **rejected on evidence** (7/7 required checks failed); ADR-0006 remains
   authoritative and unamended. Workspace schema v2 adds pinned, alias-qualified
-  cross-catalog roots; its ADR-0010 consumer-evidence gate is **tentatively**
-  amended and finalizes only on implementation-slice-1 evidence. ADR-0003 is
+  cross-catalog roots; its ADR-0010 consumer-evidence gate is amended
+  (finalized 2026-08-09 on implementation-slice-1 evidence, `CL-coif`). ADR-0003 is
   extended (cache key and provider adapters), not superseded. Projection
   eligibility composes `install_rights` first — governing both machine-local and
   committed targets — and then `redistribution_rights`, which adds the

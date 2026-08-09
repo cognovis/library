@@ -75,7 +75,7 @@ rather than copying their content or inlining routing, context-budget,
 state-owner, or harness-runtime schemas. Schema v1 rejects nested Workspace and
 cross-catalog roots.
 
-**Schema v2 — cross-catalog roots (contract accepted, approval tentative).**
+**Schema v2 — cross-catalog roots (contract accepted, approval final since 2026-08-09).**
 [ADR-0011](../adr/heterogeneous-marketplace-workspaces.md) defines schema v2, in
 which a manifest may declare a pinned `catalogs:` block of alias-to-identity
 mappings and each root may carry a `catalog:` alias qualifier. Rules: the
@@ -86,13 +86,11 @@ is manifest-local while locks and diagnostics use canonical identity throughout.
 v1 manifests remain valid and unchanged; a `catalog:` qualifier in a v1 manifest
 is a validation error.
 
-> **This approval is TENTATIVE, not final.** The ADR-0010 two-consumer evidence
-> gate was **amended, not satisfied** — provisionally, by Malte Sussdorff on
-> 2026-08-08. It becomes final only after implementation slice 1 (provider core
-> and normalized inventory) delivers the four evidence items listed in ADR-0011
-> `Approval Finalization`. If that evidence fails, the amendment lapses, ADR-0010's
-> gate is restored unamended, and Workspace v2 returns to deferred. Do not cite
-> schema v2 as settled until `Approval Finalization` reads `final`.
+> **This approval is FINAL as of 2026-08-09.** The ADR-0010 two-consumer evidence
+> gate was **amended, not satisfied** — a Human Decision by Malte Sussdorff
+> (2026-08-08), finalized 2026-08-09 after implementation slice 1 (`CL-coif`,
+> provider core and normalized inventory) delivered all four evidence items
+> listed in ADR-0011 `Approval Finalization`, which records the artifacts.
 
 **Nested Workspaces remain deferred.** ADR-0011 admits cross-catalog roots only.
 Nested Workspaces change the graph shape itself and keep their original gate:
