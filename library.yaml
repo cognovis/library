@@ -2857,6 +2857,20 @@ library:
         - origin:original
         - tier:domain
         - category:standard-bundle
+    - name: anonymization
+      description: Anonymization conventions for ETL exports — row-level anonymization before mapping, seeded deterministic fake PII, and bucketing that preserves analytical value.
+      source: https://github.com/cognovis/library-core/blob/main/standards/anonymization/anonymization.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: classification
       description: Bead Classification
       source: https://github.com/cognovis/library-core/blob/main/standards/beads/classification.md
@@ -2893,6 +2907,20 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+    - name: db-migrations
+      description: Conventions for schema migration immutability, tracking keys, backfill predicates, Postgres function identity, and adjudicating schema disputes.
+      source: https://github.com/cognovis/library-core/blob/main/standards/db-migrations/db-migrations.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: dev-tools
       description: Agent tooling conventions — tool selection and command substitutions, file-reading thresholds, hook exit codes, and subagent discipline.
       source: https://github.com/cognovis/library-core/tree/main/standards/dev-tools/
@@ -3334,7 +3362,7 @@ library:
         - tier:domain
         - category:standard-bundle
     - name: security
-      description: Security conventions for agent flows — capability isolation when untrusted external content enters an unattended pipeline.
+      description: Security conventions for agent flows and application code — capability isolation, agent boundaries, secure coding patterns, and telemetry data minimization.
       source: https://github.com/cognovis/library-core/tree/main/standards/security/
       tier: domain
       default_scope: ask
@@ -3526,7 +3554,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: x-isynet-mssql-adapter
-      description: Schema-verification, NULL-handling, and JOIN-scope facts for the x.isynet MSSQL adapter (Mira PVS sync).
+      description: Schema-verification, NULL-handling, JOIN-scope, query-pattern, and billing-domain facts for the x.isynet MSSQL adapter (Mira PVS sync).
       source: https://github.com/cognovis/library-core/tree/main/standards/x-isynet-mssql-adapter/
       metadata:
         library:
