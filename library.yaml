@@ -2845,6 +2845,18 @@ library:
         - category:standard-bundle
         - healthcare
         - ai
+    - name: aidbox-bulk-import
+      description: Aidbox bulk-import and terminology-loading facts — bundle types, size limits, $import variants, and seed-data ID verification.
+      source: https://github.com/cognovis/library-core/tree/main/standards/aidbox-bulk-import/
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
     - name: classification
       description: Bead Classification
       source: https://github.com/cognovis/library-core/blob/main/standards/beads/classification.md
@@ -2895,6 +2907,18 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: ephemeral-compose-stacks
+      description: Ephemeral Docker Resource Ownership
+      source: https://github.com/cognovis/library-core/blob/main/standards/containers/ephemeral-compose-stacks.md
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
     - name: execution-result-envelope
       description: Execution-Result Envelope Contract
       source: https://github.com/cognovis/library-core/blob/main/standards/execution-result-envelope.md
@@ -2904,6 +2928,21 @@ library:
         - origin:original
         - tier:domain
         - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: executive-pack
+      description: Ownership and identity boundaries for simple bead delivery, repository-scoped Executive Packs, and cross-repository Topics.
+      source: https://github.com/cognovis/library-core/tree/main/standards/executive-pack/
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+        - workflow:beads
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -3071,7 +3110,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: model-routing
-      description: Model Routing Standard
+      description: Model Routing
       source: https://github.com/cognovis/library-core/blob/main/standards/dispatch/model-routing.md
       metadata:
         library:
@@ -3280,6 +3319,18 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: session-close-scoping
+      description: Bead-scoping conventions for Session Close — which beads a close may touch and when the beadless path applies.
+      source: https://github.com/cognovis/library-core/tree/main/standards/session-close-scoping/
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
     - name: skills
       description: Skill authoring conventions — development patterns, the quality standard, token budget tiers, and the upstream watchdog pattern for vendored skills.
       source: https://github.com/cognovis/library-core/tree/main/standards/skills/
@@ -3391,7 +3442,7 @@ library:
         - healthcare
         - security
     - name: workflow
-      description: 'The shared development workflow — bead specification and hygiene, review and verification discipline, engineering practice, and the agent collaboration patterns that run them.'
+      description: 'The shared development workflow — bead specification and hygiene, review and verification discipline, engineering practice, and the cross-cutting rules that apply to every repository tracking work in beads.'
       source: https://github.com/cognovis/library-core/tree/main/standards/workflow/
       tier: domain
       default_scope: ask
@@ -3399,21 +3450,6 @@ library:
         - origin:original
         - tier:domain
         - category:standard-bundle
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: executive-pack
-      description: Ownership boundaries for one-Bead delivery, repository-scoped Executive Packs, and cross-repository Topic finalization.
-      source: https://github.com/cognovis/library-core/blob/main/standards/executive-pack/executive-pack.md
-      tier: domain
-      default_scope: ask
-      tags:
-        - origin:original
-        - tier:domain
-        - category:standard
-        - workflow:beads
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -3433,6 +3469,18 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: x-isynet-mssql-adapter
+      description: Schema-verification, NULL-handling, and JOIN-scope facts for the x.isynet MSSQL adapter (Mira PVS sync).
+      source: https://github.com/cognovis/library-core/tree/main/standards/x-isynet-mssql-adapter/
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
   guardrails:
     - name: block-destructive-bash
       description: Blocks destructive bash commands (force-pushes, recursive deletes, DROP TABLE, etc.) that cannot be undone. The only deterministic safety layer — runs outside the LLM loop and cannot be bypassed by the model.
