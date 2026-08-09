@@ -597,3 +597,20 @@ def test_cld_worktree_overlay_settings_honor_an_explicit_overlay_list(
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     settings = json.loads(_argv_flag_value(argv, "--settings") or "{}")
     assert settings == {"worktree": {"symlinkDirectories": [".claude/skills"]}}
+
+
+def test_cld_preserves_a_caller_supplied_settings_argument(tmp_path: Path) -> None:
+    """A caller's own --settings must win; claude takes the last one."""
+    main = _seed_main_checkout_overlays(tmp_path)
+    caller_settings = str(tmp_path / "caller-settings.json")
+
+    result, argv_file, _prompt_file, _called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["-b", "CL-smoke", "--settings", caller_settings],
+        env_overrides={"GIT_REPO_ROOT": str(main)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert argv.count("--settings") == 1
+    assert _argv_flag_value(argv, "--settings") == caller_settings

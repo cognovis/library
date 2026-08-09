@@ -44,8 +44,19 @@ WORKTREE_OVERLAY_SCRIPT="${CLD_WORKTREE_OVERLAY_SCRIPT:-${CLD_SCRIPT_DIR:h}/scri
 #
 # Set CLD_WORKTREE_OVERLAYS to a space-separated list to override the overlay
 # set, or to an empty string to disable the setting injection.
+#
+# claude takes a single --settings value and the last occurrence wins, so a
+# caller that passes its own --settings keeps it and gets no overlay injection.
 worktree_overlay_settings() {
     [[ -f "$WORKTREE_OVERLAY_SCRIPT" ]] || return 0
+
+    local arg
+    for arg in "${claude_args[@]}"; do
+        if [[ "$arg" == "--settings" || "$arg" == --settings=* ]]; then
+            echo "cld: --settings supplied by caller; skipping worktree overlay symlinks." >&2
+            return 0
+        fi
+    done
 
     local -a overlay_args
     if [[ -n "${CLD_WORKTREE_OVERLAYS+x}" ]]; then

@@ -200,3 +200,72 @@ def test_both_launchers_bootstrap_through_the_shared_resolver() -> None:
     assert "scripts/worktree-overlays.py" in cld_source
     for source in (cdx_source, cld_source):
         assert ".agents .claude/skills" not in source
+
+
+def test_link_skips_a_dangling_source_symlink(tmp_path: Path) -> None:
+    """AC3: a source that does not resolve must not become a dangling link."""
+    main = tmp_path / "main"
+    (main / ".claude" / "skills").mkdir(parents=True)
+    (main / ".agents").symlink_to(tmp_path / "missing-target")
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+
+    result = _run_script("link", "--main", str(main), "--worktree", str(worktree))
+
+    assert result.returncode == 0, result.stderr
+    assert not os.path.lexists(worktree / ".agents")
+    assert (worktree / ".claude" / "skills").is_symlink()
+
+
+def test_link_refuses_to_escape_the_worktree_through_a_symlinked_ancestor(
+    tmp_path: Path,
+) -> None:
+    """A symlinked overlay root must not let a child link land outside."""
+    main = _make_main(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    (worktree / ".agents").symlink_to(outside)
+
+    result = _run_script("link", "--main", str(main), "--worktree", str(worktree))
+
+    assert result.returncode == 0, result.stderr
+    assert sorted(os.listdir(outside)) == []
+
+
+def test_resolve_does_not_descend_into_a_symlinked_worktree_path(
+    overlays: ModuleType, tmp_path: Path
+) -> None:
+    main = _make_main(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    (worktree / ".agents").symlink_to(outside)
+
+    resolved = overlays.resolve_overlays(
+        main, overlays.DEFAULT_OVERLAYS, overlays.worktree_probe(worktree)
+    )
+
+    assert resolved == [".claude/skills", ".env"]
+
+
+def test_index_resolution_keeps_a_nested_overlay_whose_parent_is_untracked(
+    overlays: ModuleType, tmp_path: Path
+) -> None:
+    """Pin the shape cld hands to Claude Code when no .claude path is tracked.
+
+    Claude Code creates these symlinks itself and is not known to create a
+    missing parent directory, so the overlay may not materialize in that
+    repository shape. Emitting the narrow path is still strictly better than
+    widening to `.claude`, which would link the main checkout's own
+    `.claude/worktrees` into the worktree.
+    """
+    main = _make_main(tmp_path)
+
+    resolved = overlays.resolve_overlays(
+        main, overlays.DEFAULT_OVERLAYS, overlays.index_probe(["README.md"])
+    )
+
+    assert resolved == [".agents", ".claude/skills", ".env"]

@@ -42,12 +42,25 @@ import subprocess
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
+from typing import NamedTuple
 
 # The overlay set every launcher bootstraps. Keep this the single source of
 # truth: a launcher that carries its own list silently drifts from the other.
 DEFAULT_OVERLAYS: tuple[str, ...] = (".agents", ".claude/skills", ".env")
 
-PresenceProbe = Callable[[str], bool]
+
+class Probe(NamedTuple):
+    """How resolution answers two questions about the destination worktree.
+
+    ``owns`` answers whether the worktree will already have the path, and
+    ``can_descend`` whether resolution may look inside it for missing children.
+    They differ: a symlinked directory is owned but must not be descended into,
+    because its children resolve against the link target rather than the
+    worktree.
+    """
+
+    owns: Callable[[str], bool]
+    can_descend: Callable[[str], bool]
 
 
 def _validate_overlay(overlay: str) -> str:
@@ -64,28 +77,33 @@ def _validate_overlay(overlay: str) -> str:
     return "/".join(parts)
 
 
-def worktree_probe(worktree: Path) -> PresenceProbe:
-    """Presence probe for an existing worktree: does the path exist on disk?"""
+def worktree_probe(worktree: Path) -> Probe:
+    """Probe an existing worktree: does the path exist on disk?"""
 
-    def probe(relative_path: str) -> bool:
+    def owns(relative_path: str) -> bool:
         return os.path.lexists(worktree / relative_path)
 
-    return probe
+    def can_descend(relative_path: str) -> bool:
+        destination = worktree / relative_path
+        return destination.is_dir() and not destination.is_symlink()
+
+    return Probe(owns=owns, can_descend=can_descend)
 
 
-def index_probe(tracked_paths: Iterable[str]) -> PresenceProbe:
-    """Presence probe for a worktree that does not exist yet.
+def index_probe(tracked_paths: Iterable[str]) -> Probe:
+    """Probe a worktree that does not exist yet.
 
     A fresh worktree contains exactly the tracked paths of the checkout it
     branches from, so the Git index answers the same question ahead of time.
+    Git tracks no directories, so an owned path is always descendable here.
     """
     tracked = {path.strip() for path in tracked_paths if path.strip()}
 
-    def probe(relative_path: str) -> bool:
+    def owns(relative_path: str) -> bool:
         prefix = f"{relative_path}/"
         return any(path == relative_path or path.startswith(prefix) for path in tracked)
 
-    return probe
+    return Probe(owns=owns, can_descend=lambda _relative_path: True)
 
 
 def git_tracked_paths(main: Path) -> list[str]:
@@ -107,7 +125,7 @@ def git_tracked_paths(main: Path) -> list[str]:
 def resolve_overlays(
     main: Path,
     overlays: Sequence[str],
-    probe: PresenceProbe,
+    probe: Probe,
 ) -> list[str]:
     """Resolve the overlay paths that should be linked from `main`."""
     resolved: list[str] = []
@@ -116,19 +134,39 @@ def resolve_overlays(
     return resolved
 
 
-def _collect(main: Path, relative_path: str, probe: PresenceProbe, out: list[str]) -> None:
+def _collect(main: Path, relative_path: str, probe: Probe, out: list[str]) -> None:
     source = main / relative_path
-    if not os.path.lexists(source):
-        # Nothing to point at: skipping keeps the worktree free of dangling links.
+    # os.path.exists, not lexists: a source symlink that does not resolve would
+    # otherwise be linked and reproduce the dangling link as a worktree entry.
+    if not os.path.exists(source):
         return
-    if not probe(relative_path):
+    if not probe.owns(relative_path):
         out.append(relative_path)
         return
     # The worktree owns this path already. Never replace it; descend into a real
     # directory so a partly tracked overlay root still gets its missing children.
-    if source.is_dir() and not source.is_symlink():
+    if source.is_dir() and not source.is_symlink() and probe.can_descend(relative_path):
         for child in sorted(os.listdir(source)):
             _collect(main, f"{relative_path}/{child}", probe, out)
+
+
+def _stays_inside(worktree: Path, destination: Path) -> bool:
+    """Would writing `destination` land inside `worktree` as it exists on disk?
+
+    A lexical check is not enough. `mkdir` and `symlink` both follow an existing
+    symlinked ancestor, so a worktree path such as `.agents` that is itself a
+    symlink would place `.agents/skills` wherever that link points. Resolve the
+    nearest ancestor that exists and require the real path to stay contained.
+    """
+    root = worktree.resolve()
+    ancestor = destination.parent
+    while not ancestor.exists():
+        parent = ancestor.parent
+        if parent == ancestor:
+            return False
+        ancestor = parent
+    real_ancestor = ancestor.resolve()
+    return real_ancestor == root or root in real_ancestor.parents
 
 
 def link_overlays(main: Path, worktree: Path, resolved: Sequence[str]) -> list[str]:
@@ -137,6 +175,12 @@ def link_overlays(main: Path, worktree: Path, resolved: Sequence[str]) -> list[s
     for relative_path in resolved:
         destination = worktree / relative_path
         if os.path.lexists(destination):
+            continue
+        if not _stays_inside(worktree, destination):
+            print(
+                f"warning: refusing to link {relative_path}: destination escapes the worktree",
+                file=sys.stderr,
+            )
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)
         # A relative link keeps working when the worktree pair is relocated.
@@ -150,7 +194,7 @@ def link_overlays(main: Path, worktree: Path, resolved: Sequence[str]) -> list[s
     return created
 
 
-def _build_probe(args: argparse.Namespace, main: Path) -> PresenceProbe:
+def _build_probe(args: argparse.Namespace, main: Path) -> Probe:
     if args.from_index:
         return index_probe(git_tracked_paths(main))
     return worktree_probe(Path(args.worktree))

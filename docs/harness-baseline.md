@@ -183,6 +183,18 @@ exist yet.
   content while `.agents/skills/` is gitignored: linking only the root would
   silently do nothing.
 
+Two limits are worth knowing before relying on the `cld` half:
+
+- Claude Code creates those symlinks itself and is not known to create a missing
+  parent directory. In a repository where nothing under `.claude/` is tracked,
+  the worktree has no `.claude/` for `.claude/skills` to land in and the overlay
+  may not appear. The resolver still emits the narrow path, because widening to
+  `.claude` would link the main checkout's own `.claude/worktrees` into the
+  worktree. The `cdx` half creates the parent itself and is unaffected.
+- `claude` takes a single `--settings` value and the last occurrence wins, so
+  `cld` skips the injection entirely — with a note on stderr — when the caller
+  passes its own `--settings`.
+
 Set `CDX_WORKTREE_OVERLAYS` or `CLD_WORKTREE_OVERLAYS` to a space-separated list
 to override the overlay set for a repository, or to an empty string to disable
 the bootstrap. The default set is `.agents .claude/skills .env`. Claude Code's
