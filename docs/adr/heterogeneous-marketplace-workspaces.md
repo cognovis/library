@@ -1306,6 +1306,134 @@ cache object under degraded conditions. It:
 Degraded provider state never triggers a purge automatically. Purge is a human
 act with a digest in their hand.
 
+### Implementation record (slice 4, `CL-uliw`)
+
+Implemented in `scripts/lib/providers/retention.py`, on the slice-3 primitives
+rather than beside them: `ReceiptStore.referencing_digest` answers the reference
+question for one store, `ForeignReceipt.upstream_state` and
+`completeness_evidence` supply the recorded evidence, and
+`offline.evaluate_operation("automatic-garbage-collection", …)` remains the one
+table that decides whether collection may run against an observation at all.
+Five readings were open, and the implemented contract states them:
+
+1. **"Any scope" is a required set, not a supported one.** The reference check
+   is constructed over named scopes and refuses unless every required scope —
+   `project` and `global` — is present. A caller holding one store gets a typed
+   refusal instead of a confident wrong answer, because a project-scoped
+   maintenance run that cannot see the global lock reports "unreferenced" for
+   objects that lock is holding.
+2. **An unreadable scope is never an empty one.** A corrupt receipt file, or a
+   scope whose declared location does not exist, raises rather than contributing
+   zero references. The two states are the same silence and opposite facts.
+3. **The two preconditions the offline table declines to evaluate are evaluated
+   here, per object.** The table returns them as `additional_preconditions`; this
+   module holds the object, so it answers them: no active receipt references it,
+   and exact re-fetchability is proven. Every unmet condition is named, and a
+   decision carries all of them rather than only the first.
+4. **The revisionless clause extends to `adapter-declaration` completeness.** A
+   pin-only source needs a digest-verified re-fetch before its unreferenced
+   object may be deleted. An install whose completeness rests only on the
+   adapter's word never had independent proof of what it stored, so it is in the
+   same position and is treated identically. A re-fetch observing a *different*
+   digest is fail-closed drift, not a licence to collect: deleting there destroys
+   the last copy of the pinned content, and a later reinstall records a fresh
+   first-use pin — turning detectable drift into undetectable substitution.
+5. **Quarantined objects are retained evidence for collection and named-only for
+   purge.** Automatic collection never sees a tree a repair set aside. An
+   operator holding the digest may destroy it, but only by naming it explicitly,
+   so reclaiming space can never silently remove the evidence of a corruption.
+
+Two structural decisions support the guarantee that collection never escalates:
+
+- **Deletion lives in retention, not in `ObjectStore`.** Slice 3 shipped a store
+  with no delete path, and that stays true. Deleting bytes is a retention
+  decision, and keeping the only deletion behind these gates is what makes the
+  guarantee checkable. A deletion renames the tree into the store's staging area
+  before removing it, so a reader sees the whole object or nothing, and an
+  interrupted removal leaves a sweepable staging entry rather than a half-deleted
+  object a later run would read as cached.
+- **The digest and the acknowledgement are one value.** `PurgeAcknowledgement`
+  carries the object digest, the operator, the reason, and the fixed
+  acknowledgement token together, and no purge entry point takes a digest
+  without it. Removing the requirement would have to delete the type's only
+  constructor rather than add a default argument. The acknowledgement is written
+  to a durable purge ledger *before* the deletion and completed afterwards, so an
+  interrupted purge leaves the intent on record rather than an unexplained
+  absence.
+
+Both deleting paths re-prove their preconditions under
+`TofuPinStore.identity_lock`, the same lock an install holds across retrieval,
+materialization, the receipt, and activation. An object can acquire its first
+reference between a plan and a deletion; taking that lock and evaluating again
+is what makes "an active receipt protects its object" true for receipts that did
+not exist when the plan was made.
+
+Adversarial review then demonstrated, by execution, six further gaps, and the
+implemented contract now states them:
+
+6. **A scope is its location, not its label.** Two required labels over one
+   store satisfied the scope set while hiding the other scope's receipts
+   entirely, and an object a live global receipt referenced was collected.
+   Required scopes must resolve to distinct locations.
+7. **A quarantined tree is a bucket-level sibling, and nothing else is.**
+   Searching the whole object root for a quarantine-shaped name let a purge of
+   one digest reach a legitimate member directory nested inside another object's
+   content, remove it, and leave that referenced object failing verification.
+8. **A proof set is evaluated whole, and it must be current.** Keeping one proof
+   per identity made the outcome depend on argument order: a stale proof that
+   matched the pin overrode a current one that showed drift. Any disagreement
+   inside the set is drift, and a proof older than the source observation it
+   accompanies — or one whose time cannot be ordered against it — is stale.
+9. **Every deletion runs under the identity lock an install takes.** When only
+   quarantined bytes remain there is no canonical object to derive that identity
+   from, and a synthetic lock name serialized against nothing. The identity is
+   recovered from the quarantined tree's own descriptor, and a subject whose
+   identity cannot be recovered is retained rather than deleted under a lock that
+   protects nothing.
+10. **A removal that does not complete is not a deletion.** Ignoring the removal
+    error made the staging rename look like success: the caller reported the
+    members as deleted and the ledger recorded `purged` while every byte was
+    still on disk. Both a raising and a silently ineffective removal now fail
+    loudly, and the ledger entry stays at its recorded intent.
+11. **Degraded facts are independent and are all named.** An observation that is
+    unavailable *and* truncated *and* narrowed by changed authorization reported
+    one of the three, so an operator repairing it would fix one third of the
+    problem. Precedence orders the primary reason; it does not hide the others.
+
+A second adversarial round demonstrated five more, and they are stated too:
+
+12. **A deletion follows no link, and a name is not evidence.** A
+    quarantine-shaped symbolic link beside one object pointed at another
+    object's canonical directory; validating the *resolved* path accepted it,
+    because a canonical object sits at the same depth. Paths are now validated
+    as written, every component from the object root down must be a real
+    directory, and a quarantined tree must additionally prove through its own
+    descriptor that it belongs to the digest that named it.
+13. **The proof-to-deletion window is serialized against every receipt writer.**
+    The install identity lock excludes the install transaction and nothing else;
+    a bare receipt write is guarded only by the receipt file's own lock. A
+    receipt committed after the final reference read and before the rename lost
+    its object. Both deleting paths now hold every scope's receipt lock across
+    the proof and the deletion, taken in a fixed path order.
+14. **A malformed receipt store is never an empty one.** `receipts: null` parsed
+    as "this scope holds nothing", and absence of receipts is deletion authority
+    everywhere that consumes the store. Receipt and retired records must be
+    strictly typed lists, so a damaged scope refuses instead of authorizing.
+15. **Evidence has to describe the present, and how recent is operator policy.**
+    A source observation and a re-fetch proof that agree with each other prove
+    nothing if both were taken long before the run; review supplied a matching
+    pair twenty-six years old and the last copy of a revisionless object's
+    pinned bytes was deleted. Collection now takes a required
+    `evidence_max_age`, with no default, and evidence outside that window — or
+    dated after the run — is typed and fails closed.
+16. **The dry run reports the whole object, not only its payload.** A deletion
+    removes the object directory including its self-describing descriptor, while
+    the plan measured `content/` alone and reported 45 bytes where 665 were
+    removed. AC7 says *exactly* what would be deleted.
+
+**Scope boundary.** This slice ships the retention core and its contracts. No
+production CLI, installer, or sync path calls them yet; CLI wiring is `CL-mvet`.
+
 ## Migration and Existing Bead Disposition
 
 ### Named contract dispositions

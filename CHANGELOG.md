@@ -38,6 +38,52 @@
 
 ### Added
 
+- *(CL-uliw, marketplace)* Unreferenced cache objects now survive provider loss
+  until an operator purges them by digest. Automatic garbage collection takes two
+  retention inputs, not one: an object referenced by any active receipt in any
+  scope is ineligible, and exact re-fetchability must be **proven** rather than
+  inferred from source health. Collection therefore fails closed, with a typed
+  reason naming the condition, while the source is unavailable or degraded, while
+  the inventory is incomplete, while access is revoked, while the upstream item no
+  longer exists, and — for a revisionless source or an install whose completeness
+  rests only on the adapter's word — until a digest-verified re-fetch confirms the
+  pinned digest is still served. A re-fetch that observes different bytes is
+  fail-closed drift, never a licence to collect. The reference check spans a
+  required set of scopes (project and global): a partial scope set, an unreadable
+  receipt file, and a scope that is not where it says it is are all refusals, never
+  the answer "unreferenced". Deleting an unreferenced object under degraded
+  conditions is possible only through a separate operator-explicit purge that takes
+  a cache-object digest — a name, a glob, a qualified identity, a revision, or a
+  content digest is rejected with a reason that names the shape — proves across
+  every scope that no active receipt references it, and records a fixed
+  acknowledgement of permanent, potentially unrefetchable loss in a durable purge
+  ledger written before the bytes are removed. The dry-run plan reports exactly the
+  members, byte count, and quarantined siblings that would go, and mutates nothing.
+  Automatic collection never invokes purge under any provider condition, which is
+  held by a structural call-graph check as well as by execution; quarantined
+  objects a repair set aside are retained evidence that collection never touches
+  and purge removes only when an operator names them. Both deleting paths re-prove
+  their preconditions under the same identity lock an install holds — recovered
+  from a quarantined tree's own descriptor when only quarantined bytes remain, and
+  refused outright when no identity can be recovered — so a reference acquired
+  after the plan still protects the object. Required scopes must resolve to
+  distinct locations, so two labels over one store can no longer hide the other
+  scope's receipts; quarantine discovery is restricted to bucket-level siblings of
+  the named object, so a purge cannot reach a lookalike directory inside another
+  object's content; a re-fetch proof set is evaluated whole and must be at least as
+  recent as the source observation, so argument order and stale evidence can no
+  longer authorize a deletion; and a removal that does not complete raises instead
+  of recording success. A deletion follows no symbolic link and validates its path
+  as written, and a quarantined tree must prove through its own descriptor that it
+  belongs to the digest that named it; the proof-to-deletion window holds every
+  receipt scope's lock, so a receipt committed by any writer after the final check
+  still protects its object; a malformed receipt store raises instead of reading as
+  an empty one; collection takes a required evidence window, so a source observation
+  and a re-fetch proof that merely agree with each other can no longer authorize a
+  deletion long after they were taken; and the dry run accounts for the whole object
+  directory rather than its payload alone. Cache core only — no production CLI,
+  installer, or sync path calls it yet (`CL-mvet`).
+
 - *(CL-y5z4, marketplace)* Every installed foreign artifact is now reproducible
   from a complete, immutable cache object while its source is unreachable. Cache
   identity is the ADR-0011 tuple — source identity, upstream id, revision or
