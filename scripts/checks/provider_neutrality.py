@@ -71,6 +71,11 @@ BEAD_ID = "CL-coif"
 #: never granted. Their location is a packaging fact; their neutrality is a
 #: contract, so the check states it explicitly rather than inheriting the
 #: adapter exemption.
+#: The durable foreign cache (`CL-y5z4`) is listed for the same reason: cache
+#: identity, the install transaction, the offline table, and the receipt store
+#: decide what survives a source outage. A cache that recognized a source by
+#: name could keep one source's bytes and discard another's under a rule nobody
+#: wrote down, which is the failure the tuple key exists to make impossible.
 CORE_MODULES: tuple[str, ...] = (
     "scripts/lib/resolver.py",
     "scripts/lib/cache.py",
@@ -78,6 +83,10 @@ CORE_MODULES: tuple[str, ...] = (
     "scripts/lib/providers/rights.py",
     "scripts/lib/providers/admission.py",
     "scripts/lib/providers/executable_admission.py",
+    "scripts/lib/providers/foreign_cache.py",
+    "scripts/lib/providers/cache_transaction.py",
+    "scripts/lib/providers/offline.py",
+    "scripts/lib/providers/receipts.py",
 )
 
 #: Provider and hosting-service names. A core module has no business naming one.

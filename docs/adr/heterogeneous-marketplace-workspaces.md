@@ -902,6 +902,46 @@ reproducible projection the Library applies to unmodified upstream content. A
 material adaptation produces a first-party derivative, which is governed by
 `Distribution Rights`.
 
+### Implementation record (slice 3, `CL-y5z4`)
+
+Six readings of the sections above were open. They are resolved in the
+implemented cache (`scripts/lib/providers/foreign_cache.py`,
+`cache_transaction.py`, `offline.py`, `receipts.py`) rather than left to each
+call site.
+
+1. **`normalized_content_digest` covers upstream bytes, not transformed ones.**
+   It is the subject of the trust-on-first-use pin, and a pin has to be
+   comparable against what a later re-fetch returns; a pin over transformed
+   bytes would change meaning whenever a transformation rule changed. The cache
+   object *stores* the transformed bytes, because those are what an outage must
+   reproduce, and carries its own `projected_content_digest` as the integrity
+   proof of the stored object. Under the identity transformation the two are
+   equal, which is why the distinction is easy to lose.
+2. **The digest function is adopted from executable admission, not forked.**
+   Slice 2 left this open and required only that admission stay bound to
+   content. Two independent digests over the same bytes would reopen exactly the
+   gap that binding closes: a decision recorded against one identity while the
+   cache stores another.
+3. **A cache object is self-describing.** It stores the whole key tuple beside
+   its content, so an object can be identified without the receipt that
+   references it — which is what the operator-explicit purge of `Retention,
+   Garbage Collection, and Explicit Purge` needs to prove anything by digest.
+   Every tuple member is length-framed and a null revision is framed as its own
+   marker, so a revisionless identity can never collide with a pinned one.
+4. **A refused projection keeps its cache object and its receipt.** `Caching is
+   not installing`: the bytes were lawfully fetched and verified, so they stay
+   durable and recorded, and the receipt records zero targets and
+   `verified: false`. Likewise, a **failed receipt write does not roll back the
+   materialized object** — a failure is not deletion authority over retrieved
+   and verified bytes.
+5. **`degraded` is treated as unavailable for every refused row of the offline
+   table.** A truncated or partial answer is not a complete resolution, and both
+   deletion authority and remote comparison require one.
+6. **Explicit named removal archives the retired receipt.** ADR-0011 requires
+   the removal to record the degraded state and the operator's intent in receipt
+   history; discarding the record with the receipt would destroy the one entry
+   nobody can reconstruct afterwards.
+
 ## Offline Semantics
 
 Offline operation is **additive and repair-only**.
