@@ -27,6 +27,7 @@ from lib.providers.executable_admission import (  # noqa: E402
     ResolutionRefused,
     content_digest,
     gate_resolution,
+    validated_digest,
 )
 from lib.providers.inventory import (  # noqa: E402
     NormalizedItem,
@@ -40,7 +41,7 @@ GRANTED = Rights(
     install_rights="granted",
     redistribution_rights="granted",
     derivative_rights="granted",
-    evidence_source="upstream LICENSE (MIT)",
+    evidence_source="upstream LICENSE (MIT), verified 2026-08-08",
 )
 
 
@@ -129,6 +130,27 @@ def test_content_digest_is_order_and_boundary_stable() -> None:
         content_digest({})
 
 
+def test_a_digest_shaped_string_is_not_a_digest() -> None:
+    """Only the exact form is a content identity; a prefix is not enough."""
+    assert validated_digest(content_digest({"a": b"x"}))
+
+    for value in ("sha256:not-a-digest", "sha256:" + "F" * 64, "deadbeef", ""):
+        with pytest.raises(ValueError):
+            validated_digest(value)
+
+    ledger = ExecutableAdmissionLedger()
+    with pytest.raises(ValueError):
+        ledger.admit(
+            f"{PROVIDER}#flows/deploy",
+            "sha256:not-a-digest",
+            library_type="workflow",
+            reviewer="x reviewer",
+            permission_surface=(),
+            decided_at="2026-08-09T09:00:00Z",
+            evidence="filed against bytes that do not exist",
+        )
+
+
 def test_refused_admission_is_recorded_and_stays_refused() -> None:
     ledger = ExecutableAdmissionLedger()
     identity = f"{PROVIDER}#flows/deploy"
@@ -165,6 +187,27 @@ def test_refused_admission_is_recorded_and_stays_refused() -> None:
     assert ledger.state_for(identity, digest, library_type="workflow") == "admitted"
 
 
+def test_a_recorded_decision_is_never_silently_rewritten() -> None:
+    """The audit trail is the record: who vouched for these bytes, and why."""
+    ledger = ExecutableAdmissionLedger()
+    identity = f"{PROVIDER}#flows/deploy"
+    digest = content_digest({"WORKFLOW.md": b"deploy\n"})
+    _admit(ledger, identity, digest)
+
+    with pytest.raises(ValueError) as refusal:
+        ledger.admit(
+            identity,
+            digest,
+            library_type="workflow",
+            reviewer="somebody.else@example.com",
+            permission_surface=(),
+            decided_at="2026-08-09T11:00:00Z",
+            evidence="rubber-stamped without reading it",
+        )
+    assert "already recorded" in str(refusal.value)
+    assert ledger.record_for(identity, digest).reviewer == "malte.sussdorff@cognovis.de"
+
+
 def test_pending_item_fails_resolution() -> None:
     """A pending or refused executable fails the whole resolution before mutation."""
     ledger = ExecutableAdmissionLedger()
@@ -172,24 +215,22 @@ def test_pending_item_fails_resolution() -> None:
     pending_id = f"{PROVIDER}#flows/pending"
     inert_id = f"{PROVIDER}#prompts/notes"
 
-    digests = {
-        admitted_id: content_digest({"WORKFLOW.md": b"admitted\n"}),
-        pending_id: content_digest({"WORKFLOW.md": b"pending\n"}),
-        inert_id: content_digest({"NOTES.md": b"notes\n"}),
+    contents = {
+        admitted_id: {"WORKFLOW.md": b"admitted\n"},
+        pending_id: {"WORKFLOW.md": b"pending\n"},
+        inert_id: {"NOTES.md": b"notes\n"},
     }
-    _admit(ledger, admitted_id, digests[admitted_id])
+    _admit(ledger, admitted_id, content_digest(contents[admitted_id]))
 
     selection = [
         _item("flows/admitted", "workflow"),
         _item("flows/pending", "workflow"),
         _item("prompts/notes", "prompt"),
     ]
-    mutations: list[str] = []
+    mutations: list[object] = []
 
     with pytest.raises(ResolutionRefused) as refusal:
-        gate_resolution(
-            selection, ledger, digests, mutate=lambda: mutations.append("wrote")
-        )
+        gate_resolution(selection, ledger, contents, mutate=mutations.append)
 
     assert mutations == [], "the whole resolution fails before any mutation"
     assert refusal.value.refusals == ((pending_id, "pending"),)
@@ -202,7 +243,7 @@ def test_pending_item_fails_resolution() -> None:
     refusing_ledger = ExecutableAdmissionLedger(ledger.records())
     refusing_ledger.refuse(
         pending_id,
-        digests[pending_id],
+        content_digest(contents[pending_id]),
         library_type="workflow",
         reviewer="malte.sussdorff@cognovis.de",
         permission_surface=(),
@@ -210,33 +251,55 @@ def test_pending_item_fails_resolution() -> None:
         evidence="not reviewed for this scope",
     )
     with pytest.raises(ResolutionRefused) as second:
-        gate_resolution(
-            selection, refusing_ledger, digests, mutate=lambda: mutations.append("w")
-        )
+        gate_resolution(selection, refusing_ledger, contents, mutate=mutations.append)
     assert second.value.refusals == ((pending_id, "refused"),)
     assert mutations == []
 
     # With every executable member admitted, the resolution proceeds once.
-    _admit(ledger, pending_id, digests[pending_id])
-    resolved = gate_resolution(
-        selection, ledger, digests, mutate=lambda: mutations.append("wrote")
-    )
-    assert mutations == ["wrote"]
+    _admit(ledger, pending_id, content_digest(contents[pending_id]))
+    resolved = gate_resolution(selection, ledger, contents, mutate=mutations.append)
     assert [item.executable_admission for item in resolved] == [
         "admitted",
         "admitted",
         "inert",
     ]
+    # The mutation receives the exact content the gate digested, so the reviewed
+    # bytes and the materialized bytes cannot be two different things.
+    assert mutations == [contents]
 
 
-def test_resolution_fails_when_an_executable_digest_is_unknown() -> None:
-    """A missing digest is `pending`, never an implicit pass."""
+def test_changed_content_is_not_resolvable_under_an_old_admission() -> None:
+    """The gate digests the content it will materialize, not a supplied claim."""
+    ledger = ExecutableAdmissionLedger()
+    identity = f"{PROVIDER}#flows/deploy"
+    reviewed = {"WORKFLOW.md": b"safe steps\n"}
+    _admit(ledger, identity, content_digest(reviewed))
+
+    selection = [_item("flows/deploy", "workflow")]
+    mutations: list[object] = []
+
+    changed = {identity: {"WORKFLOW.md": b"rm -rf /\n"}}
+    with pytest.raises(ResolutionRefused) as refusal:
+        gate_resolution(selection, ledger, changed, mutate=mutations.append)
+
+    assert mutations == []
+    assert refusal.value.refusals == ((identity, "pending"),)
+
+    resolved = gate_resolution(
+        selection, ledger, {identity: reviewed}, mutate=mutations.append
+    )
+    assert [item.executable_admission for item in resolved] == ["admitted"]
+    assert mutations == [{identity: reviewed}]
+
+
+def test_resolution_fails_when_executable_content_is_absent() -> None:
+    """Content we cannot digest is `pending`, never an implicit pass."""
     ledger = ExecutableAdmissionLedger()
     selection = [_item("flows/deploy", "workflow")]
-    mutations: list[str] = []
+    mutations: list[object] = []
 
     with pytest.raises(ResolutionRefused):
-        gate_resolution(selection, ledger, {}, mutate=lambda: mutations.append("wrote"))
+        gate_resolution(selection, ledger, {}, mutate=mutations.append)
     assert mutations == []
 
 
@@ -272,7 +335,7 @@ def test_inert_does_not_inherit() -> None:
             reviewer="malte.sussdorff@cognovis.de",
             permission_surface=(),
             decided_at="2026-08-09T09:00:00Z",
-            evidence="looks harmless",
+            evidence="looks harmless enough",
         )
     assert ledger.record_for(inert_id, inert_digest) is None
 
@@ -280,12 +343,10 @@ def test_inert_does_not_inherit() -> None:
 def test_inert_members_never_block_a_resolution() -> None:
     """Inert content is neither trusted by association nor gated by it."""
     ledger = ExecutableAdmissionLedger()
-    mutations: list[str] = []
+    mutations: list[object] = []
     selection = [_item("prompts/a", "prompt"), _item("standards/b", "standard")]
 
-    resolved = gate_resolution(
-        selection, ledger, {}, mutate=lambda: mutations.append("wrote")
-    )
+    resolved = gate_resolution(selection, ledger, {}, mutate=mutations.append)
 
-    assert mutations == ["wrote"]
+    assert mutations == [{}]
     assert [item.executable_admission for item in resolved] == ["inert", "inert"]

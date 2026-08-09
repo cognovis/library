@@ -24,6 +24,10 @@ from lib.providers.admission import (  # noqa: E402
     evaluate_inventory,
     evaluate_item,
 )
+from lib.providers.executable_admission import (  # noqa: E402
+    ExecutableAdmissionLedger,
+    content_digest,
+)
 from lib.providers.inventory import (  # noqa: E402
     BLOCK_REASONS,
     BlockReason,
@@ -34,6 +38,15 @@ from lib.providers.inventory import (  # noqa: E402
 )
 
 PROVIDER = "provider-under-test"
+MIT = "upstream LICENSE (MIT), verified 2026-08-08"
+
+GRANTED = Rights(
+    fetch_authorization="granted",
+    install_rights="granted",
+    redistribution_rights="granted",
+    derivative_rights="granted",
+    evidence_source=MIT,
+)
 
 
 def _item(**overrides: object) -> NormalizedItem:
@@ -47,13 +60,7 @@ def _item(**overrides: object) -> NormalizedItem:
         library_name="anchor",
         classification={"type_basis": "marker-file"},
         runtime_compatibility=("unknown",),
-        rights=Rights(
-            fetch_authorization="granted",
-            install_rights="granted",
-            redistribution_rights="granted",
-            derivative_rights="granted",
-            evidence_source="upstream LICENSE (MIT)",
-        ),
+        rights=GRANTED,
         provider_availability=ProviderAvailability(
             state="available", observed_at="2026-08-09T09:00:00Z"
         ),
@@ -91,12 +98,17 @@ def test_block_reason_vocabulary() -> None:
         BlockReason(reason="license-unknown", evidence="")
     with pytest.raises(ValueError):
         BlockReason(reason="license-unknown", evidence="   ")
+    # A placeholder satisfies "non-empty" and none of the contract's purpose.
+    with pytest.raises(ValueError):
+        BlockReason(reason="license-unknown", evidence="e")
+    with pytest.raises(ValueError):
+        BlockReason(reason="license-unknown", evidence="unavailable")
 
     # The normalized item carries the same closed vocabulary.
     with pytest.raises(ValueError):
         _item(
             admission_state="blocked",
-            block_reasons=(BlockReason(reason="nope", evidence="e"),),
+            block_reasons=(BlockReason(reason="nope", evidence="named source, 2026"),),
         )
     with pytest.raises(ValueError):
         _item(admission_state="blocked", block_reasons=())
@@ -107,8 +119,10 @@ def test_block_reason_vocabulary() -> None:
         _item(
             rights=Rights(
                 fetch_authorization="granted",
-                install_rights="unknown",
-                grant_evidence={"install_rights": "no published installation grant"},
+                grant_evidence={
+                    "fetch_authorization": "subscriber token, 2026-08-08",
+                    "install_rights": "no published installation grant",
+                },
             )
         ),
         AdmissionContext(),
@@ -125,17 +139,27 @@ def test_block_reasons_serialize_with_their_evidence() -> None:
     item = _item(
         admission_state="blocked",
         block_reasons=(
-            BlockReason(reason="license-unknown", evidence="install_rights=unknown"),
+            BlockReason(
+                reason="license-unknown",
+                evidence="install_rights=unknown; evidence source: none recorded",
+            ),
         ),
     )
     payload = item.to_dict()
     assert payload["block_reasons"] == [
-        {"reason": "license-unknown", "evidence": "install_rights=unknown", "detail": None}
+        {
+            "reason": "license-unknown",
+            "evidence": "install_rights=unknown; evidence source: none recorded",
+            "detail": None,
+        }
     ]
     assert NormalizedItem.from_dict(payload) == item
 
+    # A bare vocabulary value is not a reason: it carries no evidence.
     with pytest.raises(ValueError):
         NormalizedItem.from_dict({**payload, "block_reasons": ["license-unknown"]})
+    with pytest.raises(ValueError):
+        BlockReason.from_dict({"reason": "license-unknown"})
 
 
 def test_a_fully_granted_item_is_installable_with_no_reasons() -> None:
@@ -154,10 +178,13 @@ def test_reasons_are_emitted_in_the_vocabulary_order_with_evidence() -> None:
     decision = evaluate_item(
         _item(
             library_type="workflow",
-            executable_admission="pending",
             runtime_compatibility=("pi",),
             trust_state="unreviewed",
-            rights=Rights(fetch_authorization="granted", install_rights="denied"),
+            rights=Rights(
+                fetch_authorization="granted",
+                install_rights="denied",
+                evidence_source="upstream terms forbid installation",
+            ),
             provider_availability=ProviderAvailability(
                 state="unavailable",
                 observed_at="2026-08-09T09:00:00Z",
@@ -167,7 +194,7 @@ def test_reasons_are_emitted_in_the_vocabulary_order_with_evidence() -> None:
         AdmissionContext(
             target_runtimes=("claude-code",),
             required_trust="reviewed",
-            required_auth_references=("executive-circle-token",),
+            required_auth_references=("provider-token",),
             satisfied_auth_references=(),
         ),
     )
@@ -193,6 +220,80 @@ def test_reasons_are_emitted_in_the_vocabulary_order_with_evidence() -> None:
     }
 
 
+def test_a_non_rights_block_floors_projection_eligibility() -> None:
+    """Clean rights do not survive an unadmitted executable.
+
+    Without the floor this item would advertise `allowed` on both targets while
+    reporting `blocked` -- a contradiction a consumer could act on.
+    """
+    decision = evaluate_item(_item(library_type="workflow"), AdmissionContext())
+
+    assert decision.executable_admission == "pending"
+    assert decision.reason_values() == ("executable-admission-pending",)
+    assert decision.projection_eligibility == {
+        "project_committed": "blocked",
+        "machine_local": "blocked",
+    }
+
+
+def test_an_unsubstantiated_admitted_field_is_not_authority() -> None:
+    """Executable admission comes from the operator's ledger, never from the item."""
+    claimed = _item(library_type="workflow", executable_admission="admitted")
+
+    decision = evaluate_item(claimed, AdmissionContext())
+
+    assert decision.executable_admission == "pending"
+    assert decision.admission_state == "blocked"
+    assert decision.reason_values() == ("executable-admission-pending",)
+
+    # With a ledger-backed decision for the current content, it is admitted.
+    content = {"WORKFLOW.md": b"steps: one\n"}
+    ledger = ExecutableAdmissionLedger()
+    ledger.admit(
+        claimed.qualified_identity(),
+        content_digest(content),
+        library_type="workflow",
+        reviewer="malte.sussdorff@cognovis.de",
+        permission_surface=("filesystem:write",),
+        decided_at="2026-08-09T09:00:00Z",
+        evidence="reviewed the workflow body and its permission surface",
+    )
+    admitted = evaluate_item(
+        claimed,
+        AdmissionContext(),
+        ledger=ledger,
+        contents={claimed.qualified_identity(): content},
+    )
+    assert admitted.executable_admission == "admitted"
+    assert admitted.admission_state == "installable"
+
+
+def test_a_refused_executable_records_untrusted_source() -> None:
+    """The closed vocabulary has no refused entry; a refusal is not pending."""
+    item = _item(library_type="workflow")
+    content = {"WORKFLOW.md": b"rm -rf /\n"}
+    ledger = ExecutableAdmissionLedger()
+    ledger.refuse(
+        item.qualified_identity(),
+        content_digest(content),
+        library_type="workflow",
+        reviewer="malte.sussdorff@cognovis.de",
+        decided_at="2026-08-09T09:00:00Z",
+        evidence="the workflow deletes outside its worktree",
+    )
+
+    decision = evaluate_item(
+        item,
+        AdmissionContext(),
+        ledger=ledger,
+        contents={item.qualified_identity(): content},
+    )
+
+    assert decision.executable_admission == "refused"
+    assert decision.reason_values() == ("untrusted-source",)
+    assert "refused" in decision.block_reasons[0].evidence
+
+
 def test_redistribution_block_leaves_the_machine_local_path_open() -> None:
     """The four states are orthogonal: blocked here still names a usable path."""
     decision = evaluate_item(
@@ -200,7 +301,7 @@ def test_redistribution_block_leaves_the_machine_local_path_open() -> None:
             rights=Rights(
                 fetch_authorization="granted",
                 install_rights="granted",
-                redistribution_rights="unknown",
+                evidence_source=MIT,
                 grant_evidence={"redistribution_rights": "no grant located 2026-08-08"},
             )
         ),
@@ -234,7 +335,9 @@ def test_evaluate_inventory_applies_decisions_to_the_items() -> None:
                 upstream_id="kits/restricted",
                 upstream_name="restricted",
                 library_name="restricted",
-                rights=Rights(fetch_authorization="granted", install_rights="unknown"),
+                rights=Rights(
+                    fetch_authorization="granted", evidence_source="subscriber token"
+                ),
             ),
         ]
     )
@@ -247,17 +350,24 @@ def test_evaluate_inventory_applies_decisions_to_the_items() -> None:
     assert clean.admission_state == "installable"
     assert clean.block_reasons == ()
     assert restricted.admission_state == "blocked"
-    assert [entry.reason for entry in restricted.block_reasons] == ["license-unknown"]
+    assert restricted.block_reason_values() == ("license-unknown",)
     assert restricted.projection_eligibility["machine_local"] == "operator-opt-in-required"
 
     # The decisions stay queryable by qualified identity without re-running discovery.
     assert report.decisions[f"{PROVIDER}#kits/restricted"].admission_state == "blocked"
     assert report.blocked_identities() == (f"{PROVIDER}#kits/restricted",)
+    assert report.reasons_for(f"{PROVIDER}#kits/restricted")[0].evidence
 
 
 def test_evaluation_does_not_mutate_the_discovered_inventory() -> None:
     """Discovery never implies permission, and evaluation never rewrites discovery."""
-    item = _item(rights=Rights(fetch_authorization="granted", install_rights="denied"))
+    item = _item(
+        rights=Rights(
+            fetch_authorization="granted",
+            install_rights="denied",
+            evidence_source="upstream terms forbid installation",
+        )
+    )
     inventory = NormalizedInventory([item])
 
     evaluate_inventory(inventory, AdmissionContext())
@@ -270,7 +380,7 @@ def test_evaluation_does_not_mutate_the_discovered_inventory() -> None:
 def test_gate_modules_carry_no_provider_knowledge() -> None:
     """The rights and admission gates are core, and are scanned as core."""
     sys.path.insert(0, str(REPO_ROOT / "scripts" / "checks"))
-    from provider_neutrality import CORE_MODULES, scan_repository  # noqa: E402
+    from provider_neutrality import CORE_MODULES, scan_repository, scan_source  # noqa: E402
 
     for module in (
         "scripts/lib/providers/rights.py",
@@ -280,3 +390,12 @@ def test_gate_modules_carry_no_provider_knowledge() -> None:
         assert module in CORE_MODULES
 
     assert scan_repository(REPO_ROOT) == []
+
+    # A provider name assembled from fragments is still a provider name. Without
+    # constant folding this bypassed the check entirely.
+    poisoned = (
+        "def eligible(provider_identity):\n"
+        "    return provider_identity == 'executive' + '-circle'\n"
+    )
+    kinds = {finding.kind for finding in scan_source("scripts/lib/providers/rights.py", poisoned)}
+    assert "provider-name" in kinds

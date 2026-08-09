@@ -61,6 +61,9 @@ RIGHTS_STATES = ("granted", "denied", "unknown")
 PROJECTION_TARGETS = ("project_committed", "machine_local")
 PROJECTION_STATES = ("allowed", "blocked", "operator-opt-in-required")
 
+#: Minimum length for a block reason's evidence. A floor against placeholders.
+MIN_EVIDENCE_LENGTH = 16
+
 #: The closed, ordered block-reason vocabulary of ADR-0011 `Typed block reasons`.
 BLOCK_REASONS = (
     "license-unknown",
@@ -183,6 +186,23 @@ class Rights:
                 raise ValueError(f"rights.grant_evidence[{name!r}] must be text")
         object.__setattr__(self, "grant_evidence", evidence)
 
+        # A resolved grant with no named evidence source is not a recorded grant.
+        # ADR-0011 requires each grant to resolve "with a named evidence source",
+        # and review demonstrated the consequence of not enforcing it: an
+        # all-`granted` rights value invented at a call site authorized a
+        # committed projection, durable retention, and a derivative with nothing
+        # behind it. `unknown` is the state for "nobody has looked", and it is
+        # reachable without evidence precisely so that this one is not.
+        for name in RIGHTS_GRANTS:
+            state = getattr(self, name)
+            if state == "unknown":
+                continue
+            if not (evidence.get(name) or self.evidence_source):
+                raise ValueError(
+                    f"rights.{name}={state} requires a named evidence source; "
+                    "record 'unknown' when there is none"
+                )
+
     def grant(self, name: str) -> RightsGrant:
         """Resolve one grant independently, with its own evidence source."""
         if name not in RIGHTS_GRANTS:
@@ -206,13 +226,23 @@ class Rights:
 
         Rights are immutable because a grant that can be edited in place is a
         grant whose evidence can drift away from its value without any record.
+        For the same reason, resolving a grant to `granted` or `denied` requires
+        its own evidence, and relaxing one to `unknown` discards the evidence
+        that justified the previous value instead of leaving it to describe a
+        state that no longer holds.
         """
         if name not in RIGHTS_GRANTS:
             raise ValueError(
                 f"unknown rights grant {name!r}; ADR-0011 records {list(RIGHTS_GRANTS)}"
             )
         _one_of(state, RIGHTS_STATES, f"rights.{name}")
+        if state != "unknown" and not (evidence or "").strip():
+            raise ValueError(
+                f"resolving rights.{name} to {state!r} requires its own evidence; "
+                "the evidence recorded for a previous value does not justify this one"
+            )
         evidence_map = dict(self.grant_evidence)
+        evidence_map.pop(name, None)
         if evidence is not None:
             evidence_map[name] = evidence
         values = {grant: getattr(self, grant) for grant in RIGHTS_GRANTS}
@@ -266,6 +296,17 @@ class BlockReason:
             raise ValueError(
                 f"block reason {self.reason!r} must carry the evidence that produced it"
             )
+        # A floor against a placeholder, not a judge of meaning. Review showed
+        # that "non-empty" admitted `evidence="e"`, which satisfies the letter of
+        # the contract and none of its purpose. Real evidence names a thing and
+        # says something about it, so it is at least two words. Whether the
+        # sentence is *true* stays a review question; no validator settles that.
+        stripped = self.evidence.strip()
+        if len(stripped) < MIN_EVIDENCE_LENGTH or " " not in stripped:
+            raise ValueError(
+                f"block reason {self.reason!r} evidence {self.evidence!r} is a "
+                "placeholder; record what was observed and where it came from"
+            )
         if self.detail is not None and not str(self.detail).strip():
             raise ValueError("block reason detail must be text or None")
 
@@ -282,6 +323,9 @@ class BlockReason:
         unknown = sorted(set(data) - {"reason", "evidence", "detail"})
         if unknown:
             raise ValueError(f"unknown block reason fields: {unknown}")
+        missing = sorted({"reason", "evidence"} - set(data))
+        if missing:
+            raise ValueError(f"missing block reason fields: {missing}")
         return cls(
             reason=data["reason"],
             evidence=data["evidence"],

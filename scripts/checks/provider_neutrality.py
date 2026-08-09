@@ -310,7 +310,35 @@ def _scan_ast(path: str, source: str) -> list[Finding]:
             findings.extend(
                 _scan_string_value(path, getattr(node, "lineno", 0), node.value)
             )
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            folded = _folded_string(node)
+            if folded is not None:
+                findings.extend(
+                    _scan_string_value(path, getattr(node, "lineno", 0), folded)
+                )
     return findings
+
+
+def _folded_string(node: ast.AST) -> str | None:
+    """Constant-fold a `+` chain of string literals, or return None.
+
+    `"executive" + "-circle"` is one expression away from a literal and produced
+    zero findings until this existed. A reviewer demonstrated the bypass against
+    the gate modules this check now certifies as core, which is the one place a
+    silent pass is most expensive.
+
+    Only literal operands fold. A branch assembled from runtime values remains
+    outside this tripwire's proof boundary, and the report says so.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, str) else None
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _folded_string(node.left)
+        right = _folded_string(node.right)
+        if left is None or right is None:
+            return None
+        return left + right
+    return None
 
 
 def _scan_string_value(path: str, line: int, value: str) -> list[Finding]:

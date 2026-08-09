@@ -6,12 +6,14 @@ order: `install_rights` first -- governing both targets -- then
 `redistribution_rights`, which adds the committed-tree restriction only.
 
 These tests hold the parts an operator can be hurt by: an unresolved grant must
-never read as permission, an opt-in must never override a recorded denial, and
-the rights state must be on screen before anything is written.
+never read as permission, an opt-in must never override a recorded denial, an
+acknowledgement must not travel to another item, and the rights state must be on
+screen before anything is written.
 """
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -29,6 +31,7 @@ from lib.providers.rights import (  # noqa: E402
     DerivativeRefused,
     OperatorOptIn,
     ProjectionRefused,
+    RightsDecision,
     create_derivative,
     evaluate_cache_retention,
     evaluate_derivative,
@@ -37,8 +40,21 @@ from lib.providers.rights import (  # noqa: E402
     projection_eligibility,
 )
 
+SUBJECT = f"{EXECUTIVE_CIRCLE_IDENTITY}#kits/anchor"
+OTHER_SUBJECT = f"{EXECUTIVE_CIRCLE_IDENTITY}#kits/beacon"
 
-def _opt_in(decision, operator: str = "malte") -> OperatorOptIn:
+MIT = "upstream LICENSE (MIT), verified 2026-08-08"
+
+FULLY_GRANTED = Rights(
+    fetch_authorization="granted",
+    install_rights="granted",
+    redistribution_rights="granted",
+    derivative_rights="granted",
+    evidence_source=MIT,
+)
+
+
+def _opt_in(decision: RightsDecision, operator: str = "malte") -> OperatorOptIn:
     """An opt-in that acknowledges exactly the statement this decision displays."""
     return OperatorOptIn(
         operator=operator,
@@ -91,7 +107,39 @@ def test_grants_are_independent() -> None:
     with pytest.raises(ValueError):
         rights.grant("publication_rights")
     with pytest.raises(ValueError):
-        rights.with_grant("install_rights", "probably")
+        rights.with_grant("install_rights", "probably", evidence="e e e e e e")
+
+
+def test_a_resolved_grant_requires_a_named_evidence_source() -> None:
+    """ADR-0011: each grant resolves *with a named evidence source*.
+
+    A grant nobody can point at is not a recorded grant. `unknown` is the state
+    for "nobody has looked", and it is the only one reachable without evidence.
+    """
+    with pytest.raises(ValueError) as refusal:
+        Rights(redistribution_rights="granted")
+    assert "evidence source" in str(refusal.value)
+
+    with pytest.raises(ValueError):
+        Rights(install_rights="denied")
+
+    # Nothing is required for the conservative state.
+    assert Rights().install_rights == "unknown"
+    assert Rights(install_rights="granted", evidence_source=MIT).install_rights == "granted"
+    assert (
+        Rights(install_rights="granted", grant_evidence={"install_rights": MIT})
+        .grant("install_rights")
+        .evidence_source
+        == MIT
+    )
+
+    # Resolving a grant needs evidence of its own, and relaxing it discards the
+    # evidence that justified the previous value.
+    recorded = Rights(install_rights="granted", grant_evidence={"install_rights": MIT})
+    with pytest.raises(ValueError):
+        recorded.with_grant("install_rights", "denied")
+    relaxed = recorded.with_grant("install_rights", "unknown")
+    assert relaxed.grant("install_rights").evidence_source is None
 
 
 def test_fetch_granted_with_redistribution_unknown_is_the_recorded_reference_state() -> None:
@@ -106,7 +154,7 @@ def test_fetch_granted_with_redistribution_unknown_is_the_recorded_reference_sta
     assert rights.grant("redistribution_rights").evidence_source
 
     # The whole point of independence: a granted fetch says nothing about the rest.
-    assert projection_eligibility(rights) == {
+    assert projection_eligibility(rights, subject=SUBJECT) == {
         "project_committed": "blocked",
         "machine_local": "operator-opt-in-required",
     }
@@ -122,12 +170,13 @@ def test_unknown_blocks_committed_projection(redistribution: str) -> None:
         fetch_authorization="granted",
         install_rights="granted",
         redistribution_rights=redistribution,
+        evidence_source=MIT,
         grant_evidence={
             "redistribution_rights": "no published redistribution grant located",
         },
     )
 
-    decision = evaluate_projection(rights, "project_committed")
+    decision = evaluate_projection(rights, "project_committed", subject=SUBJECT)
 
     assert decision.state == "blocked"
     assert decision.governing_grant == "redistribution_rights"
@@ -135,8 +184,9 @@ def test_unknown_blocks_committed_projection(redistribution: str) -> None:
     assert decision.evidence_source == "no published redistribution grant located"
     assert decision.block_reason == "redistribution-blocked"
 
-    # The rendered decision names both the rights state and its evidence source.
+    # The rendered decision names the subject, the rights state, and the source.
     rendered = decision.display()
+    assert SUBJECT in rendered
     assert "redistribution_rights" in rendered
     assert redistribution in rendered
     assert "no published redistribution grant located" in rendered
@@ -145,7 +195,7 @@ def test_unknown_blocks_committed_projection(redistribution: str) -> None:
     with pytest.raises(ProjectionRefused) as refusal:
         project(decision, lambda: mutations.append("wrote"))
     assert mutations == [], "a blocked committed projection materializes nothing"
-    assert refusal.value.decision is decision
+    assert refusal.value.decision.state == "blocked"
 
     # An opt-in does not unblock a committed projection either. The opt-in exists
     # for a machine-local target, which is a different act.
@@ -156,12 +206,12 @@ def test_unknown_blocks_committed_projection(redistribution: str) -> None:
 
 def test_install_rights_govern_both_targets_and_compose_first() -> None:
     """`install_rights` is checked first; a denial is not opt-in-overridable."""
-    unknown_install = Rights(fetch_authorization="granted", install_rights="unknown")
-    assert projection_eligibility(unknown_install) == {
+    unknown_install = Rights(fetch_authorization="granted", evidence_source=MIT)
+    assert projection_eligibility(unknown_install, subject=SUBJECT) == {
         "project_committed": "blocked",
         "machine_local": "operator-opt-in-required",
     }
-    committed = evaluate_projection(unknown_install, "project_committed")
+    committed = evaluate_projection(unknown_install, "project_committed", subject=SUBJECT)
     assert committed.governing_grant == "install_rights"
     assert committed.block_reason == "license-unknown"
 
@@ -169,14 +219,15 @@ def test_install_rights_govern_both_targets_and_compose_first() -> None:
         fetch_authorization="granted",
         install_rights="denied",
         redistribution_rights="granted",
+        evidence_source=MIT,
         grant_evidence={"install_rights": "upstream licence forbids local installation"},
     )
-    assert projection_eligibility(denied_install) == {
+    assert projection_eligibility(denied_install, subject=SUBJECT) == {
         "project_committed": "blocked",
         "machine_local": "blocked",
     }
 
-    machine_local = evaluate_projection(denied_install, "machine_local")
+    machine_local = evaluate_projection(denied_install, "machine_local", subject=SUBJECT)
     assert machine_local.state == "blocked"
     assert machine_local.governing_grant == "install_rights"
     assert machine_local.block_reason == "license-denied"
@@ -191,31 +242,68 @@ def test_install_rights_govern_both_targets_and_compose_first() -> None:
     assert mutations == [], "no opt-in overrides a recorded denial"
     assert "denied" in str(refusal.value)
 
-    granted = Rights(
-        fetch_authorization="granted",
-        install_rights="granted",
-        redistribution_rights="granted",
-        derivative_rights="granted",
-        evidence_source="upstream LICENSE (MIT)",
-    )
-    assert projection_eligibility(granted) == {
+    assert projection_eligibility(FULLY_GRANTED, subject=SUBJECT) == {
         "project_committed": "allowed",
         "machine_local": "allowed",
     }
 
 
+def test_a_forged_decision_cannot_authorize_a_mutation() -> None:
+    """A decision is a report, not a capability; the recorded rights decide."""
+    denied = Rights(
+        fetch_authorization="granted",
+        install_rights="denied",
+        evidence_source="upstream terms forbid installation",
+    )
+    forged = RightsDecision(
+        subject=SUBJECT,
+        act="machine_local",
+        state="allowed",
+        governing_grant="install_rights",
+        governing_state="granted",
+        evidence_source="trust me",
+        block_reason=None,
+        rights=denied,
+    )
+
+    mutations: list[str] = []
+    with pytest.raises(ProjectionRefused) as refusal:
+        project(forged, lambda: mutations.append("forbidden bytes"))
+
+    assert mutations == []
+    assert "does not match the recorded rights" in str(refusal.value)
+    # The refusal reports the *recorded* decision, not the supplied one.
+    assert refusal.value.decision.state == "blocked"
+    assert refusal.value.decision.governing_state == "denied"
+
+
 def test_durable_cache_retention_is_governed_by_install_rights() -> None:
     """Retrieval authorization is not retention authorization (ADR-0011)."""
-    fetch_only = Rights(fetch_authorization="granted", install_rights="denied")
-    retention = evaluate_cache_retention(fetch_only)
+    fetch_only = Rights(
+        fetch_authorization="granted",
+        install_rights="denied",
+        evidence_source="upstream terms forbid retention",
+    )
+    retention = evaluate_cache_retention(fetch_only, subject=SUBJECT)
     assert retention.state == "blocked"
     assert retention.governing_grant == "install_rights"
 
-    unresolved = Rights(fetch_authorization="granted", install_rights="unknown")
-    assert evaluate_cache_retention(unresolved).state == "operator-opt-in-required"
+    unresolved = Rights(fetch_authorization="granted", evidence_source="subscriber token")
+    assert (
+        evaluate_cache_retention(unresolved, subject=SUBJECT).state
+        == "operator-opt-in-required"
+    )
 
-    retainable = Rights(fetch_authorization="granted", install_rights="granted")
-    assert evaluate_cache_retention(retainable).state == "allowed"
+    retainable = Rights(
+        fetch_authorization="granted", install_rights="granted", evidence_source=MIT
+    )
+    assert evaluate_cache_retention(retainable, subject=SUBJECT).state == "allowed"
+
+    # Retention runs through the same gate, so a denial is unwritable there too.
+    kept: list[str] = []
+    with pytest.raises(ProjectionRefused):
+        project(retention, lambda: kept.append("retained"))
+    assert kept == []
 
 
 # -- AC3: machine-local projection requires an opt-in, shown first -----------
@@ -224,7 +312,7 @@ def test_durable_cache_retention_is_governed_by_install_rights() -> None:
 def test_machine_local_requires_optin_after_display() -> None:
     """The rights state is displayed before mutation, and binds the opt-in."""
     rights = reference_rights_for(EXECUTIVE_CIRCLE_IDENTITY)
-    decision = evaluate_projection(rights, "machine_local")
+    decision = evaluate_projection(rights, "machine_local", subject=SUBJECT)
 
     assert decision.state == "operator-opt-in-required"
     assert decision.governing_grant == "install_rights"
@@ -242,14 +330,12 @@ def test_machine_local_requires_optin_after_display() -> None:
     # 2. An opt-in that acknowledges a *different* rights statement is refused.
     #    This is what makes "displayed before mutation" mechanical rather than a
     #    promise: the acknowledgement is bound to the exact statement shown.
-    permissive = Rights(fetch_authorization="granted", install_rights="granted")
-    stale = evaluate_projection(permissive, "machine_local")
+    permissive = Rights(
+        fetch_authorization="granted", install_rights="granted", evidence_source=MIT
+    )
+    stale = evaluate_projection(permissive, "machine_local", subject=SUBJECT)
     with pytest.raises(ProjectionRefused) as mismatch:
-        project(
-            decision,
-            lambda: mutations.append("wrote"),
-            opt_in=_opt_in(stale),
-        )
+        project(decision, lambda: mutations.append("wrote"), opt_in=_opt_in(stale))
     assert mutations == []
     assert "acknowledged" in str(mismatch.value)
 
@@ -272,14 +358,81 @@ def test_machine_local_requires_optin_after_display() -> None:
     assert "install_rights" in outcome.display
 
 
-def test_an_allowed_projection_still_displays_the_rights_state_first() -> None:
-    granted = Rights(
-        fetch_authorization="granted",
-        install_rights="granted",
-        redistribution_rights="granted",
-        evidence_source="upstream LICENSE (MIT)",
+def test_an_optin_does_not_travel_to_another_item() -> None:
+    """Rights are recorded per provider; an acknowledgement is not.
+
+    Every item from one provider shares one rights record, so without the
+    subject in the displayed statement one opt-in would authorize the projection
+    of items the operator never saw.
+    """
+    rights = reference_rights_for(EXECUTIVE_CIRCLE_IDENTITY)
+    acknowledged = evaluate_projection(rights, "machine_local", subject=SUBJECT)
+    other_item = evaluate_projection(rights, "machine_local", subject=OTHER_SUBJECT)
+
+    assert acknowledged.display() != other_item.display()
+    assert acknowledged.display_digest() != other_item.display_digest()
+
+    mutations: list[str] = []
+    with pytest.raises(ProjectionRefused) as replay:
+        project(
+            other_item,
+            lambda: mutations.append("wrote"),
+            opt_in=_opt_in(acknowledged),
+        )
+
+    assert mutations == []
+    assert "acknowledged a different rights statement" in str(replay.value)
+
+
+def test_the_gate_can_present_the_statement_and_collect_the_acknowledgement() -> None:
+    """The library renders and collects in one call, so nothing is self-reported."""
+    rights = reference_rights_for(EXECUTIVE_CIRCLE_IDENTITY)
+    decision = evaluate_projection(rights, "machine_local", subject=SUBJECT)
+    shown: list[str] = []
+    mutations: list[str] = []
+
+    def present(statement: str) -> OperatorOptIn:
+        # The acknowledgement is derived from the text actually presented, which
+        # is the whole point of this path.
+        shown.append(statement)
+        return OperatorOptIn(
+            operator="malte",
+            acknowledged_display_digest=hashlib.sha256(
+                statement.encode("utf-8")
+            ).hexdigest(),
+            acknowledged_at="2026-08-09T09:00:00Z",
+        )
+
+    outcome = project(
+        decision, lambda: mutations.append("wrote"), present=present
     )
-    decision = evaluate_projection(granted, "project_committed")
+
+    assert shown == [decision.display()]
+    assert SUBJECT in shown[0]
+    assert mutations == ["wrote"]
+    assert outcome.events == (
+        "rights-displayed",
+        "rights-presented",
+        "operator-opt-in-accepted",
+        "projection-authorized",
+        "content-materialized",
+    )
+
+    # A presenter that acknowledges something else is refused like any other.
+    def wrong_present(statement: str) -> OperatorOptIn:
+        return OperatorOptIn(
+            operator="malte",
+            acknowledged_display_digest="0" * 64,
+            acknowledged_at="2026-08-09T09:00:00Z",
+        )
+
+    with pytest.raises(ProjectionRefused):
+        project(decision, lambda: mutations.append("again"), present=wrong_present)
+    assert mutations == ["wrote"]
+
+
+def test_an_allowed_projection_still_displays_the_rights_state_first() -> None:
+    decision = evaluate_projection(FULLY_GRANTED, "project_committed", subject=SUBJECT)
     assert decision.state == "allowed"
 
     mutations: list[str] = []
@@ -293,9 +446,11 @@ def test_an_allowed_projection_still_displays_the_rights_state_first() -> None:
     )
 
 
-def test_evaluate_projection_rejects_an_unknown_target() -> None:
+def test_evaluate_projection_rejects_an_unknown_target_or_subject() -> None:
     with pytest.raises(ValueError):
-        evaluate_projection(Rights(), "somebody_elses_laptop")
+        evaluate_projection(Rights(), "somebody_elses_laptop", subject=SUBJECT)
+    with pytest.raises(ValueError):
+        evaluate_projection(Rights(), "machine_local", subject="")
 
 
 # -- AC7: no derivative without a grant --------------------------------------
@@ -309,6 +464,7 @@ def test_derivative_refused_without_grant(derivative: str) -> None:
         install_rights="granted",
         redistribution_rights="granted",
         derivative_rights=derivative,
+        evidence_source=MIT,
         grant_evidence={"derivative_rights": "no published derivative-works grant"},
     )
     upstream = {"SKILL.md": b"---\nname: implement\n---\nupstream body\n"}
@@ -318,7 +474,7 @@ def test_derivative_refused_without_grant(derivative: str) -> None:
         adaptations.append("adapted")
         return {"SKILL.md": files["SKILL.md"] + b"\nlocal change\n"}
 
-    decision = evaluate_derivative(rights)
+    decision = evaluate_derivative(rights, subject=SUBJECT)
     assert decision.state == "blocked"
     assert decision.governing_grant == "derivative_rights"
     assert decision.governing_state == derivative
@@ -329,7 +485,7 @@ def test_derivative_refused_without_grant(derivative: str) -> None:
             upstream,
             adapt,
             upstream_provenance={
-                "qualified_identity": f"{EXECUTIVE_CIRCLE_IDENTITY}#kits/anchor",
+                "qualified_identity": SUBJECT,
                 "upstream_revision": None,
             },
         )
@@ -344,24 +500,17 @@ def test_derivative_refused_without_grant(derivative: str) -> None:
     assert provenance["rights_evidence"]["derivative_rights"] == (
         "no published derivative-works grant"
     )
-    assert provenance["qualified_identity"].endswith("#kits/anchor")
+    assert provenance["qualified_identity"] == SUBJECT
     assert refusal.value.available_artifact == upstream, (
         "only the unmodified upstream artifact remains available"
     )
 
 
 def test_derivative_is_created_when_the_grant_is_recorded() -> None:
-    rights = Rights(
-        fetch_authorization="granted",
-        install_rights="granted",
-        redistribution_rights="granted",
-        derivative_rights="granted",
-        evidence_source="upstream LICENSE (MIT)",
-    )
     upstream = {"SKILL.md": b"body\n"}
 
     result = create_derivative(
-        rights,
+        FULLY_GRANTED,
         upstream,
         lambda files: {"SKILL.md": files["SKILL.md"] + b"local\n"},
         upstream_provenance={"qualified_identity": "provider#item", "upstream_revision": "abc"},
@@ -381,6 +530,7 @@ def test_a_derivative_of_unredistributable_content_is_still_projection_gated() -
         install_rights="granted",
         redistribution_rights="unknown",
         derivative_rights="granted",
+        evidence_source=MIT,
     )
     result = create_derivative(
         rights,
@@ -390,4 +540,9 @@ def test_a_derivative_of_unredistributable_content_is_still_projection_gated() -
     )
 
     derived_rights = Rights.from_dict(result.provenance["rights"])
-    assert evaluate_projection(derived_rights, "project_committed").state == "blocked"
+    assert (
+        evaluate_projection(
+            derived_rights, "project_committed", subject="provider#item"
+        ).state
+        == "blocked"
+    )

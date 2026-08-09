@@ -83,6 +83,21 @@ def _validate_rights(rights: Any) -> None:
                 f"rights.{grant} must be one of {list(RIGHTS_STATES)}, "
                 f"got {rights[grant]!r}"
             )
+    # ADR-0011 records each grant "with a named evidence source" (CL-n7ex). A
+    # catalog entry that resolves a grant without one would construct a `Rights`
+    # value the gate refuses, so it is refused here instead -- at registration,
+    # where the person who wrote the entry can still fix it.
+    if not str(rights.get("evidence_source") or "").strip():
+        resolved = sorted(
+            grant
+            for grant in RIGHTS_GRANTS
+            if rights.get(grant, "unknown") != "unknown"
+        )
+        if resolved:
+            raise RegistrationError(
+                f"rights {resolved} are resolved but no evidence_source is recorded; "
+                "record 'unknown' when there is no named source"
+            )
 
 
 def validate_provider_entry(entry: Mapping[str, Any]) -> str:

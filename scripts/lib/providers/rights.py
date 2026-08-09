@@ -39,11 +39,32 @@ interchangeable until the "Cleared by" column is read:
 
 **Display before mutation is mechanical here, not a convention.** An
 `OperatorOptIn` carries the digest of the exact rights statement it
-acknowledges. `project` refuses an opt-in whose digest does not match the
-statement this decision displays, so an opt-in collected against some other
-item, some other target, or an older rights state cannot authorize this one.
-The alternative -- a boolean flag -- would let a caller pass `True` without ever
-rendering anything, which is the failure this criterion exists to prevent.
+acknowledges, and that statement names the **subject** -- the qualified identity
+of the item being projected -- alongside the target and every grant. `project`
+refuses an opt-in whose digest does not match, so an opt-in collected against
+some other item, some other target, or an older rights state cannot authorize
+this one. The alternative -- a boolean flag -- would let a caller pass `True`
+without ever rendering anything, which is the failure this criterion exists to
+prevent.
+
+The subject is load-bearing and was added after review. Rights are recorded per
+provider, so every item from one provider shares one rights record; without the
+subject in the statement, two different items produced byte-identical displays
+and one acknowledgement authorized the projection of items the operator had
+never seen. A reviewer demonstrated exactly that replay.
+
+**A decision is not authority; the recorded rights are.** `project` re-derives
+the decision from `decision.rights` immediately before mutating and refuses any
+decision that does not match. A caller-constructed `RightsDecision` claiming
+`state="allowed"` over `install_rights="denied"` was shown to write forbidden
+bytes when the boundary trusted the value it was handed.
+
+What this module deliberately does **not** attempt: proving *who* the operator
+is. An acknowledgement is bound to content, not to an identity, because
+authenticating an operator is credential handling, which is out of scope for
+this gate and gated on a separate human security review. `present` narrows the
+gap by making the library itself render the statement and collect the response
+in the same call.
 
 This module names no provider, no provider kind, and no upstream URL. It
 consumes recorded grants and returns decisions; where those grants came from is
@@ -109,6 +130,7 @@ class DerivativeRefused(RightsRefusal):
 class RightsDecision:
     """One composed decision about one act, with the evidence that produced it."""
 
+    subject: str
     act: str
     state: str
     governing_grant: str
@@ -122,10 +144,12 @@ class RightsDecision:
 
         Every grant is shown, not only the governing one, because an operator
         deciding whether to accept an unresolved state needs to see what else is
-        unresolved. The governing grant and the consequence are named
-        explicitly so the message is actionable rather than a status dump.
+        unresolved. The subject, the governing grant, and the consequence are
+        named explicitly so the message is actionable rather than a status dump,
+        and so the digest of this text binds the acknowledgement to this item.
         """
         lines = [
+            f"subject: {self.subject}",
             f"act: {self.act}",
             f"decision: {self.state}",
             "recorded distribution rights:",
@@ -146,6 +170,7 @@ class RightsDecision:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "subject": self.subject,
             "act": self.act,
             "state": self.state,
             "governing_grant": self.governing_grant,
@@ -203,7 +228,17 @@ class Derivative:
     provenance: Mapping[str, Any]
 
 
+def _subject_text(subject: str) -> str:
+    if not isinstance(subject, str) or not subject.strip():
+        raise ValueError(
+            "a rights decision needs the qualified identity of its subject; "
+            "without it an acknowledgement binds no particular item"
+        )
+    return subject
+
+
 def _decision(
+    subject: str,
     act: str,
     state: str,
     rights: Rights,
@@ -212,6 +247,7 @@ def _decision(
 ) -> RightsDecision:
     grant = rights.grant(grant_name)
     return RightsDecision(
+        subject=_subject_text(subject),
         act=act,
         state=state,
         governing_grant=grant.name,
@@ -222,19 +258,23 @@ def _decision(
     )
 
 
-def evaluate_projection(rights: Rights, target: str) -> RightsDecision:
+def evaluate_projection(rights: Rights, target: str, *, subject: str) -> RightsDecision:
     """Compose the grants into a projection decision for one target.
 
     Args:
         rights: The recorded grants for this item.
         target: One of the `projection_eligibility` targets.
+        subject: The qualified identity of the item being projected. It is
+            required, not optional, because it is what makes an acknowledgement
+            item-specific.
 
     Returns:
         The composed decision, naming the governing grant, its state, and the
         evidence source that resolved it.
 
     Raises:
-        ValueError: when the target is not a recorded projection target.
+        ValueError: when the target is not a recorded projection target, or the
+            subject is empty.
     """
     if target not in PROJECTION_TARGETS:
         raise ValueError(
@@ -244,28 +284,35 @@ def evaluate_projection(rights: Rights, target: str) -> RightsDecision:
 
     install = rights.install_rights
     if install == "denied":
-        return _decision(target, BLOCKED, rights, "install_rights", "license-denied")
+        return _decision(
+            subject, target, BLOCKED, rights, "install_rights", "license-denied"
+        )
     if install == "unknown":
         state = BLOCKED if target == "project_committed" else OPT_IN_REQUIRED
-        return _decision(target, state, rights, "install_rights", "license-unknown")
+        return _decision(
+            subject, target, state, rights, "install_rights", "license-unknown"
+        )
 
     redistribution = rights.redistribution_rights
     if redistribution == "granted":
         grant_name = "redistribution_rights" if target == "project_committed" else "install_rights"
-        return _decision(target, ALLOWED, rights, grant_name, None)
+        return _decision(subject, target, ALLOWED, rights, grant_name, None)
 
     state = BLOCKED if target == "project_committed" else OPT_IN_REQUIRED
     return _decision(
-        target, state, rights, "redistribution_rights", "redistribution-blocked"
+        subject, target, state, rights, "redistribution_rights", "redistribution-blocked"
     )
 
 
-def projection_eligibility(rights: Rights) -> dict[str, str]:
+def projection_eligibility(rights: Rights, *, subject: str) -> dict[str, str]:
     """The `projection_eligibility` schema field for one item's rights."""
-    return {target: evaluate_projection(rights, target).state for target in PROJECTION_TARGETS}
+    return {
+        target: evaluate_projection(rights, target, subject=subject).state
+        for target in PROJECTION_TARGETS
+    }
 
 
-def evaluate_cache_retention(rights: Rights) -> RightsDecision:
+def evaluate_cache_retention(rights: Rights, *, subject: str) -> RightsDecision:
     """Whether authorized bytes may be *kept* across sessions.
 
     Retention is not a projection: no harness path is touched and nothing is
@@ -275,16 +322,21 @@ def evaluate_cache_retention(rights: Rights) -> RightsDecision:
     install = rights.install_rights
     if install == "denied":
         return _decision(
-            CACHE_RETENTION, BLOCKED, rights, "install_rights", "license-denied"
+            subject, CACHE_RETENTION, BLOCKED, rights, "install_rights", "license-denied"
         )
     if install == "unknown":
         return _decision(
-            CACHE_RETENTION, OPT_IN_REQUIRED, rights, "install_rights", "license-unknown"
+            subject,
+            CACHE_RETENTION,
+            OPT_IN_REQUIRED,
+            rights,
+            "install_rights",
+            "license-unknown",
         )
-    return _decision(CACHE_RETENTION, ALLOWED, rights, "install_rights", None)
+    return _decision(subject, CACHE_RETENTION, ALLOWED, rights, "install_rights", None)
 
 
-def evaluate_derivative(rights: Rights) -> RightsDecision:
+def evaluate_derivative(rights: Rights, *, subject: str) -> RightsDecision:
     """Whether a materially adapted first-party derivative may be created.
 
     Adaptation is itself a licensed act. There is no opt-in path: an operator
@@ -293,7 +345,30 @@ def evaluate_derivative(rights: Rights) -> RightsDecision:
     """
     state = ALLOWED if rights.derivative_rights == "granted" else BLOCKED
     reason = None if state == ALLOWED else _derivative_reason(rights.derivative_rights)
-    return _decision(DERIVATIVE, state, rights, "derivative_rights", reason)
+    return _decision(subject, DERIVATIVE, state, rights, "derivative_rights", reason)
+
+
+#: How each gated act is re-derived at the mutation boundary.
+_REDERIVE: Mapping[str, Callable[[Rights, str, str], RightsDecision]] = {
+    CACHE_RETENTION: lambda rights, act, subject: evaluate_cache_retention(
+        rights, subject=subject
+    ),
+    DERIVATIVE: lambda rights, act, subject: evaluate_derivative(rights, subject=subject),
+}
+
+
+def rederive(decision: RightsDecision) -> RightsDecision:
+    """Recompute a decision from the rights it claims to rest on.
+
+    A `RightsDecision` is a *report*, not a capability. Anyone can construct one
+    that says `allowed`, and review demonstrated a hand-built decision writing
+    bytes over `install_rights="denied"`. Recomputing at the boundary makes the
+    recorded rights the only authority.
+    """
+    rederive_act = _REDERIVE.get(decision.act)
+    if rederive_act is not None:
+        return rederive_act(decision.rights, decision.act, decision.subject)
+    return evaluate_projection(decision.rights, decision.act, subject=decision.subject)
 
 
 def _derivative_reason(grant_state: str) -> str:
@@ -305,52 +380,80 @@ def project(
     mutate: Callable[[], Any],
     *,
     opt_in: OperatorOptIn | None = None,
+    present: Callable[[str], OperatorOptIn] | None = None,
 ) -> ProjectionOutcome:
-    """Perform a projection under one composed decision, or refuse it.
+    """Perform one gated act under a composed decision, or refuse it.
 
-    The rights statement is rendered first, unconditionally, and recorded as the
-    first event. `mutate` runs last and only once the decision and the opt-in
-    have both been satisfied.
+    The act is a projection target or durable cache retention -- the two acts
+    ADR-0011 puts under the same explicit opt-in. The decision is re-derived
+    from its own recorded rights, the rights statement is rendered, and `mutate`
+    runs last, only once decision and acknowledgement are both satisfied.
 
     Args:
-        decision: A decision from `evaluate_projection`.
+        decision: A decision from `evaluate_projection` or
+            `evaluate_cache_retention`. Its `state` is not trusted; the rights
+            it carries are re-composed here.
         mutate: The callable that writes content. Never called on a refusal.
-        opt_in: The operator's acknowledgement, required when the decision is
-            `operator-opt-in-required`.
+        present: Renders the rights statement to the operator and returns their
+            acknowledgement. This is the path that makes "displayed before
+            mutation" true by construction rather than by convention.
+        opt_in: A previously collected acknowledgement, for a non-interactive
+            flow. It must match this decision's statement digest, which binds it
+            to this subject, this target, and this rights state.
 
     Returns:
         The outcome, carrying the displayed statement and the ordered events.
 
     Raises:
-        ProjectionRefused: when the decision is blocked, when a required opt-in
-            is absent, or when the opt-in acknowledges a different statement.
+        ProjectionRefused: when the decision does not match the recorded rights,
+            when it is blocked, when a required acknowledgement is absent, or
+            when the acknowledgement is for a different statement.
     """
-    display = decision.display()
-    events = ["rights-displayed"]
-
-    if decision.state == BLOCKED:
+    recorded = rederive(decision)
+    if recorded != decision:
         raise ProjectionRefused(
-            f"{decision.act} is blocked: "
-            f"{decision.governing_grant}={decision.governing_state} "
-            f"(evidence source: {decision.evidence_source or 'none recorded'}). "
-            "No operator opt-in overrides this state.",
-            decision,
+            f"{decision.act}: the supplied decision does not match the recorded "
+            f"rights. Recorded: {recorded.governing_grant}="
+            f"{recorded.governing_state} -> {recorded.state}. "
+            f"Supplied: {decision.governing_grant}={decision.governing_state} -> "
+            f"{decision.state}.",
+            recorded,
         )
 
-    if decision.state == OPT_IN_REQUIRED:
+    display = recorded.display()
+    events = ["rights-displayed"]
+
+    if recorded.state == BLOCKED:
+        raise ProjectionRefused(
+            f"{recorded.act} is blocked: "
+            f"{recorded.governing_grant}={recorded.governing_state} "
+            f"(evidence source: {recorded.evidence_source or 'none recorded'}). "
+            "No operator opt-in overrides this state.",
+            recorded,
+        )
+
+    if recorded.state == OPT_IN_REQUIRED:
+        if present is not None:
+            opt_in = present(display)
+            events.append("rights-presented")
         if opt_in is None:
             raise ProjectionRefused(
-                f"{decision.act} requires an explicit operator opt-in: "
-                f"{decision.governing_grant}={decision.governing_state} "
-                f"(evidence source: {decision.evidence_source or 'none recorded'})",
-                decision,
+                f"{recorded.act} requires an explicit operator opt-in: "
+                f"{recorded.governing_grant}={recorded.governing_state} "
+                f"(evidence source: {recorded.evidence_source or 'none recorded'})",
+                recorded,
             )
-        if opt_in.acknowledged_display_digest != decision.display_digest():
+        if not isinstance(opt_in, OperatorOptIn):
             raise ProjectionRefused(
-                f"{decision.act}: the operator acknowledged a different rights "
+                f"{recorded.act}: an acknowledgement must be an OperatorOptIn",
+                recorded,
+            )
+        if opt_in.acknowledged_display_digest != recorded.display_digest():
+            raise ProjectionRefused(
+                f"{recorded.act}: the operator acknowledged a different rights "
                 "statement than the one this decision displays, so the opt-in "
                 "does not authorize it",
-                decision,
+                recorded,
             )
         events.append("operator-opt-in-accepted")
 
@@ -358,7 +461,7 @@ def project(
     result = mutate()
     events.append("content-materialized")
     return ProjectionOutcome(
-        decision=decision, display=display, events=tuple(events), result=result
+        decision=recorded, display=display, events=tuple(events), result=result
     )
 
 
@@ -395,6 +498,7 @@ def create_derivative(
         upstream_artifact: The unmodified upstream files.
         adapt: The adaptation. Never called without a recorded grant.
         upstream_provenance: Upstream identity and pin, retained on the result.
+            Its `qualified_identity` is the subject of the decision.
 
     Returns:
         The derivative and its provenance, including the rights state.
@@ -404,7 +508,8 @@ def create_derivative(
             refusal carries the unmodified upstream artifact and the retained
             rights state.
     """
-    decision = evaluate_derivative(rights)
+    subject = str(upstream_provenance.get("qualified_identity") or "")
+    decision = evaluate_derivative(rights, subject=subject)
     if decision.state != ALLOWED:
         raise DerivativeRefused(
             "no adapted artifact is created: "

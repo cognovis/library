@@ -171,7 +171,9 @@ def _rights_reasons(item: NormalizedItem) -> list[BlockReason]:
     reasons: list[BlockReason] = []
     seen: set[str] = set()
     for target in PROJECTION_TARGETS:
-        decision = evaluate_projection(item.rights, target)
+        decision = evaluate_projection(
+            item.rights, target, subject=item.qualified_identity()
+        )
         if decision.block_reason is None or decision.block_reason in seen:
             continue
         seen.add(decision.block_reason)
@@ -229,25 +231,32 @@ def evaluate_item(
     context: AdmissionContext,
     *,
     ledger: ExecutableAdmissionLedger | None = None,
-    digests: Mapping[str, str] | None = None,
+    contents: Mapping[str, Mapping[str, bytes]] | None = None,
 ) -> AdmissionDecision:
     """Evaluate one normalized item against one scope policy.
 
     Args:
         item: A normalized item, as discovered.
         context: The scope policy this admission is judged against.
-        ledger: The operator's executable-admission decisions. When absent, the
-            item's own recorded `executable_admission` is used unchanged.
-        digests: Qualified identity to content digest, for the ledger lookup.
+        ledger: The operator's executable-admission decisions. An absent ledger
+            is an empty one, never a permissive one.
+        contents: Qualified identity to the item's complete content, from which
+            the admission-binding digest is computed.
 
     Returns:
         The decision. The item itself is never modified.
+
+    An executable item's own `executable_admission` field is **not** consulted.
+    Review demonstrated the reason: a normalized item carrying
+    `executable_admission="admitted"` -- a value any producer of an item can
+    write -- evaluated to `installable` with no reviewer, no digest, and no
+    permission surface behind it. Authority for an executable decision lives in
+    the operator's ledger, so the absence of a ledger entry for the current
+    content is `pending`, which is what the field would have had to prove.
     """
-    executable_admission = item.executable_admission
-    if ledger is not None:
-        executable_admission = executable_admission_for_item(
-            item, ledger, digests or {}
-        )
+    executable_admission = executable_admission_for_item(
+        item, ledger or ExecutableAdmissionLedger(), contents or {}
+    )
 
     reasons: list[BlockReason] = list(_rights_reasons(item))
 
@@ -295,7 +304,7 @@ def evaluate_item(
 
     ordered = tuple(sorted(reasons, key=lambda entry: BLOCK_REASONS.index(entry.reason)))
 
-    eligibility = projection_eligibility(item.rights)
+    eligibility = projection_eligibility(item.rights, subject=item.qualified_identity())
     if any(reason.reason not in _RIGHTS_REASONS for reason in ordered):
         eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
 
@@ -330,13 +339,13 @@ def evaluate_inventory(
     context: AdmissionContext,
     *,
     ledger: ExecutableAdmissionLedger | None = None,
-    digests: Mapping[str, str] | None = None,
+    contents: Mapping[str, Mapping[str, bytes]] | None = None,
 ) -> AdmissionReport:
     """Evaluate a whole normalized inventory against one scope policy."""
     decisions: dict[str, AdmissionDecision] = {}
     evaluated: list[NormalizedItem] = []
     for item in inventory:
-        decision = evaluate_item(item, context, ledger=ledger, digests=digests)
+        decision = evaluate_item(item, context, ledger=ledger, contents=contents)
         decisions[decision.qualified_identity] = decision
         evaluated.append(apply_decision(item, decision))
     return AdmissionReport(inventory=NormalizedInventory(evaluated), decisions=decisions)

@@ -425,6 +425,7 @@ executable-admission decision beyond ordinary Workspace selection.
 | Recorded state | `executable_admission` on the normalized item and on the receipt, bound to the **content digest**, not to the name or version |
 | Composition with Workspace selection | Admission is a precondition of installability. A Workspace root that reaches a `pending` or `refused` executable item **fails the whole resolution before mutation**; it does not silently skip it |
 | Invalidation | Any change to the content digest returns the item to `pending`. Re-admission is a new decision with new evidence |
+| Authority (slice 2, `CL-n7ex`) | The operator's admission ledger, keyed by identity **and** content digest. A normalized item's own `executable_admission` field is never consulted as authority: any producer of an item can write `admitted` into it, and review demonstrated such an item evaluating to `installable` with no reviewer, no digest, and no permission surface behind it. The gate digests the content it will materialize, so the reviewed bytes and the written bytes are the same bytes |
 
 Inert Prompt, Standard, and documentation content is `executable_admission:
 inert` and never silently inherits executable trust by sharing a bundle,
@@ -962,12 +963,32 @@ own. One shared string cannot state that a fetch grant rests on a reachable
 subscriber endpoint while a redistribution grant rests on nothing located at
 all, and that is precisely the pair this ADR ships as its worked case.
 
+The phrase is read as a **requirement, not a description**: resolving a grant to
+`granted` or `denied` without a named evidence source is refused at
+construction and at provider registration. `unknown` is the state for "nobody
+has looked", and it is the only one reachable without evidence. Adversarial
+review made the cost of the weaker reading concrete — an all-`granted` rights
+value invented at a call site authorized a committed projection, durable
+retention, and a derivative, with nothing behind any of them.
+
 The operator opt-in is bound to the digest of the rights statement it
-acknowledges. "Displayed before mutation" is therefore checkable after the fact
-rather than a convention: an acknowledgement collected against a different item,
-a different target, or an older rights state does not authorize this projection.
-A boolean confirmation flag was rejected for the obvious reason — it can be
-passed without anything ever being rendered.
+acknowledges, and that statement names the **subject** — the qualified identity
+of the item — alongside the target and every grant. "Displayed before mutation"
+is therefore checkable after the fact rather than a convention: an
+acknowledgement collected against a different item, a different target, or an
+older rights state does not authorize this projection. The subject is
+load-bearing, not decoration: rights are recorded per provider, so without it
+two items from one provider render byte-identical statements and one
+acknowledgement silently covers content the operator never saw. A boolean
+confirmation flag was rejected for the obvious reason — it can be passed without
+anything ever being rendered.
+
+A composed decision is a **report, not a capability**. The mutation boundary
+re-derives it from the recorded rights and refuses any decision that does not
+match, so a hand-built decision claiming `allowed` over a recorded denial writes
+nothing. Proving *who* the operator is remains out of scope: authenticating an
+operator is credential handling, and this ADR's gate binds an acknowledgement to
+content rather than to an identity.
 
 ### Caching is not installing
 

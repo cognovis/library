@@ -38,6 +38,7 @@ today. What must not change is the *binding*: admission follows content.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -45,6 +46,7 @@ from .classification import EXECUTABLE_TYPES
 from .inventory import EXECUTABLE_ADMISSION_STATES, NormalizedItem
 
 DIGEST_PREFIX = "sha256:"
+_DIGEST_RE = re.compile(rf"^{DIGEST_PREFIX}[0-9a-f]{{64}}$")
 
 INERT = "inert"
 ADMITTED = "admitted"
@@ -111,6 +113,21 @@ def content_digest(files: Mapping[str, bytes]) -> str:
     return f"{DIGEST_PREFIX}{digest.hexdigest()}"
 
 
+def validated_digest(value: str) -> str:
+    """A digest in this module's exact form, or a refusal.
+
+    Accepting `sha256:not-a-digest` was demonstrated in review: any string that
+    started with the prefix was recorded as if it were a reviewed content
+    identity, so a decision could be filed against bytes that do not exist.
+    """
+    if not isinstance(value, str) or not _DIGEST_RE.match(value):
+        raise ValueError(
+            f"{value!r} is not a content digest; expected {DIGEST_PREFIX} followed "
+            "by 64 lowercase hex characters"
+        )
+    return value
+
+
 def is_executable_type(library_type: str) -> bool:
     """Whether this Library type requires an executable-admission decision."""
     return library_type in EXECUTABLE_TYPES
@@ -135,10 +152,7 @@ class AdmissionRecord:
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"AdmissionRecord.{name} is required")
-        if not self.content_digest.startswith(DIGEST_PREFIX):
-            raise ValueError(
-                f"AdmissionRecord.content_digest must be a {DIGEST_PREFIX} digest"
-            )
+        validated_digest(self.content_digest)
         object.__setattr__(self, "permission_surface", tuple(self.permission_surface))
 
     def to_dict(self) -> dict[str, Any]:
@@ -164,11 +178,16 @@ class ExecutableAdmissionLedger:
     def _store(self, record: AdmissionRecord, *, supersedes: bool = False) -> AdmissionRecord:
         key = (record.qualified_identity, record.content_digest)
         existing = self._records.get(key)
-        if existing is not None and existing.state != record.state and not supersedes:
+        if existing is not None and not supersedes:
+            # Any existing decision for these exact bytes is protected, not only
+            # a contradicting one. Review observed that a repeated `admit` with a
+            # different reviewer silently rewrote who had vouched for the
+            # content -- the audit trail is the point of the record.
             raise ValueError(
                 f"{record.qualified_identity} at {record.content_digest} is already "
-                f"recorded as {existing.state}; reversing that decision is an "
-                "explicit act (pass supersedes=True), never an overwrite"
+                f"recorded as {existing.state} by {existing.reviewer}; replacing "
+                "that decision is an explicit act (pass supersedes=True), never an "
+                "overwrite"
             )
         self._records[key] = record
         return record
@@ -291,7 +310,7 @@ class ExecutableAdmissionLedger:
             return INERT
         if not content_digest_value:
             return PENDING
-        record = self.record_for(qualified_identity, content_digest_value)
+        record = self.record_for(qualified_identity, validated_digest(content_digest_value))
         if record is None:
             return PENDING
         return record.state
@@ -300,30 +319,38 @@ class ExecutableAdmissionLedger:
 def executable_admission_for_item(
     item: NormalizedItem,
     ledger: ExecutableAdmissionLedger,
-    digests: Mapping[str, str],
+    contents: Mapping[str, Mapping[str, bytes]],
 ) -> str:
-    """The admission state for one normalized item under one ledger."""
-    return ledger.state_for(
-        item.qualified_identity(),
-        digests.get(item.qualified_identity()),
-        library_type=item.library_type,
-    )
+    """The admission state for one normalized item under one ledger.
+
+    The digest is computed here from the item's content. A caller-supplied
+    digest map was the earlier shape and review broke it: the gate checked one
+    digest while the mutation wrote other bytes, so the reviewed content and the
+    materialized content were never the same object.
+    """
+    identity = item.qualified_identity()
+    files = contents.get(identity)
+    digest = content_digest(files) if files else None
+    return ledger.state_for(identity, digest, library_type=item.library_type)
 
 
 def gate_resolution(
     items: Sequence[NormalizedItem],
     ledger: ExecutableAdmissionLedger,
-    digests: Mapping[str, str],
+    contents: Mapping[str, Mapping[str, bytes]],
     *,
-    mutate: Callable[[], Any] | None = None,
+    mutate: Callable[[Mapping[str, Mapping[str, bytes]]], Any] | None = None,
 ) -> tuple[NormalizedItem, ...]:
     """Resolve a selection only when every executable member is admitted.
 
     Args:
         items: The selected items, in resolution order.
         ledger: The scope operator's admission decisions.
-        digests: Qualified identity to content digest for the resolved content.
-        mutate: The callable that writes. Called once, after the gate passes.
+        contents: Qualified identity to the complete content that will be
+            materialized. The gate digests exactly these bytes, so the content
+            it checks and the content it hands to `mutate` cannot diverge.
+        mutate: The callable that writes. Called once, after the gate passes,
+            with the verified content -- not with content of its own choosing.
 
     Returns:
         The items with their evaluated `executable_admission` state.
@@ -332,7 +359,7 @@ def gate_resolution(
         ResolutionRefused: when any executable member is `pending` or `refused`.
             Raised before `mutate` runs, and no member is resolved.
     """
-    states = [(item, executable_admission_for_item(item, ledger, digests)) for item in items]
+    states = [(item, executable_admission_for_item(item, ledger, contents)) for item in items]
     refusals = [
         (item.qualified_identity(), state)
         for item, state in states
@@ -346,7 +373,12 @@ def gate_resolution(
         for item, state in states
     )
     if mutate is not None:
-        mutate()
+        verified = {
+            item.qualified_identity(): contents[item.qualified_identity()]
+            for item, _ in states
+            if item.qualified_identity() in contents
+        }
+        mutate(verified)
     return resolved
 
 
