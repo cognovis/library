@@ -3109,6 +3109,20 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: mcp-client-timeout
+      description: Client-side MCP idle timeouts on long-running delegated sessions are transport artifacts, not work failures — never retry the dispatch, recover the handle, and poll external state instead.
+      source: https://github.com/cognovis/library-core/blob/main/standards/mcp-client-timeout/mcp-client-timeout.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: model-routing
       description: Model Routing
       source: https://github.com/cognovis/library-core/blob/main/standards/dispatch/model-routing.md
@@ -3345,6 +3359,20 @@ library:
         - origin:original
         - tier:domain
         - category:standard-bundle
+    - name: shell-hardening
+      description: Empirically confirmed shell scripting hazards on macOS — bash 3.2 portability, NUL-safe filename handling, jq argument passing, git pathspec-commit behavior, and exit-code capture traps.
+      source: https://github.com/cognovis/library-core/blob/main/standards/shell-hardening/shell-hardening.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: skills
       description: Skill authoring conventions — development patterns, the quality standard, token budget tiers, and the upstream watchdog pattern for vendored skills.
       source: https://github.com/cognovis/library-core/tree/main/standards/skills/
@@ -3458,6 +3486,20 @@ library:
     - name: workflow
       description: 'The shared development workflow — bead specification and hygiene, review and verification discipline, engineering practice, and the cross-cutting rules that apply to every repository tracking work in beads.'
       source: https://github.com/cognovis/library-core/tree/main/standards/workflow/
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: worktree-subagent-discipline
+      description: Empirically grounded discipline rules for multi-worktree layouts and delegated subagent work — checkout targeting, worktree mechanics, acceptance gates, parallel orchestration, and diff-scope integrity.
+      source: https://github.com/cognovis/library-core/tree/main/standards/worktree-subagent-discipline/
       tier: domain
       default_scope: ask
       tags:
