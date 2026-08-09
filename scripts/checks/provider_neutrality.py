@@ -102,6 +102,15 @@ CORE_MODULES: tuple[str, ...] = (
     "scripts/lib/providers/classification.py",
     "scripts/lib/providers/decompose.py",
     "scripts/lib/routing.py",
+    # Slice 7 (`CL-m6cc`). Migration and legacy disposition are core by function
+    # for the sharpest version of the reason: they decide what happens to
+    # content that is already on the operator's machine. A migration that
+    # recognized a provider by name could re-key one source's legacy objects and
+    # leave another's, and a disposition that did could mark one source's
+    # unattributed projections compliant. Both decisions must fall out of the
+    # recorded rights and the recomputed digest, never out of a name.
+    "scripts/lib/providers/migration.py",
+    "scripts/lib/providers/legacy_projections.py",
 )
 
 #: Provider and hosting-service names. A core module has no business naming one.

@@ -232,6 +232,38 @@ answerable only by guessing.
 | `planned_targets` | For foreign content | Target paths this receipt declared **before** its projection was activated. A failure between activation and finalization therefore leaves an intent on record instead of an installed target that no receipt describes |
 | `completeness_evidence` | For foreign content | How the retrieval's completeness was established: `member-manifest`, `pinned-digest`, or `adapter-declaration`. The last is the honest name for "nothing but the adapter's contract", recorded so an operator can query which installs rest on it |
 
+### Reading an unmigrated receipt (`CL-m6cc`)
+
+The additive rule is implemented as a **read**, not as a migration on the read
+path: `migration.read_foreign_fields(entry)` returns every field above with
+`unknown` where the receipt records nothing, and mutates nothing. A caller that
+had to migrate before it could read would have a write on the read path, and a
+read path that writes is a read path that fails during an outage — which is when
+a receipt is most needed.
+
+`migration.migrate_foreign_receipt_fields(entry)` writes those defaults into a
+copy. It is purely additive and idempotent, and it never overwrites a recorded
+value: replacing evidence with `unknown` is an honest-looking downgrade that
+erases the only proof an install ever had.
+
+Two of the migrated values are not literally `unknown`, and both are deliberate:
+
+| Field | Migrated value | Why not `unknown` |
+|---|---|---|
+| `projection_eligibility` | Derived from the all-`unknown` rights — `project_committed: blocked`, `machine_local: operator-opt-in-required` | Eligibility is a *binding* of the rights state, not an independent fact. Invariant 13 binds `unknown` to a blocked committed projection, and writing `unknown` here would let a caller that reads it as "no opinion" commit third-party bytes |
+| `executable_admission` | `pending` | Admission is bound to the projected content digest. A migrated receipt records no digest, so nothing was ever admitted about its bytes, and `pending` is the state that says exactly that |
+
+`upstream_state` migrates to `unknown`, which is **not** in the live receipt
+vocabulary (`present` | `upstream-vanished`). That is the point: a migrated entry
+is not loadable as a `ForeignReceipt` until re-materialization gives it an
+observed state, so it cannot inherit guarantees the receipt store makes about
+receipts it actually wrote.
+
+A receipt whose `source`, content digest, or `catalog_identity` cannot be
+reconstructed is `unresolvable`. It is **retained**, and
+`prune_blocked_reason` is set to a reason naming every missing fact. Unknown
+state is never converted into deletion authority.
+
 ### Where foreign receipts live (fold decision, `CL-dbam`)
 
 `CL-y5z4` made foreign receipts durable in their own JSON document and left one

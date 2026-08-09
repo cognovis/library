@@ -45,11 +45,19 @@ from .cache_transaction import (
     InstallOutcome,
     ProjectionActivation,
     install_foreign_item,
+    reinstall_from_cache,
 )
 from .contract import SourceProvider
 from .executable_admission import ExecutableAdmissionLedger
-from .foreign_cache import IDENTITY_TRANSFORMATION, ObjectStore, TofuPinStore, Transformation
+from .foreign_cache import (
+    IDENTITY_TRANSFORMATION,
+    ObjectStore,
+    TofuPinStore,
+    Transformation,
+    normalized_content_digest,
+)
 from .inventory import NormalizedItem, Rights
+from .legacy_projections import NonComplianceRegister, guard_rematerialization
 from .normalize import NormalizationResult, normalize_inventory
 from .offline import ResolutionEvidence
 from .placement import curated_skill_classes
@@ -479,7 +487,9 @@ def _write_beneath(root: Path, relative: str, payload: bytes) -> Path:
     return root.joinpath(*parts)
 
 
-def filesystem_activation(target_root: Path) -> ProjectionActivation:
+def filesystem_activation(
+    target_root: Path, *, non_compliance: "NonComplianceRegister | None" = None
+) -> ProjectionActivation:
     """A two-phase filesystem projection into one directory.
 
     `plan` computes the paths from the projected content and touches nothing;
@@ -491,13 +501,28 @@ def filesystem_activation(target_root: Path) -> ProjectionActivation:
     Both phases enforce containment, not just `apply`: a plan that declares a
     path it may not write is already wrong, and refusing at plan time means
     nothing has been created when the refusal happens.
+
+    `non_compliance` is the `CL-m6cc` re-materialization block, and it is checked
+    in both phases for the same reason. Every path that reaches disk goes through
+    this activation -- install and repair alike -- so a legacy projection whose
+    redistribution state is `unknown` or `denied` is refused here regardless of
+    which caller asked, and refused before a byte is written.
     """
     root = Path(target_root)
 
     def plan(content: Mapping[str, bytes]) -> Sequence[str]:
-        return sorted(str(_contained_path(root, relative)) for relative in content)
+        planned = sorted(str(_contained_path(root, relative)) for relative in content)
+        guard_rematerialization(
+            non_compliance, paths=planned, digest=normalized_content_digest(content)
+        )
+        return planned
 
     def apply(content: Mapping[str, bytes]) -> Sequence[ReceiptTarget]:
+        guard_rematerialization(
+            non_compliance,
+            paths=sorted(str(root / relative) for relative in content),
+            digest=normalized_content_digest(content),
+        )
         # Every path is shape-checked before any byte is written, so a member
         # that could not be contained refuses the whole activation rather than
         # leaving the earlier members installed. The containment that matters is
@@ -537,6 +562,7 @@ def install_marketplace_item(
     transformation: Transformation = IDENTITY_TRANSFORMATION,
     present: Callable[[Any], Any] | None = None,
     observed_at: str | None = None,
+    non_compliance: NonComplianceRegister | None = None,
 ) -> InstallOutcome:
     """Install one normalized item through the ordered cache transaction.
 
@@ -554,7 +580,14 @@ def install_marketplace_item(
     before it gets there — so review found `install_rights="denied"` leaving a
     cache object and a receipt behind a refused projection. The retention
     decision therefore has to be made here, before the transaction starts.
+
+    **A non-compliant legacy projection is refused before anything is fetched.**
+    `CL-m6cc` records projections whose redistribution state is `unknown` or
+    `denied`; they may not be re-materialized by any later sync. The activation
+    enforces that per member path, and this earlier check enforces it for the
+    target root as a whole, so the refusal costs no retrieval.
     """
+    guard_rematerialization(non_compliance, paths=[str(Path(target_root))])
     retention = evaluate_cache_retention(item.rights, subject=item.qualified_identity())
     project(retention, lambda: None, present=present)
     return install_foreign_item(
@@ -564,12 +597,51 @@ def install_marketplace_item(
         pin_store=state.pin_store(),
         receipt_store=state.receipt_store(scope),
         target=target,
-        activate=filesystem_activation(target_root),
+        activate=filesystem_activation(target_root, non_compliance=non_compliance),
         observed_at=observed_at or _now(),
         completeness=completeness_for(provider, item),
         transformation=transformation,
         ledger=ledger,
         present=present,
+    )
+
+
+def repair_projection(
+    *,
+    receipt: Any,
+    state: "ForeignState",
+    scope: str,
+    target_root: Path,
+    availability: Any,
+    non_compliance: NonComplianceRegister | None = None,
+    observed_at: str | None = None,
+) -> Any:
+    """Reinstall one receipt's projection from the verified cache.
+
+    Repair is the second production path that writes projected bytes, and it is
+    the one an enforcement check written for `install` quietly misses: it makes
+    no remote claim, needs no rights re-evaluation, and reads as recovery rather
+    than as installation. ADR-0011 `Legacy Projection Disposition` says a
+    non-compliant projection cannot be re-materialized by future sync **or
+    repair**, so the block is checked here against the receipt's own recorded
+    and planned targets, and again inside the activation.
+    """
+    guard_rematerialization(
+        non_compliance,
+        paths=[
+            str(Path(target_root)),
+            *[target.path for target in receipt.targets],
+            *receipt.planned_targets,
+        ],
+        digest=receipt.projected_content_digest,
+    )
+    return reinstall_from_cache(
+        receipt=receipt,
+        object_store=state.object_store(),
+        receipt_store=state.receipt_store(scope),
+        availability=availability,
+        activate=filesystem_activation(target_root, non_compliance=non_compliance),
+        observed_at=observed_at or _now(),
     )
 
 
