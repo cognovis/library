@@ -3260,6 +3260,7 @@ def cmd_marketplace_install(
     args: argparse.Namespace, repo_root: Path | None, catalog: dict
 ) -> int:
     from lib.providers.admission import AdmissionContext, evaluate_item
+    from lib.providers.classification import is_unclassified
     from lib.providers.rights import ProjectionRefused, RightsPresentation
     from lib.providers.wiring import install_marketplace_item, marketplace_inventory
 
@@ -3271,18 +3272,42 @@ def cmd_marketplace_install(
     except KeyError as exc:
         raise LibraryError(str(exc)) from exc
 
-    decision = evaluate_item(item, AdmissionContext())
-    if decision.admission_state == "blocked":
+    # Only `installable` installs. Accepting `discoverable` would silently undo
+    # both non-promotion rules the inventory enforces: an `in-progress` item is
+    # discoverable precisely because promoting it is an explicit scope decision,
+    # and an unclassified member is discoverable precisely because the Library
+    # has no type to install it as. Rejecting only `blocked` treated both as
+    # installable and projected them.
+    context = AdmissionContext()
+    decision = evaluate_item(item, context)
+    if decision.admission_state != "installable":
         reasons = [reason.describe() for reason in decision.block_reasons]
+        if not reasons:
+            maturity = str(item.classification.get("maturity") or "stable")
+            if not context.admits_maturity(maturity):
+                reasons = [
+                    f"maturity {maturity!r} is not promoted by this scope; promoting it "
+                    f"is an explicit decision (admitted maturities: "
+                    f"{list(context.admitted_maturities)})"
+                ]
+            elif is_unclassified(item.library_type):
+                reasons = [
+                    "the member fits no existing Library primitive type, so there is "
+                    "no type to install it as; it is listed, not installable"
+                ]
+            else:
+                reasons = [
+                    "no projection target is eligible under the recorded rights"
+                ]
         payload = {
-            "status": "blocked",
+            "status": decision.admission_state,
             "qualified_identity": identity,
             "reasons": reasons,
         }
         if args.json:
             print_json(error_result(json.dumps(payload), 3))
         else:
-            print(f"Blocked: {identity}", file=sys.stderr)
+            print(f"Not installable ({decision.admission_state}): {identity}", file=sys.stderr)
             for reason in reasons:
                 print(f"  {reason}", file=sys.stderr)
         return 3
@@ -4334,6 +4359,36 @@ def _workspace_normalized_members(
     return items, contents
 
 
+def _workspace_gated_content_drift(
+    catalog: dict, closure, repo_root: Path, admitted
+) -> list[str]:
+    """Members whose source no longer matches the content the gate admitted.
+
+    The admission gate freezes and digests an immutable snapshot, and hands it to
+    the mutation. The legacy installers cannot consume that snapshot — they
+    resolve their own source — so without this comparison the gate binds a
+    decision to bytes nobody guarantees are the ones written. Review demonstrated
+    it end to end: editing a member's source between the snapshot and the install
+    produced a successful run whose installed file contained the edited bytes.
+
+    Returns:
+        The qualified identities whose current content differs, in a stable
+        order. Empty means every admitted member still matches its source.
+    """
+    from lib.providers.executable_admission import content_digest
+
+    _, current = _workspace_normalized_members(catalog, closure, repo_root)
+    drifted: list[str] = []
+    for identity, files in dict(admitted).items():
+        observed = current.get(identity)
+        if observed is None or content_digest(dict(observed)) != content_digest(dict(files)):
+            drifted.append(identity)
+    for identity in current:
+        if identity not in dict(admitted):
+            drifted.append(identity)
+    return sorted(set(drifted))
+
+
 def _workspace_content_matches(source: Path, target: Path) -> bool:
     """Return whether an unreceipted target is byte-exact catalog content."""
     from lib.lockfile import compute_checksum
@@ -4617,14 +4672,34 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         )
         member_failure: list[tuple[str, int, str]] = []
 
-        def _install_members(_frozen_content=None) -> None:
+        def _install_members(frozen_content=None) -> None:
             """Install every resolved member, recording the first that failed.
 
             The failure is recorded rather than returned because this callable is
             invoked by the admission gate, which owns its own return value. A
             returned code would be swallowed there and the run would report
             success over a member that never installed.
+
+            `frozen_content` is the exact immutable content the gate digested and
+            admitted. The legacy installers cannot be handed bytes -- they resolve
+            their own source -- so the binding is enforced instead of assumed:
+            every member's source is re-read and compared against the admitted
+            snapshot immediately before anything is written, and again after the
+            last member is installed. A source that changed inside that window
+            fails the whole operation, because the decision was made about
+            different bytes than the ones on disk.
             """
+            if frozen_content is not None:
+                drifted = _workspace_gated_content_drift(
+                    catalog, closure, repo_root, frozen_content
+                )
+                if drifted:
+                    raise LibraryError(
+                        "Workspace source content changed after the admission gate "
+                        f"digested it: {drifted}. The gate admitted different bytes "
+                        "than the installer would read, so nothing is written",
+                        exit_code=3,
+                    )
             for primitive, name in closure.artifacts:
                 output_buffer = io.StringIO()
                 with redirect_stdout(output_buffer):
@@ -4646,6 +4721,17 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                         (f"{primitive}:{name}", rc, output_buffer.getvalue().strip())
                     )
                     return
+            if frozen_content is not None:
+                drifted = _workspace_gated_content_drift(
+                    catalog, closure, repo_root, frozen_content
+                )
+                if drifted:
+                    raise LibraryError(
+                        "Workspace source content changed while its members were "
+                        f"being installed: {drifted}. What was installed is not what "
+                        "the gate admitted; re-run to install the current content",
+                        exit_code=3,
+                    )
 
         if closure.cross_catalog:
             # ADR-0011 slice 5 refused to materialize a v2 closure because three
@@ -5634,6 +5720,21 @@ def main(argv: list[str] | None = None) -> int:
             # A provider refusal is a typed fact, not a stack trace. Every one of
             # them names what was refused and why, so the message is the report.
             message = f"{type(exc).__name__}: {exc}"
+            if type(exc).__name__ == "ProviderUnauthenticated":
+                # Stated rather than left as a puzzle: this CLI has no way to
+                # supply a token-scoped provider's client, because resolving a
+                # credential reference into a session is credential handling and
+                # is held for a human security review. The provider is reachable
+                # only through a caller that owns the connection.
+                message = (
+                    f"{message}\n"
+                    "This command cannot supply a client for a token-scoped "
+                    "provider: resolving a credential reference into a session is "
+                    "credential handling, which is deliberately not implemented "
+                    "here. Registration, inventory schema, rights, and receipts "
+                    "for this provider all work; only the transport is missing, "
+                    "and no other source is substituted for it."
+                )
             if use_json:
                 print_json(error_result(message, EXIT_FAILURE))
             else:

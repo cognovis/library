@@ -34,7 +34,11 @@
   `source.py`, previously the largest at 50 findings, now measures zero and drops
   out of the baseline entirely. The certified core grows from 12 modules to 17,
   adding the normalization layer, the inventory schema, the Library-owned
-  classification and decomposition rules, and catalog-derived routing.
+  classification and decomposition rules, and catalog-derived routing. The
+  drawdown removes provider *knowledge* from `source.py`, not provider
+  *dependence*: it still resolves through the Git adapter and still handles one
+  hosting service, and the zero should not be read as the module having become
+  provider-independent.
 - *(CL-hyp9, Workspace)* Workspace status, sync, and removal now fall back to the
   Library tool's consolidated catalog when a consuming catalog repository cannot
   resolve its locked Workspace roots. The consumer remains the project target;

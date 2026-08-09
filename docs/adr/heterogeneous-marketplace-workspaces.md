@@ -1641,6 +1641,18 @@ routing. What remains legacy is the catalog and installer surface, which still
 resolves by cloning; that is the path the provider contract exists to replace,
 and it is not extended here.
 
+**What the drawdown does not claim**, stated because review found the stronger
+reading available and wrong: `source.py` is now free of provider *knowledge*, not
+provider *dependence*. It still imports a Git marketplace-type constant, Git URL
+kind sets, and Git parsing and cloning functions from `providers/git_url.py`, and
+it still branches on that imported constant — so it resolves a repository URL on
+one hosting service and returns `unknown` for an equivalent URL on another, with
+the neutrality scan reporting nothing. That is the correct outcome for a legacy
+path: the knowledge now lives at the sanctioned boundary where a second host
+could be added, and the module that consumes it no longer encodes which host it
+is. It is not the same thing as `source.py` having become provider-independent,
+and reading the zero as that claim would overstate it.
+
 ## Migration and Existing Bead Disposition
 
 ### Named contract dispositions

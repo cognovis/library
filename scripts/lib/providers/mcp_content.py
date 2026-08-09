@@ -65,9 +65,43 @@ from .contract import (
 IDENTITY_SCHEME = "mcp"
 
 #: A credential *reference* is a name. This is a shape floor, not a secret
-#: detector: it refuses text that cannot be a configuration key, and it makes no
-#: claim to recognize a token that happens to look like one.
-_REFERENCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,63}$")
+#: detector.
+#:
+#: Review demonstrated the first version's limit: `sk-prod-0123456789abcdef` is
+#: identifier-shaped, so it was accepted as a reference and echoed verbatim in a
+#: diagnostic. The floor below is raised to catch the shapes a pasted credential
+#: actually has — a known issuer prefix, or a long unbroken run of token
+#: characters — and it is deliberately *stated* as a floor rather than dressed up
+#: as detection: no shape rule can tell a secret from a name, and a caller who
+#: chooses a reference that looks exactly like a plausible identifier will pass.
+#: What the design does guarantee is elsewhere: this adapter has no field a
+#: credential value belongs in and no code that reads one.
+_REFERENCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,39}$")
+
+#: Issuer prefixes common enough that a reference starting with one is far more
+#: likely to be a pasted credential than a configuration key.
+_CREDENTIAL_PREFIXES = (
+    "sk-",
+    "sk_",
+    "pk-",
+    "pk_",
+    "rk_",
+    "ghp_",
+    "gho_",
+    "ghs_",
+    "github_pat_",
+    "glpat-",
+    "xox",
+    "eyj",
+    "bearer",
+    "basic ",
+    "token-",
+    "secret-",
+)
+
+#: An unbroken run of token characters this long is a value, not a name. Real
+#: references are hyphenated or dotted words.
+_OPAQUE_RUN_RE = re.compile(r"[A-Za-z0-9]{20,}")
 
 
 class CredentialReferenceRequired(ValueError):
@@ -118,6 +152,41 @@ def _now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _refuse_credential_shape(reference: str) -> None:
+    """Refuse a value where a credential reference belongs.
+
+    The reference is recorded in inventory, receipts, and diagnostics, so a value
+    placed here would be written into all of them. Three checks, each catching a
+    shape the previous one let through:
+
+    1. it has to be name-shaped and short;
+    2. it must not start with a known credential issuer prefix;
+    3. it must not contain a long unbroken run of token characters.
+
+    None of this detects a secret. It refuses the shapes a pasted credential
+    actually has, and the module docstring states the limit plainly.
+    """
+    if not _REFERENCE_RE.fullmatch(reference):
+        raise CredentialValueRefused(
+            "auth_ref must be the NAME of a credential reference, not a credential "
+            "value or free text. It is recorded in inventory, receipts, and "
+            "diagnostics, so a value placed here would be written to all of them"
+        )
+    lowered = reference.lower()
+    if lowered.startswith(_CREDENTIAL_PREFIXES):
+        raise CredentialValueRefused(
+            f"auth_ref {reference[:6]!r}... begins like a credential value rather "
+            "than a configuration key. Name the reference the credential is stored "
+            "under; the value itself belongs only in provider configuration"
+        )
+    if _OPAQUE_RUN_RE.search(reference):
+        raise CredentialValueRefused(
+            "auth_ref contains a long unbroken run of token characters, which is "
+            "the shape of a value rather than of a name. Name the reference the "
+            "credential is stored under"
+        )
+
+
 def _text(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise McpResponseInvalid(f"{label} is required and must be text")
@@ -150,13 +219,7 @@ class McpContentProvider(SourceProvider):
                 "credential reference; a registration with none cannot say which "
                 "credential authorizes a fetch"
             )
-        if not _REFERENCE_RE.fullmatch(reference):
-            raise CredentialValueRefused(
-                "auth_ref must be the NAME of a credential reference, not a "
-                "credential value or free text. It is recorded in inventory, "
-                "receipts, and diagnostics, so a value placed here would be "
-                "written to all of them"
-            )
+        _refuse_credential_shape(reference)
         self.auth_ref = reference
         self._items: tuple[ProviderItem, ...] | None = None
         self._descriptions: dict[str, dict[str, Any]] = {}

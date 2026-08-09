@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import os
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
@@ -39,6 +40,7 @@ from typing import Any, Callable, Mapping, Sequence
 from .admission import AdmissionContext, AdmissionReport, evaluate_inventory
 from .cache_transaction import (
     CompletenessEvidence,
+    IncompleteRetrieval,
     InstallOutcome,
     ProjectionActivation,
     install_foreign_item,
@@ -51,6 +53,7 @@ from .normalize import NormalizationResult, normalize_inventory
 from .offline import ResolutionEvidence
 from .placement import curated_skill_classes
 from .receipts import ReceiptStore, ReceiptTarget
+from .rights import evaluate_cache_retention, project
 from .reference_rights import rights_for
 from .retention import (
     GarbageCollectionResult,
@@ -320,19 +323,78 @@ def completeness_for(
     declared = provider.capabilities()
     if "member_manifest" in declared:
         paths = tuple(provider.member_manifest(item.upstream_id, item.upstream_revision))
-        if paths:
-            return CompletenessEvidence.from_manifest(
-                paths,
-                detail=(
-                    f"member list read from {provider.identity()} at revision "
-                    f"{item.upstream_revision or 'none (revisionless source)'}"
-                ),
+        if not paths:
+            # A declared capability that answers "no members" is a broken adapter,
+            # not an absent capability. Downgrading to the adapter's own word here
+            # discarded the manifest AND recorded the false reason that the
+            # provider does not declare it, so a nonempty retrieval installed
+            # against a manifest it never had to match.
+            raise IncompleteRetrieval(
+                f"{provider.identity()} declares member_manifest and returned no "
+                f"members for {item.qualified_identity()}; an item with no members "
+                "cannot be retrieved completely, and an empty manifest is a defect "
+                "in the adapter rather than an absent capability"
             )
+        return CompletenessEvidence.from_manifest(
+            paths,
+            detail=(
+                f"member list read from {provider.identity()} at revision "
+                f"{item.upstream_revision or 'none (revisionless source)'}"
+            ),
+        )
     return CompletenessEvidence.adapter_declared(
         f"{provider.identity()} does not declare member_manifest, so no independent "
         "member list exists to check the retrieval against; completeness rests on "
         "the adapter's own contract that FetchedItem is complete"
     )
+
+
+class ProjectionEscape(RuntimeError):
+    """A projection path resolves outside the target root it declared.
+
+    The planned/applied comparison is a **string** comparison, so a path that
+    traverses a symlink out of the root satisfies it perfectly while the bytes
+    land somewhere else entirely. Review demonstrated it: a pre-existing
+    `target/link` symlink turned a declared `target/link/escaped.txt` into a
+    write outside the root, with a matching plan and an accepted receipt.
+    """
+
+
+def _contained_path(root: Path, relative: str) -> Path:
+    """Resolve one member path and refuse anything that leaves `root`.
+
+    Containment is checked against the **real** path, because the declared path
+    is exactly what an escape keeps intact. Every existing component between the
+    root and the file is checked for being a symlink, since one of those is the
+    whole mechanism, and the final containment check catches the rest.
+    """
+    real_root = Path(os.path.realpath(root))
+    if relative.startswith("/") or ".." in Path(relative).parts:
+        raise ProjectionEscape(
+            f"projection member {relative!r} is not a contained relative path"
+        )
+    candidate = root / relative
+    current = root
+    for part in Path(relative).parts[:-1]:
+        current = current / part
+        if current.is_symlink():
+            raise ProjectionEscape(
+                f"projection path {relative!r} traverses the symlink {current}; a "
+                "declared path that resolves elsewhere satisfies the plan check "
+                "while the bytes land outside the target root"
+            )
+    if candidate.is_symlink():
+        raise ProjectionEscape(
+            f"projection target {candidate} is an existing symlink; writing "
+            "through it would place the bytes outside the target root"
+        )
+    resolved_parent = Path(os.path.realpath(candidate.parent))
+    if resolved_parent != real_root and real_root not in resolved_parent.parents:
+        raise ProjectionEscape(
+            f"projection path {relative!r} resolves to {resolved_parent}, which is "
+            f"outside the declared target root {real_root}"
+        )
+    return candidate
 
 
 def filesystem_activation(target_root: Path) -> ProjectionActivation:
@@ -343,20 +405,29 @@ def filesystem_activation(target_root: Path) -> ProjectionActivation:
     digests. A single "write it and tell me what you wrote" callable cannot be
     made recoverable, because the only record of what exists is produced after it
     already exists.
+
+    Both phases enforce containment, not just `apply`: a plan that declares a
+    path it may not write is already wrong, and refusing at plan time means
+    nothing has been created when the refusal happens.
     """
     root = Path(target_root)
 
-    def _paths(content: Mapping[str, bytes]) -> list[str]:
-        return sorted(str(root / relative) for relative in content)
-
     def plan(content: Mapping[str, bytes]) -> Sequence[str]:
-        return _paths(content)
+        return sorted(str(_contained_path(root, relative)) for relative in content)
 
     def apply(content: Mapping[str, bytes]) -> Sequence[ReceiptTarget]:
+        # Every path is validated before any byte is written, so a member that
+        # would escape refuses the whole activation rather than leaving the
+        # earlier members installed.
+        paths = {relative: _contained_path(root, relative) for relative in content}
         created: list[ReceiptTarget] = []
         for relative in sorted(content):
-            path = root / relative
+            path = paths[relative]
             path.parent.mkdir(parents=True, exist_ok=True)
+            # The parent may have been created through a symlink planted between
+            # validation and here, so containment is re-checked once the parent
+            # actually exists.
+            _contained_path(root, relative)
             payload = content[relative]
             path.write_bytes(payload)
             created.append(
@@ -392,7 +463,20 @@ def install_marketplace_item(
     Every obligation the transaction refuses to work without is supplied here
     rather than defaulted: stated completeness evidence, and a two-phase
     projection whose applied paths must equal its declared plan.
+
+    **Durable retention is gated before anything is retrieved.** ADR-0011
+    `Caching is not installing` governs keeping an offline copy by
+    `install_rights`, not by `fetch_authorization`: `denied` forbids durable
+    retention outright and leaves only transient retrieval, and `unknown` makes
+    it an operator-acknowledged act under the same shown-first opt-in as a
+    machine-local projection. The cache transaction evaluates only the
+    *projection* decision, and it materializes the object and writes the receipt
+    before it gets there — so review found `install_rights="denied"` leaving a
+    cache object and a receipt behind a refused projection. The retention
+    decision therefore has to be made here, before the transaction starts.
     """
+    retention = evaluate_cache_retention(item.rights, subject=item.qualified_identity())
+    project(retention, lambda: None, present=present)
     return install_foreign_item(
         item,
         retrieve=lambda: provider.fetch(item.upstream_id, item.upstream_revision),

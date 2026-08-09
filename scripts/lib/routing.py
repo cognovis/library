@@ -57,6 +57,14 @@ _SOURCE_TOKEN_RE = re.compile(
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
+#: The opening words of every note this module generates. A note not starting
+#: with one of these was written by a caller, and a caller's prose is outside
+#: what the run can attest to.
+_GENERATED_NOTE_PREFIXES = (
+    "context pointers not present on this machine",
+    "no source is registered on this machine",
+)
+
 
 class RoutingNotCatalogDerived(RuntimeError):
     """A routing answer named a source this run did not read.
@@ -146,8 +154,23 @@ class RoutingAnswer:
         Checked on the rendered text, not on the structured fields, because the
         rendered text is what a reader acts on. A structured check would pass an
         answer whose prose named a repository nobody registered.
+
+        Free prose is checked by **provenance, not by pattern**. A URL scan
+        cannot recognize a bare repository name — review put `sussdorff-core`
+        into a note and the scan passed it, which is precisely the failure this
+        method exists to prevent, since a plain sibling name is the most likely
+        way a routing table would leak. So every note has to be one this module
+        generated: prose whose wording is not the module's own cannot be
+        attributed to what the run read, and is refused rather than scanned.
         """
         read = {name for name in (*self.catalogs_read, *self.identities_read) if name}
+        for note in self.notes:
+            if not note.startswith(_GENERATED_NOTE_PREFIXES):
+                raise RoutingNotCatalogDerived(
+                    f"routing answer carries a note this module did not generate: "
+                    f"{note!r}. Free prose cannot be attributed to what the run "
+                    "read, and a bare repository name in it would read as fact"
+                )
         rendered = self.render()
         for match in _SOURCE_TOKEN_RE.finditer(rendered):
             token = match.group(0).rstrip(".,);")

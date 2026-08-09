@@ -128,6 +128,35 @@ def _marker_directories(paths: Sequence[str]) -> dict[str, str]:
     return found
 
 
+def _refuse_nested_markers(markers: Mapping[str, str]) -> None:
+    """Refuse a marker directory that contains another marker directory.
+
+    A marker item owns every path beneath its directory, so a nested marker makes
+    two items own the same bytes: the outer item's content contains the inner
+    item's whole content. Downstream that is two cache identities and two
+    receipts for one artifact, which is the exact ownership collision the
+    tree-level refusal already covers — the tree root is simply the case someone
+    thought of first. Review demonstrated the general one: `outer/SKILL.md` beside
+    `outer/child/AGENT.md` produced two items claiming the same files under both
+    layouts.
+
+    Refusing rather than trimming the outer item is deliberate. Trimming would
+    silently redefine what the outer item *is*, and an upstream author who nested
+    two markers has stated something the Library cannot interpret.
+    """
+    directories = sorted(name for name in markers if name != ROOT_ITEM_ID)
+    for index, outer in enumerate(directories):
+        prefix = f"{outer}/"
+        for inner in directories[index + 1 :]:
+            if inner.startswith(prefix):
+                raise AmbiguousItemLayout(
+                    f"marker item {inner!r} ({markers[inner]}) is nested inside "
+                    f"marker item {outer!r} ({markers[outer]}); the outer item's "
+                    "content contains the inner item's bytes, so item ownership is "
+                    "undefined"
+                )
+
+
 def _marker_items(paths: Sequence[str], markers: Mapping[str, str]) -> list[ItemLayout]:
     items: list[ItemLayout] = []
     for directory in sorted(markers):
@@ -203,6 +232,7 @@ def decompose_tree(
         raise ValueError(f"unknown decomposition layout {layout!r}; expected {list(LAYOUTS)}")
     ordered = sorted(paths)
     markers = _marker_directories(ordered)
+    _refuse_nested_markers(markers)
     items = _marker_items(ordered, markers)
 
     if layout == MARKER_LAYOUT:
