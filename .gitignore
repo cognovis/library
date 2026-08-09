@@ -30,8 +30,11 @@ tests/__pycache__/
 .session-close-state.json
 
 # Library-installed primitives in this marketplace repo (source lives in top-level primitive dirs)
-.claude/skills/
-.agents/skills/
+# No trailing slash: a linked worktree gets these as overlay *symlinks*
+# (scripts/worktree-overlays.py), and git records a symlink as a file, so a
+# directory-only pattern left every worktree permanently dirty.
+.claude/skills
+.agents/skills
 .agents/standards/*
 !.agents/standards/judge-layer/
 !.agents/standards/judge-layer/**
