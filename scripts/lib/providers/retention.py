@@ -51,11 +51,19 @@ import re
 import shutil
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from .executable_admission import validated_digest
-from .foreign_cache import QUARANTINE_SUFFIX, CacheKey, CacheObject, ObjectStore, TofuPinStore
+from .foreign_cache import (
+    DESCRIPTOR_NAME,
+    QUARANTINE_SUFFIX,
+    CacheKey,
+    CacheObject,
+    ObjectStore,
+    TofuPinStore,
+)
 from .inventory import parse_qualified_identity
 from .offline import ResolutionEvidence, evaluate_operation
 from .receipts import ForeignReceipt, ReceiptStore
@@ -84,6 +92,7 @@ RETENTION_REFUSALS: tuple[str, ...] = (
     "inventory-incomplete",
     "upstream-vanished",
     "refetch-digest-drift",
+    "refetch-proof-stale",
     "re-fetchability-not-proven",
 )
 
@@ -101,6 +110,7 @@ PURGE_REFUSALS: tuple[str, ...] = (
     "acknowledgement-incomplete",
     "referenced-by-active-receipt",
     "not-operator-explicit",
+    "unidentifiable-subject",
 )
 
 #: The one origin a purge accepts. Automatic reconciliation and garbage
@@ -197,6 +207,7 @@ class ReferenceIndex:
                 "protect its object, and a partial check answers 'unreferenced' for "
                 "objects another lock is holding."
             )
+        locations: dict[Path, str] = {}
         for scope in scopes:
             location = scope.store.path.parent
             if not location.is_dir():
@@ -205,6 +216,20 @@ class ReferenceIndex:
                     f"but {location} does not exist. A scope that is not where it says "
                     "it is has no answer, and 'no answer' is never 'no references'."
                 )
+            # Distinct labels over one store are one store wearing two names.
+            # Review supplied the empty project store as both `project` and
+            # `global`: the required-scope check passed, the real global store
+            # was never read, and an object a live global receipt referenced was
+            # collected. A scope is its location, not its label.
+            resolved = scope.store.path.resolve()
+            if resolved in locations:
+                raise ScopeUnreadable(
+                    f"scopes {locations[resolved]!r} and {scope.name!r} both read "
+                    f"{resolved}; one store cannot answer for two scopes, and a label "
+                    "that stands in for another scope's location hides every receipt "
+                    "that scope holds"
+                )
+            locations[resolved] = scope.name
         self._scopes: tuple[ReceiptScope, ...] = tuple(scopes)
 
     @property
@@ -293,6 +318,13 @@ class RefetchProof:
         _text(self.provider_identity, "RefetchProof.provider_identity")
         _text(self.qualified_identity, "RefetchProof.qualified_identity")
         _text(self.observed_at, "RefetchProof.observed_at")
+        if _timestamp(self.observed_at) is None:
+            raise ValueError(
+                f"RefetchProof.observed_at {self.observed_at!r} is not an ISO-8601 "
+                "timestamp; a proof about what a source serves *now* has to be "
+                "locatable in time, or a proof taken years ago authorizes today's "
+                "deletion"
+            )
         validated_digest(self.observed_digest)
         if self.method != "digest-verified-refetch":
             raise ValueError(
@@ -348,16 +380,65 @@ class GarbageCollectionResult:
     raced: tuple[RetentionDecision, ...] = field(default_factory=tuple)
 
 
-def _proofs_by_identity(proofs: Iterable[RefetchProof]) -> dict[str, RefetchProof]:
-    indexed: dict[str, RefetchProof] = {}
+def _timestamp(value: object) -> "datetime | None":
+    """One ISO-8601 instant, or None when the text cannot be ordered."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith(("Z", "z")):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _proofs_by_identity(
+    proofs: Iterable[RefetchProof],
+) -> dict[str, tuple[RefetchProof, ...]]:
+    """Every proof offered for each identity, kept rather than collapsed.
+
+    Keeping only one proof per identity made the answer depend on argument
+    order: review supplied a current proof showing drift and a 26-year-old proof
+    showing a match, and the stale one won because it came last. A proof set is
+    therefore evaluated as a whole, and any disagreement inside it is drift.
+    """
+    indexed: dict[str, list[RefetchProof]] = {}
     for proof in proofs:
         if not isinstance(proof, RefetchProof):
             raise ValueError(
                 "a re-fetchability proof must be a RefetchProof value; a bare digest "
                 "cannot state which identity it was observed for"
             )
-        indexed[proof.qualified_identity] = proof
-    return indexed
+        indexed.setdefault(proof.qualified_identity, []).append(proof)
+    return {identity: tuple(values) for identity, values in indexed.items()}
+
+
+def _stale_proofs(
+    offered: Sequence[RefetchProof], observation: ResolutionEvidence | None
+) -> tuple[str, ...]:
+    """Why an otherwise matching proof cannot describe the current source state.
+
+    A proof is about what the source serves *now*, so it has to be at least as
+    recent as the source observation this run is acting on. When the observation
+    carries no orderable time the two cannot be related at all, and an
+    unorderable pair fails closed rather than defaulting to "recent enough".
+    """
+    if observation is None:
+        return ("no source observation accompanies it",)
+    observed = _timestamp(observation.availability.observed_at)
+    if observed is None:
+        return (
+            f"the source observation is timed {observation.availability.observed_at!r}, "
+            "which cannot be ordered against the proof",
+        )
+    return tuple(
+        f"the proof was taken at {proof.observed_at} but the source was observed at "
+        f"{observation.availability.observed_at}"
+        for proof in offered
+        if (_timestamp(proof.observed_at) or observed) < observed
+    )
 
 
 def _completeness_evidence(known: Sequence[tuple[str, ForeignReceipt]]) -> set[str]:
@@ -371,7 +452,7 @@ def _evaluate_object(
     *,
     references: ReferenceIndex,
     observations: Mapping[str, ResolutionEvidence],
-    proofs: Mapping[str, RefetchProof],
+    proofs: Mapping[str, tuple[RefetchProof, ...]],
 ) -> RetentionDecision:
     """Apply both retention inputs to one object and name every unmet one."""
     key = cache_object.key
@@ -402,26 +483,41 @@ def _evaluate_object(
         # active receipt references the object, and exact re-fetchability is
         # proven -- are evaluated below, where the object is in hand.
         verdict = evaluate_operation("automatic-garbage-collection", observation)
-        if not verdict.allowed:
-            if observation.availability.state != "available":
-                conditions.append("provider-unavailable")
-                details.append(
-                    f"the source is {observation.availability.state}: "
-                    f"{observation.describe()}"
-                )
-            elif observation.reduced_by_authorization:
-                conditions.append("access-revoked")
-                details.append(
-                    "the inventory is reduced by changed authorization, so access to "
-                    "re-fetch these bytes is revoked or narrowed"
-                )
-            else:
-                conditions.append("inventory-incomplete")
-                details.append(
-                    "the inventory is incomplete or truncated, which cannot prove the "
-                    "item still exists upstream"
-                )
-        elif identity not in observation.listed_identities:
+        # The three degraded facts are independent and are reported
+        # independently. An if/elif chain named only the first, so an
+        # observation that was unavailable AND truncated AND narrowed by changed
+        # authorization reported one of the three and an operator repairing it
+        # would fix one third of the problem. Precedence belongs to
+        # RETENTION_REFUSALS, which orders the primary reason afterwards.
+        if observation.availability.state != "available":
+            conditions.append("provider-unavailable")
+            details.append(
+                f"the source is {observation.availability.state}: "
+                f"{observation.describe()}"
+            )
+        if observation.reduced_by_authorization:
+            conditions.append("access-revoked")
+            details.append(
+                "the inventory is reduced by changed authorization, so access to "
+                "re-fetch these bytes is revoked or narrowed"
+            )
+        if not observation.complete:
+            conditions.append("inventory-incomplete")
+            details.append(
+                "the inventory is incomplete or truncated, which cannot prove the "
+                "item still exists upstream"
+            )
+        degraded = {"provider-unavailable", "access-revoked", "inventory-incomplete"}
+        if not verdict.allowed and not degraded & set(conditions):  # pragma: no cover
+            # The table refused for a reason this module does not model. Fail
+            # closed rather than silently disagree with the one table that owns
+            # the offline verdict.
+            conditions.append("inventory-incomplete")
+            details.append(
+                f"the offline table refuses automatic garbage collection: "
+                f"{verdict.evidence}"
+            )
+        if verdict.allowed and identity not in observation.listed_identities:
             conditions.append("upstream-vanished")
             details.append(
                 f"a reachable and complete inventory no longer lists {identity}; a "
@@ -457,20 +553,38 @@ def _evaluate_object(
             f"{sorted(evidence) or ['unrecorded']}, which is the adapter-declaration "
             "case: nothing independent ever confirmed what was stored"
         )
-        proof = proofs.get(identity)
-        if proof is None:
+        offered = proofs.get(identity) or ()
+        drifted = sorted(
+            {
+                proof.observed_digest
+                for proof in offered
+                if proof.observed_digest != key.normalized_content_digest
+            }
+        )
+        if not offered:
             conditions.append("re-fetchability-not-proven")
             details.append(
                 f"{why}; deleting requires a digest-verified re-fetch confirming the "
                 f"source still serves {key.normalized_content_digest}"
             )
-        elif proof.observed_digest != key.normalized_content_digest:
+        elif drifted:
+            # Every offered proof must agree. Taking the last one made the
+            # answer depend on argument order, so a stale matching proof could
+            # override a current one that showed drift.
             conditions.append("refetch-digest-drift")
             details.append(
-                f"the re-fetch observed {proof.observed_digest} where the object pins "
+                f"a re-fetch observed {', '.join(drifted)} where the object pins "
                 f"{key.normalized_content_digest}; this is fail-closed drift, and "
                 "deleting would destroy the last copy of the pinned content"
             )
+        else:
+            stale = _stale_proofs(offered, observation)
+            if stale:
+                conditions.append("refetch-proof-stale")
+                details.append(
+                    "the re-fetch proof does not describe what the source serves now: "
+                    + "; ".join(stale)
+                )
 
     ordered = tuple(
         reason for reason in RETENTION_REFUSALS if reason in set(conditions)
@@ -630,12 +744,29 @@ def _discard_tree(object_store: ObjectStore, path: Path) -> None:
     sees the whole object or nothing at all, and a failure part way through the
     removal leaves an abandoned staging entry that `ObjectStore.sweep_staging`
     reclaims rather than a half-deleted object that a later run reads as cached.
+
+    A removal that does not complete **raises**. Ignoring the removal error made
+    the staging rename look like a deletion: review made the removal fail, and
+    the caller reported the members as deleted and the ledger recorded `purged`
+    while every byte was still on disk under `incoming/`.
     """
     staging_root = object_store.staging_root
     staging_root.mkdir(parents=True, exist_ok=True)
     staged = staging_root / f"{os.getpid()}-{uuid.uuid4().hex}"
     os.rename(path, staged)
-    shutil.rmtree(staged, ignore_errors=True)
+    try:
+        shutil.rmtree(staged)
+    except OSError as exc:
+        raise RetentionError(
+            f"{path} was staged for removal at {staged} but could not be removed: "
+            f"{exc}. The bytes are still on disk and are not deleted; the staging "
+            "entry is reclaimable by ObjectStore.sweep_staging."
+        ) from exc
+    if staged.exists():
+        raise RetentionError(
+            f"{path} was staged for removal at {staged} and the removal reported no "
+            "error, but the tree is still present; nothing is recorded as deleted"
+        )
     with contextlib.suppress(OSError):
         if staging_root.is_dir() and not any(staging_root.iterdir()):
             staging_root.rmdir()
@@ -674,13 +805,21 @@ def _discard_object(object_store: ObjectStore, cache_object: CacheObject) -> tup
     return members
 
 
-def _delete_quarantine(object_store: ObjectStore, path: Path) -> Path:
-    """Delete one quarantined tree an operator named explicitly."""
+def _delete_quarantine(object_store: ObjectStore, digest: str, path: Path) -> Path:
+    """Delete one quarantined tree an operator named explicitly.
+
+    The candidate is re-proven here rather than trusted from the plan: it must
+    be a *bucket-level sibling* of where this digest's object lives and its name
+    must be exactly this digest plus the quarantine marker. Accepting any
+    matching name anywhere under the object root let a purge of one digest reach
+    a directory nested inside another object's content and destroy bytes an
+    active receipt was protecting.
+    """
     resolved = _assert_deletable(object_store, path)
-    if QUARANTINE_SUFFIX not in resolved.name:
+    if resolved not in _quarantine_paths(object_store, digest):
         raise RetentionError(
-            f"{resolved} is not a quarantined tree; only set-aside evidence is removed "
-            "through this path"
+            f"{resolved} is not a quarantined sibling of cache object {digest}; only "
+            "set-aside evidence for this exact object is removed through this path"
         )
     _discard_tree(object_store, resolved)
     return resolved
@@ -776,26 +915,50 @@ class PurgePlan:
     digest: str
     key: CacheKey | None
     object_path: Path | None
+    #: Members of the canonical object, relative to its content root.
     member_paths: tuple[str, ...]
+    #: Bytes held by the canonical object's members.
     byte_count: int
     quarantine_paths: tuple[Path, ...]
     includes_quarantine: bool
     references: tuple[ScopedReference, ...]
     blocked_reason: str | None
+    #: Members held by the quarantined trees, prefixed by their directory name.
+    #: Reported separately from the canonical members because they are deleted
+    #: only when the operator names them, and reported at all because a
+    #: quarantine-only plan otherwise announced zero members and zero bytes
+    #: while deleting a populated tree.
+    quarantine_member_paths: tuple[str, ...] = field(default_factory=tuple)
+    quarantine_byte_count: int = 0
+    #: The identity whose install lock serializes this deletion. It comes from
+    #: the canonical object's key, or from a quarantined tree's own descriptor
+    #: when only quarantined bytes remain.
+    identity: str | None = None
 
     @property
     def deletable(self) -> bool:
         return self.blocked_reason is None
 
+    @property
+    def total_byte_count(self) -> int:
+        """Every byte this plan would actually delete, as it stands."""
+        return self.byte_count + (
+            self.quarantine_byte_count if self.includes_quarantine else 0
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "digest": self.digest,
             "key": self.key.to_dict() if self.key else None,
+            "identity": self.identity,
             "object_path": str(self.object_path) if self.object_path else None,
             "member_paths": list(self.member_paths),
             "byte_count": self.byte_count,
             "quarantine_paths": [str(path) for path in self.quarantine_paths],
+            "quarantine_member_paths": list(self.quarantine_member_paths),
+            "quarantine_byte_count": self.quarantine_byte_count,
             "includes_quarantine": self.includes_quarantine,
+            "total_byte_count": self.total_byte_count,
             "references": [reference.describe() for reference in self.references],
             "blocked_reason": self.blocked_reason,
         }
@@ -830,7 +993,18 @@ class PurgeLedger:
         payload = json.loads(self.path.read_text(encoding="utf-8"))
         if payload.get("schema") != PURGE_LEDGER_SCHEMA:
             raise ValueError(f"unexpected purge ledger schema: {payload.get('schema')}")
-        return list(payload.get("entries") or [])
+        entries = payload.get("entries")
+        # Strictly a list. `entries or []` read `null`, `false`, and `""` as an
+        # empty ledger, so a malformed record of destroyed bytes was
+        # indistinguishable from never having destroyed any.
+        if not isinstance(entries, list) or not all(
+            isinstance(entry, dict) for entry in entries
+        ):
+            raise ValueError(
+                "purge ledger entries must be a list of records; a malformed ledger is "
+                "never read as an empty one"
+            )
+        return entries
 
     def _save(self, entries: Sequence[Mapping[str, Any]]) -> None:
         atomic_write_text(
@@ -890,16 +1064,56 @@ class PurgeLedger:
 
 
 def _quarantine_paths(object_store: ObjectStore, digest: str) -> tuple[Path, ...]:
+    """Trees a repair set aside *for this exact object*, and nothing else.
+
+    A quarantined object is a bucket-level sibling of the object it replaced:
+    `<objects_root>/<bucket>/<digest><marker><unique>`. Searching the whole tree
+    for that name instead let a purge reach a directory nested inside another
+    object's content. Review created `.../<keeper>/content/docs/<victim>.quarantined-…`,
+    purged the victim's digest, and removed a member of the keeper -- an object
+    an active receipt referenced, which then failed verification.
+    """
     root = object_store.objects_root
     if not root.is_dir():
         return ()
-    return tuple(
-        sorted(
-            path
-            for path in root.rglob(f"{digest}{QUARANTINE_SUFFIX}*")
-            if path.is_dir()
-        )
-    )
+    resolved_root = root.resolve()
+    found: list[Path] = []
+    for bucket in sorted(root.iterdir()):
+        if not bucket.is_dir():
+            continue
+        for candidate in sorted(bucket.iterdir()):
+            if not candidate.is_dir():
+                continue
+            marker = f"{digest}{QUARANTINE_SUFFIX}"
+            if not candidate.name.startswith(marker) or candidate.name == marker:
+                continue
+            resolved = candidate.resolve()
+            # A bucket sibling and nothing deeper: exactly two levels below the
+            # object root, and inside it.
+            if resolved.parent.parent != resolved_root:
+                continue
+            found.append(resolved)
+    return tuple(sorted(found))
+
+
+def _quarantine_key(path: Path) -> CacheKey | None:
+    """The cache identity a quarantined tree still describes, if it is readable.
+
+    A quarantine keeps the object's self-describing descriptor, which is what
+    lets a purge of quarantine-only bytes take the *same* identity lock an
+    install takes. Locking a synthetic `purge#<digest>` name instead serialized
+    against nothing: review installed the same item under the real identity lock
+    after purge's final reference check and the last quarantined bytes were
+    deleted anyway.
+    """
+    descriptor = path / DESCRIPTOR_NAME
+    if not descriptor.is_file():
+        return None
+    try:
+        payload = json.loads(descriptor.read_text(encoding="utf-8"))
+        return CacheKey.from_dict(payload["key"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
 
 
 def plan_purge(
@@ -936,9 +1150,17 @@ def plan_purge(
             ),
         )
     active = references.references(subject)
+    key = cache_object.key if cache_object else _quarantine_identity_key(quarantine)
+    quarantine_members: list[str] = []
+    quarantine_bytes = 0
+    for path in quarantine:
+        for member in sorted(path.rglob("*")):
+            if member.is_file():
+                quarantine_members.append(f"{path.name}/{member.relative_to(path)}")
+                quarantine_bytes += member.stat().st_size
     return PurgePlan(
         digest=subject,
-        key=cache_object.key if cache_object else None,
+        key=key,
         object_path=cache_object.path if cache_object else None,
         member_paths=_member_paths(cache_object) if cache_object else (),
         byte_count=_byte_count(cache_object) if cache_object else 0,
@@ -946,7 +1168,22 @@ def plan_purge(
         includes_quarantine=bool(include_quarantined and quarantine),
         references=active,
         blocked_reason="referenced-by-active-receipt" if active else None,
+        quarantine_member_paths=tuple(quarantine_members),
+        quarantine_byte_count=quarantine_bytes,
+        identity=key.qualified_identity() if key else None,
     )
+
+
+def _quarantine_identity_key(quarantine: Sequence[Path]) -> CacheKey | None:
+    """The one identity every quarantined tree for this digest agrees on."""
+    keys = {}
+    for path in quarantine:
+        key = _quarantine_key(path)
+        if key is not None:
+            keys[key.qualified_identity()] = key
+    if len(keys) != 1:
+        return None
+    return next(iter(keys.values()))
 
 
 def purge_object(
@@ -1000,9 +1237,13 @@ def purge_object(
         include_quarantined=include_quarantined,
     )
     _refuse_referenced(plan)
+    _refuse_unidentifiable(plan)
 
-    identity = plan.key.qualified_identity() if plan.key else f"purge#{plan.digest}"
-    with pin_store.identity_lock(identity):
+    # The *same* lock an install takes for this identity. A synthetic name
+    # derived from the digest serialized against nothing: review installed the
+    # item under the real identity lock after the final reference check, and the
+    # purge deleted the last quarantined bytes and recorded success anyway.
+    with pin_store.identity_lock(str(plan.identity)):
         confirmed = plan_purge(
             object_store=object_store,
             references=references,
@@ -1010,6 +1251,14 @@ def purge_object(
             include_quarantined=include_quarantined,
         )
         _refuse_referenced(confirmed)
+        _refuse_unidentifiable(confirmed)
+        if confirmed.identity != plan.identity:  # pragma: no cover - defensive
+            raise PurgeRefused(
+                "unidentifiable-subject",
+                f"cache object {confirmed.digest} identified as {plan.identity!r} "
+                f"before the lock and {confirmed.identity!r} under it; the deletion is "
+                "refused rather than performed under the wrong serialization",
+            )
         entry_id = ledger.record_intent(confirmed, acknowledgement)
         deleted_members: tuple[str, ...] = ()
         if confirmed.object_path is not None:
@@ -1023,7 +1272,9 @@ def purge_object(
         deleted_quarantine: list[Path] = []
         if confirmed.includes_quarantine:
             for path in confirmed.quarantine_paths:
-                deleted_quarantine.append(_delete_quarantine(object_store, path))
+                deleted_quarantine.append(
+                    _delete_quarantine(object_store, confirmed.digest, path)
+                )
         ledger.record_completion(
             entry_id,
             deleted_paths=deleted_members,
@@ -1036,6 +1287,26 @@ def purge_object(
         deleted_quarantine=tuple(deleted_quarantine),
         ledger_entry_id=entry_id,
         purged_at=acknowledgement.acknowledged_at,
+    )
+
+
+def _refuse_unidentifiable(plan: PurgePlan) -> PurgePlan:
+    """Refuse to delete bytes whose identity cannot be serialized against installs.
+
+    Every deletion runs under the identity lock an install holds. A subject
+    whose identity cannot be recovered -- a quarantined tree with an unreadable
+    or absent descriptor, or trees that disagree about whose bytes they are --
+    cannot take that lock, so it is retained rather than deleted under a lock
+    that protects nothing.
+    """
+    if plan.identity:
+        return plan
+    raise PurgeRefused(
+        "unidentifiable-subject",
+        f"cache object {plan.digest} carries no readable identity: the canonical "
+        "object is gone and its quarantined trees do not agree on, or do not record, "
+        "the item they came from. Without it the deletion cannot be serialized "
+        "against an install of the same item, so the bytes are retained.",
     )
 
 

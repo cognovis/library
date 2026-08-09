@@ -63,9 +63,18 @@
   held by a structural call-graph check as well as by execution; quarantined
   objects a repair set aside are retained evidence that collection never touches
   and purge removes only when an operator names them. Both deleting paths re-prove
-  their preconditions under the same identity lock an install holds, so a reference
-  acquired after the plan still protects the object. Cache core only — no
-  production CLI, installer, or sync path calls it yet (`CL-mvet`).
+  their preconditions under the same identity lock an install holds — recovered
+  from a quarantined tree's own descriptor when only quarantined bytes remain, and
+  refused outright when no identity can be recovered — so a reference acquired
+  after the plan still protects the object. Required scopes must resolve to
+  distinct locations, so two labels over one store can no longer hide the other
+  scope's receipts; quarantine discovery is restricted to bucket-level siblings of
+  the named object, so a purge cannot reach a lookalike directory inside another
+  object's content; a re-fetch proof set is evaluated whole and must be at least as
+  recent as the source observation, so argument order and stale evidence can no
+  longer authorize a deletion; and a removal that does not complete raises instead
+  of recording success. Cache core only — no production CLI, installer, or sync
+  path calls it yet (`CL-mvet`).
 
 - *(CL-y5z4, marketplace)* Every installed foreign artifact is now reproducible
   from a complete, immutable cache object while its source is unreachable. Cache

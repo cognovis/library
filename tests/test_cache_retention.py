@@ -60,6 +60,7 @@ from lib.providers.retention import (  # noqa: E402
     ReceiptScope,
     ReferenceIndex,
     RefetchProof,
+    RetentionError,
     ScopeUnreadable,
     collect_garbage,
     plan_garbage_collection,
@@ -854,3 +855,195 @@ def test_no_static_call_path_from_collection_to_purge() -> None:
 
     assert named == []
     assert "collect_garbage" in reached and "plan_garbage_collection" in reached
+
+
+# -- wave-1 adversarial review regressions (gpt-5.6-sol) ----------------------
+#
+# Each test below reproduces one demonstrated defect from the wave-1 review and
+# is kept as a regression. They are written as executable tests rather than as
+# repair notes because the mandated co-reviewer was unavailable for this bead,
+# so every reviewer proof-of-concept is re-executed against the delivered
+# candidate on every run.
+
+
+def test_scope_labels_cannot_alias_one_store_as_two_scopes(tmp_path: Path) -> None:
+    """Wave-1 F2: one store under both required labels hid the real global lock.
+
+    The required-scope check passed, the actual global store was never read, and
+    an object a live global receipt referenced was collected.
+    """
+    cache = _Cache(tmp_path)
+    cache.install(scope="global", upstream_id="kits/beacon", name="beacon")
+
+    with pytest.raises(ScopeUnreadable) as aliased:
+        ReferenceIndex(
+            [
+                ReceiptScope(name="project", store=cache.project),
+                ReceiptScope(name="global", store=cache.project),
+            ]
+        )
+    assert "one store cannot answer for two scopes" in str(aliased.value)
+
+    # Two distinct ReceiptStore objects over the same file are the same alias.
+    with pytest.raises(ScopeUnreadable):
+        ReferenceIndex(
+            [
+                ReceiptScope(name="project", store=cache.project),
+                ReceiptScope(name="global", store=ReceiptStore(cache.project.path)),
+            ]
+        )
+
+
+@pytest.mark.parametrize("stale_last", [True, False])
+def test_conflicting_refetch_proofs_fail_closed(tmp_path: Path, stale_last: bool) -> None:
+    """Wave-1 F3: the last proof in the sequence used to win.
+
+    A stale proof that matched the pin overrode a current one that showed drift,
+    so argument order decided whether irreplaceable bytes were deleted.
+    """
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    identity = outcome.receipt.qualified_identity()
+    served = content_digest({"SKILL.md": b"---\nname: anchor\n---\nreplaced body\n"})
+
+    matching = _proof(outcome)
+    drifting = RefetchProof(
+        provider_identity=PROVIDER,
+        qualified_identity=identity,
+        observed_digest=served,
+        observed_at=LATER,
+    )
+    proofs = (drifting, matching) if stale_last else (matching, drifting)
+
+    plan = plan_garbage_collection(
+        object_store=cache.objects,
+        references=cache.index(),
+        observations={PROVIDER: _observation(identities=(identity,))},
+        refetch_proofs=proofs,
+        observed_at=LATER,
+    )
+    decision = _decision(plan, outcome.cache_object.key.digest())
+    assert decision.reason == "refetch-digest-drift"
+    assert not decision.collectable
+
+    result = collect_garbage(
+        object_store=cache.objects,
+        references=cache.index(),
+        observations={PROVIDER: _observation(identities=(identity,))},
+        refetch_proofs=proofs,
+        observed_at=LATER,
+        pin_store=cache.pins,
+    )
+    assert result.deleted == ()
+    assert cache.objects.verify(outcome.cache_object.key).verified
+
+
+def test_a_refetch_proof_older_than_its_observation_is_stale(tmp_path: Path) -> None:
+    """Wave-1 F3: a proof is about what the source serves now, so it must be current."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    identity = outcome.receipt.qualified_identity()
+
+    ancient = RefetchProof(
+        provider_identity=PROVIDER,
+        qualified_identity=identity,
+        observed_digest=outcome.receipt.normalized_content_digest,
+        observed_at="2000-01-01T00:00:00Z",
+    )
+    plan = plan_garbage_collection(
+        object_store=cache.objects,
+        references=cache.index(),
+        observations={
+            PROVIDER: _observation(
+                availability=ProviderAvailability(state="available", observed_at=LATER),
+                identities=(identity,),
+            )
+        },
+        refetch_proofs=(ancient,),
+        observed_at=LATER,
+    )
+    decision = _decision(plan, outcome.cache_object.key.digest())
+    assert decision.reason == "refetch-proof-stale"
+    assert "2000-01-01T00:00:00Z" in decision.detail
+
+    # A proof whose time cannot be ordered is not a proof at all.
+    with pytest.raises(ValueError, match="ISO-8601"):
+        RefetchProof(
+            provider_identity=PROVIDER,
+            qualified_identity=identity,
+            observed_digest=outcome.receipt.normalized_content_digest,
+            observed_at="recently",
+        )
+
+
+def test_simultaneous_degraded_conditions_are_all_named(tmp_path: Path) -> None:
+    """Wave-1 F6: an if/elif chain reported one of three facts that all held."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+
+    plan = plan_garbage_collection(
+        object_store=cache.objects,
+        references=cache.index(),
+        observations={
+            PROVIDER: _observation(
+                availability=UNAVAILABLE,
+                identities=(outcome.receipt.qualified_identity(),),
+                complete=False,
+                reduced_by_authorization=True,
+            )
+        },
+        refetch_proofs=(_proof(outcome),),
+        observed_at=LATER,
+    )
+    decision = _decision(plan, outcome.cache_object.key.digest())
+    assert set(decision.conditions) >= {
+        "provider-unavailable",
+        "access-revoked",
+        "inventory-incomplete",
+    }
+    # Precedence still picks one primary reason, and it is the first in the
+    # declared order rather than the first branch that happened to run.
+    assert decision.reason == "provider-unavailable"
+    assert list(decision.conditions) == [
+        reason for reason in RETENTION_REFUSALS if reason in set(decision.conditions)
+    ]
+
+
+@pytest.mark.parametrize("mode", ["raises", "silently-ineffective"])
+def test_a_failed_removal_is_never_reported_as_a_deletion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Wave-1 F5: `ignore_errors=True` turned a failed removal into a success.
+
+    Both shapes are covered: a removal that raises, and the shape the swallowed
+    error actually produced -- a removal that reports nothing and removes
+    nothing, which the caller then recorded as a deletion.
+    """
+    cache = _Cache(tmp_path)
+    outcome = cache.install(revision="v1.0.0")
+    cache.unreference(outcome)
+
+    def _refuse(*args: object, **kwargs: object) -> None:
+        if mode == "raises":
+            raise OSError("the filesystem refused to remove the staged tree")
+
+    monkeypatch.setattr(retention.shutil, "rmtree", _refuse)
+    with pytest.raises(RetentionError) as failed:
+        collect_garbage(
+            object_store=cache.objects,
+            references=cache.index(),
+            observations={
+                PROVIDER: _observation(identities=(outcome.receipt.qualified_identity(),))
+            },
+            refetch_proofs=(_proof(outcome),),
+            observed_at=LATER,
+            pin_store=cache.pins,
+        )
+    assert "not deleted" in str(failed.value) or "still present" in str(failed.value)
+
+    # The bytes are still on disk, staged and reclaimable rather than lost.
+    monkeypatch.undo()
+    assert cache.objects.temporary_entries() != ()

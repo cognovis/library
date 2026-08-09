@@ -59,9 +59,12 @@ from lib.providers.retention import (  # noqa: E402
     PurgeRefused,
     ReceiptScope,
     ReferenceIndex,
+    RetentionError,
+    ScopeUnreadable,
     plan_purge,
     purge_object,
 )
+from lib.providers import retention  # noqa: E402
 
 PROVIDER = "provider-under-test"
 NOW = "2026-08-09T09:00:00Z"
@@ -359,8 +362,6 @@ def test_purge_rechecks_references_under_the_install_lock(tmp_path: Path) -> Non
 
 def test_purge_refuses_when_a_scope_cannot_be_read(tmp_path: Path) -> None:
     """An unreadable scope is never the same answer as an unreferenced object."""
-    from lib.providers.retention import ScopeUnreadable
-
     cache = _Cache(tmp_path)
     outcome = cache.install()
     cache.unreference(outcome)
@@ -387,8 +388,10 @@ def test_purge_requires_acknowledgement(tmp_path: Path) -> None:
     cache.unreference(outcome)
     digest = outcome.cache_object.key.digest()
 
-    # There is no purge entry point that does not take an acknowledgement.
-    with pytest.raises(TypeError):
+    # There is no purge entry point that does not take an acknowledgement. The
+    # diagnostic is matched, because "any TypeError" would also be satisfied by
+    # an unrelated signature change (wave-1 A3).
+    with pytest.raises(TypeError, match="acknowledgement"):
         purge_object(  # type: ignore[call-arg]
             object_store=cache.objects,
             references=cache.index(),
@@ -556,3 +559,253 @@ def test_purge_leaves_quarantined_evidence_unless_it_is_named(tmp_path: Path) ->
     assert not quarantine.exists()
     assert cache.objects.quarantined() == ()
     assert [entry["status"] for entry in cache.ledger.entries()] == ["purged", "purged"]
+
+
+# -- wave-1 adversarial review regressions (gpt-5.6-sol) ----------------------
+
+
+def test_purge_never_reaches_a_lookalike_directory_inside_another_object(
+    tmp_path: Path,
+) -> None:
+    """Wave-1 F1: quarantine discovery searched the whole object tree.
+
+    A legitimate member directory of a *different*, actively referenced object
+    was named like a quarantine of the purged digest, and purging removed it.
+    """
+    cache = _Cache(tmp_path)
+    victim = cache.install()
+    cache.unreference(victim)
+    digest = victim.cache_object.key.digest()
+
+    # A second item legitimately ships a directory whose name looks exactly like
+    # a quarantine of the victim's digest.
+    member = f"docs/{digest}{QUARANTINE_SUFFIX}legitimate/note.md"
+    files = {"SKILL.md": b"---\nname: keeper\n---\nkeeper body\n", member: b"# note\n"}
+    keeper = install_foreign_item(
+        _item(upstream_id="kits/keeper", upstream_name="keeper", library_name="keeper"),
+        retrieve=lambda: FetchedItem(
+            upstream_id="kits/keeper",
+            revision=None,
+            files=tuple(
+                FetchedFile(path=path, content=content) for path, content in files.items()
+            ),
+            primary_path="SKILL.md",
+        ),
+        object_store=cache.objects,
+        pin_store=cache.pins,
+        receipt_store=cache.global_,
+        transformation=IDENTITY_TRANSFORMATION,
+        target="project_committed",
+        activate=cache.projector.activation,
+        completeness=CompletenessEvidence.from_manifest(sorted(files)),
+        observed_at=NOW,
+    )
+    assert cache.objects.verify(keeper.cache_object.key).verified
+
+    plan = plan_purge(
+        object_store=cache.objects,
+        references=cache.index(),
+        digest=digest,
+        include_quarantined=True,
+    )
+    assert plan.quarantine_paths == ()
+    assert not plan.includes_quarantine
+
+    purge_object(
+        object_store=cache.objects,
+        references=cache.index(),
+        pin_store=cache.pins,
+        ledger=cache.ledger,
+        acknowledgement=_acknowledgement(digest),
+        include_quarantined=True,
+    )
+    assert not victim.cache_object.path.exists()
+    assert (keeper.cache_object.content_path / member).is_file()
+    assert cache.objects.verify(keeper.cache_object.key).verified
+
+
+def test_quarantine_only_purge_uses_the_install_identity_lock(tmp_path: Path) -> None:
+    """Wave-1 F4: a synthetic `purge#<digest>` lock serialized against nothing."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    digest = outcome.cache_object.key.digest()
+    identity = outcome.receipt.qualified_identity()
+    quarantine = outcome.cache_object.path.with_name(
+        f"{outcome.cache_object.path.name}{QUARANTINE_SUFFIX}deadbeef"
+    )
+    shutil.copytree(outcome.cache_object.path, quarantine)
+
+    purge_object(
+        object_store=cache.objects,
+        references=cache.index(),
+        pin_store=cache.pins,
+        ledger=cache.ledger,
+        acknowledgement=_acknowledgement(digest),
+    )
+    assert not outcome.cache_object.path.exists()
+
+    # Only the quarantined bytes remain. The plan still recovers the real
+    # identity from the quarantined tree's own descriptor.
+    plan = plan_purge(
+        object_store=cache.objects,
+        references=cache.index(),
+        digest=digest,
+        include_quarantined=True,
+    )
+    assert plan.identity == identity
+    assert plan.key is not None
+
+    real_lock = cache.pins.identity_lock
+    taken: list[str] = []
+
+    @contextmanager
+    def racing_lock(qualified_identity: str) -> Iterator[None]:
+        with real_lock(qualified_identity):
+            taken.append(qualified_identity)
+            if len(taken) == 1:
+                cache.global_.put(outcome.receipt)
+            yield
+
+    cache.pins.identity_lock = racing_lock  # type: ignore[method-assign]
+    with pytest.raises(PurgeRefused) as refused:
+        purge_object(
+            object_store=cache.objects,
+            references=cache.index(),
+            pin_store=cache.pins,
+            ledger=cache.ledger,
+            acknowledgement=_acknowledgement(digest),
+            include_quarantined=True,
+        )
+    assert refused.value.reason == "referenced-by-active-receipt"
+    assert taken == [identity]
+    assert quarantine.is_dir()
+
+
+def test_purge_refuses_a_quarantine_it_cannot_identify(tmp_path: Path) -> None:
+    """Bytes that cannot be serialized against an install are retained."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    digest = outcome.cache_object.key.digest()
+    quarantine = outcome.cache_object.path.with_name(
+        f"{outcome.cache_object.path.name}{QUARANTINE_SUFFIX}deadbeef"
+    )
+    shutil.copytree(outcome.cache_object.path, quarantine)
+    (quarantine / "object.json").unlink()
+
+    purge_object(
+        object_store=cache.objects,
+        references=cache.index(),
+        pin_store=cache.pins,
+        ledger=cache.ledger,
+        acknowledgement=_acknowledgement(digest),
+    )
+    with pytest.raises(PurgeRefused) as refused:
+        purge_object(
+            object_store=cache.objects,
+            references=cache.index(),
+            pin_store=cache.pins,
+            ledger=cache.ledger,
+            acknowledgement=_acknowledgement(digest),
+            include_quarantined=True,
+        )
+    assert refused.value.reason == "unidentifiable-subject"
+    assert refused.value.reason in PURGE_REFUSALS
+    assert quarantine.is_dir()
+
+
+@pytest.mark.parametrize("mode", ["raises", "silently-ineffective"])
+def test_a_failed_purge_removal_never_records_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Wave-1 F5: the ledger recorded `purged` while every byte was still there."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    digest = outcome.cache_object.key.digest()
+
+    def _refuse(*args: object, **kwargs: object) -> None:
+        if mode == "raises":
+            raise OSError("the filesystem refused to remove the staged tree")
+
+    monkeypatch.setattr(retention.shutil, "rmtree", _refuse)
+    with pytest.raises(RetentionError):
+        purge_object(
+            object_store=cache.objects,
+            references=cache.index(),
+            pin_store=cache.pins,
+            ledger=cache.ledger,
+            acknowledgement=_acknowledgement(digest),
+        )
+    monkeypatch.undo()
+
+    entries = PurgeLedger(cache.ledger.path).entries()
+    assert [entry["status"] for entry in entries] == ["planned"]
+    assert entries[0]["completed_at"] is None
+    assert entries[0]["deleted_paths"] == []
+    # The bytes survived as a reclaimable staging entry rather than vanishing.
+    assert cache.objects.temporary_entries() != ()
+
+
+def test_a_quarantine_only_plan_reports_the_members_it_would_delete(
+    tmp_path: Path,
+) -> None:
+    """Wave-1 A1: the dry run announced zero members while deleting a full tree."""
+    cache = _Cache(tmp_path)
+    outcome = cache.install()
+    cache.unreference(outcome)
+    digest = outcome.cache_object.key.digest()
+    quarantine = outcome.cache_object.path.with_name(
+        f"{outcome.cache_object.path.name}{QUARANTINE_SUFFIX}deadbeef"
+    )
+    shutil.copytree(outcome.cache_object.path, quarantine)
+
+    plan = plan_purge(
+        object_store=cache.objects,
+        references=cache.index(),
+        digest=digest,
+        include_quarantined=True,
+    )
+    quarantine_files = sorted(
+        f"{quarantine.name}/{path.relative_to(quarantine)}"
+        for path in quarantine.rglob("*")
+        if path.is_file()
+    )
+    assert sorted(plan.quarantine_member_paths) == quarantine_files
+    assert plan.quarantine_byte_count == sum(
+        path.stat().st_size for path in quarantine.rglob("*") if path.is_file()
+    )
+    assert plan.total_byte_count == plan.byte_count + plan.quarantine_byte_count
+
+    # Without the operator naming them, the quarantined bytes are not counted as
+    # something this purge would delete.
+    unnamed = plan_purge(
+        object_store=cache.objects, references=cache.index(), digest=digest
+    )
+    assert unnamed.quarantine_member_paths == plan.quarantine_member_paths
+    assert unnamed.total_byte_count == unnamed.byte_count
+
+
+def test_a_malformed_purge_ledger_is_never_read_as_an_empty_one(tmp_path: Path) -> None:
+    """Wave-1 A2: `entries or []` turned a damaged record of destroyed bytes into none."""
+    ledger = PurgeLedger(tmp_path / "purge-ledger.json")
+    for broken in ("null", "false", '""', '"[]"', "{}"):
+        ledger.path.write_text(
+            '{"schema": "cognovis.cache-purge-ledger.v1", "entries": ' + broken + "}",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="never read as an empty one"):
+            ledger.entries()
+
+    ledger.path.write_text(
+        '{"schema": "cognovis.cache-purge-ledger.v1", "entries": ["not-a-record"]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError):
+        ledger.entries()
+
+    ledger.path.write_text(
+        '{"schema": "cognovis.cache-purge-ledger.v1", "entries": []}', encoding="utf-8"
+    )
+    assert ledger.entries() == ()

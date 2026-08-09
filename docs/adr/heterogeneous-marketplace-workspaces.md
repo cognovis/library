@@ -1368,6 +1368,38 @@ reference between a plan and a deletion; taking that lock and evaluating again
 is what makes "an active receipt protects its object" true for receipts that did
 not exist when the plan was made.
 
+Adversarial review then demonstrated, by execution, six further gaps, and the
+implemented contract now states them:
+
+6. **A scope is its location, not its label.** Two required labels over one
+   store satisfied the scope set while hiding the other scope's receipts
+   entirely, and an object a live global receipt referenced was collected.
+   Required scopes must resolve to distinct locations.
+7. **A quarantined tree is a bucket-level sibling, and nothing else is.**
+   Searching the whole object root for a quarantine-shaped name let a purge of
+   one digest reach a legitimate member directory nested inside another object's
+   content, remove it, and leave that referenced object failing verification.
+8. **A proof set is evaluated whole, and it must be current.** Keeping one proof
+   per identity made the outcome depend on argument order: a stale proof that
+   matched the pin overrode a current one that showed drift. Any disagreement
+   inside the set is drift, and a proof older than the source observation it
+   accompanies — or one whose time cannot be ordered against it — is stale.
+9. **Every deletion runs under the identity lock an install takes.** When only
+   quarantined bytes remain there is no canonical object to derive that identity
+   from, and a synthetic lock name serialized against nothing. The identity is
+   recovered from the quarantined tree's own descriptor, and a subject whose
+   identity cannot be recovered is retained rather than deleted under a lock that
+   protects nothing.
+10. **A removal that does not complete is not a deletion.** Ignoring the removal
+    error made the staging rename look like success: the caller reported the
+    members as deleted and the ledger recorded `purged` while every byte was
+    still on disk. Both a raising and a silently ineffective removal now fail
+    loudly, and the ledger entry stays at its recorded intent.
+11. **Degraded facts are independent and are all named.** An observation that is
+    unavailable *and* truncated *and* narrowed by changed authorization reported
+    one of the three, so an operator repairing it would fix one third of the
+    problem. Precedence orders the primary reason; it does not hide the others.
+
 **Scope boundary.** This slice ships the retention core and its contracts. No
 production CLI, installer, or sync path calls them yet; CLI wiring is `CL-mvet`.
 
