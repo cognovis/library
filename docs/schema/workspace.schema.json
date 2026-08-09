@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/cognovis/library/docs/schema/workspace.schema.json",
   "title": "Library Workspace Manifest",
-  "description": "Schema v1 for a metadata-only, same-catalog Library desired-state root.",
-  "type": "object",
-  "required": ["schema_version", "name", "version", "description", "roots"],
-  "additionalProperties": false,
-  "properties": {
-    "schema_version": {"const": 1},
+  "description": "Schema v1 (same-catalog) and schema v2 (pinned cross-catalog roots) for a metadata-only Library desired-state root.",
+  "oneOf": [
+    {"$ref": "#/$defs/v1"},
+    {"$ref": "#/$defs/v2"}
+  ],
+  "$defs": {
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*$"
@@ -16,64 +16,172 @@
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
     },
-    "description": {"type": "string", "minLength": 1},
     "status": {
       "type": "string",
       "enum": ["experimental", "stable", "deprecated"],
       "default": "experimental"
     },
-    "standing_context_fraction": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 1
+    "constraint": {
+      "type": "string",
+      "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
     },
-    "source": {"type": "string", "minLength": 1},
-    "metadata": {"type": "object"},
-    "tags": {
-      "type": "array",
-      "items": {"type": "string"},
-      "default": []
+    "rootType": {
+      "type": "string",
+      "enum": [
+        "skill",
+        "agent",
+        "prompt",
+        "script",
+        "standard",
+        "guardrail",
+        "mcp",
+        "model-standard",
+        "agent-base",
+        "workflow",
+        "pi-extension",
+        "pi-profile",
+        "just-module",
+        "runtime-config"
+      ]
     },
-    "roots": {
-      "type": "array",
-      "minItems": 2,
-      "maxItems": 10,
-      "uniqueItems": true,
-      "items": {"$ref": "#/$defs/root"}
-    }
-  },
-  "$defs": {
-    "root": {
+    "rootName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "v1": {
+      "type": "object",
+      "required": ["schema_version", "name", "version", "description", "roots"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": 1},
+        "name": {"$ref": "#/$defs/name"},
+        "version": {"$ref": "#/$defs/version"},
+        "description": {"type": "string", "minLength": 1},
+        "status": {"$ref": "#/$defs/status"},
+        "standing_context_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source": {"type": "string", "minLength": 1},
+        "metadata": {"type": "object"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "roots": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/v1Root"}
+        }
+      }
+    },
+    "v1Root": {
       "type": "object",
       "required": ["type", "name"],
       "additionalProperties": false,
       "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "skill",
-            "agent",
-            "prompt",
-            "script",
-            "standard",
-            "guardrail",
-            "mcp",
-            "model-standard",
-            "agent-base",
-            "workflow",
-            "pi-extension",
-            "pi-profile",
-            "just-module",
-            "runtime-config"
-          ]
+        "type": {"$ref": "#/$defs/rootType"},
+        "name": {"$ref": "#/$defs/rootName"},
+        "constraint": {"$ref": "#/$defs/constraint"}
+      }
+    },
+    "v2": {
+      "type": "object",
+      "required": ["schema_version", "name", "version", "description", "catalogs", "roots"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": 2},
+        "name": {"$ref": "#/$defs/name"},
+        "version": {"$ref": "#/$defs/version"},
+        "description": {"type": "string", "minLength": 1},
+        "status": {"$ref": "#/$defs/status"},
+        "standing_context_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         },
-        "name": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        "source": {"type": "string", "minLength": 1},
+        "metadata": {"type": "object"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
         },
-        "constraint": {
+        "catalogs": {
+          "description": "The only place a Workspace may name a source. Every entry carries an immutable pin.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/declaredCatalog"}
+        },
+        "roots": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/v2Root"}
+        }
+      }
+    },
+    "declaredCatalog": {
+      "type": "object",
+      "required": ["alias", "identity", "pin"],
+      "additionalProperties": false,
+      "properties": {
+        "alias": {
+          "description": "Manifest-local display alias. Locks and diagnostics use the canonical identity.",
           "type": "string",
-          "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "identity": {
+          "description": "Canonical catalog or provider identity.",
+          "type": "string",
+          "minLength": 1
+        },
+        "pin": {"$ref": "#/$defs/catalogPin"}
+      }
+    },
+    "catalogPin": {
+      "description": "A typed, immutable pin. Resolution uses the pin, never a moving branch.",
+      "type": "object",
+      "required": ["kind", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "enum": ["commit", "inventory-snapshot"]},
+        "value": {"type": "string", "pattern": "^[0-9a-f]+$"}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {"const": "commit"},
+            "value": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"}
+          }
+        },
+        {
+          "properties": {
+            "kind": {"const": "inventory-snapshot"},
+            "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "v2Root": {
+      "type": "object",
+      "required": ["type", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"$ref": "#/$defs/rootType"},
+        "name": {"$ref": "#/$defs/rootName"},
+        "constraint": {"$ref": "#/$defs/constraint"},
+        "catalog": {
+          "description": "An alias declared in this manifest's catalogs block. Never a URL.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
         }
       }
     }

@@ -306,9 +306,11 @@ whose constitutive feature is ownership-aware desired-state reconciliation. It
 has no deployable artifact and can explicitly retire clean, ownerless receipts
 through ADR-0010's prune contract. A project may directly register several
 orthogonal Workspaces. Schema v1 keeps every manifest to same-catalog artifact
-roots and defers nested Workspace and cross-catalog manifest roots. The
-Workspace CLI implements discovery, validation, registration, status,
-explanation, sync, adoption, removal, and digest-bound pruning.
+roots; schema v2 adds cross-catalog roots qualified by an alias from a pinned
+`catalogs:` block, which is the only place a manifest may name a source. Nested
+Workspace roots remain deferred in both versions. The Workspace CLI implements
+discovery, validation, registration, status, explanation, sync, adoption,
+removal, and digest-bound pruning.
 
 
 ## Precedence and Name Collision Policy

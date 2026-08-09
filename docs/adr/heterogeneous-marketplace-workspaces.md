@@ -604,10 +604,14 @@ description: Engineering navigator and procedure skills across first-party and u
 catalogs:
   - alias: mattpocock
     identity: https://github.com/mattpocock/skills
-    pin: 4f2c1e9a8b7d6c5e4f3a2b1c0d9e8f7a6b5c4d3e
+    pin:
+      kind: commit
+      value: 4f2c1e9a8b7d6c5e4f3a2b1c0d9e8f7a6b5c4d3e
   - alias: core
     identity: https://github.com/cognovis/library-core
-    pin: dee0415f47d8ae4ccfa7e166bdd682c29f94c33b
+    pin:
+      kind: commit
+      value: dee0415f47d8ae4ccfa7e166bdd682c29f94c33b
 roots:
   - type: skill
     name: implement
@@ -628,7 +632,10 @@ Rules:
 2. **Every declared catalog carries a `pin`.** Resolution uses the pin, not a
    moving branch. An unpinned catalog entry is a schema error.
 
-   A pin is **typed**, because not every provider has a commit:
+   A pin is **typed**, and the type is written out — the mapping above, never a
+   bare string. A bare string would have to be interpreted as one kind by
+   default, and defaulting a revisionless source's snapshot digest to `commit`
+   is exactly the silent mis-typing the table below exists to prevent:
 
    | `pin.kind` | Value | Used by |
    |---|---|---|
@@ -711,6 +718,99 @@ provider in the resolved scope closure is unavailable, returns an inventory that
 is incomplete, truncated, or reduced by changed authorization, or no longer lists
 a previously installed item. See `Offline Semantics` for the full behavior and for
 the `upstream-vanished` receipt state.
+
+### Implementation record (slice 5, `CL-dbam`)
+
+Delivered: schema v2 validation in both `docs/schema/workspace.schema.json` and
+`scripts/lib/workspace.py`, cross-catalog closure resolution with per-node
+canonical identity and pin, the mutation gate, and the restated foreign-catalog
+prune guard. v1 manifests validate unchanged.
+
+Three points where the implementation is more specific than the text above, each
+because the text alone admitted a reading that would have broken something:
+
+1. **Registration has two sources, not one.** Read literally, "registered in the
+   resolved Workspace closure" would mean *only* a v2 `catalogs:` block, and a
+   v1-only scope would register nothing and could never prune. The implemented
+   rule is the union of ADR-0010's shipped provenance comparison — the audited
+   catalog and its configured first-party source catalogs — with this ADR's
+   addition: every identity a resolved Workspace registers, meaning its steward
+   and its declared catalogs. A marketplace or provider is deliberately excluded
+   from the first source: configuring one is not registration, and reaching one
+   requires the pinned declaration this section is about.
+2. **"Unresolvable catalog" is not "unresolvable member."** A registered
+   Workspace whose manifest can no longer be read makes registration
+   undeterminable and suspends the scope's prune. A stale direct root whose
+   member left the catalog does not: it is reported as a blocker, and the
+   catalog it records still counts. Collapsing the two would let one stale entry
+   suspend an operator's ability to remove anything, which contradicts shipped,
+   tested behavior.
+3. **Every resolved catalog must be declared, in v2.** The ADR requires a pin on
+   every resolved node; a dependency resolving into a catalog the manifest does
+   not declare therefore has no pin available, and the resolution fails naming
+   the member and the undeclared identity rather than recording an unpinned
+   node. This also closes a redirection path the qualifier alone leaves open: a
+   published item's `requires:` cannot pull the closure into an unreviewed
+   source.
+
+`gate_workspace_mutation` is the single door from a completed resolution to a
+mutation. It refuses an item the resolution did not select, an item carrying a
+selected member's name under a different provider identity, a duplicate item, an
+item with no content, and a selection that does not cover every resolved
+artifact, before applying `executable_admission.gate_resolution`. The writer is
+called by that gate with the frozen content the gate digested.
+
+**Materialization is staged behind the adapters, deliberately.** A v2 Workspace
+resolves, validates, and previews in this slice; `library workspace use` refuses
+to materialize a closure with declared catalogs. The reason is not incompleteness
+but honesty: the existing installer path fetches each member from the live
+catalog and would ignore the declared pin entirely, so installing now would ship
+a `catalogs:` block that looks pinned and is not. Verifying the pin against the
+source, normalizing members into inventory items, and putting the gate in the
+write path is `CL-mvet`'s work.
+
+**Adversarial review of this slice produced five accepted blocking findings**, all
+repaired before delivery, and each is a place the first implementation looked
+correct while a probe walked through it:
+
+| Finding | Repair |
+|---|---|
+| Pins were recorded on every node and never verified against anything, and the mutation gate had no production caller | Declared pins are recorded on the requested root at registration and a changed pin is fail-closed drift naming both values; materialization of a cross-catalog closure is refused outright until the adapters land |
+| The gate accepted a strict subset of the closure, so calling it with an empty selection returned success and invoked the writer | The gate now requires every resolved artifact to be supplied exactly once with content |
+| An observation with `complete: true` and an empty listing authorized deletion of a receipt whose upstream had vanished | An empty listing is not a complete inventory; a receipt absent from a complete listing is `upstream-vanished` and is never deletion authority |
+| No production path supplies catalog observations, so a healthy cross-catalog prune was unreachable | Resolved by the staging boundary above: a scope cannot hold v2 receipts until materialization lands with the observations that authorize pruning them |
+| ADR-0010 Decision 8 condition 2 (catalog identity, resolved version, **and** source pin known) was not enforced anywhere | Enforced in the plan and re-derived in the preflight immediately before deletion; a plan with no recorded catalog closure is refused outright |
+
+Two further hardenings were made without a reviewer asking, because the cache
+slice had already paid for both lessons: catalog observations carry an explicit
+evidence window with no default, so a stale observation cannot authorize today's
+deletion; and an observation attributed to a different source is refused.
+
+**A second adversarial round found four more, all accepted and repaired**, and
+three of them were the first round's repairs relocating the unsafe assumption
+rather than removing it:
+
+| Finding | Repair |
+|---|---|
+| Declared pins still did not constrain resolution: they were copied onto every node and compared with nothing, so an edit to the local catalog changed the closure while every node reported its pin | A cross-catalog closure is not produced at all without a caller-supplied verifier that answers what each declared source currently serves; a differing, empty, or failed answer is fail-closed drift naming both values |
+| A nonempty but irrelevant listing, or a receipt with no recorded upstream identity, still authorized pruning | Under a cross-catalog closure a receipt must appear in its source's complete listing; absence is `upstream-vanished`, and a receipt with no upstream identity is undeterminable and therefore not deletable |
+| Observation freshness was measured against a caller-supplied run clock, so 2020 evidence beside a 2020 run time passed in 2026 | Freshness is measured against the real clock; the caller-supplied run time is gone, and future-dated evidence is refused as well |
+| Cycle and ambiguity diagnostics carried display catalog names only, so AC3's "canonical identities and stewards named" held for constraint and collision failures and not for these | Every resolver failure is re-raised naming the root, its constraint, its canonical identity, and its steward |
+
+**The residual, stated rather than implied.** A verified pin proves the source
+has not moved. It does not prove that a consuming repository's catalog document
+describes that revision, because members are still read locally until an adapter
+fetches at the pin. Slice 5 therefore ships resolution, validation, and preview
+with verified pins, and refuses materialization; `CL-mvet` closes the second half
+by fetching at the pin. A test asserts this limitation directly so a later reader
+finds it in the suite instead of inferring a guarantee that is not there.
+
+Kimi was unavailable for both rounds of this slice (`provider.auth_error: 403
+You've reached your usage limit for this billing cycle`), so the user-mandated
+second reviewer produced no verdict. Compensating evidence: every proof of
+concept from both rounds is a regression test in the delivered suite, including
+an end-to-end CLI test that a v2 manifest validates and refuses to install while
+writing no lock and no files.
 
 ### Nested Workspace disposition
 

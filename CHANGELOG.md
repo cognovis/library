@@ -38,6 +38,55 @@
 
 ### Added
 
+- *(CL-dbam, Workspace)* Workspace schema v2 composes pinned roots across several
+  catalogs in one manifest. A manifest declares a `catalogs:` block of
+  alias-to-identity mappings, each carrying a typed immutable pin (`commit` or
+  `inventory-snapshot`), and each root may qualify itself with one of those
+  aliases. That block is the only place a Workspace may name a source: a root
+  carrying a URL, an undeclared alias, an unpinned catalog, a branch name in a
+  pin, a `catalog:` qualifier in a v1 manifest, and a nested Workspace root are
+  each refused with a named diagnostic by both the JSON Schema and the resolver.
+  v1 manifests remain valid and unchanged. Resolution completes before any target
+  mutation and records canonical catalog identity plus the resolving catalog's
+  pin on every node, while display aliases stay manifest-local. Composition stays
+  an unordered set union: two catalogs supplying one projection target collide —
+  inside a manifest or between two Workspaces in a scope — and fail naming both
+  identities and stewards, rather than layering. A dependency may not pull the
+  closure into a catalog the manifest does not declare. Mutation is reachable
+  only through a gate that refuses items the resolution did not select, a
+  selected member offered from a different source, a duplicate, a member with no
+  content, and any selection that does not cover the whole resolved closure,
+  then applies the executable-admission gate and hands the writer the exact
+  content it digested. A cross-catalog closure is not produced at all unless a
+  caller-supplied verifier confirms what each declared source currently serves;
+  a differing, empty, or failed answer is fail-closed drift naming both values,
+  and registration additionally records the pins it was made against so a
+  changed manifest pin is drift rather than a silent re-pin. A cross-catalog
+  closure resolves, validates, and previews but is deliberately **not installable
+  yet**: `workspace use` refuses it, because the current installer would fetch
+  each member from the live catalog and honor no pin at all. Every resolution
+  failure — including cycles and ambiguous matches reported by the shared
+  resolver — names the root, its constraint, its canonical identity, and its
+  steward.
+  The foreign-catalog prune guard is restated on the resolved closure: an
+  unregistered owner, a missing identity, the legacy `unknown` value, and an
+  unresolvable catalog are all foreign and never pruned, and a scope whose
+  closure reaches a source through a v2 `catalogs:` block fails its whole prune
+  closed unless every such source was observed conclusively — which also refuses
+  an empty listing, an observation of a different source, and one outside the
+  caller's declared evidence window measured against the real clock. Under such
+  a closure a receipt is prunable only while its source's complete listing still
+  contains it: absence is `upstream-vanished`, and a receipt recording no
+  upstream identity is undeterminable and therefore not deletable. ADR-0010
+  Decision 8 condition 2 (catalog identity, resolved version, and source pin all
+  known) is now enforced in the plan and re-derived in the preflight immediately
+  before deletion, and a prune plan carrying no recorded catalog closure is
+  refused instead of read as one whose owners are all registered. Foreign receipts are
+  folded onto their lock scope as `<lock>.foreign-receipts.json`; they stay out
+  of the lock body because inlining would drop one of the store's three
+  invariants, and `retention.REQUIRED_SCOPES` is unchanged because a
+  cross-catalog Workspace reconciles one existing scope rather than a new one.
+
 - *(CL-uliw, marketplace)* Unreferenced cache objects now survive provider loss
   until an operator purges them by digest. Automatic garbage collection takes two
   retention inputs, not one: an object referenced by any active receipt in any

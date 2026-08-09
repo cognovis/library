@@ -163,16 +163,19 @@ prerequisites:
 | `constraint` | Optional | User-requested compatible version range or pin. |
 | `resolved_version` | YES | Version selected by the last complete resolution. |
 | `definition_commit` | YES | Exact catalog or definition pin used for that resolution. |
+| `catalogs` | Workspace roots registered from a schema v2 manifest | The identity, pin kind, and pin value of every catalog the manifest declared **at registration**. A later resolution that finds a different pin fails naming both values; a changed pin is never silently adopted. Absent on v1 roots and on roots registered before this field existed, which are compared against nothing rather than against an invented baseline. |
 
 Direct artifact primitives and Workspaces use the same root model. Transitive
 artifact dependencies are graph nodes, not implicit direct roots.
 
 One lock scope may contain several Workspace requested roots. Their effective
 closure is an unordered union with all direct artifact roots. Workspace schema
-v1 rejects nested Workspace and cross-catalog manifest roots. Cross-catalog
-composition therefore appears as several qualified direct registrations. Every
-resolved node records canonical catalog identity regardless of the operator's
-display alias.
+v1 rejects cross-catalog manifest roots, so a v1 consumer composes across
+catalogs by registering several Workspaces at the scope boundary; schema v2
+admits cross-catalog roots inside one manifest, qualified by an alias from its
+pinned `catalogs:` block. Nested Workspace roots are rejected by both versions.
+Every resolved node records canonical catalog identity and the pin of the
+catalog it resolved from, regardless of the operator's display alias.
 
 ### v2 prerequisite assertion fields
 
@@ -228,6 +231,40 @@ answerable only by guessing.
 | `projected_content_digest` | For foreign content | Digest of the bytes actually stored and installed, after the transformation. `normalized_content_digest` remains the upstream identity and the trust-on-first-use pin subject; this is what an executable-admission decision and a target inventory are about. Under the identity transformation the two are equal |
 | `planned_targets` | For foreign content | Target paths this receipt declared **before** its projection was activated. A failure between activation and finalization therefore leaves an intent on record instead of an installed target that no receipt describes |
 | `completeness_evidence` | For foreign content | How the retrieval's completeness was established: `member-manifest`, `pinned-digest`, or `adapter-declaration`. The last is the honest name for "nothing but the adapter's contract", recorded so an operator can query which installs rest on it |
+
+### Where foreign receipts live (fold decision, `CL-dbam`)
+
+`CL-y5z4` made foreign receipts durable in their own JSON document and left one
+decision to the Workspace slice: fold them into `.library.lock` v2. The fold is
+**a relocation to the lock scope, not an inlining into the lock body.**
+
+- **What moved.** The store is now addressed through its lock scope:
+  `workspace_receipt_store(<lock path>)` reads and writes
+  `<lock path>.foreign-receipts.json`. "Which foreign receipts belong to this
+  scope" is answerable from the lock path alone, with no scan and no second
+  configuration entry. No record was translated: the fields already are the ones
+  documented above, which is what the previous slice chose them for.
+- **What deliberately did not move.** The records are not serialized inside the
+  YAML lock body. Doing that would route them through `save_lockfile` and
+  through `apply_post_prune_lock`'s list filtering, and each of those drops one
+  of the three properties the store exists to hold:
+
+  | Invariant | What inlining would lose |
+  |---|---|
+  | The whole load-modify-save is one cross-process transaction | The lock body's writers do not hold the receipt store's lock; two writers would each save a snapshot taken before the other, and an installed artifact would lose the only record describing it |
+  | `planned_targets` are durable **before** a projection is activated | A pre-activation write would have to commit the whole lock body, which is a much larger transaction than the intent it records |
+  | Retirement is reachable only through `remove_named_receipt` | `lock["receipts"]` is a plain list that existing code filters directly; a retirement would become a list comprehension, and a projection could be left installed with no receipt |
+
+- **What unblocks the container move.** Inlining becomes correct once the lock
+  write path itself carries all three properties. That is CLI-wiring work and
+  belongs with `CL-mvet`; until then the relocation gives the scope binding
+  without weakening the guarantees.
+- **No new receipt scope.** `retention.REQUIRED_SCOPES` stays `("project",
+  "global")`. Scope isolation means a cross-catalog Workspace reconciles exactly
+  one existing lock scope, so a third "workspace" scope would have no distinct
+  location — and the reference index refuses two scopes reading one location,
+  because a label standing in for another scope's location hides every receipt
+  that scope holds.
 
 Rules that bind these fields:
 
@@ -317,6 +354,13 @@ into a consistent lock view before fresh re-resolution.
 Workspace deletion additionally requires `--prune --apply`. Drifted,
 unverified, foreign, ambiguous, project-authored, or externally managed targets
 remain untouched and are surfaced by Workspace status.
+
+The prune preflight enforces ADR-0010 Decision 8 condition 2 directly: a
+candidate whose catalog identity, resolved version, or source pin is unknown is
+refused immediately before deletion, re-derived from the candidate rather than
+trusted from the plan that produced it. A prune plan that records no resolved
+catalog closure is refused outright, because a plan carrying no ownership
+evidence must not be read as one whose owners are all registered.
 
 If journal replay encounters drift, `library workspace recover --scope <scope>`
 reports the journal digest and makes no further changes. An operator may repair

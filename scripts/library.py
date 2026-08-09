@@ -4030,11 +4030,18 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
 
     from lib.catalog import get_catalogs
     from lib.workspace import (
+        assert_materializable,
         clear_workspace_journal,
         recover_workspace_journal,
         workspace_write_lock,
         write_workspace_journal,
     )
+
+    # A cross-catalog closure resolves and previews, and stops here. The current
+    # installer path would fetch each member from the live catalog and ignore the
+    # declared pin, which is worse than not installing: it would present a pinned
+    # manifest whose install honored no pin.
+    assert_materializable(closure)
 
     with workspace_write_lock(lock_path):
         recover_workspace_journal(lock_path, repo_root)
