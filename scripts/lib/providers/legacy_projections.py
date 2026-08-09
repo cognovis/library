@@ -26,6 +26,7 @@ refuses without a confirmation bound to a presentation it just created.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -925,6 +926,51 @@ def render_remediation_statement(
     return "\n".join(lines)
 
 
+def _rename_into(subject: Path, destination: Path) -> None:
+    """Move one projection to its destination without ever writing through a link.
+
+    `shutil.move` asks whether the destination is a directory and, if it is,
+    moves *into* it -- which is why a planted `destination -> /elsewhere`
+    symlink relocated the bytes outside the machine-local root while the
+    outcome reported the in-root path. `os.rename` has the opposite behavior on
+    a symlink destination: it replaces the link itself and never follows it. So
+    the pre-checks above catch the planted destination, and this call means even
+    one planted inside the remaining window cannot redirect the bytes.
+
+    A cross-filesystem move cannot be a rename. That case falls back to a copy,
+    and it refuses outright if anything is at the destination, because the
+    fallback has no atomic form and guessing is what produced the defect.
+    """
+    try:
+        os.rename(subject, destination)
+        return
+    except OSError as exc:
+        if exc.errno in (errno.ENOTDIR, errno.EISDIR, errno.ENOTEMPTY, errno.EEXIST):
+            # Something occupies the destination now that did not when it was
+            # checked. `os.rename` refused rather than resolving it, which is
+            # the behavior wanted: the bytes stayed where they were.
+            raise RemediationRefused(
+                f"the relocation destination {destination} was occupied between "
+                "the operator's confirmation and the move, so nothing was moved. "
+                "Re-plan the remediation."
+            ) from exc
+        if exc.errno != errno.EXDEV:
+            raise
+    if destination.is_symlink() or destination.exists():
+        raise RemediationRefused(
+            f"the relocation destination {destination} appeared during the move "
+            "and this is a cross-filesystem relocation, which has no atomic form. "
+            "Nothing was moved."
+        )
+    shutil.copytree(subject, destination, symlinks=True) if subject.is_dir() else (
+        shutil.copy2(subject, destination)
+    )
+    if subject.is_dir() and not subject.is_symlink():
+        shutil.rmtree(subject)
+    else:
+        subject.unlink()
+
+
 def _relocation_destination(relocate_root: Path, name: str) -> Path:
     """The one path a relocation may write, proven absent and contained.
 
@@ -1051,12 +1097,11 @@ def apply_remediation(
 
     if destination is not None:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        # Re-check after the confirmation round-trip: the destination was proven
-        # absent and contained before the statement was rendered, and an
-        # interactive confirmation is an arbitrary amount of wall-clock time
-        # during which something could have created it.
+        # Re-checked after the confirmation round-trip, because an interactive
+        # confirmation is an arbitrary amount of wall-clock time during which
+        # something could have created the destination.
         _relocation_destination(Path(str(relocate_root)), plan.name)
-        shutil.move(str(subject), str(destination))
+        _rename_into(subject, destination)
         return RemediationOutcome(
             choice=choice,
             subject=plan.subject,
@@ -1197,6 +1242,14 @@ def apply_receipt_backfill(
     _text(observed_at, "observed_at")
     from .wiring import filesystem_activation  # local: wiring imports this module
 
+    # A backfill writes projected bytes, so it is a re-materialization like any
+    # other and the block is not optional here either. Review named the default
+    # of `None` as the residual left by the F1 repair: the register became a
+    # default rather than an invariant, and one writer still defaulted to no
+    # register at all.
+    blocks = (
+        state.non_compliance_register() if non_compliance is None else non_compliance
+    )
     store = receipt_store if receipt_store is not None else state.receipt_store(scope)
     receipted: list[str] = []
     outcomes: list[InstallOutcome] = []
@@ -1204,7 +1257,7 @@ def apply_receipt_backfill(
         item = _backfill_item(request, observed_at=observed_at)
         content = dict(request.content)
         guard_rematerialization(
-            non_compliance,
+            blocks,
             paths=[str(Path(target_root) / member) for member in sorted(content)],
             digest=normalized_content_digest(content),
         )
@@ -1223,9 +1276,7 @@ def apply_receipt_backfill(
             pin_store=state.pin_store(),
             receipt_store=store,
             target="machine_local",
-            activate=filesystem_activation(
-                Path(target_root), non_compliance=non_compliance
-            ),
+            activate=filesystem_activation(Path(target_root), non_compliance=blocks),
             observed_at=observed_at,
             completeness=CompletenessEvidence.from_manifest(
                 sorted(content),

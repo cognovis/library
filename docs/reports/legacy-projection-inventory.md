@@ -20,7 +20,7 @@ ADR's sense, which means exactly two things and no more:
 It keeps every byte it has. Migration grants no deletion authority.
 
 
-- Observed at: `2026-08-09T17:11:18Z`
+- Observed at: `2026-08-09T17:27:07Z`
 - Roots: `/Users/malte/.claude/skills`, `/Users/malte/.claude/workflows`
 - Foreign receipt stores read: none found
 - Existing locks read for declared provenance: `/Users/malte/.config/library/global.lock`
@@ -77,7 +77,7 @@ It keeps every byte it has. Migration grants no deletion authority.
 | `ingest-content` | symlink | 1 | unattributed | unknown | unreceipted | non-compliant | rights-unresolved-pending-digest-attribution |
 | `inject-standards` | symlink | 2 | receipt-declared | granted | receipted | compliant | - |
 | `intake` | symlink | 1 | receipt-declared | granted | receipted | compliant | - |
-| `library` | symlink | 6187 | receipt-declared | granted | receipted | compliant | - |
+| `library` | symlink | 6471 | receipt-declared | granted | receipted | compliant | - |
 | `loop-me` | symlink | 2 | unattributed | unknown | unreceipted | non-compliant | rights-unresolved-pending-digest-attribution |
 | `mail-send` | symlink | 4 | unattributed | unknown | unreceipted | non-compliant | rights-unresolved-pending-digest-attribution |
 | `ob-triage` | symlink | 1 | unattributed | unknown | unreceipted | non-compliant | rights-unresolved-pending-digest-attribution |
@@ -143,7 +143,7 @@ It keeps every byte it has. Migration grants no deletion authority.
 | `ingest-content` | `/Users/malte/.claude/skills/ingest-content` | `sha256:fa021b2f6f8ef55b7d1dfb8420a42060f24b59771488e4fb6efd2d7ee74315ec` | `/Users/malte/.agents/skills/ingest-content` |
 | `inject-standards` | `/Users/malte/.claude/skills/inject-standards` | `sha256:ec8a7dd74e22e030b2d12ec45242635da9a0b4baeacd4407688dd6ef710fee49` | `/Users/malte/.agents/skills/inject-standards` |
 | `intake` | `/Users/malte/.claude/skills/intake` | `sha256:58e4d981570e24d153e88e991e04a0ec6c91db3ee701ab83f70ce21b570dca55` | `/Users/malte/.agents/skills/intake` |
-| `library` | `/Users/malte/.claude/skills/library` | `sha256:036d92f217f3d9b611b94d14affb99d13bd920f3d75af1bf36c78cab26661c65` | `/Users/malte/code/library/meta` |
+| `library` | `/Users/malte/.claude/skills/library` | `sha256:13d035cac1925461a059b847725d438cee34bf8de3c629b5094ff892f5c578ca` | `/Users/malte/code/library/meta` |
 | `loop-me` | `/Users/malte/.claude/skills/loop-me` | `sha256:e499fb213ab08b83c291f8deff2428af148a39ea12f9fb5b03a309a53591430d` | `../../.agents/skills/loop-me` |
 | `mail-send` | `/Users/malte/.claude/skills/mail-send` | `sha256:b44d796115ca23c71e4f96efbcdf9cf15ec20bee01ac65b37eaa1c5fcf51df1b` | `/Users/malte/.agents/skills/mail-send` |
 | `ob-triage` | `/Users/malte/.claude/skills/ob-triage` | `sha256:54362babb77cce7d2687d6cb9008f1369bc79c00e80a8790d91ba726146129ca` | `/Users/malte/.agents/skills/ob-triage` |

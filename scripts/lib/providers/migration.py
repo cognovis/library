@@ -661,6 +661,22 @@ def rematerialize_legacy_object(
             it catches a store implementation or a concurrent process that
             damaged the retained copy.
     """
+    from .foreign_cache import ObjectStore
+
+    if not isinstance(object_store, ObjectStore):
+        # The store is the one collaborator this function calls, so an untyped
+        # parameter here would reintroduce the arbitrary-callback boundary the
+        # F3 repair removed from `apply_cache_migration` -- just wearing a
+        # method name instead of a lambda. `ObjectStore` has no deletion path by
+        # construction, and requiring the type is what makes that fact load
+        # bearing rather than conventional.
+        raise MigrationRefused(
+            "re-materialization writes through the content-addressed ObjectStore, "
+            "which has no deletion path by construction. A caller-supplied object "
+            "with a `materialize` method is an arbitrary mutation hook, which is "
+            "exactly what this path removed"
+        )
+
     legacy = Path(request.legacy_path)
     before = census([legacy])
     object_store.materialize(cache_key, dict(content), created_at=observed_at)

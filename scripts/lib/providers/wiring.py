@@ -550,6 +550,46 @@ def filesystem_activation(
     return ProjectionActivation(plan=plan, apply=apply)
 
 
+def _composed_blocks(
+    state: "ForeignState", supplied: NonComplianceRegister | None
+) -> NonComplianceRegister | ComposedNonCompliance:
+    """The state's register, plus any the caller added. Never instead of.
+
+    A caller-supplied register began as a *replacement* for the state's, which
+    made the state register a default rather than an invariant: passing an empty
+    register turned every block off, and review named that as the residual left
+    by the F1 repair. Composition is the fix — a caller may add blocks and can
+    never remove one, so the shipped enforcement is not something a call site
+    can opt out of.
+    """
+    bound = state.non_compliance_register()
+    if supplied is None or supplied.path == bound.path:
+        return bound
+    return ComposedNonCompliance((bound, supplied))
+
+
+@dataclass(frozen=True)
+class ComposedNonCompliance:
+    """Several registers read as one. Any of them blocking is blocking."""
+
+    registers: tuple[NonComplianceRegister, ...]
+
+    def matches(self, *, paths: Sequence[str] = (), digest: str | None = None):
+        found: list[Any] = []
+        for register in self.registers:
+            found.extend(register.matches(paths=paths, digest=digest))
+        return tuple(found)
+
+    def is_blocked(self, *, path: str | None = None, digest: str | None = None) -> bool:
+        return bool(self.matches(paths=[path] if path is not None else [], digest=digest))
+
+    def blocked(self):
+        found: list[Any] = []
+        for register in self.registers:
+            found.extend(register.blocked())
+        return tuple(found)
+
+
 def install_marketplace_item(
     item: NormalizedItem,
     *,
@@ -587,7 +627,7 @@ def install_marketplace_item(
     enforces that per member path, and this earlier check enforces it for the
     target root as a whole, so the refusal costs no retrieval.
     """
-    blocks = state.non_compliance_register() if non_compliance is None else non_compliance
+    blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(blocks, paths=[str(Path(target_root))])
     retention = evaluate_cache_retention(item.rights, subject=item.qualified_identity())
     project(retention, lambda: None, present=present)
@@ -627,7 +667,7 @@ def repair_projection(
     repair**, so the block is checked here against the receipt's own recorded
     and planned targets, and again inside the activation.
     """
-    blocks = state.non_compliance_register() if non_compliance is None else non_compliance
+    blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(
         blocks,
         paths=[

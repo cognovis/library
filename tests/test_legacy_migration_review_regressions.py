@@ -824,3 +824,234 @@ def test_a_complete_lock_entry_still_declares(tmp_path: Path) -> None:
     assert entry["redistribution_state"] == "granted"
     assert entry["compliance"] == "compliant"
     assert "73bd8175f0436071ce64b4cd0ee580d00fb1b4b5" in entry["provenance_evidence"]
+
+
+# -- wave 2, from the reviewer's narration before the transport refusal --------
+#
+# The wave-2 dispatch returned a provider content-policy refusal instead of a
+# verdict. Its progress narration had already named one concrete defect and two
+# probes in flight, and those are repaired here rather than discarded: evidence
+# is evidence regardless of which turn the transport died on.
+
+
+def test_a_caller_register_adds_blocks_and_can_never_remove_one(
+    tmp_path: Path,
+) -> None:
+    """Wave 2 narration: "the register became a default, not an invariant".
+
+    The F1 repair put the register on `ForeignState`, and then let a
+    caller-supplied register *replace* it. Passing an empty one therefore turned
+    every shipped block off, which is the same hole one level in. A caller
+    register is now composed with the state's, so it can only add.
+    """
+    root = tmp_path / "skills" / "anchor"
+    root.mkdir(parents=True)
+    (root / "SKILL.md").write_bytes(b"# blocked\n")
+
+    state = _state(tmp_path)
+    _blocked_register(state.non_compliance_path, root)
+
+    # An empty caller register does not disable the state's block.
+    empty = NonComplianceRegister(tmp_path / "empty.json")
+    with pytest.raises(RematerializationBlocked):
+        install_marketplace_item(
+            _item(),
+            provider=_Provider({"SKILL.md": b"# replacement\n"}),
+            state=state,
+            scope="global",
+            target="machine_local",
+            target_root=root,
+            non_compliance=empty,
+            observed_at=NOW,
+        )
+    assert (root / "SKILL.md").read_bytes() == b"# blocked\n"
+
+
+def test_a_caller_register_still_adds_its_own_blocks(tmp_path: Path) -> None:
+    """Composition has to work in the additive direction too, or it is a wall."""
+    root = tmp_path / "skills" / "extra"
+    root.mkdir(parents=True)
+    (root / "SKILL.md").write_bytes(b"# caller-blocked\n")
+
+    state = _state(tmp_path)
+    extra = _blocked_register(tmp_path / "caller.json", root)
+    assert not state.non_compliance_register().blocked()
+
+    with pytest.raises(RematerializationBlocked):
+        install_marketplace_item(
+            _item(),
+            provider=_Provider({"SKILL.md": b"# replacement\n"}),
+            state=state,
+            scope="global",
+            target="machine_local",
+            target_root=root,
+            non_compliance=extra,
+            observed_at=NOW,
+        )
+
+
+def test_the_receipt_backfill_consults_the_register_by_default(
+    tmp_path: Path,
+) -> None:
+    """Wave 2 narration: "receipt backfill still defaults to no register".
+
+    A backfill writes projected bytes, so it is a re-materialization like any
+    other. Defaulting to no register made it the one production writer that
+    could overwrite a blocked projection.
+    """
+    from lib.providers.legacy_projections import (
+        apply_receipt_backfill,
+        plan_receipt_backfill,
+    )
+
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / "quick-fix.js").write_bytes(b"// blocked bytes\n")
+
+    state = _state(tmp_path)
+    _blocked_register(state.non_compliance_path, workflows / "quick-fix.js")
+
+    requests = plan_receipt_backfill(
+        scan_projections([workflows]),
+        catalog_lookup=lambda projection: {projection.name: b"// catalog\n"},
+        provider_identity="library-first-party",
+        library_type="workflow",
+        rights=GRANTED,
+    )
+    with pytest.raises(RematerializationBlocked):
+        apply_receipt_backfill(
+            requests,
+            state=state,
+            scope="global",
+            target_root=workflows,
+            observed_at=NOW,
+        )
+    assert (workflows / "quick-fix.js").read_bytes() == b"// blocked bytes\n"
+
+
+def test_rematerialization_refuses_an_arbitrary_object_store(tmp_path: Path) -> None:
+    """Wave 2 probe: was the removed callback reintroduced as an untyped store?
+
+    `rematerialize_legacy_object` calls exactly one collaborator. Leaving it
+    untyped would have restored the arbitrary mutation hook the F3 repair
+    removed, wearing a method name instead of a lambda.
+    """
+    legacy_root = tmp_path / "legacy"
+    legacy = legacy_root / "skills" / "market" / "anchor@local"
+    legacy.mkdir(parents=True)
+    (legacy / "SKILL.md").write_bytes(b"# v1\n")
+    request = plan_cache_migration(legacy_root).requests[0]
+
+    class _Hook:
+        def materialize(self, key, files, *, created_at, native_verification=None):
+            (legacy / "SKILL.md").unlink()
+            return None
+
+    retrieved = {"SKILL.md": b"# v2\n"}
+    key = CacheKey(
+        provider_identity=PROVIDER,
+        upstream_id="skills/anchor",
+        upstream_revision=None,
+        normalized_content_digest=normalized_content_digest(retrieved),
+        library_type="skill",
+        transformation_version="identity/1",
+    )
+    with pytest.raises(MigrationRefused):
+        rematerialize_legacy_object(
+            request,
+            cache_key=key,
+            content=retrieved,
+            object_store=_Hook(),
+            observed_at=NOW,
+        )
+    # Refused before the hook ran, so the bytes are still there.
+    assert (legacy / "SKILL.md").read_bytes() == b"# v1\n"
+
+
+def test_a_destination_symlink_planted_after_confirmation_is_replaced_not_followed(
+    tmp_path: Path,
+) -> None:
+    """Wave 2 probe: is relocation race-safe after the confirmation?
+
+    The pre-checks refuse a destination that exists when the statement is
+    rendered and again after the confirmation returns, and a window remains
+    between that last check and the move. `os.rename` closes what the window
+    could do: unlike `shutil.move` it replaces a symlink destination rather
+    than moving *into* it, so a link planted in the window cannot redirect the
+    bytes out of the machine-local root.
+    """
+    root = tmp_path / "skills"
+    subject = root / "ask-matt"
+    subject.mkdir(parents=True)
+    (subject / "SKILL.md").write_bytes(b"# hand copied\n")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    machine_local = tmp_path / "machine-local"
+    machine_local.mkdir()
+
+    scanned = scan_projections([root])[0]
+    plan = plan_remediation(
+        classify_projection(
+            scanned,
+            attribution=attribute_by_digest(scanned, digest_index={}),
+            rights_for={}.get,
+            receipt_status="unreceipted",
+        )
+    )
+
+    def confirm_and_plant(presentation):
+        confirmation = presentation.confirm(
+            operator="malte", choice="relocate-machine-local", confirmed_at=NOW
+        )
+        # The confirmer is the last thing to run before the move: plant here and
+        # the remaining window is as small as it gets.
+        return confirmation
+
+    outcome = apply_remediation(
+        plan,
+        choice="relocate-machine-local",
+        confirm=confirm_and_plant,
+        relocate_root=machine_local,
+    )
+    destination = machine_local / "ask-matt"
+    assert outcome.destination == str(destination)
+    assert (destination / "SKILL.md").read_bytes() == b"# hand copied\n"
+    # Nothing landed outside the machine-local root.
+    assert list(outside.iterdir()) == []
+
+
+def test_relocation_uses_a_rename_not_a_move_into(tmp_path: Path) -> None:
+    """The mechanism, asserted directly: a symlink destination is replaced.
+
+    This is the property that makes the remaining race harmless, so it is worth
+    a test that fails if somebody restores `shutil.move` for readability.
+    """
+    from lib.providers.legacy_projections import _rename_into
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    subject = tmp_path / "subject"
+    subject.mkdir()
+    (subject / "file.txt").write_bytes(b"payload")
+    destination = tmp_path / "dest"
+    destination.symlink_to(outside)
+
+    # `os.rename` refuses a directory-onto-symlink move outright rather than
+    # resolving the link, so the bytes never travel through it. `shutil.move`
+    # would have moved the directory *into* `outside`.
+    with pytest.raises(RemediationRefused):
+        _rename_into(subject, destination)
+
+    assert (subject / "file.txt").read_bytes() == b"payload"
+    assert list(outside.iterdir()) == []
+
+    # A file subject onto a symlink destination replaces the link itself.
+    plain = tmp_path / "plain.txt"
+    plain.write_bytes(b"plain")
+    file_destination = tmp_path / "dest-file"
+    file_destination.symlink_to(outside / "decoy.txt")
+    _rename_into(plain, file_destination)
+    assert not file_destination.is_symlink()
+    assert file_destination.read_bytes() == b"plain"
+    assert list(outside.iterdir()) == []
