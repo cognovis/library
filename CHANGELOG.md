@@ -38,6 +38,35 @@
 
 ### Added
 
+- *(CL-uliw, marketplace)* Unreferenced cache objects now survive provider loss
+  until an operator purges them by digest. Automatic garbage collection takes two
+  retention inputs, not one: an object referenced by any active receipt in any
+  scope is ineligible, and exact re-fetchability must be **proven** rather than
+  inferred from source health. Collection therefore fails closed, with a typed
+  reason naming the condition, while the source is unavailable or degraded, while
+  the inventory is incomplete, while access is revoked, while the upstream item no
+  longer exists, and — for a revisionless source or an install whose completeness
+  rests only on the adapter's word — until a digest-verified re-fetch confirms the
+  pinned digest is still served. A re-fetch that observes different bytes is
+  fail-closed drift, never a licence to collect. The reference check spans a
+  required set of scopes (project and global): a partial scope set, an unreadable
+  receipt file, and a scope that is not where it says it is are all refusals, never
+  the answer "unreferenced". Deleting an unreferenced object under degraded
+  conditions is possible only through a separate operator-explicit purge that takes
+  a cache-object digest — a name, a glob, a qualified identity, a revision, or a
+  content digest is rejected with a reason that names the shape — proves across
+  every scope that no active receipt references it, and records a fixed
+  acknowledgement of permanent, potentially unrefetchable loss in a durable purge
+  ledger written before the bytes are removed. The dry-run plan reports exactly the
+  members, byte count, and quarantined siblings that would go, and mutates nothing.
+  Automatic collection never invokes purge under any provider condition, which is
+  held by a structural call-graph check as well as by execution; quarantined
+  objects a repair set aside are retained evidence that collection never touches
+  and purge removes only when an operator names them. Both deleting paths re-prove
+  their preconditions under the same identity lock an install holds, so a reference
+  acquired after the plan still protects the object. Cache core only — no
+  production CLI, installer, or sync path calls it yet (`CL-mvet`).
+
 - *(CL-y5z4, marketplace)* Every installed foreign artifact is now reproducible
   from a complete, immutable cache object while its source is unreachable. Cache
   identity is the ADR-0011 tuple — source identity, upstream id, revision or

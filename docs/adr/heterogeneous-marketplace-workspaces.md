@@ -1306,6 +1306,71 @@ cache object under degraded conditions. It:
 Degraded provider state never triggers a purge automatically. Purge is a human
 act with a digest in their hand.
 
+### Implementation record (slice 4, `CL-uliw`)
+
+Implemented in `scripts/lib/providers/retention.py`, on the slice-3 primitives
+rather than beside them: `ReceiptStore.referencing_digest` answers the reference
+question for one store, `ForeignReceipt.upstream_state` and
+`completeness_evidence` supply the recorded evidence, and
+`offline.evaluate_operation("automatic-garbage-collection", …)` remains the one
+table that decides whether collection may run against an observation at all.
+Five readings were open, and the implemented contract states them:
+
+1. **"Any scope" is a required set, not a supported one.** The reference check
+   is constructed over named scopes and refuses unless every required scope —
+   `project` and `global` — is present. A caller holding one store gets a typed
+   refusal instead of a confident wrong answer, because a project-scoped
+   maintenance run that cannot see the global lock reports "unreferenced" for
+   objects that lock is holding.
+2. **An unreadable scope is never an empty one.** A corrupt receipt file, or a
+   scope whose declared location does not exist, raises rather than contributing
+   zero references. The two states are the same silence and opposite facts.
+3. **The two preconditions the offline table declines to evaluate are evaluated
+   here, per object.** The table returns them as `additional_preconditions`; this
+   module holds the object, so it answers them: no active receipt references it,
+   and exact re-fetchability is proven. Every unmet condition is named, and a
+   decision carries all of them rather than only the first.
+4. **The revisionless clause extends to `adapter-declaration` completeness.** A
+   pin-only source needs a digest-verified re-fetch before its unreferenced
+   object may be deleted. An install whose completeness rests only on the
+   adapter's word never had independent proof of what it stored, so it is in the
+   same position and is treated identically. A re-fetch observing a *different*
+   digest is fail-closed drift, not a licence to collect: deleting there destroys
+   the last copy of the pinned content, and a later reinstall records a fresh
+   first-use pin — turning detectable drift into undetectable substitution.
+5. **Quarantined objects are retained evidence for collection and named-only for
+   purge.** Automatic collection never sees a tree a repair set aside. An
+   operator holding the digest may destroy it, but only by naming it explicitly,
+   so reclaiming space can never silently remove the evidence of a corruption.
+
+Two structural decisions support the guarantee that collection never escalates:
+
+- **Deletion lives in retention, not in `ObjectStore`.** Slice 3 shipped a store
+  with no delete path, and that stays true. Deleting bytes is a retention
+  decision, and keeping the only deletion behind these gates is what makes the
+  guarantee checkable. A deletion renames the tree into the store's staging area
+  before removing it, so a reader sees the whole object or nothing, and an
+  interrupted removal leaves a sweepable staging entry rather than a half-deleted
+  object a later run would read as cached.
+- **The digest and the acknowledgement are one value.** `PurgeAcknowledgement`
+  carries the object digest, the operator, the reason, and the fixed
+  acknowledgement token together, and no purge entry point takes a digest
+  without it. Removing the requirement would have to delete the type's only
+  constructor rather than add a default argument. The acknowledgement is written
+  to a durable purge ledger *before* the deletion and completed afterwards, so an
+  interrupted purge leaves the intent on record rather than an unexplained
+  absence.
+
+Both deleting paths re-prove their preconditions under
+`TofuPinStore.identity_lock`, the same lock an install holds across retrieval,
+materialization, the receipt, and activation. An object can acquire its first
+reference between a plan and a deletion; taking that lock and evaluating again
+is what makes "an active receipt protects its object" true for receipts that did
+not exist when the plan was made.
+
+**Scope boundary.** This slice ships the retention core and its contracts. No
+production CLI, installer, or sync path calls them yet; CLI wiring is `CL-mvet`.
+
 ## Migration and Existing Bead Disposition
 
 ### Named contract dispositions
