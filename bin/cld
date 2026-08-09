@@ -28,6 +28,51 @@ fi
 
 BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
 
+CLD_SCRIPT_DIR="${0:A:h}"
+WORKTREE_OVERLAY_SCRIPT="${CLD_WORKTREE_OVERLAY_SCRIPT:-${CLD_SCRIPT_DIR:h}/scripts/worktree-overlays.py}"
+
+# Claude Code creates the bead worktree itself (native --worktree), so this
+# wrapper cannot symlink into it afterwards. Instead it resolves the overlay set
+# up front and hands it to Claude Code's own worktree.symlinkDirectories
+# setting, which creates the symlinks during worktree creation. The worktree does
+# not exist yet, so the resolver probes the main checkout's Git index: a fresh
+# worktree carries exactly the tracked paths.
+#
+# The resolver is shared with bin/cdx, so both launchers bootstrap the same
+# overlay set. Files (such as .env) are excluded: symlinkDirectories takes
+# directories only.
+#
+# Set CLD_WORKTREE_OVERLAYS to a space-separated list to override the overlay
+# set, or to an empty string to disable the setting injection.
+worktree_overlay_settings() {
+    [[ -f "$WORKTREE_OVERLAY_SCRIPT" ]] || return 0
+
+    local -a overlay_args
+    if [[ -n "${CLD_WORKTREE_OVERLAYS+x}" ]]; then
+        local overlay
+        for overlay in ${=CLD_WORKTREE_OVERLAYS}; do
+            overlay_args+=("--overlay" "$overlay")
+        done
+        # Explicitly emptied: the operator opted out of the bootstrap.
+        [[ ${#overlay_args} -gt 0 ]] || return 0
+    fi
+
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+    [[ -n "$repo_root" ]] || return 0
+
+    local overlays_json
+    overlays_json=$(python3 "$WORKTREE_OVERLAY_SCRIPT" resolve \
+        --main "$repo_root" \
+        --from-index \
+        --directories-only \
+        --json \
+        "${overlay_args[@]}" 2>/dev/null) || return 0
+    [[ -n "$overlays_json" && "$overlays_json" != "[]" ]] || return 0
+
+    printf '{"worktree":{"symlinkDirectories":%s}}\n' "$overlays_json"
+}
+
 # ── Parse wrapper flags ──────────────────────────────────────────
 
 caveman=false
@@ -448,6 +493,12 @@ if [[ -n "$bead_id" ]]; then
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_id}"
     claude_args+=("--worktree" "$worktree_name")
+    # ── Overlay symlinks from the main checkout into the worktree ──
+    local overlay_settings
+    overlay_settings=$(worktree_overlay_settings)
+    if [[ -n "$overlay_settings" ]]; then
+        claude_args+=("--settings" "$overlay_settings")
+    fi
     # ── Force full plugin registry in the worktree session ────────
     # Guarantee the canonical Session Close owner is available at handoff,
     # even if a project-level .claude/settings overrides setting-sources.
@@ -526,6 +577,12 @@ if [[ -n "$bead_quick_id" ]]; then
     # ── Worktree isolation via Claude Code native --worktree ──────
     local worktree_name="bead-${bead_quick_id}"
     claude_args+=("--worktree" "$worktree_name")
+    # ── Overlay symlinks from the main checkout into the worktree ──
+    local overlay_settings
+    overlay_settings=$(worktree_overlay_settings)
+    if [[ -n "$overlay_settings" ]]; then
+        claude_args+=("--settings" "$overlay_settings")
+    fi
     # ── Force full plugin registry in the worktree session ────────
     # Guarantee the canonical Session Close owner is available at handoff,
     # even if a project-level .claude/settings overrides setting-sources.

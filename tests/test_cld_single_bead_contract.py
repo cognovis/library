@@ -82,7 +82,17 @@ def _write_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
 def _write_cld_path_mocks(tmp_path: Path) -> None:
     _write_executable(
         tmp_path / "git",
+        # GIT_REPO_ROOT and GIT_TRACKED stay unset for the default mock, so cld
+        # behaves exactly as it did before worktree-overlay resolution existed.
         "#!/bin/sh\n"
+        "if [ \"$1\" = \"rev-parse\" ] && [ \"$2\" = \"--show-toplevel\" ]; then\n"
+        "  [ -n \"${GIT_REPO_ROOT:-}\" ] && printf '%s\\n' \"$GIT_REPO_ROOT\"\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$1\" = \"ls-files\" ] || [ \"$3\" = \"ls-files\" ]; then\n"
+        "  [ -n \"${GIT_TRACKED:-}\" ] && printf '%b\\n' \"$GIT_TRACKED\"\n"
+        "  exit 0\n"
+        "fi\n"
         "exit 0\n",
     )
     _write_executable(
@@ -500,3 +510,90 @@ def test_cld_has_no_callback_environment_variable_interface() -> None:
     assert "CLD_COORDINATOR" not in source
     assert "COORDINATOR_WORKSPACE" not in source
     assert "COORDINATOR_SURFACE" not in source
+
+
+def _seed_main_checkout_overlays(tmp_path: Path) -> Path:
+    """Create the gitignored overlay content a real main checkout carries."""
+    main = tmp_path / "main"
+    (main / ".agents" / "skills" / "session-close").mkdir(parents=True)
+    (main / ".agents" / "pi").mkdir(parents=True)
+    (main / ".claude" / "skills" / "beads").mkdir(parents=True)
+    (main / ".env").write_text("TOKEN=value\n", encoding="utf-8")
+    return main
+
+
+@pytest.mark.parametrize("flag", ["-b", "-bq"])
+def test_cld_bead_modes_configure_worktree_overlay_symlinks(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    """AC2: cld hands the overlay set to Claude Code's native worktree symlinks.
+
+    Claude Code creates the worktree itself, so the wrapper cannot symlink into
+    it. It resolves the overlay set from the main checkout's index instead and
+    passes it as worktree.symlinkDirectories.
+    """
+    main = _seed_main_checkout_overlays(tmp_path)
+
+    result, argv_file, _prompt_file, _called_file, _bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-smoke"],
+        env_overrides={"GIT_REPO_ROOT": str(main), "GIT_TRACKED": ".agents/pi/cli.ts"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert "--worktree" in argv
+    settings = json.loads(_argv_flag_value(argv, "--settings") or "{}")
+    # .agents is partly tracked, so only its missing child is linked; .env is a
+    # file and symlinkDirectories takes directories only.
+    assert settings == {
+        "worktree": {"symlinkDirectories": [".agents/skills", ".claude/skills"]}
+    }
+
+
+def test_cld_bead_mode_omits_overlay_settings_outside_a_repository(
+    tmp_path: Path,
+) -> None:
+    result, argv_file, _prompt_file, _called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["-b", "CL-smoke"],
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--settings") is None
+
+
+def test_cld_worktree_overlay_settings_can_be_disabled(tmp_path: Path) -> None:
+    main = _seed_main_checkout_overlays(tmp_path)
+
+    result, argv_file, _prompt_file, _called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"GIT_REPO_ROOT": str(main), "CLD_WORKTREE_OVERLAYS": ""},
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert _argv_flag_value(argv, "--settings") is None
+
+
+def test_cld_worktree_overlay_settings_honor_an_explicit_overlay_list(
+    tmp_path: Path,
+) -> None:
+    main = _seed_main_checkout_overlays(tmp_path)
+
+    result, argv_file, _prompt_file, _called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={
+            "GIT_REPO_ROOT": str(main),
+            "CLD_WORKTREE_OVERLAYS": ".claude/skills",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    settings = json.loads(_argv_flag_value(argv, "--settings") or "{}")
+    assert settings == {"worktree": {"symlinkDirectories": [".claude/skills"]}}

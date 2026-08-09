@@ -162,8 +162,8 @@ def _write_review_client_capture(tmp_path: Path) -> Path:
 
 def _write_launcher_git_mock(tmp_path: Path) -> tuple[Path, Path, Path]:
     repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    (repo_root / ".git").mkdir()
+    repo_root.mkdir(exist_ok=True)
+    (repo_root / ".git").mkdir(exist_ok=True)
     git_log = tmp_path / "git-argv.jsonl"
     git_mock = tmp_path / "git-launcher-mock"
     _write_launcher_executable(
@@ -183,6 +183,11 @@ def _write_launcher_git_mock(tmp_path: Path) -> tuple[Path, Path, Path]:
         "if args[:2] == ['worktree', 'add']:\n"
         "    worktree_dir = pathlib.Path(args[-2])\n"
         "    worktree_dir.mkdir(parents=True, exist_ok=True)\n"
+        # GIT_WORKTREE_SEED stands in for tracked content that a real worktree
+        # checks out, so tests can cover an overlay root the worktree owns.
+        "    for seed in os.environ.get('GIT_WORKTREE_SEED', '').split(':'):\n"
+        "        if seed:\n"
+        "            (worktree_dir / seed).mkdir(parents=True, exist_ok=True)\n"
         "    raise SystemExit(0)\n"
         "raise SystemExit(0)\n",
     )
@@ -1373,3 +1378,90 @@ def test_cdx_source_has_no_callback_env_or_cmux_pane_creation() -> None:
     assert "cmux split" not in source
     assert "cmux create" not in source
     assert "wave-dispatch" not in source
+
+
+def _seed_main_checkout_overlays(tmp_path: Path, *, with_agents: bool = True) -> Path:
+    """Create the gitignored overlay content a real main checkout carries."""
+    repo_root = tmp_path / "repo"
+    if with_agents:
+        (repo_root / ".agents" / "skills" / "session-close").mkdir(parents=True)
+    (repo_root / ".claude" / "skills" / "beads").mkdir(parents=True)
+    (repo_root / ".env").write_text("TOKEN=value\n", encoding="utf-8")
+    return repo_root
+
+
+def test_cdx_bead_worktree_bootstraps_overlay_symlinks(tmp_path: Path) -> None:
+    """AC1: a cdx worktree carries overlays that resolve into the main checkout."""
+    repo_root = _seed_main_checkout_overlays(tmp_path)
+
+    result, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+
+    assert result.returncode == 0, result.stderr
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    for relative_path in (".agents", ".claude/skills", ".env"):
+        link = worktree / relative_path
+        assert link.is_symlink(), f"{relative_path} is not a symlink"
+        assert not os.path.isabs(os.readlink(link)), f"{relative_path} must be relative"
+        assert link.resolve() == (repo_root / relative_path).resolve()
+    assert (worktree / ".agents" / "skills" / "session-close").is_dir()
+
+
+def test_cdx_bead_worktree_skips_missing_overlay_sources(tmp_path: Path) -> None:
+    """AC3: an overlay absent from the main checkout is skipped, not dangled."""
+    _seed_main_checkout_overlays(tmp_path, with_agents=False)
+
+    result, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+
+    assert result.returncode == 0, result.stderr
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    assert not os.path.lexists(worktree / ".agents")
+    assert (worktree / ".claude" / "skills").is_symlink()
+
+
+def test_cdx_bead_worktree_never_overwrites_existing_overlay_paths(tmp_path: Path) -> None:
+    """AC3: tracked worktree content wins; only its missing children are linked."""
+    repo_root = _seed_main_checkout_overlays(tmp_path)
+    (repo_root / ".agents" / "pi").mkdir(parents=True)
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"GIT_WORKTREE_SEED": ".agents/pi"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    assert (worktree / ".agents").is_dir()
+    assert not (worktree / ".agents").is_symlink()
+    assert not (worktree / ".agents" / "pi").is_symlink()
+    assert (worktree / ".agents" / "skills").is_symlink()
+    assert (worktree / ".agents" / "skills").resolve() == (
+        repo_root / ".agents" / "skills"
+    ).resolve()
+
+
+def test_cdx_bead_worktree_overlay_bootstrap_can_be_disabled(tmp_path: Path) -> None:
+    _seed_main_checkout_overlays(tmp_path)
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"CDX_WORKTREE_OVERLAYS": ""},
+    )
+
+    assert result.returncode == 0, result.stderr
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    assert not os.path.lexists(worktree / ".agents")
+    assert not os.path.lexists(worktree / ".env")
+
+
+def test_cdx_bead_worktree_path_stays_clean_on_stdout(tmp_path: Path) -> None:
+    """The bootstrap must not pollute the captured worktree path."""
+    _seed_main_checkout_overlays(tmp_path)
+
+    result, argv_file, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    worktree_index = argv.index("-C")
+    assert Path(argv[worktree_index + 1]) == tmp_path / "worktrees" / "bead-CL-smoke"
