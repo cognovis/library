@@ -22,6 +22,7 @@ They fall into three groups, and the grouping is the lesson:
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import sys
@@ -1055,3 +1056,330 @@ def test_relocation_uses_a_rename_not_a_move_into(tmp_path: Path) -> None:
     assert not file_destination.is_symlink()
     assert file_destination.read_bytes() == b"plain"
     assert list(outside.iterdir()) == []
+
+
+# -- wave 2 regressions ---------------------------------------------------------
+
+
+def test_the_inventory_arms_the_production_register(tmp_path: Path) -> None:
+    """Wave 2, F1.
+
+    The generator classified projections and nothing recorded them, so no
+    production path ever called `NonComplianceRegister.record`. The report named
+    38 non-compliant projections and a later sync would have overwritten any of
+    them. A report that describes a control nobody armed is worse than no
+    report, because it reads as evidence the control ran.
+    """
+    root = tmp_path / "skills"
+    target = root / "unknown-origin"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_bytes(b"# unknown origin\n")
+
+    document = generator.build_document(
+        roots=[root],
+        digest_index={},
+        receipt_store_paths=[],
+        lock_paths=[],
+        observed_at=NOW,
+    )
+    classifications = document.pop("_classifications")
+    state = _state(tmp_path)
+    armed = generator.enforce_classifications(
+        classifications, register_path=state.non_compliance_path, recorded_at=NOW
+    )
+    assert armed == (str(target),)
+
+    with pytest.raises(RematerializationBlocked):
+        install_marketplace_item(
+            _item(),
+            provider=_Provider({"SKILL.md": b"# overwritten by sync\n"}),
+            state=state,
+            scope="global",
+            target="machine_local",
+            target_root=target,
+            observed_at=NOW,
+        )
+    assert (target / "SKILL.md").read_bytes() == b"# unknown origin\n"
+
+
+def test_a_recorded_null_revision_survives_migration() -> None:
+    """Wave 2, F2.
+
+    `upstream_revision: null` is the documented identity of a revisionless
+    provider, not an absent field. Treating every `None` as absence overwrote a
+    recorded identity with `unknown` -- the "never overwrite a recorded value"
+    rule inverted.
+    """
+    entry = {"id": "skill:x:global", "upstream_revision": None}
+    view = migration.read_foreign_fields(entry)
+    assert view["upstream_revision"] is None
+    assert view.is_unknown("upstream_revision") is False
+    assert migrate_foreign_receipt_fields(entry)["upstream_revision"] is None
+
+
+@pytest.mark.parametrize("sentinel", ["unknown", "UNKNOWN", "none", "null", " - "])
+def test_an_absence_sentinel_is_not_a_reconstructed_identity(sentinel: str) -> None:
+    """Wave 2, F3.
+
+    `_blank` accepted the module's own migration sentinel as reconstructed
+    identity, and the operator's real lock carries `unknown` in identity fields
+    today. A receipt whose source and catalog are both `unknown` was therefore
+    resolvable and prune-eligible.
+    """
+    entry = {
+        "id": "skill:ghost:global",
+        "source": sentinel,
+        "catalog_identity": sentinel,
+        "normalized_content_digest": "a" * 64,
+        "targets": [],
+    }
+    resolution = legacy_receipt_resolution(entry)
+    assert resolution.state == "unresolvable"
+    assert "source" in resolution.missing
+    assert "catalog-identity" in resolution.missing
+
+
+def test_a_lock_entry_without_a_source_declares_nothing(tmp_path: Path) -> None:
+    """Wave 2, F4. `entry.get("source") or name` made a name into an identity."""
+    lock = tmp_path / "global.lock"
+    lock.write_text(
+        "installed:\n"
+        "  - name: pretender\n"
+        "    type: skill\n"
+        "    scope: global\n"
+        "    catalog_identity: https://github.com/cognovis/library\n"
+        "    source_commit: 73bd8175f0436071ce64b4cd0ee580d00fb1b4b5\n"
+        f"    install_target: {tmp_path / 'skills' / 'pretender'}\n",
+        encoding="utf-8",
+    )
+    assert generator.declared_provenance_from_lock(lock) == {}
+
+
+def test_a_registered_path_is_canonicalized_when_recorded(tmp_path: Path) -> None:
+    """Wave 2, F5.
+
+    A relative entry resolved at check time made durable enforcement depend on
+    the process working directory.
+    """
+    root = tmp_path / "skills"
+    target = root / "x"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_bytes(b"# blocked\n")
+
+    original = os.getcwd()
+    register = NonComplianceRegister(tmp_path / "register.json")
+    try:
+        os.chdir(root)
+        scanned = scan_projections([Path("."), ])
+        projection = next(item for item in scanned if item.name == "x")
+        register.record(
+            classify_projection(
+                projection,
+                attribution=attribute_by_digest(projection, digest_index={}),
+                rights_for={}.get,
+                receipt_status="unreceipted",
+            ),
+            recorded_at=NOW,
+        )
+        recorded = register.blocked()[0].path
+        assert Path(recorded).is_absolute()
+        os.chdir(tmp_path)
+        assert register.is_blocked(path=str(target)) is True
+    finally:
+        os.chdir(original)
+
+
+def test_concurrent_registrations_do_not_lose_an_entry(tmp_path: Path) -> None:
+    """Wave 2, F6.
+
+    An unlocked load-modify-save kept one of two concurrent entries, silently
+    re-permitting the projection the lost one blocked. ReceiptStore.put already
+    had this exact lock for this exact failure.
+    """
+    import threading
+
+    root = tmp_path / "skills"
+    for name in ("first", "second"):
+        (root / name).mkdir(parents=True)
+        (root / name / "SKILL.md").write_bytes(f"# {name}\n".encode())
+
+    register = NonComplianceRegister(tmp_path / "register.json")
+    projections = list(scan_projections([root]))
+    barrier = threading.Barrier(len(projections))
+    errors: list[BaseException] = []
+
+    def record(projection):
+        try:
+            classification = classify_projection(
+                projection,
+                attribution=attribute_by_digest(projection, digest_index={}),
+                rights_for={}.get,
+                receipt_status="unreceipted",
+            )
+            barrier.wait(timeout=10)
+            register.record(classification, recorded_at=NOW)
+        except BaseException as exc:  # noqa: BLE001 - reported, not swallowed
+            errors.append(exc)
+
+    threads = [threading.Thread(target=record, args=(item,)) for item in projections]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+
+    assert errors == []
+    assert len(register.blocked()) == len(projections)
+
+
+def test_replaced_bytes_are_not_removed_under_the_old_statement(
+    tmp_path: Path,
+) -> None:
+    """Wave 2, F7.
+
+    The statement names a content digest, and nothing rechecked it. Review
+    planned a removal, replaced the subject's content, confirmed the presented
+    statement, and the replacement was deleted under a statement describing
+    content nobody had seen.
+    """
+    root = tmp_path / "skills"
+    subject = root / "ask-matt"
+    subject.mkdir(parents=True)
+    (subject / "SKILL.md").write_bytes(b"# planned content\n")
+
+    scanned = scan_projections([root])[0]
+    plan = plan_remediation(
+        classify_projection(
+            scanned,
+            attribution=attribute_by_digest(scanned, digest_index={}),
+            rights_for={}.get,
+            receipt_status="unreceipted",
+        )
+    )
+    (subject / "SKILL.md").write_bytes(b"# NEW UNCONFIRMED BYTES\n")
+
+    with pytest.raises(RemediationRefused) as refusal:
+        apply_remediation(
+            plan,
+            choice="operator-confirmed-removal",
+            confirm=lambda presentation: presentation.confirm(
+                operator="malte",
+                choice="operator-confirmed-removal",
+                confirmed_at=NOW,
+            ),
+        )
+    assert "changed after this remediation was planned" in str(refusal.value)
+    assert (subject / "SKILL.md").read_bytes() == b"# NEW UNCONFIRMED BYTES\n"
+
+
+def test_the_backfill_composes_the_caller_register_too(tmp_path: Path) -> None:
+    """Wave 2, F8. The one writer where a supplied register still replaced."""
+    from lib.providers.legacy_projections import (
+        apply_receipt_backfill,
+        plan_receipt_backfill,
+    )
+
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / "flow.js").write_bytes(b"// blocked bytes\n")
+
+    state = _state(tmp_path)
+    _blocked_register(state.non_compliance_path, workflows / "flow.js")
+    empty = NonComplianceRegister(tmp_path / "empty.json")
+
+    requests = plan_receipt_backfill(
+        scan_projections([workflows]),
+        catalog_lookup=lambda projection: {projection.name: b"replaced"},
+        provider_identity="library-first-party",
+        library_type="workflow",
+        rights=GRANTED,
+    )
+    with pytest.raises(RematerializationBlocked):
+        apply_receipt_backfill(
+            requests,
+            state=state,
+            scope="global",
+            target_root=workflows,
+            observed_at=NOW,
+            non_compliance=empty,
+        )
+    assert (workflows / "flow.js").read_bytes() == b"// blocked bytes\n"
+
+
+def test_an_object_store_subclass_is_refused(tmp_path: Path) -> None:
+    """Wave 2, F9.
+
+    `isinstance` admitted a subclass whose `materialize` override deleted a
+    retained member, so the census again reported damage only after it was
+    irreversible. The exact type makes "no deletion path by construction" a fact
+    about the code that runs.
+    """
+    legacy_root = tmp_path / "legacy"
+    legacy = legacy_root / "skills" / "market" / "anchor@local"
+    legacy.mkdir(parents=True)
+    (legacy / "SKILL.md").write_bytes(b"# v1\n")
+    request = plan_cache_migration(legacy_root).requests[0]
+
+    class _Subclass(ObjectStore):
+        def materialize(self, key, files, *, created_at, native_verification=None):
+            (legacy / "SKILL.md").unlink()
+            return super().materialize(
+                key, files, created_at=created_at, native_verification=native_verification
+            )
+
+    retrieved = {"SKILL.md": b"# v2\n"}
+    key = CacheKey(
+        provider_identity=PROVIDER,
+        upstream_id="skills/anchor",
+        upstream_revision=None,
+        normalized_content_digest=normalized_content_digest(retrieved),
+        library_type="skill",
+        transformation_version="identity/1",
+    )
+    with pytest.raises(MigrationRefused):
+        rematerialize_legacy_object(
+            request,
+            cache_key=key,
+            content=retrieved,
+            object_store=_Subclass(tmp_path / "objects"),
+            observed_at=NOW,
+        )
+    assert (legacy / "SKILL.md").read_bytes() == b"# v1\n"
+
+
+def test_a_cross_filesystem_relocation_is_refused_not_approximated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave 2, F10.
+
+    The copy fallback was itself the defect: `shutil.copy2` follows a symlink
+    planted between the destination check and the write, so it overwrote a file
+    outside the machine-local root and unlinked the source. There is no atomic
+    form of a cross-filesystem move, so it is refused rather than approximated.
+
+    `EXDEV` is injected rather than staged with two real filesystems, because
+    the behavior under test is the branch, not the kernel.
+    """
+    from lib.providers import legacy_projections
+
+    subject = tmp_path / "subject"
+    subject.mkdir()
+    (subject / "file.txt").write_bytes(b"projection")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "victim.txt").write_bytes(b"do not touch")
+    destination = tmp_path / "machine-local" / "subject"
+    destination.parent.mkdir()
+
+    def _exdev(*args, **kwargs):
+        raise OSError(errno.EXDEV, "Cross-device link")
+
+    monkeypatch.setattr(legacy_projections.os, "rename", _exdev)
+
+    with pytest.raises(RemediationRefused) as refusal:
+        legacy_projections._rename_into(subject, destination)
+
+    assert "crosses a filesystem boundary" in str(refusal.value)
+    # Nothing moved, nothing copied, nothing outside was touched.
+    assert (subject / "file.txt").read_bytes() == b"projection"
+    assert not destination.exists()
+    assert (outside / "victim.txt").read_bytes() == b"do not touch"

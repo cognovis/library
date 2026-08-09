@@ -49,7 +49,7 @@ from .inventory import (
     Rights,
 )
 from .receipts import ForeignReceipt, ReceiptStore
-from .state_files import atomic_write_text
+from .state_files import atomic_write_text, exclusive_lock
 
 INVENTORY_SCHEMA = "cognovis.legacy-projection-inventory.v1"
 NON_COMPLIANCE_SCHEMA = "cognovis.legacy-projection-non-compliance.v1"
@@ -608,7 +608,11 @@ class NonComplianceRegister:
                 "list of everything installed"
             )
         entry = BlockedProjection(
-            path=classification.projection.path,
+            # Canonicalized when recorded, not when checked. A relative entry
+            # resolved at check time made durable enforcement depend on the
+            # process working directory: review recorded `skills/x`, changed
+            # directory, and the same projection was no longer blocked.
+            path=str(Path(classification.projection.path).absolute()),
             name=classification.projection.name,
             content_digest=classification.projection.content_digest,
             redistribution_state=classification.redistribution_state,
@@ -616,9 +620,17 @@ class NonComplianceRegister:
             recorded_at=recorded_at,
             remediation=classification.remediation,
         )
-        entries = self._load()
-        entries[entry.path] = entry
-        self._save(entries)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # One locked transaction. Atomic replacement protects a reader from a
+        # half-written file and does nothing about two writers that each loaded
+        # before the other saved: review ran two successful `record` calls
+        # concurrently and the file kept one entry, silently re-permitting the
+        # projection the lost entry blocked. `ReceiptStore.put` already had this
+        # exact lock for this exact failure.
+        with exclusive_lock(self.path):
+            entries = self._load()
+            entries[entry.path] = entry
+            self._save(entries)
         return entry
 
     def _save(self, entries: Mapping[str, BlockedProjection]) -> None:
@@ -926,6 +938,24 @@ def render_remediation_statement(
     return "\n".join(lines)
 
 
+def _require_unchanged_subject(plan: "RemediationPlan") -> None:
+    """Refuse when the subject's bytes are not the bytes the statement names."""
+    subject = Path(plan.subject)
+    if not subject.exists() and not subject.is_symlink():
+        raise RemediationRefused(
+            f"the remediation subject {plan.subject} no longer exists, so this "
+            "confirmation describes nothing that is there. Re-plan."
+        )
+    current = scan_projection(subject)
+    if current.content_digest != plan.content_digest:
+        raise RemediationRefused(
+            f"the content at {plan.subject} changed after this remediation was "
+            f"planned: the statement names {plan.content_digest} and the bytes on "
+            f"disk are {current.content_digest}. A confirmation authorizes an act "
+            "on the content it described, never on whatever is there later."
+        )
+
+
 def _rename_into(subject: Path, destination: Path) -> None:
     """Move one projection to its destination without ever writing through a link.
 
@@ -956,19 +986,19 @@ def _rename_into(subject: Path, destination: Path) -> None:
             ) from exc
         if exc.errno != errno.EXDEV:
             raise
-    if destination.is_symlink() or destination.exists():
+        # A cross-filesystem move cannot be a rename, and the copy fallback that
+        # replaced it was itself the defect: `shutil.copy2` follows a symlink
+        # planted between the destination check and the write, so it overwrote a
+        # file outside the machine-local root and then unlinked the source.
+        # There is no atomic form of this operation, so it is refused rather
+        # than approximated. An operator who wants it can move the bytes
+        # themselves, having been told exactly what and where.
         raise RemediationRefused(
-            f"the relocation destination {destination} appeared during the move "
-            "and this is a cross-filesystem relocation, which has no atomic form. "
-            "Nothing was moved."
-        )
-    shutil.copytree(subject, destination, symlinks=True) if subject.is_dir() else (
-        shutil.copy2(subject, destination)
-    )
-    if subject.is_dir() and not subject.is_symlink():
-        shutil.rmtree(subject)
-    else:
-        subject.unlink()
+            f"relocating {subject} to {destination} crosses a filesystem "
+            "boundary, which has no atomic form. Nothing was moved. Choose a "
+            "machine-local root on the same filesystem, or move the projection "
+            "yourself and re-run the inventory."
+        ) from exc
 
 
 def _relocation_destination(relocate_root: Path, name: str) -> Path:
@@ -1094,6 +1124,14 @@ def apply_remediation(
         raise RemediationRefused(
             f"the operator confirmed {confirmation.choice!r}, not {choice!r}"
         )
+
+    # The statement names a content digest, so the bytes it names have to be the
+    # bytes that are acted on. Review planned a removal, replaced the subject's
+    # content, confirmed the presented statement, and the replacement was
+    # deleted under a statement describing content nobody had seen. Re-reading
+    # the subject here is the same digest binding executable admission uses, and
+    # for the same reason.
+    _require_unchanged_subject(plan)
 
     if destination is not None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1247,9 +1285,12 @@ def apply_receipt_backfill(
     # of `None` as the residual left by the F1 repair: the register became a
     # default rather than an invariant, and one writer still defaulted to no
     # register at all.
-    blocks = (
-        state.non_compliance_register() if non_compliance is None else non_compliance
-    )
+    from .wiring import _composed_blocks  # local: wiring imports this module
+
+    # Composed, never replaced. The first repair made this the one writer where
+    # a caller-supplied register could still turn the state's blocks off, which
+    # is the same hole the other two had just lost.
+    blocks = _composed_blocks(state, non_compliance)
     store = receipt_store if receipt_store is not None else state.receipt_store(scope)
     receipted: list[str] = []
     outcomes: list[InstallOutcome] = []

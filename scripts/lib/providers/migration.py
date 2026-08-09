@@ -79,6 +79,13 @@ FOREIGN_RECEIPT_FIELDS: tuple[str, ...] = (
     "cache_key_digest",
 )
 
+#: Foreign fields whose recorded value may legitimately be `null`.
+#: `upstream_revision: null` is the documented identity of a revisionless
+#: provider (`docs/lockfile-format.md`), not an absent field. Treating every
+#: `None` as absence overwrote that recorded identity with `unknown`, which is
+#: precisely the "migration never overwrites a recorded value" rule inverted.
+NULLABLE_FOREIGN_FIELDS: frozenset[str] = frozenset({"upstream_revision"})
+
 #: The three facts a receipt needs before anything can be reproduced from it.
 #: They are named rather than implied, because "unresolvable" has to say *what*
 #: could not be resolved for an operator to have any move at all.
@@ -111,6 +118,21 @@ class MigrationRefused(RuntimeError):
 
 def _blank(value: Any) -> bool:
     return not isinstance(value, str) or not value.strip()
+
+
+#: Values that record the absence of an identity rather than an identity. The
+#: first is this module's own migration sentinel, and the operator's real
+#: `global.lock` carries `unknown` in identity fields today -- so accepting it as
+#: reconstructed identity made an unresolvable receipt resolvable and dropped the
+#: retention and prune block that state exists to grant.
+_ABSENCE_SENTINELS: frozenset[str] = frozenset({"unknown", "none", "null", "n/a", "-"})
+
+
+def _unresolved(value: Any) -> bool:
+    """Whether a recorded identity field actually identifies anything."""
+    if _blank(value):
+        return True
+    return str(value).strip().lower() in _ABSENCE_SENTINELS
 
 
 def _field_default(name: str) -> Any:
@@ -186,7 +208,10 @@ def read_foreign_fields(entry: Mapping[str, Any]) -> ForeignFieldView:
     values: dict[str, Any] = {}
     absent: list[str] = []
     for name in FOREIGN_RECEIPT_FIELDS:
-        if name in entry and entry[name] is not None:
+        recorded = name in entry and (
+            entry[name] is not None or name in NULLABLE_FOREIGN_FIELDS
+        )
+        if recorded:
             values[name] = entry[name]
         else:
             values[name] = _field_default(name)
@@ -285,11 +310,11 @@ def legacy_receipt_resolution(entry: Mapping[str, Any]) -> LegacyResolution:
     if not isinstance(entry, Mapping):
         raise ValueError("a receipt is a mapping")
     missing: list[str] = []
-    if _blank(entry.get("source")):
+    if _unresolved(entry.get("source")):
         missing.append("source")
     if not _has_content_digest(entry):
         missing.append("content-digest")
-    if _blank(entry.get("catalog_identity")):
+    if _unresolved(entry.get("catalog_identity")):
         missing.append("catalog-identity")
     if not missing:
         return LegacyResolution(
@@ -663,18 +688,22 @@ def rematerialize_legacy_object(
     """
     from .foreign_cache import ObjectStore
 
-    if not isinstance(object_store, ObjectStore):
-        # The store is the one collaborator this function calls, so an untyped
-        # parameter here would reintroduce the arbitrary-callback boundary the
-        # F3 repair removed from `apply_cache_migration` -- just wearing a
-        # method name instead of a lambda. `ObjectStore` has no deletion path by
-        # construction, and requiring the type is what makes that fact load
-        # bearing rather than conventional.
+    if type(object_store) is not ObjectStore:
+        # The store is the one collaborator this function calls, so a loose type
+        # here reintroduces the arbitrary-callback boundary the first repair
+        # removed from `apply_cache_migration` -- wearing a method name instead
+        # of a lambda. `isinstance` was not enough: review supplied an
+        # `ObjectStore` subclass whose `materialize` override deleted a retained
+        # member, passed the check, and the census again reported the damage
+        # only after it was done. The exact type is what makes "no deletion path
+        # by construction" a fact about the code that runs rather than about the
+        # class that was declared.
         raise MigrationRefused(
-            "re-materialization writes through the content-addressed ObjectStore, "
-            "which has no deletion path by construction. A caller-supplied object "
-            "with a `materialize` method is an arbitrary mutation hook, which is "
-            "exactly what this path removed"
+            "re-materialization writes through the content-addressed ObjectStore "
+            "itself, which has no deletion path by construction. A subclass may "
+            "override `materialize`, so a subclass is an arbitrary mutation hook "
+            "and is refused for the same reason the callback was removed; got "
+            f"{type(object_store).__name__}"
         )
 
     legacy = Path(request.legacy_path)

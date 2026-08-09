@@ -737,10 +737,10 @@
     },
     {
       "compliance": "compliant",
-      "content_digest": "sha256:13d035cac1925461a059b847725d438cee34bf8de3c629b5094ff892f5c578ca",
+      "content_digest": "sha256:e6c40a3ff85c56b3955302887c12b8fc32947fbe6c0cdde645cdddb6da1ef39c",
       "kind": "symlink",
       "link_target": "/Users/malte/code/library/meta",
-      "member_count": 6471,
+      "member_count": 7333,
       "name": "library",
       "path": "/Users/malte/.claude/skills/library",
       "pending_reason": null,
@@ -1287,8 +1287,10 @@
   "locks_read": [
     "/Users/malte/.config/library/global.lock"
   ],
-  "observed_at": "2026-08-09T17:27:07Z",
+  "observed_at": "2026-08-09T17:49:01Z",
   "receipt_stores_read": [],
+  "register_path": null,
+  "registered_non_compliant": 0,
   "roots": [
     "/Users/malte/.claude/skills",
     "/Users/malte/.claude/workflows"

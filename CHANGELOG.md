@@ -140,6 +140,23 @@
   longer show one projection and delete another; and a relocation names its destination
   in the statement it presents and refuses any pre-existing destination, closing a
   `shutil.move` that followed a destination symlink out of the machine-local root.
+  A second round found ten more, every one reproduced: the inventory classified
+  non-compliant projections and nothing recorded them, so no production path ever
+  armed the register the report described — the generator now writes it, at the same
+  location `ForeignState` derives; `read_foreign_fields` overwrote a recorded
+  `upstream_revision: null`, which is the documented revisionless identity rather than
+  an absent field; the literal `unknown` counted as a reconstructed source and catalog
+  identity, and the operator's real lock carries it today, so an unresolvable receipt
+  became prune-eligible; the lock reader used an entry's name as its upstream identity
+  when `source` was missing; a registered block was canonicalized at check time, so a
+  relative entry stopped matching after a working-directory change; `record` did an
+  unlocked load-modify-save and lost concurrent entries; `apply_remediation` never
+  rebound the subject's content digest, so replaced bytes were removed under a statement
+  describing content nobody saw; the receipt backfill still let a caller-supplied
+  register replace the state's rather than compose with it; an `ObjectStore` subclass
+  passed the type check and restored the mutation hook the callback removal had closed;
+  and the cross-filesystem relocation fallback followed a symlink planted in its own
+  window, so it is now refused rather than approximated.
 - *(CL-mvet, marketplace)* Three structurally different reference marketplaces
   install through one generic provider contract, and the contract now has a
   production caller. The `git-repo` adapter installs `implement` and `ask-matt`

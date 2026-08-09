@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -49,6 +50,7 @@ from lib.providers.legacy_projections import (  # noqa: E402
     INVENTORY_SCHEMA,
     PENDING_DIGEST_ATTRIBUTION,
     DeclaredProvenance,
+    NonComplianceRegister,
     classify_inventory,
     inventory_document,
     receipt_index_for,
@@ -83,6 +85,18 @@ DEFAULT_RECEIPT_STORES: tuple[Path, ...] = (
 #: Existing v1/v2 locks whose receipts declare provenance for a projected path.
 DEFAULT_LOCKS: tuple[Path, ...] = (
     Path.home() / ".config" / "library" / "global.lock",
+)
+
+#: Where the production non-compliance register lives. It is the same location
+#: `ForeignState.for_locks` derives, so arming it here is arming the register
+#: every production writer consults -- not a second, parallel one.
+DEFAULT_REGISTER = (
+    Path(
+        os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))
+    )
+    / "library"
+    / "foreign"
+    / "non-compliant-projections.json"
 )
 
 JSON_ARTIFACT = REPO_ROOT / "docs" / "reports" / "legacy-projection-inventory.json"
@@ -185,13 +199,18 @@ def declared_provenance_from_lock(
         catalog = str(entry.get("catalog_identity") or "").strip()
         name = str(entry.get("name") or "").strip()
         commit = str(entry.get("source_commit") or "").strip()
-        if not catalog or not name or not commit:
+        source = str(entry.get("source") or "").strip()
+        # `source` is required and is never replaced by the entry's name. The
+        # fallback `entry.get("source") or name` made a name into an upstream
+        # identity, which is precisely the evidence this module refuses
+        # everywhere else.
+        if not catalog or not name or not commit or not source:
             continue
         receipt_id = f"{entry.get('type')}:{name}:{entry.get('scope')}"
         provenance = DeclaredProvenance(
             receipt_id=receipt_id,
             provider_identity=catalog,
-            upstream_id=str(entry.get("source") or name),
+            upstream_id=source,
             evidence_source=(
                 f"lock receipt {receipt_id} in {path} records catalog_identity "
                 f"{catalog} and source_commit {commit}"
@@ -230,21 +249,47 @@ def build_document(
     for claimed, provenance in declared.items():
         receipt_index.setdefault(claimed, provenance.receipt_id)
 
-    document = inventory_document(
-        classify_inventory(
-            scan_projections(roots),
-            digest_index=digest_index,
-            rights_for=_rights_for,
-            receipt_index=receipt_index,
-            declared_provenance=declared,
-        ),
-        observed_at=observed_at,
+    classifications = classify_inventory(
+        scan_projections(roots),
+        digest_index=digest_index,
+        rights_for=_rights_for,
+        receipt_index=receipt_index,
+        declared_provenance=declared,
     )
+    document = inventory_document(classifications, observed_at=observed_at)
+    document["_classifications"] = classifications
     document["roots"] = [str(root) for root in roots]
     document["receipt_stores_read"] = [str(store.path) for store in stores]
     document["locks_read"] = read_locks
     document["digest_index_size"] = len(digest_index)
     return document
+
+
+def enforce_classifications(
+    classifications: Sequence[Any],
+    *,
+    register_path: Path,
+    recorded_at: str,
+) -> tuple[str, ...]:
+    """Write every non-compliant classification into the durable register.
+
+    Without this the inventory and the enforcement state are two unrelated
+    facts: the report named 38 non-compliant projections and nothing on the
+    machine would refuse to overwrite one, because no production path ever
+    called `NonComplianceRegister.record`. Review demonstrated a sync
+    overwriting a projection this report had just classified.
+
+    A report that describes a control nobody armed is worse than no report,
+    because it reads as evidence that the control ran.
+    """
+    register = NonComplianceRegister(Path(register_path))
+    recorded: list[str] = []
+    for classification in classifications:
+        if not classification.blocks_rematerialization():
+            continue
+        register.record(classification, recorded_at=recorded_at)
+        recorded.append(classification.projection.path)
+    return tuple(recorded)
 
 
 _HEADER = """# Legacy projection inventory (ADR-0011, `CL-m6cc` AC5)
@@ -289,6 +334,13 @@ def render_markdown(document: Mapping[str, Any]) -> str:
         + (", ".join(f"`{lock}`" for lock in locks) if locks else "none found")
     )
     lines.append(f"- Resolved upstream digests available: {document['digest_index_size']}")
+    register = document.get("register_path")
+    lines.append(
+        f"- Non-compliance register armed: `{register}` "
+        f"({document.get('registered_non_compliant', 0)} entries recorded)"
+        if register
+        else "- Non-compliance register armed: no (report-only run)"
+    )
     lines.append("")
     lines.append("## Counts")
     lines.append("")
@@ -366,6 +418,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-json", default=str(JSON_ARTIFACT), metavar="PATH")
     parser.add_argument("--output-markdown", default=str(MARKDOWN_ARTIFACT), metavar="PATH")
     parser.add_argument("--observed-at", default=None, metavar="TIMESTAMP")
+    parser.add_argument(
+        "--register",
+        default=str(DEFAULT_REGISTER),
+        metavar="PATH",
+        help="Durable non-compliance register to arm with this inventory.",
+    )
+    parser.add_argument(
+        "--no-enforce",
+        action="store_true",
+        default=False,
+        help="Report only; do not record classifications into the register.",
+    )
     return parser
 
 
@@ -388,6 +452,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         lock_paths=locks,
         observed_at=observed_at,
     )
+
+    classifications = document.pop("_classifications")
+    if not args.no_enforce:
+        armed = enforce_classifications(
+            classifications,
+            register_path=Path(args.register).expanduser(),
+            recorded_at=observed_at,
+        )
+        document["register_path"] = str(Path(args.register).expanduser())
+        document["registered_non_compliant"] = len(armed)
+    else:
+        document["register_path"] = None
+        document["registered_non_compliant"] = 0
 
     json_path = Path(args.output_json)
     markdown_path = Path(args.output_markdown)

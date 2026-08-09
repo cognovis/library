@@ -1485,6 +1485,31 @@ lock entry carrying neither produced `receipt-declared` provenance with
 `granted` first-party rights. A declaration that cannot be reconstructed is not
 weak evidence; it is the absence of evidence with a URL attached.
 
+**The inventory arms the register; the delivery does not arm it for you.**
+Classification and enforcement were two unrelated facts in the first two
+candidates: the report named 38 non-compliant projections and no production path
+ever called `NonComplianceRegister.record`, so a later sync would have
+overwritten any of them. A report that describes a control nobody armed is worse
+than no report, because it reads as evidence the control ran. The generator now
+records every non-compliant classification into the register
+`ForeignState.for_locks` derives — the same file every production writer
+consults, not a parallel one. It was run with `--no-enforce` to produce the
+committed artifact, because arming a control on the operator's machine is an
+operator's act and not a side effect of generating a document. Run it without
+that flag to arm it.
+
+**Second-round repairs, recorded because each was a guard that looked right.**
+
+| What was wrong | Why it passed the first reading |
+|---|---|
+| `read_foreign_fields` overwrote a recorded `upstream_revision: null` with `unknown` | `None` reads as "absent" everywhere else, and this is the one field whose schema documents `null` as an identity |
+| The literal `unknown` counted as a reconstructed source and catalog identity | It is this module's own migration sentinel, and the operator's real lock carries it today, so an unresolvable receipt became resolvable and prune-eligible |
+| A registered path was canonicalized at check time | Enforcement then depended on the process working directory: a relative entry stopped matching after a `chdir` |
+| `NonComplianceRegister.record` did an unlocked load-modify-save | Atomic replacement protects a reader and does nothing about two writers; `ReceiptStore.put` already carried the lock for the identical failure |
+| `apply_remediation` never rebound the subject's content digest | The statement names a digest, so replaced bytes were removed under a statement describing content nobody saw |
+| An `ObjectStore` **subclass** passed the type check | `isinstance` admitted an override of `materialize`, restoring the mutation hook the callback removal had just closed |
+| The cross-filesystem relocation fell back to `shutil.copy2` | The fallback followed a symlink planted in its own window, wrote outside the machine-local root, and unlinked the source. There is no atomic form, so it is now refused rather than approximated |
+
 **What is still owed, and stated rather than implied.** The digest index is
 empty, so no projection is `attributed` today. Populating it means retrieving the
 reference providers' content through the ADR-0011 cache and recording the digests
