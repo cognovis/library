@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -42,7 +41,7 @@ from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 from ..source import (
     ParsedSource,
-    clone_github_repo,
+    clone_source_repo,
     get_local_commit_sha,
     parse_source,
     resolve_marketplace,
@@ -64,7 +63,7 @@ def install_skill(
 
     Steps:
     1. Look up entry in catalog
-    2. Resolve source (local path or GitHub URL)
+    2. Resolve source (local path or remote repository URL)
     3. Compute cache path (Layer B)
     4. If dry_run: return planned operations without mutating
     5. Materialize cache (copy source dir -> Layer B)
@@ -340,7 +339,7 @@ def _fetch_source_dir(
     clone directory the caller must clean up, or None for local sources.
 
     For local sources: returns the parent directory.
-    For GitHub sources: clones to a temp dir, navigates to the skill subdir.
+    For remote sources: clones to a temp dir, navigates to the skill subdir.
     """
     if parsed.is_local():
         local = parsed.local_path
@@ -353,21 +352,21 @@ def _fetch_source_dir(
         commit = get_local_commit_sha(source_dir)
         return source_dir, commit, None
 
-    if parsed.is_github():
+    if parsed.is_remote_repository():
         clone_url = parsed.clone_url or ""
         try:
-            tmp = clone_github_repo(clone_url, parsed.branch)
+            tmp = clone_source_repo(clone_url, parsed.branch)
         except SourceError as exc:
             raise InstallError(str(exc)) from exc
 
         # Get commit SHA
-        sha_result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=str(tmp),
-        )
-        commit = sha_result.stdout.strip() if sha_result.returncode == 0 else "unknown"
+        # The shared HEAD lookup, rather than a third copy of the same call.
+        # It reports an untracked tree as `local`; a fresh clone is tracked, so
+        # that value here means the lookup itself failed, which this installer
+        # has always reported as `unknown`.
+        commit = get_local_commit_sha(tmp)
+        if commit == "local":
+            commit = "unknown"
 
         if parsed.file_path:
             source_path = tmp / parsed.file_path

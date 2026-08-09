@@ -36,7 +36,7 @@ from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 from ..source import (
     ParsedSource,
-    clone_github_repo,
+    clone_source_repo,
     get_local_commit_sha,
     parse_source,
     resolve_marketplace,
@@ -931,10 +931,10 @@ def _fetch_agent_source(
         commit = get_local_commit_sha(source_file)
         return source_file, commit, None
 
-    if parsed.is_github():
+    if parsed.is_remote_repository():
         clone_url = parsed.clone_url or ""
         try:
-            tmp = clone_github_repo(clone_url)
+            tmp = clone_source_repo(clone_url)
         except SourceError as exc:
             raise InstallError(str(exc)) from exc
 

@@ -16,6 +16,8 @@ by catching exceptions and never branches on a provider's name or kind.
 | `revision_of` | NO | The provider is revisionless; `upstream_revision` is `null` |
 | `verify` | NO | The Library normalized digest is the only integrity proof |
 | `rights_evidence` | NO | Rights stay `unknown` until a human records evidence |
+| `item_rights_evidence` | NO | The provider is uniform; one rights answer covers every item |
+| `member_manifest` | NO | Completeness rests on the adapter's declaration, which the install records as its weakest evidence |
 
 `describe` is **optional and declared**, not "mandatory with a default".
 ADR-0011's first table marked it `Required: YES` while also defining behavior
@@ -61,6 +63,8 @@ OPTIONAL_CAPABILITIES = frozenset(
         "revision_of",
         "verify",
         "rights_evidence",
+        "item_rights_evidence",
+        "member_manifest",
     }
 )
 
@@ -292,6 +296,45 @@ class SourceProvider(abc.ABC):
         """Pointer to the provider's licensing evidence source, if it publishes one."""
         raise CapabilityNotDeclared(
             f"{type(self).__name__} does not declare rights_evidence"
+        )
+
+    def member_manifest(
+        self, upstream_id: str, revision: str | None = None
+    ) -> Sequence[str]:
+        """The item-relative paths this item consists of, listed from the source.
+
+        This is what lets an install state `CompletenessEvidence.from_manifest`
+        rather than the adapter's own word. The two are not the same claim: a
+        manifest read from the source is an independent list to check a retrieval
+        against, while an adapter declaration says only "I believe I returned
+        everything" -- and review demonstrated an adapter returning one file of a
+        two-file item and having it pinned, cached, receipted, and projected.
+
+        An adapter that does not declare it is not a lesser adapter; it is one
+        whose source cannot list an item's members, and the install records that
+        weaker evidence explicitly instead of letting it be the quiet default.
+        """
+        raise CapabilityNotDeclared(
+            f"{type(self).__name__} does not declare member_manifest"
+        )
+
+    def item_rights_evidence(self, upstream_id: str) -> RightsEvidence:
+        """Licensing evidence for **one item**, when the provider is not uniform.
+
+        A single repository publishes one licence for everything it contains, so
+        `rights_evidence` answers for the whole provider. An organization-level
+        provider does not: ADR-0011 records the `disler` grant as per repository,
+        with `live-bench` carrying no observed `LICENSE` at all. Without this
+        capability the only way to express that is a provider-wide answer, which
+        would let one repository's grant stand in for a sibling that has none --
+        exactly the inheritance the ADR calls out.
+
+        Declaring it is what makes a consumer ask per item. An adapter that does
+        not declare it is stating that its provider is uniform, and the consumer
+        uses `rights_evidence` unchanged.
+        """
+        raise CapabilityNotDeclared(
+            f"{type(self).__name__} does not declare item_rights_evidence"
         )
 
 

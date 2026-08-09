@@ -271,6 +271,21 @@ sources:
       source: https://github.com/disler
       description: Public skill/agent/hooks repos for Claude Code and AI agents
       type: git
+      provider_kind: git-org
+      allowlist:
+        - pi-vs-claude-code
+        - fusion-harness
+        - planf3
+      rights:
+        fetch_authorization: granted
+        install_rights: granted
+        redistribution_rights: granted
+        derivative_rights: granted
+        evidence_source: >-
+          per-repository MIT LICENSE recorded with commit pins in
+          /Users/malte/code/library/cognovis-pi/docs/research/indydevdan-pi-repos.md,
+          2026-08-08. Resolved per repository at normalization: a repository with
+          no observed licence relaxes the licence-derived grants to unknown.
       local_path: null
       writable: false
       content_types:
@@ -285,6 +300,64 @@ sources:
           - agents
         excludes:
           - private
+    - name: matt-pocock-skills
+      source: https://github.com/mattpocock/skills
+      description: ADR-0011 git-repo reference provider; nested Agent-Skills layout, MIT
+      type: git
+      provider_kind: git-repo
+      branch: main
+      rights:
+        fetch_authorization: granted
+        install_rights: granted
+        redistribution_rights: granted
+        derivative_rights: granted
+        evidence_source: >-
+          upstream LICENSE (MIT) confirmed via raw.githubusercontent.com HTTP 200
+          and the repository API reporting spdx_id: MIT, 2026-08-08
+      local_path: null
+      writable: false
+      content_types:
+        - skills
+      scope:
+        topics:
+          - public
+          - skills
+          - engineering
+        excludes:
+          - private
+    - name: executive-circle
+      source: mcp:executive-circle
+      description: >-
+        ADR-0011 mcp-content reference provider. Token-scoped and revisionless:
+        MCP is the transport only, so a fetched prompt kit produces a Prompt
+        receipt and never an mcp: dependency, a global ownership edge, or a
+        harness MCP registration. Committed projection is blocked by default
+        because no redistribution grant has been located.
+      type: git
+      provider_kind: mcp-content
+      auth_ref: executive-circle-subscriber
+      rights:
+        fetch_authorization: granted
+        install_rights: unknown
+        redistribution_rights: unknown
+        derivative_rights: unknown
+        evidence_source: >-
+          no published licence or redistribution grant located, 2026-08-08
+          (docs/research/external-marketplace-reference-matrix.md)
+        grant_evidence:
+          fetch_authorization: >-
+            subscriber-token-scoped MCP endpoint recorded in local harness
+            configuration, 2026-08-08
+      local_path: null
+      writable: false
+      content_types:
+        - prompts
+      scope:
+        topics:
+          - private
+          - prompts
+        excludes:
+          - public
     - name: pbakaus
       source: https://github.com/pbakaus
       description: Paul Bakaus' public agentic content (Impeccable frontend design skill)

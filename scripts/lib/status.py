@@ -219,7 +219,7 @@ def cmd_status_impl(
             # For GitHub browser/raw URLs, extract branch to compare against the
             # correct ref rather than always defaulting to remote HEAD.
             parsed = parse_source(source)
-            if parsed.kind in ("github_browser", "github_raw") and parsed.clone_url:
+            if parsed.addresses_path_in_repository() and parsed.clone_url:
                 clone_url = parsed.clone_url
                 ref = parsed.branch or "HEAD"
             else:

@@ -134,19 +134,25 @@
         "pi_extensions": {
           "description": "Catalog of project-only Pi extension files.",
           "type": "array",
-          "items": {"$ref": "#/$defs/project_native_entry"},
+          "items": {
+            "$ref": "#/$defs/project_native_entry"
+          },
           "default": []
         },
         "pi_profiles": {
           "description": "Catalog of project-only Pi profile files.",
           "type": "array",
-          "items": {"$ref": "#/$defs/project_native_entry"},
+          "items": {
+            "$ref": "#/$defs/project_native_entry"
+          },
           "default": []
         },
         "just_modules": {
           "description": "Catalog of project-only Just recipe modules.",
           "type": "array",
-          "items": {"$ref": "#/$defs/project_native_entry"},
+          "items": {
+            "$ref": "#/$defs/project_native_entry"
+          },
           "default": []
         },
         "runtime_configs": {
@@ -251,16 +257,32 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "max_roots": {"type": "integer", "minimum": 1, "maximum": 5},
-            "max_receipts": {"type": "integer", "minimum": 1, "maximum": 15},
-            "max_standing_context_fraction": {"type": "number", "minimum": 0, "maximum": 0.01}
+            "max_roots": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "max_receipts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 15
+            },
+            "max_standing_context_fraction": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.01
+            }
           }
         },
         "project": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "max_receipts": {"type": "integer", "minimum": 1, "maximum": 30}
+            "max_receipts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            }
           }
         }
       }
@@ -1072,7 +1094,7 @@
           }
         },
         "auth_ref": {
-          "description": "Name of the credential reference this provider requires. A reference and its scope only — never a credential value.",
+          "description": "Name of the credential reference this provider requires. A reference and its scope only \u2014 never a credential value.",
           "type": "string",
           "minLength": 1
         },
@@ -1107,13 +1129,51 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "fetch_authorization": { "type": "string", "minLength": 1 },
-                "install_rights": { "type": "string", "minLength": 1 },
-                "redistribution_rights": { "type": "string", "minLength": 1 },
-                "derivative_rights": { "type": "string", "minLength": 1 }
+                "fetch_authorization": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "install_rights": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "redistribution_rights": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "derivative_rights": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             }
           }
+        },
+        "branch": {
+          "description": "Default branch or ref this provider enumerates at. A per-repository override lives in `refs`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "refs": {
+          "description": "Per-unit ref or commit for an organization provider. Revision identity is per repository, so one value cannot stand for the organization.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "layout": {
+          "description": "How this provider's trees decompose into items. `marker` treats a directory carrying a marker file as one item; `bundle` also emits each remaining file as its own member, classified individually.",
+          "type": "string",
+          "enum": [
+            "marker",
+            "bundle"
+          ]
+        },
+        "auth_scope": {
+          "description": "Scope of the named credential reference. A scope, never a credential value.",
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,
@@ -1175,7 +1235,9 @@
             "globs": {
               "description": "File glob patterns (agentskills.io standard). When any glob matches a file in context, this skill is suggested.",
               "type": "array",
-              "items": {"type": "string"},
+              "items": {
+                "type": "string"
+              },
               "default": []
             },
             "always_apply": {
@@ -1295,7 +1357,9 @@
             "globs": {
               "description": "File glob patterns (agentskills.io standard). When any glob matches a file in context, this standard is suggested.",
               "type": "array",
-              "items": {"type": "string"},
+              "items": {
+                "type": "string"
+              },
               "default": []
             },
             "always_apply": {
@@ -1536,7 +1600,7 @@
           "minLength": 1
         },
         "species": {
-          "description": "MCP-server species discriminator (ADR-0007). `external-capability` is a third-party provider (open-brain, executive-circle, pencil, heypresto) — `prefer CLI + Skill` decision rule applies when shell access exists. `library-tool-surface` is a first-party Library server that acts as the typed invocation channel over Library CLIs and Scripts (cognovis-tools) — the prefer-CLI rule does NOT apply. Omitting this field is equivalent to `external-capability` for backward compatibility. Per-tool data is NOT a catalog field for either species; the MCP `tools/list` call is the runtime source of truth.",
+          "description": "MCP-server species discriminator (ADR-0007). `external-capability` is a third-party provider (open-brain, executive-circle, pencil, heypresto) \u2014 `prefer CLI + Skill` decision rule applies when shell access exists. `library-tool-surface` is a first-party Library server that acts as the typed invocation channel over Library CLIs and Scripts (cognovis-tools) \u2014 the prefer-CLI rule does NOT apply. Omitting this field is equivalent to `external-capability` for backward compatibility. Per-tool data is NOT a catalog field for either species; the MCP `tools/list` call is the runtime source of truth.",
           "type": "string",
           "enum": [
             "external-capability",
@@ -2018,9 +2082,15 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["consumer", "marketplace"]
+            "enum": [
+              "consumer",
+              "marketplace"
+            ]
           },
-          "default": ["consumer", "marketplace"]
+          "default": [
+            "consumer",
+            "marketplace"
+          ]
         },
         "sync_strategy": {
           "description": "How to apply the target when syncing. overwrite_if_source_newer: copy only when content differs. overwrite_always: always overwrite. append_if_missing: append content if not already present. replace_section: replace a marked section between begin/end markers. repair_fields: for json_field_enforce, apply ensure/remove field operations.",
@@ -2258,9 +2328,12 @@
           "minLength": 1
         },
         "format": {
-          "description": "Source format. 'yaml' (default) composes base + global_overlay via section merge. 'markdown' deploys the base source verbatim (no parse, no overlay) — used for always-on instruction files like AGENTS.md.",
+          "description": "Source format. 'yaml' (default) composes base + global_overlay via section merge. 'markdown' deploys the base source verbatim (no parse, no overlay) \u2014 used for always-on instruction files like AGENTS.md.",
           "type": "string",
-          "enum": ["yaml", "markdown"],
+          "enum": [
+            "yaml",
+            "markdown"
+          ],
           "default": "yaml"
         },
         "global_overlay": {
@@ -2277,8 +2350,12 @@
           "items": {
             "type": "object",
             "properties": {
-              "default": {"type": "string"},
-              "global": {"type": "string"}
+              "default": {
+                "type": "string"
+              },
+              "global": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           }
@@ -2307,40 +2384,99 @@
     "workspace_entry": {
       "description": "A convention-scanned Workspace manifest plus source-catalog metadata.",
       "type": "object",
-      "required": ["name", "description", "source", "schema_version", "version", "roots"],
+      "required": [
+        "name",
+        "description",
+        "source",
+        "schema_version",
+        "version",
+        "roots"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
-        "description": {"type": "string", "minLength": 1},
-        "source": {"$ref": "#/$defs/source_ref"},
-        "schema_version": {"const": 1},
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/source_ref"
+        },
+        "schema_version": {
+          "const": 1
+        },
         "version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
         },
-        "status": {"type": "string", "enum": ["experimental", "stable", "deprecated"]},
-        "standing_context_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "status": {
+          "type": "string",
+          "enum": [
+            "experimental",
+            "stable",
+            "deprecated"
+          ]
+        },
+        "standing_context_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
         "roots": {
           "type": "array",
           "minItems": 2,
           "maxItems": 10,
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/workspace_root"}
+          "items": {
+            "$ref": "#/$defs/workspace_root"
+          }
         },
-        "metadata": {"$ref": "#/$defs/entry_metadata"},
-        "tags": {"type": "array", "items": {"type": "string"}, "default": []}
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
       }
     },
     "workspace_root": {
       "type": "object",
-      "required": ["type", "name"],
+      "required": [
+        "type",
+        "name"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["skill", "agent", "prompt", "script", "standard", "guardrail", "mcp", "model-standard", "agent-base", "workflow", "pi-extension", "pi-profile", "just-module", "runtime-config"]
+          "enum": [
+            "skill",
+            "agent",
+            "prompt",
+            "script",
+            "standard",
+            "guardrail",
+            "mcp",
+            "model-standard",
+            "agent-base",
+            "workflow",
+            "pi-extension",
+            "pi-profile",
+            "just-module",
+            "runtime-config"
+          ]
         },
-        "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"},
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
         "constraint": {
           "type": "string",
           "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
@@ -2350,8 +2486,12 @@
     "project_native_entry": {
       "description": "A project-only harness-native file or Pi extension bundle installed at a fixed target below .agents/.",
       "allOf": [
-        {"$ref": "#/$defs/base_entry"},
-        {"$ref": "#/$defs/marketplace_ref"},
+        {
+          "$ref": "#/$defs/base_entry"
+        },
+        {
+          "$ref": "#/$defs/marketplace_ref"
+        },
         {
           "type": "object",
           "properties": {

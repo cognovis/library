@@ -1,6 +1,6 @@
 """The SSH clone fallback must start from an empty directory.
 
-Guards CL-k33k. `clone_github_repo` tries HTTPS first, then SSH. The cognovis
+Guards CL-k33k. `clone_source_repo` tries HTTPS first, then SSH. The cognovis
 remotes are private, so the HTTPS attempt always fails -- but git creates and
 partially populates the target before failing. The old code retried into that
 same dirty path, so git refused with "already exists and is not an empty
@@ -8,8 +8,12 @@ directory". The fallback could therefore never succeed, and that misleading
 message masked the real error.
 
 The blast radius was total: `library sync` reported `0 refreshed` with a
-per-entry ERROR for every GitHub-sourced primitive, so sources and installed
+per-entry ERROR for every remotely sourced primitive, so sources and installed
 copies drifted silently.
+
+The clone itself moved to `lib.providers.git_url` under the ADR-0011 neutrality
+drawdown (`CL-mvet`); `lib.source.clone_source_repo` is the same behavior behind
+the same public entry point, which is what this test still enters through.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from lib.errors import SourceError  # noqa: E402
-from lib.source import clone_github_repo  # noqa: E402
+from lib.source import clone_source_repo  # noqa: E402
 
 
 class _Result:
@@ -48,9 +52,9 @@ def test_ssh_fallback_receives_an_empty_directory(monkeypatch):
         (target / ".git").mkdir(parents=True, exist_ok=True)
         return _Result(0)
 
-    monkeypatch.setattr("lib.source.subprocess.run", fake_run)
+    monkeypatch.setattr("lib.providers.git_url.subprocess.run", fake_run)
 
-    tmp = clone_github_repo("https://github.com/cognovis/library-core.git")
+    tmp = clone_source_repo("https://github.com/cognovis/library-core.git")
 
     assert len(seen) == 2, "expected an HTTPS attempt then an SSH fallback"
     assert seen[0][0].startswith("https://")
@@ -68,9 +72,9 @@ def test_branch_is_passed_to_both_attempts(monkeypatch):
         (Path(cmd[-1]) / ".git").mkdir(exist_ok=True)
         return _Result(128 if cmd[-2].startswith("https://") else 0, "boom")
 
-    monkeypatch.setattr("lib.source.subprocess.run", fake_run)
+    monkeypatch.setattr("lib.providers.git_url.subprocess.run", fake_run)
 
-    clone_github_repo("https://github.com/cognovis/library-core.git", "dev")
+    clone_source_repo("https://github.com/cognovis/library-core.git", "dev")
 
     for cmd in commands:
         assert "--branch" in cmd and cmd[cmd.index("--branch") + 1] == "dev"
@@ -87,10 +91,10 @@ def test_both_transports_failing_names_the_real_errors(monkeypatch):
             return _Result(128, "could not read Username for 'https://github.com'")
         return _Result(128, "Permission denied (publickey)")
 
-    monkeypatch.setattr("lib.source.subprocess.run", fake_run)
+    monkeypatch.setattr("lib.providers.git_url.subprocess.run", fake_run)
 
     with pytest.raises(SourceError) as excinfo:
-        clone_github_repo("https://github.com/cognovis/library-core.git")
+        clone_source_repo("https://github.com/cognovis/library-core.git")
 
     message = str(excinfo.value)
     assert "could not read Username" in message
@@ -107,10 +111,10 @@ def test_temp_dir_is_removed_when_both_transports_fail(monkeypatch):
         captured.append(target)
         return _Result(128, "nope")
 
-    monkeypatch.setattr("lib.source.subprocess.run", fake_run)
+    monkeypatch.setattr("lib.providers.git_url.subprocess.run", fake_run)
 
     with pytest.raises(SourceError):
-        clone_github_repo("https://github.com/cognovis/library-core.git")
+        clone_source_repo("https://github.com/cognovis/library-core.git")
 
     assert captured, "expected at least one clone attempt"
     assert not captured[0].exists(), "failed clone must not leak a temp directory"

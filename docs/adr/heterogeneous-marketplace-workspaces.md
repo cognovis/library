@@ -151,6 +151,8 @@ degrades deterministically; it never probes by catching exceptions.
 | `auth_requirements()` | Named credential *references* and scopes. Never values. | YES | — |
 | `availability()` | `available`, `degraded`, or `unavailable`, with a reason. | YES | — |
 | `rights_evidence()` | Machine-readable pointer to the licensing evidence source, if the provider publishes one. | NO | Rights state is `unknown` until a human records evidence |
+| `item_rights_evidence(upstream_id)` | Licensing evidence for **one item**, for a provider whose units are not uniform. | NO | The provider is uniform; one rights answer covers every item it lists |
+| `member_manifest(upstream_id, revision)` | The item-relative paths one item consists of, listed from the source. | NO | Completeness rests on the adapter's own declaration, which an install records explicitly as its weakest evidence |
 
 `enumerate` is deliberately the required floor. A provider that cannot list
 without a local checkout is not a provider under this contract; it is a local
@@ -1533,6 +1535,111 @@ A second adversarial round demonstrated five more, and they are stated too:
 
 **Scope boundary.** This slice ships the retention core and its contracts. No
 production CLI, installer, or sync path calls them yet; CLI wiring is `CL-mvet`.
+
+### Implementation record (slice 6, `CL-mvet`)
+
+The three reference adapters, the production wiring, and the legacy neutrality
+drawdown. Slices 1 to 5 each ended with a working core and no caller; this slice
+is where every one of those boundaries closes.
+
+**The adapters.**
+
+| Adapter | Module | Declared capabilities beyond the required floor |
+|---|---|---|
+| `git-repo` | `scripts/lib/providers/git_repo.py` | `describe`, `revision_of`, `verify`, `rights_evidence`, `member_manifest` |
+| `git-org` | `scripts/lib/providers/git_org.py` | the same, plus `item_rights_evidence` |
+| `mcp-content` | `scripts/lib/providers/mcp_content.py` | `describe`, `rights_evidence` only |
+
+Two capabilities are added to the contract table, both because a reference
+provider needs a question answered that no existing capability asks:
+
+- **`item_rights_evidence(upstream_id)`** exists because this ADR records the
+  organization provider's grant as *per repository* and names a repository in the
+  same organization with no observed `LICENSE`. A provider-wide answer would let
+  one repository's grant stand in for a sibling that has none. Declaring the
+  capability is what makes a consumer ask per item; an adapter that does not
+  declare it is stating that its provider is uniform.
+- **`member_manifest(upstream_id, revision)`** exists because
+  `CompletenessEvidence.from_manifest` requires a member list read *from the
+  source*, which is a different claim from the adapter's own word that its
+  `FetchedItem` is complete. An adapter that cannot list members is not a lesser
+  adapter; its installs record `adapter-declaration`, the weakest evidence in the
+  vocabulary, explicitly rather than by default.
+
+**The `mcp-content` credential boundary, stated rather than implied.** This
+adapter implements **no credential handling**: no acquisition, no storage, no
+token exchange, no transmission. It holds a credential *reference* and its scope,
+returns them through `auth_requirements()`, and takes a caller-owned transport.
+That separation is what makes `Credential isolation` structural instead of a
+promise — a module that never receives a secret cannot write one into a cache
+object, a receipt, or a projection. Resolving a reference into a token is
+credential handling and requires a human security review before any such code is
+written; it is deliberately out of this slice. The visible consequence is that an
+operator with no configured transport gets a typed `unavailable` availability
+naming the credential reference. That is a refusal, and in particular it is never
+a reason to read the distinct public repository this ADR records as *not* this
+provider.
+
+**Maturity is classification, not a filter.** Items under an `in-progress` or
+`deprecated` collection carry `classification.maturity` with the collection that
+produced it named, stay in the inventory, and resolve to `discoverable`.
+Promotion is an explicit scope decision (`AdmissionContext.admitted_maturities`)
+or a Workspace naming the item. Filtering them out of the inventory would delete
+upstream's own statement about its confidence and make the inventory disagree
+with the source it claims to describe.
+
+**Unclassified is the recorded absence of a type, not a type.** A bundle member
+fitting no existing primitive is recorded as `unclassified`, stays
+`discoverable`, and is never `installable`. The two alternatives are both silent
+falsehoods: a new catch-all primitive is the `harness` type this ADR refuses, and
+filing the member under the nearest existing type records a classification nobody
+made. It is deliberately not `blocked` either — a block reason asserts that
+something was observed about the content, and nothing was.
+
+**Production wiring.** `scripts/lib/providers/wiring.py` holds the one legitimate
+`provider_kind` branch in the platform, and supplies the four obligations the
+cores refuse to work without: stated `CompletenessEvidence`, a two-phase
+`ProjectionActivation`, a `ReferenceIndex` over **both** receipt scopes, and one
+source-scoped `ResolutionEvidence` per provider beside an explicit
+`evidence_max_age` and a durable purge ledger. `library marketplace
+list|inventory|install|status|gc` is the caller. Foreign receipts are addressed
+from their lock scope — `<lock path>.foreign-receipts.json` — so "which receipts
+belong to this scope" is answerable from the lock path with no scan and no second
+configuration entry.
+
+**Workspace v2 materialization is unblocked.** `assert_materializable` refused a
+cross-catalog closure pending three things, and all three now hold: the CLI
+resolves every closure with a provider-backed pin verifier that reads what each
+declared source currently serves, normalizes the resolved members into inventory
+items bound to their exact bytes, and routes every v2 mutation through
+`gate_workspace_mutation` and the executable-admission gate. The refusal is a
+retained no-op rather than a deletion or a weaker residual check, because a
+second version of the same refusal is what gets relaxed later while everyone
+assumes the real gate is still there.
+
+**Two residuals, recorded rather than closed.**
+
+1. A verified pin proves the *source* has not moved. It does not prove that this
+   repository's catalog document describes that revision, because members are
+   still read from the local checkout rather than fetched at the pin. A catalog
+   document edited between the pin check and the read can still describe a member
+   the pinned revision does not.
+2. A v2 closure containing an executable member fails the whole resolution until
+   a scope operator admits that member's exact bytes, and this slice ships no CLI
+   for recording that decision. Inert closures install now; an executable one is
+   refused, which is the correct ADR behavior and an incomplete operator surface.
+
+**Legacy neutrality drawdown.** `scripts/lib/source.py` carried 50 findings, more
+than every other legacy module combined. Its URL shapes, clone forms, SSH
+fallback, and owner-or-repository resolution moved to
+`scripts/lib/providers/git_url.py` — the remedy the check's own report names —
+and the module now measures zero and has dropped out of the baseline. The legacy
+set falls from 15 modules and 126 findings to 11 and 55; the certified core grows
+from 12 modules to 17, adding the normalization layer, the inventory schema, the
+Library-owned classification and decomposition rules, and catalog-derived
+routing. What remains legacy is the catalog and installer surface, which still
+resolves by cloning; that is the path the provider contract exists to replace,
+and it is not extended here.
 
 ## Migration and Existing Bead Disposition
 

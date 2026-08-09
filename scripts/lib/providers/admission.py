@@ -55,6 +55,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
+from .classification import DEFAULT_MATURITY, MATURITIES, is_unclassified
 from .executable_admission import (
     ExecutableAdmissionLedger,
     executable_admission_for_item,
@@ -96,6 +97,15 @@ class AdmissionContext:
     required_trust: str = "unreviewed"
     required_auth_references: tuple[str, ...] = ()
     satisfied_auth_references: tuple[str, ...] = ()
+    #: Which maturities this scope promotes to `installable`. The default is the
+    #: stable one alone, because an upstream collection that says "in progress"
+    #: has stated its own confidence and an inventory that installs it anyway has
+    #: overruled the author silently. Promoting one is an explicit act: a scope
+    #: adds the maturity here, or a Workspace names the item. It is deliberately
+    #: NOT a filter -- an unadmitted item stays in the inventory as
+    #: `discoverable`, because hiding it would make the inventory disagree with
+    #: the source it claims to describe.
+    admitted_maturities: tuple[str, ...] = (DEFAULT_MATURITY,)
 
     def __post_init__(self) -> None:
         if self.required_trust not in TRUST_STATES:
@@ -107,8 +117,22 @@ class AdmissionContext:
             "target_runtimes",
             "required_auth_references",
             "satisfied_auth_references",
+            "admitted_maturities",
         ):
             object.__setattr__(self, name, tuple(getattr(self, name)))
+        unknown = sorted(set(self.admitted_maturities) - set(MATURITIES))
+        if unknown:
+            raise ValueError(
+                f"admitted_maturities must come from {list(MATURITIES)}, got {unknown}"
+            )
+        if not self.admitted_maturities:
+            raise ValueError(
+                "a scope that admits no maturity can install nothing; record the "
+                "maturities it does admit"
+            )
+
+    def admits_maturity(self, maturity: str) -> bool:
+        return maturity in self.admitted_maturities
 
     def unsatisfied_auth(self) -> tuple[str, ...]:
         satisfied = set(self.satisfied_auth_references)
@@ -321,8 +345,27 @@ def evaluate_item(
     if any(reason.reason not in _RIGHTS_REASONS for reason in ordered):
         eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
 
-    if ordered:
+    maturity = str(item.classification.get("maturity") or DEFAULT_MATURITY)
+
+    if is_unclassified(item.library_type):
+        # ADR-0011 `Mixed external bundles`: a member fitting no existing type is
+        # discoverable and unclassified. It is deliberately NOT `blocked` -- a
+        # block reason asserts something was observed about the content, and
+        # nothing was; the Library simply has no type to install it as. It is
+        # equally deliberately never `installable`, because "install this, we do
+        # not know what it is" is how a generic catch-all primitive gets created
+        # by accident.
+        eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
+        admission_state = "blocked" if ordered else "discoverable"
+    elif ordered:
         admission_state = "blocked"
+    elif not context.admits_maturity(maturity):
+        # Not a block: nothing was observed about this item that forbids it, and
+        # a `blocked` state carries evidence that something was. The item is
+        # listed, classified, and available to an explicit decision -- it is just
+        # not promoted by default.
+        eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
+        admission_state = "discoverable"
     elif any(state == "allowed" for state in eligibility.values()):
         admission_state = "installable"
     else:

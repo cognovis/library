@@ -1,14 +1,21 @@
-"""What the shipped CLI does with a schema v2 manifest (CL-dbam, wave-2 repair).
+"""What the shipped CLI does with a schema v2 manifest.
 
-A v2 Workspace resolves, validates, and previews in this slice. It does not
-install: the current installer path fetches each member from the live catalog and
-would honor no declared pin at all, so installing now would present a pinned
-manifest whose install was not pinned.
+Slice 5 (`CL-dbam`) resolved, validated, and previewed a v2 Workspace and
+**refused** to install it, because three things were missing: the declared pin
+verified against its source, the members normalized into inventory items, and
+the executable-admission gate in the write path.
 
-Round 1 raised this as an orphaned API -- `gate_workspace_mutation` existed with
-no production caller. The refusal is therefore asserted end to end through the
-real CLI process, not through a unit call, because "the library refuses to
-install this" is a claim about the program an operator runs.
+Slice 6 (`CL-mvet`) supplies all three, so the blanket refusal is replaced by
+the checks it was standing in for. What is asserted here is the replacement, not
+its absence:
+
+- a source that cannot say what it currently serves refuses, and writes nothing;
+- a pin that no longer matches its source is fail-closed drift naming both
+  values, and is never silently re-pinned;
+- a verified pin installs, through the mutation gate.
+
+All three run the real CLI process rather than a unit call, because "the library
+installs (or refuses) this" is a claim about the program an operator runs.
 """
 
 from __future__ import annotations
@@ -139,9 +146,50 @@ def _write_v2_fixture(project: Path) -> Path:
     return manifest_path
 
 
-def test_the_cli_validates_a_v2_manifest_and_refuses_to_install_it(
+def _commit_repository(root: Path) -> str:
+    """Make one catalog checkout a real repository and return its HEAD."""
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    for command in (
+        ["git", "config", "user.email", "test@example.invalid"],
+        ["git", "config", "user.name", "Test"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-q", "-m", "catalog content"],
+    ):
+        subprocess.run(command, cwd=root, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
+    )
+    return head.stdout.strip()
+
+
+def _pin_manifest_to_sources(project: Path, manifest_path: Path) -> dict[str, str]:
+    """Commit both catalog checkouts and pin the manifest to what they serve."""
+    heads = {
+        "core": _commit_repository(project / "team-core"),
+        "upstream": _commit_repository(project / "upstream-core"),
+    }
+    manifest = yaml.safe_load(manifest_path.read_text())
+    for declared in manifest["catalogs"]:
+        declared["pin"] = {"kind": "commit", "value": heads[declared["alias"]]}
+    manifest_path.write_text(yaml.safe_dump(manifest))
+
+    catalog = yaml.safe_load((project / "library.yaml").read_text())
+    for entry in catalog["library"]["workspaces"]:
+        if entry.get("name") == manifest["name"]:
+            entry["catalogs"] = manifest["catalogs"]
+    (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+    return heads
+
+
+def test_a_v2_manifest_whose_source_cannot_answer_refuses_and_writes_nothing(
     tmp_path: Path,
 ) -> None:
+    """A source that cannot say what it serves is refused, not assumed current.
+
+    The declared catalogs here are plain directories, not tracked working trees.
+    "No answer" is never "the pin still holds", so the whole closure is refused
+    before any mutation.
+    """
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
@@ -152,22 +200,74 @@ def test_the_cli_validates_a_v2_manifest_and_refuses_to_install_it(
     assert validated.returncode == 0, validated.stderr or validated.stdout
 
     used = _run(
-        project,
-        home,
-        "workspace",
-        "use",
-        "team-core:engineering",
-        "--scope",
-        "project",
+        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
         "--json",
     )
 
     assert used.returncode != 0
     message = (used.stdout or "") + (used.stderr or "")
-    assert "verified against their sources" in message or "not yet installable" in message
+    assert "could not be verified" in message
     # Nothing was written: no lock, no skills, no partial projection.
     assert not (project / ".library.lock").exists()
     assert not (project / ".agents" / "skills").exists()
+
+
+def test_a_verified_pin_installs_a_v2_workspace(tmp_path: Path) -> None:
+    """With both pins verified against real sources, the closure materializes.
+
+    This is the removal of the slice-5 refusal, asserted as an installation
+    rather than as the absence of an error message.
+    """
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    manifest_path = _write_v2_fixture(project)
+    _pin_manifest_to_sources(project, manifest_path)
+
+    used = _run(
+        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
+        "--json",
+    )
+
+    assert used.returncode == 0, used.stdout + used.stderr
+    payload = json.loads(used.stdout)
+    assert payload["status"] == "applied"
+    assert (project / ".library.lock").exists()
+    assert (project / ".agents" / "skills" / "python-dev").exists()
+    assert (project / ".agents" / "skills" / "helper").exists()
+
+
+def test_pin_drift_is_fail_closed_and_never_re_pinned(tmp_path: Path) -> None:
+    """A source that moved refuses, names both values, and writes nothing."""
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    manifest_path = _write_v2_fixture(project)
+    heads = _pin_manifest_to_sources(project, manifest_path)
+
+    # The source moves after the manifest was pinned.
+    (project / "team-core" / "skills" / "python-dev" / "NOTES.md").write_text("moved\n")
+    subprocess.run(["git", "add", "-A"], cwd=project / "team-core", check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "upstream moved"], cwd=project / "team-core", check=True
+    )
+
+    used = _run(
+        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
+        "--json",
+    )
+
+    assert used.returncode != 0
+    message = (used.stdout or "") + (used.stderr or "")
+    assert "pin drift" in message
+    assert heads["core"] in message, "the refusal names the declared pin"
+    assert not (project / ".library.lock").exists()
+    # And the manifest still declares the original pin: drift is never resolved
+    # by quietly adopting whatever the source now serves.
+    manifest = yaml.safe_load(manifest_path.read_text())
+    assert manifest["catalogs"][0]["pin"]["value"] == heads["core"]
 
 
 def test_the_cli_rejects_a_v1_manifest_carrying_a_catalog_qualifier(

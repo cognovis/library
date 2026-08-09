@@ -2229,7 +2229,11 @@ library:
                 return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
             raise AssertionError(f"Unexpected command: {cmd}")
 
-        monkeypatch.setattr(skill_mod.subprocess, "run", fake_run)
+        # The clone and the HEAD lookup both live in the provider adapter now
+        # (ADR-0011 neutrality drawdown), so that is where the seam is.
+        from lib.providers import git_url
+
+        monkeypatch.setattr(git_url.subprocess, "run", fake_run)
 
     def test_marketplace_source_resolves_impeccable_tree_url(self):
         """from_marketplace + repo + path resolves to a GitHub tree source."""
@@ -2642,7 +2646,11 @@ class TestStandardTreeSource:
                 return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
             raise AssertionError(f"Unexpected command: {cmd}")
 
-        monkeypatch.setattr(standard_mod.subprocess, "run", fake_run)
+        # The clone and the HEAD lookup both live in the provider adapter now
+        # (ADR-0011 neutrality drawdown), so that is where the seam is.
+        from lib.providers import git_url
+
+        monkeypatch.setattr(git_url.subprocess, "run", fake_run)
 
     def test_source_parse_github_tree_has_directory_hint(self):
         """GitHub tree URL parses as a browser source with directory path type."""
@@ -3581,7 +3589,11 @@ class TestStandardInstallCategoryMirror:
                 return subprocess.CompletedProcess(cmd, 0, "abcdef1234567890\n", "")
             raise AssertionError(f"Unexpected command: {cmd}")
 
-        monkeypatch.setattr(standard_mod.subprocess, "run", fake_run)
+        # The clone and the HEAD lookup both live in the provider adapter now
+        # (ADR-0011 neutrality drawdown), so that is where the seam is.
+        from lib.providers import git_url
+
+        monkeypatch.setattr(git_url.subprocess, "run", fake_run)
 
     def test_single_file_standard_installs_to_category_path(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

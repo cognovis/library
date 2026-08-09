@@ -35,6 +35,24 @@ EXECUTIVE_CIRCLE_IDENTITY = "mcp:executive-circle"
 #: The reference Git skills provider, MIT licensed.
 SKILLS_REPO_IDENTITY = "https://github.com/mattpocock/skills"
 
+#: The reference organization provider. Its grant is recorded **per repository**,
+#: not organizationally: the same organization serves a repository with no
+#: observed licence file, and it is not on the Library-owned allowlist. The
+#: values below are the grant that holds for a repository whose licence *is*
+#: observed; `normalize_inventory` relaxes the licence-derived grants to
+#: `unknown` for any repository whose licence it cannot locate, which is what
+#: keeps this entry from becoming an organization-wide grant by the back door.
+ORGANIZATION_IDENTITY = "https://github.com/disler"
+
+#: The Library-owned allowlist ADR-0011 records for the organization provider.
+ORGANIZATION_ALLOWLIST = ("pi-vs-claude-code", "fusion-harness", "planf3")
+
+_ORGANIZATION_MIT_EVIDENCE = (
+    "per-repository MIT LICENSE recorded with commit pins in "
+    "/Users/malte/code/library/cognovis-pi/docs/research/indydevdan-pi-repos.md, "
+    "2026-08-08"
+)
+
 _MIT_EVIDENCE = (
     "upstream LICENSE (MIT) confirmed via raw.githubusercontent.com HTTP 200 and "
     "the repository API reporting spdx_id: MIT, 2026-08-08"
@@ -57,6 +75,13 @@ REFERENCE_PROVIDER_RIGHTS: Mapping[str, Rights] = {
         redistribution_rights="granted",
         derivative_rights="granted",
         evidence_source=_MIT_EVIDENCE,
+    ),
+    ORGANIZATION_IDENTITY: Rights(
+        fetch_authorization="granted",
+        install_rights="granted",
+        redistribution_rights="granted",
+        derivative_rights="granted",
+        evidence_source=_ORGANIZATION_MIT_EVIDENCE,
     ),
     EXECUTIVE_CIRCLE_IDENTITY: Rights(
         fetch_authorization="granted",

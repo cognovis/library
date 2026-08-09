@@ -10,7 +10,6 @@ Installs a standard by:
 from __future__ import annotations
 
 import shutil
-import subprocess
 import tempfile
 import warnings
 from pathlib import Path
@@ -38,7 +37,7 @@ from ..output import blocked_result, dry_run_result, success
 from ..paths import resolve_install_paths
 from ..primitives import get_primitive
 from ..source import (
-    clone_github_repo,
+    clone_source_repo,
     get_local_commit_sha,
     parse_source,
     resolve_marketplace,
@@ -304,23 +303,23 @@ def _fetch_standard_source(
         commit = get_local_commit_sha(local)
         return local, commit, None
 
-    if parsed.is_github():
+    if parsed.is_remote_repository():
         clone_url = parsed.clone_url or ""
         try:
-            tmp = clone_github_repo(clone_url)
+            tmp = clone_source_repo(clone_url)
         except SourceError as exc:
             raise InstallError(str(exc)) from exc
 
-        sha_result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=str(tmp),
-        )
-        commit = sha_result.stdout.strip() if sha_result.returncode == 0 else "unknown"
+        # The shared HEAD lookup, rather than a third copy of the same call.
+        # It reports an untracked tree as `local`; a fresh clone is tracked, so
+        # that value here means the lookup itself failed, which this installer
+        # has always reported as `unknown`.
+        commit = get_local_commit_sha(tmp)
+        if commit == "local":
+            commit = "unknown"
 
         # Navigate to the file or directory within the repo. Standards may be
-        # single files (GitHub blob/raw URL) or folder-form bundles (tree URL).
+        # single files (a blob or raw URL) or folder-form bundles (a tree URL).
         if parsed.file_path:
             source_path = tmp / parsed.file_path
             if not source_path.exists():

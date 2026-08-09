@@ -31,6 +31,7 @@ from checks.provider_neutrality import (  # noqa: E402
     scan_legacy,
     scan_paths,
     scan_repository,
+    scan_source,
 )
 
 CHECK_SCRIPT = REPO_ROOT / "scripts" / "checks" / "provider_neutrality.py"
@@ -235,7 +236,17 @@ def test_legacy_provider_modules_are_measured_against_a_ratchet() -> None:
     stops it growing.
     """
     baseline = load_baseline(REPO_ROOT)
-    assert "scripts/lib/source.py" in baseline
+    # Slice 6 (`CL-mvet`) drove `scripts/lib/source.py` to zero by moving its
+    # hosting-service knowledge into `providers/git_url.py`, which is the remedy
+    # this check's own report names. It is therefore absent from the baseline,
+    # and that absence is asserted rather than merely tolerated: a module
+    # dropping out because it was cleaned and a module dropping out because the
+    # measurement stopped seeing it look identical from here otherwise.
+    assert "scripts/lib/source.py" not in baseline
+    assert not scan_source(
+        "scripts/lib/source.py", (REPO_ROOT / "scripts/lib/source.py").read_text()
+    )
+    assert baseline, "the legacy set is drawn down, not declared empty"
 
     statuses = scan_legacy(REPO_ROOT)
     assert statuses, "the legacy set must not be silently empty"
@@ -311,9 +322,10 @@ def test_check_writes_a_typed_artifact(tmp_path: Path) -> None:
     # The artifact states the limit of its own claim, both in prose and in data.
     assert "not a claim about every module" in payload["scope_note"]
     legacy = {entry["path"]: entry for entry in payload["legacy_provider_modules"]}
-    assert legacy["scripts/lib/source.py"]["state"] == "held"
-    assert legacy["scripts/lib/source.py"]["observed_total"] > 0
-    assert legacy["scripts/lib/source.py"]["new_fingerprints"] == {}
+    assert legacy, "the artifact reports the legacy set, not just the clean core"
+    assert all(entry["state"] == "held" for entry in legacy.values())
+    assert all(entry["new_fingerprints"] == {} for entry in legacy.values())
+    assert "scripts/lib/source.py" not in legacy
     assert "not a claim about every module" in result.stdout
 
 

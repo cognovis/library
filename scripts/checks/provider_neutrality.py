@@ -89,6 +89,19 @@ CORE_MODULES: tuple[str, ...] = (
     "scripts/lib/providers/receipts.py",
     "scripts/lib/providers/retention.py",
     "scripts/lib/providers/state_files.py",
+    # Slice 6 (`CL-mvet`). The normalization layer, the inventory schema, and the
+    # Library-owned classification and decomposition rules are core by function
+    # for the same reason the gates are: they are what every adapter's output
+    # passes through, so a provider name here would be a special case applied to
+    # every provider. `routing.py` is core because a routing answer that knew a
+    # repository by name would be describing somebody else's machine, and
+    # `placement.py`, `reference_rights.py`, and `wiring.py` are deliberately
+    # NOT here -- naming a provider is their whole job.
+    "scripts/lib/providers/normalize.py",
+    "scripts/lib/providers/inventory.py",
+    "scripts/lib/providers/classification.py",
+    "scripts/lib/providers/decompose.py",
+    "scripts/lib/routing.py",
 )
 
 #: Provider and hosting-service names. A core module has no business naming one.
