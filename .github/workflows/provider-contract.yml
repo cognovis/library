@@ -34,6 +34,13 @@ jobs:
             tests/test_normalized_inventory.py \
             tests/test_library_yaml_provider_fields.py
 
+      - name: Rights, admission, and executable-admission gates
+        run: |
+          uv run --extra dev pytest -q \
+            tests/test_distribution_rights.py \
+            tests/test_admission_state.py \
+            tests/test_executable_admission.py
+
   provider-liveness:
     # The offline evidence is a recorded capture of a real provider. This job
     # re-binds it to reality on a schedule so drift surfaces here rather than in

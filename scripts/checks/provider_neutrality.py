@@ -62,10 +62,22 @@ SCHEMA = "cognovis.provider-neutrality.v1"
 BEAD_ID = "CL-coif"
 
 #: The modules ADR-0011 names as consumers of the normalized inventory only.
+#:
+#: The rights, admission, and executable-admission gates (`CL-n7ex`) are listed
+#: here even though they live under the adapter directory, which is otherwise
+#: the sanctioned home for provider knowledge. They are core by function: they
+#: decide what a scope may do with an item, and a gate that recognized a
+#: provider by name could grant that provider a permission its recorded rights
+#: never granted. Their location is a packaging fact; their neutrality is a
+#: contract, so the check states it explicitly rather than inheriting the
+#: adapter exemption.
 CORE_MODULES: tuple[str, ...] = (
     "scripts/lib/resolver.py",
     "scripts/lib/cache.py",
     "scripts/lib/workspace.py",
+    "scripts/lib/providers/rights.py",
+    "scripts/lib/providers/admission.py",
+    "scripts/lib/providers/executable_admission.py",
 )
 
 #: Provider and hosting-service names. A core module has no business naming one.

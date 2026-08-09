@@ -626,6 +626,9 @@ def test_optional_capability_absence_is_declared() -> None:
         "redistribution_rights": "unknown",
         "derivative_rights": "unknown",
         "evidence_source": None,
+        # Per-grant evidence (CL-n7ex) is empty for the same reason the shared
+        # source is None: nothing was located, so nothing is invented.
+        "grant_evidence": {},
     }
     # verify absent -> the Library normalized digest is the only integrity proof.
     assert "verify" in result.absent_capabilities

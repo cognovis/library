@@ -298,6 +298,30 @@ produced it.
 `blocked` is a first-class, queryable state, not an error. An operator must be
 able to ask "what did I not get, and exactly why" without re-running discovery.
 
+**Implementation record (slice 2, `CL-n7ex`).** Two readings of this table were
+open, and both are resolved in the implemented gate rather than left to each
+call site:
+
+- The vocabulary has no entry for a *refused* executable admission. A refusal
+  records `untrusted-source`, not `executable-admission-pending`: the pending
+  entry is cleared by "the Executable Admission gate", which a refusal has
+  already been through, and what a refusal needs is the explicit review that
+  clears `untrusted-source`. Recording a decided refusal as "pending" would also
+  make a deliberate decision read as unfinished work.
+- `admission_state` is derived by one rule: `installable` when there is no block
+  reason and at least one projection target is `allowed`; `blocked` when there
+  is any block reason; `discoverable` otherwise. `blocked` is therefore reached
+  by an item that still has a machine-local opt-in path — which is the intended
+  reading of orthogonal axes, not a contradiction: the item was not installed,
+  the reason is recorded, and `projection_eligibility` separately names the path
+  that remains open.
+
+`block_reasons` entries are stored as typed records carrying `reason`,
+`evidence`, and an optional `detail`, per this section's requirement that each
+reason "carries the evidence that produced it". Evidence held only in a
+transient decision object would not survive to answer the question this state
+exists to answer.
+
 ### Freshness and provider availability
 
 A normalized inventory entry records `provider_availability` **with the timestamp
@@ -930,6 +954,20 @@ each resolving to `granted`, `denied`, or `unknown`:
 
 Authorization to fetch is **not** permission to redistribute. A subscriber token
 proves the first and says nothing about the second.
+
+**Implementation record (slice 2, `CL-n7ex`).** "Each with a named evidence
+source" is implemented as evidence **per grant**, with the item-level
+`evidence_source` retained as the fallback for grants that have none of their
+own. One shared string cannot state that a fetch grant rests on a reachable
+subscriber endpoint while a redistribution grant rests on nothing located at
+all, and that is precisely the pair this ADR ships as its worked case.
+
+The operator opt-in is bound to the digest of the rights statement it
+acknowledges. "Displayed before mutation" is therefore checkable after the fact
+rather than a convention: an acknowledgement collected against a different item,
+a different target, or an older rights state does not authorize this projection.
+A boolean confirmation flag was rejected for the obvious reason — it can be
+passed without anything ever being rendered.
 
 ### Caching is not installing
 
