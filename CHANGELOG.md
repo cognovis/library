@@ -38,6 +38,46 @@
 
 ### Added
 
+- *(CL-n7ex, marketplace)* Gate every foreign projection on distribution rights
+  and admission state. The four grants are recorded and queried independently,
+  each with its own evidence source, and compose in the ADR-0011 order:
+  `install_rights` first, governing both the machine-local and the committed
+  target, then `redistribution_rights`, which adds the committed-tree
+  restriction. `unknown` blocks a committed projection by default and names the
+  grant and evidence that blocked it; `denied` blocks both targets and no
+  operator opt-in overrides it. A machine-local projection under an unresolved
+  state requires an explicit opt-in bound to the digest of the rights statement
+  the operator was shown — a statement that names the item, so one
+  acknowledgement cannot travel to another item sharing the same provider rights
+  record. The acknowledgement is issued rather than asserted: the gate renders
+  the statement, issues a single-use presentation, and accepts only an
+  acknowledgement carrying that presentation's token, so it cannot exist unless
+  the statement was shown and it authorizes exactly one act. A
+  composed decision is a report and not a capability: the mutation boundary
+  re-derives it from the recorded rights and refuses any decision that does not
+  match. Resolving a grant to `granted` or `denied` requires a named evidence
+  source, at construction and at provider registration; `unknown` is the only
+  state reachable without one. Durable cache retention is governed by
+  `install_rights`, not by the fetch grant that produced the bytes. Without a
+  `derivative_rights` grant
+  no adapted artifact is created at all, and the unresolved state is retained in
+  provenance. `block_reasons` is a closed vocabulary of typed records that each
+  carry an observation and its named source, and `blocked` is a queryable state
+  answering "what did I not get, and exactly why" without re-running discovery.
+  Executable admission
+  is bound to the normalized content digest and comes from the operator's
+  ledger rather than from a field on the item: changed content returns to
+  `pending`, the gate digests the exact content it will materialize, a pending
+  or refused executable member fails a whole resolution before any mutation
+  instead of being skipped, and inert content never inherits executable trust
+  from its bundle, collection, or provider. Admission is a separate pass over
+  normalized inventory, because discovery never implies permission. The rights,
+  admission, and executable-admission gates are scanned as core by the
+  provider-neutrality CI check, which now constant-folds concatenated string
+  literals and constant f-strings so a provider name assembled from fragments no
+  longer passes. `sources.marketplaces` rights entries accept per-grant
+  `grant_evidence` beside the shared `evidence_source`.
+
 - *(CL-coif, marketplace)* Implement the ADR-0011 source-provider capability
   contract and the normalized inventory core. A provider adapter declares its
   capabilities and consumers degrade from that declaration alone: an absent

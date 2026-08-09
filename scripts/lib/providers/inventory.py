@@ -11,7 +11,7 @@ derivation is never mistaken for a missing field:
 | `provider_identity`, `upstream_id`, `upstream_name`, `collection_membership` | slice 1, from `enumerate()` |
 | `upstream_revision` | slice 1, from `revision_of()` when declared; `None` otherwise |
 | `library_type`, `library_name`, `classification`, `runtime_compatibility` | slice 1, from `describe()` or the fetch-then-classify path |
-| `rights` | slice 1 carries the recorded grants; enforcement is slice 2 (`CL-n7ex`) |
+| `rights` | slice 1 carries the recorded grants; slice 2 (`CL-n7ex`) adds per-grant evidence and enforcement |
 | `provider_availability` | slice 1, from `availability()` with its observation timestamp |
 | `admission_state`, `block_reasons`, `executable_admission`, `trust_state`, `projection_eligibility` | slice 2 (`CL-n7ex`) derives them; slice 1 records the conservative default |
 | `cache_state` | slice 3 (`CL-y5z4`) derives it; slice 1 records `absent` |
@@ -27,6 +27,21 @@ and inventing `license-unknown` for an item nobody has evaluated would put a
 false evidence-bearing reason into a closed vocabulary whose entries each
 "carry the evidence that produced it". Empty is the honest value until slice 2
 evaluates.
+
+Slice 2 (`CL-n7ex`) makes two schema fields carry what the ADR always said they
+carry, rather than adding a parallel record beside them:
+
+- `block_reasons` holds ordered `BlockReason` values, not bare strings. The ADR
+  schema table says "Ordered, typed" and `Typed block reasons` says each reason
+  "carries the evidence that produced it". A reason whose evidence lives in a
+  separate transient object is not queryable after the fact, which is precisely
+  what `blocked` being "a first-class, queryable state" rules out.
+- `Rights` records evidence **per grant**. The four grants are independent, and
+  the ADR requires each to resolve "with a named evidence source"; one shared
+  string cannot say that a fetch grant rests on a reachable subscriber endpoint
+  while a redistribution grant rests on nothing at all. The shared
+  `evidence_source` is retained as the fallback for grants with no specific
+  evidence, so slice-1 records stay readable unchanged.
 """
 
 from __future__ import annotations
@@ -45,6 +60,30 @@ AVAILABILITY_STATES = ("available", "degraded", "unavailable")
 RIGHTS_STATES = ("granted", "denied", "unknown")
 PROJECTION_TARGETS = ("project_committed", "machine_local")
 PROJECTION_STATES = ("allowed", "blocked", "operator-opt-in-required")
+
+#: Minimum length for a block reason's evidence. A floor against placeholders.
+MIN_EVIDENCE_LENGTH = 16
+
+#: Phrases that assert nothing. Each of these was either demonstrated by review
+#: or is the same move in different words. The list is a floor, not a judge: it
+#: catches text that admits it says nothing, and it cannot catch text that
+#: merely says nothing convincingly. Only a reader settles that.
+EVIDENCE_PLACEHOLDERS = frozenset(
+    {
+        "details unavailable",
+        "detail unavailable",
+        "no details",
+        "no detail available",
+        "not available",
+        "not applicable",
+        "not recorded",
+        "no evidence",
+        "unknown source",
+        "see above",
+        "see below",
+        "to be determined",
+    }
+)
 
 #: The closed, ordered block-reason vocabulary of ADR-0011 `Typed block reasons`.
 BLOCK_REASONS = (
@@ -99,12 +138,52 @@ def parse_qualified_identity(value: str) -> tuple[str, str]:
     return provider_identity, upstream_id
 
 
+#: The four grants of ADR-0011 `Distribution Rights`, in the ADR's own order.
+RIGHTS_GRANTS = (
+    "fetch_authorization",
+    "install_rights",
+    "redistribution_rights",
+    "derivative_rights",
+)
+
+
+@dataclass(frozen=True)
+class RightsGrant:
+    """One grant, resolved, with the evidence source that resolved it.
+
+    This is the unit ADR-0011 describes: "Four grants are recorded
+    independently, each with a named evidence source". `evidence_source` is
+    `None` only when nothing at all has been recorded -- which is itself the
+    evidence for `unknown`, and is reported as such rather than hidden.
+    """
+
+    name: str
+    state: str
+    evidence_source: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.name not in RIGHTS_GRANTS:
+            raise ValueError(f"unknown rights grant: {self.name!r}")
+        _one_of(self.state, RIGHTS_STATES, f"rights.{self.name}")
+
+    def describe(self) -> str:
+        """`<grant>=<state>; evidence source: <source>`, for display and evidence."""
+        source = self.evidence_source or "none recorded"
+        return f"{self.name}={self.state}; evidence source: {source}"
+
+
 @dataclass(frozen=True)
 class Rights:
     """The four independent grants of ADR-0011 `Distribution Rights`.
 
-    Slice 1 records them. Slice 2 (`CL-n7ex`) composes them into projection
-    decisions; nothing here enforces anything.
+    The grants are stored flat so that a single grant is readable without
+    unpacking a nested structure, and evidence is stored beside them in
+    `grant_evidence`. `evidence_source` remains the item-level fallback for
+    grants with no specific evidence of their own.
+
+    Slice 1 recorded the grants. Slice 2 (`CL-n7ex`) composes them into
+    projection, retention, and derivative decisions in `providers.rights`;
+    nothing in this module enforces anything.
     """
 
     fetch_authorization: str = "unknown"
@@ -112,17 +191,104 @@ class Rights:
     redistribution_rights: str = "unknown"
     derivative_rights: str = "unknown"
     evidence_source: str | None = None
+    grant_evidence: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        for name in (
-            "fetch_authorization",
-            "install_rights",
-            "redistribution_rights",
-            "derivative_rights",
-        ):
+        for name in RIGHTS_GRANTS:
             _one_of(getattr(self, name), RIGHTS_STATES, f"rights.{name}")
-        if self.evidence_source is not None and not str(self.evidence_source).strip():
+        if self.evidence_source is not None and (
+            not isinstance(self.evidence_source, str) or not self.evidence_source.strip()
+        ):
+            # `str(value).strip()` was the earlier check and it passed the
+            # integer 1 as a "named evidence source", which then authorized
+            # every gated act. A source that is not text names nothing.
             raise ValueError("rights.evidence_source must be text or None")
+        evidence = dict(self.grant_evidence)
+        unknown = sorted(set(evidence) - set(RIGHTS_GRANTS))
+        if unknown:
+            raise ValueError(f"unknown rights evidence grants: {unknown}")
+        for name, source in evidence.items():
+            if not isinstance(source, str) or not source.strip():
+                raise ValueError(f"rights.grant_evidence[{name!r}] must be text")
+        object.__setattr__(self, "grant_evidence", evidence)
+
+        # A resolved grant with no named evidence source is not a recorded grant.
+        # ADR-0011 requires each grant to resolve "with a named evidence source",
+        # and review demonstrated the consequence of not enforcing it: an
+        # all-`granted` rights value invented at a call site authorized a
+        # committed projection, durable retention, and a derivative with nothing
+        # behind it. `unknown` is the state for "nobody has looked", and it is
+        # reachable without evidence precisely so that this one is not.
+        for name in RIGHTS_GRANTS:
+            state = getattr(self, name)
+            if state == "unknown":
+                continue
+            if not (evidence.get(name) or self.evidence_source):
+                raise ValueError(
+                    f"rights.{name}={state} requires a named evidence source; "
+                    "record 'unknown' when there is none"
+                )
+
+    def grant(self, name: str) -> RightsGrant:
+        """Resolve one grant independently, with its own evidence source."""
+        if name not in RIGHTS_GRANTS:
+            raise ValueError(
+                f"unknown rights grant {name!r}; ADR-0011 records {list(RIGHTS_GRANTS)}"
+            )
+        return RightsGrant(
+            name=name,
+            state=getattr(self, name),
+            evidence_source=self.grant_evidence.get(name) or self.evidence_source,
+        )
+
+    def grants(self) -> tuple[RightsGrant, ...]:
+        """All four grants, in the ADR's order."""
+        return tuple(self.grant(name) for name in RIGHTS_GRANTS)
+
+    def with_grant(
+        self, name: str, state: str, *, evidence: str | None = None
+    ) -> "Rights":
+        """A copy with one grant changed. Every other grant is untouched.
+
+        Rights are immutable because a grant that can be edited in place is a
+        grant whose evidence can drift away from its value without any record.
+        For the same reason, resolving a grant to `granted` or `denied` requires
+        its own evidence, and relaxing one to `unknown` discards the evidence
+        that justified the previous value instead of leaving it to describe a
+        state that no longer holds.
+        """
+        if name not in RIGHTS_GRANTS:
+            raise ValueError(
+                f"unknown rights grant {name!r}; ADR-0011 records {list(RIGHTS_GRANTS)}"
+            )
+        _one_of(state, RIGHTS_STATES, f"rights.{name}")
+        if (
+            state != "unknown"
+            and not (evidence or "").strip()
+            and not (self.evidence_source or "").strip()
+        ):
+            # The item-level source is a legitimate fallback -- ADR-0011 says so
+            # -- and demanding it be repeated here would have made construction
+            # and update disagree about the same evidence model.
+            raise ValueError(
+                f"resolving rights.{name} to {state!r} requires a named evidence "
+                "source, either its own or the item-level fallback"
+            )
+        evidence_map = dict(self.grant_evidence)
+        evidence_map.pop(name, None)
+        if evidence is not None:
+            evidence_map[name] = evidence
+        values = {grant: getattr(self, grant) for grant in RIGHTS_GRANTS}
+        values[name] = state
+        return Rights(
+            **values,
+            evidence_source=self.evidence_source,
+            grant_evidence=evidence_map,
+        )
+
+    def evidence_map(self) -> dict[str, str | None]:
+        """Each grant mapped to the evidence source that resolved it."""
+        return {grant.name: grant.evidence_source for grant in self.grants()}
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -131,21 +297,102 @@ class Rights:
             "redistribution_rights": self.redistribution_rights,
             "derivative_rights": self.derivative_rights,
             "evidence_source": self.evidence_source,
+            "grant_evidence": dict(self.grant_evidence),
         }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "Rights":
-        known = {
-            "fetch_authorization",
-            "install_rights",
-            "redistribution_rights",
-            "derivative_rights",
-            "evidence_source",
-        }
+        known = {*RIGHTS_GRANTS, "evidence_source", "grant_evidence"}
         unknown = sorted(set(data) - known)
         if unknown:
             raise ValueError(f"unknown rights fields: {unknown}")
         return cls(**{key: data[key] for key in known if key in data})
+
+
+@dataclass(frozen=True)
+class BlockReason:
+    """One typed block reason with the evidence that produced it.
+
+    ADR-0011 `Typed block reasons` closes the vocabulary and requires evidence
+    on every entry. Both halves are enforced here rather than at the call site:
+    a reason with no evidence is unactionable, and a reason outside the
+    vocabulary is unqueryable, so neither may be constructed at all.
+
+    Evidence is **two required fields, not one string**, because review kept
+    finding text that passed every length and shape check while naming nothing:
+    first `evidence="e"`, then `evidence="details unavailable"`. The ADR asks for
+    "the evidence that produced it", which is an observation *and* where the
+    observation came from, so the record demands both and a caller cannot omit
+    the half they do not have. What a validator still cannot decide is whether
+    either sentence is true; that stays a review question, and this type does
+    not pretend otherwise.
+    """
+
+    reason: str
+    evidence: str
+    source: str
+    detail: str | None = None
+
+    def __post_init__(self) -> None:
+        _one_of(self.reason, BLOCK_REASONS, "block reason")
+        for field_name in ("evidence", "source"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"block reason {self.reason!r} must record its {field_name}"
+                )
+            stripped = value.strip()
+            if (
+                len(stripped) < MIN_EVIDENCE_LENGTH
+                or " " not in stripped
+                or stripped.lower().rstrip(".") in EVIDENCE_PLACEHOLDERS
+            ):
+                raise ValueError(
+                    f"block reason {self.reason!r} {field_name} {value!r} is a "
+                    "placeholder; record what was observed and where it came from"
+                )
+        if self.evidence.strip().lower() == self.source.strip().lower():
+            # A source names where an observation came from, so it is a
+            # different sentence from the observation. Identical text is the
+            # tell that one of the two was never actually recorded.
+            raise ValueError(
+                f"block reason {self.reason!r} repeats its evidence as its source; "
+                "record where the observation came from"
+            )
+        if self.detail is not None and not str(self.detail).strip():
+            raise ValueError("block reason detail must be text or None")
+
+    def describe(self) -> str:
+        """The reason as one line: what was observed, and where it came from."""
+        return f"{self.reason}: {self.evidence} (source: {self.source})"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "reason": self.reason,
+            "evidence": self.evidence,
+            "source": self.source,
+            "detail": self.detail,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "BlockReason":
+        if not isinstance(data, Mapping):
+            raise ValueError(
+                "a block reason must be an object carrying its reason and evidence, "
+                "not a bare vocabulary value"
+            )
+        unknown = sorted(set(data) - {"reason", "evidence", "source", "detail"})
+        if unknown:
+            raise ValueError(f"unknown block reason fields: {unknown}")
+        missing = sorted({"reason", "evidence", "source"} - set(data))
+        if missing:
+            raise ValueError(f"missing block reason fields: {missing}")
+        return cls(
+            reason=data["reason"],
+            evidence=data["evidence"],
+            source=data["source"],
+            detail=data.get("detail"),
+        )
 
 
 @dataclass(frozen=True)
@@ -202,7 +449,7 @@ class NormalizedItem:
     rights: Rights
     provider_availability: ProviderAvailability
     admission_state: str = "discoverable"
-    block_reasons: tuple[str, ...] = ()
+    block_reasons: tuple[BlockReason, ...] = ()
     executable_admission: str = "inert"
     trust_state: str = "unreviewed"
     cache_state: str = "absent"
@@ -243,7 +490,11 @@ class NormalizedItem:
         _one_of(self.trust_state, TRUST_STATES, "trust_state")
         _one_of(self.cache_state, CACHE_STATES, "cache_state")
         for reason in self.block_reasons:
-            _one_of(reason, BLOCK_REASONS, "block_reasons entry")
+            if not isinstance(reason, BlockReason):
+                raise ValueError(
+                    "block_reasons entries must be BlockReason values carrying "
+                    "their evidence"
+                )
         if self.admission_state == "blocked" and not self.block_reasons:
             raise ValueError("a blocked item must record at least one block reason")
         if sorted(self.projection_eligibility) != sorted(PROJECTION_TARGETS):
@@ -256,6 +507,10 @@ class NormalizedItem:
     def qualified_identity(self) -> str:
         """This item's canonical `<provider-identity>#<upstream-id>`."""
         return qualified_identity(self.provider_identity, self.upstream_id)
+
+    def block_reason_values(self) -> tuple[str, ...]:
+        """Just the vocabulary values, for querying "what did I not get"."""
+        return tuple(reason.reason for reason in self.block_reasons)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -271,7 +526,7 @@ class NormalizedItem:
             "rights": self.rights.to_dict(),
             "provider_availability": self.provider_availability.to_dict(),
             "admission_state": self.admission_state,
-            "block_reasons": list(self.block_reasons),
+            "block_reasons": [reason.to_dict() for reason in self.block_reasons],
             "executable_admission": self.executable_admission,
             "trust_state": self.trust_state,
             "cache_state": self.cache_state,
@@ -308,7 +563,10 @@ class NormalizedItem:
             raise ValueError(f"missing normalized item fields: {missing}")
         payload["collection_membership"] = tuple(payload["collection_membership"])
         payload["runtime_compatibility"] = tuple(payload["runtime_compatibility"])
-        payload["block_reasons"] = tuple(payload["block_reasons"])
+        payload["block_reasons"] = tuple(
+            reason if isinstance(reason, BlockReason) else BlockReason.from_dict(reason)
+            for reason in payload["block_reasons"]
+        )
         payload["rights"] = Rights.from_dict(payload["rights"])
         payload["provider_availability"] = ProviderAvailability.from_dict(
             payload["provider_availability"]

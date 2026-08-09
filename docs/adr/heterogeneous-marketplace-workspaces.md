@@ -298,6 +298,37 @@ produced it.
 `blocked` is a first-class, queryable state, not an error. An operator must be
 able to ask "what did I not get, and exactly why" without re-running discovery.
 
+**Implementation record (slice 2, `CL-n7ex`).** Two readings of this table were
+open, and both are resolved in the implemented gate rather than left to each
+call site:
+
+- The vocabulary has no entry for a *refused* executable admission. A refusal
+  records `untrusted-source`, not `executable-admission-pending`: the pending
+  entry is cleared by "the Executable Admission gate", which a refusal has
+  already been through, and what a refusal needs is the explicit review that
+  clears `untrusted-source`. Recording a decided refusal as "pending" would also
+  make a deliberate decision read as unfinished work.
+- `admission_state` is derived by one rule: `installable` when there is no block
+  reason and at least one projection target is `allowed`; `blocked` when there
+  is any block reason; `discoverable` otherwise. `blocked` is therefore reached
+  by an item that still has a machine-local opt-in path — which is the intended
+  reading of orthogonal axes, not a contradiction: the item was not installed,
+  the reason is recorded, and `projection_eligibility` separately names the path
+  that remains open.
+
+`block_reasons` entries are stored as typed records carrying `reason`, an
+`evidence` observation, its named `source`, and an optional `detail`, per this
+section's requirement that each reason "carries the evidence that produced it".
+Evidence held only in a transient decision object would not survive to answer
+the question this state exists to answer.
+
+Evidence is **two fields rather than one**, recorded after review twice found
+text that passed every shape check while naming nothing. The observation and its
+source are separate sentences, so a caller cannot silently omit the half they do
+not have. The honest limit is stated rather than glossed: the record enforces
+shape, not truth. Whether the observation is accurate remains a review question,
+and no validator in this system decides it.
+
 ### Freshness and provider availability
 
 A normalized inventory entry records `provider_availability` **with the timestamp
@@ -401,6 +432,7 @@ executable-admission decision beyond ordinary Workspace selection.
 | Recorded state | `executable_admission` on the normalized item and on the receipt, bound to the **content digest**, not to the name or version |
 | Composition with Workspace selection | Admission is a precondition of installability. A Workspace root that reaches a `pending` or `refused` executable item **fails the whole resolution before mutation**; it does not silently skip it |
 | Invalidation | Any change to the content digest returns the item to `pending`. Re-admission is a new decision with new evidence |
+| Authority (slice 2, `CL-n7ex`) | The operator's admission ledger, keyed by identity **and** content digest. A normalized item's own `executable_admission` field is never consulted as authority: any producer of an item can write `admitted` into it, and review demonstrated such an item evaluating to `installable` with no reviewer, no digest, and no permission surface behind it. The gate digests the content it will materialize, so the reviewed bytes and the written bytes are the same bytes |
 
 Inert Prompt, Standard, and documentation content is `executable_admission:
 inert` and never silently inherits executable trust by sharing a bundle,
@@ -930,6 +962,44 @@ each resolving to `granted`, `denied`, or `unknown`:
 
 Authorization to fetch is **not** permission to redistribute. A subscriber token
 proves the first and says nothing about the second.
+
+**Implementation record (slice 2, `CL-n7ex`).** "Each with a named evidence
+source" is implemented as evidence **per grant**, with the item-level
+`evidence_source` retained as the fallback for grants that have none of their
+own. One shared string cannot state that a fetch grant rests on a reachable
+subscriber endpoint while a redistribution grant rests on nothing located at
+all, and that is precisely the pair this ADR ships as its worked case.
+
+The phrase is read as a **requirement, not a description**: resolving a grant to
+`granted` or `denied` without a named evidence source is refused at
+construction and at provider registration. `unknown` is the state for "nobody
+has looked", and it is the only one reachable without evidence. Adversarial
+review made the cost of the weaker reading concrete — an all-`granted` rights
+value invented at a call site authorized a committed projection, durable
+retention, and a derivative, with nothing behind any of them.
+
+The operator opt-in is issued, not asserted. An opt-in-required act is
+authorized only through a presenter: the gate renders the statement, issues a
+single-use presentation, hands it to the presenter, and accepts only an
+acknowledgement carrying that presentation's token and digest. An
+acknowledgement therefore cannot exist unless the statement was rendered first,
+and it authorizes exactly one act. Two weaker designs were tried and both were
+broken by review: a boolean flag can be passed without rendering anything, and a
+value bound only to a publicly computable digest can be self-minted with nothing
+ever shown.
+
+The statement names the **subject** — the qualified identity of the item —
+alongside the target and every grant. The subject is load-bearing, not
+decoration: rights are recorded per provider, so without it two items from one
+provider render byte-identical statements and one acknowledgement silently
+covers content the operator never saw.
+
+A composed decision is a **report, not a capability**. The mutation boundary
+re-derives it from the recorded rights and refuses any decision that does not
+match, so a hand-built decision claiming `allowed` over a recorded denial writes
+nothing. Proving *who* the operator is remains out of scope: authenticating an
+operator is credential handling, and this ADR's gate binds an acknowledgement to
+content rather than to an identity.
 
 ### Caching is not installing
 

@@ -144,13 +144,12 @@ def normalize_inventory(
     if "rights_evidence" in declared:
         evidence = provider.rights_evidence()
         if evidence.located and evidence.source:
-            recorded_rights = Rights(
-                fetch_authorization=recorded_rights.fetch_authorization,
-                install_rights=recorded_rights.install_rights,
-                redistribution_rights=recorded_rights.redistribution_rights,
-                derivative_rights=recorded_rights.derivative_rights,
-                evidence_source=recorded_rights.evidence_source or evidence.source,
-            )
+            # Rebuilt through `to_dict`/`from_dict` rather than field by field:
+            # a hand-listed rebuild silently drops any field a later slice adds,
+            # and slice 2 added per-grant evidence to exactly this value.
+            payload = recorded_rights.to_dict()
+            payload["evidence_source"] = recorded_rights.evidence_source or evidence.source
+            recorded_rights = Rights.from_dict(payload)
 
     costs: list[NormalizationCost] = []
     items: list[NormalizedItem] = []

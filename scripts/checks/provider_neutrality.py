@@ -62,10 +62,22 @@ SCHEMA = "cognovis.provider-neutrality.v1"
 BEAD_ID = "CL-coif"
 
 #: The modules ADR-0011 names as consumers of the normalized inventory only.
+#:
+#: The rights, admission, and executable-admission gates (`CL-n7ex`) are listed
+#: here even though they live under the adapter directory, which is otherwise
+#: the sanctioned home for provider knowledge. They are core by function: they
+#: decide what a scope may do with an item, and a gate that recognized a
+#: provider by name could grant that provider a permission its recorded rights
+#: never granted. Their location is a packaging fact; their neutrality is a
+#: contract, so the check states it explicitly rather than inheriting the
+#: adapter exemption.
 CORE_MODULES: tuple[str, ...] = (
     "scripts/lib/resolver.py",
     "scripts/lib/cache.py",
     "scripts/lib/workspace.py",
+    "scripts/lib/providers/rights.py",
+    "scripts/lib/providers/admission.py",
+    "scripts/lib/providers/executable_admission.py",
 )
 
 #: Provider and hosting-service names. A core module has no business naming one.
@@ -298,7 +310,52 @@ def _scan_ast(path: str, source: str) -> list[Finding]:
             findings.extend(
                 _scan_string_value(path, getattr(node, "lineno", 0), node.value)
             )
+        elif isinstance(node, (ast.BinOp, ast.JoinedStr)):
+            folded = _folded_string(node)
+            if folded is not None:
+                findings.extend(
+                    _scan_string_value(path, getattr(node, "lineno", 0), folded)
+                )
     return findings
+
+
+def _folded_string(node: ast.AST) -> str | None:
+    """Constant-fold a `+` chain of string literals, or return None.
+
+    `"executive" + "-circle"` is one expression away from a literal and produced
+    zero findings until this existed. A reviewer demonstrated the bypass against
+    the gate modules this check now certifies as core, which is the one place a
+    silent pass is most expensive.
+
+    An f-string whose parts are all constant is the same trick with different
+    syntax -- `f"{'executive'}{'-circle'}"` survived the first repair -- so
+    `JoinedStr` and a constant `FormattedValue` fold too. Only literal operands
+    fold. A branch assembled from runtime values remains outside this tripwire's
+    proof boundary, and the report says so.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, str) else None
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _folded_string(node.left)
+        right = _folded_string(node.right)
+        if left is None or right is None:
+            return None
+        return left + right
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            folded = _folded_string(value)
+            if folded is None:
+                return None
+            parts.append(folded)
+        return "".join(parts)
+    if isinstance(node, ast.FormattedValue):
+        # A format spec or conversion changes the rendered text, so only a bare
+        # substitution of a constant is statically known.
+        if node.conversion not in (-1, None) or node.format_spec is not None:
+            return None
+        return _folded_string(node.value)
+    return None
 
 
 def _scan_string_value(path: str, line: int, value: str) -> list[Finding]:
