@@ -76,9 +76,30 @@ GRANTED = Rights(
 AVAILABLE = ProviderAvailability(state="available", observed_at=NOW)
 
 
-def _closure(catalog: dict[str, Any], reference: str, scope: str = "project"):
+def _verifier(**overrides: str):
+    """A source that serves exactly the pins the manifest declares.
+
+    A test that resolves without one would be asserting the pre-repair contract:
+    a closure whose pins were copied from the manifest and checked against
+    nothing.
+    """
+
+    def verify(entry) -> str:
+        return overrides.get(entry.identity, entry.pin.value)
+
+    return verify
+
+
+def _closure(catalog: dict[str, Any], reference: str, scope: str = "project", **kwargs):
     workspace = resolve_workspace(catalog, reference)
-    return resolve_workspace_closure(catalog, workspace, Path.cwd(), scope)
+    return resolve_workspace_closure(
+        catalog,
+        workspace,
+        Path.cwd(),
+        scope,
+        pin_verifier=kwargs.pop("pin_verifier", _verifier()),
+        **kwargs,
+    )
 
 
 def _item(**overrides: Any) -> NormalizedItem:
@@ -327,6 +348,106 @@ def test_a_cross_catalog_closure_is_not_installable_yet() -> None:
     assert_materializable(_closure(v1, f"{CORE_NAME}:python-cli"))
 
 
+def test_a_v2_closure_is_not_produced_without_pin_verification() -> None:
+    """Wave-2 F1: a pin copied onto every node and checked against nothing.
+
+    Review changed the local catalog while both declared pins stayed the same;
+    the closure grew a member and every node still reported its pin. No closure
+    is produced at all now unless the pins were verified against their sources.
+    """
+    catalog = catalog_document()
+    workspace = resolve_workspace(catalog, f"{CORE_NAME}:engineering")
+
+    with pytest.raises(LibraryError, match="verified against their sources"):
+        resolve_workspace_closure(catalog, workspace, Path.cwd(), "project")
+
+    with pytest.raises(LibraryError, match="pin drift"):
+        resolve_workspace_closure(
+            catalog,
+            workspace,
+            Path.cwd(),
+            "project",
+            pin_verifier=_verifier(**{UPSTREAM_IDENTITY: "9" * 64}),
+        )
+
+    def silent(entry):
+        return ""
+
+    with pytest.raises(LibraryError, match="no observable"):
+        resolve_workspace_closure(
+            catalog, workspace, Path.cwd(), "project", pin_verifier=silent
+        )
+
+    # A v1 manifest declares no catalogs, so it has no pin to verify and needs
+    # no verifier.
+    v1 = catalog_document(workspaces=[v1_manifest()])
+    v1_workspace = resolve_workspace(v1, f"{CORE_NAME}:python-cli")
+    assert resolve_workspace_closure(v1, v1_workspace, Path.cwd(), "project").artifacts
+
+
+def test_a_verified_pin_does_not_yet_bind_the_local_catalog_document() -> None:
+    """The documented residual of the pin contract, asserted so nobody assumes more.
+
+    Verifying a declared pin proves the *source* has not moved. It does not prove
+    that this repository's catalog document describes that revision, because
+    members are still read locally until an adapter fetches at the pin. That gap
+    is why a cross-catalog closure is refused materialization, and closing it is
+    the provider slice's work. This test exists so the limitation is discovered
+    by reading the suite rather than by trusting a pin that does not bind.
+    """
+    catalog = catalog_document()
+    catalog["library"]["skills"].append(
+        {
+            "name": "injected",
+            "description": "injected skill.",
+            "version": "1.0.0",
+            "source": "https://example.invalid/upstream/skills/injected/SKILL.md",
+            "requires": [],
+            "metadata": {"library": {"source_catalog": UPSTREAM_NAME}},
+        }
+    )
+    catalog["library"]["skills"][2]["requires"] = ["standard:common", "skill:injected"]
+
+    closure = _closure(catalog, f"{CORE_NAME}:engineering")
+
+    assert ("skill", "injected") in closure.artifacts
+    with pytest.raises(LibraryError, match="not yet installable"):
+        assert_materializable(closure)
+
+
+def test_a_failed_resolution_names_its_root_identity_and_steward() -> None:
+    """Wave-2 F4: cycles and ambiguity reported only display catalog names."""
+    cyclic = catalog_document()
+    cyclic["library"]["standards"][0]["requires"] = ["skill:python-dev"]
+
+    with pytest.raises(LibraryError) as cycle:
+        _closure(cyclic, f"{CORE_NAME}:engineering")
+
+    message = str(cycle.value)
+    assert "cycle" in message.lower()
+    assert "skill:python-dev" in message
+    assert CORE_IDENTITY in message
+    assert CORE_NAME in message
+
+    ambiguous = catalog_document()
+    ambiguous["library"]["standards"].append(
+        {
+            "name": "common",
+            "description": "Common standard.",
+            "version": "1.0.0",
+            "source": "https://example.invalid/third/standards/common.md",
+            "metadata": {"library": {"source_catalog": THIRD_NAME}},
+        }
+    )
+
+    with pytest.raises(LibraryError) as ambiguity:
+        _closure(ambiguous, f"{CORE_NAME}:engineering")
+
+    message = str(ambiguity.value)
+    assert "standard:common" in message
+    assert UPSTREAM_IDENTITY in message or CORE_IDENTITY in message
+
+
 def test_a_changed_catalog_pin_is_drift_not_a_silent_re_pin() -> None:
     catalog = catalog_document()
     workspace = resolve_workspace(catalog, f"{CORE_NAME}:engineering")
@@ -342,7 +463,9 @@ def test_a_changed_catalog_pin_is_drift_not_a_silent_re_pin() -> None:
     lock = empty_lock()
     lock["requested_roots"] = [{**root, "scope": "project"}]
 
-    plan = build_workspace_plan(moved, lock, Path.cwd(), "project")
+    plan = build_workspace_plan(
+        moved, lock, Path.cwd(), "project", pin_verifier=_verifier()
+    )
 
     blocker = next(item for item in plan["blockers"] if "pin drift" in item)
     assert UPSTREAM_PIN["value"] in blocker
@@ -426,7 +549,9 @@ def test_collision_across_two_workspaces_blocks_the_plan() -> None:
         ),
     ]
 
-    plan = build_workspace_plan(catalog, lock, Path.cwd(), "project")
+    plan = build_workspace_plan(
+        catalog, lock, Path.cwd(), "project", pin_verifier=_verifier()
+    )
 
     assert any("skill:python-dev" in blocker for blocker in plan["blockers"])
     assert any(THIRD_IDENTITY in blocker for blocker in plan["blockers"])
@@ -512,7 +637,9 @@ def _shared_ownership_lock() -> tuple[dict[str, Any], dict[str, Any]]:
 def test_multi_catalog_shared_ownership() -> None:
     catalog, lock = _shared_ownership_lock()
 
-    plan = build_workspace_plan(catalog, lock, Path.cwd(), "project")
+    plan = build_workspace_plan(
+        catalog, lock, Path.cwd(), "project", pin_verifier=_verifier()
+    )
     shared = next(item for item in plan["receipts"] if item["id"] == "standard:common")
     assert shared["shared"] is True
     assert len(shared["owners"]) == 2
@@ -525,7 +652,9 @@ def test_multi_catalog_shared_ownership() -> None:
         for root in lock["requested_roots"]
         if root["id"] != workspace_root_id(THIRD_IDENTITY, "reporting")
     ]
-    after = build_workspace_plan(catalog, lock, Path.cwd(), "project")
+    after = build_workspace_plan(
+        catalog, lock, Path.cwd(), "project", pin_verifier=_verifier()
+    )
 
     surviving = next(item for item in after["receipts"] if item["id"] == "standard:common")
     assert surviving["owners"] == [workspace_root_id(CORE_IDENTITY, "engineering")]

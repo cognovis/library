@@ -57,20 +57,27 @@
   selected member offered from a different source, a duplicate, a member with no
   content, and any selection that does not cover the whole resolved closure,
   then applies the executable-admission gate and hands the writer the exact
-  content it digested. Registering a v2 Workspace records the pins it was
-  registered against, and a later resolution finding a different pin is drift
-  naming both values rather than a silent re-pin. A cross-catalog closure
-  resolves, validates, and previews but is deliberately **not installable yet**:
-  `workspace use` refuses it, because the current installer would fetch each
-  member from the live catalog and honor no pin at all.
+  content it digested. A cross-catalog closure is not produced at all unless a
+  caller-supplied verifier confirms what each declared source currently serves;
+  a differing, empty, or failed answer is fail-closed drift naming both values,
+  and registration additionally records the pins it was made against so a
+  changed manifest pin is drift rather than a silent re-pin. A cross-catalog
+  closure resolves, validates, and previews but is deliberately **not installable
+  yet**: `workspace use` refuses it, because the current installer would fetch
+  each member from the live catalog and honor no pin at all. Every resolution
+  failure — including cycles and ambiguous matches reported by the shared
+  resolver — names the root, its constraint, its canonical identity, and its
+  steward.
   The foreign-catalog prune guard is restated on the resolved closure: an
   unregistered owner, a missing identity, the legacy `unknown` value, and an
   unresolvable catalog are all foreign and never pruned, and a scope whose
   closure reaches a source through a v2 `catalogs:` block fails its whole prune
-  closed unless every such source was observed conclusively — which now also
-  refuses an empty listing, an observation of a different source, and one older
-  than the caller's declared evidence window, and treats a receipt absent from a
-  complete listing as `upstream-vanished` rather than as deletable. ADR-0010
+  closed unless every such source was observed conclusively — which also refuses
+  an empty listing, an observation of a different source, and one outside the
+  caller's declared evidence window measured against the real clock. Under such
+  a closure a receipt is prunable only while its source's complete listing still
+  contains it: absence is `upstream-vanished`, and a receipt recording no
+  upstream identity is undeterminable and therefore not deletable. ADR-0010
   Decision 8 condition 2 (catalog identity, resolved version, and source pin all
   known) is now enforced in the plan and re-derived in the preflight immediately
   before deletion, and a prune plan carrying no recorded catalog closure is

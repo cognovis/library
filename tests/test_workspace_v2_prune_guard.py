@@ -20,7 +20,7 @@ this scope to delete content it never installed.
 from __future__ import annotations
 
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -50,8 +50,17 @@ from workspace_v2_fixtures import (  # noqa: E402
     workspace_root_record,
 )
 
-NOW = "2026-08-09T09:00:00Z"
-EARLIER = "2026-08-01T09:00:00Z"
+#: Freshness is measured against the real clock, so the suite's timestamps are
+#: relative to it. Wave-2 review paired evidence from 2020 with a run time from
+#: 2020 and a one-hour window: every check agreed with itself while the evidence
+#: was six years old.
+def _at(offset: timedelta = timedelta(0)) -> str:
+    return (datetime.now(timezone.utc) + offset).isoformat().replace("+00:00", "Z")
+
+
+NOW = _at()
+STALE = _at(-timedelta(days=8))
+AHEAD = _at(timedelta(hours=3))
 WINDOW = timedelta(hours=6)
 AVAILABLE = ProviderAvailability(state="available", observed_at=NOW)
 UNAVAILABLE = ProviderAvailability(
@@ -62,7 +71,14 @@ UNAVAILABLE = ProviderAvailability(
 #: listing is not a complete one, so a suite that always passed `frozenset()`
 #: would be asserting deletion authority nobody has.
 LISTINGS: dict[str, frozenset[str]] = {
-    CORE_IDENTITY: frozenset({f"{CORE_IDENTITY}#skills/python-dev"}),
+    CORE_IDENTITY: frozenset(
+        {
+            f"{CORE_IDENTITY}#skills/python-dev",
+            f"{CORE_IDENTITY}#skills/legacy-unknown",
+            f"{CORE_IDENTITY}#skills/no-identity",
+            f"{CORE_IDENTITY}#skills/blank-identity",
+        }
+    ),
     UPSTREAM_IDENTITY: frozenset(
         {
             f"{UPSTREAM_IDENTITY}#skills/helper",
@@ -82,16 +98,23 @@ def _conclusive(identity: str) -> ResolutionEvidence:
 
 
 def _observed(observations: dict[str, ResolutionEvidence]) -> CatalogObservations:
-    return CatalogObservations(
-        observations=observations, observed_at=NOW, max_age=WINDOW
-    )
+    return CatalogObservations(observations=observations, max_age=WINDOW)
 
 
 def _observations(*identities: str) -> CatalogObservations:
     return _observed({identity: _conclusive(identity) for identity in identities})
 
 
-def _receipt(receipt_id: str, catalog_identity: Any) -> dict[str, Any]:
+def _receipt(
+    receipt_id: str, catalog_identity: Any, *, upstream: str | None = "listed"
+) -> dict[str, Any]:
+    """One lock receipt.
+
+    `upstream` selects the recorded upstream identity: `"listed"` records one the
+    fixture inventory lists, `None` records none at all (which is undeterminable
+    and therefore never prunable under a cross-catalog closure), and any other
+    value records one the inventory does not list.
+    """
     primitive, _, name = receipt_id.partition(":")
     receipt: dict[str, Any] = {
         "id": receipt_id,
@@ -105,6 +128,11 @@ def _receipt(receipt_id: str, catalog_identity: Any) -> dict[str, Any]:
     }
     if catalog_identity is not None:
         receipt["catalog_identity"] = catalog_identity
+    if upstream is not None and isinstance(catalog_identity, str):
+        receipt["provider_identity"] = catalog_identity
+        receipt["upstream_id"] = (
+            f"{primitive}s/{name}" if upstream == "listed" else upstream
+        )
     return receipt
 
 
@@ -128,7 +156,12 @@ def _scope(*, receipts: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str,
 
 def _plan(catalog: dict[str, Any], lock: dict[str, Any], observations: Any) -> dict[str, Any]:
     return build_workspace_plan(
-        catalog, lock, Path.cwd(), "project", catalog_observations=observations
+        catalog,
+        lock,
+        Path.cwd(),
+        "project",
+        catalog_observations=observations,
+        pin_verifier=lambda entry: entry.pin.value,
     )
 
 
@@ -316,7 +349,8 @@ def test_prune_fails_closed_offline() -> None:
         _candidate(empty, "skill:retired")["blocked_reason"]
     )
 
-    # An observation older than the evidence window says nothing about now.
+    # An observation older than the evidence window says nothing about now, and
+    # the comparison is against the real clock, not a time the caller supplied.
     stale = _plan(
         catalog,
         lock,
@@ -326,7 +360,7 @@ def test_prune_fails_closed_offline() -> None:
                 UPSTREAM_IDENTITY: ResolutionEvidence(
                     provider_identity=UPSTREAM_IDENTITY,
                     availability=ProviderAvailability(
-                        state="available", observed_at=EARLIER
+                        state="available", observed_at=STALE
                     ),
                     complete=True,
                     listed_identities=LISTINGS[UPSTREAM_IDENTITY],
@@ -335,6 +369,26 @@ def test_prune_fails_closed_offline() -> None:
         ),
     )
     assert "evidence window" in str(_candidate(stale, "skill:retired")["blocked_reason"])
+
+    # Evidence that has not happened yet establishes nothing either.
+    ahead = _plan(
+        catalog,
+        lock,
+        _observed(
+            {
+                CORE_IDENTITY: _conclusive(CORE_IDENTITY),
+                UPSTREAM_IDENTITY: ResolutionEvidence(
+                    provider_identity=UPSTREAM_IDENTITY,
+                    availability=ProviderAvailability(
+                        state="available", observed_at=AHEAD
+                    ),
+                    complete=True,
+                    listed_identities=LISTINGS[UPSTREAM_IDENTITY],
+                ),
+            }
+        ),
+    )
+    assert "future" in str(_candidate(ahead, "skill:retired")["blocked_reason"])
 
     # An observation of a different source cannot answer for this one.
     misattributed = _plan(
@@ -354,38 +408,40 @@ def test_prune_fails_closed_offline() -> None:
     assert _candidate(observed, "skill:retired")["blocked_reason"] is None
 
 
-def test_observations_require_a_window_and_a_run_time() -> None:
+def test_observations_require_an_evidence_window() -> None:
     """Evidence with no window is evidence about no particular moment."""
     with pytest.raises(LibraryError, match="evidence window"):
         CatalogObservations(
             observations={CORE_IDENTITY: _conclusive(CORE_IDENTITY)},
-            observed_at=NOW,
             max_age=timedelta(0),
-        )
-    with pytest.raises(LibraryError, match="observed_at"):
-        CatalogObservations(
-            observations={CORE_IDENTITY: _conclusive(CORE_IDENTITY)},
-            observed_at="whenever",
-            max_age=WINDOW,
         )
     with pytest.raises(LibraryError, match="ResolutionEvidence"):
         CatalogObservations(
-            observations={CORE_IDENTITY: AVAILABLE},
-            observed_at=NOW,
-            max_age=WINDOW,
+            observations={CORE_IDENTITY: AVAILABLE}, max_age=WINDOW
         )
 
 
 def test_a_vanished_upstream_is_never_deletion_authority() -> None:
-    """A complete listing that omits the item proves loss, not permission."""
-    receipt = _receipt("skill:retired", UPSTREAM_IDENTITY)
-    receipt["provider_identity"] = UPSTREAM_IDENTITY
-    receipt["upstream_id"] = "skills/gone"
-    catalog, lock = _scope(receipts=[receipt])
+    """A complete listing that omits the item proves loss, not permission.
 
+    Wave-2 F2: the earlier shape only asked this question when the receipt
+    happened to record an upstream identity, and accepted any nonempty listing.
+    Both holes are closed here -- a listing that does not mention the receipt,
+    and a receipt with no upstream identity at all.
+    """
+    catalog, lock = _scope(
+        receipts=[_receipt("skill:retired", UPSTREAM_IDENTITY, upstream="skills/gone")]
+    )
     plan = _plan(catalog, lock, ALL_OBSERVED)
-
     assert "upstream-vanished" in str(
+        _candidate(plan, "skill:retired")["blocked_reason"]
+    )
+
+    catalog, lock = _scope(
+        receipts=[_receipt("skill:retired", UPSTREAM_IDENTITY, upstream=None)]
+    )
+    plan = _plan(catalog, lock, ALL_OBSERVED)
+    assert "no upstream identity" in str(
         _candidate(plan, "skill:retired")["blocked_reason"]
     )
 

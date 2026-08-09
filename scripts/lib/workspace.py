@@ -124,6 +124,13 @@ class DeclaredCatalog:
     pin: CatalogPin
 
 
+#: Answers what one declared catalog currently serves, as the pin value of its
+#: declared kind. Supplied by the caller because reading a source is provider
+#: work; there is no default, because a resolution that cannot check its pins
+#: must not produce a closure that claims to be pinned.
+PinVerifier = Callable[["DeclaredCatalog"], str]
+
+
 @dataclass(frozen=True)
 class ResolvedNode:
     """One resolved closure member with its canonical provenance.
@@ -630,13 +637,75 @@ def _constraint_satisfied(version: str, constraint: str) -> bool:
     return True
 
 
+def assert_declared_pins(
+    declared: Sequence[DeclaredCatalog], verifier: PinVerifier | None
+) -> None:
+    """Verify each declared pin against its source, or refuse to resolve at all.
+
+    A pin that is copied onto every resolved node and compared with nothing is
+    decoration. Review demonstrated exactly that: with both declared pins
+    unchanged, an edit to the local catalog changed the resolved closure and
+    nothing was reported, while every node still carried the pin.
+
+    The verifier is a caller-supplied seam because reading what a source
+    currently serves is provider work. It has no default: without one, a
+    cross-catalog closure is not produced, so nothing can report a live closure
+    as pinned.
+
+    **The honest residual.** A verified pin proves the *source* has not moved. It
+    does not prove that this repository's catalog document describes that
+    revision, because the members are still read locally until an adapter fetches
+    at the pin. That is the second half of the same guarantee, it belongs to the
+    provider slice, and it is why materialization is refused meanwhile.
+    """
+    if not declared:
+        return
+    if verifier is None:
+        raise LibraryError(
+            "Cross-catalog resolution requires the declared pins to be verified "
+            "against their sources: "
+            f"{sorted(entry.identity for entry in declared)}. A closure resolved "
+            "without that check would report a live, moving member set as pinned"
+        )
+    for entry in declared:
+        try:
+            observed = verifier(entry)
+        except LibraryError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - any failure is an unverified pin
+            raise LibraryError(
+                f"Workspace catalog {entry.identity} could not be verified against "
+                f"its declared {entry.pin.kind} pin: {exc}"
+            ) from exc
+        if not isinstance(observed, str) or not observed.strip():
+            raise LibraryError(
+                f"Workspace catalog {entry.identity} returned no observable "
+                f"{entry.pin.kind} pin; an unanswered source is not a verified one"
+            )
+        if observed.strip() != entry.pin.value:
+            raise LibraryError(
+                f"Workspace catalog pin drift for {entry.identity}: the manifest "
+                f"declares {entry.pin.kind} {entry.pin.value}, the source now "
+                f"serves {observed.strip()}. A changed pin is fail-closed drift "
+                "and is never silently re-pinned"
+            )
+
+
 def resolve_workspace_closure(
     catalog: dict[str, Any],
     workspace: ResolvedWorkspace,
     repo_root: Path,
     scope: str,
+    *,
+    pin_verifier: PinVerifier | None = None,
 ) -> WorkspaceClosure:
-    """Resolve a Workspace's independent roots and dependency closure."""
+    """Resolve a Workspace's independent roots and dependency closure.
+
+    Args:
+        pin_verifier: Answers what each declared catalog currently serves.
+            Required for a v2 manifest and unused for v1, which declares no
+            catalogs and therefore has no pin to verify.
+    """
     if scope not in {"project", "global"}:
         raise LibraryError("Workspace scope must be project or global")
     validate_workspace_manifest(workspace.entry)
@@ -658,6 +727,7 @@ def resolve_workspace_closure(
             )
 
     declared = declared_catalogs(workspace.entry)
+    assert_declared_pins(declared, pin_verifier)
     alias_names = _alias_catalog_names(catalog, declared)
     pins_by_identity = {entry.identity: entry.pin for entry in declared}
     registry = _catalog_identities(catalog)
@@ -735,12 +805,26 @@ def resolve_workspace_closure(
                     f"{root_id(primitive, name)} at version {version!r} from "
                     f"catalog {source_catalog} ({source_identity})"
                 )
-        closure = resolve_requires_bound(
-            catalog,
-            primitive,
-            name,
-            source_catalog=source_catalog,
-        )
+        try:
+            closure = resolve_requires_bound(
+                catalog,
+                primitive,
+                name,
+                source_catalog=source_catalog,
+            )
+        except LibraryError as exc:
+            # The resolver speaks in display catalog names, which is right for
+            # its own callers and insufficient here: ADR-0010 requires a failed
+            # Workspace resolution to name the root, its constraint, the
+            # canonical identity, and the steward. A cycle or an ambiguous match
+            # reported with display names alone leaves an operator unable to tell
+            # *which* source produced it.
+            raise LibraryError(
+                f"Workspace root {root_id(primitive, name)} did not resolve from "
+                f"catalog {source_catalog} ({source_identity}) with constraint "
+                f"{root.get('constraint')!r}: {exc}",
+                exit_code=getattr(exc, "exit_code", 1),
+            ) from exc
         for member_primitive, member_name, member_source in closure:
             member = (member_primitive, member_name)
             member_catalog_entry = next(
@@ -1080,6 +1164,7 @@ def _resolve_requested_root(
     root: dict[str, Any],
     repo_root: Path,
     scope: str,
+    pin_verifier: PinVerifier | None = None,
 ) -> _RootResolution:
     primitive = str(root.get("type") or "")
     name = str(root.get("name") or "")
@@ -1094,7 +1179,9 @@ def _resolve_requested_root(
                 f"Workspace {reference} catalog identity changed; explicit re-registration required"
             )
         assert_recorded_pins(root, declared_catalogs(workspace.entry))
-        closure = resolve_workspace_closure(catalog, workspace, repo_root, scope)
+        closure = resolve_workspace_closure(
+            catalog, workspace, repo_root, scope, pin_verifier=pin_verifier
+        )
         requirements = _prerequisite_requirements(
             catalog, closure.prerequisite_bindings
         )
@@ -1263,20 +1350,29 @@ def _parse_timestamp(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+#: How far ahead of the real clock an observation may be timestamped before it is
+#: refused. Small clock skew between a source and this machine is ordinary;
+#: evidence from the future is not.
+OBSERVATION_FUTURE_TOLERANCE = timedelta(minutes=5)
+
+
 @dataclass(frozen=True)
 class CatalogObservations:
     """Source-scoped inventory observations, and the window that makes them now.
 
-    Constructed with all three parts or not at all. An observation and the run
-    that acts on it can agree with each other perfectly and still prove nothing
-    if the observation was taken long before the run: deletion authority derives
-    from a resolution over a source that is reachable *now*. The cache slice
-    learned this the same way, which is why `evidence_max_age` has no default
-    there either.
+    Both parts or neither. An observation and the run that acts on it can agree
+    with each other perfectly and still prove nothing if the observation was
+    taken long before the run: deletion authority derives from a resolution over
+    a source that is reachable *now*. The cache slice learned this the same way,
+    which is why its evidence window has no default either.
+
+    The comparison is against the **real clock**, not a caller-supplied run time.
+    Review passed evidence timestamped 2020 alongside a 2020 run time and a
+    one-hour window, and every freshness check agreed with itself while the
+    evidence was six years old.
     """
 
     observations: Mapping[str, ResolutionEvidence]
-    observed_at: str
     max_age: timedelta
 
     def __post_init__(self) -> None:
@@ -1290,12 +1386,6 @@ class CatalogObservations:
                 )
             normalized[normalize_catalog_identity(str(identity))] = observation
         object.__setattr__(self, "observations", normalized)
-        if _parse_timestamp(self.observed_at) is None:
-            raise LibraryError(
-                f"catalog observations need an ISO-8601 observed_at, not "
-                f"{self.observed_at!r}; a run that cannot locate itself in time "
-                "cannot say whether its evidence is current"
-            )
         if not isinstance(self.max_age, timedelta) or self.max_age <= timedelta(0):
             raise LibraryError(
                 "catalog observations need a positive evidence window; without one "
@@ -1331,13 +1421,19 @@ class CatalogObservations:
                 "one, and absence from it is not evidence of removal"
             )
         observed = _parse_timestamp(observation.availability.observed_at)
-        now = _parse_timestamp(self.observed_at)
         if observed is None:
             return (
                 f"catalog {identity} was observed at an unreadable time "
                 f"({observation.availability.observed_at!r})"
             )
-        if now is not None and now - observed > self.max_age:
+        now = datetime.now(timezone.utc)
+        if observed - now > OBSERVATION_FUTURE_TOLERANCE:
+            return (
+                f"catalog {identity} carries an observation timestamped "
+                f"{observation.availability.observed_at}, which is in the future; "
+                "evidence that has not happened yet establishes nothing"
+            )
+        if now - observed > self.max_age:
             return (
                 f"catalog {identity} was observed at {observation.availability.observed_at}, "
                 f"which is older than the {self.max_age} evidence window; a stale "
@@ -1357,6 +1453,7 @@ def build_workspace_plan(
     scope: str,
     *,
     catalog_observations: CatalogObservations | None = None,
+    pin_verifier: PinVerifier | None = None,
 ) -> dict[str, Any]:
     """Recompute reachability and return an ownership-aware selected-scope plan.
 
@@ -1395,7 +1492,7 @@ def build_workspace_plan(
         owner_id = str(requested_root.get("id") or "")
         try:
             resolution = _resolve_requested_root(
-                catalog, requested_root, repo_root, scope
+                catalog, requested_root, repo_root, scope, pin_verifier
             )
         except LibraryError as exc:
             blockers.append(f"{owner_id}: {exc}")
@@ -1525,14 +1622,24 @@ def build_workspace_plan(
         identity = normalize_catalog_identity(
             str(receipt.get("catalog_identity") or "")
         )
-        provider = str(receipt.get("provider_identity") or "").strip()
-        upstream = str(receipt.get("upstream_id") or "").strip()
-        if (
-            catalog_observations is not None
-            and identity in cross_catalog
-            and provider
-            and upstream
-        ):
+        if identity in cross_catalog:
+            provider = str(receipt.get("provider_identity") or "").strip()
+            upstream = str(receipt.get("upstream_id") or "").strip()
+            if not provider or not upstream:
+                # Without an upstream identity nothing can be looked up in the
+                # source's listing, so "is it still there" is unanswerable. Review
+                # pruned exactly this receipt: the check only ran when both fields
+                # happened to be present, so their absence was a pass.
+                return registration, (
+                    "this receipt records no upstream identity, so whether its "
+                    f"source {identity} still lists it cannot be determined; "
+                    "undeterminable is not deletable"
+                )
+            if catalog_observations is None:
+                return registration, (
+                    f"source {identity} was not observed, so whether it still "
+                    f"lists {provider}#{upstream} cannot be determined"
+                )
             listing = catalog_observations.listing_for(identity)
             if f"{provider}#{upstream}" not in listing:
                 # The observation itself proves the item is gone. ADR-0011 turns

@@ -114,10 +114,29 @@ Two resolution rules follow from the block being the whole trust boundary:
 Every resolved node records its canonical catalog identity and the pin of the
 catalog it came from, regardless of the display alias the manifest used.
 
-**Pin drift is never silent.** Registering a v2 Workspace records the identity
-and pin of every catalog it declared. A later resolution that finds a different
-pin fails naming both values and requires explicit re-registration. Without this
-the `catalogs:` block would be reviewable exactly once.
+**A v2 closure is not produced without pin verification.** Resolving a manifest
+that declares catalogs requires a verifier that answers what each declared source
+currently serves. There is no default: a resolution that cannot check its pins
+does not produce a closure at all, so nothing can report a live, moving member
+set as pinned. A source that answers with a different value, with nothing, or
+with an error is fail-closed drift naming both values.
+
+The honest residual: a verified pin proves the *source* has not moved. It does
+not prove that this repository's catalog document describes that revision,
+because members are still read locally until an adapter fetches at the pin. That
+is the second half of the same guarantee, it belongs to the provider slice, and
+it is why materialization is refused meanwhile.
+
+**Pin drift is never silent.** Registering a v2 Workspace also records the
+identity and pin of every catalog it declared. A later resolution that finds a
+different pin in the manifest fails naming both values and requires explicit
+re-registration. Without this the `catalogs:` block would be reviewable exactly
+once.
+
+**A failed resolution names its root, constraint, identity, and steward.** That
+includes failures the shared resolver reports in display names — cycles and
+ambiguous matches — which are re-raised with the root and its canonical
+provenance attached.
 
 **Mutation gate.** A completed cross-catalog resolution reaches the filesystem
 only through `gate_workspace_mutation`, which refuses an item the resolution did
@@ -187,14 +206,17 @@ observation of a different source, an unreachable source, a reachable source
 that answered incompletely, a "complete" answer that lists nothing, and an
 observation older than the caller's declared evidence window. Observations are
 supplied as one value carrying the observations, the run's own timestamp, and
-that window — all three or none, because an observation and the run acting on it
-can agree perfectly and still prove nothing if the observation is old. One
-refusal fails the scope's whole prune, not only that source's receipts. Additive
-work is unaffected: offline operation stays additive and repair-only.
+that window. Freshness is measured against the real clock, not against a run
+time the caller supplies, and evidence dated in the future is refused as well as
+evidence that is too old. One refusal fails the scope's whole prune, not only
+that source's receipts. Additive work is unaffected: offline operation stays
+additive and repair-only.
 
-A receipt that records its provider identity and upstream id and is absent from
-that source's complete listing is `upstream-vanished`. That is when the local
-copy is most valuable, and it is never converted into deletion authority.
+Under a cross-catalog closure a receipt is prunable only when the source's
+complete listing still contains it. A receipt absent from that listing is
+`upstream-vanished` — when the local copy is most valuable, and never deletion
+authority — and a receipt that records no upstream identity at all cannot be
+looked up, which is undeterminable and therefore also not deletable.
 
 **ADR-0010 Decision 8 condition 2 is enforced, not assumed.** A receipt is
 prunable only when its catalog identity, resolved version, and source pin are

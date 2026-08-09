@@ -782,10 +782,35 @@ correct while a probe walked through it:
 | ADR-0010 Decision 8 condition 2 (catalog identity, resolved version, **and** source pin known) was not enforced anywhere | Enforced in the plan and re-derived in the preflight immediately before deletion; a plan with no recorded catalog closure is refused outright |
 
 Two further hardenings were made without a reviewer asking, because the cache
-slice had already paid for both lessons: catalog observations carry the run's own
-timestamp and an explicit evidence window, with no default, so a stale
-observation cannot authorize today's deletion; and an observation attributed to a
-different source is refused.
+slice had already paid for both lessons: catalog observations carry an explicit
+evidence window with no default, so a stale observation cannot authorize today's
+deletion; and an observation attributed to a different source is refused.
+
+**A second adversarial round found four more, all accepted and repaired**, and
+three of them were the first round's repairs relocating the unsafe assumption
+rather than removing it:
+
+| Finding | Repair |
+|---|---|
+| Declared pins still did not constrain resolution: they were copied onto every node and compared with nothing, so an edit to the local catalog changed the closure while every node reported its pin | A cross-catalog closure is not produced at all without a caller-supplied verifier that answers what each declared source currently serves; a differing, empty, or failed answer is fail-closed drift naming both values |
+| A nonempty but irrelevant listing, or a receipt with no recorded upstream identity, still authorized pruning | Under a cross-catalog closure a receipt must appear in its source's complete listing; absence is `upstream-vanished`, and a receipt with no upstream identity is undeterminable and therefore not deletable |
+| Observation freshness was measured against a caller-supplied run clock, so 2020 evidence beside a 2020 run time passed in 2026 | Freshness is measured against the real clock; the caller-supplied run time is gone, and future-dated evidence is refused as well |
+| Cycle and ambiguity diagnostics carried display catalog names only, so AC3's "canonical identities and stewards named" held for constraint and collision failures and not for these | Every resolver failure is re-raised naming the root, its constraint, its canonical identity, and its steward |
+
+**The residual, stated rather than implied.** A verified pin proves the source
+has not moved. It does not prove that a consuming repository's catalog document
+describes that revision, because members are still read locally until an adapter
+fetches at the pin. Slice 5 therefore ships resolution, validation, and preview
+with verified pins, and refuses materialization; `CL-mvet` closes the second half
+by fetching at the pin. A test asserts this limitation directly so a later reader
+finds it in the suite instead of inferring a guarantee that is not there.
+
+Kimi was unavailable for both rounds of this slice (`provider.auth_error: 403
+You've reached your usage limit for this billing cycle`), so the user-mandated
+second reviewer produced no verdict. Compensating evidence: every proof of
+concept from both rounds is a regression test in the delivered suite, including
+an end-to-end CLI test that a v2 manifest validates and refuses to install while
+writing no lock and no files.
 
 ### Nested Workspace disposition
 
