@@ -29,11 +29,11 @@ that fold is a move, not a translation.
 from __future__ import annotations
 
 import json
-import os
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
+
+from .state_files import atomic_write_text, exclusive_lock
 
 from .inventory import (
     PROJECTION_TARGETS,
@@ -60,6 +60,7 @@ RECEIPT_EVENTS: tuple[str, ...] = (
     "installed",
     "projection-planned",
     "projection-activated",
+    "projection-plan-violated",
     "reinstalled-from-cache",
     "integrity-verified",
     "integrity-failed",
@@ -364,6 +365,19 @@ def deletion_authority(
             f"{receipt.id} cannot be deleted from an incomplete resolution: "
             f"{observation.describe()}"
         )
+    if receipt.qualified_identity() not in observation.listed_identities:
+        # The observation itself proves the item is gone. Depending on somebody
+        # having reconciled first would make safety a matter of call order:
+        # review passed a conclusive listing that omitted the identity and got
+        # authority to delete the last copy of a vanished item's bytes.
+        raise DeletionAuthorityRefused(
+            f"{receipt.id} is absent from this complete inventory of "
+            f"{observation.provider_identity!r}, which makes it upstream-vanished. "
+            "A vanished upstream is exactly when the local cache is most valuable, "
+            "and it is never converted into deletion authority; reconcile the "
+            "receipt so the state is recorded, then remove it explicitly if that "
+            "is what you mean."
+        )
     if receipt.upstream_state == "upstream-vanished":
         raise DeletionAuthorityRefused(
             f"{receipt.id} is upstream-vanished: the upstream item no longer exists, "
@@ -444,23 +458,23 @@ class ReceiptStore:
             "receipts": [active[key].to_dict() for key in sorted(active)],
             "retired": [receipt.to_dict() for receipt in retired],
         }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        staged = self.path.with_name(f"{self.path.name}.{uuid.uuid4().hex}.staged")
-        try:
-            staged.write_text(
-                json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-            )
-            os.replace(staged, self.path)
-        finally:
-            staged.unlink(missing_ok=True)
+        atomic_write_text(self.path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
     def put(self, receipt: ForeignReceipt) -> ForeignReceipt:
-        """Write one receipt durably, replacing any earlier record of the same id."""
+        """Write one receipt durably, replacing any earlier record of the same id.
+
+        The load and the save are one locked transaction. Atomic replacement
+        protects a reader from half-written JSON and does nothing about two
+        writers that each loaded the file before the other saved: review ran two
+        successful `put` calls concurrently and the file kept one receipt, so an
+        installed artifact lost the only record that described it.
+        """
         if not isinstance(receipt, ForeignReceipt):
             raise TypeError("a receipt store holds validated ForeignReceipt values")
-        active, retired = self._load()
-        active[receipt.id] = receipt
-        self._save(active, retired)
+        with exclusive_lock(self.path):
+            active, retired = self._load()
+            active[receipt.id] = receipt
+            self._save(active, retired)
         return receipt
 
     def get(self, receipt_id: str) -> ForeignReceipt | None:
@@ -490,15 +504,25 @@ class ReceiptStore:
             receipt for receipt in self.all() if receipt.cache_key_digest == cache_key_digest
         )
 
-    def retire(self, receipt: ForeignReceipt) -> ForeignReceipt:
+    def _retire(self, receipt: ForeignReceipt) -> ForeignReceipt:
         """Move one receipt out of the active set and into the archive.
 
-        Reached only through `remove_named_receipt`, which is where the operator
-        gate, the deactivation, and the history entry live.
+        Private, and additionally guarded: the docstring used to claim this was
+        reached only through `remove_named_receipt` and nothing enforced it, so a
+        direct call retired a receipt while its projection stayed installed. A
+        retirement is only valid as the last step of an explicit removal, and
+        the receipt's own history is the proof of that.
         """
-        active, retired = self._load()
-        active.pop(receipt.id, None)
-        self._save(active, [*retired, receipt])
+        if not receipt.history or receipt.history[-1].event != "explicit-removal":
+            raise ProjectionStillActive(
+                f"{receipt.id} may only be retired as the final step of an explicit "
+                "named removal, whose history entry records the operator, the intent, "
+                "and the degraded state. Call remove_named_receipt."
+            )
+        with exclusive_lock(self.path):
+            active, retired = self._load()
+            active.pop(receipt.id, None)
+            self._save(active, [*retired, receipt])
         return receipt
 
 
@@ -586,6 +610,21 @@ def reconcile_upstream_state(
     )
 
 
+def _claimed_targets(receipt: ForeignReceipt) -> tuple[ReceiptTarget, ...]:
+    """Every path this receipt may have created, proven or merely declared.
+
+    A planned path carries no install-time digest, because the whole point of
+    recording it is that it was written down *before* anything was created. It
+    is still a path this receipt is responsible for.
+    """
+    proven = {target.path: target for target in receipt.targets}
+    claimed = dict(proven)
+    for path in receipt.planned_targets:
+        if path not in claimed:
+            claimed[path] = ReceiptTarget(path=path, kind="directory")
+    return tuple(claimed[path] for path in sorted(claimed))
+
+
 def remove_named_receipt(
     store: ReceiptStore,
     receipt_id: str,
@@ -641,19 +680,38 @@ def remove_named_receipt(
     if receipt is None:
         raise KeyError(f"no active receipt with id {receipt_id!r}")
 
-    active_targets = receipt.targets
-    if active_targets and deactivate is None:
+    # Everything this receipt may have put on disk: the proven targets and the
+    # paths it declared before activating. A receipt that crashed between the
+    # plan and the finalization has only the plan, and review retired exactly
+    # that receipt while its files stayed installed.
+    claimed = _claimed_targets(receipt)
+    if claimed and deactivate is None:
         raise ProjectionStillActive(
-            f"{receipt.id} records {len(active_targets)} active target(s). Retiring "
-            "the receipt without deactivating them would leave an installed "
-            "projection that no receipt describes -- exactly the unreproducible "
-            "state this cache exists to end. Supply a deactivation for the "
-            "recorded targets; the cache object is retained either way."
+            f"{receipt.id} claims {len(claimed)} target(s), recorded or planned. "
+            "Retiring the receipt without deactivating them would leave an "
+            "installed projection that no receipt describes -- exactly the "
+            "unreproducible state this cache exists to end. Supply a deactivation; "
+            "the cache object is retained either way."
         )
 
-    removed = tuple(deactivate(active_targets)) if active_targets else ()
+    removed = tuple(deactivate(claimed)) if claimed else ()
+    surviving = tuple(
+        target.path
+        for target in claimed
+        if target.path not in set(removed) and Path(target.path).exists()
+    )
+    if surviving:
+        # The receipt stays active. A partially deactivated projection with no
+        # record is the failure being prevented; a receipt that still describes
+        # what is installed is the recovery record for it.
+        raise ProjectionStillActive(
+            f"{receipt.id} was not retired: {len(surviving)} claimed target(s) are "
+            f"still present after deactivation ({', '.join(surviving[:5])}). The "
+            "receipt remains active so the installed content stays attributable; "
+            "finish or repair the deactivation and remove it again."
+        )
     retained = tuple(
-        target.path for target in active_targets if target.path not in set(removed)
+        target.path for target in claimed if target.path not in set(removed)
     )
 
     retired = receipt.with_event(
@@ -672,7 +730,7 @@ def remove_named_receipt(
             provider_state=observation.describe(),
         )
     )
-    store.retire(retired)
+    store._retire(retired)
     return RemovalOutcome(
         receipt=retired,
         retained_cache_path=Path(receipt.cache_path),

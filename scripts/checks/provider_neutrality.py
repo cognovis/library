@@ -87,6 +87,7 @@ CORE_MODULES: tuple[str, ...] = (
     "scripts/lib/providers/cache_transaction.py",
     "scripts/lib/providers/offline.py",
     "scripts/lib/providers/receipts.py",
+    "scripts/lib/providers/state_files.py",
 )
 
 #: Provider and hosting-service names. A core module has no business naming one.

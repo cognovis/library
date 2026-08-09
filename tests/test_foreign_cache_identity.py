@@ -340,6 +340,107 @@ def test_read_verified_hands_back_the_bytes_it_verified(tmp_path: Path) -> None:
     assert not store.read_verified(key)[1].verified
 
 
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [("dir/file.txt", "dir//file.txt"), ("a/b.txt", "./a/b.txt"), ("x.txt", "x.txt/")],
+)
+def test_filesystem_equivalent_member_paths_are_refused(
+    left: str, right: str, tmp_path: Path
+) -> None:
+    """Two spellings of one destination are one member (wave-2 F8).
+
+    Review supplied `dir/file.txt` and `dir//file.txt`: both passed the raw
+    duplicate check, both wrote to the same place, and materialization returned
+    success while publishing an object that immediately failed verification.
+    """
+    store = ObjectStore(tmp_path / "cache")
+    with pytest.raises(ValueError, match="duplicate cached path"):
+        store.materialize(
+            _key(), {left: b"first", right: b"second"}, created_at=NOW
+        )
+    assert store.objects() == ()
+    assert store.temporary_entries() == ()
+
+
+def test_a_failed_repair_swap_rolls_back(tmp_path: Path, monkeypatch) -> None:
+    """The repair swap restores the previous object when it cannot publish (wave-2 F9).
+
+    Review failed the second rename and left the canonical path absent with the
+    verified replacement already deleted, recoverable through no API at all.
+    """
+    store = ObjectStore(tmp_path / "cache")
+    key = _key()
+    stored = store.materialize(key, {"SKILL.md": b"anchor v1"}, created_at=NOW)
+    (stored.path / "content" / "SKILL.md").write_bytes(b"corrupted")
+
+    real_rename = os.rename
+    calls = {"count": 0}
+
+    def failing_rename(src, dst):
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise OSError("the publishing rename failed")
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", failing_rename)
+    with pytest.raises(OSError, match="publishing rename"):
+        store.repair_object(key, {"SKILL.md": b"anchor v1"}, created_at=LATER, operator="malte")
+    monkeypatch.undo()
+
+    # The canonical object is back where it was, damaged but present and
+    # loadable, rather than absent and unrecoverable.
+    assert store.load(key).path == stored.path
+    assert store.read_content(key) == {"SKILL.md": b"corrupted"}
+    assert store.quarantined() == ()
+
+    # A successful repair leaves nothing quarantined either.
+    store.repair_object(key, {"SKILL.md": b"anchor v1"}, created_at=LATER, operator="malte")
+    assert store.verify(key).verified
+    assert store.quarantined() == ()
+
+
+def test_repin_refuses_another_sources_resolution(tmp_path: Path) -> None:
+    """One source's healthy resolution never authorizes another's (wave-2 F6)."""
+    from lib.providers.inventory import ProviderAvailability
+    from lib.providers.offline import OfflineRefusal, ResolutionEvidence
+
+    store = TofuPinStore(tmp_path / "pins.json")
+    identity = "provider-b#kits/anchor"
+    pinned = normalized_content_digest({"SKILL.md": b"anchor v1"})
+    drifted = normalized_content_digest({"SKILL.md": b"anchor v2"})
+    store.pin(identity, pinned, observed_at=NOW)
+
+    def evidence(provider: str) -> ResolutionEvidence:
+        return ResolutionEvidence(
+            provider_identity=provider,
+            availability=ProviderAvailability(state="available", observed_at=NOW),
+            listed_identities=frozenset({identity}),
+            complete=True,
+        )
+
+    with pytest.raises(OfflineRefusal, match="never authorizes substitution"):
+        store.repin(
+            identity,
+            drifted,
+            operator="malte",
+            acknowledged_drift=(pinned, drifted),
+            decided_at=LATER,
+            availability=evidence("provider-a"),
+        )
+    assert store.pin_for(identity).normalized_content_digest == pinned
+
+    replaced = store.repin(
+        identity,
+        drifted,
+        operator="malte",
+        acknowledged_drift=(pinned, drifted),
+        decided_at=LATER,
+        availability=evidence("provider-b"),
+    )
+    assert replaced.normalized_content_digest == drifted
+    assert replaced.superseded_digests == (pinned,)
+
+
 def test_integrity_verification_reports_both_digests(tmp_path: Path) -> None:
     """Verification names what was expected and what was found."""
     store = ObjectStore(tmp_path / "cache")

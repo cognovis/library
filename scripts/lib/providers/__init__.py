@@ -18,9 +18,10 @@ Module map:
 | `cache_transaction` | The ordered retrieve/verify/materialize/receipt/project transaction |
 | `offline` | The offline operation table and freshness reporting |
 | `receipts` | Foreign receipts, `upstream-vanished`, and explicit named removal |
+| `state_files` | Cross-process serialization and atomic writes for durable state |
 
 `rights`, `admission`, `executable_admission`, `foreign_cache`,
-`cache_transaction`, `offline`, and `receipts` live here for packaging reasons
+`cache_transaction`, `offline`, `receipts`, and `state_files` live here for packaging reasons
 only. They are **core by function** — they decide what a scope may do with an
 item and what survives a source outage — so `scripts/checks/provider_neutrality.py`
 scans them as core rather than granting them the adapter exemption.

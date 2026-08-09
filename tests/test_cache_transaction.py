@@ -26,6 +26,7 @@ from lib.providers.cache_transaction import (  # noqa: E402
     CompletenessEvidence,
     IncompleteRetrieval,
     ProjectionActivation,
+    ProjectionPlanViolated,
     TransactionAborted,
     install_foreign_item,
 )
@@ -544,6 +545,147 @@ def test_admission_binds_the_projected_bytes(tmp_path: Path) -> None:
     )
     assert outcome.receipt.executable_admission == "admitted"
     assert projector.activations == 1
+
+
+def test_the_plan_binds_the_mutation(tmp_path: Path) -> None:
+    """An activation that creates other paths than it declared is refused (wave-2 F1).
+
+    A plan that does not bind the mutation is a plan in name only: review made
+    `plan` return one path, `apply` create another, and the receipt then
+    described a path that did not exist while an unattributed file did.
+    """
+    objects, pins, receipts = _stores(tmp_path)
+    root = tmp_path / "harness"
+
+    def lying_plan(files: Mapping[str, bytes]) -> Sequence[str]:
+        return (str(root / "planned.txt"),)
+
+    def unrelated_apply(files: Mapping[str, bytes]) -> Sequence[ReceiptTarget]:
+        root.mkdir(parents=True, exist_ok=True)
+        actual = root / "actual.txt"
+        actual.write_bytes(b"unattributed")
+        return (
+            ReceiptTarget(
+                path=str(actual),
+                kind="file",
+                content_sha256=content_digest({"actual.txt": b"unattributed"}),
+            ),
+        )
+
+    with pytest.raises(ProjectionPlanViolated) as excinfo:
+        install_foreign_item(
+            _item(),
+            retrieve=_fetched,
+            object_store=objects,
+            pin_store=pins,
+            receipt_store=receipts,
+            target="project_committed",
+            activate=ProjectionActivation(plan=lying_plan, apply=unrelated_apply),
+            completeness=MANIFEST,
+            observed_at=NOW,
+        )
+    assert str(root / "actual.txt") in str(excinfo.value)
+
+    receipt = ReceiptStore(receipts.path).all()[0]
+    assert not receipt.verified
+    # What exists on disk is described by the receipt, which is the whole point.
+    assert [target.path for target in receipt.targets] == [str(root / "actual.txt")]
+    assert "projection-plan-violated" in tuple(event.event for event in receipt.history)
+
+
+def test_concurrent_receipt_writes_do_not_lose_one(tmp_path: Path) -> None:
+    """Two installs cannot erase each other's receipt (wave-2 F4).
+
+    Atomic replacement protects a reader from half-written JSON and does nothing
+    about two writers that each loaded the file before the other saved.
+    """
+    import threading
+
+    receipts = ReceiptStore(tmp_path / "receipts.json")
+    outcome, _, _, _, _ = _install(tmp_path / "first")
+    template = outcome.receipt.to_dict()
+
+    def write(index: int) -> None:
+        payload = dict(template, id=f"skill:anchor@{index:016d}")
+        receipts.put(type(outcome.receipt).from_dict(payload))
+
+    threads = [threading.Thread(target=write, args=(index,)) for index in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+
+    assert len(ReceiptStore(receipts.path).all()) == 8
+
+
+def test_a_repin_cannot_race_an_install(tmp_path: Path) -> None:
+    """The trust decision and the install it governs are one transaction (wave-2 F7)."""
+    import threading
+
+    from lib.providers.foreign_cache import TofuPinStore as PinStore
+    from lib.providers.inventory import ProviderAvailability as Availability
+    from lib.providers.offline import ResolutionEvidence
+
+    outcome, objects, pins, receipts, projector = _install(tmp_path)
+    identity = f"{PROVIDER}#kits/anchor"
+    pinned = outcome.receipt.normalized_content_digest
+    drifted = content_digest({"SKILL.md": b"substituted\n"})
+    assert isinstance(pins, PinStore)
+
+    entered = threading.Event()
+    release = threading.Event()
+    failures: list[BaseException] = []
+
+    def repin() -> None:
+        entered.wait(timeout=10)
+        try:
+            pins.repin(
+                identity,
+                drifted,
+                operator="malte",
+                acknowledged_drift=(pinned, drifted),
+                decided_at="2026-08-09T11:00:00Z",
+                availability=ResolutionEvidence(
+                    provider_identity=PROVIDER,
+                    availability=Availability(state="available", observed_at=NOW),
+                    listed_identities=frozenset({identity}),
+                    complete=True,
+                ),
+            )
+        except BaseException as exc:  # noqa: BLE001 - recorded for the assertion
+            failures.append(exc)
+
+    def slow_retrieve():
+        entered.set()
+        release.wait(timeout=10)
+        return _fetched()
+
+    worker = threading.Thread(target=repin)
+    worker.start()
+    # The install holds the identity lock, so the re-pin cannot land mid-install.
+    release.set()
+    install_foreign_item(
+        _item(),
+        retrieve=slow_retrieve,
+        object_store=objects,
+        pin_store=pins,
+        receipt_store=receipts,
+        target="project_committed",
+        activate=projector.activation,
+        completeness=MANIFEST,
+        observed_at=NOW,
+    )
+    worker.join(timeout=15)
+    assert not failures, failures
+
+    # Whatever order the lock granted, the durable pin and the installed content
+    # never disagree: either the re-pin ran first and the install drifted, or the
+    # install completed against the pin it verified.
+    final_pin = pins.pin_for(identity).normalized_content_digest
+    installed = ReceiptStore(receipts.path).all()
+    for receipt in installed:
+        if receipt.verified:
+            assert receipt.normalized_content_digest in (pinned, final_pin)
 
 
 def test_drift_on_reinstall_never_overwrites_the_pinned_object(tmp_path: Path) -> None:

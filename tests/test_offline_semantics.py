@@ -464,6 +464,18 @@ def test_an_incomplete_inventory_never_authorizes_deletion(tmp_path: Path) -> No
     with pytest.raises(DeletionAuthorityRefused, match="says nothing about another"):
         deletion_authority(verified, foreign)
 
+    # A complete listing that omits the item proves it vanished, which never
+    # grants deletion authority -- and safety must not depend on the caller
+    # having reconciled first (wave-2 F5).
+    omitting = InventoryObservation(
+        provider_identity=PROVIDER,
+        availability=AVAILABLE,
+        listed_identities=frozenset({f"{PROVIDER}#kits/other"}),
+        complete=True,
+    )
+    with pytest.raises(DeletionAuthorityRefused, match="upstream-vanished"):
+        deletion_authority(verified, omitting)
+
     conclusive = InventoryObservation(
         provider_identity=PROVIDER,
         availability=AVAILABLE,
@@ -472,6 +484,92 @@ def test_an_incomplete_inventory_never_authorizes_deletion(tmp_path: Path) -> No
     )
     assert evaluate_operation("ownership-derived-prune", conclusive).allowed
     assert deletion_authority(verified, conclusive) is verified
+
+
+def test_removal_recovers_a_planned_only_receipt(tmp_path: Path) -> None:
+    """A crash-window receipt still owns its files (wave-2 F2).
+
+    Review crashed an install after activation and before finalization, then
+    removed the resulting receipt: it recorded no targets, so deactivation was
+    skipped entirely and the projection stayed installed with nothing describing
+    it.
+    """
+    outcome, _, _, receipts, projector = _installed(tmp_path)
+    installed = projector.root / "SKILL.md"
+    assert installed.is_file()
+
+    # Reduce the receipt to the state a crash between plan and finalize leaves.
+    crashed = outcome.receipt.to_dict()
+    crashed["targets"] = []
+    crashed["verified"] = False
+    crashed["planned_targets"] = [str(installed)]
+    receipts.put(type(outcome.receipt).from_dict(crashed))
+
+    observation = InventoryObservation(
+        provider_identity=PROVIDER, availability=UNAVAILABLE, complete=False
+    )
+    with pytest.raises(ProjectionStillActive):
+        remove_named_receipt(
+            receipts,
+            outcome.receipt.id,
+            operator="malte",
+            intent="retire the anchor kit",
+            observation=observation,
+            removed_at=LATER,
+        )
+    assert installed.is_file()
+
+    removal = remove_named_receipt(
+        receipts,
+        outcome.receipt.id,
+        operator="malte",
+        intent="retire the anchor kit",
+        observation=observation,
+        removed_at=LATER,
+        deactivate=projector.deactivate,
+    )
+    assert removal.deactivated == (str(installed),)
+    assert not installed.exists()
+    assert ReceiptStore(receipts.path).get(outcome.receipt.id) is None
+
+
+def test_a_partial_deactivation_keeps_the_receipt_active(tmp_path: Path) -> None:
+    """A projection that survives deactivation keeps its recovery record (wave-2 F2)."""
+    outcome, _, _, receipts, projector = _installed(tmp_path)
+    installed = projector.root / "SKILL.md"
+    observation = InventoryObservation(
+        provider_identity=PROVIDER, availability=UNAVAILABLE, complete=False
+    )
+
+    with pytest.raises(ProjectionStillActive, match="still present after deactivation"):
+        remove_named_receipt(
+            receipts,
+            outcome.receipt.id,
+            operator="malte",
+            intent="retire the anchor kit",
+            observation=observation,
+            removed_at=LATER,
+            deactivate=lambda targets: (),
+        )
+
+    assert installed.is_file()
+    assert ReceiptStore(receipts.path).get(outcome.receipt.id) is not None
+    assert ReceiptStore(receipts.path).retired() == ()
+
+
+def test_retirement_cannot_bypass_the_removal_gates(tmp_path: Path) -> None:
+    """The archive is reachable only through an explicit removal (wave-2 F3).
+
+    The store's retire path used to be public and unguarded, so a direct call
+    archived a receipt while its projection stayed on disk.
+    """
+    outcome, _, _, receipts, projector = _installed(tmp_path)
+    assert not hasattr(receipts, "retire")
+
+    with pytest.raises(ProjectionStillActive, match="final step of an explicit"):
+        receipts._retire(outcome.receipt)
+    assert ReceiptStore(receipts.path).get(outcome.receipt.id) is not None
+    assert (projector.root / "SKILL.md").is_file()
 
 
 def test_named_removal_is_never_reached_by_ownership_derived_prune(tmp_path: Path) -> None:

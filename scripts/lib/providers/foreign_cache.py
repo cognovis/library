@@ -45,8 +45,6 @@ cache stores another.
 from __future__ import annotations
 
 import contextlib
-import errno
-import fcntl
 import hashlib
 import json
 import os
@@ -61,6 +59,13 @@ from typing import Any, Callable, Iterable, Iterator, Mapping
 from .executable_admission import content_digest, validated_digest
 from .inventory import ProviderAvailability
 from .offline import OfflineRefusal, ResolutionEvidence, require_operation
+from .state_files import (
+    atomic_write_text,
+    exclusive_lock,
+    owner_pid,
+    process_is_alive,
+    scoped_lock_path,
+)
 
 CACHE_OBJECT_SCHEMA = "cognovis.foreign-cache-object.v1"
 PIN_STORE_SCHEMA = "cognovis.trust-on-first-use-pins.v1"
@@ -73,6 +78,8 @@ DESCRIPTOR_NAME = "object.json"
 STAGING_DIRECTORY = "incoming"
 #: Where completed objects live.
 OBJECTS_DIRECTORY = "objects"
+#: Marks a damaged object a repair set aside. Discoverable on purpose.
+QUARANTINE_SUFFIX = ".quarantined-"
 #: A storage bucket segment. The bucket is derived from `library_type`, which is
 #: caller-supplied text, so it is constrained to one safe path segment. Review
 #: materialized an object outside the cache root by supplying an absolute
@@ -318,44 +325,26 @@ def _as_pairs(files: Mapping[str, bytes] | Iterable[tuple[str, bytes]]):
     return iter(files)
 
 
-def _staging_owner(name: str) -> int | None:
-    """The writing process id encoded in a staging entry name, if any."""
-    head, separator, _ = name.partition("-")
-    if not separator or not head.isdigit():
-        return None
-    return int(head)
+def normalized_member_path(path: object) -> str:
+    """One item-relative member path in exactly one spelling, or a refusal.
 
-
-def _process_is_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except OSError as exc:
-        # EPERM means the process exists and belongs to somebody else, which is
-        # still "alive". Only ESRCH proves it is gone.
-        return exc.errno != errno.ESRCH
-    return True
-
-
-@contextlib.contextmanager
-def _exclusive(path: Path) -> Iterator[None]:
-    """Serialize a read-modify-write across processes on one state file.
-
-    Atomic replacement makes the *write* indivisible; it does nothing for the
-    read that decided what to write. Review ran two first-use pins concurrently
-    and both succeeded with different digests, so the identity a source is
-    trusted at was chosen by whichever process finished last. The whole
-    compare-and-write therefore runs under one lock.
+    Two spellings of one destination are two logical members that occupy one
+    file. Review supplied `dir/file.txt` and `dir//file.txt`: both passed the
+    duplicate check, both wrote to the same place, and materialization returned
+    success while publishing an object that immediately failed verification.
+    Aliases are therefore collapsed here and then rejected as duplicates by the
+    caller, rather than discovered by the filesystem after the digest is fixed.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = path.with_name(f"{path.name}.lock")
-    handle = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
-    try:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
-    finally:
-        with contextlib.suppress(OSError):
-            fcntl.flock(handle, fcntl.LOCK_UN)
-        os.close(handle)
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("every cached file needs an item-relative path")
+    if "\\" in path:
+        raise ValueError(f"cached path must use forward separators: {path!r}")
+    if path.startswith("/"):
+        raise ValueError(f"cached path must be item-relative: {path!r}")
+    segments = [segment for segment in path.split("/") if segment not in ("", ".")]
+    if not segments or any(segment == ".." for segment in segments):
+        raise ValueError(f"cached path must be item-relative: {path!r}")
+    return "/".join(segments)
 
 
 class ObjectStore:
@@ -424,8 +413,8 @@ class ObjectStore:
             return ()
         swept: list[str] = []
         for entry in sorted(self.staging_root.iterdir()):
-            owner = _staging_owner(entry.name)
-            if owner is None or owner == os.getpid() or _process_is_alive(owner):
+            owner = owner_pid(entry.name)
+            if owner is None or owner == os.getpid() or process_is_alive(owner):
                 continue
             shutil.rmtree(entry, ignore_errors=True)
             swept.append(entry.name)
@@ -438,6 +427,9 @@ class ObjectStore:
             return ()
         found = []
         for descriptor in sorted(self.objects_root.rglob(DESCRIPTOR_NAME)):
+            if QUARANTINE_SUFFIX in descriptor.parent.name:
+                # A quarantined object is retained evidence, not a cache entry.
+                continue
             found.append(self._read_descriptor(descriptor))
         return tuple(found)
 
@@ -484,7 +476,17 @@ class ObjectStore:
         staged = self.staging_root / f"{os.getpid()}-{uuid.uuid4().hex}"
         try:
             written = self._stage(staged, files)
-            projected_digest = normalized_content_digest(written)
+            # Digest what is on disk, not what was handed in. An object is
+            # published only if the staged tree reproduces the digest recorded
+            # in its descriptor, so a write that silently lost or merged a
+            # member never becomes a visible object.
+            on_disk = self._staged_content(staged)
+            projected_digest = normalized_content_digest(on_disk)
+            if projected_digest != normalized_content_digest(written):
+                raise CacheObjectConflict(
+                    "staged content does not reproduce the offered members; the "
+                    "object was not published"
+                )
             descriptor = CacheObject(
                 key=key,
                 path=self.path_for(key),
@@ -510,21 +512,29 @@ class ObjectStore:
         content_root.mkdir(parents=True)
         written: dict[str, bytes] = {}
         for path, content in _as_pairs(files):
-            if not isinstance(path, str) or not path.strip():
-                raise ValueError("every cached file needs an item-relative path")
-            if path.startswith("/") or ".." in path.split("/"):
-                raise ValueError(f"cached path must be item-relative: {path!r}")
-            if path in written:
-                raise ValueError(f"duplicate cached path: {path!r}")
+            member = normalized_member_path(path)
+            if member in written:
+                raise ValueError(
+                    f"duplicate cached path: {path!r} resolves to {member!r}, which "
+                    "another member already occupies"
+                )
             if not isinstance(content, (bytes, bytearray)):
                 raise ValueError(f"content for {path!r} must be bytes")
-            destination = content_root / path
+            destination = content_root / member
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(bytes(content))
-            written[path] = bytes(content)
+            written[member] = bytes(content)
         if not written:
             raise ValueError("a cache object holds at least one file")
         return written
+
+    def _staged_content(self, staged: Path) -> dict[str, bytes]:
+        content_root = staged / CONTENT_DIRECTORY
+        return {
+            str(path.relative_to(content_root)): path.read_bytes()
+            for path in sorted(content_root.rglob("*"))
+            if path.is_file()
+        }
 
     def _publish(
         self, staged: Path, descriptor: CacheObject, written: Mapping[str, bytes]
@@ -565,14 +575,21 @@ class ObjectStore:
         not reachable from `materialize`: silent self-healing is
         indistinguishable from silent substitution at the moment it matters.
 
-        The damaged object is moved aside before the replacement is moved in, so
-        a crash mid-repair leaves the damaged copy under a `.corrupt-` suffix
-        rather than leaving nothing at all.
+        The swap is the dangerous part and it is protected on both sides. The
+        damaged object is renamed into a discoverable quarantine, the
+        replacement is renamed into its place, and a failure of that second
+        rename rolls the quarantine back. Review injected exactly that failure
+        against the earlier version and left the canonical object absent with
+        the verified replacement already deleted, recoverable through no API at
+        all. If the rollback also fails, both paths are named in the error and
+        `quarantined` lists what remains.
 
         Raises:
             ValueError: when the offered bytes do not reproduce the stored
                 object's recorded digest, or when no operator is named.
             CacheObjectMissing: when there is nothing to repair.
+            CacheObjectCorrupt: when the swap failed and could not be rolled
+                back; the message names every path that still holds content.
         """
         if not isinstance(operator, str) or not operator.strip():
             raise ValueError("a cache repair records the operator who authorized it")
@@ -585,7 +602,10 @@ class ObjectStore:
                 "restores the recorded object, it does not redefine it"
             )
         staged = self.staging_root / f"{os.getpid()}-{uuid.uuid4().hex}"
-        quarantine = stored.path.with_name(f"{stored.path.name}.corrupt-{uuid.uuid4().hex}")
+        quarantine = stored.path.with_name(
+            f"{stored.path.name}{QUARANTINE_SUFFIX}{uuid.uuid4().hex}"
+        )
+        published = False
         try:
             written = self._stage(staged, files)
             descriptor = CacheObject(
@@ -600,12 +620,41 @@ class ObjectStore:
                 encoding="utf-8",
             )
             os.rename(stored.path, quarantine)
-            os.rename(staged, stored.path)
+            try:
+                os.rename(staged, stored.path)
+                published = True
+            except OSError as exc:
+                try:
+                    os.rename(quarantine, stored.path)
+                except OSError:
+                    raise CacheObjectCorrupt(
+                        key.digest(),
+                        "the repair swap failed and could not be rolled back; the "
+                        f"damaged object is at {quarantine} and the verified "
+                        f"replacement is at {staged}",
+                    ) from exc
+                raise
         finally:
-            shutil.rmtree(staged, ignore_errors=True)
+            if not published:
+                shutil.rmtree(staged, ignore_errors=True)
             self._prune_empty_staging_root()
         shutil.rmtree(quarantine, ignore_errors=True)
         return descriptor
+
+    def quarantined(self) -> tuple[Path, ...]:
+        """Damaged objects a repair set aside, in case one has to be inspected.
+
+        A quarantine that nothing can list is a deletion with extra steps.
+        """
+        if not self.objects_root.is_dir():
+            return ()
+        return tuple(
+            sorted(
+                path
+                for path in self.objects_root.rglob(f"*{QUARANTINE_SUFFIX}*")
+                if path.is_dir()
+            )
+        )
 
     def _prune_empty_staging_root(self) -> None:
         try:
@@ -783,6 +832,21 @@ class TofuPinStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
 
+    @contextlib.contextmanager
+    def identity_lock(self, qualified_identity: str) -> Iterator[None]:
+        """Serialize everything one identity's trust decision governs.
+
+        Locking only the compare-and-write serializes the pin file and nothing
+        else. Review paused an install after it had verified the old pin,
+        re-pinned the identity to different bytes, and let the install finish:
+        the durable pin and the installed content described different content,
+        which is the substitution the pin exists to make impossible. An install
+        therefore holds this lock across verification, materialization, the
+        receipt, and activation, and a re-pin waits for it.
+        """
+        with exclusive_lock(scoped_lock_path(self.path, qualified_identity)):
+            yield
+
     def _load(self) -> dict[str, TofuPin]:
         if not self.path.is_file():
             return {}
@@ -799,13 +863,7 @@ class TofuPinStore:
             "schema": PIN_STORE_SCHEMA,
             "pins": {identity: pin.to_dict() for identity, pin in sorted(pins.items())},
         }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        staged = self.path.with_name(f"{self.path.name}.{uuid.uuid4().hex}.staged")
-        try:
-            staged.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            os.replace(staged, self.path)
-        finally:
-            staged.unlink(missing_ok=True)
+        atomic_write_text(self.path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
     def pins(self) -> tuple[TofuPin, ...]:
         return tuple(self._load().values())
@@ -824,7 +882,7 @@ class TofuPinStore:
                 a failed comparison must hit the same refusal.
         """
         validated_digest(digest)
-        with _exclusive(self.path):
+        with exclusive_lock(self.path):
             pins = self._load()
             existing = pins.get(qualified_identity)
             if existing is not None:
@@ -871,7 +929,7 @@ class TofuPinStore:
             The pin and whether this call created it.
         """
         validated_digest(digest)
-        with _exclusive(self.path):
+        with exclusive_lock(self.path):
             existing = self._load().get(qualified_identity)
             if existing is None:
                 recorded = self._pin_locked(
@@ -917,19 +975,38 @@ class TofuPinStore:
             acknowledged_drift: The exact `(pinned, observed)` pair the operator
                 was shown. A mismatch refuses, so an acknowledgement of one drift
                 cannot authorize a different substitution.
-            availability: The source observation. A re-pin needs a reachable
-                source; the offline table refuses otherwise.
+            availability: Source-scoped resolution evidence **for this
+                identity's own source**. Review re-pinned one source's item on
+                another source's healthy resolution, so a reachable source could
+                authorize substitution for an unreachable one.
 
         Raises:
-            OfflineRefusal: when the source is not reachable.
+            OfflineRefusal: when the source is not reachable, or when the
+                evidence describes a different source.
             ValueError: when the acknowledgement does not match the recorded pin
                 and the offered digest, or when nothing is pinned.
         """
         require_operation("re-pin", availability)
+        owner = qualified_identity.partition("#")[0]
+        if not isinstance(availability, ResolutionEvidence):
+            raise OfflineRefusal(
+                "re-pin",
+                "would-substitute-pinned-content",
+                "a re-pin needs source-scoped resolution evidence for this "
+                "identity, not transport reachability alone",
+            )
+        if availability.provider_identity != owner:
+            raise OfflineRefusal(
+                "re-pin",
+                "would-substitute-pinned-content",
+                f"{qualified_identity} belongs to {owner!r} but the evidence "
+                f"describes {availability.provider_identity!r}; one source's "
+                "resolution never authorizes substitution for another's",
+            )
         validated_digest(digest)
         if not isinstance(operator, str) or not operator.strip():
             raise ValueError("a re-pin records the operator who decided it")
-        with _exclusive(self.path):
+        with self.identity_lock(qualified_identity), exclusive_lock(self.path):
             pins = self._load()
             existing = pins.get(qualified_identity)
             if existing is None:

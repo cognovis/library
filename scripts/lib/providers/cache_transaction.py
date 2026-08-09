@@ -124,6 +124,13 @@ class ProjectionActivation:
     `plan` answers "which paths am I about to touch" without touching them;
     `apply` performs the mutation and returns the targets with their
     install-time proofs. Both take the same projected content.
+
+    A plan that does not bind the mutation is a plan in name only: review made
+    `plan` return one path, `apply` create another, and failed the finalizing
+    write. The receipt then described a path that did not exist while an
+    unattributed file did. The transaction therefore checks that the applied
+    targets are exactly the planned paths and records the actual ones before it
+    refuses.
     """
 
     plan: Callable[[Mapping[str, bytes]], Sequence[str]]
@@ -132,6 +139,26 @@ class ProjectionActivation:
     def __post_init__(self) -> None:
         if not callable(self.plan) or not callable(self.apply):
             raise ValueError("a projection activation needs both a plan and an apply")
+
+
+class ProjectionPlanViolated(TransactionAborted):
+    """The activated targets are not the targets the receipt declared.
+
+    Raised only after the receipt has been updated to describe what actually
+    exists, so the divergence is recorded before it is reported. An unrecorded
+    installed path is the failure; an honest record plus a loud refusal is the
+    recovery.
+    """
+
+    def __init__(self, planned: Sequence[str], produced: Sequence[str]) -> None:
+        super().__init__(
+            "project",
+            "the activation did not create the paths it declared. Declared "
+            f"{sorted(planned)}; created {sorted(produced)}. The receipt now records "
+            "what actually exists, and the projection is not accepted.",
+        )
+        self.planned = tuple(planned)
+        self.produced = tuple(produced)
 
 
 @dataclass(frozen=True)
@@ -373,6 +400,48 @@ def install_foreign_item(
     events: list[str] = []
     identity = item.qualified_identity()
 
+    # The trust decision, the materialization, the receipt, and the activation
+    # are one transaction for this identity. Serializing only the pin write left
+    # a window review walked through: an install verified the old pin, a re-pin
+    # moved the identity to different bytes, and the install then activated the
+    # old ones under the new pin.
+    with pin_store.identity_lock(identity):
+        return _install_locked(
+            item,
+            retrieve=retrieve,
+            object_store=object_store,
+            pin_store=pin_store,
+            receipt_store=receipt_store,
+            target=target,
+            activate=activate,
+            observed_at=observed_at,
+            completeness=completeness,
+            transformation=transformation,
+            ledger=ledger,
+            present=present,
+            events=events,
+            identity=identity,
+        )
+
+
+def _install_locked(
+    item: NormalizedItem,
+    *,
+    retrieve: Callable[[], FetchedItem],
+    object_store: ObjectStore,
+    pin_store: TofuPinStore,
+    receipt_store: ReceiptStore,
+    target: str,
+    activate: ProjectionActivation,
+    observed_at: str,
+    completeness: CompletenessEvidence,
+    transformation: Transformation,
+    ledger: ExecutableAdmissionLedger | None,
+    present: Callable[[Any], Any] | None,
+    events: list[str],
+    identity: str,
+) -> InstallOutcome:
+    """The ordered transaction, under this identity's serialization lock."""
     # 1. Retrieve complete content, and check it against the stated evidence.
     fetched = _retrieve(retrieve, item)
     upstream_files = _fetched_files(fetched)
@@ -449,6 +518,13 @@ def install_foreign_item(
             ),
         ),
     )
+    if item.upstream_revision is None:
+        # Re-verify immediately before the receipt becomes durable. The identity
+        # lock already serializes a competing re-pin, and this is the second
+        # half of the same guarantee: what the receipt records is what the pin
+        # says at the moment it is written, not what it said when we fetched.
+        pin_store.verify(identity, digest)
+
     try:
         receipt_store.put(receipt)
         durable = receipt_store.get(receipt.id)
@@ -498,21 +574,34 @@ def install_foreign_item(
         )
         produced = tuple(activate.apply(projected_files))
         created.extend(produced)
+        produced_paths = tuple(entry.path for entry in produced)
+        divergent = set(produced_paths) != set(planned)
         receipt_store.put(
             planned_receipt.with_event(
                 ReceiptEvent(
-                    event="projection-activated",
+                    event="projection-plan-violated" if divergent else "projection-activated",
                     recorded_at=observed_at,
                     detail=(
-                        f"{len(produced)} target(s) activated for {target} after the "
-                        "cache object, the receipt, and the declared target plan were "
-                        "durable"
+                        (
+                            "the activation created paths other than the ones it "
+                            f"declared; recording {len(produced)} actual target(s) so "
+                            "nothing installed is unattributable"
+                        )
+                        if divergent
+                        else (
+                            f"{len(produced)} target(s) activated for {target} after "
+                            "the cache object, the receipt, and the declared target "
+                            "plan were durable"
+                        )
                     ),
                 ),
                 targets=[entry.to_dict() for entry in produced],
-                verified=bool(produced),
+                planned_targets=sorted({*planned, *produced_paths}),
+                verified=bool(produced) and not divergent,
             )
         )
+        if divergent:
+            raise ProjectionPlanViolated(planned, produced_paths)
         return produced
 
     outcome = project(decision, _mutate, present=present)
@@ -587,14 +676,24 @@ def reinstall_from_cache(
         )
     )
     targets = tuple(activate.apply(content))
+    produced_paths = tuple(entry.path for entry in targets)
+    divergent = set(produced_paths) != set(planned)
     updated = receipt_store.put(
         planned_receipt.with_event(
             ReceiptEvent(
-                event="reinstalled-from-cache",
+                event="projection-plan-violated" if divergent else "reinstalled-from-cache",
                 recorded_at=observed_at,
                 detail=(
-                    f"reinstalled {len(targets)} target(s) from verified cache object "
-                    f"{key.digest()}; no remote claim was made"
+                    (
+                        "the repair created paths other than the ones it declared; "
+                        f"recording {len(targets)} actual target(s) so nothing "
+                        "installed is unattributable"
+                    )
+                    if divergent
+                    else (
+                        f"reinstalled {len(targets)} target(s) from verified cache "
+                        f"object {key.digest()}; no remote claim was made"
+                    )
                 ),
                 provider_state=(
                     f"source state {observed_availability.state!r} at "
@@ -602,10 +701,13 @@ def reinstall_from_cache(
                 ),
             ),
             targets=[entry.to_dict() for entry in targets],
-            verified=bool(targets),
+            planned_targets=sorted({*planned, *produced_paths}),
+            verified=bool(targets) and not divergent,
             provider_availability=observed_availability.to_dict(),
         )
     )
+    if divergent:
+        raise ProjectionPlanViolated(planned, produced_paths)
     availability = observed_availability
     return ReinstallOutcome(
         receipt=updated,
@@ -657,6 +759,7 @@ __all__ = [
     "IncompleteRetrieval",
     "InstallOutcome",
     "ProjectionActivation",
+    "ProjectionPlanViolated",
     "ReinstallOutcome",
     "StatusReport",
     "TransactionAborted",
