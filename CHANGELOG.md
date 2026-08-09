@@ -26,6 +26,23 @@
 
 ### Fixed
 
+- *(clc-mfaz, cdx/cld)* A fresh bead worktree now carries the gitignored harness
+  overlays of its main checkout. A linked worktree checks out tracked content
+  only, so `.agents/`, `.claude/skills/`, and `.env` were missing and hygiene
+  review, standards resolution, and session-close gates behaved differently from
+  the main checkout. Both launchers now bootstrap the same overlay set through
+  one resolver, `scripts/worktree-overlays.py`: `cdx` links it after its own
+  `git worktree add`, while `cld` resolves it from the Git index up front and
+  hands it to Claude Code's native `worktree.symlinkDirectories`, which links it
+  during native `--worktree` creation. A source that does not resolve — missing
+  or a dangling symlink — is skipped rather than linked, a path the worktree
+  already owns is never replaced, and a partly tracked overlay root is descended
+  into so only its missing children are linked. Resolution stops at a symlinked
+  worktree path and linking refuses any destination whose nearest existing
+  ancestor resolves outside the worktree, so a symlinked overlay root cannot
+  place links outside it. `cld` leaves a caller-supplied `--settings` untouched,
+  since `claude` honors only the last one. `CDX_WORKTREE_OVERLAYS` and
+  `CLD_WORKTREE_OVERLAYS` override the set or disable the bootstrap.
 - *(CL-hyp9, Workspace)* Workspace status, sync, and removal now fall back to the
   Library tool's consolidated catalog when a consuming catalog repository cannot
   resolve its locked Workspace roots. The consumer remains the project target;
