@@ -74,7 +74,9 @@ def _validate_rights(rights: Any) -> None:
         return
     if not isinstance(rights, Mapping):
         raise RegistrationError("rights must be a mapping of grants")
-    unknown = sorted(set(rights) - set(RIGHTS_GRANTS) - {"evidence_source"})
+    unknown = sorted(
+        set(rights) - set(RIGHTS_GRANTS) - {"evidence_source", "grant_evidence"}
+    )
     if unknown:
         raise RegistrationError(f"unknown rights fields: {unknown}")
     for grant in RIGHTS_GRANTS:
@@ -83,21 +85,43 @@ def _validate_rights(rights: Any) -> None:
                 f"rights.{grant} must be one of {list(RIGHTS_STATES)}, "
                 f"got {rights[grant]!r}"
             )
+
+    shared = rights.get("evidence_source")
+    if shared is not None and (not isinstance(shared, str) or not shared.strip()):
+        raise RegistrationError("rights.evidence_source must be text")
+
+    # Per-grant evidence is the representation ADR-0011 actually describes:
+    # four grants, each with a named source. Registration accepting only the
+    # shared fallback would have refused the very entry shape the reference
+    # provider needs -- a granted fetch on a subscriber endpoint beside three
+    # grants resting on nothing.
+    grant_evidence = rights.get("grant_evidence")
+    if grant_evidence is not None and not isinstance(grant_evidence, Mapping):
+        raise RegistrationError("rights.grant_evidence must be a mapping of grants")
+    evidence_map: Mapping[str, Any] = grant_evidence or {}
+    unknown_evidence = sorted(set(evidence_map) - set(RIGHTS_GRANTS))
+    if unknown_evidence:
+        raise RegistrationError(f"unknown rights evidence grants: {unknown_evidence}")
+    for grant, source in evidence_map.items():
+        if not isinstance(source, str) or not source.strip():
+            raise RegistrationError(f"rights.grant_evidence[{grant!r}] must be text")
+
     # ADR-0011 records each grant "with a named evidence source" (CL-n7ex). A
     # catalog entry that resolves a grant without one would construct a `Rights`
     # value the gate refuses, so it is refused here instead -- at registration,
     # where the person who wrote the entry can still fix it.
-    if not str(rights.get("evidence_source") or "").strip():
-        resolved = sorted(
-            grant
-            for grant in RIGHTS_GRANTS
-            if rights.get(grant, "unknown") != "unknown"
+    unevidenced = sorted(
+        grant
+        for grant in RIGHTS_GRANTS
+        if rights.get(grant, "unknown") != "unknown"
+        and not str(evidence_map.get(grant) or "").strip()
+        and not str(shared or "").strip()
+    )
+    if unevidenced:
+        raise RegistrationError(
+            f"rights {unevidenced} are resolved but no evidence source is recorded; "
+            "record 'unknown' when there is no named source"
         )
-        if resolved:
-            raise RegistrationError(
-                f"rights {resolved} are resolved but no evidence_source is recorded; "
-                "record 'unknown' when there is no named source"
-            )
 
 
 def validate_provider_entry(entry: Mapping[str, Any]) -> str:

@@ -38,14 +38,18 @@ interchangeable until the "Cleared by" column is read:
 | install granted, redistribution not granted | `redistribution-blocked` | Literally "fetch allowed, redistribution not", and cleared by "a rights change, or choosing a machine-local target" |
 
 **Display before mutation is mechanical here, not a convention.** An
-`OperatorOptIn` carries the digest of the exact rights statement it
-acknowledges, and that statement names the **subject** -- the qualified identity
-of the item being projected -- alongside the target and every grant. `project`
-refuses an opt-in whose digest does not match, so an opt-in collected against
-some other item, some other target, or an older rights state cannot authorize
-this one. The alternative -- a boolean flag -- would let a caller pass `True`
-without ever rendering anything, which is the failure this criterion exists to
-prevent.
+opt-in-required act is authorized only through a `present` callback: `project`
+renders the statement, issues a single-use `RightsPresentation`, hands it to the
+presenter, and accepts only an acknowledgement carrying that presentation's
+token and digest. An acknowledgement therefore cannot exist unless this module
+rendered the statement first. Two weaker designs were tried and both were broken
+by review: a boolean flag can be passed without rendering anything, and a
+digest-bearing value can be self-minted from a publicly computable digest with
+nothing ever shown.
+
+The statement names the **subject** -- the qualified identity of the item --
+alongside the target and every grant, so an acknowledgement of one item never
+carries to another.
 
 The subject is load-bearing and was added after review. Rights are recorded per
 provider, so every item from one provider shares one rights record; without the
@@ -74,6 +78,7 @@ the catalog's business.
 from __future__ import annotations
 
 import hashlib
+import secrets
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
@@ -191,20 +196,52 @@ _CONSEQUENCE = {
 
 
 @dataclass(frozen=True)
+class RightsPresentation:
+    """A rendered rights statement, issued by this module and good once.
+
+    The `token` is what an acknowledgement must carry. It cannot be guessed and
+    it cannot be obtained without this module having rendered `statement`, which
+    is what turns "displayed before mutation" from a convention into a fact.
+    Review demonstrated the weaker design: an acknowledgement built from a
+    publicly computable digest authorized a mutation with nothing ever shown.
+    """
+
+    statement: str
+    display_digest: str
+    token: str
+
+    def acknowledge(self, *, operator: str, acknowledged_at: str) -> "OperatorOptIn":
+        """The operator's acceptance of exactly this presented statement."""
+        return OperatorOptIn(
+            operator=operator,
+            acknowledged_display_digest=self.display_digest,
+            acknowledged_at=acknowledged_at,
+            presentation_token=self.token,
+        )
+
+
+@dataclass(frozen=True)
 class OperatorOptIn:
     """An operator's explicit acceptance of a displayed rights state.
 
     `acknowledged_display_digest` is the digest of the statement the operator
-    was shown. It is what makes "displayed before mutation" checkable after the
-    fact instead of a claim in a docstring.
+    was shown, and `presentation_token` proves this module is what showed it.
+    Together they make "displayed before mutation" checkable after the fact
+    instead of a claim in a docstring.
     """
 
     operator: str
     acknowledged_display_digest: str
     acknowledged_at: str
+    presentation_token: str
 
     def __post_init__(self) -> None:
-        for name in ("operator", "acknowledged_display_digest", "acknowledged_at"):
+        for name in (
+            "operator",
+            "acknowledged_display_digest",
+            "acknowledged_at",
+            "presentation_token",
+        ):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"OperatorOptIn.{name} is required")
@@ -357,6 +394,19 @@ _REDERIVE: Mapping[str, Callable[[Rights, str, str], RightsDecision]] = {
 }
 
 
+def _present(decision: RightsDecision, statement: str) -> RightsPresentation:
+    """Issue a single-use presentation of one decision's statement.
+
+    The token is fresh per call, so an acknowledgement of one presentation never
+    authorizes a later act -- not even the same act on the same item.
+    """
+    return RightsPresentation(
+        statement=statement,
+        display_digest=decision.display_digest(),
+        token=secrets.token_hex(16),
+    )
+
+
 def rederive(decision: RightsDecision) -> RightsDecision:
     """Recompute a decision from the rights it claims to rest on.
 
@@ -379,8 +429,7 @@ def project(
     decision: RightsDecision,
     mutate: Callable[[], Any],
     *,
-    opt_in: OperatorOptIn | None = None,
-    present: Callable[[str], OperatorOptIn] | None = None,
+    present: Callable[[RightsPresentation], OperatorOptIn] | None = None,
 ) -> ProjectionOutcome:
     """Perform one gated act under a composed decision, or refuse it.
 
@@ -394,20 +443,20 @@ def project(
             `evaluate_cache_retention`. Its `state` is not trusted; the rights
             it carries are re-composed here.
         mutate: The callable that writes content. Never called on a refusal.
-        present: Renders the rights statement to the operator and returns their
-            acknowledgement. This is the path that makes "displayed before
-            mutation" true by construction rather than by convention.
-        opt_in: A previously collected acknowledgement, for a non-interactive
-            flow. It must match this decision's statement digest, which binds it
-            to this subject, this target, and this rights state.
+        present: Receives the rendered `RightsPresentation` and returns the
+            operator's acknowledgement of it. This is the **only** way to
+            authorize an opt-in-required act. A non-interactive policy flow
+            supplies a presenter that records the statement and acknowledges it;
+            it still cannot acknowledge something it was not given.
 
     Returns:
         The outcome, carrying the displayed statement and the ordered events.
 
     Raises:
         ProjectionRefused: when the decision does not match the recorded rights,
-            when it is blocked, when a required acknowledgement is absent, or
-            when the acknowledgement is for a different statement.
+            when it is blocked, when no presenter is supplied for an
+            opt-in-required act, or when the acknowledgement does not match the
+            statement that was presented.
     """
     recorded = rederive(decision)
     if recorded != decision:
@@ -433,19 +482,26 @@ def project(
         )
 
     if recorded.state == OPT_IN_REQUIRED:
-        if present is not None:
-            opt_in = present(display)
-            events.append("rights-presented")
-        if opt_in is None:
+        if present is None:
             raise ProjectionRefused(
                 f"{recorded.act} requires an explicit operator opt-in: "
                 f"{recorded.governing_grant}={recorded.governing_state} "
-                f"(evidence source: {recorded.evidence_source or 'none recorded'})",
+                f"(evidence source: {recorded.evidence_source or 'none recorded'}). "
+                "Supply a presenter; an acknowledgement cannot exist without one.",
                 recorded,
             )
+        presentation = _present(recorded, display)
+        events.append("rights-presented")
+        opt_in = present(presentation)
         if not isinstance(opt_in, OperatorOptIn):
             raise ProjectionRefused(
                 f"{recorded.act}: an acknowledgement must be an OperatorOptIn",
+                recorded,
+            )
+        if opt_in.presentation_token != presentation.token:
+            raise ProjectionRefused(
+                f"{recorded.act}: the acknowledgement does not belong to the "
+                "statement that was just presented, so it does not authorize it",
                 recorded,
             )
         if opt_in.acknowledged_display_digest != recorded.display_digest():

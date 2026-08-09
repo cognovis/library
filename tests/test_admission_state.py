@@ -87,28 +87,50 @@ def test_block_reason_vocabulary() -> None:
 
     reason = BlockReason(
         reason="license-unknown",
-        evidence="install_rights=unknown; evidence source: none recorded",
+        evidence="install_rights resolves to unknown for this item",
+        source="the rights recorded for this provider in the catalog",
     )
     assert reason.reason == "license-unknown"
     assert reason.evidence
+    assert reason.source
 
     with pytest.raises(ValueError):
-        BlockReason(reason="looks-fishy", evidence="a reviewer disliked it")
-    with pytest.raises(ValueError):
-        BlockReason(reason="license-unknown", evidence="")
-    with pytest.raises(ValueError):
-        BlockReason(reason="license-unknown", evidence="   ")
-    # A placeholder satisfies "non-empty" and none of the contract's purpose.
-    with pytest.raises(ValueError):
-        BlockReason(reason="license-unknown", evidence="e")
-    with pytest.raises(ValueError):
-        BlockReason(reason="license-unknown", evidence="unavailable")
+        BlockReason(
+            reason="looks-fishy",
+            evidence="a reviewer disliked it",
+            source="a reviewer's opinion, recorded",
+        )
+    # Evidence is two required halves: what was observed, and where from.
+    for evidence, source in (
+        ("", "the catalog rights record"),
+        ("   ", "the catalog rights record"),
+        ("e", "the catalog rights record"),
+        ("unavailable", "the catalog rights record"),
+        # "details unavailable" passed every length and shape check while naming
+        # nothing; it is still refused, and now it also cannot omit its source.
+        ("details unavailable", ""),
+        ("install_rights resolves to unknown", "unknown"),
+        # Text that admits it says nothing, in either half.
+        ("details unavailable", "details unavailable"),
+        ("details unavailable", "the catalog rights record"),
+        ("install_rights resolves to unknown", "not recorded"),
+        # A source that merely repeats the observation names no source at all.
+        ("install_rights resolves to unknown", "install_rights resolves to unknown"),
+    ):
+        with pytest.raises(ValueError):
+            BlockReason(reason="license-unknown", evidence=evidence, source=source)
 
     # The normalized item carries the same closed vocabulary.
     with pytest.raises(ValueError):
         _item(
             admission_state="blocked",
-            block_reasons=(BlockReason(reason="nope", evidence="named source, 2026"),),
+            block_reasons=(
+                BlockReason(
+                    reason="nope",
+                    evidence="something looked wrong here",
+                    source="a named source, observed 2026",
+                ),
+            ),
         )
     with pytest.raises(ValueError):
         _item(admission_state="blocked", block_reasons=())
@@ -130,9 +152,10 @@ def test_block_reason_vocabulary() -> None:
     assert blocked.admission_state == "blocked"
     assert [entry.reason for entry in blocked.block_reasons] == ["license-unknown"]
     assert all(entry.reason in BLOCK_REASONS for entry in blocked.block_reasons)
-    assert "no published installation grant" in blocked.block_reasons[0].evidence
+    assert "no published installation grant" in blocked.block_reasons[0].source
     assert "install_rights" in blocked.block_reasons[0].evidence
     assert "unknown" in blocked.block_reasons[0].evidence
+    assert "install_rights" in blocked.block_reasons[0].describe()
 
 
 def test_block_reasons_serialize_with_their_evidence() -> None:
@@ -141,7 +164,8 @@ def test_block_reasons_serialize_with_their_evidence() -> None:
         block_reasons=(
             BlockReason(
                 reason="license-unknown",
-                evidence="install_rights=unknown; evidence source: none recorded",
+                evidence="install_rights resolves to unknown for this item",
+                source="no published installation grant was located",
             ),
         ),
     )
@@ -149,7 +173,8 @@ def test_block_reasons_serialize_with_their_evidence() -> None:
     assert payload["block_reasons"] == [
         {
             "reason": "license-unknown",
-            "evidence": "install_rights=unknown; evidence source: none recorded",
+            "evidence": "install_rights resolves to unknown for this item",
+            "source": "no published installation grant was located",
             "detail": None,
         }
     ]
@@ -160,6 +185,10 @@ def test_block_reasons_serialize_with_their_evidence() -> None:
         NormalizedItem.from_dict({**payload, "block_reasons": ["license-unknown"]})
     with pytest.raises(ValueError):
         BlockReason.from_dict({"reason": "license-unknown"})
+    with pytest.raises(ValueError):
+        BlockReason.from_dict(
+            {"reason": "license-unknown", "evidence": "install_rights is unknown here"}
+        )
 
 
 def test_a_fully_granted_item_is_installable_with_no_reasons() -> None:
@@ -292,6 +321,7 @@ def test_a_refused_executable_records_untrusted_source() -> None:
     assert decision.executable_admission == "refused"
     assert decision.reason_values() == ("untrusted-source",)
     assert "refused" in decision.block_reasons[0].evidence
+    assert "ledger" in decision.block_reasons[0].source
 
 
 def test_redistribution_block_leaves_the_machine_local_path_open() -> None:
@@ -310,7 +340,8 @@ def test_redistribution_block_leaves_the_machine_local_path_open() -> None:
 
     assert decision.admission_state == "blocked"
     assert [entry.reason for entry in decision.block_reasons] == ["redistribution-blocked"]
-    assert "no grant located 2026-08-08" in decision.block_reasons[0].evidence
+    assert "no grant located 2026-08-08" in decision.block_reasons[0].source
+    assert "redistribution_rights" in decision.block_reasons[0].evidence
     assert decision.projection_eligibility == {
         "project_committed": "blocked",
         "machine_local": "operator-opt-in-required",
@@ -357,6 +388,7 @@ def test_evaluate_inventory_applies_decisions_to_the_items() -> None:
     assert report.decisions[f"{PROVIDER}#kits/restricted"].admission_state == "blocked"
     assert report.blocked_identities() == (f"{PROVIDER}#kits/restricted",)
     assert report.reasons_for(f"{PROVIDER}#kits/restricted")[0].evidence
+    assert report.reasons_for(f"{PROVIDER}#kits/restricted")[0].source
 
 
 def test_evaluation_does_not_mutate_the_discovered_inventory() -> None:
@@ -398,4 +430,15 @@ def test_gate_modules_carry_no_provider_knowledge() -> None:
         "    return provider_identity == 'executive' + '-circle'\n"
     )
     kinds = {finding.kind for finding in scan_source("scripts/lib/providers/rights.py", poisoned)}
+    assert "provider-name" in kinds
+
+    # The same trick in f-string syntax survived the first repair.
+    fstring_poisoned = (
+        "def eligible(provider_identity):\n"
+        "    return provider_identity == f\"{'executive'}{'-circle'}\"\n"
+    )
+    kinds = {
+        finding.kind
+        for finding in scan_source("scripts/lib/providers/rights.py", fstring_poisoned)
+    }
     assert "provider-name" in kinds

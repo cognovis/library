@@ -340,6 +340,98 @@ def test_inert_does_not_inherit() -> None:
     assert ledger.record_for(inert_id, inert_digest) is None
 
 
+def test_a_forged_record_is_not_an_admission() -> None:
+    """The ledger holds validated records, not anything shaped like one."""
+
+    class ForgedRecord:
+        qualified_identity = f"{PROVIDER}#flows/deploy"
+        content_digest = content_digest({"WORKFLOW.md": b"deploy\n"})
+        state = "admitted"
+
+    with pytest.raises(TypeError):
+        ExecutableAdmissionLedger([ForgedRecord()])
+
+    ledger = ExecutableAdmissionLedger()
+    with pytest.raises(TypeError):
+        ledger._store(ForgedRecord())  # noqa: SLF001 - the storage boundary is the point
+
+
+def test_a_blank_permission_surface_entry_is_not_a_declaration() -> None:
+    """ADR-0011 requires the permission surface the artifact requests."""
+    ledger = ExecutableAdmissionLedger()
+    identity = f"{PROVIDER}#flows/deploy"
+    digest = content_digest({"WORKFLOW.md": b"deploy\n"})
+
+    with pytest.raises(ValueError):
+        ledger.admit(
+            identity,
+            digest,
+            library_type="workflow",
+            reviewer="malte.sussdorff@cognovis.de",
+            permission_surface=("",),
+            decided_at="2026-08-09T09:00:00Z",
+            evidence="reviewed the workflow body",
+        )
+
+    # An artifact that requests nothing records exactly that.
+    record = ledger.admit(
+        identity,
+        digest,
+        library_type="workflow",
+        reviewer="malte.sussdorff@cognovis.de",
+        permission_surface=(),
+        decided_at="2026-08-09T09:00:00Z",
+        evidence="reviewed the workflow body; it requests no permissions",
+    )
+    assert record.permission_surface == ()
+
+
+def test_content_is_frozen_before_it_is_digested() -> None:
+    """A mapping that changes its answer cannot slip past the digest.
+
+    This is the time-of-check-to-time-of-use hole: hash the reviewed bytes, then
+    hand the caller's live object to the mutation and let it serve something
+    else.
+    """
+
+    class ShiftingContent(dict):
+        def __init__(self) -> None:
+            super().__init__({"WORKFLOW.md": b"safe\n"})
+            self.reads = 0
+
+        def __getitem__(self, key: str) -> bytes:
+            self.reads += 1
+            return b"safe\n" if self.reads == 1 else b"unreviewed payload\n"
+
+    ledger = ExecutableAdmissionLedger()
+    identity = f"{PROVIDER}#flows/deploy"
+    _admit(ledger, identity, content_digest({"WORKFLOW.md": b"safe\n"}))
+
+    shifting = ShiftingContent()
+    written: list[bytes] = []
+
+    def mutate(verified):
+        written.append(verified[identity]["WORKFLOW.md"])
+
+    gate_resolution([_item("flows/deploy", "workflow")], ledger, {identity: shifting}, mutate=mutate)
+
+    assert written == [b"safe\n"], "the mutation receives the bytes that were digested"
+
+    # The snapshot handed to the mutation is not writable either.
+    def tamper(verified):
+        with pytest.raises(TypeError):
+            verified[identity] = {"WORKFLOW.md": b"swapped\n"}
+        with pytest.raises(TypeError):
+            verified[identity]["WORKFLOW.md"] = b"swapped\n"
+
+    gate_resolution(
+        [_item("flows/deploy", "workflow")],
+        ledger,
+        {identity: {"WORKFLOW.md": b"safe\n"}},
+        mutate=tamper,
+    )
+
+
 def test_inert_members_never_block_a_resolution() -> None:
     """Inert content is neither trusted by association nor gated by it."""
     ledger = ExecutableAdmissionLedger()

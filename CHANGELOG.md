@@ -49,7 +49,10 @@
   state requires an explicit opt-in bound to the digest of the rights statement
   the operator was shown — a statement that names the item, so one
   acknowledgement cannot travel to another item sharing the same provider rights
-  record — so "displayed before mutation" is checkable rather than promised. A
+  record. The acknowledgement is issued rather than asserted: the gate renders
+  the statement, issues a single-use presentation, and accepts only an
+  acknowledgement carrying that presentation's token, so it cannot exist unless
+  the statement was shown and it authorizes exactly one act. A
   composed decision is a report and not a capability: the mutation boundary
   re-derives it from the recorded rights and refuses any decision that does not
   match. Resolving a grant to `granted` or `denied` requires a named evidence
@@ -59,8 +62,9 @@
   `derivative_rights` grant
   no adapted artifact is created at all, and the unresolved state is retained in
   provenance. `block_reasons` is a closed vocabulary of typed records that each
-  carry their evidence, and `blocked` is a queryable state answering "what did I
-  not get, and exactly why" without re-running discovery. Executable admission
+  carry an observation and its named source, and `blocked` is a queryable state
+  answering "what did I not get, and exactly why" without re-running discovery.
+  Executable admission
   is bound to the normalized content digest and comes from the operator's
   ledger rather than from a field on the item: changed content returns to
   `pending`, the gate digests the exact content it will materialize, a pending
@@ -70,7 +74,9 @@
   normalized inventory, because discovery never implies permission. The rights,
   admission, and executable-admission gates are scanned as core by the
   provider-neutrality CI check, which now constant-folds concatenated string
-  literals so a provider name assembled from fragments no longer passes.
+  literals and constant f-strings so a provider name assembled from fragments no
+  longer passes. `sources.marketplaces` rights entries accept per-grant
+  `grant_evidence` beside the shared `evidence_source`.
 
 - *(CL-coif, marketplace)* Implement the ADR-0011 source-provider capability
   contract and the normalized inventory core. A provider adapter declares its

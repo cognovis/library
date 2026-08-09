@@ -310,7 +310,7 @@ def _scan_ast(path: str, source: str) -> list[Finding]:
             findings.extend(
                 _scan_string_value(path, getattr(node, "lineno", 0), node.value)
             )
-        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        elif isinstance(node, (ast.BinOp, ast.JoinedStr)):
             folded = _folded_string(node)
             if folded is not None:
                 findings.extend(
@@ -327,8 +327,11 @@ def _folded_string(node: ast.AST) -> str | None:
     the gate modules this check now certifies as core, which is the one place a
     silent pass is most expensive.
 
-    Only literal operands fold. A branch assembled from runtime values remains
-    outside this tripwire's proof boundary, and the report says so.
+    An f-string whose parts are all constant is the same trick with different
+    syntax -- `f"{'executive'}{'-circle'}"` survived the first repair -- so
+    `JoinedStr` and a constant `FormattedValue` fold too. Only literal operands
+    fold. A branch assembled from runtime values remains outside this tripwire's
+    proof boundary, and the report says so.
     """
     if isinstance(node, ast.Constant):
         return node.value if isinstance(node.value, str) else None
@@ -338,6 +341,20 @@ def _folded_string(node: ast.AST) -> str | None:
         if left is None or right is None:
             return None
         return left + right
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            folded = _folded_string(value)
+            if folded is None:
+                return None
+            parts.append(folded)
+        return "".join(parts)
+    if isinstance(node, ast.FormattedValue):
+        # A format spec or conversion changes the rendered text, so only a bare
+        # substitution of a constant is statically known.
+        if node.conversion not in (-1, None) or node.format_spec is not None:
+            return None
+        return _folded_string(node.value)
     return None
 
 

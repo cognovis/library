@@ -1098,9 +1098,20 @@
               "$ref": "#/$defs/rights_grant"
             },
             "evidence_source": {
-              "description": "Named source of the recorded rights evidence, for example an upstream LICENSE URL plus the date it was observed.",
+              "description": "Named source of the recorded rights evidence, for example an upstream LICENSE URL plus the date it was observed. Used for every grant that records no source of its own; a grant resolved to granted or denied must have one or the other.",
               "type": "string",
               "minLength": 1
+            },
+            "grant_evidence": {
+              "description": "Named evidence source per grant. ADR-0011 records the four grants independently, each with its own source: a fetch grant may rest on a reachable subscriber endpoint while a redistribution grant rests on nothing located at all.",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "fetch_authorization": { "type": "string", "minLength": 1 },
+                "install_rights": { "type": "string", "minLength": 1 },
+                "redistribution_rights": { "type": "string", "minLength": 1 },
+                "derivative_rights": { "type": "string", "minLength": 1 }
+              }
             }
           }
         }

@@ -64,6 +64,27 @@ PROJECTION_STATES = ("allowed", "blocked", "operator-opt-in-required")
 #: Minimum length for a block reason's evidence. A floor against placeholders.
 MIN_EVIDENCE_LENGTH = 16
 
+#: Phrases that assert nothing. Each of these was either demonstrated by review
+#: or is the same move in different words. The list is a floor, not a judge: it
+#: catches text that admits it says nothing, and it cannot catch text that
+#: merely says nothing convincingly. Only a reader settles that.
+EVIDENCE_PLACEHOLDERS = frozenset(
+    {
+        "details unavailable",
+        "detail unavailable",
+        "no details",
+        "no detail available",
+        "not available",
+        "not applicable",
+        "not recorded",
+        "no evidence",
+        "unknown source",
+        "see above",
+        "see below",
+        "to be determined",
+    }
+)
+
 #: The closed, ordered block-reason vocabulary of ADR-0011 `Typed block reasons`.
 BLOCK_REASONS = (
     "license-unknown",
@@ -175,7 +196,12 @@ class Rights:
     def __post_init__(self) -> None:
         for name in RIGHTS_GRANTS:
             _one_of(getattr(self, name), RIGHTS_STATES, f"rights.{name}")
-        if self.evidence_source is not None and not str(self.evidence_source).strip():
+        if self.evidence_source is not None and (
+            not isinstance(self.evidence_source, str) or not self.evidence_source.strip()
+        ):
+            # `str(value).strip()` was the earlier check and it passed the
+            # integer 1 as a "named evidence source", which then authorized
+            # every gated act. A source that is not text names nothing.
             raise ValueError("rights.evidence_source must be text or None")
         evidence = dict(self.grant_evidence)
         unknown = sorted(set(evidence) - set(RIGHTS_GRANTS))
@@ -236,10 +262,17 @@ class Rights:
                 f"unknown rights grant {name!r}; ADR-0011 records {list(RIGHTS_GRANTS)}"
             )
         _one_of(state, RIGHTS_STATES, f"rights.{name}")
-        if state != "unknown" and not (evidence or "").strip():
+        if (
+            state != "unknown"
+            and not (evidence or "").strip()
+            and not (self.evidence_source or "").strip()
+        ):
+            # The item-level source is a legitimate fallback -- ADR-0011 says so
+            # -- and demanding it be repeated here would have made construction
+            # and update disagree about the same evidence model.
             raise ValueError(
-                f"resolving rights.{name} to {state!r} requires its own evidence; "
-                "the evidence recorded for a previous value does not justify this one"
+                f"resolving rights.{name} to {state!r} requires a named evidence "
+                "source, either its own or the item-level fallback"
             )
         evidence_map = dict(self.grant_evidence)
         evidence_map.pop(name, None)
@@ -284,34 +317,62 @@ class BlockReason:
     on every entry. Both halves are enforced here rather than at the call site:
     a reason with no evidence is unactionable, and a reason outside the
     vocabulary is unqueryable, so neither may be constructed at all.
+
+    Evidence is **two required fields, not one string**, because review kept
+    finding text that passed every length and shape check while naming nothing:
+    first `evidence="e"`, then `evidence="details unavailable"`. The ADR asks for
+    "the evidence that produced it", which is an observation *and* where the
+    observation came from, so the record demands both and a caller cannot omit
+    the half they do not have. What a validator still cannot decide is whether
+    either sentence is true; that stays a review question, and this type does
+    not pretend otherwise.
     """
 
     reason: str
     evidence: str
+    source: str
     detail: str | None = None
 
     def __post_init__(self) -> None:
         _one_of(self.reason, BLOCK_REASONS, "block reason")
-        if not isinstance(self.evidence, str) or not self.evidence.strip():
+        for field_name in ("evidence", "source"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"block reason {self.reason!r} must record its {field_name}"
+                )
+            stripped = value.strip()
+            if (
+                len(stripped) < MIN_EVIDENCE_LENGTH
+                or " " not in stripped
+                or stripped.lower().rstrip(".") in EVIDENCE_PLACEHOLDERS
+            ):
+                raise ValueError(
+                    f"block reason {self.reason!r} {field_name} {value!r} is a "
+                    "placeholder; record what was observed and where it came from"
+                )
+        if self.evidence.strip().lower() == self.source.strip().lower():
+            # A source names where an observation came from, so it is a
+            # different sentence from the observation. Identical text is the
+            # tell that one of the two was never actually recorded.
             raise ValueError(
-                f"block reason {self.reason!r} must carry the evidence that produced it"
-            )
-        # A floor against a placeholder, not a judge of meaning. Review showed
-        # that "non-empty" admitted `evidence="e"`, which satisfies the letter of
-        # the contract and none of its purpose. Real evidence names a thing and
-        # says something about it, so it is at least two words. Whether the
-        # sentence is *true* stays a review question; no validator settles that.
-        stripped = self.evidence.strip()
-        if len(stripped) < MIN_EVIDENCE_LENGTH or " " not in stripped:
-            raise ValueError(
-                f"block reason {self.reason!r} evidence {self.evidence!r} is a "
-                "placeholder; record what was observed and where it came from"
+                f"block reason {self.reason!r} repeats its evidence as its source; "
+                "record where the observation came from"
             )
         if self.detail is not None and not str(self.detail).strip():
             raise ValueError("block reason detail must be text or None")
 
+    def describe(self) -> str:
+        """The reason as one line: what was observed, and where it came from."""
+        return f"{self.reason}: {self.evidence} (source: {self.source})"
+
     def to_dict(self) -> dict[str, Any]:
-        return {"reason": self.reason, "evidence": self.evidence, "detail": self.detail}
+        return {
+            "reason": self.reason,
+            "evidence": self.evidence,
+            "source": self.source,
+            "detail": self.detail,
+        }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "BlockReason":
@@ -320,15 +381,16 @@ class BlockReason:
                 "a block reason must be an object carrying its reason and evidence, "
                 "not a bare vocabulary value"
             )
-        unknown = sorted(set(data) - {"reason", "evidence", "detail"})
+        unknown = sorted(set(data) - {"reason", "evidence", "source", "detail"})
         if unknown:
             raise ValueError(f"unknown block reason fields: {unknown}")
-        missing = sorted({"reason", "evidence"} - set(data))
+        missing = sorted({"reason", "evidence", "source"} - set(data))
         if missing:
             raise ValueError(f"missing block reason fields: {missing}")
         return cls(
             reason=data["reason"],
             evidence=data["evidence"],
+            source=data["source"],
             detail=data.get("detail"),
         )
 

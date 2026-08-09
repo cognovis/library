@@ -180,7 +180,14 @@ def _rights_reasons(item: NormalizedItem) -> list[BlockReason]:
         reasons.append(
             BlockReason(
                 reason=decision.block_reason,
-                evidence=item.rights.grant(decision.governing_grant).describe(),
+                evidence=(
+                    f"{decision.governing_grant} resolves to "
+                    f"{decision.governing_state} for this item"
+                ),
+                source=(
+                    decision.evidence_source
+                    or "no evidence source is recorded for this grant"
+                ),
                 detail=f"{target}: {decision.state}",
             )
         )
@@ -201,6 +208,7 @@ def _runtime_reason(item: NormalizedItem, context: AdmissionContext) -> BlockRea
             f"declared runtime compatibility {sorted(declared)} excludes every "
             f"target runtime {sorted(context.target_runtimes)}"
         ),
+        source="the item's declared runtime_compatibility and this scope's targets",
     )
 
 
@@ -214,6 +222,7 @@ def _trust_reason(
                 "executable admission was refused for the reviewed content digest; "
                 "re-admission is a new decision on new evidence"
             ),
+            source="the scope operator's executable-admission ledger",
         )
     if _TRUST_RANK[item.trust_state] < _TRUST_RANK[context.required_trust]:
         return BlockReason(
@@ -222,6 +231,7 @@ def _trust_reason(
                 f"trust_state={item.trust_state}, and this scope requires "
                 f"{context.required_trust}"
             ),
+            source="the item's recorded trust_state and this scope's policy",
         )
     return None
 
@@ -268,6 +278,7 @@ def evaluate_item(
                     f"credential reference {reference!r} is required by this provider "
                     "and is not configured for this scope"
                 ),
+                source="the provider's declared auth_requirements and this scope's configuration",
             )
         )
 
@@ -283,6 +294,7 @@ def evaluate_item(
                     f"{item.library_type} is executable and no admission decision is "
                     "recorded for its current content digest"
                 ),
+                source="the scope operator's executable-admission ledger",
             )
         )
 
@@ -299,6 +311,7 @@ def evaluate_item(
                     f"provider availability was {item.provider_availability.state} at "
                     f"{item.provider_availability.observed_at}: {detail}"
                 ),
+                source="the provider availability observation recorded on this item",
             )
         )
 

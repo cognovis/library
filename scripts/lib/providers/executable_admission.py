@@ -40,6 +40,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .classification import EXECUTABLE_TYPES
@@ -100,17 +101,37 @@ def content_digest(files: Mapping[str, bytes]) -> str:
             bind a decision to, and treating it as a stable digest would let
             "nothing" be admitted once and reused.
     """
+    snapshot = frozen_content(files)
+    digest = hashlib.sha256()
+    for path in sorted(snapshot):
+        content = snapshot[path]
+        encoded_path = path.encode("utf-8")
+        digest.update(str(len(encoded_path)).encode("ascii") + b":" + encoded_path)
+        digest.update(str(len(content)).encode("ascii") + b":" + content)
+    return f"{DIGEST_PREFIX}{digest.hexdigest()}"
+
+
+def frozen_content(files: Mapping[str, bytes]) -> Mapping[str, bytes]:
+    """An immutable bytes-only snapshot of one item's content.
+
+    Digesting a live mapping and later handing that same object to a mutation is
+    a time-of-check-to-time-of-use hole, and review walked straight through it:
+    a stateful mapping returned reviewed bytes while being hashed and an
+    unreviewed payload when the mutation read it. Everything downstream of the
+    gate works on the snapshot, so the bytes that were digested are the bytes
+    that get written.
+    """
     if not files:
         raise ValueError("an item with no files has no content digest to bind")
-    digest = hashlib.sha256()
+    snapshot: dict[str, bytes] = {}
     for path in sorted(files):
         content = files[path]
         if not isinstance(content, (bytes, bytearray)):
             raise ValueError(f"content for {path!r} must be bytes")
-        encoded_path = path.encode("utf-8")
-        digest.update(str(len(encoded_path)).encode("ascii") + b":" + encoded_path)
-        digest.update(str(len(content)).encode("ascii") + b":" + bytes(content))
-    return f"{DIGEST_PREFIX}{digest.hexdigest()}"
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("content paths must be non-empty text")
+        snapshot[path] = bytes(content)
+    return MappingProxyType(snapshot)
 
 
 def validated_digest(value: str) -> str:
@@ -153,7 +174,19 @@ class AdmissionRecord:
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"AdmissionRecord.{name} is required")
         validated_digest(self.content_digest)
-        object.__setattr__(self, "permission_surface", tuple(self.permission_surface))
+        surface = tuple(self.permission_surface)
+        # An empty surface is a legitimate declaration: this artifact requests
+        # nothing. A blank *entry* is not -- it is a declaration shaped like one,
+        # and ADR-0011 requires the permission surface the artifact requests to
+        # be recorded evidence, not padding.
+        for entry in surface:
+            if not isinstance(entry, str) or not entry.strip():
+                raise ValueError(
+                    "AdmissionRecord.permission_surface entries must each name a "
+                    "requested permission; record an empty surface for an artifact "
+                    "that requests none"
+                )
+        object.__setattr__(self, "permission_surface", surface)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -176,6 +209,15 @@ class ExecutableAdmissionLedger:
             self._store(record)
 
     def _store(self, record: AdmissionRecord, *, supersedes: bool = False) -> AdmissionRecord:
+        if not isinstance(record, AdmissionRecord):
+            # The ledger is the authority for executable trust, so anything that
+            # merely looks like a record is not one. Review filed a duck-typed
+            # object carrying `state="admitted"` and nothing else, and the gate
+            # materialized executable content on it.
+            raise TypeError(
+                "an executable-admission ledger holds validated AdmissionRecord "
+                f"values, not {type(record).__name__}"
+            )
         key = (record.qualified_identity, record.content_digest)
         existing = self._records.get(key)
         if existing is not None and not supersedes:
@@ -334,6 +376,13 @@ def executable_admission_for_item(
     return ledger.state_for(identity, digest, library_type=item.library_type)
 
 
+def snapshot_contents(
+    contents: Mapping[str, Mapping[str, bytes]],
+) -> dict[str, Mapping[str, bytes]]:
+    """Freeze every item's content once, before anything is digested."""
+    return {identity: frozen_content(files) for identity, files in contents.items()}
+
+
 def gate_resolution(
     items: Sequence[NormalizedItem],
     ledger: ExecutableAdmissionLedger,
@@ -359,7 +408,12 @@ def gate_resolution(
         ResolutionRefused: when any executable member is `pending` or `refused`.
             Raised before `mutate` runs, and no member is resolved.
     """
-    states = [(item, executable_admission_for_item(item, ledger, contents)) for item in items]
+    # Freeze first, then digest, then mutate -- all three against one snapshot.
+    verified_contents = snapshot_contents(contents)
+    states = [
+        (item, executable_admission_for_item(item, ledger, verified_contents))
+        for item in items
+    ]
     refusals = [
         (item.qualified_identity(), state)
         for item, state in states
@@ -373,11 +427,13 @@ def gate_resolution(
         for item, state in states
     )
     if mutate is not None:
-        verified = {
-            item.qualified_identity(): contents[item.qualified_identity()]
-            for item, _ in states
-            if item.qualified_identity() in contents
-        }
+        verified = MappingProxyType(
+            {
+                item.qualified_identity(): verified_contents[item.qualified_identity()]
+                for item, _ in states
+                if item.qualified_identity() in verified_contents
+            }
+        )
         mutate(verified)
     return resolved
 

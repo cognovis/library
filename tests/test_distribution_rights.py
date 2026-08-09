@@ -54,13 +54,29 @@ FULLY_GRANTED = Rights(
 )
 
 
-def _opt_in(decision: RightsDecision, operator: str = "malte") -> OperatorOptIn:
-    """An opt-in that acknowledges exactly the statement this decision displays."""
-    return OperatorOptIn(
-        operator=operator,
-        acknowledged_display_digest=decision.display_digest(),
-        acknowledged_at="2026-08-09T09:00:00Z",
-    )
+def _presenter(shown: list | None = None, captured: list | None = None):
+    """An operator who reads what the gate presents and acknowledges exactly it."""
+
+    def present(presentation):
+        if shown is not None:
+            shown.append(presentation.statement)
+        opt_in = presentation.acknowledge(
+            operator="malte", acknowledged_at="2026-08-09T09:00:00Z"
+        )
+        if captured is not None:
+            captured.append(opt_in)
+        return opt_in
+
+    return present
+
+
+def _replaying_presenter(opt_in: OperatorOptIn):
+    """An operator who hands back an acknowledgement of some earlier statement."""
+
+    def present(presentation):
+        return opt_in
+
+    return present
 
 
 # -- AC1: the four grants are independent ------------------------------------
@@ -197,11 +213,14 @@ def test_unknown_blocks_committed_projection(redistribution: str) -> None:
     assert mutations == [], "a blocked committed projection materializes nothing"
     assert refusal.value.decision.state == "blocked"
 
-    # An opt-in does not unblock a committed projection either. The opt-in exists
-    # for a machine-local target, which is a different act.
+    # A willing operator does not unblock a committed projection either. The
+    # opt-in exists for a machine-local target, which is a different act, and a
+    # blocked decision is refused before anything is even presented.
+    shown: list[str] = []
     with pytest.raises(ProjectionRefused):
-        project(decision, lambda: mutations.append("wrote"), opt_in=_opt_in(decision))
+        project(decision, lambda: mutations.append("wrote"), present=_presenter(shown))
     assert mutations == []
+    assert shown == []
 
 
 def test_install_rights_govern_both_targets_and_compose_first() -> None:
@@ -237,7 +256,7 @@ def test_install_rights_govern_both_targets_and_compose_first() -> None:
         project(
             machine_local,
             lambda: mutations.append("wrote"),
-            opt_in=_opt_in(machine_local),
+            present=_presenter(),
         )
     assert mutations == [], "no opt-in overrides a recorded denial"
     assert "denied" in str(refusal.value)
@@ -321,37 +340,66 @@ def test_machine_local_requires_optin_after_display() -> None:
 
     mutations: list[str] = []
 
-    # 1. No opt-in at all: refused, nothing written.
+    # 1. No presenter at all: refused, nothing written. An acknowledgement cannot
+    #    exist without the gate having rendered the statement.
     with pytest.raises(ProjectionRefused) as refusal:
         project(decision, lambda: mutations.append("wrote"))
     assert mutations == []
     assert "operator opt-in" in str(refusal.value)
 
-    # 2. An opt-in that acknowledges a *different* rights statement is refused.
-    #    This is what makes "displayed before mutation" mechanical rather than a
-    #    promise: the acknowledgement is bound to the exact statement shown.
+    # 2. A self-minted acknowledgement -- one built from the publicly computable
+    #    digest rather than from a presentation -- authorizes nothing.
+    forged = OperatorOptIn(
+        operator="malte",
+        acknowledged_display_digest=decision.display_digest(),
+        acknowledged_at="2026-08-09T09:00:00Z",
+        presentation_token="self-minted",
+    )
+    with pytest.raises(ProjectionRefused) as minted:
+        project(
+            decision,
+            lambda: mutations.append("wrote"),
+            present=_replaying_presenter(forged),
+        )
+    assert mutations == []
+    assert "does not belong to the statement" in str(minted.value)
+
+    # 3. An acknowledgement of a *different* rights statement is refused, even
+    #    when it carries this presentation's token.
     permissive = Rights(
         fetch_authorization="granted", install_rights="granted", evidence_source=MIT
     )
     stale = evaluate_projection(permissive, "machine_local", subject=SUBJECT)
-    with pytest.raises(ProjectionRefused) as mismatch:
-        project(decision, lambda: mutations.append("wrote"), opt_in=_opt_in(stale))
-    assert mutations == []
-    assert "acknowledged" in str(mismatch.value)
 
-    # 3. An opt-in bound to this decision's displayed statement proceeds, and the
-    #    display is recorded before the mutation, not after it.
+    def wrong_statement(presentation):
+        return OperatorOptIn(
+            operator="malte",
+            acknowledged_display_digest=stale.display_digest(),
+            acknowledged_at="2026-08-09T09:00:00Z",
+            presentation_token=presentation.token,
+        )
+
+    with pytest.raises(ProjectionRefused) as mismatch:
+        project(decision, lambda: mutations.append("wrote"), present=wrong_statement)
+    assert mutations == []
+    assert "acknowledged a different rights statement" in str(mismatch.value)
+
+    # 4. An acknowledgement of the presented statement proceeds, and the display
+    #    is recorded before the mutation, not after it.
+    shown: list[str] = []
     outcome = project(
-        decision, lambda: mutations.append("wrote"), opt_in=_opt_in(decision)
+        decision, lambda: mutations.append("wrote"), present=_presenter(shown)
     )
     assert mutations == ["wrote"]
+    assert shown == [decision.display()]
     assert outcome.events == (
         "rights-displayed",
+        "rights-presented",
         "operator-opt-in-accepted",
         "projection-authorized",
         "content-materialized",
     )
-    assert outcome.events.index("rights-displayed") < outcome.events.index(
+    assert outcome.events.index("rights-presented") < outcome.events.index(
         "content-materialized"
     )
     assert outcome.display == decision.display()
@@ -373,15 +421,29 @@ def test_an_optin_does_not_travel_to_another_item() -> None:
     assert acknowledged.display_digest() != other_item.display_digest()
 
     mutations: list[str] = []
+    captured: list[OperatorOptIn] = []
+    project(acknowledged, lambda: mutations.append("first"), present=_presenter(captured=captured))
+    assert mutations == ["first"]
+
     with pytest.raises(ProjectionRefused) as replay:
         project(
             other_item,
-            lambda: mutations.append("wrote"),
-            opt_in=_opt_in(acknowledged),
+            lambda: mutations.append("second"),
+            present=_replaying_presenter(captured[0]),
         )
 
-    assert mutations == []
-    assert "acknowledged a different rights statement" in str(replay.value)
+    assert mutations == ["first"]
+    assert "does not belong to the statement" in str(replay.value)
+
+    # Nor does it authorize the same act a second time: a presentation is issued
+    # once and its acknowledgement is good for that one act.
+    with pytest.raises(ProjectionRefused):
+        project(
+            acknowledged,
+            lambda: mutations.append("again"),
+            present=_replaying_presenter(captured[0]),
+        )
+    assert mutations == ["first"]
 
 
 def test_the_gate_can_present_the_statement_and_collect_the_acknowledgement() -> None:
@@ -391,21 +453,18 @@ def test_the_gate_can_present_the_statement_and_collect_the_acknowledgement() ->
     shown: list[str] = []
     mutations: list[str] = []
 
-    def present(statement: str) -> OperatorOptIn:
+    def present(presentation) -> OperatorOptIn:
         # The acknowledgement is derived from the text actually presented, which
         # is the whole point of this path.
-        shown.append(statement)
-        return OperatorOptIn(
-            operator="malte",
-            acknowledged_display_digest=hashlib.sha256(
-                statement.encode("utf-8")
-            ).hexdigest(),
-            acknowledged_at="2026-08-09T09:00:00Z",
+        shown.append(presentation.statement)
+        assert presentation.display_digest == hashlib.sha256(
+            presentation.statement.encode("utf-8")
+        ).hexdigest()
+        return presentation.acknowledge(
+            operator="malte", acknowledged_at="2026-08-09T09:00:00Z"
         )
 
-    outcome = project(
-        decision, lambda: mutations.append("wrote"), present=present
-    )
+    outcome = project(decision, lambda: mutations.append("wrote"), present=present)
 
     assert shown == [decision.display()]
     assert SUBJECT in shown[0]
@@ -419,16 +478,24 @@ def test_the_gate_can_present_the_statement_and_collect_the_acknowledgement() ->
     )
 
     # A presenter that acknowledges something else is refused like any other.
-    def wrong_present(statement: str) -> OperatorOptIn:
+    def wrong_present(presentation) -> OperatorOptIn:
         return OperatorOptIn(
             operator="malte",
             acknowledged_display_digest="0" * 64,
             acknowledged_at="2026-08-09T09:00:00Z",
+            presentation_token=presentation.token,
         )
 
     with pytest.raises(ProjectionRefused):
         project(decision, lambda: mutations.append("again"), present=wrong_present)
     assert mutations == ["wrote"]
+
+    # Each act gets a fresh presentation, so two acts never share a token.
+    first: list[OperatorOptIn] = []
+    second: list[OperatorOptIn] = []
+    project(decision, lambda: None, present=_presenter(captured=first))
+    project(decision, lambda: None, present=_presenter(captured=second))
+    assert first[0].presentation_token != second[0].presentation_token
 
 
 def test_an_allowed_projection_still_displays_the_rights_state_first() -> None:

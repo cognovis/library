@@ -316,11 +316,18 @@ call site:
   the reason is recorded, and `projection_eligibility` separately names the path
   that remains open.
 
-`block_reasons` entries are stored as typed records carrying `reason`,
-`evidence`, and an optional `detail`, per this section's requirement that each
-reason "carries the evidence that produced it". Evidence held only in a
-transient decision object would not survive to answer the question this state
-exists to answer.
+`block_reasons` entries are stored as typed records carrying `reason`, an
+`evidence` observation, its named `source`, and an optional `detail`, per this
+section's requirement that each reason "carries the evidence that produced it".
+Evidence held only in a transient decision object would not survive to answer
+the question this state exists to answer.
+
+Evidence is **two fields rather than one**, recorded after review twice found
+text that passed every shape check while naming nothing. The observation and its
+source are separate sentences, so a caller cannot silently omit the half they do
+not have. The honest limit is stated rather than glossed: the record enforces
+shape, not truth. Whether the observation is accurate remains a review question,
+and no validator in this system decides it.
 
 ### Freshness and provider availability
 
@@ -971,17 +978,21 @@ review made the cost of the weaker reading concrete — an all-`granted` rights
 value invented at a call site authorized a committed projection, durable
 retention, and a derivative, with nothing behind any of them.
 
-The operator opt-in is bound to the digest of the rights statement it
-acknowledges, and that statement names the **subject** — the qualified identity
-of the item — alongside the target and every grant. "Displayed before mutation"
-is therefore checkable after the fact rather than a convention: an
-acknowledgement collected against a different item, a different target, or an
-older rights state does not authorize this projection. The subject is
-load-bearing, not decoration: rights are recorded per provider, so without it
-two items from one provider render byte-identical statements and one
-acknowledgement silently covers content the operator never saw. A boolean
-confirmation flag was rejected for the obvious reason — it can be passed without
-anything ever being rendered.
+The operator opt-in is issued, not asserted. An opt-in-required act is
+authorized only through a presenter: the gate renders the statement, issues a
+single-use presentation, hands it to the presenter, and accepts only an
+acknowledgement carrying that presentation's token and digest. An
+acknowledgement therefore cannot exist unless the statement was rendered first,
+and it authorizes exactly one act. Two weaker designs were tried and both were
+broken by review: a boolean flag can be passed without rendering anything, and a
+value bound only to a publicly computable digest can be self-minted with nothing
+ever shown.
+
+The statement names the **subject** — the qualified identity of the item —
+alongside the target and every grant. The subject is load-bearing, not
+decoration: rights are recorded per provider, so without it two items from one
+provider render byte-identical statements and one acknowledgement silently
+covers content the operator never saw.
 
 A composed decision is a **report, not a capability**. The mutation boundary
 re-derives it from the recorded rights and refuses any decision that does not
