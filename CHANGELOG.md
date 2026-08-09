@@ -26,6 +26,22 @@
 
 ### Fixed
 
+- *(CL-1f36, lockfile)* A bulk `library agent sync --scope global` no longer
+  corrupts `~/.config/library/global.lock` when a second Library process writes
+  it. Both lockfiles were rewritten through a truncating `open(path, "w")` after
+  an unguarded load-modify-save, so two writers interleaved: the reported deploy
+  saw 3 of 27 entries sync and the rest fail with "Invalid YAML", over a file
+  holding a half-written `install_timestamp` inside another entry's target list.
+  Saves are now serialized in full and renamed into place, so a reader never
+  sees a partial document and a failed serialization changes nothing. Because
+  atomic replacement says nothing about the read that decided what to write,
+  every read-modify-write — installers, removals, sync, bootstrap receipts, and
+  Workspace mutations — now runs inside `mutate_lockfile`/`lockfile_transaction`,
+  an advisory `flock` on a `<lockfile>.lock` sidecar that nests safely when an
+  installer writes inside a sync that already holds it. Workspace mutations keep
+  their existing non-blocking guard and take the write guard second, never the
+  reverse.
+
 - *(CL-mvet, provider neutrality)* `scripts/lib/source.py` no longer carries any
   hosting-service knowledge. Its URL shapes, clone forms, SSH fallback, and
   owner-or-repository resolution moved to `scripts/lib/providers/git_url.py`,

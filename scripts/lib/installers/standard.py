@@ -28,9 +28,8 @@ from ..lockfile import (
     compute_checksum,
     compute_directory_hash,
     find_lockfile,
-    load_lockfile,
     make_entry,
-    save_lockfile,
+    mutate_lockfile,
     upsert_entry,
 )
 from ..output import blocked_result, dry_run_result, success
@@ -256,9 +255,8 @@ def install_standard(
             )
 
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-        lock_data = load_lockfile(lockfile_path)
-        upsert_entry(lock_data, lockfile_entry)
-        save_lockfile(lockfile_path, lock_data)
+        with mutate_lockfile(lockfile_path) as lock_data:
+            upsert_entry(lock_data, lockfile_entry)
 
         # 8. Migration: remove old per-name subdir if it still exists and is different
         #    from the new category-mirror parent directory

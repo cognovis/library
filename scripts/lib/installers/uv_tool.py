@@ -13,10 +13,9 @@ from ..errors import InstallError
 from ..lockfile import (
     compute_directory_hash,
     find_lockfile,
-    load_lockfile,
     make_entry,
+    mutate_lockfile,
     remove_entry,
-    save_lockfile,
     upsert_entry,
 )
 from ..output import dry_run_result, success
@@ -148,9 +147,8 @@ def install_uv_tool(
             if entry.get("version") is not None
             else None,
         )
-        lock = load_lockfile(lockfile_path)
-        upsert_entry(lock, receipt)
-        save_lockfile(lockfile_path, lock)
+        with mutate_lockfile(lockfile_path) as lock:
+            upsert_entry(lock, receipt)
 
         return success(
             data={
@@ -207,9 +205,8 @@ def remove_uv_tool(
         raise InstallError(
             f"uv tool uninstall failed for Script '{item_name}': {detail or 'unknown error'}"
         )
-    lock = load_lockfile(lockfile_path)
-    remove_entry(lock, item_name, "script")
-    save_lockfile(lockfile_path, lock)
+    with mutate_lockfile(lockfile_path) as lock:
+        remove_entry(lock, item_name, "script")
     return success(
         data={"name": item_name, "package_name": distribution["package_name"]},
         message=f"uv-tool Script '{item_name}' removed",

@@ -6,12 +6,14 @@ Schema: see docs/lockfile-format.md and docs/schema/lockfile.schema.json.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
+import threading
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 try:
     import yaml
@@ -19,6 +21,7 @@ except ImportError as exc:
     raise ImportError("PyYAML is required: pip install PyYAML") from exc
 
 from .errors import LockfileError
+from .providers.state_files import atomic_write_text, exclusive_lock
 
 # Default lockfile name at project root
 LOCKFILE_NAME = ".library.lock"
@@ -491,7 +494,19 @@ def _portable_project_lock(data: dict[str, Any], project_root: Path) -> dict[str
 
 
 def save_lockfile(lockfile_path: Path, data: dict[str, Any]) -> None:
-    """Write lockfile data to disk.
+    """Write lockfile data to disk indivisibly for readers.
+
+    The document is serialized in full before anything on disk changes, and the
+    finished text replaces the lockfile by rename. Writing into the lockfile
+    itself (`open(path, "w")`) truncated it first, so a reader that arrived
+    mid-write, or a second writer that had opened the same path, saw a partial
+    document: CL-1f36 recorded a half-written `install_timestamp` inside another
+    entry's target list, after which every later `library` call failed with
+    "Invalid YAML".
+
+    Atomicity keeps readers safe; it does not make the surrounding
+    load-modify-save a transaction. Callers that modify the lock must hold
+    `mutate_lockfile`.
 
     Args:
         lockfile_path: Path to write.
@@ -512,18 +527,100 @@ def save_lockfile(lockfile_path: Path, data: dict[str, Any]) -> None:
         if scope == "project"
         else data
     )
+    document = yaml.dump(
+        serialized,
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    )
     try:
-        lockfile_path.parent.mkdir(parents=True, exist_ok=True)
-        with lockfile_path.open("w") as f:
-            yaml.dump(
-                serialized,
-                f,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-            )
+        atomic_write_text(lockfile_path, document)
     except OSError as exc:
         raise LockfileError(f"Failed to write {lockfile_path}: {exc}") from exc
+
+
+# One in-process transaction registry per thread. `flock` is held per open file
+# description, so a second acquisition inside the same process would block on
+# itself; installers legitimately nest (an agent install writes the lock inside
+# a Workspace mutation that already holds it), so an active transaction is
+# recorded here and a nested one reuses it instead of acquiring again.
+_TRANSACTIONS = threading.local()
+
+
+def _transaction_states() -> dict[str, dict[str, Any]]:
+    states = getattr(_TRANSACTIONS, "states", None)
+    if states is None:
+        states = {}
+        _TRANSACTIONS.states = states
+    return states
+
+
+def _guard_path(lockfile_path: Path) -> Path:
+    """Return the canonical path that identifies one lockfile's guard.
+
+    Symlinks are resolved so two spellings of the same file cannot take two
+    different guards and believe they are alone. On macOS that is the ordinary
+    case, not an exotic one: `/var/...` and `/private/var/...` name the same
+    lockfile.
+    """
+    return Path(os.path.realpath(str(Path(lockfile_path).expanduser())))
+
+
+@contextlib.contextmanager
+def lockfile_transaction(lockfile_path: Path) -> Iterator[None]:
+    """Hold one lockfile's cross-process write guard for a whole critical section.
+
+    The guard is an advisory `flock` on a sidecar beside the lockfile, so it
+    survives the rename that every save performs. It serializes cooperating
+    Library processes -- a sync, an install, and a Workspace mutation -- and is
+    no defense against a process that writes the lockfile without it.
+    """
+    guard = _guard_path(lockfile_path)
+    key = str(guard)
+    states = _transaction_states()
+    if key in states:
+        yield
+        return
+
+    with exclusive_lock(guard):
+        states[key] = {"data": None}
+        try:
+            yield
+        finally:
+            states.pop(key, None)
+
+
+@contextlib.contextmanager
+def mutate_lockfile(lockfile_path: Path) -> Iterator[dict[str, Any]]:
+    """Load, modify, and save one lockfile as a single guarded transaction.
+
+    Atomic replacement is not an atomic transaction: it makes a write
+    indivisible for readers and does nothing for the read that decided what to
+    write. Two unguarded writers each loaded the lock, and each saved a snapshot
+    taken before the other's save, so completed installs lost their receipts
+    while their content stayed on disk (CL-1f36). Every read-modify-write of a
+    lockfile must go through here.
+
+    The lockfile is saved when the block exits normally. An exception leaves the
+    lockfile exactly as it was, so a failed install never publishes a partial
+    receipt.
+    """
+    key = str(_guard_path(lockfile_path))
+    path = Path(lockfile_path)
+    with lockfile_transaction(path):
+        state = _transaction_states()[key]
+        if state["data"] is not None:
+            # Nested inside an active mutation: share its document so the outer
+            # save cannot overwrite what this block just changed.
+            yield state["data"]
+            return
+        data = load_lockfile(path)
+        state["data"] = data
+        try:
+            yield data
+            save_lockfile(path, data)
+        finally:
+            state["data"] = None
 
 
 def upsert_entry(

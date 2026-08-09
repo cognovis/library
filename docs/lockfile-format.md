@@ -78,6 +78,35 @@ The global lockfile uses the same schema as the per-project lockfile. It is NOT 
 to version control — it is a user-local file managed by `library` tooling. The path
 `~/.config/library/` follows the XDG Base Directory specification for user configuration.
 
+### Concurrent writers
+
+Both lockfiles are shared mutable state. The global one especially: a bulk
+`library agent sync --scope global` and a launcher's self-heal install are two
+processes writing one file, and CL-1f36 recorded what that cost — interleaved
+YAML, a half-written `install_timestamp` inside another entry's target list, and
+24 of 27 sync entries failing with "Invalid YAML".
+
+Two rules make that safe, and both are needed:
+
+1. **Every save is atomic.** The document is serialized in full, written to a
+   staged sibling, and renamed over the lockfile. A reader always sees a
+   complete document; a writer that dies mid-serialization changes nothing.
+2. **Every read-modify-write holds the write guard.** Atomic replacement says
+   nothing about the read that decided what to write, so two unguarded writers
+   each save a snapshot taken before the other and one install's receipt
+   disappears while its content stays on disk. `lib.lockfile.mutate_lockfile`
+   loads, yields, and saves inside an advisory `flock` on a `<lockfile>.lock`
+   sidecar; `lockfile_transaction` holds the same guard around a critical
+   section that manages its own save.
+
+The guard is advisory: it serializes cooperating Library processes and is no
+defense against something that writes the lockfile without it. Never call
+`save_lockfile` after a bare `load_lockfile` — that pair is exactly the defect.
+
+Workspace mutations take their non-blocking `<lockfile>.workspace-lock` guard
+first and the write guard second, always in that order. Both sidecars and the
+transient `<lockfile>.*.staged` file are tool-local and gitignored.
+
 ### MCP scope and ownership
 
 `library mcp use <name>` and `library mcp remove <name>` default to global scope.

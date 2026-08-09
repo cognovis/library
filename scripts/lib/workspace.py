@@ -2250,8 +2250,20 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
 
 @contextmanager
 def workspace_write_lock(lock_path: Path):
-    """Serialize one scope's Workspace mutations with a non-blocking file lock."""
+    """Serialize one scope's Workspace mutations with a non-blocking file lock.
+
+    Two guards, in this order and never the reverse. The Workspace guard is
+    non-blocking, so a second Workspace mutation is refused by name instead of
+    queueing behind a long reconciliation. The lockfile write guard is then held
+    for the whole region, because a Workspace mutation reads the lock, plans
+    against it, and writes it back: an installer in another process that wrote
+    the lock inside that window would otherwise have its receipt overwritten by
+    the plan's snapshot (CL-1f36). Installers acquire only the second guard, so
+    the ordering cannot invert.
+    """
     import fcntl
+
+    from .lockfile import lockfile_transaction
 
     guard_path = lock_path.with_name(f"{lock_path.name}.workspace-lock")
     guard_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2263,7 +2275,8 @@ def workspace_write_lock(lock_path: Path):
                 f"Another Workspace mutation holds the selected-scope lock: {guard_path}"
             ) from exc
         try:
-            yield
+            with lockfile_transaction(lock_path):
+                yield
         finally:
             fcntl.flock(guard.fileno(), fcntl.LOCK_UN)
 

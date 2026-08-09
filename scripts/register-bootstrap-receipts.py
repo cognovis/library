@@ -20,9 +20,8 @@ if str(SCRIPT_DIR) not in sys.path:
 from lib.lockfile import (
     compute_directory_hash,
     find_lockfile,
-    load_lockfile,
     make_entry,
-    save_lockfile,
+    mutate_lockfile,
     upsert_entry,
 )
 
@@ -64,38 +63,37 @@ def matching_links(home: Path, name: str, source: Path) -> list[Path]:
 
 def register(meta_root: Path, home: Path) -> list[str]:
     lock_path = find_lockfile(global_scope=True)
-    lock = load_lockfile(lock_path)
     commit = source_commit(meta_root)
     registered: list[str] = []
-    for name, relative_source in BOOTSTRAP_SKILLS.items():
-        source = (meta_root / relative_source).resolve()
-        links = matching_links(home, name, source)
-        if not links:
-            continue
-        entry = make_entry(
-            name=name,
-            primitive_type="skill",
-            catalog_identity="https://github.com/cognovis/library",
-            marketplace="platform-bootstrap",
-            source=str(source),
-            source_commit=commit,
-            cache_path="",
-            install_target=str(links[0]),
-            checksum_sha256=compute_directory_hash(source),
-            checksum_type="directory",
-            content_sha256=compute_directory_hash(source),
-            install_mode="symlink",
-            license_id="proprietary",
-            bridge_symlinks=[f"{link} -> {source}" for link in links[1:]],
-        )
-        upsert_entry(lock, entry)
-        receipt = next(
-            item for item in lock["receipts"] if item["id"] == f"skill:{name}"
-        )
-        receipt["adopted"] = True
-        receipt["bootstrap_owned"] = True
-        registered.append(name)
-    save_lockfile(lock_path, lock)
+    with mutate_lockfile(lock_path) as lock:
+        for name, relative_source in BOOTSTRAP_SKILLS.items():
+            source = (meta_root / relative_source).resolve()
+            links = matching_links(home, name, source)
+            if not links:
+                continue
+            entry = make_entry(
+                name=name,
+                primitive_type="skill",
+                catalog_identity="https://github.com/cognovis/library",
+                marketplace="platform-bootstrap",
+                source=str(source),
+                source_commit=commit,
+                cache_path="",
+                install_target=str(links[0]),
+                checksum_sha256=compute_directory_hash(source),
+                checksum_type="directory",
+                content_sha256=compute_directory_hash(source),
+                install_mode="symlink",
+                license_id="proprietary",
+                bridge_symlinks=[f"{link} -> {source}" for link in links[1:]],
+            )
+            upsert_entry(lock, entry)
+            receipt = next(
+                item for item in lock["receipts"] if item["id"] == f"skill:{name}"
+            )
+            receipt["adopted"] = True
+            receipt["bootstrap_owned"] = True
+            registered.append(name)
     return registered
 
 

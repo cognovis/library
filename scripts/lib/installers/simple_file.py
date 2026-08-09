@@ -28,10 +28,9 @@ from ..errors import InstallError, SourceError
 from ..lockfile import (
     compute_checksum,
     find_lockfile,
-    load_lockfile,
     make_entry,
+    mutate_lockfile,
     remove_entry,
-    save_lockfile,
     upsert_entry,
 )
 from ..output import dry_run_result, success
@@ -240,9 +239,8 @@ def install_simple_file(
             version=str(entry.get("version")) if entry.get("version") is not None else None,
         )
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-        lock_data = load_lockfile(lockfile_path)
-        upsert_entry(lock_data, lockfile_entry)
-        save_lockfile(lockfile_path, lock_data)
+        with mutate_lockfile(lockfile_path) as lock_data:
+            upsert_entry(lock_data, lockfile_entry)
 
         return success(
             data={
@@ -306,9 +304,8 @@ def remove_simple_file(
                 candidate.unlink()
             removed_files.append(str(candidate))
 
-    lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name, primitive_type=primitive_name)
-    save_lockfile(lockfile_path, lock_data)
+    with mutate_lockfile(lockfile_path) as lock_data:
+        remove_entry(lock_data, name, primitive_type=primitive_name)
 
     return success(
         data={"name": name, "removed_files": removed_files},
