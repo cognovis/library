@@ -902,6 +902,80 @@ reproducible projection the Library applies to unmodified upstream content. A
 material adaptation produces a first-party derivative, which is governed by
 `Distribution Rights`.
 
+### Implementation record (slice 3, `CL-y5z4`)
+
+Six readings of the sections above were open. They are resolved in the
+implemented cache (`scripts/lib/providers/foreign_cache.py`,
+`cache_transaction.py`, `offline.py`, `receipts.py`) rather than left to each
+call site.
+
+1. **`normalized_content_digest` covers upstream bytes, not transformed ones.**
+   It is the subject of the trust-on-first-use pin, and a pin has to be
+   comparable against what a later re-fetch returns; a pin over transformed
+   bytes would change meaning whenever a transformation rule changed. The cache
+   object *stores* the transformed bytes, because those are what an outage must
+   reproduce, and carries its own `projected_content_digest` as the integrity
+   proof of the stored object. Under the identity transformation the two are
+   equal, which is why the distinction is easy to lose.
+2. **The digest function is adopted from executable admission, not forked.**
+   Slice 2 left this open and required only that admission stay bound to
+   content. Two independent digests over the same bytes would reopen exactly the
+   gap that binding closes: a decision recorded against one identity while the
+   cache stores another.
+3. **A cache object is self-describing.** It stores the whole key tuple beside
+   its content, so an object can be identified without the receipt that
+   references it — which is what the operator-explicit purge of `Retention,
+   Garbage Collection, and Explicit Purge` needs to prove anything by digest.
+   Every tuple member is length-framed and a null revision is framed as its own
+   marker, so a revisionless identity can never collide with a pinned one.
+4. **A refused projection keeps its cache object and its receipt.** `Caching is
+   not installing`: the bytes were lawfully fetched and verified, so they stay
+   durable and recorded, and the receipt records zero targets and
+   `verified: false`. Likewise, a **failed receipt write does not roll back the
+   materialized object** — a failure is not deletion authority over retrieved
+   and verified bytes.
+5. **`degraded` is treated as unavailable for every refused row of the offline
+   table.** A truncated or partial answer is not a complete resolution, and both
+   deletion authority and remote comparison require one.
+6. **Explicit named removal archives the retired receipt.** ADR-0011 requires
+   the removal to record the degraded state and the operator's intent in receipt
+   history; discarding the record with the receipt would destroy the one entry
+   nobody can reconstruct afterwards.
+
+Adversarial review then demonstrated, by execution, six further gaps that the
+ADR text implies but does not say, and the implemented contract now states them:
+
+7. **A removal deactivates the projection it retires.** Retiring the receipt
+   alone left the installed files in place with nothing describing them —
+   recreating the exact unreceipted projection this section exists to end.
+   Deactivation happens *before* the receipt is retired, which is the reverse of
+   the install order and for the same reason: the recoverable failure is a
+   receipt without its targets, never a target without its receipt.
+8. **Projection is two-phase.** The receipt declares its intended target paths
+   before anything is written and records the install-time proofs afterwards.
+   Recording the inventory only after activation leaves a window in which a live
+   projection is described by a zero-target receipt.
+9. **Executable admission binds the projected bytes.** A transformation that
+   rewrites content produces bytes no reviewer saw, so admitting the upstream
+   digest and installing the transformed one repeats precisely the divergence
+   `Executable admission` forbids. The upstream digest remains the
+   trust-on-first-use identity.
+10. **Completeness is proven or named.** A first retrieval's completeness is not
+    decidable from its own bytes: a truncated item is a valid item of a
+    different shape. It is established against a member manifest, against an
+    existing pin, or on the adapter's contract alone — and the receipt records
+    which, so `adapter-declaration` is a queryable fact rather than a silence.
+11. **Reachability is not a complete resolution.** Every destructive verdict
+    requires a source-scoped observation that is complete and not narrowed by
+    changed authorization. An observation also may only change receipts of the
+    source it describes; one source's complete listing marked another source's
+    receipts as vanished before this was explicit.
+12. **A verified read and an installed read are one read.** A repair takes one
+    immutable snapshot, digests that snapshot, and installs that snapshot.
+    Reading twice is a check-to-use window, and it was walked through. For the
+    same reason a corrupt object is never reused or silently replaced: repair is
+    an explicit act that must reproduce the recorded digest.
+
 ## Offline Semantics
 
 Offline operation is **additive and repair-only**.

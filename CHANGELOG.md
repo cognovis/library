@@ -38,6 +38,50 @@
 
 ### Added
 
+- *(CL-y5z4, marketplace)* Every installed foreign artifact is now reproducible
+  from a complete, immutable cache object while its source is unreachable. Cache
+  identity is the ADR-0011 tuple — source identity, upstream id, revision or
+  null, normalized content digest, primitive type, and transformation version —
+  which separates the three collisions the released
+  `<type>/<marketplace>/<name>@<commit14>` key produced within one source: a
+  revisionless item's every version overwriting one fallback tag, two upstream
+  ids normalizing to one Library name, and one content reached under two
+  transformation rules. Install and adoption run one ordered transaction —
+  retrieve complete content, verify against the pin or record the first-use pin,
+  materialize atomically, write the receipt, and only then activate projections
+  — so a truncated retrieval leaves no partial object and a failed receipt write
+  activates no projection. A revisionless source is pin-only: its first observed
+  digest is recorded as a trust-on-first-use pin that proves continuity and not
+  authenticity, a differing re-fetch is fail-closed drift naming both digests,
+  and nothing is ever auto-re-pinned. Offline operation is additive and
+  repair-only: reinstall from a verified cache, integrity verification, status,
+  and explicit named removal are allowed, while upgrade, re-pin,
+  ownership-derived prune, `--prune --apply`, and automatic garbage collection
+  are refused with a typed reason. Local integrity and remote freshness stay two
+  separate reported facts, and freshness is never `current` for an unreachable
+  or pin-only source. A reachable, complete inventory that no longer lists an
+  installed item puts its receipt into the durable, queryable `upstream-vanished`
+  state, which grants no deletion authority; explicit named removal of a named
+  receipt works under every degraded-inventory condition, records the degraded
+  state and the operator's intent in receipt history, deactivates the projection
+  it retires, and never deletes the underlying cache object. Destructive verdicts
+  require a **source-scoped, conclusive** inventory observation: transport
+  reachability alone, a truncated listing, and a listing narrowed by changed
+  authorization all fail closed, and one source's resolution never changes
+  another source's receipts. Projection is two-phase — the receipt declares its
+  intended targets before anything is written — so an installed target is always
+  described by a durable receipt; executable admission binds the projected bytes
+  that are installed rather than the upstream bytes; a repair reads the cache
+  object once and installs exactly the snapshot it verified; a damaged object is
+  never silently reused or self-healed; concurrent first uses serialize so one
+  pin wins and the other is drift; and a materialization killed mid-write leaves
+  residue that the next write scavenges.
+  **Scope boundary:** this slice delivers the cache core and its contracts. No
+  production CLI, installer, or sync path calls them yet — the consuming install,
+  status, repair, and removal commands arrive with the Workspace and
+  reference-marketplace slices (`CL-dbam`, `CL-mvet`), and retention, garbage
+  collection, and operator-explicit purge with `CL-uliw`.
+
 - *(CL-n7ex, marketplace)* Gate every foreign projection on distribution rights
   and admission state. The four grants are recorded and queried independently,
   each with its own evidence source, and compose in the ADR-0011 order:
