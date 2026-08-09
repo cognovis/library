@@ -15,10 +15,9 @@ from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError
 from ..lockfile import (
     find_lockfile,
-    load_lockfile,
     make_entry,
+    mutate_lockfile,
     remove_entry,
-    save_lockfile,
     upsert_entry,
 )
 from ..output import dry_run_result, error_result, success
@@ -143,7 +142,6 @@ def install_guardrail(
 
     # 3. Write lockfile
     source_str = entry.get("source") or f"guardrail:{guardrail_name}"
-    lock_data = load_lockfile(lockfile_path)
     lockfile_entry = make_entry(
         name=guardrail_name,
         primitive_type="guardrail",
@@ -158,8 +156,8 @@ def install_guardrail(
         scope=scope,
         version=str(entry.get("version")) if entry.get("version") is not None else None,
     )
-    upsert_entry(lock_data, lockfile_entry)
-    save_lockfile(lockfile_path, lock_data)
+    with mutate_lockfile(lockfile_path) as lock_data:
+        upsert_entry(lock_data, lockfile_entry)
 
     return success(
         data={"name": guardrail_name},
@@ -202,9 +200,8 @@ def remove_guardrail(
     except Exception:
         pass
 
-    lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, guardrail_name, primitive_type="guardrail")
-    save_lockfile(lockfile_path, lock_data)
+    with mutate_lockfile(lockfile_path) as lock_data:
+        remove_entry(lock_data, guardrail_name, primitive_type="guardrail")
 
     return success(
         data={"name": guardrail_name},

@@ -31,9 +31,8 @@ from ..lockfile import (
     compute_directory_hash,
     find_lockfile,
     get_entry,
-    load_lockfile,
     make_entry,
-    save_lockfile,
+    mutate_lockfile,
     upsert_entry,
 )
 from ..output import dry_run_result, success
@@ -277,9 +276,8 @@ def install_skill(
         )
 
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-        lock_data = load_lockfile(lockfile_path)
-        upsert_entry(lock_data, lockfile_entry)
-        save_lockfile(lockfile_path, lock_data)
+        with mutate_lockfile(lockfile_path) as lock_data:
+            upsert_entry(lock_data, lockfile_entry)
 
         # 9. Harness materialization (always_apply / globs)
         harness_materialization = materialize_harness_fields(entry, skill_name, "skill", repo_root)

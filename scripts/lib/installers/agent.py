@@ -26,7 +26,9 @@ from ..lockfile import (
     find_lockfile,
     get_entry,
     load_lockfile,
+    lockfile_transaction,
     make_entry,
+    mutate_lockfile,
     remove_entry,
     save_lockfile,
     upsert_entry,
@@ -326,9 +328,8 @@ def install_agent(
         version=str(entry.get("version")) if entry.get("version") is not None else None,
     )
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-    lock_data = load_lockfile(lockfile_path)
-    upsert_entry(lock_data, lockfile_entry)
-    save_lockfile(lockfile_path, lock_data)
+    with mutate_lockfile(lockfile_path) as lock_data:
+        upsert_entry(lock_data, lockfile_entry)
 
     result = success(
         data={
@@ -831,25 +832,26 @@ def remove_agent(
             bridge_path.unlink()
             removed_files.append(str(bridge_path))
 
-    lock_data = load_lockfile(lockfile_path)
-    entry_removed = remove_entry(lock_data, name, primitive_type="agent")
+    with lockfile_transaction(lockfile_path):
+        lock_data = load_lockfile(lockfile_path)
+        entry_removed = remove_entry(lock_data, name, primitive_type="agent")
 
-    if not entry_removed and not removed_files:
-        # Nothing was removed, so nothing is written: saving here created a
-        # `.library.lock` containing `installed: []` in a project that had none,
-        # which made an honest error report a state change of its own
-        # (clc-9e4x).
-        #
-        # Reporting success here would additionally send the operator away
-        # believing the state changed. The most common cause is a scope
-        # mismatch: `remove` defaults to project scope while the entry is
-        # installed globally.
-        return error_result(
-            f"Agent '{name}' is not installed in scope '{scope}' "
-            f"(lockfile {lockfile_path}); nothing was removed."
-        )
+        if not entry_removed and not removed_files:
+            # Nothing was removed, so nothing is written: saving here created a
+            # `.library.lock` containing `installed: []` in a project that had
+            # none, which made an honest error report a state change of its own
+            # (clc-9e4x).
+            #
+            # Reporting success here would additionally send the operator away
+            # believing the state changed. The most common cause is a scope
+            # mismatch: `remove` defaults to project scope while the entry is
+            # installed globally.
+            return error_result(
+                f"Agent '{name}' is not installed in scope '{scope}' "
+                f"(lockfile {lockfile_path}); nothing was removed."
+            )
 
-    save_lockfile(lockfile_path, lock_data)
+        save_lockfile(lockfile_path, lock_data)
     return success(
         data={
             "name": name,

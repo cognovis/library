@@ -17,9 +17,9 @@ from ..lockfile import (
     get_entry,
     load_lockfile,
     make_entry,
+    mutate_lockfile,
     remove_entry,
     resolve_lockfile_path,
-    save_lockfile,
     upsert_entry,
 )
 from ..output import dry_run_result, success
@@ -383,28 +383,27 @@ def install_project_native_file(
             if bundle
             else compute_checksum(installed)
         )
-        lock_data = load_lockfile(lockfile_path)
-        upsert_entry(
-            lock_data,
-            make_entry(
-                name=item_name,
-                primitive_type=primitive,
-                catalog_identity=get_catalog_identity(catalog),
-                marketplace=marketplace,
-                source=source,
-                source_commit=source_commit,
-                cache_path=str(cache_path) + "/",
-                install_target=str(target),
-                checksum_sha256=checksum,
-                content_sha256=checksum,
-                checksum_type="directory" if bundle else "file",
-                install_mode=install_mode,
-                license_id=entry.get("license", "unknown"),
-                scope=scope,
-                version=str(entry.get("version")) if entry.get("version") is not None else None,
-            ),
-        )
-        save_lockfile(lockfile_path, lock_data)
+        with mutate_lockfile(lockfile_path) as lock_data:
+            upsert_entry(
+                lock_data,
+                make_entry(
+                    name=item_name,
+                    primitive_type=primitive,
+                    catalog_identity=get_catalog_identity(catalog),
+                    marketplace=marketplace,
+                    source=source,
+                    source_commit=source_commit,
+                    cache_path=str(cache_path) + "/",
+                    install_target=str(target),
+                    checksum_sha256=checksum,
+                    content_sha256=checksum,
+                    checksum_type="directory" if bundle else "file",
+                    install_mode=install_mode,
+                    license_id=entry.get("license", "unknown"),
+                    scope=scope,
+                    version=str(entry.get("version")) if entry.get("version") is not None else None,
+                ),
+            )
         if primitive == "just-module":
             _write_just_aggregator(repo_root, lock_data)
         return success(
@@ -472,8 +471,11 @@ def remove_project_native_file(
     if target is not None and (target.exists() or target.is_symlink()):
         _remove_target(target)
         removed.append(str(target))
-    remove_entry(lock_data, name, primitive_type=primitive)
-    save_lockfile(lockfile_path, lock_data)
+    # Re-read under the write guard: the entry inspected above only decided
+    # which target to delete, and a snapshot taken before the guard would
+    # discard whatever another Library process recorded in the meantime.
+    with mutate_lockfile(lockfile_path) as lock_data:
+        remove_entry(lock_data, name, primitive_type=primitive)
     if primitive == "just-module":
         _write_just_aggregator(repo_root, lock_data)
     return success(

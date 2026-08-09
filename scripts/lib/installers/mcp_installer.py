@@ -23,7 +23,9 @@ from ..errors import InstallError
 from ..lockfile import (
     find_lockfile,
     load_lockfile,
+    lockfile_transaction,
     make_entry,
+    mutate_lockfile,
     remove_entry,
     save_lockfile,
     upsert_entry,
@@ -607,7 +609,6 @@ def install_mcp(
                 retired_registrations_removed.append(str(path))
 
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-        lock_data = load_lockfile(lockfile_path)
         source_str = entry.get("source") or f"mcp:{mcp_name}"
         source_commit = deploy_revision or _resolve_source_commit(
             mcp_name, entry.get("source")
@@ -626,8 +627,8 @@ def install_mcp(
             scope=scope,
             version=str(entry.get("version")) if entry.get("version") is not None else None,
         )
-        upsert_entry(lock_data, lockfile_entry)
-        save_lockfile(lockfile_path, lock_data)
+        with mutate_lockfile(lockfile_path) as lock_data:
+            upsert_entry(lock_data, lockfile_entry)
 
         # A successful stdio rollback must also deactivate the shared daemon.
         # Stop only after every selected harness has been rewritten so a
@@ -861,9 +862,8 @@ def remove_mcp(
         if supervised and project_path:
             uninstall_supervised_service(entry, project_path, dry_run=False)
 
-        lock_data = load_lockfile(lockfile_path)
-        remove_entry(lock_data, mcp_name, primitive_type="mcp")
-        save_lockfile(lockfile_path, lock_data)
+        with mutate_lockfile(lockfile_path) as lock_data:
+            remove_entry(lock_data, mcp_name, primitive_type="mcp")
 
         return success(
             data={"name": mcp_name, "removed_harnesses": removed_harnesses},
@@ -896,10 +896,13 @@ def remove_project_mcp_lock_record(
             summary=f"Would remove legacy project MCP lock record '{name}'",
         )
 
-    lock_data = load_lockfile(lockfile_path)
-    removed = remove_entry(lock_data, name, primitive_type="mcp")
-    if removed:
-        save_lockfile(lockfile_path, lock_data)
+    # Guard-only transaction: a record that was not present must leave the
+    # lockfile untouched rather than writing an empty one back.
+    with lockfile_transaction(lockfile_path):
+        lock_data = load_lockfile(lockfile_path)
+        removed = remove_entry(lock_data, name, primitive_type="mcp")
+        if removed:
+            save_lockfile(lockfile_path, lock_data)
     return success(
         data={"name": name, "lockfile": str(lockfile_path), "removed": removed},
         message=(

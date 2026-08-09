@@ -32,9 +32,8 @@ from .catalog import get_catalog_identity, lookup_entry
 from .errors import InstallError
 from .lockfile import (
     find_lockfile,
-    load_lockfile,
     make_entry,
-    save_lockfile,
+    mutate_lockfile,
     upsert_entry,
 )
 from .output import dry_run_result, success
@@ -332,9 +331,8 @@ def install_runtime_config(
     lockfile_entry["overlay_commit"] = overlay_commit
 
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
-    lock_data = load_lockfile(lockfile_path)
-    upsert_entry(lock_data, lockfile_entry)
-    save_lockfile(lockfile_path, lock_data)
+    with mutate_lockfile(lockfile_path) as lock_data:
+        upsert_entry(lock_data, lockfile_entry)
 
     return success(
         data={

@@ -15,9 +15,8 @@ from ..errors import InstallError
 from ..lockfile import (
     find_lockfile,
     get_entry,
-    load_lockfile,
+    mutate_lockfile,
     remove_entry,
-    save_lockfile,
 )
 from ..output import dry_run_result, success
 from ..paths import resolve_install_paths
@@ -96,9 +95,8 @@ def remove_skill(
     if cursor_bridge_dir:
         _remove_path(cursor_bridge_dir)
 
-    lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name, primitive_type="skill")
-    save_lockfile(lockfile_path, lock_data)
+    with mutate_lockfile(lockfile_path) as lock_data:
+        remove_entry(lock_data, name, primitive_type="skill")
 
     return success(
         data={"name": name, "removed_files": removed_files},
@@ -160,9 +158,8 @@ def remove_standard(
         canonical_dir.unlink()
         removed_files.append(str(canonical_dir))
 
-    lock_data = load_lockfile(lockfile_path)
-    remove_entry(lock_data, name, primitive_type="standard")
-    save_lockfile(lockfile_path, lock_data)
+    with mutate_lockfile(lockfile_path) as lock_data:
+        remove_entry(lock_data, name, primitive_type="standard")
 
     return success(
         data={

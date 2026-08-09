@@ -28,8 +28,9 @@ from .lockfile import (
     find_lockfile,
     get_entry,
     load_lockfile,
+    mutate_lockfile,
     resolve_lockfile_path,
-    save_lockfile,
+    root_id,
 )
 from .output import dry_run_result, success
 from .paths import resolve_install_paths
@@ -303,7 +304,11 @@ def reinstall_entry(
 
     lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
     before = load_lockfile(lockfile_path)
-    requested_roots = deepcopy(before.get("requested_roots") or [])
+    roots_before_install = {
+        str(root.get("id") or ""): deepcopy(root)
+        for root in before.get("requested_roots") or []
+    }
+    reinstalled_root_id = root_id(entry_type, entry_name)
     prerequisite_statuses = {
         str(item.get("id") or ""): str(item.get("status") or "unknown")
         for item in before.get("prerequisites") or []
@@ -400,18 +405,32 @@ def reinstall_entry(
     else:
         return None
 
-    refreshed = load_lockfile(lockfile_path)
-    refreshed["requested_roots"] = requested_roots
+    # Re-read and rewrite under the write guard. The installer above wrote the
+    # lock, and so may a second Library process; a snapshot taken outside the
+    # guard would silently republish the state as it was before that write.
     from .workspace import apply_plan_ownership, build_workspace_plan
 
-    plan = build_workspace_plan(catalog, refreshed, repo_root, scope)
-    if not plan.get("blockers"):
-        apply_plan_ownership(
-            refreshed,
-            plan,
-            prerequisite_statuses=prerequisite_statuses,
-        )
-    save_lockfile(lockfile_path, refreshed)
+    with mutate_lockfile(lockfile_path) as refreshed:
+        # Restore requested intent entry by entry rather than by replacing the
+        # whole list with the pre-install snapshot. A re-install must not
+        # promote its receipt to a requested root, but a root that another
+        # Library process recorded while this entry was installing is not this
+        # sync's to discard -- and republishing the snapshot did exactly that.
+        preserved_roots: list[dict[str, Any]] = []
+        for root in refreshed.get("requested_roots") or []:
+            root_identity = str(root.get("id") or "")
+            if root_identity in roots_before_install:
+                preserved_roots.append(roots_before_install[root_identity])
+            elif root_identity != reinstalled_root_id:
+                preserved_roots.append(root)
+        refreshed["requested_roots"] = preserved_roots
+        plan = build_workspace_plan(catalog, refreshed, repo_root, scope)
+        if not plan.get("blockers"):
+            apply_plan_ownership(
+                refreshed,
+                plan,
+                prerequisite_statuses=prerequisite_statuses,
+            )
     return result
 
 
