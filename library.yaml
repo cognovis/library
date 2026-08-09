@@ -3255,6 +3255,20 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: review-governance
+      description: Empirically grounded governance rules for multi-layer bead review — layer independence, finding adjudication, the evidence contract, and documented test blind spots.
+      source: https://github.com/cognovis/library-core/tree/main/standards/review-governance/
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard-bundle
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: review-quality-signals
       description: Review Quality Signals Provider Contract
       source: https://github.com/cognovis/library-core/blob/main/standards/orchestrator/review-quality-signals.md
