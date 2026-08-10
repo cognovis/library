@@ -73,6 +73,8 @@ from lib.routing import (  # noqa: E402
     RoutingNotCatalogDerived,
 )
 
+from foreign_admission_support import admitting  # noqa: E402
+
 LIBRARY_PY = REPO_ROOT / "scripts" / "library.py"
 
 MIT_EVIDENCE = "upstream LICENSE (MIT) observed in the pinned tree, 2026-08-09"
@@ -190,9 +192,25 @@ def test_f1_an_in_progress_item_is_not_installable_through_the_command() -> None
             "maturity_basis": "collection:in-progress",
         }
     )
-    decision = evaluate_item(item, AdmissionContext())
+    # `CL-lt51` made this foreign steward's Skill admission-required, so the
+    # decision has to be recorded before the maturity axis is the one answering.
+    files = {"SKILL.md": b"body\n"}
+    decision = evaluate_item(
+        item,
+        AdmissionContext(),
+        ledger=admitting(item.qualified_identity(), files),
+        contents={item.qualified_identity(): files},
+    )
     assert decision.admission_state == "discoverable"
     assert decision.block_reasons == ()
+
+    # Undecided, it is refused for that reason instead -- either way it is not
+    # installable, which is what the command gates on.
+    undecided = evaluate_item(item, AdmissionContext())
+    assert undecided.admission_state == "blocked"
+    assert [entry.reason for entry in undecided.block_reasons] == [
+        "executable-admission-pending"
+    ]
 
     source = LIBRARY_PY.read_text()
     assert 'if decision.admission_state != "installable":' in source, (
@@ -469,14 +487,18 @@ def test_f6_unknown_install_rights_needs_a_shown_opt_in(tmp_path: Path) -> None:
             operator="test-operator", acknowledged_at="2026-08-09T12:00:00Z"
         )
 
+    acknowledged = _item(rights=unknown)
     install_marketplace_item(
-        _item(rights=unknown),
+        acknowledged,
         provider=_StubProvider(files={"SKILL.md": b"body\n"}),
         state=state,
         scope="project",
         target="machine_local",
         target_root=tmp_path / "projection",
         present=present,
+        # `CL-lt51`: a foreign steward's Skill is admission-required, and this
+        # test is about the rights opt-in being shown before retention.
+        ledger=admitting(acknowledged.qualified_identity(), {"SKILL.md": b"body\n"}),
     )
     assert len(shown) == 2
     assert "install_rights" in shown[0]
@@ -865,7 +887,18 @@ def test_f1_the_install_command_refuses_an_unpromoted_item(tmp_path: Path) -> No
     assert item.classification["maturity"] == "in-progress"
 
     decision = evaluate_item(item, AdmissionContext())
-    assert decision.admission_state == "discoverable"
+    # `CL-lt51`: undecided model-instructing content from a foreign steward is
+    # `blocked`; with the decision recorded, the unpromoted maturity is what
+    # leaves it `discoverable`. Neither is `installable`, which is the claim.
+    assert decision.admission_state == "blocked"
+    files = {"SKILL.md": b"the reviewed body of this in-progress item\n"}
+    decided = evaluate_item(
+        item,
+        AdmissionContext(),
+        ledger=admitting(item.qualified_identity(), files),
+        contents={item.qualified_identity(): files},
+    )
+    assert decided.admission_state == "discoverable"
 
     # The command path: an item in this state is refused, and the projection
     # directory the install would have created does not exist.

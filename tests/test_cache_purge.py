@@ -37,6 +37,8 @@ from lib.providers.cache_transaction import (  # noqa: E402
 )
 from lib.providers.contract import FetchedFile, FetchedItem  # noqa: E402
 from lib.providers.executable_admission import content_digest  # noqa: E402
+
+from foreign_admission_support import admitting  # noqa: E402
 from lib.providers.foreign_cache import (  # noqa: E402
     IDENTITY_TRANSFORMATION,
     QUARANTINE_SUFFIX,
@@ -175,8 +177,13 @@ class _Cache:
     ):
         files = {"SKILL.md": body, "reference.md": b"# reference\n"}
         store = self.project if scope == "project" else self.global_
+        item = _item(upstream_id=upstream_id, upstream_name=name, library_name=name)
         return install_foreign_item(
-            _item(upstream_id=upstream_id, upstream_name=name, library_name=name),
+            item,
+            # `CL-lt51`: a foreign steward's Skill is admission-required. This
+            # suite is about purge, so it records the decision for exactly the
+            # bytes it installs rather than installing undecided content.
+            ledger=admitting(item.qualified_identity(), files),
             retrieve=lambda: FetchedItem(
                 upstream_id=upstream_id,
                 revision=None,
@@ -594,8 +601,12 @@ def test_purge_never_reaches_a_lookalike_directory_inside_another_object(
     # a quarantine of the victim's digest.
     member = f"docs/{digest}{QUARANTINE_SUFFIX}legitimate/note.md"
     files = {"SKILL.md": b"---\nname: keeper\n---\nkeeper body\n", member: b"# note\n"}
+    keeper_item = _item(
+        upstream_id="kits/keeper", upstream_name="keeper", library_name="keeper"
+    )
     keeper = install_foreign_item(
-        _item(upstream_id="kits/keeper", upstream_name="keeper", library_name="keeper"),
+        keeper_item,
+        ledger=admitting(keeper_item.qualified_identity(), files),
         retrieve=lambda: FetchedItem(
             upstream_id="kits/keeper",
             revision=None,

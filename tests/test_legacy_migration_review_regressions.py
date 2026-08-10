@@ -79,6 +79,7 @@ from lib.providers.wiring import (  # noqa: E402
 )
 
 import legacy_projection_inventory as generator  # noqa: E402
+from foreign_admission_support import admitting  # noqa: E402
 
 NOW = "2026-08-09T18:00:00Z"
 PROVIDER = "provider-under-test"
@@ -253,8 +254,12 @@ def test_a_symlink_alias_for_a_blocked_root_is_still_blocked(tmp_path: Path) -> 
     assert (actual / "SKILL.md").read_bytes() == b"# blocked bytes\n"
 
     # The same alias through the repair path.
+    beacon = _item(upstream_id="skills/beacon", library_name="beacon")
     outcome = install_foreign_item(
-        _item(upstream_id="skills/beacon", library_name="beacon"),
+        beacon,
+        # `CL-lt51`: a foreign steward's Skill is admission-required, on the
+        # repair path as well as the install path.
+        ledger=admitting(beacon.qualified_identity(), provider.files),
         retrieve=lambda: provider.fetch("skills/beacon", None),
         object_store=state.object_store(),
         pin_store=state.pin_store(),

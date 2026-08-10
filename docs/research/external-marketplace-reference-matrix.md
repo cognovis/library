@@ -98,7 +98,8 @@ classification:
 runtime_compatibility: [claude-code, codex]
 admission_state: installable
 block_reasons: []
-executable_admission: inert
+executable_admission: pending           # CL-lt51: a foreign steward's Skill
+                                        # instructs a model, so it needs a decision
 trust_state: unreviewed
 rights:
   fetch_authorization: {state: granted, evidence: upstream-license-mit}
@@ -236,7 +237,8 @@ classification: {}
 runtime_compatibility: [claude-code, codex, claude-ai, pi]
 admission_state: blocked
 block_reasons: [license-unknown, redistribution-blocked]
-executable_admission: inert             # prompt content is inert
+executable_admission: pending           # CL-lt51: foreign prompt content is
+                                        # model-instructing, not inert
 trust_state: unreviewed
 rights:
   fetch_authorization:   {state: granted, evidence: configured-subscriber-token}

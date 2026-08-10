@@ -27,6 +27,12 @@ from lib.providers.wiring import (  # noqa: E402
     marketplace_inventory,
 )
 
+from foreign_admission_support import (  # noqa: E402
+    admitting,
+    admitting_inventory,
+    stand_in_contents,
+)
+
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "provider_git_repo" / "mattpocock-skills.json"
 
 
@@ -111,6 +117,9 @@ def test_installs_nested_skills(tmp_path: Path) -> None:
         assert item.classification["maturity"] == "stable"
         assert item.upstream_revision is not None, "a git-repo source is revisioned"
 
+        # `CL-lt51`: these are a foreign steward's Skills, so the install needs
+        # the operator's recorded decision about the exact bytes it retrieves.
+        fetched = provider.fetch(item.upstream_id, item.upstream_revision)
         outcome = install_marketplace_item(
             item,
             provider=provider,
@@ -118,6 +127,10 @@ def test_installs_nested_skills(tmp_path: Path) -> None:
             scope="project",
             target="project_committed",
             target_root=tmp_path / "projection" / name,
+            ledger=admitting(
+                item.qualified_identity(),
+                {entry.path: entry.content for entry in fetched.files},
+            ),
         )
 
         # The transaction's own order, not a rewording of it.
@@ -190,13 +203,19 @@ def test_in_progress_remains_discoverable() -> None:
     assert in_progress, "the recorded capture carries in-progress items"
     assert stable, "and stable ones to compare them against"
 
+    # `CL-lt51` added a fourth claim to the picture: this is a foreign steward,
+    # and a foreign steward's Skill is admission-required, so *every* item here
+    # carries the admission-pending reason at discovery time -- discovery does
+    # not fetch whole items, and the decision binds to bytes. Maturity is still
+    # the axis under test, and it is still visible: it is recorded on the
+    # classification and it is the only thing that differs between the two
+    # groups' block reasons.
     for item in in_progress:
         assert item.classification["maturity"] == "in-progress"
         assert item.classification["maturity_basis"] == "collection:in-progress"
-        assert item.admission_state == "discoverable"
-        assert item.block_reasons == (), (
-            "not promoting is not blocking: a block reason asserts something was "
-            "observed about the item, and nothing was"
+        assert item.block_reason_values() == ("executable-admission-pending",), (
+            "not promoting is still not blocking: no reason here asserts anything "
+            "observed about this item's rights, runtime, or availability"
         )
         assert item.rights.install_rights == "granted", (
             "the non-promotion is maturity, not rights"
@@ -204,17 +223,43 @@ def test_in_progress_remains_discoverable() -> None:
 
     for item in stable:
         assert item.classification["maturity"] == "stable"
-        assert item.admission_state == "installable"
+        assert item.block_reason_values() == ("executable-admission-pending",)
+
+    # And with the decision recorded for the exact bytes, maturity is once more
+    # the only thing separating the two groups.
+    decided = evaluate_inventory(
+        result.inventory,
+        AdmissionContext(),
+        ledger=admitting_inventory(result.inventory),
+        contents=stand_in_contents(result.inventory),
+    )
+    for item in decided.inventory:
+        if item.collection_membership[:2] == ("skills", "in-progress"):
+            assert item.admission_state == "discoverable"
+            assert item.block_reasons == ()
+        elif item.collection_membership[:2] == ("skills", "engineering"):
+            assert item.admission_state == "installable"
 
 
 def test_promoting_in_progress_is_an_explicit_scope_decision() -> None:
-    """A scope that admits `in-progress` installs it; the default never does."""
-    _, result = marketplace_inventory(_entry(), http_transport=_transport())
+    """A scope that admits `in-progress` installs it; the default never does.
 
-    default_report = evaluate_inventory(result.inventory, AdmissionContext())
+    Evaluated with the admission decisions recorded, because `CL-lt51` makes a
+    foreign steward's Skill admission-required and this test is about the
+    maturity axis: without the decisions both scopes would answer `blocked` and
+    the promotion would be invisible.
+    """
+    _, result = marketplace_inventory(_entry(), http_transport=_transport())
+    decided = dict(
+        ledger=admitting_inventory(result.inventory),
+        contents=stand_in_contents(result.inventory),
+    )
+
+    default_report = evaluate_inventory(result.inventory, AdmissionContext(), **decided)
     promoted_report = evaluate_inventory(
         result.inventory,
         AdmissionContext(admitted_maturities=("stable", "in-progress")),
+        **decided,
     )
 
     identity = next(

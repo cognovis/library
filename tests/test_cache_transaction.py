@@ -148,6 +148,35 @@ def _stores(tmp_path: Path) -> tuple[ObjectStore, TofuPinStore, ReceiptStore]:
     )
 
 
+def _admitting(
+    files: Mapping[str, bytes] = UPSTREAM,
+    *,
+    identity: str = PROVIDER + "#kits/anchor",
+    library_type: str = "skill",
+) -> ExecutableAdmissionLedger:
+    """The operator's recorded decision about exactly these bytes.
+
+    `CL-lt51` made a foreign steward's Skill admission-required, and this module
+    installs one through the foreign cache transaction. Every test whose subject
+    is the *transaction* -- its ordering, its receipts, its atomicity -- records
+    the decision its content needs, rather than the transaction quietly not
+    needing one. That the gate still refuses an undecided artifact is asserted by
+    `test_unadmitted_executable_content_is_cached_but_never_projected`, which
+    passes an empty ledger on purpose.
+    """
+    ledger = ExecutableAdmissionLedger()
+    ledger.admit(
+        identity,
+        content_digest(files),
+        library_type=library_type,
+        reviewer="malte.sussdorff@cognovis.de",
+        permission_surface=("filesystem:read",),
+        decided_at="2026-08-10T09:00:00Z",
+        evidence="read the whole item body for this transaction fixture and admitted it",
+    )
+    return ledger
+
+
 def _install(tmp_path: Path, **overrides: object):
     objects, pins, receipts = _stores(tmp_path)
     projector = _Projector(tmp_path / "harness")
@@ -161,6 +190,7 @@ def _install(tmp_path: Path, **overrides: object):
         activate=projector.activation,
         observed_at=NOW,
         completeness=MANIFEST,
+        ledger=_admitting(),
     )
     kwargs.update(overrides)
     outcome = install_foreign_item(_item(), **kwargs)
@@ -316,6 +346,7 @@ def test_a_blocked_committed_projection_still_caches_and_receipts(tmp_path: Path
             activate=projector.activation,
             completeness=MANIFEST,
             observed_at=NOW,
+            ledger=_admitting(),
         )
 
     assert projector.activations == 0
@@ -390,6 +421,7 @@ def test_a_failed_finalization_leaves_a_receipt_that_names_its_targets(
             activate=projector.activation,
             completeness=MANIFEST,
             observed_at=NOW,
+            ledger=_admitting(),
         )
 
     assert projector.activations == 1, "the projection did happen"
@@ -454,6 +486,7 @@ def test_completeness_evidence_is_stated_and_recorded(tmp_path: Path) -> None:
         activate=_Projector(tmp_path / "harness2").activation,
         completeness=ADAPTER_DECLARED,
         observed_at=NOW,
+        ledger=_admitting(),
     )
     assert second.receipt.completeness_evidence == "pinned-digest"
 
@@ -583,6 +616,7 @@ def test_the_plan_binds_the_mutation(tmp_path: Path) -> None:
             activate=ProjectionActivation(plan=lying_plan, apply=unrelated_apply),
             completeness=MANIFEST,
             observed_at=NOW,
+            ledger=_admitting(),
         )
     assert str(root / "actual.txt") in str(excinfo.value)
 
@@ -674,6 +708,7 @@ def test_a_repin_cannot_race_an_install(tmp_path: Path) -> None:
         activate=projector.activation,
         completeness=MANIFEST,
         observed_at=NOW,
+        ledger=_admitting(),
     )
     worker.join(timeout=15)
     assert not failures, failures

@@ -224,7 +224,7 @@ def test_grant_is_durable_across_processes_and_auditable(tmp_path: Path) -> None
     # on the same path answers the same thing.
     store = AdmissionLedgerStore(_state_for_home(tmp_path).admission_ledger_path)
     assert (
-        store.ledger().state_for(IDENTITY, digest, library_type="workflow")
+        store.ledger().state_for(IDENTITY, digest, library_type="workflow", stewardship="foreign")
         == "admitted"
     )
 
@@ -625,7 +625,7 @@ def test_a_denial_recorded_during_an_install_is_not_overtaken_by_it(
         )
         assert (
             state.admission_ledger().state_for(
-                IDENTITY, digest, library_type="workflow"
+                IDENTITY, digest, library_type="workflow", stewardship="foreign"
             )
             == "refused"
         )
@@ -784,7 +784,7 @@ def test_a_hand_edited_ledger_entry_is_refused_rather_than_coerced(
         store.ledger()
 
     _write(base)
-    assert store.ledger().state_for(IDENTITY, digest, library_type="workflow") == (
+    assert store.ledger().state_for(IDENTITY, digest, library_type="workflow", stewardship="foreign") == (
         "admitted"
     )
 
@@ -890,7 +890,7 @@ def test_a_workspace_mutation_holds_its_decisions_for_its_whole_write(
 
     with store.decisions() as decisions:
         assert (
-            decisions.state_for(IDENTITY, digest, library_type="workflow") == "admitted"
+            decisions.state_for(IDENTITY, digest, library_type="workflow", stewardship="foreign") == "admitted"
         )
         writer = threading.Thread(target=_record_denial)
         writer.start()
@@ -898,7 +898,7 @@ def test_a_workspace_mutation_holds_its_decisions_for_its_whole_write(
             mutating.set()
             # The denial cannot complete while the mutation holds the decisions.
             assert not landed.wait(timeout=1.0)
-            seen.append(decisions.state_for(IDENTITY, digest, library_type="workflow"))
+            seen.append(decisions.state_for(IDENTITY, digest, library_type="workflow", stewardship="foreign"))
         finally:
             released.set()
     writer.join(timeout=30)
@@ -906,7 +906,7 @@ def test_a_workspace_mutation_holds_its_decisions_for_its_whole_write(
     assert seen == ["admitted"]
     assert landed.is_set()
     assert (
-        store.ledger().state_for(IDENTITY, digest, library_type="workflow") == "refused"
+        store.ledger().state_for(IDENTITY, digest, library_type="workflow", stewardship="foreign") == "refused"
     )
 
 
@@ -1016,7 +1016,38 @@ def test_there_is_no_bulk_grant_surface(tmp_path: Path) -> None:
     assert malformed.returncode == 3
     assert "digest" in (malformed.stderr + malformed.stdout).lower()
 
-    unknown_type = _run(
+    # A type that is inert under every stewardship still cannot be decided about.
+    # `CL-lt51` narrowed this set rather than removing it: a Skill is now
+    # decidable because a foreign steward's Skill instructs a model, while an
+    # MCP-Server registration instructs nothing and holds no trust to grant.
+    inert_type = _run(
+        tmp_path,
+        ADMISSION_COMMAND,
+        GRANT_VERB,
+        "--identity",
+        f"{PROVIDER}#servers/helper",
+        "--digest",
+        content_digest(ORIGINAL),
+        "--type",
+        "mcp-server",
+        "--operator",
+        OPERATOR,
+        "--reason",
+        REASON,
+        "--no-permissions",
+    )
+    assert inert_type.returncode == 3
+    assert "inert" in (inert_type.stderr + inert_type.stdout).lower()
+
+
+def test_a_foreign_skill_can_be_decided_about_at_the_cli(tmp_path: Path) -> None:
+    """AC1: the operator act reaches model-instructing content too (`CL-lt51`).
+
+    Before this bead the same command answered "that is inert", which left an
+    operator who wanted to record their review of an upstream Skill with nothing
+    to record it in -- the `CL-2wqz` failure mode, one content class over.
+    """
+    granted = _run(
         tmp_path,
         ADMISSION_COMMAND,
         GRANT_VERB,
@@ -1031,6 +1062,9 @@ def test_there_is_no_bulk_grant_surface(tmp_path: Path) -> None:
         "--reason",
         REASON,
         "--no-permissions",
+        "--json",
     )
-    assert unknown_type.returncode == 3
-    assert "inert" in (unknown_type.stderr + unknown_type.stdout).lower()
+    assert granted.returncode == 0, granted.stderr
+    payload = json.loads(granted.stdout)["data"]["decision"]
+    assert payload["state"] == "admitted"
+    assert payload["content_digest"] == content_digest(ORIGINAL)

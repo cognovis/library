@@ -729,6 +729,8 @@ def _add_marketplace_verbs(subparsers: argparse._SubParsersAction) -> None:
     )
     status_parser.add_argument("--json", action="store_true", help="Output JSON")
 
+    _add_marketplace_update_verbs(verb_sub)
+
     gc_parser = verb_sub.add_parser(
         "gc", help="Plan (or perform) automatic collection of unreferenced objects"
     )
@@ -746,6 +748,149 @@ def _add_marketplace_verbs(subparsers: argparse._SubParsersAction) -> None:
         "--apply", action="store_true", help="Delete what the plan proved collectable"
     )
     gc_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+
+def _add_marketplace_update_verbs(verb_sub: argparse._SubParsersAction) -> None:
+    """The `CL-lt51` update flow: fetch and summarize, then a human decides.
+
+    The split between the verbs is the control. `update` fetches into the
+    quarantine, scans, reviews, and writes a decision packet -- it changes no pin,
+    no admission decision, and no projected byte, so an agent may run it.
+    `update-approve` raises a pin and admits bytes, so an agent may not: the
+    `.dcg/packs/library-pin-raise-guard.yaml` guard blocks it in an agent shell
+    and the packet renders the exact command for the human to run instead.
+    """
+    from lib.providers.update_admission import (
+        UPDATE_APPROVE_VERB,
+        UPDATE_LIST_VERB,
+        UPDATE_REJECT_VERB,
+        UPDATE_SHOW_VERB,
+        UPDATE_VERB,
+    )
+
+    update_parser = verb_sub.add_parser(
+        UPDATE_VERB,
+        help=(
+            "Fetch a provider's current state into the update quarantine and "
+            "produce a decision packet. Changes no pin and no projection"
+        ),
+    )
+    update_parser.add_argument("name", help="Registered marketplace name")
+    update_parser.add_argument(
+        "--selector", default=None, help="Provider-native selector passed to enumerate"
+    )
+    update_parser.add_argument(
+        "--item",
+        action="append",
+        dest="upstream_ids",
+        default=None,
+        help=(
+            "Limit the update to these upstream ids; repeatable. The default is "
+            "every item already pinned for this provider"
+        ),
+    )
+    update_parser.add_argument(
+        "--review-model",
+        default=None,
+        help="Exact adapter model id for the review stage",
+    )
+    update_parser.add_argument(
+        "--review-agent", default=None, help="Agent-shell adapter for the review stage"
+    )
+    update_parser.add_argument(
+        "--review-verdict-file",
+        type=Path,
+        default=None,
+        help=(
+            "Replay an already-recorded verdict artifact instead of dispatching a "
+            "reviewer. The verdict must name this change set or it is refused"
+        ),
+    )
+    update_parser.add_argument(
+        "--scope", choices=["project", "global"], default="project"
+    )
+    update_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    show_parser = verb_sub.add_parser(
+        UPDATE_SHOW_VERB, help="Show one decision packet and its recommendation"
+    )
+    show_parser.add_argument("packet_id", help="Packet id from `marketplace update`")
+    show_parser.add_argument(
+        "--content",
+        action="store_true",
+        help="Also print the full post-update content of every changed item",
+    )
+    show_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    list_parser = verb_sub.add_parser(
+        UPDATE_LIST_VERB, help="List update packets and any decision recorded about them"
+    )
+    list_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    approve_parser = verb_sub.add_parser(
+        UPDATE_APPROVE_VERB,
+        help=(
+            "Adopt some or all of one packet: raise the pin, record the admission "
+            "decision, and project. A human act; blocked in an agent shell"
+        ),
+    )
+    approve_parser.add_argument("packet_id", help="Packet id from `marketplace update`")
+    approve_parser.add_argument(
+        "--operator",
+        required=True,
+        help=(
+            "The declared identity of whoever is deciding. Recorded, never "
+            "verified: authenticating an operator is credential handling"
+        ),
+    )
+    approve_parser.add_argument(
+        "--reason", required=True, help="What you read in this packet and why you accept it"
+    )
+    approve_parser.add_argument(
+        "--item",
+        action="append",
+        dest="selected",
+        default=None,
+        help=(
+            "Adopt only this qualified identity; repeatable. The default adopts "
+            "every changed item in the packet"
+        ),
+    )
+    approve_parser.add_argument(
+        "--against-recommendation",
+        action="store_true",
+        help=(
+            "Adopt although the packet does not recommend it. Required in that "
+            "case, so overruling the packet is never accidental"
+        ),
+    )
+    approve_parser.add_argument(
+        "--scope", choices=["project", "global"], default="project"
+    )
+    approve_parser.add_argument(
+        "--target",
+        choices=["project_committed", "machine_local"],
+        default="machine_local",
+        help="Projection target for the adopted revision",
+    )
+    approve_parser.add_argument(
+        "--target-root", default=None, help="Directory the adopted items are projected into"
+    )
+    approve_parser.add_argument(
+        "--accept-rights",
+        action="store_true",
+        help="Acknowledge the rights statement printed before any mutation",
+    )
+    approve_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    reject_parser = verb_sub.add_parser(
+        UPDATE_REJECT_VERB,
+        help="Record that this packet was declined. Changes nothing else at all",
+    )
+    reject_parser.add_argument("packet_id", help="Packet id from `marketplace update`")
+    reject_parser.add_argument("--operator", required=True, help="Who is deciding")
+    reject_parser.add_argument("--reason", required=True, help="Why the update is declined")
+    reject_parser.add_argument("--json", action="store_true", help="Output JSON")
 
 
 def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
@@ -3592,6 +3737,316 @@ def cmd_marketplace_gc(
     return EXIT_SUCCESS
 
 
+# -- foreign update admission (ADR-0011, CL-lt51) -----------------------------
+
+
+def _update_store(repo_root: Path | None):
+    from lib.providers.update_admission import UpdatePacketStore
+
+    return UpdatePacketStore(_foreign_state(repo_root).update_root())
+
+
+def _update_candidates(provider, result, args) -> list:
+    """Which items this update fetches.
+
+    The default is every item this provider already has a pin for, because an
+    update is about content the operator already holds. `--item` narrows it, and
+    an explicitly named item with no pin is a legitimate first import.
+    """
+    inventory = list(result.inventory)
+    by_upstream = {item.upstream_id: item for item in inventory}
+    requested = getattr(args, "upstream_ids", None)
+    if requested:
+        missing = [value for value in requested if value not in by_upstream]
+        if missing:
+            raise LibraryError(
+                f"{provider.identity()} does not list these items: {sorted(missing)}"
+            )
+        return [by_upstream[value] for value in requested]
+
+    state = _foreign_state(getattr(args, "_repo_root", None))
+    pinned = {pin.qualified_identity for pin in state.pin_store().pins()}
+    candidates = [item for item in inventory if item.qualified_identity() in pinned]
+    if not candidates:
+        raise LibraryError(
+            f"No item from {provider.identity()} is pinned in this scope, so there "
+            "is nothing to update. Name the items to import for the first time with "
+            "--item <upstream id>, or install one through `library marketplace "
+            "install` first."
+        )
+    return candidates
+
+
+def _review_stage(args, repo_root: Path | None):
+    """The review stage this update runs, from the operator's flags."""
+    import json as _json
+
+    from lib.providers.update_review_acpx import (
+        DEFAULT_AGENT,
+        DEFAULT_MODEL,
+        acpx_review,
+        recorded_review,
+    )
+
+    verdict_file = getattr(args, "review_verdict_file", None)
+    if verdict_file is not None:
+        return recorded_review(_json.loads(Path(verdict_file).read_text(encoding="utf-8")))
+    state = _foreign_state(repo_root)
+    return acpx_review(
+        workspace=repo_root or Path.cwd(),
+        artifacts=state.update_root() / "review-artifacts",
+        agent=getattr(args, "review_agent", None) or DEFAULT_AGENT,
+        model=getattr(args, "review_model", None) or DEFAULT_MODEL,
+    )
+
+
+def _packet_payload(packet, *, content: bool = False, contents=None) -> dict:
+    payload = packet.to_dict()
+    if content and contents is not None:
+        payload["content"] = {
+            identity: {
+                path: value.decode("utf-8", errors="replace")
+                for path, value in sorted(files.items())
+            }
+            for identity, files in sorted(contents.items())
+        }
+    return payload
+
+
+def _print_packet(packet, *, contents=None, show_content: bool = False) -> None:
+    print(f"Update packet {packet.packet_id}")
+    print(f"  source: {packet.provider_identity}")
+    print(f"  observed: {packet.change_set.observed_at}")
+    print(f"  change set: {packet.change_set.digest()}")
+    if not packet.change_set.items:
+        print("  nothing changed against the admitted baseline")
+    for item in packet.change_set.items:
+        markers = packet.scans.get(item.qualified_identity)
+        rendered = (
+            ", ".join(f"{name} x{count}" for name, count in sorted(markers.counts().items()))
+            if markers is not None and markers.counts()
+            else "no risk markers"
+        )
+        print(
+            f"  {item.change:>8}  {item.qualified_identity} "
+            f"({item.byte_size} bytes, {len(item.content or {})} member(s)) — {rendered}"
+        )
+    if packet.review is not None:
+        print(f"  reviewer: {packet.review.reviewer} answered {packet.review.verdict!r}")
+        print(f"    {packet.review.summary}")
+        for finding in packet.review.findings:
+            print(f"    [{finding.severity}] {finding.identifier}: {finding.detail}")
+    else:
+        print(f"  reviewer: no verdict — {packet.review_unavailable_detail}")
+    print(f"  recommendation: {packet.recommendation}")
+    print(f"    {packet.recommendation_basis}")
+    print(
+        "  The recommendation is advice. Nothing is adopted until you decide, and "
+        "the scanner reduces risk rather than detecting intent."
+    )
+    print("  Approve:")
+    print(f"    {packet.approval_command()}")
+    print("  Decline:")
+    print(f"    {packet.rejection_command()}")
+    if show_content and contents:
+        for identity, files in sorted(contents.items()):
+            for path, value in sorted(files.items()):
+                print(f"\n----- {identity} :: {path} -----")
+                print(value.decode("utf-8", errors="replace"))
+
+
+def cmd_marketplace_update(
+    args: argparse.Namespace, repo_root: Path | None, catalog: dict
+) -> int:
+    """Fetch, quarantine, scan, review, and summarize. Adopt nothing."""
+    from lib.providers.update_admission import UpdateFetchFailed, prepare_update
+    from lib.providers.wiring import marketplace_inventory
+
+    entry = _marketplace_entry(catalog, args.name)
+    provider, result = marketplace_inventory(entry, selector=args.selector)
+    setattr(args, "_repo_root", repo_root)
+    items = _update_candidates(provider, result, args)
+
+    try:
+        packet = prepare_update(
+            provider=provider,
+            items=items,
+            state=_foreign_state(repo_root),
+            review=_review_stage(args, repo_root),
+            observed_at=_utc_now(),
+        )
+    except UpdateFetchFailed as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+
+    if args.json:
+        print_json(success(_packet_payload(packet)))
+        return EXIT_SUCCESS
+    _print_packet(packet)
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_update_show(args: argparse.Namespace, repo_root: Path | None) -> int:
+    store = _update_store(repo_root)
+    try:
+        packet, contents = store.load(args.packet_id)
+    except KeyError as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+    decisions = store.decisions(args.packet_id)
+    if args.json:
+        payload = _packet_payload(packet, content=args.content, contents=contents)
+        payload["decisions"] = list(decisions)
+        print_json(success(payload))
+        return EXIT_SUCCESS
+    _print_packet(packet, contents=contents, show_content=args.content)
+    for row in decisions:
+        print(
+            f"  decided: {row['decision']} by {row['operator']} at {row['decided_at']}"
+        )
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_update_list(args: argparse.Namespace, repo_root: Path | None) -> int:
+    store = _update_store(repo_root)
+    rows = []
+    for packet_id in store.packet_ids():
+        packet, _ = store.load(packet_id)
+        decisions = store.decisions(packet_id)
+        rows.append(
+            {
+                "packet_id": packet_id,
+                "provider_identity": packet.provider_identity,
+                "created_at": packet.created_at,
+                "changed_items": len(packet.change_set.items),
+                "recommendation": packet.recommendation,
+                "review_status": packet.review_status,
+                "decision": decisions[-1]["decision"] if decisions else None,
+            }
+        )
+    if args.json:
+        print_json(success({"packets": rows}))
+        return EXIT_SUCCESS
+    if not rows:
+        print("No update packets in the quarantine.")
+        return EXIT_SUCCESS
+    for row in rows:
+        state = row["decision"] or "undecided"
+        print(
+            f"{row['packet_id']}: {row['changed_items']} changed item(s), "
+            f"recommends {row['recommendation']}, {state}"
+        )
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_update_approve(
+    args: argparse.Namespace, repo_root: Path | None, catalog: dict
+) -> int:
+    """Raise the pin, record the decision, and project. The human transition."""
+    from lib.providers.rights import RightsPresentation
+    from lib.providers.update_admission import approve_packet
+    from lib.providers.wiring import marketplace_inventory, resolution_observations
+
+    store = _update_store(repo_root)
+    try:
+        packet, _ = store.load(args.packet_id)
+    except KeyError as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+
+    entry = None
+    from lib.catalog import get_marketplaces
+
+    for candidate in get_marketplaces(catalog):
+        if isinstance(candidate, dict) and candidate.get("source") == packet.provider_identity:
+            entry = candidate
+            break
+        if isinstance(candidate, dict) and candidate.get("name") == packet.provider_identity:
+            entry = candidate
+            break
+    if entry is None:
+        raise LibraryError(
+            f"No registered marketplace serves {packet.provider_identity}; approving "
+            "an update needs its provider, because raising a pin requires a current "
+            "observation of the source that stands behind the bytes."
+        )
+    provider, result = marketplace_inventory(entry)
+    items = {item.qualified_identity(): item for item in result.inventory}
+
+    shown: list[str] = []
+
+    def present(presentation: RightsPresentation):
+        shown.append(presentation.statement)
+        print(presentation.statement)
+        if not args.accept_rights:
+            raise LibraryError(
+                "This target requires an explicit operator opt-in for the rights "
+                "state shown above. Re-run with --accept-rights to accept it.",
+                exit_code=3,
+            )
+        return presentation.acknowledge(
+            operator=args.operator, acknowledged_at=_utc_now()
+        )
+
+    default_root = (repo_root or Path.cwd()) / ".agents" / "foreign"
+    target_root = Path(args.target_root).expanduser() if args.target_root else default_root
+
+    try:
+        outcome = approve_packet(
+            packet_id=args.packet_id,
+            state=_foreign_state(repo_root),
+            items=items,
+            operator=args.operator,
+            reason=args.reason,
+            availability=resolution_observations([provider]),
+            decided_at=_utc_now(),
+            target=args.target,
+            target_root=target_root,
+            scope=args.scope,
+            selected=tuple(args.selected) if args.selected else None,
+            against_recommendation=bool(args.against_recommendation),
+            present=present,
+        )
+    except ValueError as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+
+    payload = {
+        "packet_id": outcome.packet_id,
+        "approved": list(outcome.approved),
+        "declined": list(outcome.declined),
+        "receipts": list(outcome.receipts),
+        "decision": dict(outcome.decision),
+        "rights_statement_shown": bool(shown),
+    }
+    if args.json:
+        print_json(success(payload))
+        return EXIT_SUCCESS
+    print(f"Approved {len(outcome.approved)} item(s) from {outcome.packet_id}")
+    for identity in outcome.approved:
+        print(f"  adopted: {identity}")
+    for identity in outcome.declined:
+        print(f"  left as it was: {identity}")
+    return EXIT_SUCCESS
+
+
+def cmd_marketplace_update_reject(args: argparse.Namespace, repo_root: Path | None) -> int:
+    from lib.providers.update_admission import reject_packet
+
+    try:
+        row = reject_packet(
+            packet_id=args.packet_id,
+            state=_foreign_state(repo_root),
+            operator=args.operator,
+            reason=args.reason,
+            decided_at=_utc_now(),
+        )
+    except (KeyError, ValueError) as exc:
+        raise LibraryError(str(exc), exit_code=3) from exc
+    if args.json:
+        print_json(success({"decision": row}))
+        return EXIT_SUCCESS
+    print(f"Declined {args.packet_id}.")
+    print("  Pins, admission decisions, and projected bytes are unchanged.")
+    return EXIT_SUCCESS
+
+
 # -- executable admission (ADR-0011, CL-2wqz) ---------------------------------
 
 
@@ -4887,6 +5342,7 @@ def _workspace_normalized_members(
     undigested.
     """
     from lib.providers.classification import (
+        FIRST_PARTY,
         classification_for,
         executable_admission_for,
         library_name_for,
@@ -4923,7 +5379,19 @@ def _workspace_normalized_members(
             library_type=node.primitive,
             library_name=library_name_for(node.name),
             classification=classification_for(
-                node.primitive, "workspace-resolution", None, None, (node.catalog_name,)
+                node.primitive,
+                "workspace-resolution",
+                None,
+                None,
+                (node.catalog_name,),
+                # A Workspace closure resolves entries out of *registered source
+                # catalogs* -- this repository and its steward catalogs. That is
+                # the first-party side of `CL-lt51`'s boundary, and stating it
+                # here is what keeps the model-instructing admission requirement
+                # from blocking the platform on its own Skills. A foreign item
+                # never reaches this function; it arrives through
+                # `install_foreign_item`, which records `foreign` itself.
+                stewardship=FIRST_PARTY,
             ),
             runtime_compatibility=("unknown",),
             rights=Rights(
@@ -4940,7 +5408,7 @@ def _workspace_normalized_members(
             provider_availability=ProviderAvailability(
                 state="available", observed_at=observed_at
             ),
-            executable_admission=executable_admission_for(node.primitive),
+            executable_admission=executable_admission_for(node.primitive, FIRST_PARTY),
         )
         items.append(item)
         contents[item.qualified_identity()] = files
@@ -6329,6 +6797,16 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_marketplace_status(args, repo_root)
             if verb == "gc":
                 return cmd_marketplace_gc(args, repo_root, catalog)
+            if verb == "update":
+                return cmd_marketplace_update(args, repo_root, catalog)
+            if verb == "update-show":
+                return cmd_marketplace_update_show(args, repo_root)
+            if verb == "update-list":
+                return cmd_marketplace_update_list(args, repo_root)
+            if verb == "update-approve":
+                return cmd_marketplace_update_approve(args, repo_root, catalog)
+            if verb == "update-reject":
+                return cmd_marketplace_update_reject(args, repo_root)
         except LibraryError as exc:
             if use_json:
                 print_json(error_result(str(exc), exc.exit_code))

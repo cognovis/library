@@ -1274,6 +1274,20 @@ class ForeignState:
         """The decisions that stand right now, as the gate consults them."""
         return self.admission_ledger_store().ledger()
 
+    def update_root(self) -> Path:
+        """Where `CL-lt51` quarantines fetched updates awaiting a human decision.
+
+        Under the cache root and beside the object store, never inside it. A
+        fetched update is lawfully retrieved content that no harness path
+        receives -- ADR-0011 `Caching is not installing` -- but it is also not an
+        object the Library installs from: keeping the two apart is what makes a
+        rejection free, because the bytes an operator declined never entered the
+        store an install reads.
+        """
+        root = Path(self.cache_root) / "updates"
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+
     def non_compliance_register(self) -> NonComplianceRegister:
         """The register of projections no sync or repair may write.
 

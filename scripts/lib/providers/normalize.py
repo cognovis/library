@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from .classification import (
+    FOREIGN,
     classification_for,
     executable_admission_for,
     library_name_for,
@@ -239,6 +240,10 @@ def normalize_inventory(
             content,
             (curated_skill_classes or {}).get(raw.upstream_id),
             raw.collection_membership,
+            # Everything a registered source provider enumerates is somebody
+            # else's content by definition. Stated rather than defaulted, so the
+            # claim is readable at the one place that makes it.
+            stewardship=FOREIGN,
         )
         item_rights = _item_rights(provider, declared, raw.upstream_id, recorded_rights)
         classification.update(
@@ -264,7 +269,9 @@ def normalize_inventory(
                 runtime_compatibility=description.runtime_compatibility,
                 rights=item_rights,
                 provider_availability=availability,
-                executable_admission=executable_admission_for(description.library_type),
+                executable_admission=executable_admission_for(
+                    description.library_type, FOREIGN
+                ),
                 trust_state=trust_state,
             )
         )

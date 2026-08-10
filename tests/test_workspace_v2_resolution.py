@@ -111,7 +111,12 @@ def _item(**overrides: Any) -> NormalizedItem:
         upstream_revision=None,
         library_type="workflow",
         library_name="deploy",
-        classification={},
+        # A Workspace closure resolves entries out of registered source catalogs,
+        # which is `CL-lt51`'s first-party side: a first-party Standard or Skill
+        # stays inert, and the Workflow in this closure is still admission-
+        # required because an executable is admission-required under either
+        # stewardship.
+        classification={"stewardship": "first-party"},
         runtime_compatibility=("pi",),
         rights=GRANTED,
         provider_availability=AVAILABLE,

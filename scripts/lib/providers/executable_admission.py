@@ -56,7 +56,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence, Union
 
-from .classification import EXECUTABLE_TYPES
+from .classification import (
+    ADMISSION_DECIDABLE_TYPES,
+    EXECUTABLE_TYPES,
+    requires_admission,
+    stewardship_of_classification,
+)
 from .inventory import (
     EVIDENCE_PLACEHOLDERS,
     EXECUTABLE_ADMISSION_STATES,
@@ -188,8 +193,18 @@ def validated_digest(value: str) -> str:
 
 
 def is_executable_type(library_type: str) -> bool:
-    """Whether this Library type requires an executable-admission decision."""
+    """Whether this Library type runs a process of its own.
+
+    Narrower than "requires a decision" since `CL-lt51`: a foreign Skill needs a
+    decision and executes no process. Call `requires_admission` for the gate
+    question and this one only where the *process* distinction is what matters.
+    """
     return library_type in EXECUTABLE_TYPES
+
+
+def is_admission_decidable_type(library_type: str) -> bool:
+    """Whether a decision can be recorded for this type under any stewardship."""
+    return library_type in ADMISSION_DECIDABLE_TYPES
 
 
 def _is_template(value: str) -> bool:
@@ -366,8 +381,20 @@ def admission_refusal(
         if already_decided
         else "nothing has decided about these bytes yet"
     )
+    # Named for what this artifact actually is. Calling a foreign Skill "an
+    # executable artifact" would be the one sentence in the diagnostic an
+    # operator could reasonably argue with, and arguing with the refusal is how
+    # somebody talks themselves into working around it.
+    kind = (
+        "an executable artifact"
+        if is_executable_type(library_type)
+        else (
+            "model-instructing content from a foreign steward: this harness loads "
+            "it into a model's context so the model will follow it"
+        )
+    )
     return (
-        f"{qualified_identity} is an executable artifact whose admission state is "
+        f"{qualified_identity} is {kind}. Its admission state is "
         f"{state!r} for these exact bytes ({content_digest_value}). The content is "
         "cached and receipted; caching is not installing, and no harness path "
         f"receives it until the scope operator decides -- {standing}. Record the "
@@ -481,10 +508,11 @@ class ExecutableAdmissionLedger:
         evidence: str,
         supersedes: bool = False,
     ) -> AdmissionRecord:
-        if not is_executable_type(library_type):
+        if not is_admission_decidable_type(library_type):
             raise InertContentNotAdmissible(
-                f"{qualified_identity} is {library_type!r}, which is inert; inert "
-                "content holds no executable trust to grant or withhold"
+                f"{qualified_identity} is {library_type!r}, which is inert under "
+                "every stewardship; inert content holds no trust to grant or "
+                "withhold"
             )
         return self._store(
             AdmissionRecord(
@@ -589,13 +617,21 @@ class ExecutableAdmissionLedger:
         content_digest_value: str | None,
         *,
         library_type: str,
+        stewardship: str,
     ) -> str:
         """The `executable_admission` state for one item at one content digest.
 
-        Inert types short-circuit before the ledger is consulted at all, so no
-        record, sibling, collection, or provider can lend them executable trust.
+        Args:
+            stewardship: Required, with no default. This is the gate, and the
+                argument decides whether a Skill is inert or needs a recorded
+                decision; a default here would be a silent answer to the only
+                question the caller is being asked. Every call site is a place
+                that knows where its bytes came from.
+
+        Inert pairs short-circuit before the ledger is consulted at all, so no
+        record, sibling, collection, or provider can lend them trust.
         """
-        if not is_executable_type(library_type):
+        if not requires_admission(library_type, stewardship):
             return INERT
         if not content_digest_value:
             return PENDING
@@ -873,8 +909,9 @@ class FirstPartyAdmission:
         content_digest_value: str | None,
         *,
         library_type: str,
+        stewardship: str,
     ) -> str:
-        if not is_executable_type(library_type):
+        if not requires_admission(library_type, stewardship):
             return INERT
         if not content_digest_value:
             return PENDING
@@ -895,11 +932,21 @@ def executable_admission_for_item(
     digest map was the earlier shape and review broke it: the gate checked one
     digest while the mutation wrote other bytes, so the reviewed content and the
     materialized content were never the same object.
+
+    Stewardship is read from the item's own **classification**, which is Library-
+    recorded metadata, and never from a field the producer supplies. An item with
+    no recorded stewardship is treated as foreign; see
+    `classification.stewardship_of_classification`.
     """
     identity = item.qualified_identity()
     files = contents.get(identity)
     digest = content_digest(files) if files else None
-    return ledger.state_for(identity, digest, library_type=item.library_type)
+    return ledger.state_for(
+        identity,
+        digest,
+        library_type=item.library_type,
+        stewardship=stewardship_of_classification(item.classification),
+    )
 
 
 def snapshot_contents(

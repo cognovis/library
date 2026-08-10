@@ -311,13 +311,31 @@ def evaluate_item(
         reasons.append(runtime_reason)
 
     if executable_admission == "pending":
+        # Two different pending facts, worded apart. Discovery is non-executing
+        # and does not fetch whole items, so it usually has no digest to check a
+        # decision against -- and a reason that claims "no decision is recorded
+        # for its current content digest" when no digest was ever computed sends
+        # an operator looking for a ledger entry they could not have made. The
+        # state is `pending` either way, because "we did not compute what this is"
+        # must never be more permissive than "we computed it and nobody reviewed
+        # it".
+        digested = bool((contents or {}).get(item.qualified_identity()))
+        evidence = (
+            (
+                f"{item.library_type} from this steward is admission-required and "
+                "no admission decision is recorded for its current content digest"
+            )
+            if digested
+            else (
+                f"{item.library_type} from this steward is admission-required and "
+                "this evaluation holds no content for it, so no decision could be "
+                "checked; the decision binds to bytes"
+            )
+        )
         reasons.append(
             BlockReason(
                 reason="executable-admission-pending",
-                evidence=(
-                    f"{item.library_type} is executable and no admission decision is "
-                    "recorded for its current content digest"
-                ),
+                evidence=evidence,
                 source="the scope operator's executable-admission ledger",
             )
         )

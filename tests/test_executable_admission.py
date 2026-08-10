@@ -54,7 +54,11 @@ def _item(upstream_id: str, library_type: str, **overrides: object) -> Normalize
         upstream_revision=None,
         library_type=library_type,
         library_name=upstream_id.rsplit("/", 1)[-1],
-        classification={"type_basis": "marker-file"},
+        # This module exercises the resolution gate over a first-party closure.
+        # `CL-lt51` made a foreign steward's Skill, Prompt, and Standard
+        # admission-required too; that boundary has its own assertions below and
+        # in tests/test_model_instructing_admission.py.
+        classification={"type_basis": "marker-file", "stewardship": "first-party"},
         runtime_compatibility=("unknown",),
         rights=GRANTED,
         provider_availability=ProviderAvailability(
@@ -88,7 +92,7 @@ def test_digest_change_returns_pending() -> None:
     original = {"WORKFLOW.md": b"steps: one\n", "lib/run.py": b"print('one')\n"}
     digest = content_digest(original)
 
-    assert ledger.state_for(identity, digest, library_type="workflow") == "pending"
+    assert ledger.state_for(identity, digest, library_type="workflow", stewardship="first-party") == "pending"
 
     record = ledger.admit(
         identity,
@@ -102,21 +106,21 @@ def test_digest_change_returns_pending() -> None:
     assert record.content_digest == digest
     assert record.reviewer == "malte.sussdorff@cognovis.de"
     assert record.permission_surface == ("filesystem:write",)
-    assert ledger.state_for(identity, digest, library_type="workflow") == "admitted"
+    assert ledger.state_for(identity, digest, library_type="workflow", stewardship="first-party") == "admitted"
 
     # One byte of the non-marker file is enough. Admission follows the bytes.
     changed = {"WORKFLOW.md": b"steps: one\n", "lib/run.py": b"print('two')\n"}
     changed_digest = content_digest(changed)
     assert changed_digest != digest
-    assert ledger.state_for(identity, changed_digest, library_type="workflow") == "pending"
+    assert ledger.state_for(identity, changed_digest, library_type="workflow", stewardship="first-party") == "pending"
 
     # The original decision is retained; re-admission is a new decision.
-    assert ledger.state_for(identity, digest, library_type="workflow") == "admitted"
+    assert ledger.state_for(identity, digest, library_type="workflow", stewardship="first-party") == "admitted"
     assert ledger.record_for(identity, changed_digest) is None
 
     # Neither the name nor the version carries the decision.
     other = f"{PROVIDER}#flows/deploy-v2"
-    assert ledger.state_for(other, digest, library_type="workflow") == "pending"
+    assert ledger.state_for(other, digest, library_type="workflow", stewardship="first-party") == "pending"
 
 
 def test_content_digest_is_order_and_boundary_stable() -> None:
@@ -166,12 +170,12 @@ def test_refused_admission_is_recorded_and_stays_refused() -> None:
         evidence="the workflow deletes outside its worktree",
     )
 
-    assert ledger.state_for(identity, digest, library_type="workflow") == "refused"
+    assert ledger.state_for(identity, digest, library_type="workflow", stewardship="first-party") == "refused"
 
     # A repeated admit does not quietly undo a deliberate refusal.
     with pytest.raises(ValueError):
         _admit(ledger, identity, digest)
-    assert ledger.state_for(identity, digest, library_type="workflow") == "refused"
+    assert ledger.state_for(identity, digest, library_type="workflow", stewardship="first-party") == "refused"
 
     # Reversing it is available, but only as an explicit act with its own evidence.
     ledger.admit(
@@ -184,7 +188,7 @@ def test_refused_admission_is_recorded_and_stays_refused() -> None:
         evidence="re-reviewed after the destructive command was removed upstream",
         supersedes=True,
     )
-    assert ledger.state_for(identity, digest, library_type="workflow") == "admitted"
+    assert ledger.state_for(identity, digest, library_type="workflow", stewardship="first-party") == "admitted"
 
 
 def test_a_recorded_decision_is_never_silently_rewritten() -> None:
@@ -307,7 +311,14 @@ def test_resolution_fails_when_executable_content_is_absent() -> None:
 
 
 def test_inert_does_not_inherit() -> None:
-    """Sharing a bundle, collection, or provider grants nothing."""
+    """Sharing a bundle, collection, or provider grants nothing.
+
+    `CL-lt51` narrowed what "inert" covers without changing this property. A
+    Prompt or Standard is inert only while its steward is this platform; from a
+    foreign steward it is model-instructing content and needs its own decision.
+    What no type ever gets is trust it did not earn -- not from a sibling, not
+    from a bundle, not from a provider.
+    """
     ledger = ExecutableAdmissionLedger()
     executable_id = f"{PROVIDER}#bundle/deploy"
     inert_id = f"{PROVIDER}#bundle/notes"
@@ -319,19 +330,25 @@ def test_inert_does_not_inherit() -> None:
     _admit(ledger, executable_id, executable_digest)
 
     # Same bundle, same collection, same provider -- and still inert.
-    assert ledger.state_for(inert_id, inert_digest, library_type="prompt") == "inert"
-    assert ledger.state_for(inert_id, executable_digest, library_type="prompt") == "inert"
-    assert ledger.state_for(inert_id, inert_digest, library_type="standard") == "inert"
+    assert ledger.state_for(inert_id, inert_digest, library_type="prompt", stewardship="first-party") == "inert"
+    assert ledger.state_for(inert_id, executable_digest, library_type="prompt", stewardship="first-party") == "inert"
+    assert ledger.state_for(inert_id, inert_digest, library_type="standard", stewardship="first-party") == "inert"
+
+    # The same bytes from a foreign steward are model-instructing content and
+    # carry no decision, so they are `pending` rather than inert.
+    assert ledger.state_for(inert_id, inert_digest, library_type="prompt", stewardship="foreign") == "pending"
 
     # A second executable in the same bundle inherits nothing either.
-    assert ledger.state_for(sibling_id, sibling_digest, library_type="workflow") == "pending"
+    assert ledger.state_for(sibling_id, sibling_digest, library_type="workflow", stewardship="first-party") == "pending"
 
-    # Inert content cannot be admitted at all: there is no executable trust to grant.
+    # A type that is inert under every stewardship cannot be admitted at all:
+    # there is no trust to grant, so recording a harmless-looking decision about
+    # it is refused rather than filed.
     with pytest.raises(InertContentNotAdmissible):
         ledger.admit(
             inert_id,
             inert_digest,
-            library_type="prompt",
+            library_type="mcp-server",
             reviewer="malte.sussdorff@cognovis.de",
             permission_surface=(),
             decided_at="2026-08-09T09:00:00Z",
