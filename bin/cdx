@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
-# cdx - Codex launcher with beads workflow integration
+# cdx - Codex launcher routed through mcodex with beads workflow integration
 #
 # Usage: cdx [wrapper-flags] [codex-args...]
-#        cdx -h | --help        Show wrapper flag help, then fall through to codex --help
+#        cdx -h | --help        Show wrapper flag help, then fall through to mcodex --help
 #
 # Wrapper flags (not passed to codex):
 #   --no-full-auto  → Launch codex without the default --full-auto wrapper
@@ -20,9 +20,9 @@
 
 set -euo pipefail
 
-CODEX_BIN="${CODEX_BIN:-$(command -v codex 2>/dev/null)}"
+CODEX_BIN="${CODEX_BIN:-$(command -v mcodex 2>/dev/null || true)}"
 if [[ -z "${CODEX_BIN}" ]]; then
-    echo "ERROR: codex not found in PATH. Install Codex first: https://github.com/openai/codex"
+    echo "ERROR: mcodex not found in PATH. Install codex-multi-auth first: npm install -g codex-multi-auth" >&2
     exit 1
 fi
 GIT_BIN="${GIT_BIN:-$(command -v git 2>/dev/null)}"
@@ -475,7 +475,7 @@ Wrapper flags (consumed by cdx, not passed to codex):
          --tui                   For cdx -b, force interactive Codex TUI mode
                                  (default for cdx -b)
          --exec                  For cdx -b, force non-interactive codex exec mode
-    -h,  --help                  Show this help, then codex --help
+    -h,  --help                  Show this help, then mcodex --help
 
 ────────────────────────────────────────────────────────────
 Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
@@ -483,7 +483,7 @@ context and pass it to Codex. Full cdx -b defaults to TUI mode so you can ask
 status questions while the workflow runs; pass --exec for non-interactive
 automation. Set CDX_BEAD_CODEX_MODE=auto to use TTY auto-detection instead.
 ────────────────────────────────────────────────────────────
-Forwarding to 'codex --help':
+Forwarding to 'mcodex --help':
 HELP
     exec "${CODEX_BIN}" --help
 fi

@@ -262,6 +262,74 @@ def _run_cdx_launcher(
     return result, argv_file, prompt_file, called_file, env_file, bd_log, git_log
 
 
+def _run_plain_cdx_launcher(
+    tmp_path: Path,
+    args: list[str],
+    *,
+    route_name: str | None,
+    use_override: bool = False,
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    route_mock, argv_file, prompt_file, called_file, env_file = _write_codex_capture(tmp_path)
+    if route_name is not None:
+        resolved_route = tmp_path / route_name
+        route_mock.rename(resolved_route)
+    else:
+        resolved_route = route_mock
+        route_mock.unlink()
+
+    env = dict(os.environ)
+    env.pop("CODEX_BIN", None)
+    env["HOME"] = str(tmp_path / "home")
+    env["PATH"] = f"{tmp_path}{os.pathsep}/usr/bin:/bin"
+    env["CODEX_ARGV_FILE"] = str(argv_file)
+    env["CODEX_PROMPT_FILE"] = str(prompt_file)
+    env["CODEX_CALLED_FILE"] = str(called_file)
+    env["CODEX_ENV_FILE"] = str(env_file)
+    if use_override:
+        env["CODEX_BIN"] = str(resolved_route)
+
+    result = subprocess.run(
+        [str(_CDX_BIN), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+        env=env,
+    )
+    return result, argv_file
+
+
+def test_cdx_defaults_to_mcodex_router(tmp_path: Path) -> None:
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        ["--no-full-auto", "--model", "gpt-test"],
+        route_name="mcodex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(argv_file.read_text(encoding="utf-8")) == ["--model", "gpt-test"]
+
+
+def test_cdx_keeps_explicit_codex_bin_override(tmp_path: Path) -> None:
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        ["--no-full-auto", "--model", "gpt-test"],
+        route_name="custom-codex",
+        use_override=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(argv_file.read_text(encoding="utf-8")) == ["--model", "gpt-test"]
+
+
+def test_cdx_fails_closed_when_mcodex_is_missing(tmp_path: Path) -> None:
+    result, _argv_file = _run_plain_cdx_launcher(tmp_path, [], route_name=None)
+
+    assert result.returncode == 1
+    assert "mcodex not found in PATH" in result.stderr
+    assert "codex-multi-auth" in result.stderr
+
+
 def _assert_safe_bead_permissions(argv: list[str]) -> None:
     assert _DANGEROUS_CODEX_ARG not in argv
     sandbox_index = argv.index("--sandbox")
