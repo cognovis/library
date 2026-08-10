@@ -84,6 +84,67 @@
 
 ### Added
 
+- *(CL-2wqz, admission)* `library admission` records the executable-admission
+  decision ADR-0011 requires, closing the residual the ADR itself recorded: slice
+  2 shipped the digest-bound ledger and the gate that reads it, and nothing that
+  could write to it, so every externally sourced Workflow, Pi extension, hook,
+  guardrail, and script was refused permanently. `grant`, `deny`, `show`, and
+  `list` all take `--json`. A decision names **bytes**: `--digest`, or
+  `--receipt <id>` which resolves an installed or cached item and displays its
+  identity, type, and digest *before* recording, so a name reference cannot
+  quietly bind content the operator did not mean. `--operator` and `--reason` are
+  required, a grant states the permission surface the artifact requests
+  (`--permission` per entry, or `--no-permissions` to state that it requests
+  none), and replacing an existing decision for the same bytes needs an explicit
+  `--supersede` — the ledger file is append-only, so the superseded decision and
+  the one that replaced it stay readable with their operators and reasons. There
+  is no `--all` and no bulk verb. Both write paths now consult the operator's
+  durable ledger instead of an empty one: `install_marketplace_item` locates it
+  from the `ForeignState` it was already given rather than accepting it as an
+  argument every call site has to remember, and `library workspace use` passes it
+  into `gate_workspace_mutation`, which previously constructed an empty ledger
+  inline and therefore refused every executable member of a cross-catalog
+  Workspace forever. Both refusals now name the exact command that would decide
+  the artifact, carrying the real digest they refused; the command is rendered
+  from the same constants the CLI registers and is parsed back through the
+  shipped parser by test, so a renamed subcommand breaks the build instead of
+  leaving operators a command that does not exist. Gate semantics are unchanged —
+  the resolution still fails whole, before any mutation, and never returns a
+  filtered selection. Two limits are stated rather than implied: the operator
+  identity is a **declared** string that nothing authenticates, because
+  authenticating an operator is credential handling and stays behind a human
+  security review, and the reason is checked for shape, not truth, using the same
+  placeholder floor `BlockReason` applies to block-reason evidence. Adversarial
+  review closed three further ways executable bytes could reach disk with no
+  standing decision: an omitted admission authority read the item's own
+  `executable_admission` field, so an external `workflow` carrying
+  `admitted` installed through the shared primitive with nothing behind it, and
+  an omitted authority is now an empty one; a `deny` could complete and return
+  success while an install was retrieving, and the artifact was projected anyway
+  under the grant read on the way in, so the activation now runs while the
+  decisions are held still under the same lock `decide` takes; and a hand-edited
+  ledger whose reviewer was an integer, whose timestamp was an object, and whose
+  permission surface was a bare string was coerced into a well-formed `admitted`
+  record with a sixteen-character permission surface, so stored field types are
+  now validated rather than stringified. First-party catalog content is the one
+  exemption and it is explicit: `apply_receipt_backfill` passes a
+  `FirstPartyAdmission` built from the exact `(identity, digest)` pairs it is
+  about to re-materialize, rather than the Library's own workflow specs becoming
+  unrestorable. A second review round found two more write paths outside that
+  boundary, both of the "this is not really an install" shape: `repair_projection`
+  verified cache integrity and activated, so a granted workflow that was
+  subsequently refused was written back onto disk from the cache — integrity
+  proves which bytes are present, not that the operator still admits them, and
+  the decision is now re-derived from the verified cached content and held across
+  the activation; and `library workspace use` handed the gate a snapshot for the
+  duration of the whole mutation, so a refusal recorded while the members were
+  installing did not stop them, and the gate and its mutation now run inside
+  `decisions()` with the gate itself untouched. The same round tightened the
+  durable record further: a *missing* `permission_surface` is refused rather than
+  read as the operator's explicit `--no-permissions` claim, and `decided_at` must
+  name a real instant, since `fromisoformat` accepts a calendar date and a naive
+  local datetime and neither can be ordered against the UTC timestamps the CLI
+  writes.
 - *(CL-m6cc, migration)* Legacy cache objects, lock receipts, and already-materialized
   projections now carry honest identity and rights, and the migration that gives them
   one can delete nothing. Receipt migration is **additive and readable**: an unmigrated

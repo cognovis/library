@@ -49,7 +49,13 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from .contract import FetchedItem
-from .executable_admission import ExecutableAdmissionLedger
+from .executable_admission import (
+    ADMITTED,
+    AdmissionAuthority,
+    ExecutableAdmissionLedger,
+    admission_refusal,
+    is_executable_type,
+)
 from .foreign_cache import (
     IDENTITY_TRANSFORMATION,
     CacheKey,
@@ -325,9 +331,27 @@ def _retrieve(retrieve: Callable[[], FetchedItem], item: NormalizedItem) -> Fetc
     return fetched
 
 
+def _admission_authority(ledger: Any) -> Any:
+    """The admission authority for one install. Never the item's own claim.
+
+    An omitted ledger used to mean "believe the item's `executable_admission`
+    field", which made the *producer* of an item the authority over whether it
+    may execute -- the exact substitution ADR-0011 forbids and that
+    `admission.evaluate_item` already refuses. Review walked through it: an
+    external `workflow` carrying `executable_admission="admitted"` installed and
+    projected through this shared primitive with no ledger and no decision
+    behind it.
+
+    An omitted authority is now an **empty** one. Inert content is unaffected --
+    it short-circuits before any record is consulted -- and an executable item
+    resolves to `pending`, which is what "nobody decided" has to mean.
+    """
+    return ledger if ledger is not None else ExecutableAdmissionLedger()
+
+
 def _executable_admission_state(
     item: NormalizedItem,
-    ledger: ExecutableAdmissionLedger | None,
+    ledger: ExecutableAdmissionLedger,
     installed_files: Mapping[str, bytes],
 ) -> str:
     """The admission state for the bytes that will actually be installed.
@@ -338,8 +362,6 @@ def _executable_admission_state(
     mutation were about two different payloads, which is precisely the binding
     slice 2's gate exists to hold.
     """
-    if ledger is None:
-        return item.executable_admission
     return ledger.state_for(
         item.qualified_identity(),
         normalized_content_digest(installed_files),
@@ -359,7 +381,7 @@ def install_foreign_item(
     observed_at: str,
     completeness: CompletenessEvidence,
     transformation: Transformation = IDENTITY_TRANSFORMATION,
-    ledger: ExecutableAdmissionLedger | None = None,
+    ledger: AdmissionAuthority | None = None,
     present: Callable[[Any], Any] | None = None,
 ) -> InstallOutcome:
     """Install or adopt one foreign item through the ordered transaction.
@@ -436,7 +458,7 @@ def _install_locked(
     observed_at: str,
     completeness: CompletenessEvidence,
     transformation: Transformation,
-    ledger: ExecutableAdmissionLedger | None,
+    ledger: AdmissionAuthority | None,
     present: Callable[[Any], Any] | None,
     events: list[str],
     identity: str,
@@ -479,7 +501,9 @@ def _install_locked(
     events.append("cache-object-materialized")
 
     # 4. Write the receipt, and prove it is durable by reading it back.
-    admission_state = _executable_admission_state(item, ledger, projected_files)
+    authority = _admission_authority(ledger)
+    with authority.decisions() as standing:
+        admission_state = _executable_admission_state(item, standing, projected_files)
     receipt = ForeignReceipt(
         id=receipt_id_for(item, key),
         provider_identity=item.provider_identity,
@@ -542,16 +566,54 @@ def _install_locked(
 
     # 5. Only then activate the projection.
     if admission_state in ("pending", "refused"):
+        # The remedy is rendered from the CLI's own words rather than written
+        # out here. Until `CL-2wqz` this refusal named the state and stopped,
+        # which was accurate and a dead end: no command existed that could
+        # change the answer, so the artifact was refused permanently.
         raise TransactionAborted(
             "project",
-            f"{identity} is an executable artifact whose admission state is "
-            f"{admission_state!r} for these exact bytes. The content is cached and "
-            "receipted; caching is not installing, and no harness path receives it "
-            "until the scope operator decides.",
+            admission_refusal(
+                identity,
+                normalized_content_digest(projected_files),
+                item.library_type,
+                admission_state,
+            ),
         )
 
     decision = evaluate_projection(item.rights, target, subject=identity)
     created: list[ReceiptTarget] = []
+
+    def _activate_under_the_standing_decision() -> tuple[ReceiptTarget, ...]:
+        """Write only while the decision that authorized the write still stands.
+
+        The check above reads a decision and the write happens later, and review
+        walked through the gap: a `deny` for these exact bytes was recorded and
+        returned success while this install was still retrieving, and the
+        artifact was projected anyway on the grant read on the way in. An
+        operator whose denial completed had every reason to believe it had taken
+        effect.
+
+        Re-reading is not enough on its own, because a re-read is another check
+        with another gap after it. The decisions are therefore held still across
+        the activation itself, which is the only window where the difference is
+        observable. Inert content skips all of it: no decision governs it, so
+        there is nothing to hold still.
+        """
+        if not is_executable_type(item.library_type):
+            return tuple(activate.apply(projected_files))
+        with authority.decisions() as decisions:
+            state_now = _executable_admission_state(item, decisions, projected_files)
+            if state_now != ADMITTED:
+                raise TransactionAborted(
+                    "project",
+                    admission_refusal(
+                        identity,
+                        normalized_content_digest(projected_files),
+                        item.library_type,
+                        state_now,
+                    ),
+                )
+            return tuple(activate.apply(projected_files))
 
     def _mutate() -> tuple[ReceiptTarget, ...]:
         # The intent is durable before the mutation. A crash after activation
@@ -572,7 +634,7 @@ def _install_locked(
                 planned_targets=list(planned),
             )
         )
-        produced = tuple(activate.apply(projected_files))
+        produced = _activate_under_the_standing_decision()
         created.extend(produced)
         produced_paths = tuple(entry.path for entry in produced)
         divergent = set(produced_paths) != set(planned)
@@ -617,6 +679,46 @@ def _install_locked(
     )
 
 
+def _repair_under_the_standing_decision(
+    receipt: ForeignReceipt,
+    ledger: AdmissionAuthority | None,
+    content: Mapping[str, bytes],
+    *,
+    activate: ProjectionActivation,
+) -> tuple[ReceiptTarget, ...]:
+    """Write a repaired projection only while its admission decision stands.
+
+    The decision is re-derived from the **verified cached content**, not read
+    off the receipt: `receipt.executable_admission` records what was decided
+    when the projection was installed, and the whole point of this check is that
+    the answer may have changed since. As on the install path, the decisions are
+    held still across the activation, so a denial recorded during the repair
+    either lands before the write and refuses it or waits for a write that was
+    authorized while it happened.
+    """
+    if not is_executable_type(receipt.library_type):
+        return tuple(activate.apply(content))
+    authority = _admission_authority(ledger)
+    identity = receipt.qualified_identity()
+    with authority.decisions() as decisions:
+        state_now = decisions.state_for(
+            identity,
+            normalized_content_digest(content),
+            library_type=receipt.library_type,
+        )
+        if state_now != ADMITTED:
+            raise TransactionAborted(
+                "project",
+                admission_refusal(
+                    identity,
+                    normalized_content_digest(content),
+                    receipt.library_type,
+                    state_now,
+                ),
+            )
+        return tuple(activate.apply(content))
+
+
 def reinstall_from_cache(
     *,
     receipt: ForeignReceipt,
@@ -625,6 +727,7 @@ def reinstall_from_cache(
     availability: ProviderAvailability | ResolutionEvidence,
     activate: ProjectionActivation,
     observed_at: str,
+    ledger: AdmissionAuthority | None = None,
 ) -> ReinstallOutcome:
     """Repair a projection from the verified cache, with no remote claim.
 
@@ -637,10 +740,20 @@ def reinstall_from_cache(
     that is installed, because review substituted the stored file between a
     successful `verify` and the read that produced the installed bytes.
 
+    **Repair is an executable write, and admission governs it.** Cache integrity
+    proves which bytes are present; it says nothing about whether the operator
+    currently admits them. Review granted a workflow, installed it, superseded
+    the grant with a refusal, deleted the projection, and repaired: the refused
+    bytes were written back while the ledger still answered `refused`. Repair is
+    the write path an enforcement check written for `install` quietly misses --
+    it makes no remote claim and reads as recovery -- which is the same reason
+    `CL-m6cc` had to add the re-materialization block here separately.
+
     Raises:
-        TransactionAborted: when the cache object fails verification. A repair
-            that installs unverified bytes is the substitution this whole slice
-            exists to prevent.
+        TransactionAborted: when the cache object fails verification, or when the
+            standing admission decision for these exact bytes is not `admitted`.
+            A repair that installs unverified or unadmitted bytes is the
+            substitution this whole slice exists to prevent.
     """
     require_operation("reinstall-from-cache", availability)
     if not isinstance(activate, ProjectionActivation):
@@ -675,7 +788,9 @@ def reinstall_from_cache(
             planned_targets=list(planned),
         )
     )
-    targets = tuple(activate.apply(content))
+    targets = _repair_under_the_standing_decision(
+        receipt, ledger, content, activate=activate
+    )
     produced_paths = tuple(entry.path for entry in targets)
     divergent = set(produced_paths) != set(planned)
     updated = receipt_store.put(

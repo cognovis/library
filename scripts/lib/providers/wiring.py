@@ -48,7 +48,11 @@ from .cache_transaction import (
     reinstall_from_cache,
 )
 from .contract import SourceProvider
-from .executable_admission import ExecutableAdmissionLedger
+from .executable_admission import (
+    AdmissionAuthority,
+    AdmissionLedgerStore,
+    ExecutableAdmissionLedger,
+)
 from .foreign_cache import (
     IDENTITY_TRANSFORMATION,
     ObjectStore,
@@ -307,7 +311,7 @@ def admitted_inventory(
     result: NormalizationResult,
     context: AdmissionContext,
     *,
-    ledger: ExecutableAdmissionLedger | None = None,
+    ledger: AdmissionAuthority | None = None,
     contents: Mapping[str, Mapping[str, bytes]] | None = None,
 ) -> AdmissionReport:
     """Evaluate a normalized inventory against one scope policy."""
@@ -598,7 +602,7 @@ def install_marketplace_item(
     scope: str,
     target: str,
     target_root: Path,
-    ledger: ExecutableAdmissionLedger | None = None,
+    ledger: AdmissionAuthority | None = None,
     transformation: Transformation = IDENTITY_TRANSFORMATION,
     present: Callable[[Any], Any] | None = None,
     observed_at: str | None = None,
@@ -626,7 +630,25 @@ def install_marketplace_item(
     `denied`; they may not be re-materialized by any later sync. The activation
     enforces that per member path, and this earlier check enforces it for the
     target root as a whole, so the refusal costs no retrieval.
+
+    **The admission authority is located, not passed.** `ledger` defaults to the
+    operator's durable decision *store* in `state`, and a caller that supplies
+    one is substituting a different authority deliberately. Two things follow.
+
+    The store rather than a snapshot of it, because the transaction takes the
+    decision that authorizes the write at the moment it writes: review recorded a
+    denial while an install was still retrieving and watched the artifact project
+    anyway under the grant the install had read on the way in.
+
+    Located rather than passed, because `None` used to mean "trust the item's own
+    `executable_admission` field", which put the decision in the hands of whoever
+    produced the item -- the producer-asserted trust `admission.evaluate_item`
+    already refuses to consult. Before `CL-2wqz` the shipped CLI passed nothing
+    at all here, so the ledger the gate consulted was never the one an operator
+    could write to.
     """
+    if ledger is None:
+        ledger = state.admission_ledger_store()
     blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(blocks, paths=[str(Path(target_root))])
     retention = evaluate_cache_retention(item.rights, subject=item.qualified_identity())
@@ -656,6 +678,7 @@ def repair_projection(
     availability: Any,
     non_compliance: NonComplianceRegister | None = None,
     observed_at: str | None = None,
+    ledger: AdmissionAuthority | None = None,
 ) -> Any:
     """Reinstall one receipt's projection from the verified cache.
 
@@ -666,6 +689,12 @@ def repair_projection(
     non-compliant projection cannot be re-materialized by future sync **or
     repair**, so the block is checked here against the receipt's own recorded
     and planned targets, and again inside the activation.
+
+    The admission decision is the second control this path used to miss for the
+    same reason. Review granted a workflow, installed it, superseded the grant
+    with a refusal, deleted the projection, and repaired: the refused bytes were
+    written back. The operator's durable decisions are therefore located here and
+    handed to the transaction, exactly as on the install path.
     """
     blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(
@@ -684,6 +713,7 @@ def repair_projection(
         availability=availability,
         activate=filesystem_activation(target_root, non_compliance=blocks),
         observed_at=observed_at or _now(),
+        ledger=ledger if ledger is not None else state.admission_ledger_store(),
     )
 
 
@@ -714,6 +744,12 @@ class ForeignState:
     #: call site remembering an argument is a control that is already off
     #: somewhere. A caller now acquires the block by locating its stores.
     non_compliance_path: Path | None = None
+    #: Where the `CL-2wqz` executable-admission decisions live. Derived from the
+    #: cache root for the same reason as the register above, and addressed from
+    #: the cache rather than from a lock: admission is the scope operator's
+    #: decision about *bytes*, and those bytes are held once here no matter which
+    #: project's lock happens to reference them.
+    admission_ledger_path: Path | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "cache_root", Path(self.cache_root))
@@ -725,6 +761,13 @@ class ForeignState:
             Path(self.non_compliance_path)
             if self.non_compliance_path is not None
             else Path(self.cache_root) / "non-compliant-projections.json",
+        )
+        object.__setattr__(
+            self,
+            "admission_ledger_path",
+            Path(self.admission_ledger_path)
+            if self.admission_ledger_path is not None
+            else Path(self.cache_root) / "executable-admission.json",
         )
         paths = {str(name): Path(value) for name, value in self.receipt_paths.items()}
         missing = sorted(set(REQUIRED_SCOPES) - set(paths))
@@ -755,6 +798,7 @@ class ForeignState:
                 "global": Path(f"{global_lock}{FOREIGN_RECEIPT_SUFFIX}"),
             },
             non_compliance_path=root / "non-compliant-projections.json",
+            admission_ledger_path=root / "executable-admission.json",
         )
 
     def object_store(self) -> ObjectStore:
@@ -778,6 +822,15 @@ class ForeignState:
     def purge_ledger(self) -> PurgeLedger:
         self.purge_ledger_path.parent.mkdir(parents=True, exist_ok=True)
         return PurgeLedger(self.purge_ledger_path)
+
+    def admission_ledger_store(self) -> AdmissionLedgerStore:
+        """The durable store of this operator's executable-admission decisions."""
+        self.admission_ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        return AdmissionLedgerStore(self.admission_ledger_path)
+
+    def admission_ledger(self) -> ExecutableAdmissionLedger:
+        """The decisions that stand right now, as the gate consults them."""
+        return self.admission_ledger_store().ledger()
 
     def non_compliance_register(self) -> NonComplianceRegister:
         """The register of projections no sync or repair may write.

@@ -440,6 +440,88 @@ Inert Prompt, Standard, and documentation content is `executable_admission:
 inert` and never silently inherits executable trust by sharing a bundle,
 collection, or provider with an executable artifact.
 
+#### The operator act (slice 7, `CL-2wqz`)
+
+Slice 2 delivered the ledger and the gate that reads it, and nothing that could
+write to it. The state machine was correct and the artifact was refused forever,
+which is the failure mode of a fail-closed control with no door: an operator
+reading "this is `pending`" had no act available that would make it anything
+else. `library admission` is that act.
+
+| Element | Decision |
+|---|---|
+| Surface | `library admission grant`, `library admission deny`, `library admission show`, `library admission list`, each with `--json` |
+| Subject | `--digest`, or `--receipt <id>` which resolves an installed or cached item's digest and **displays** identity, type, and digest before recording. A decision is never bound to a name |
+| Required evidence | `--operator` (a declared string; see below), `--reason`, and for a grant a stated permission surface — `--permission` per entry, or `--no-permissions` to state that the artifact requests none |
+| Replacing a decision | `--supersede`, explicitly. The ledger file is append-only, so the superseded decision and the one that replaced it are both readable, with their operators and reasons |
+| Durability | `<cache root>/executable-admission.json`, addressed from the cache rather than from a lock: admission is a decision about *bytes*, and the bytes are held once no matter which project's lock referenced them |
+| Refusal diagnostic | The install-time refusal renders the exact command from the same constants the CLI registers, carrying the real digest it refused. A test parses that string back through the shipped parser, so a renamed subcommand fails the build instead of leaving operators a command that does not exist |
+| No bulk act | There is no `--all` and no bulk verb. A surface that admits many things at once is the surface people use to admit things they did not read |
+
+Three further rules came out of adversarial review of this slice, each closing a
+way for executable bytes to reach disk with no standing decision about them:
+
+- **An omitted admission authority is an empty one, never the item's own claim.**
+  `install_foreign_item` used to read the item's `executable_admission` field
+  when no ledger was passed, which made the *producer* of an item the authority
+  over whether it may run. An external `workflow` carrying
+  `executable_admission: admitted` installed and projected through it with no
+  decision behind it. An omitted authority now resolves an executable to
+  `pending`.
+- **The decision is held still across the write, not merely read before it.** The
+  authority an install receives is the durable *store*, and the activation runs
+  inside `AdmissionLedgerStore.decisions()`, which holds the same lock `decide`
+  takes. Without it a `deny` could complete and return success while an install
+  was still retrieving, and the artifact was then projected under the grant the
+  install had read on the way in.
+- **A malformed durable decision is refused, not coerced.** The store validates
+  stored field *types* rather than calling `str()` on them: a hand-edited ledger
+  whose reviewer was an integer, whose timestamp was an object, and whose
+  permission surface was a bare string otherwise produced a well-formed
+  `admitted` record with a sixteen-character permission surface. A *missing*
+  `permission_surface` is refused too — an absent declaration is not the
+  operator's explicit `--no-permissions` claim — and `decided_at` must name a
+  real instant: `fromisoformat` accepts a calendar date and a naive local
+  datetime, and neither can be ordered against the UTC timestamps the CLI
+  writes, which is the only thing the field is for.
+
+Two more write paths were found outside that boundary in the second review round,
+both of them the "this is not really an install" shape:
+
+- **Repair is an executable write.** `reinstall_from_cache` verified cache
+  integrity and activated. Integrity proves which bytes are present and says
+  nothing about whether the operator still admits them: review granted a
+  workflow, installed it, superseded the grant with a refusal, deleted the
+  projection, and repaired the refused bytes back onto disk. The decision is now
+  re-derived from the verified cached content — not read off the receipt, which
+  records what was decided at install time — and held across the activation.
+- **A Workspace mutation holds its decisions for its whole write.**
+  `library workspace use` read a snapshot and handed it to
+  `gate_workspace_mutation` for the duration; review superseded the grant while
+  the members were installing and the admitted bytes were written anyway. The
+  gate and its mutation now run inside `AdmissionLedgerStore.decisions()`. The
+  gate itself is untouched — what changed is how long the answer it was given is
+  guaranteed to still be true.
+
+First-party catalog content is the one exemption, and it is explicit. The
+decision above asks the operator whether to trust an *externally sourced*
+artifact, and the Library re-materializing its own workflow specs is not that
+question. `FirstPartyAdmission` states that at the call site:
+`apply_receipt_backfill` constructs it with the exact `(identity, digest)` pairs
+it is about to install, so it authorizes that backfill and nothing else, and it
+is never inferred from a field the item carries.
+
+Two limits are stated rather than implied:
+
+- **The operator identity is declared, not verified.** Nothing authenticates it,
+  because authenticating an operator is credential handling and is held behind a
+  human security review. What is refused is an *absent* or template identity,
+  which is the difference between a weak attribution and none.
+- **The reason is checked for shape, not for truth.** It must be a sentence
+  rather than a placeholder, using the same floor `BlockReason` applies to
+  block-reason evidence. No validator can tell a considered reason from a fluent
+  one, and claiming otherwise would be the more dangerous statement.
+
 ### Mixed external bundles
 
 An external bundle is **decomposed** into its typed members — Skills, Workflows,
@@ -1786,10 +1868,16 @@ assumes the real gate is still there.
    still read from the local checkout rather than fetched at the pin. A catalog
    document edited between the pin check and the read can still describe a member
    the pinned revision does not.
-2. A v2 closure containing an executable member fails the whole resolution until
-   a scope operator admits that member's exact bytes, and this slice ships no CLI
-   for recording that decision. Inert closures install now; an executable one is
-   refused, which is the correct ADR behavior and an incomplete operator surface.
+2. ~~A v2 closure containing an executable member fails the whole resolution
+   until a scope operator admits that member's exact bytes, and this slice ships
+   no CLI for recording that decision.~~ **Closed by `CL-2wqz`.** The operator
+   surface is `library admission` (see `Executable admission` above). Both write
+   paths now consult the operator's durable ledger rather than an empty one —
+   `install_marketplace_item` locates it from the `ForeignState` it was already
+   given, and `library workspace use` passes it into `gate_workspace_mutation` —
+   and both refusals name the exact command that would decide the member. The
+   gate's semantics are unchanged: it still fails the whole resolution before any
+   mutation and never returns a filtered selection.
 3. **The v2 mutation gate detects source drift; it does not prevent its effects.**
    The gate digests an immutable snapshot and admits a decision about it, and the
    legacy installers resolve their own source rather than consuming that
