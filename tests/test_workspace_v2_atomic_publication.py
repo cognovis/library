@@ -314,3 +314,129 @@ def test_a_non_atomic_target_is_not_written_by_a_copy_fallback(
         filesystem_activation(root).apply(CONTENT)
 
     assert [path for path in root.rglob("*") if path.is_file()] == []
+
+
+# -- wave-1 review findings, held as regression tests ------------------------
+#
+# The mandated co-reviewer could not run, so every counterexample the reviewer
+# that did run executed is kept here rather than read once and discarded.
+
+
+def test_f3_a_refused_target_keeps_no_directory_the_activation_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave-1 `CL-st5s-F3`: the refusal must precede *every* mutation.
+
+    The reviewer forced each probe rename to `EXDEV` and found the projection
+    root and its `nested/` subdirectory left behind: the payload bytes were
+    refused, but the layout had already been built. An activation that refuses
+    leaves the filesystem as it found it, directories included.
+    """
+    root = tmp_path / "projection"
+
+    def rename(src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        raise OSError(errno.EXDEV, "Cross-device link", str(dst))
+
+    monkeypatch.setattr(os, "rename", rename)
+
+    with pytest.raises(NonAtomicProjectionTarget):
+        filesystem_activation(root).apply(CONTENT)
+
+    assert not root.exists(), "an absent target root stays absent after a refusal"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_f3_a_refusal_keeps_directories_that_already_existed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The undo removes what it created, and nothing else."""
+    root = tmp_path / "projection"
+    (root / "nested").mkdir(parents=True)
+    (root / "unrelated.txt").write_bytes(b"someone else's file\n")
+
+    def rename(src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        raise OSError(errno.EXDEV, "Cross-device link", str(dst))
+
+    monkeypatch.setattr(os, "rename", rename)
+
+    with pytest.raises(NonAtomicProjectionTarget):
+        filesystem_activation(root).apply(CONTENT)
+
+    assert (root / "nested").is_dir()
+    assert (root / "unrelated.txt").read_bytes() == b"someone else's file\n"
+
+
+def test_f2_an_interruption_is_not_a_gentler_failure_than_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave-1 `CL-st5s-F2`: `KeyboardInterrupt` left a mixed projection.
+
+    The publication loop restored only on `OSError`, so an interruption walked
+    out through `finally` with two members published and one not.
+    """
+    root = tmp_path / "projection"
+    (root / "nested").mkdir(parents=True)
+    prior = {
+        "first.txt": b"prior first\n",
+        "nested/second.txt": b"prior second\n",
+        "third.txt": b"prior third\n",
+    }
+    for relative, payload in prior.items():
+        (root / relative).write_bytes(payload)
+
+    real_rename = os.rename
+
+    def rename(src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        if os.fsdecode(dst).rsplit("/", 1)[-1] == "third.txt":
+            raise KeyboardInterrupt("injected interruption")
+        return real_rename(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+
+    monkeypatch.setattr(os, "rename", rename)
+
+    with pytest.raises(KeyboardInterrupt):
+        filesystem_activation(root).apply(CONTENT)
+
+    assert _projection_members(root) == prior
+
+
+def test_f2_a_failed_undo_adds_nothing_to_the_projection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave-1 `CL-st5s-F2`, second half: undo material stayed in the tree.
+
+    When both the publication rename and the undo rename fail, the target is
+    honestly reported as untrusted -- but `.<name>.library-undo.<token>` files
+    were left inside the projection, where any recursive reader counts them as
+    content.
+    """
+    root = tmp_path / "projection"
+    (root / "nested").mkdir(parents=True)
+    prior = {
+        "first.txt": b"prior first\n",
+        "nested/second.txt": b"prior second\n",
+        "third.txt": b"prior third\n",
+    }
+    for relative, payload in prior.items():
+        (root / relative).write_bytes(payload)
+
+    real_rename = os.rename
+
+    def rename(src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        name = os.fsdecode(dst).rsplit("/", 1)[-1]
+        source = os.fsdecode(src).rsplit("/", 1)[-1]
+        if name == "third.txt" or "library-undo" in source:
+            raise OSError(errno.EIO, "injected failure", str(dst))
+        return real_rename(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+
+    monkeypatch.setattr(os, "rename", rename)
+
+    with pytest.raises(ProjectionPublicationFailed) as failure:
+        filesystem_activation(root).apply(CONTENT)
+
+    assert failure.value.unrestored, "a failed undo names what it could not restore"
+    leftovers = [
+        path.name
+        for path in root.rglob("*")
+        if "library-undo" in path.name or "library-staging" in path.name
+    ]
+    assert leftovers == []

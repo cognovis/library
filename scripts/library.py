@@ -59,7 +59,7 @@ import sys
 import tempfile
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
-from typing import NamedTuple
+from typing import Mapping, NamedTuple
 
 # Make `lib` importable when running as a script
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -4637,6 +4637,37 @@ def _admitted_entry_source(entry: dict, resolved: Path, member_root: Path) -> Pa
     return member_root
 
 
+#: Catalog entry fields an installer may resolve content from. The Workspace
+#: mutation gate reads exactly `source`, so anything else is content it never
+#: digested and never admitted.
+_ADMITTED_SOURCE_FIELD = "source"
+_UNADMITTED_SOURCE_FIELDS = ("sources",)
+
+
+def _unadmitted_source_fields(entry: dict) -> list[str]:
+    """Source-bearing fields on this entry that the gate did not read.
+
+    Review demonstrated the consequence of not asking: an `agent` entry carrying
+    both `source` and `sources.claude` had its `source` digested and admitted,
+    while `_resolve_agent_targets` read `sources.claude` preferentially and
+    installed bytes no operator ever saw -- with the command reporting `applied`
+    and the lock recording the admitted source. The binding rebinds `source`;
+    a member offering the installer somewhere else to read is refused instead.
+
+    Adding a field here is part of adding one to an installer. The list is short
+    on purpose: it is the set an installer can resolve a source from, not a
+    denylist of things that look suspicious.
+    """
+    found: list[str] = []
+    for field in _UNADMITTED_SOURCE_FIELDS:
+        value = entry.get(field)
+        if isinstance(value, Mapping) and value:
+            found.extend(f"{field}.{key}" for key in sorted(value))
+        elif isinstance(value, str) and value.strip():
+            found.append(field)
+    return found
+
+
 def _workspace_admitted_catalog(catalog: dict, closure, items, published, contents) -> dict:
     """A catalog whose resolved members resolve to the admitted publication.
 
@@ -4689,6 +4720,16 @@ def _workspace_admitted_catalog(catalog: dict, closure, items, published, conten
         entry = lookup_entry(
             bound, node.primitive, node.name, fuzzy=False, source_catalog=node.catalog_name
         )
+        unadmitted = _unadmitted_source_fields(entry)
+        if unadmitted:
+            raise LibraryError(
+                f"{root_id(node.primitive, node.name)} declares source fields the "
+                f"Workspace mutation gate did not read: {unadmitted}. The gate "
+                f"digested and admitted only its {_ADMITTED_SOURCE_FIELD!r}, so an "
+                "installer reading one of these would write bytes no operator "
+                "decided about. The member is refused rather than partly bound",
+                exit_code=3,
+            )
         resolved = _workspace_local_source(catalog, entry, node.primitive)
         if resolved is None:
             raise LibraryError(
@@ -4726,16 +4767,21 @@ def _admitted_publication_root(repo_root: Path):
     import uuid
 
     container = Path(repo_root) / ".library" / "admitted"
+    root = container / uuid.uuid4().hex
     try:
-        yield container / uuid.uuid4().hex
+        yield root
     finally:
-        shutil.rmtree(container, ignore_errors=True)
-        try:
-            container.parent.rmdir()
-        except OSError:
-            # `.library` holds something else, or never existed. Either way it is
-            # not this operation's to remove.
-            pass
+        # This operation's directory only. Removing the shared container would
+        # take a concurrent operation's publication with it -- the project lock
+        # serializes one scope, not two.
+        shutil.rmtree(root, ignore_errors=True)
+        for path in (container, container.parent):
+            try:
+                path.rmdir()
+            except OSError:
+                # Still holds something, or never existed. Either way it is not
+                # this operation's to remove.
+                break
 
 
 def _workspace_member_provenance(catalog: dict, closure) -> dict:

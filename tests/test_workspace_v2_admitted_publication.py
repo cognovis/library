@@ -376,3 +376,174 @@ def test_the_installed_projection_is_the_admitted_bytes(tmp_path: Path) -> None:
         projected = project / ".agents" / "skills" / skill / "SKILL.md"
         assert projected.is_file()
         assert f"name: {skill}" in projected.read_text()
+
+
+# -- wave-1 review findings, held as regression tests ------------------------
+
+
+def _v2_agent_project(tmp_path: Path) -> tuple[Path, Path]:
+    """The wave-1 `CL-st5s-F1` counterexample, as a fixture.
+
+    One catalog, one v2 Workspace, one agent whose entry declares an admitted
+    `source` and a different harness-specific `sources.claude`.
+    """
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    core = tmp_path / "core"
+    for path in (project, home, core):
+        path.mkdir(parents=True)
+
+    agents = core / "agents"
+    agents.mkdir()
+    (agents / "admitted.md").write_text(
+        "---\nname: bypass-agent\ndescription: admitted agent.\nversion: 1.0.0\n---\n"
+        "\n--- AGENT PERSONA ---\n\n# ADMITTED PAYLOAD\n"
+    )
+    (agents / "unadmitted.md").write_text(
+        "---\nname: bypass-agent\ndescription: admitted agent.\nversion: 1.0.0\n---\n"
+        "\n--- AGENT PERSONA ---\n\n# UNADMITTED PAYLOAD\n"
+    )
+    prompts = core / "prompts"
+    prompts.mkdir()
+    (prompts / "control.md").write_text("# control\n")
+
+    subprocess.run(["git", "init", "-q", str(core)], check=True)
+    for command in (
+        ["git", "config", "user.email", "test@example.invalid"],
+        ["git", "config", "user.name", "Test"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-q", "-m", "catalog content"],
+    ):
+        subprocess.run(command, cwd=core, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=core, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    manifest = {
+        "schema_version": 2,
+        "name": "agents",
+        "version": "1.0.0",
+        "description": "A Workspace containing one harness-specific agent.",
+        "status": "experimental",
+        "catalogs": [
+            {
+                "alias": "core",
+                "identity": "https://example.invalid/core",
+                "pin": {"kind": "commit", "value": head},
+            }
+        ],
+        "roots": [
+            {"type": "agent", "name": "bypass-agent", "catalog": "core"},
+            {"type": "prompt", "name": "control", "catalog": "core"},
+        ],
+    }
+    workspaces = core / "workspaces"
+    workspaces.mkdir()
+    (workspaces / "agents.yaml").write_text(yaml.safe_dump(manifest))
+
+    catalog = {
+        "catalog_identity": "https://example.invalid/platform",
+        "default_dirs": {
+            "agents": [
+                {"default": ".claude/agents/"},
+                {"global": "~/.claude/agents/"},
+                {"default_codex": ".codex/agents/"},
+                {"global_codex": "~/.codex/agents/"},
+            ],
+            "prompts": [
+                {"default": ".claude/commands/"},
+                {"global": "~/.claude/commands/"},
+            ],
+        },
+        "sources": {
+            "catalogs": [
+                {
+                    "name": "team-core",
+                    "source": "https://example.invalid/core",
+                    "local_path": str(core),
+                    "content_types": ["agents", "prompts", "workspaces"],
+                }
+            ],
+            "marketplaces": [],
+        },
+        "library": {
+            "agents": [
+                {
+                    "name": "bypass-agent",
+                    "description": "admitted agent.",
+                    "version": "1.0.0",
+                    "source": str(agents / "admitted.md"),
+                    "sources": {"claude": str(agents / "unadmitted.md")},
+                    "metadata": {"library": {"source_catalog": "team-core"}},
+                }
+            ],
+            "prompts": [
+                {
+                    "name": "control",
+                    "description": "control prompt.",
+                    "version": "1.0.0",
+                    "source": str(prompts / "control.md"),
+                    "metadata": {"library": {"source_catalog": "team-core"}},
+                }
+            ],
+            "workspaces": [
+                {
+                    **manifest,
+                    "source": str(workspaces / "agents.yaml"),
+                    "metadata": {
+                        "library": {
+                            "source_catalog": "team-core",
+                            "inventory": "convention-scan",
+                        }
+                    },
+                }
+            ],
+        },
+    }
+    (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    return project, home
+
+
+def test_f1_a_harness_specific_source_cannot_bypass_the_admitted_publication(
+    tmp_path: Path,
+) -> None:
+    """Wave-1 `CL-st5s-F1`, executed end to end.
+
+    The reviewer ran this exact shape against the wave-1 candidate: the gate
+    digested and admitted `source`, `_resolve_agent_targets` read
+    `sources.claude`, the command returned `applied`, and the installed agent
+    contained `UNADMITTED PAYLOAD` while the lock recorded the admitted source
+    and the verified pin.
+
+    The gate reads one source, so a member offering the installer a second one is
+    refused. That is a real restriction on what a v2 Workspace may contain, and
+    it is the fail-closed side of it.
+    """
+    project, home = _v2_agent_project(tmp_path)
+    environment = os.environ.copy()
+    environment["HOME"] = str(home)
+    result = subprocess.run(
+        [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:agents",
+         "--scope", "project", "--json"],
+        cwd=project,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    combined = result.stdout + result.stderr
+    assert "agent:bypass-agent" in combined
+    assert "sources.claude" in combined
+
+    installed = list((project / ".claude" / "agents").glob("*")) if (
+        project / ".claude" / "agents"
+    ).exists() else []
+    assert installed == [], "nothing is installed for a member that cannot be bound"
+    for path in project.rglob("*"):
+        if path.is_file():
+            assert b"UNADMITTED PAYLOAD" not in path.read_bytes(), (
+                f"unadmitted bytes reached {path}"
+            )
+    assert not (project / ".library" / "admitted").exists()

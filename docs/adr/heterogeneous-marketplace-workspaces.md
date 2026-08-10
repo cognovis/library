@@ -1927,16 +1927,27 @@ version of it:
 | Staged write inside the final directory | The rename that publishes a member is a same-directory rename, so it cannot silently become a cross-device copy |
 | Rename capability probe, per directory, before any projection byte | A target that cannot rename is refused with `NonAtomicProjectionTarget` naming the directory and the reason |
 | Same-device assertion | Cheap, and it keeps the staging-inside-the-target construction honest if it is ever changed |
-| Stage-all, then publish-all, with undo | A failure inside the publication phase restores the members already published, from bytes captured *before* the first rename |
+| Stage-all, then publish-all, with undo | **Any** failure inside the publication phase — not only an `OSError` — restores the members already published, from bytes captured *before* the first rename |
+| Directory undo on refusal | A refusal removes every directory the activation created, and only those, and only while empty. An activation that refuses leaves the filesystem as it found it |
 | Post-activation digest over the published paths | The bytes are read back from the real paths and hashed; hashing the argument would confirm only that the writer agrees with itself |
 | `admitted_digest` binding | Content that does not hash to the decision made elsewhere is refused before anything is staged. `repair_projection` binds the receipt's own `projected_content_digest` |
+
+Two of those rows are review repairs rather than original design, and both were
+demonstrated rather than argued. An interruption was treated as a gentler failure
+than an error, so a `KeyboardInterrupt` at the third of three renames walked out
+through `finally` leaving two members new and one prior. And the refusal was
+"before any projection *byte*", not before any mutation: forcing every probe to
+`EXDEV` refused the activation and left a freshly created target root and member
+subdirectory behind.
 
 **Refusal is the only fallback.** There is no copy path when rename is
 unavailable, per the `CL-m6cc` finding that approximating a guarantee is the
 defect. The undo path is not an exception to that: it republishes prior bytes
 through the same staged-write-then-rename step, so undoing a member is as atomic
 as doing it, and an undo that fails is reported as its own condition rather than
-folded into the original failure.
+folded into the original failure. An undo that fails also removes its own undo
+file, because a failed restore may leave a target untrusted but may not add
+material to the projection that a recursive reader will count as content.
 
 **How the Workspace v2 path consumes it.** `gate_workspace_mutation` calls its
 writer with the frozen content it digested. That writer now
@@ -1961,6 +1972,19 @@ and final drift comparisons are deleted rather than kept as a second line of
 defence, because a redundant check that can never fire is the one that gets
 trusted after the real one is removed.
 
+**One source per member, enforced rather than assumed.** The gate reads a
+member's content from the entry's `source`, and the binding rebinds that field.
+Some installers can resolve content from a *second* field: an `agent` entry may
+carry a `sources` map, and `_resolve_agent_targets` prefers it. Review took that
+end to end — an entry declaring an admitted `source` and a different
+`sources.claude` installed the unadmitted bytes, returned `applied`, and recorded
+the admitted source and the verified pin in the lock, which made the restored
+provenance actively false. A v2 member declaring any source field the gate did
+not read is therefore refused by name. That is a real restriction on what a
+cross-catalog Workspace may contain, and it is the fail-closed side of a gate
+that can only admit bytes it has read. Widening it means digesting every declared
+source, not widening the binding.
+
 **Provenance is deliberately not rebound.** The bytes came from an admitted
 publication; the *source* is still the catalog the resolution named, and the
 commit is the pin the resolution verified. Both are restored onto the lock after
@@ -1970,13 +1994,16 @@ checkout happened to be on when the installer read it.
 
 **Two residuals, stated rather than implied.**
 
-1. Whole-projection atomicity is per target path, not per projection. Every
-   member transitions in one step and no target ever holds a partial file, and a
-   failure *inside* the publication phase is undone — but a process killed
-   mid-phase can leave some members published. The receipt's `planned_targets`
-   already record the intended set, and re-running republishes; this is a smaller
-   claim than "the whole projection is one atomic operation", which a filesystem
-   cannot offer for a set of files under an existing shared root.
+1. The activation's guarantee is over failures the process can observe. Every
+   member transitions in one step, no target ever holds a partial file, and any
+   exception during the publication phase — error or interruption — restores the
+   prior projection before it propagates. What remains outside it is what is
+   outside every userspace write: a process ended by an uncatchable signal or a
+   power loss between two renames can leave a subset published. The receipt
+   records `planned_targets` before activation for exactly that case, and
+   re-running republishes. This is deliberately not written as "atomic across the
+   set": a filesystem offers one-step replacement per path, not per set of paths
+   under a shared root that other content also lives in.
 2. A harness derivation is a transformation of the admitted bytes, not the
    admitted bytes. `SKILL.md` vendored into `.agents/skills/<name>/` is
    byte-identical and is asserted as such; a translated `.mdc` or an injected

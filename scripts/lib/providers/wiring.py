@@ -411,8 +411,14 @@ def _contained_path(root: Path, relative: str) -> Path:
     return candidate
 
 
-def _descend(root: Path, relative: str) -> list[int]:
+def _descend(root: Path, relative: str, created: list[Path] | None = None) -> list[int]:
     """Open every directory between `root` and one member, creating as needed.
+
+    `created` collects, in creation order, every directory this call brought into
+    existence. A refusal after that point has to be able to put the filesystem
+    back exactly as it found it — review demonstrated a `NonAtomicProjectionTarget`
+    leaving a target root and a member subdirectory behind, which is a mutation
+    performed by an activation that refused to mutate.
 
     Checking a path and then writing it cannot be made safe by checking harder.
     Whatever the check saw, any component can be replaced before the write opens
@@ -442,14 +448,22 @@ def _descend(root: Path, relative: str) -> list[int]:
     # The root is the destination the caller declared, so it is created and
     # followed deliberately. Everything below it is opened no-follow: the
     # containment guarantee is "beneath this root", not "this root exists".
+    if created is not None:
+        missing = [path for path in [root, *root.parents] if not path.exists()]
+        created.extend(reversed(missing))
     root.mkdir(parents=True, exist_ok=True)
     descriptors: list[int] = [os.open(root, os.O_RDONLY | directory)]
+    current = root
     try:
         for part in parts[:-1]:
+            current = current / part
             try:
                 os.mkdir(part, 0o755, dir_fd=descriptors[-1])
             except FileExistsError:
                 pass
+            else:
+                if created is not None:
+                    created.append(current)
             try:
                 descriptors.append(
                     os.open(
@@ -683,14 +697,19 @@ def _restore(published: Sequence[_StagedMember], parents: Mapping[str, int], tok
     unrestored: list[str] = []
     for member in reversed(list(published)):
         parent = parents[member.parent_key]
+        undo = f".{member.final_name}.library-undo.{token}"
         try:
             if member.prior is None:
                 os.unlink(member.final_name, dir_fd=parent)
             else:
-                undo = f".{member.final_name}.library-undo.{token}"
                 _create_beneath(parent, undo, member.relative, member.prior)
                 os.rename(undo, member.final_name, src_dir_fd=parent, dst_dir_fd=parent)
         except OSError:
+            # The undo file is removed even here. Review found a failed undo
+            # leaving `.<name>.library-undo.<token>` inside the projection, where
+            # a recursive reader counts it as content: a failed restore may leave
+            # the target untrusted, but it may not add material to it.
+            _discard(parent, undo)
             unrestored.append(str(member.final_path))
     return unrestored
 
@@ -710,8 +729,11 @@ def publish_projection(
     3. each staged member is renamed onto its final name, which is a single
        filesystem step: a reader sees the prior member or the new one, never a
        prefix of either;
-    4. a failure during step 3 restores the members already published, so the
-       observable outcome is the prior projection or the complete new one;
+    4. **any** failure during step 3 -- not only an `OSError` -- restores the
+       members already published, so the observable outcome is the prior
+       projection or the complete new one. Review interrupted the publication
+       loop with `KeyboardInterrupt` and watched a mixed projection survive,
+       because only `OSError` was caught;
     5. the published paths are then read back and hashed, and the result must
        equal `admitted_digest`.
 
@@ -719,6 +741,10 @@ def publish_projection(
     Hashing the argument would confirm only that the writer is consistent with
     itself, which is exactly the check that passes while the file on disk says
     something else.
+
+    A refusal before step 3 also removes every directory this call created, so an
+    activation that refuses leaves the filesystem exactly as it found it. Only
+    directories this call created are removed, and only while they are empty.
 
     Raises:
         NonAtomicProjectionTarget: when a target cannot publish in one step.
@@ -731,12 +757,14 @@ def publish_projection(
     parents: dict[str, int] = {}
     staged: list[_StagedMember] = []
     published: list[_StagedMember] = []
+    created: list[Path] = []
+    completed = False
     try:
         for relative in relatives:
             key = _parent_key(relative)
             if key in parents:
                 continue
-            descriptors = _descend(root, relative)
+            descriptors = _descend(root, relative, created)
             for descriptor in descriptors[:-1]:
                 os.close(descriptor)
             parents[key] = descriptors[-1]
@@ -777,10 +805,18 @@ def publish_projection(
                 )
             except OSError as exc:
                 unrestored = _restore(published, parents, token)
+                published.clear()
                 raise ProjectionPublicationFailed(
                     f"{member.final_path} could not be renamed into place ({exc})",
                     unrestored,
                 ) from exc
+            except BaseException:
+                # An interruption is not a gentler failure than an error. The
+                # members already published are put back before it propagates,
+                # and the original exception is preserved rather than replaced.
+                _restore(published, parents, token)
+                published.clear()
+                raise
             published.append(member)
 
         for key in sorted(parents):
@@ -814,7 +850,7 @@ def publish_projection(
                 )
             )
 
-        return tuple(
+        activated = tuple(
             ReceiptTarget(
                 path=str(member.final_path),
                 kind="file",
@@ -824,6 +860,8 @@ def publish_projection(
             )
             for member in staged
         )
+        completed = True
+        return activated
     finally:
         outstanding = {id(member) for member in staged} - {id(member) for member in published}
         for member in staged:
@@ -831,6 +869,15 @@ def publish_projection(
                 _discard(parents[member.parent_key], member.staged_name)
         for descriptor in parents.values():
             os.close(descriptor)
+        if not completed:
+            # Every directory this activation created, innermost first, and only
+            # while empty. A directory that now holds something is either a
+            # pre-existing one or someone else's, and neither is ours to remove.
+            for path in reversed(created):
+                try:
+                    path.rmdir()
+                except OSError:
+                    break
 
 
 def filesystem_activation(
