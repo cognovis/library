@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
+from uuid import uuid4
 
 from .admission import AdmissionContext, AdmissionReport, evaluate_inventory
 from .cache_transaction import (
@@ -410,8 +411,14 @@ def _contained_path(root: Path, relative: str) -> Path:
     return candidate
 
 
-def _write_beneath(root: Path, relative: str, payload: bytes) -> Path:
-    """Create one file strictly beneath `root`, resolving nothing by name.
+def _descend(root: Path, relative: str, created: list[Path] | None = None) -> list[int]:
+    """Open every directory between `root` and one member, creating as needed.
+
+    `created` collects, in creation order, every directory this call brought into
+    existence. A refusal after that point has to be able to put the filesystem
+    back exactly as it found it — review demonstrated a `NonAtomicProjectionTarget`
+    leaving a target root and a member subdirectory behind, which is a mutation
+    performed by an activation that refused to mutate.
 
     Checking a path and then writing it cannot be made safe by checking harder.
     Whatever the check saw, any component can be replaced before the write opens
@@ -421,15 +428,14 @@ def _write_beneath(root: Path, relative: str, payload: bytes) -> Path:
 
     The fix is to stop naming the path at all after the first component. Every
     directory is opened relative to the descriptor of the one above it, with
-    `O_NOFOLLOW` and `O_DIRECTORY`, and the file is created relative to the last
-    of those descriptors. A component swapped for a symlink after it has been
-    opened changes nothing: the descriptor already refers to the real directory,
-    and a component swapped *before* it is opened fails the `O_NOFOLLOW` open.
-    There is no window between resolution and use because the resolution is the
-    use.
+    `O_NOFOLLOW` and `O_DIRECTORY`. A component swapped for a symlink after it
+    has been opened changes nothing: the descriptor already refers to the real
+    directory, and a component swapped *before* it is opened fails the
+    `O_NOFOLLOW` open. There is no window between resolution and use because the
+    resolution is the use.
 
     Returns:
-        The path that was written, for the receipt.
+        The open descriptors, outermost first. The caller closes all of them.
 
     Raises:
         ProjectionEscape: when any component is or becomes a symlink.
@@ -442,14 +448,22 @@ def _write_beneath(root: Path, relative: str, payload: bytes) -> Path:
     # The root is the destination the caller declared, so it is created and
     # followed deliberately. Everything below it is opened no-follow: the
     # containment guarantee is "beneath this root", not "this root exists".
+    if created is not None:
+        missing = [path for path in [root, *root.parents] if not path.exists()]
+        created.extend(reversed(missing))
     root.mkdir(parents=True, exist_ok=True)
     descriptors: list[int] = [os.open(root, os.O_RDONLY | directory)]
+    current = root
     try:
         for part in parts[:-1]:
+            current = current / part
             try:
                 os.mkdir(part, 0o755, dir_fd=descriptors[-1])
             except FileExistsError:
                 pass
+            else:
+                if created is not None:
+                    created.append(current)
             try:
                 descriptors.append(
                     os.open(
@@ -466,33 +480,447 @@ def _write_beneath(root: Path, relative: str, payload: bytes) -> Path:
                         "refused rather than redirected"
                     ) from exc
                 raise
-        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | nofollow
-        try:
-            target = os.open(parts[-1], flags, 0o644, dir_fd=descriptors[-1])
-        except OSError as exc:
-            if exc.errno in (errno.ELOOP, errno.EMLINK):
-                raise ProjectionEscape(
-                    f"projection target {relative!r} is a symlink; the write is "
-                    "refused rather than redirected"
-                ) from exc
-            raise
-        try:
-            handle = os.fdopen(target, "wb")
-        except BaseException:
-            # `fdopen` takes ownership only once it succeeds, so a failure here
-            # leaves the descriptor ours to close.
-            os.close(target)
-            raise
-        with handle:
-            handle.write(payload)
+    except BaseException:
+        for descriptor in descriptors:
+            os.close(descriptor)
+        raise
+    return descriptors
+
+
+def _create_beneath(parent: int, name: str, relative: str, payload: bytes) -> None:
+    """Create one file relative to an already-opened parent descriptor."""
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | nofollow
+    try:
+        target = os.open(name, flags, 0o644, dir_fd=parent)
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.EMLINK):
+            raise ProjectionEscape(
+                f"projection target {relative!r} is a symlink; the write is "
+                "refused rather than redirected"
+            ) from exc
+        raise
+    try:
+        handle = os.fdopen(target, "wb")
+    except BaseException:
+        # `fdopen` takes ownership only once it succeeds, so a failure here
+        # leaves the descriptor ours to close.
+        os.close(target)
+        raise
+    with handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _write_beneath(root: Path, relative: str, payload: bytes) -> Path:
+    """Create one file strictly beneath `root`, resolving nothing by name.
+
+    Returns:
+        The path that was written, for the receipt.
+
+    Raises:
+        ProjectionEscape: when any component is or becomes a symlink.
+    """
+    parts = Path(relative).parts
+    descriptors = _descend(root, relative)
+    try:
+        _create_beneath(descriptors[-1], parts[-1], relative, payload)
     finally:
         for descriptor in descriptors:
             os.close(descriptor)
     return root.joinpath(*parts)
 
 
+class NonAtomicProjectionTarget(RuntimeError):
+    """This target's filesystem cannot publish a member in one step.
+
+    `CL-m6cc` established that approximating a guarantee is the defect, so there
+    is deliberately no copy fallback: a target that cannot rename atomically is
+    refused before any projection byte is written, and the operator is told which
+    target and why.
+    """
+
+    def __init__(self, target: Path | str, reason: str) -> None:
+        self.target = str(target)
+        self.reason = reason
+        super().__init__(
+            f"projection target {self.target} cannot be published atomically: "
+            f"{reason}. The activation is refused rather than approximated with a "
+            "copy, which would reintroduce the partial-write window this contract "
+            "exists to close"
+        )
+
+
+class AdmittedContentSubstituted(RuntimeError):
+    """The content offered to the writer is not the content that was admitted.
+
+    The gate digests an immutable snapshot and admits a decision about *those*
+    bytes. Binding the writer to that digest is what turns "the writer publishes
+    what it was handed" from a tautology into a guarantee.
+    """
+
+
+class ProjectionPublicationFailed(RuntimeError):
+    """A member could not be published, and the prior projection was restored.
+
+    Carries the paths that could not be put back, if any: a failed undo is worse
+    than a failed publication and may not be reported as the same thing.
+    """
+
+    def __init__(self, detail: str, unrestored: Sequence[str] = ()) -> None:
+        self.unrestored = tuple(unrestored)
+        message = f"projection publication failed: {detail}"
+        if self.unrestored:
+            message += (
+                "; the prior projection could not be restored at "
+                f"{list(self.unrestored)}, so this target is in neither state and "
+                "must be treated as untrusted"
+            )
+        else:
+            message += "; the prior projection state was restored"
+        super().__init__(message)
+
+
+class PublishedContentMismatch(RuntimeError):
+    """The bytes at the final target paths are not the admitted bytes.
+
+    Read from the published paths themselves rather than from the mapping the
+    writer was given or from any cache, because those two agreeing proves only
+    that the writer is self-consistent.
+    """
+
+
+@dataclass(frozen=True)
+class _StagedMember:
+    """One member written under a staging name, ready to be renamed into place.
+
+    `undo_name` is the prior target's bytes, already written beside it under a
+    staging name, when there was a prior target. Capturing the undo material
+    *before* the first publication rename makes restoration a pure rename loop:
+    the same single filesystem step as publication, with nothing left that can
+    fail for a new reason halfway through putting a projection back.
+    """
+
+    relative: str
+    parent_key: str
+    final_name: str
+    staged_name: str
+    payload: bytes
+    had_prior: bool
+    undo_name: str
+    final_path: Path
+
+
+def _parent_key(relative: str) -> str:
+    return Path(relative).parent.as_posix()
+
+
+def _read_beneath(parent: int, name: str, relative: str) -> bytes | None:
+    """Read one file relative to an opened parent, or `None` when absent."""
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    try:
+        handle = os.open(name, os.O_RDONLY | nofollow, dir_fd=parent)
+    except OSError as exc:
+        if exc.errno == errno.ENOENT:
+            return None
+        if exc.errno in (errno.ELOOP, errno.EMLINK):
+            raise ProjectionEscape(
+                f"projection target {relative!r} is a symlink; the write is "
+                "refused rather than redirected"
+            ) from exc
+        raise
+    with os.fdopen(handle, "rb") as opened:
+        return opened.read()
+
+
+def _assert_atomic_rename(
+    root: Path, key: str, parent: int, token: str, artifacts: list[tuple[str, str]]
+) -> None:
+    """Refuse a directory that cannot rename a staged file into place.
+
+    Two questions, both answered before a projection byte exists:
+
+    - can this directory rename at all? Some mounts (and some network
+      filesystems) answer no, and finding that out after the members are staged
+      would leave the caller holding a failure with no safe way forward.
+    - is the staged file on the same device as the directory it will be renamed
+      into? Staging happens *inside* the final directory precisely so the answer
+      is yes by construction, and the assertion is what keeps it true if that
+      construction is ever changed.
+    """
+    display = root if key == "." else root / key
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    probe = f".library-atomic-probe.{token}"
+    moved = f"{probe}.moved"
+    # Registered before either name can exist, so the caller's cleanup owns them
+    # whatever happens next. Review raised `SystemExit` from the probe rename and
+    # watched the probe file and the freshly created root survive, because only
+    # `OSError` cleaned up.
+    artifacts.append((key, probe))
+    artifacts.append((key, moved))
+    try:
+        handle = os.open(
+            probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600, dir_fd=parent
+        )
+    except OSError as exc:
+        raise NonAtomicProjectionTarget(
+            display, f"a staged file could not be created there ({exc.strerror})"
+        ) from exc
+    os.close(handle)
+    try:
+        os.rename(probe, moved, src_dir_fd=parent, dst_dir_fd=parent)
+    except OSError as exc:
+        reason = exc.strerror or errno.errorcode.get(exc.errno or 0, "rename refused")
+        if exc.errno == errno.EXDEV:
+            reason = f"{reason} (EXDEV)"
+        raise NonAtomicProjectionTarget(display, reason) from exc
+    staged_device = os.stat(moved, dir_fd=parent, follow_symlinks=False).st_dev
+    target_device = os.fstat(parent).st_dev
+    _discard(parent, moved)
+    if staged_device != target_device:
+        raise NonAtomicProjectionTarget(
+            display,
+            "the staging area and the target directory are on different "
+            f"filesystems (device {staged_device} vs {target_device}), so a rename "
+            "into place would not be one step",
+        )
+
+
+def _discard(parent: int, name: str) -> None:
+    """Remove a staging artifact, tolerating its absence."""
+    try:
+        os.unlink(name, dir_fd=parent)
+    except OSError:
+        pass
+
+
+def _restore(published: Sequence[_StagedMember], parents: Mapping[str, int]) -> list[str]:
+    """Put every already-published member back to its prior state.
+
+    Restoration is one rename per member and nothing else. The undo material was
+    written during staging, before the first publication rename, so this loop
+    creates no file, allocates nothing, and can fail only where the publication
+    it is undoing could also have failed. An earlier shape wrote the undo file
+    here, which added a failure mode to the recovery path and left the file
+    behind when the rename after it failed.
+
+    Any exception is contained, not only `OSError`: an undo interrupted halfway
+    must still try the remaining members and still report what it could not put
+    back, rather than replacing the failure that triggered it.
+
+    Returns:
+        The target paths that could not be restored. Empty means the prior
+        projection is intact.
+    """
+    unrestored: list[str] = []
+    for member in reversed(list(published)):
+        parent = parents[member.parent_key]
+        try:
+            if member.had_prior:
+                os.rename(
+                    member.undo_name,
+                    member.final_name,
+                    src_dir_fd=parent,
+                    dst_dir_fd=parent,
+                )
+            else:
+                os.unlink(member.final_name, dir_fd=parent)
+        except Exception:  # noqa: BLE001 - the path is the diagnostic
+            unrestored.append(str(member.final_path))
+    return unrestored
+
+
+def publish_projection(
+    root: Path, content: Mapping[str, bytes], *, admitted_digest: str
+) -> tuple[ReceiptTarget, ...]:
+    """Publish one item's admitted bytes into `root`, atomically per target.
+
+    The shape is stage-everything, then publish-everything:
+
+    1. every member is written under a staging name **inside its own final
+       directory**, so the rename that publishes it is a same-directory rename
+       and cannot be a cross-device copy;
+    2. every directory involved is asked whether it can rename at all, before
+       any projection byte is staged, and refuses the activation if it cannot;
+    3. each staged member is renamed onto its final name, which is a single
+       filesystem step: a reader sees the prior member or the new one, never a
+       prefix of either;
+    4. **any** failure during step 3 -- not only an `OSError` -- restores the
+       members already published, so the observable outcome is the prior
+       projection or the complete new one. Review interrupted the publication
+       loop with `KeyboardInterrupt` and watched a mixed projection survive,
+       because only `OSError` was caught;
+    5. the published paths are then read back and hashed, and the result must
+       equal `admitted_digest`.
+
+    Step 5 reads the real paths rather than the mapping this function was given.
+    Hashing the argument would confirm only that the writer is consistent with
+    itself, which is exactly the check that passes while the file on disk says
+    something else.
+
+    A refusal before step 3 also removes every directory this call created, so an
+    activation that refuses leaves the filesystem exactly as it found it. Only
+    directories this call created are removed, and only while they are empty.
+
+    Raises:
+        NonAtomicProjectionTarget: when a target cannot publish in one step.
+        ProjectionPublicationFailed: when a member could not be published.
+        PublishedContentMismatch: when the published bytes are not the admitted
+            bytes.
+    """
+    token = uuid4().hex
+    relatives = sorted(content)
+    parents: dict[str, int] = {}
+    staged: list[_StagedMember] = []
+    published: list[_StagedMember] = []
+    created: list[Path] = []
+    #: Every staging name this call may bring into existence, registered before
+    #: it can exist. Review interrupted `_create_beneath` inside its `fsync` and
+    #: watched the staging file survive, because the member was registered only
+    #: after it had been created and read back.
+    artifacts: list[tuple[str, str]] = []
+    completed = False
+    try:
+        for relative in relatives:
+            key = _parent_key(relative)
+            if key in parents:
+                continue
+            descriptors = _descend(root, relative, created)
+            for descriptor in descriptors[:-1]:
+                os.close(descriptor)
+            parents[key] = descriptors[-1]
+
+        # Before anything of this projection exists on disk.
+        for key in sorted(parents):
+            _assert_atomic_rename(root, key, parents[key], token, artifacts)
+
+        for relative in relatives:
+            key = _parent_key(relative)
+            parent = parents[key]
+            final_name = Path(relative).name
+            staged_name = f".{final_name}.library-staging.{token}"
+            undo_name = f".{final_name}.library-undo.{token}"
+            payload = content[relative]
+            artifacts.append((key, staged_name))
+            _create_beneath(parent, staged_name, relative, payload)
+            # Captured while the prior projection is still the one on disk, and
+            # written beside it now rather than during recovery: an undo that has
+            # to create a file first can fail for a reason the publication never
+            # had, halfway through putting the projection back.
+            prior = _read_beneath(parent, final_name, relative)
+            if prior is not None:
+                artifacts.append((key, undo_name))
+                _create_beneath(parent, undo_name, relative, prior)
+            staged.append(
+                _StagedMember(
+                    relative=relative,
+                    parent_key=key,
+                    final_name=final_name,
+                    staged_name=staged_name,
+                    payload=payload,
+                    had_prior=prior is not None,
+                    undo_name=undo_name,
+                    final_path=root.joinpath(*Path(relative).parts),
+                )
+            )
+
+        for member in staged:
+            parent = parents[member.parent_key]
+            try:
+                os.rename(
+                    member.staged_name,
+                    member.final_name,
+                    src_dir_fd=parent,
+                    dst_dir_fd=parent,
+                )
+            except OSError as exc:
+                unrestored = _restore(published, parents)
+                published.clear()
+                raise ProjectionPublicationFailed(
+                    f"{member.final_path} could not be renamed into place ({exc})",
+                    unrestored,
+                ) from exc
+            except BaseException:
+                # An interruption is not a gentler failure than an error. The
+                # members already published are put back before it propagates,
+                # and the original exception is preserved rather than replaced.
+                _restore(published, parents)
+                published.clear()
+                raise
+            published.append(member)
+
+        for key in sorted(parents):
+            try:
+                os.fsync(parents[key])
+            except OSError:
+                # Directory fsync is a durability improvement, not a correctness
+                # requirement, and some filesystems refuse it outright.
+                pass
+
+        observed: dict[str, bytes] = {}
+        differing: list[str] = []
+        for member in staged:
+            found = _read_beneath(parents[member.parent_key], member.final_name, member.relative)
+            if found is None:
+                differing.append(str(member.final_path))
+                continue
+            observed[member.relative] = found
+            if found != member.payload:
+                differing.append(str(member.final_path))
+        if differing or normalized_content_digest(observed) != admitted_digest:
+            unrestored = _restore(published, parents)
+            published.clear()
+            raise PublishedContentMismatch(
+                "the bytes at the published target paths are not the admitted "
+                f"content ({admitted_digest}); differing targets: {sorted(differing)}"
+                + (
+                    f"; the prior projection could not be restored at {unrestored}"
+                    if unrestored
+                    else "; the prior projection state was restored"
+                )
+            )
+
+        activated = tuple(
+            ReceiptTarget(
+                path=str(member.final_path),
+                kind="file",
+                # The digest of what was written, taken from the bytes that were
+                # written -- and now also confirmed against the published path.
+                content_sha256=hashlib.sha256(member.payload).hexdigest(),
+            )
+            for member in staged
+        )
+        completed = True
+        return activated
+    finally:
+        # Every name this call registered, whether or not it ever existed. A
+        # cleanup driven by what was successfully created misses exactly the
+        # artifact whose creation was interrupted.
+        for key, name in artifacts:
+            parent = parents.get(key)
+            if parent is not None:
+                _discard(parent, name)
+        for descriptor in parents.values():
+            os.close(descriptor)
+        if not completed:
+            # Every directory this activation created, innermost first, and only
+            # while empty. A directory that now holds something is either a
+            # pre-existing one or someone else's, and neither is ours to remove;
+            # the loop continues past it, because a sibling branch may still be
+            # removable.
+            for path in reversed(created):
+                try:
+                    path.rmdir()
+                except OSError:
+                    continue
+
+
 def filesystem_activation(
-    target_root: Path, *, non_compliance: "NonComplianceRegister | None" = None
+    target_root: Path,
+    *,
+    non_compliance: "NonComplianceRegister | None" = None,
+    admitted_digest: str | None = None,
 ) -> ProjectionActivation:
     """A two-phase filesystem projection into one directory.
 
@@ -511,45 +939,49 @@ def filesystem_activation(
     this activation -- install and repair alike -- so a legacy projection whose
     redistribution state is `unknown` or `denied` is refused here regardless of
     which caller asked, and refused before a byte is written.
+
+    `admitted_digest` binds this activation to a decision made elsewhere. A
+    caller that knows which bytes were admitted -- the Workspace mutation gate, or
+    a repair working from a receipt -- supplies it, and content that does not hash
+    to it is refused before anything is staged. Without the binding the activation
+    can still only publish what it was handed, and it still checks that on disk;
+    what it cannot do is notice that what it was handed is not what was decided.
     """
     root = Path(target_root)
 
+    def bound_digest(content: Mapping[str, bytes]) -> str:
+        digest = normalized_content_digest(content)
+        if admitted_digest and digest != admitted_digest:
+            raise AdmittedContentSubstituted(
+                f"this activation is bound to the admitted content {admitted_digest} "
+                f"and was offered {digest}; the writer publishes the admitted bytes "
+                "or nothing"
+            )
+        return digest
+
     def plan(content: Mapping[str, bytes]) -> Sequence[str]:
+        digest = bound_digest(content)
         planned = sorted(str(_contained_path(root, relative)) for relative in content)
-        guard_rematerialization(
-            non_compliance, paths=planned, digest=normalized_content_digest(content)
-        )
+        guard_rematerialization(non_compliance, paths=planned, digest=digest)
         return planned
 
     def apply(content: Mapping[str, bytes]) -> Sequence[ReceiptTarget]:
+        digest = bound_digest(content)
         guard_rematerialization(
             non_compliance,
             paths=sorted(str(root / relative) for relative in content),
-            digest=normalized_content_digest(content),
+            digest=digest,
         )
         # Every path is shape-checked before any byte is written, so a member
         # that could not be contained refuses the whole activation rather than
         # leaving the earlier members installed. The containment that matters is
-        # then enforced by `_write_beneath`, which never resolves a component by
-        # name a second time: a check whose result is used later is a check that
-        # can be invalidated in between, and review invalidated this one twice.
+        # then enforced by the descriptor walk, which never resolves a component
+        # by name a second time: a check whose result is used later is a check
+        # that can be invalidated in between, and review invalidated this one
+        # twice.
         for relative in content:
             _contained_path(root, relative)
-        created: list[ReceiptTarget] = []
-        for relative in sorted(content):
-            payload = content[relative]
-            path = _write_beneath(root, relative, payload)
-            created.append(
-                ReceiptTarget(
-                    path=str(path),
-                    kind="file",
-                    # The digest of what was written, taken from the bytes that
-                    # were written -- not re-read from disk, which would record
-                    # whatever a concurrent writer left there instead.
-                    content_sha256=hashlib.sha256(payload).hexdigest(),
-                )
-            )
-        return created
+        return publish_projection(root, content, admitted_digest=digest)
 
     return ProjectionActivation(plan=plan, apply=apply)
 
@@ -695,6 +1127,12 @@ def repair_projection(
     with a refusal, deleted the projection, and repaired: the refused bytes were
     written back. The operator's durable decisions are therefore located here and
     handed to the transaction, exactly as on the install path.
+
+    The activation is bound to the receipt's own `projected_content_digest`, so a
+    repair republishes the projection the receipt describes or refuses. A repair
+    is the one write path where the intended bytes are already written down, and
+    not binding them would let a cache object that verified against a different
+    receipt be projected under this one's name.
     """
     blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(
@@ -711,7 +1149,11 @@ def repair_projection(
         object_store=state.object_store(),
         receipt_store=state.receipt_store(scope),
         availability=availability,
-        activate=filesystem_activation(target_root, non_compliance=blocks),
+        activate=filesystem_activation(
+            target_root,
+            non_compliance=blocks,
+            admitted_digest=receipt.projected_content_digest,
+        ),
         observed_at=observed_at or _now(),
         ledger=ledger if ledger is not None else state.admission_ledger_store(),
     )

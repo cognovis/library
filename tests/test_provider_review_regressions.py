@@ -701,15 +701,17 @@ def _v2_project(tmp_path: Path) -> tuple[Path, Path, Path]:
 def test_f2_the_workspace_write_path_refuses_bytes_the_gate_did_not_admit(
     tmp_path: Path,
 ) -> None:
-    """A member's source edited after the gate digested it fails the operation.
+    """A member's source edited after the gate digested it changes nothing.
 
     Review changed `helper/SKILL.md` immediately after the gate captured the
     bytes; the command returned 0 and installed the changed bytes, so the
-    admission decision described a payload that was never written.
+    admission decision described a payload that was never written. Slice 6
+    answered that with a comparison, which reported the edit only after
+    publishing it.
 
-    The legacy installers resolve their own source and cannot be handed the
-    frozen mapping, so the binding is enforced by comparison instead: the
-    admitted snapshot is re-derived and compared immediately before the write.
+    `CL-st5s` removes the second read instead: the gate's frozen content is
+    published, and the catalog the installers run against resolves every member
+    to that publication. The edit below is not detected; it is unreachable.
     """
     project, home, helper_source = _v2_project(tmp_path)
 
@@ -725,14 +727,16 @@ def test_f2_the_workspace_write_path_refuses_bytes_the_gate_did_not_admit(
     )
     assert baseline.returncode == 0, baseline.stdout + baseline.stderr
 
-    # The comparison itself, exercised directly: an admitted snapshot that no
-    # longer matches the source is reported as drift, by identity.
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     import importlib
 
     library = importlib.import_module("library")
     from lib.catalog import load_catalog
-    from lib.workspace import resolve_workspace, resolve_workspace_closure
+    from lib.workspace import (
+        publish_admitted_members,
+        resolve_workspace,
+        resolve_workspace_closure,
+    )
 
     catalog = load_catalog(project)
     workspace = resolve_workspace(catalog, "team-core:engineering")
@@ -743,26 +747,35 @@ def test_f2_the_workspace_write_path_refuses_bytes_the_gate_did_not_admit(
         "project",
         pin_verifier=library._workspace_pin_verifier(catalog),
     )
-    _, admitted = library._workspace_normalized_members(catalog, closure, project)
+    items, admitted = library._workspace_normalized_members(catalog, closure, project)
     assert admitted, "the closure normalized into content-bearing items"
-    assert library._workspace_gated_content_drift(catalog, closure, project, admitted) == []
+
+    published = publish_admitted_members(tmp_path / "admitted", items, admitted)
+    bound = library._workspace_admitted_catalog(
+        catalog, closure, items, published, admitted
+    )
 
     helper_source.write_text("---\nname: helper\nversion: 1.0.0\n---\n# changed\n")
-    drifted = library._workspace_gated_content_drift(catalog, closure, project, admitted)
-    assert drifted, "an edited source is reported as drift against the admitted bytes"
-    assert any("helper" in identity for identity in drifted)
+
+    _, after_edit = library._workspace_normalized_members(bound, closure, project)
+    assert after_edit == admitted, (
+        "the bound catalog resolves every member to the admitted bytes; the "
+        "edited source is unreachable rather than detected"
+    )
 
 
-def test_f2_post_failure_state_matches_the_recorded_residual(tmp_path: Path) -> None:
-    """The residual is asserted, not described: detection happens after publication.
+def test_f2_the_recorded_residual_is_closed_by_publication(tmp_path: Path) -> None:
+    """The successor to the residual test, holding the ADR to the same line.
 
-    Round 2 demonstrated that a source changed after its member's pre-check is
-    installed anyway, the final comparison then fails the run, and nothing rolls
-    the bytes back. The ADR now records exactly that, and this test holds it — so
-    the day someone makes the write path atomic, this test fails and the ADR text
-    has to be corrected with it.
+    Round 2 demonstrated that a source changed after its member's pre-check was
+    installed anyway, the final comparison then failed the run, and nothing
+    rolled the bytes back. That test asserted the ADR's own words so the two
+    could not drift apart, and it said that the day someone makes the write path
+    atomic it should fail and take the ADR text with it. This is that
+    replacement: what is installed is the admitted content, and the ADR records
+    the closure rather than the residual.
     """
-    project, home, helper_source = _v2_project(tmp_path)
+    project, home, _helper_source = _v2_project(tmp_path)
     environment = os.environ.copy()
     environment["HOME"] = str(home)
 
@@ -781,6 +794,7 @@ def test_f2_post_failure_state_matches_the_recorded_residual(tmp_path: Path) -> 
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     library = importlib.import_module("library")
     from lib.catalog import load_catalog
+    from lib.providers.executable_admission import content_digest
     from lib.workspace import resolve_workspace, resolve_workspace_closure
 
     catalog = load_catalog(project)
@@ -793,17 +807,18 @@ def test_f2_post_failure_state_matches_the_recorded_residual(tmp_path: Path) -> 
         pin_verifier=library._workspace_pin_verifier(catalog),
     )
     _, admitted = library._workspace_normalized_members(catalog, closure, project)
-
-    # The source moves after the snapshot. The comparison reports it by identity;
-    # the ADR records that a change landing after a member's own installer is
-    # detected only once the bytes are already published.
-    helper_source.write_text("---\nname: helper\nversion: 1.0.0\n---\n# changed\n")
-    drifted = library._workspace_gated_content_drift(catalog, closure, project, admitted)
-    assert drifted, "drift against the admitted snapshot is detected"
+    helper = next(identity for identity in admitted if "helper" in identity)
+    projected = project / ".agents" / "skills" / "helper"
+    on_disk = {
+        path.relative_to(projected).as_posix(): path.read_bytes()
+        for path in sorted(projected.rglob("*"))
+        if path.is_file() and not path.is_symlink()
+    }
+    assert content_digest(on_disk) == content_digest(admitted[helper])
 
     adr = (REPO_ROOT / "docs" / "adr" / "heterogeneous-marketplace-workspaces.md").read_text()
-    assert "detects source drift; it does not prevent its effects" in adr
-    assert "nothing rolls them back" in adr
+    assert "detects source drift; it does not prevent its effects" not in adr
+    assert "publishes the admitted bytes atomically" in adr
 
 
 def test_f1_the_install_command_refuses_an_unpromoted_item(tmp_path: Path) -> None:
