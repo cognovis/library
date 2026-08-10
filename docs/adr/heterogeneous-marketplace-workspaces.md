@@ -686,6 +686,41 @@ complete and decide nothing:
    allocates, and its transport takes no workspace from its caller. It needs no
    capability: the whole item is already in its prompt.
 
+A second adversarial round against those repairs filed six more, all of them in
+the same place — the seam between deciding and acting:
+
+8. **The recommendation is bound and recomputed.** It was in neither the
+   fingerprint nor the load-time verification, so editing `reject` to `adopt` in
+   the stored packet removed the explicit override an approval otherwise needs.
+   It is now part of the fingerprint *and* recomputed from the verified scan and
+   verdict, because a fingerprint proves the file was not edited afterwards and
+   recomputation proves the value was never wrong to begin with.
+9. **A packet is bound to the id it is loaded by.** Changing one packet's
+   embedded id to another's made `update-show A` print A's content and render a
+   decision command naming B. The payload id, the requested id, and the directory
+   name must now agree.
+10. **A publication returns the packet that is on disk.** Two concurrent
+    preparations with disagreeing reviewers both returned success under one id
+    while only one packet existed, so a caller was handed a verdict that had
+    never been written. A losing rename is now accepted only when the stored
+    fingerprint matches; otherwise the publication allocates the next id.
+11. **The decision is claimed before anything moves.** An approval paused inside
+    its install, a rejection landed from another process, and the approval went
+    on to pin, admit, and project — leaving the rejection as the only decision on
+    record. The decision row is now written under the single-decision lock
+    *before* the first durable change, and a second row records the outcome.
+12. **Rights refusals happen before the pin.** `install_rights: denied` refused
+    from inside the install, after the pin had been raised and the grant
+    recorded, and still left a cache object and a receipt. Retention, projection
+    rights, and the non-compliance block are all evaluated in the pre-flight, so a
+    refusal happens while nothing has changed.
+13. **Adoption goes through the marketplace install, not around it.** The
+    approval path called the cache transaction directly and so skipped the
+    durable-retention decision and the `CL-m6cc` guard that
+    `install_marketplace_item` exists to add. `install_marketplace_item` now
+    accepts a caller-supplied `retrieve` and `completeness` — the reviewed bytes
+    — so there is one policy path rather than two.
+
 **The agent boundary is enforced, not requested.**
 `.dcg/packs/library-pin-raise-guard.yaml` blocks `library marketplace
 update-approve`, any adoption flag, and `library admission grant` in an agent

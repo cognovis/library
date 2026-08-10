@@ -59,10 +59,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from .cache_transaction import (
-    CompletenessEvidence,
-    install_foreign_item,
-)
+from .cache_transaction import CompletenessEvidence
 from .classification import FOREIGN, requires_admission
 from .contract import FetchedFile, FetchedItem
 from .executable_admission import (
@@ -76,6 +73,12 @@ from .executable_admission import (
 from .foreign_cache import TofuPinStore, normalized_member_path
 from .inventory import NormalizedItem
 from .offline import OfflineRefusal, ResolutionEvidence
+from .legacy_projections import guard_rematerialization
+from .rights import (
+    evaluate_cache_retention,
+    evaluate_projection,
+    project,
+)
 from .state_files import atomic_write_text, exclusive_lock
 from .update_scanner import ScanReport, merged_counts, scan_content
 
@@ -120,6 +123,11 @@ REASON_PLACEHOLDER = "<what you read in this packet and why you accept it>"
 #: summary.
 DIFF_LINE_LIMIT = 400
 
+#: How many ids one publication tries before giving up. Bounded rather than a
+#: `while True`: a loop that always finds the id taken is a bug somewhere else,
+#: and spinning on it forever hides that.
+PUBLICATION_ATTEMPTS = 8
+
 
 class UpdateFetchFailed(RuntimeError):
     """The update could not retrieve the current upstream state.
@@ -129,6 +137,21 @@ class UpdateFetchFailed(RuntimeError):
     the old revision, so the fetch is staged and published as a whole or not at
     all.
     """
+
+
+class PacketPublicationRaced(RuntimeError):
+    """Another preparation published a different packet under this id first.
+
+    Raised rather than swallowed, so `prepare_update` allocates a fresh id and
+    republishes instead of returning a packet that is not on disk. It is a
+    retryable condition and never reaches an operator.
+    """
+
+    def __init__(self, packet_id: str) -> None:
+        super().__init__(
+            f"another update published a different packet as {packet_id} first"
+        )
+        self.packet_id = packet_id
 
 
 class AlreadyDecided(ValueError):
@@ -691,6 +714,14 @@ class DecisionPacket:
                 },
                 "review": self.review.digest() if self.review is not None else None,
                 "review_status": self.review_status,
+                # The recommendation is the field that decides whether adopting
+                # this packet needs an explicit override, so leaving it out of the
+                # fingerprint left the one outcome-bearing value in the file
+                # unbound: wave-2 review edited a `reject` recommendation to
+                # `adopt`, the fingerprint did not move, and the approval no
+                # longer required `--against-recommendation`.
+                "recommendation": self.recommendation,
+                "recommendation_basis": self.recommendation_basis,
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -866,6 +897,23 @@ def _verify_packet(
             f"{packet.change_set.digest()}; a verdict about another change is not a "
             "review of this one"
         )
+    # The recommendation is recomputed from the artifacts that were just verified,
+    # not merely fingerprinted. A fingerprint proves the file was not edited after
+    # it was written; recomputation proves the value was never wrong in the first
+    # place, and this is the field that decides whether adopting the packet needs
+    # an explicit override.
+    expected, expected_basis = recommendation_for(
+        change_set=packet.change_set,
+        scan_counts=packet.scan_counts,
+        review_status=packet.review_status,
+        verdict=packet.review,
+    )
+    if (packet.recommendation, packet.recommendation_basis) != (expected, expected_basis):
+        raise ValueError(
+            f"update packet {packet.packet_id} recommends {packet.recommendation!r}, "
+            f"and its own scan and review produce {expected!r}; a recommendation "
+            "that does not follow from the evidence beside it is refused"
+        )
     if recorded.get("fingerprint") != packet.fingerprint():
         raise ValueError(
             f"update packet {packet.packet_id} records fingerprint "
@@ -1011,10 +1059,21 @@ class UpdatePacketStore:
             try:
                 os.rename(staged, final)
             except OSError:
-                if not (final / self.PACKET_FILE).is_file():
+                # Somebody published under this id while we were staging. Accept
+                # it only if it is the *same* packet. Wave-2 review ran two
+                # concurrent preparations whose reviewers disagreed, and both
+                # returned success under one id while only one packet existed on
+                # disk -- so a caller was handed a `reject` verdict that had never
+                # been written anywhere.
+                stored = final / self.PACKET_FILE
+                if not stored.is_file():
                     raise
-                # Somebody published this exact packet while we were staging it.
-                # Theirs is ours: the id was allocated against the fingerprint.
+                try:
+                    existing = json.loads(stored.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise PacketPublicationRaced(packet.packet_id) from exc
+                if existing.get("fingerprint") != packet.fingerprint():
+                    raise PacketPublicationRaced(packet.packet_id)
             return final
         finally:
             shutil.rmtree(staged, ignore_errors=True)
@@ -1032,6 +1091,17 @@ class UpdatePacketStore:
             raise ValueError(
                 f"unexpected update packet schema {payload.get('schema')!r}; expected "
                 f"{PACKET_SCHEMA}"
+            )
+        if payload.get("packet_id") != packet_id:
+            # A packet has to be the packet it was asked for. Wave-2 review
+            # changed one packet's embedded id to another's, and `load` returned
+            # it happily -- so `update-show A` printed A's content and rendered a
+            # decision command naming B, which is a way to have an operator decide
+            # about something they were never shown.
+            raise ValueError(
+                f"update packet at {directory.name} records packet id "
+                f"{payload.get('packet_id')!r}; a packet that does not agree with "
+                "the id it is stored under is refused"
             )
         contents: dict[str, dict[str, bytes]] = {}
         content_root = directory / self.CONTENT_DIRECTORY
@@ -1314,15 +1384,30 @@ def prepare_update(
     # produces a second review, and replacing the first one -- possibly one
     # somebody had already rejected -- is how the evidence a decision was made
     # against disappears.
-    final_id = store.available_packet_id(packet_id, packet.fingerprint())
-    if final_id != packet_id:
-        packet = replace(packet, packet_id=final_id)
-    store.write(
-        packet,
-        {item.qualified_identity: dict(item.content) for item in change_set.items if item.content},
-        prompt,
+    stored_contents = {
+        item.qualified_identity: dict(item.content)
+        for item in change_set.items
+        if item.content
+    }
+    fingerprint = packet.fingerprint()
+    for _ in range(PUBLICATION_ATTEMPTS):
+        final_id = store.available_packet_id(packet_id, fingerprint)
+        candidate = packet if final_id == packet.packet_id else replace(
+            packet, packet_id=final_id
+        )
+        try:
+            store.write(candidate, stored_contents, prompt)
+        except PacketPublicationRaced:
+            # Somebody else took this id with different evidence between the
+            # allocation and the rename. Try the next one rather than returning a
+            # packet that is not the packet on disk.
+            continue
+        return candidate
+    raise UpdateFetchFailed(
+        f"could not publish an update packet for {provider.identity()} after "
+        f"{PUBLICATION_ATTEMPTS} attempts; another process is publishing packets "
+        "for this source"
     )
-    return packet
 
 
 def _recorded_library_types(state) -> dict[str, str]:
@@ -1487,7 +1572,9 @@ def approve_packet(
     # that can refuse this approval is therefore checked before the first durable
     # write, so a refusal is a refusal rather than a half-adoption.
     pin_store = state.pin_store()
-    installable: list[tuple[str, ChangedItem, NormalizedItem, Mapping[str, bytes], str]] = []
+    installable: list[
+        tuple[str, ChangedItem, NormalizedItem, Mapping[str, bytes], str, Path]
+    ] = []
     for identity in chosen:
         entry = changed[identity]
         if entry.change == "removed":
@@ -1520,14 +1607,68 @@ def approve_packet(
             # docstring promised the opposite. Adoption is the trust act: if the
             # source cannot be observed now, it cannot stand behind the bytes now.
             _require_current_observation(identity, item.provider_identity, availability)
-        installable.append((identity, entry, item, stored, actual))
+        # The rights this adoption needs, decided before anything is written.
+        # Wave-2 review approved an item whose `install_rights` were `denied`: the
+        # refusal arrived from inside the install, after the pin had been raised
+        # and the grant recorded, and left a cache object and a receipt behind it.
+        # Retention and projection are evaluated here so a rights refusal happens
+        # while nothing has changed.
+        project(
+            evaluate_cache_retention(item.rights, subject=identity),
+            lambda: None,
+            present=present,
+        )
+        project(
+            evaluate_projection(item.rights, target, subject=identity),
+            lambda: None,
+            present=present,
+        )
+        # And the `CL-m6cc` block on the exact directory this adoption would
+        # write. `install_marketplace_item` checks it too, but it checks it after
+        # this loop has already moved the pin: a control that refuses only once
+        # the trust has been raised has refused nothing that matters.
+        root = projection_root_for(
+            state,
+            scope=scope,
+            identity=identity,
+            item=item,
+            target_root=Path(target_root),
+        )
+        guard_rematerialization(state.non_compliance_register(), paths=[str(root)])
+        installable.append((identity, entry, item, stored, actual, root))
 
-    # -- durable, per item ---------------------------------------------------
+    # -- claim the decision, then act ----------------------------------------
+    #
+    # The decision row is written *before* the first durable change, under the
+    # lock that refuses a second decision. Wave-2 review paused an approval inside
+    # its install, recorded a rejection from another process, and watched the
+    # approval go on to pin, admit, and project -- after which the only decision
+    # on record for that packet was the rejection. Claiming first makes the
+    # transition the serialization point it was always described as.
+    # Imported here rather than at module scope: `wiring` composes this module's
+    # siblings, so a top-level import would close a cycle.
+    from .wiring import install_marketplace_item
+
     approved: list[str] = []
     receipts: list[str] = []
     ledger = state.admission_ledger_store()
+    store.record_decision(
+        packet_id=packet_id,
+        decision="approved",
+        operator=operator_identity,
+        reason=operator_reason,
+        decided_at=decided_at,
+        change_set_digest=packet.change_set.digest(),
+        detail={
+            "status": "claimed",
+            "selected": [entry[0] for entry in installable],
+            "declined": sorted(set(changed) - {entry[0] for entry in installable}),
+            "recommendation": packet.recommendation,
+            "against_recommendation": bool(against_recommendation),
+        },
+    )
     try:
-        for identity, entry, item, stored, actual in installable:
+        for identity, entry, item, stored, actual, root in installable:
             # Pin first, then admit. A crash between the two leaves bytes pinned
             # and undecided, which refuses the next install; the reverse leaves a
             # standing grant for bytes nobody adopted, which is the record that
@@ -1563,8 +1704,20 @@ def approve_packet(
                 supersedes=True,
             )
 
-            outcome = install_foreign_item(
+            outcome = install_marketplace_item(
                 item,
+                # Through the marketplace install, not the bare transaction: the
+                # durable-retention rights decision and the `CL-m6cc`
+                # non-compliance guard around the target root and the activation
+                # live here, and wave-2 review found the approval path skipping
+                # both by calling the lower primitive directly.
+                state=state,
+                scope=scope,
+                target=target,
+                target_root=root,
+                ledger=ledger,
+                present=present,
+                observed_at=decided_at,
                 # The reviewed bytes, not a re-fetch. Upstream may have moved
                 # between the packet and this decision, and the human approved
                 # the packet.
@@ -1577,49 +1730,35 @@ def approve_packet(
                     ),
                     primary_path=sorted(stored)[0],
                 ),
-                object_store=state.object_store(),
-                pin_store=pin_store,
-                receipt_store=state.receipt_store(scope),
-                target=target,
-                activate=_activation(
-                    projection_root_for(
-                        state, scope=scope, identity=identity, item=item,
-                        target_root=Path(target_root),
-                    )
-                ),
-                observed_at=decided_at,
                 completeness=CompletenessEvidence.from_manifest(
                     sorted(stored),
                     "the packet stores the complete content the reviewer read and the "
                     "operator approved",
                 ),
-                ledger=ledger,
-                present=present,
             )
             approved.append(identity)
             receipts.append(outcome.receipt.id)
-    except BaseException:
-        # Whatever went wrong, what was already adopted is adopted. Recording it
-        # is the difference between a packet that reads "undecided" over three
-        # live grants and one that names exactly what happened.
-        if approved:
-            store.record_decision(
-                packet_id=packet_id,
-                decision="approved",
-                operator=operator_identity,
-                reason=operator_reason,
-                decided_at=decided_at,
-                change_set_digest=packet.change_set.digest(),
-                detail={
-                    "approved": list(approved),
-                    "declined": sorted(set(changed) - set(approved)),
-                    "recommendation": packet.recommendation,
-                    "against_recommendation": bool(against_recommendation),
-                    "receipts": list(receipts),
-                    "interrupted": True,
-                },
-                allow_second=True,
-            )
+    except BaseException as exc:
+        # The claim already stands, so the packet never reads "undecided" over
+        # live grants. What this adds is what actually happened.
+        store.record_decision(
+            packet_id=packet_id,
+            decision="approved",
+            operator=operator_identity,
+            reason=operator_reason,
+            decided_at=decided_at,
+            change_set_digest=packet.change_set.digest(),
+            detail={
+                "status": "interrupted",
+                "approved": list(approved),
+                "declined": sorted(set(changed) - set(approved)),
+                "recommendation": packet.recommendation,
+                "against_recommendation": bool(against_recommendation),
+                "receipts": list(receipts),
+                "failure": f"{type(exc).__name__}: {exc}",
+            },
+            allow_second=True,
+        )
         raise
 
     decision = store.record_decision(
@@ -1630,12 +1769,14 @@ def approve_packet(
         decided_at=decided_at,
         change_set_digest=packet.change_set.digest(),
         detail={
+            "status": "completed",
             "approved": approved,
             "declined": sorted(set(changed) - set(approved)),
             "recommendation": packet.recommendation,
             "against_recommendation": bool(against_recommendation),
             "receipts": receipts,
         },
+        allow_second=True,
     )
     return ApprovalOutcome(
         packet_id=packet_id,
@@ -1716,12 +1857,6 @@ def projection_root_for(
     return Path(target_root) / item.library_type / item.library_name
 
 
-def _activation(target_root: Path):
-    from .wiring import filesystem_activation
-
-    return filesystem_activation(Path(target_root))
-
-
 def reject_packet(
     *,
     packet_id: str,
@@ -1752,6 +1887,7 @@ def reject_packet(
 __all__ = [
     "CHANGES",
     "AlreadyDecided",
+    "PacketPublicationRaced",
     "DECISIONS",
     "DECISION_LEDGER_SCHEMA",
     "PACKET_SCHEMA",

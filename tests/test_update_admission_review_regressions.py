@@ -890,3 +890,457 @@ class TestF7TheReviewerIsPowerless:
             "a caller that can choose the reviewer's working directory can choose "
             "one worth reading"
         )
+
+
+# -- wave 2 ------------------------------------------------------------------
+#
+# Six further blocking findings against `9cb79fb`, the repair of wave 1. All six
+# were accepted. This is the final round the preset allows, so these repairs are
+# delivered rather than re-reviewed -- which is exactly why each proof of concept
+# is a test here.
+#
+# | Finding | What it demonstrated |
+# |---|---|
+# | W2-F1 | The recommendation was neither fingerprinted nor recomputed |
+# | W2-F2 | A packet was not bound to the id it was loaded by |
+# | W2-F3 | Concurrent preparation returned a packet that was never published |
+# | W2-F4 | A concurrent rejection could be the sole decision after approval adopted |
+# | W2-F5 | A refused install left a pin and a grant with no decision row |
+# | W2-F6 | Approval bypassed the rights and non-compliance publication guards |
+
+
+def _packet_payload(store: UpdatePacketStore, packet_id: str) -> tuple[Path, dict]:
+    path = store.path_for(packet_id) / store.PACKET_FILE
+    return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+class TestW2F1TheRecommendationIsEvidenceBound:
+    """The one outcome-bearing field must follow from the artifacts beside it."""
+
+    def _rejecting(self, tmp_path: Path):
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        packet = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("reject"),
+            observed_at=LATER,
+        )
+        assert packet.recommendation == "reject"
+        return state, item, packet, UpdatePacketStore(state.update_root())
+
+    def test_an_edited_recommendation_is_refused(self, tmp_path: Path):
+        state, item, packet, store = self._rejecting(tmp_path)
+        path, payload = _packet_payload(store, packet.packet_id)
+        payload["recommendation"] = "adopt"
+        payload["recommendation_basis"] = "Looks fine to me."
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="recommend|fingerprint"):
+            store.load(packet.packet_id)
+
+    def test_the_recommendation_is_part_of_the_fingerprint(self, tmp_path: Path):
+        state, item, packet, store = self._rejecting(tmp_path)
+        from dataclasses import replace as _replace
+
+        assert _replace(packet, recommendation="adopt").fingerprint() != packet.fingerprint()
+
+    def test_an_edited_recommendation_cannot_skip_the_explicit_override(
+        self, tmp_path: Path
+    ):
+        state, item, packet, store = self._rejecting(tmp_path)
+        path, payload = _packet_payload(store, packet.packet_id)
+        payload["recommendation"] = "adopt"
+        payload["recommendation_basis"] = "Looks fine to me."
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        with pytest.raises(ValueError):
+            approve_packet(
+                packet_id=packet.packet_id,
+                state=state,
+                items={item.qualified_identity(): item},
+                operator=OPERATOR,
+                reason=REASON,
+                availability={PROVIDER: _evidence(item.qualified_identity())},
+                decided_at=LATER,
+                target="machine_local",
+                target_root=tmp_path / "projection",
+                scope="project",
+            )
+        assert state.pin_store().pin_for(
+            item.qualified_identity()
+        ).normalized_content_digest == content_digest(V1)
+
+
+class TestW2F2APacketIsBoundToItsId:
+    """`update-show A` must never render a decision command naming B."""
+
+    def test_a_packet_whose_embedded_id_was_changed_is_refused(self, tmp_path: Path):
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        first = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("clean"),
+            observed_at=LATER,
+        )
+        second = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("reject"),
+            observed_at=LATER,
+        )
+        store = UpdatePacketStore(state.update_root())
+        assert first.packet_id != second.packet_id
+
+        path, payload = _packet_payload(store, first.packet_id)
+        payload["packet_id"] = second.packet_id
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="packet id|stored under"):
+            store.load(first.packet_id)
+
+
+class TestW2F3PublicationReturnsWhatIsOnDisk:
+    """A returned packet is a packet somebody can load."""
+
+    def test_two_concurrent_preparations_return_two_distinct_stored_packets(
+        self, tmp_path: Path
+    ):
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        store = UpdatePacketStore(state.update_root())
+
+        start = threading.Barrier(2)
+        results: list[object] = []
+        guard = threading.Lock()
+
+        def prepare(verdict: str) -> None:
+            start.wait(timeout=10)
+            try:
+                packet = prepare_update(
+                    provider=_Provider({"skills/helper": V2}),
+                    items=[item],
+                    state=state,
+                    review=_reviewer(verdict),
+                    observed_at=LATER,
+                )
+                with guard:
+                    results.append(packet)
+            except BaseException as exc:  # noqa: BLE001 - recorded for the assertion
+                with guard:
+                    results.append(exc)
+
+        threads = [
+            threading.Thread(target=prepare, args=(verdict,))
+            for verdict in ("clean", "reject")
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        packets = [entry for entry in results if not isinstance(entry, BaseException)]
+        assert len(packets) == 2, results
+        assert len({packet.packet_id for packet in packets}) == 2
+        for packet in packets:
+            reloaded, _ = store.load(packet.packet_id)
+            assert reloaded.review.verdict == packet.review.verdict, (
+                "a preparation returned a verdict that was never written anywhere"
+            )
+
+
+class TestW2F4TheDecisionIsClaimedBeforeAnythingMoves:
+    """Adopting the bytes and being the recorded decision are one transition."""
+
+    def test_a_rejection_during_an_approval_cannot_become_the_only_decision(
+        self, tmp_path: Path, monkeypatch
+    ):
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        packet = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("clean"),
+            observed_at=LATER,
+        )
+        store = UpdatePacketStore(state.update_root())
+        identity = item.qualified_identity()
+
+        inside = threading.Event()
+        release = threading.Event()
+        rejection: list[object] = []
+
+        import lib.providers.wiring as wiring
+
+        original = wiring.install_marketplace_item
+
+        def paused(*args, **kwargs):
+            inside.set()
+            release.wait(timeout=10)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(wiring, "install_marketplace_item", paused)
+
+        def reject_meanwhile() -> None:
+            inside.wait(timeout=10)
+            try:
+                rejection.append(
+                    reject_packet(
+                        packet_id=packet.packet_id,
+                        state=state,
+                        operator="second-operator@example.test",
+                        reason="Declined after reading the full post-update content.",
+                        decided_at=LATER,
+                    )
+                )
+            except BaseException as exc:  # noqa: BLE001 - recorded for the assertion
+                rejection.append(exc)
+            release.set()
+
+        worker = threading.Thread(target=reject_meanwhile)
+        worker.start()
+        approve_packet(
+            packet_id=packet.packet_id,
+            state=state,
+            items={identity: item},
+            operator=OPERATOR,
+            reason=REASON,
+            availability={PROVIDER: _evidence(identity)},
+            decided_at=LATER,
+            target="machine_local",
+            target_root=tmp_path / "projection",
+            scope="project",
+        )
+        worker.join(timeout=20)
+
+        assert rejection and isinstance(rejection[0], AlreadyDecided), (
+            "a rejection landed while an approval was adopting the bytes"
+        )
+        rows = store.decisions(packet.packet_id)
+        assert {row["decision"] for row in rows} == {"approved"}
+        assert (tmp_path / "projection" / "helper" / "SKILL.md").read_bytes() == V2["SKILL.md"]
+
+
+class TestW2F5NoAdoptionWithoutItsDecisionRow:
+    """A refused or failed install never leaves trust behind an empty record."""
+
+    def test_denied_install_rights_refuse_before_the_pin_moves(self, tmp_path: Path):
+        from lib.providers.rights import ProjectionRefused
+
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        packet = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("clean"),
+            observed_at=LATER,
+        )
+        identity = item.qualified_identity()
+        denied_payload = item.to_dict()
+        denied_payload["rights"] = dict(
+            denied_payload["rights"], install_rights="denied"
+        )
+        denied = NormalizedItem.from_dict(denied_payload)
+        objects_before = len(state.object_store().objects())
+        receipts_before = len(state.receipt_store("project").all())
+
+        with pytest.raises(ProjectionRefused):
+            approve_packet(
+                packet_id=packet.packet_id,
+                state=state,
+                items={identity: denied},
+                operator=OPERATOR,
+                reason=REASON,
+                availability={PROVIDER: _evidence(identity)},
+                decided_at=LATER,
+                target="machine_local",
+                target_root=tmp_path / "projection",
+                scope="project",
+            )
+
+        assert state.pin_store().pin_for(identity).normalized_content_digest == content_digest(V1)
+        assert not any(
+            record.content_digest == content_digest(V2)
+            for record in state.admission_ledger_store().current()
+        )
+        assert len(state.object_store().objects()) == objects_before
+        assert len(state.receipt_store("project").all()) == receipts_before
+        assert UpdatePacketStore(state.update_root()).decisions(packet.packet_id) == ()
+
+    def test_a_failure_inside_the_install_still_leaves_a_decision_row(
+        self, tmp_path: Path, monkeypatch
+    ):
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        packet = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("clean"),
+            observed_at=LATER,
+        )
+        store = UpdatePacketStore(state.update_root())
+        identity = item.qualified_identity()
+
+        import lib.providers.wiring as wiring
+
+        def explode(*args, **kwargs):
+            raise OSError("no space left on device")
+
+        monkeypatch.setattr(wiring, "install_marketplace_item", explode)
+
+        with pytest.raises(OSError):
+            approve_packet(
+                packet_id=packet.packet_id,
+                state=state,
+                items={identity: item},
+                operator=OPERATOR,
+                reason=REASON,
+                availability={PROVIDER: _evidence(identity)},
+                decided_at=LATER,
+                target="machine_local",
+                target_root=tmp_path / "projection",
+                scope="project",
+            )
+
+        rows = store.decisions(packet.packet_id)
+        assert rows, "trust was raised with no decision row describing it"
+        assert rows[0]["detail"]["status"] == "claimed"
+        assert rows[-1]["detail"]["status"] == "interrupted"
+        assert "no space left" in rows[-1]["detail"]["failure"]
+
+
+class TestW2F6ApprovalKeepsTheEstablishedGuards:
+    """An adoption is an install, and the install path owns the guards."""
+
+    def test_a_non_compliant_target_refuses_the_adoption(self, tmp_path: Path):
+        from lib.providers.legacy_projections import (
+            LegacyProjection,
+            ProjectionClassification,
+            ProvenanceAttribution,
+            RematerializationBlocked,
+        )
+
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        packet = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("clean"),
+            observed_at=LATER,
+        )
+        identity = item.qualified_identity()
+        blocked_root = tmp_path / "projection" / "helper"
+
+        state.non_compliance_register().record(
+            ProjectionClassification(
+                projection=LegacyProjection(
+                    path=str(blocked_root),
+                    name="helper",
+                    kind="directory",
+                    content_digest=content_digest(V1),
+                    member_count=1,
+                ),
+                attribution=ProvenanceAttribution(
+                    state="unattributed",
+                    evidence_source="no receipt describes this projection",
+                ),
+                redistribution_state="unknown",
+                redistribution_evidence="no published grant located",
+                receipt_status="unreceipted",
+                compliance="non-compliant",
+                pending_reason="redistribution rights are unknown for this projection",
+                remediation=(),
+            ),
+            recorded_at=NOW,
+        )
+
+        with pytest.raises(RematerializationBlocked):
+            approve_packet(
+                packet_id=packet.packet_id,
+                state=state,
+                items={identity: item},
+                operator=OPERATOR,
+                reason=REASON,
+                availability={PROVIDER: _evidence(identity)},
+                decided_at=LATER,
+                target="machine_local",
+                target_root=tmp_path / "projection",
+                scope="project",
+            )
+
+        assert (blocked_root / "SKILL.md").read_bytes() == V1["SKILL.md"]
+        assert state.pin_store().pin_for(identity).normalized_content_digest == content_digest(V1)
+
+    def test_unknown_install_rights_need_the_shown_opt_in(self, tmp_path: Path):
+        from lib.providers.rights import ProjectionRefused
+
+        state = _state(tmp_path)
+        item = _item()
+        _install(tmp_path, state, item, V1)
+        packet = prepare_update(
+            provider=_Provider({"skills/helper": V2}),
+            items=[item],
+            state=state,
+            review=_reviewer("clean"),
+            observed_at=LATER,
+        )
+        identity = item.qualified_identity()
+        unknown_payload = item.to_dict()
+        unknown_payload["rights"] = dict(
+            unknown_payload["rights"], install_rights="unknown", redistribution_rights="unknown"
+        )
+        unknown = NormalizedItem.from_dict(unknown_payload)
+
+        with pytest.raises(ProjectionRefused):
+            approve_packet(
+                packet_id=packet.packet_id,
+                state=state,
+                items={identity: unknown},
+                operator=OPERATOR,
+                reason=REASON,
+                availability={PROVIDER: _evidence(identity)},
+                decided_at=LATER,
+                target="machine_local",
+                target_root=tmp_path / "projection",
+                scope="project",
+            )
+
+        shown: list[str] = []
+
+        def present(presentation):
+            shown.append(presentation.statement)
+            return presentation.acknowledge(
+                operator=OPERATOR, acknowledged_at=LATER
+            )
+
+        approve_packet(
+            packet_id=packet.packet_id,
+            state=state,
+            items={identity: unknown},
+            operator=OPERATOR,
+            reason=REASON,
+            availability={PROVIDER: _evidence(identity)},
+            decided_at=LATER,
+            target="machine_local",
+            target_root=tmp_path / "projection",
+            scope="project",
+            present=present,
+        )
+        assert shown, "the rights statement was never shown before the mutation"
+        assert "install_rights" in shown[0]
+        assert (tmp_path / "projection" / "helper" / "SKILL.md").read_bytes() == V2["SKILL.md"]
