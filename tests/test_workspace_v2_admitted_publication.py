@@ -535,7 +535,7 @@ def test_f1_a_harness_specific_source_cannot_bypass_the_admitted_publication(
     assert result.returncode != 0, result.stdout + result.stderr
     combined = result.stdout + result.stderr
     assert "agent:bypass-agent" in combined
-    assert "sources.claude" in combined
+    assert "'sources'" in combined
 
     installed = list((project / ".claude" / "agents").glob("*")) if (
         project / ".claude" / "agents"
@@ -547,3 +547,202 @@ def test_f1_a_harness_specific_source_cannot_bypass_the_admitted_publication(
                 f"unadmitted bytes reached {path}"
             )
     assert not (project / ".library" / "admitted").exists()
+
+
+def test_w2f1_an_entry_with_no_source_resolves_to_nothing(tmp_path: Path) -> None:
+    """Wave-2 `CL-st5s-W2-F1`, the mechanism underneath it.
+
+    `Path("")` is `Path(".")`, and it exists. A catalog entry with no `source`
+    therefore resolved to the *current directory*, and its "content" was every
+    file in the project — which is how a `runtime-config` member, whose schema has
+    no `source` at all, appeared to the gate's whole-closure coverage check as a
+    member with content.
+    """
+    import importlib
+
+    library = importlib.import_module("library")
+
+    assert library._workspace_local_source({}, {}, "skill") is None
+    assert library._workspace_local_source({}, {"source": ""}, "skill") is None
+    assert library._workspace_local_source({}, {"source": "   "}, "skill") is None
+
+
+def test_w2f1_a_member_field_the_gate_has_not_classified_is_refused(
+    tmp_path: Path,
+) -> None:
+    """Wave-2 `CL-st5s-W2-F1`: the refusal is an allowlist, not a denylist.
+
+    Wave 1 named `sources` on an `agent`; wave 2 answered with `base` on a
+    `runtime-config`. Predicting the next spelling is the losing side of this,
+    so an entry key nobody has classified as free of installer content refuses
+    the member.
+    """
+    import importlib
+
+    library = importlib.import_module("library")
+
+    inert = {
+        "name": "helper",
+        "description": "helper skill.",
+        "version": "1.0.0",
+        "source": "/somewhere/SKILL.md",
+        "metadata": {"library": {"source_catalog": "team-core"}},
+        "requires": ["skill:other"],
+        "tags": ["a"],
+    }
+    assert library._unadmitted_entry_keys(inert) == []
+    assert library._unadmitted_entry_keys({**inert, "base": "/x.yaml"}) == ["base"]
+    assert library._unadmitted_entry_keys(
+        {**inert, "base": "/x.yaml", "global_overlay": "/y.yaml"}
+    ) == ["base", "global_overlay"]
+    assert library._unadmitted_entry_keys({**inert, "sources": {"claude": "/z.md"}}) == [
+        "sources"
+    ]
+    assert library._unadmitted_entry_keys({**inert, "handlers": ["h.py"]}) == ["handlers"]
+    # A field invented after this bead, which nobody has classified.
+    assert library._unadmitted_entry_keys({**inert, "attachments": ["a"]}) == [
+        "attachments"
+    ]
+
+
+def test_w2f1_a_runtime_config_member_cannot_install_unadmitted_bytes(
+    tmp_path: Path,
+) -> None:
+    """Wave-2 `CL-st5s-W2-F1`, executed end to end.
+
+    The reviewer's counterexample: a schema-valid `runtime-config` member with no
+    `source` and a `base` naming unadmitted bytes. The command returned `applied`
+    and wrote `# UNADMITTED RUNTIME CONFIG` to the configured target.
+    """
+    project, home, base_file = _v2_runtime_config_project(tmp_path)
+    environment = os.environ.copy()
+    environment["HOME"] = str(home)
+    result = subprocess.run(
+        [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:runtime",
+         "--scope", "project", "--json"],
+        cwd=project,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    unadmitted = base_file.read_bytes()
+    assert b"UNADMITTED RUNTIME CONFIG" in unadmitted
+    for path in project.rglob("*"):
+        if path.is_file():
+            assert b"UNADMITTED RUNTIME CONFIG" not in path.read_bytes(), (
+                f"unadmitted bytes reached {path}"
+            )
+    assert not (project / ".library" / "admitted").exists()
+
+
+def _v2_runtime_config_project(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """One catalog, one v2 Workspace, one sourceless runtime-config member."""
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    core = tmp_path / "core"
+    for path in (project, home, core):
+        path.mkdir(parents=True)
+
+    configs = core / "runtime-configs"
+    configs.mkdir()
+    base_file = configs / "bypass.yaml"
+    base_file.write_text("# UNADMITTED RUNTIME CONFIG\nkey: value\n")
+    prompts = core / "prompts"
+    prompts.mkdir()
+    (prompts / "control.md").write_text("# control\n")
+
+    subprocess.run(["git", "init", "-q", str(core)], check=True)
+    for command in (
+        ["git", "config", "user.email", "test@example.invalid"],
+        ["git", "config", "user.name", "Test"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-q", "-m", "catalog content"],
+    ):
+        subprocess.run(command, cwd=core, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=core, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    manifest = {
+        "schema_version": 2,
+        "name": "runtime",
+        "version": "1.0.0",
+        "description": "A Workspace containing a sourceless runtime-config.",
+        "status": "experimental",
+        "catalogs": [
+            {
+                "alias": "core",
+                "identity": "https://example.invalid/core",
+                "pin": {"kind": "commit", "value": head},
+            }
+        ],
+        "roots": [
+            {"type": "runtime-config", "name": "bypass", "catalog": "core"},
+            {"type": "prompt", "name": "control", "catalog": "core"},
+        ],
+    }
+    workspaces = core / "workspaces"
+    workspaces.mkdir()
+    (workspaces / "runtime.yaml").write_text(yaml.safe_dump(manifest))
+
+    catalog = {
+        "catalog_identity": "https://example.invalid/platform",
+        "default_dirs": {
+            "runtime_configs": [
+                {"default": ".agents/"},
+                {"global": "~/.agents/"},
+            ],
+            "prompts": [
+                {"default": ".claude/commands/"},
+                {"global": "~/.claude/commands/"},
+            ],
+        },
+        "sources": {
+            "catalogs": [
+                {
+                    "name": "team-core",
+                    "source": "https://example.invalid/core",
+                    "local_path": str(core),
+                    "content_types": ["runtime-configs", "prompts", "workspaces"],
+                }
+            ],
+            "marketplaces": [],
+        },
+        "library": {
+            "runtime_configs": [
+                {
+                    "name": "bypass",
+                    "description": "runtime config.",
+                    "version": "1.0.0",
+                    "base": str(base_file),
+                    "metadata": {"library": {"source_catalog": "team-core"}},
+                }
+            ],
+            "prompts": [
+                {
+                    "name": "control",
+                    "description": "control prompt.",
+                    "version": "1.0.0",
+                    "source": str(prompts / "control.md"),
+                    "metadata": {"library": {"source_catalog": "team-core"}},
+                }
+            ],
+            "workspaces": [
+                {
+                    **manifest,
+                    "source": str(workspaces / "runtime.yaml"),
+                    "metadata": {
+                        "library": {
+                            "source_catalog": "team-core",
+                            "inventory": "convention-scan",
+                        }
+                    },
+                }
+            ],
+        },
+    }
+    (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    return project, home, base_file

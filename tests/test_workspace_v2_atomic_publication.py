@@ -268,7 +268,10 @@ def test_no_target_ever_holds_a_partially_written_member(
     assert observed, "the publication phase renamed at least once"
     for snapshot in observed:
         for relative, payload in snapshot.items():
-            if "library-staging" in relative or "library-atomic-probe" in relative:
+            if any(
+                marker in relative
+                for marker in ("library-staging", "library-atomic-probe", "library-undo")
+            ):
                 continue
             assert payload in (prior[relative], CONTENT[relative]), (
                 f"{relative} was observed holding neither its prior nor its "
@@ -440,3 +443,137 @@ def test_f2_a_failed_undo_adds_nothing_to_the_projection(
         if "library-undo" in path.name or "library-staging" in path.name
     ]
     assert leftovers == []
+
+
+# -- wave-2 review findings, held as regression tests ------------------------
+
+
+def test_w2f2_an_interruption_during_staging_leaves_no_staging_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave-2 `CL-st5s-W2-F2`: the artifact whose creation was interrupted.
+
+    The reviewer raised `KeyboardInterrupt` from the `fsync` inside
+    `_create_beneath`. The member had not been registered yet, so the cleanup —
+    which iterated the members it had successfully staged — never saw the file,
+    and it survived along with the root that had just been created for it.
+    """
+    root = tmp_path / "projection"
+    real_fsync = os.fsync
+    raised: list[int] = []
+
+    def fsync(fd):
+        if not raised:
+            raised.append(fd)
+            raise KeyboardInterrupt("injected interruption during staging")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+
+    with pytest.raises(KeyboardInterrupt):
+        filesystem_activation(root).apply(CONTENT)
+
+    assert not root.exists(), "the root created for an interrupted staging is removed"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_w2f2_an_interruption_during_the_probe_leaves_no_probe_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wave-2 `CL-st5s-W2-F2`: the probe cleaned up only on `OSError`.
+
+    `SystemExit` from the probe rename left `.library-atomic-probe.<token>` and,
+    because that file made the directory non-empty, the created root as well.
+    """
+    root = tmp_path / "projection"
+
+    def rename(src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        raise SystemExit("injected interruption during the capability probe")
+
+    monkeypatch.setattr(os, "rename", rename)
+
+    with pytest.raises(SystemExit):
+        filesystem_activation(root).apply(CONTENT)
+
+    assert not root.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_w2f2_the_undo_material_exists_before_the_first_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Restoration creates nothing, so it cannot fail for a new reason.
+
+    Wave 2 showed a partially failed undo leaving prior/new/prior across three
+    targets. The undo can still fail if the filesystem refuses a rename it just
+    proved it could do, but it no longer *writes* during recovery: every undo
+    file is in place before the first publication rename, which is why a failure
+    to create one refuses the activation instead of surfacing halfway through
+    putting it back.
+    """
+    root = tmp_path / "projection"
+    (root / "nested").mkdir(parents=True)
+    for relative in CONTENT:
+        (root / relative).write_bytes(b"prior\n")
+
+    seen: list[list[str]] = []
+    real_rename = os.rename
+
+    def rename(src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        name = os.fsdecode(dst).rsplit("/", 1)[-1]
+        if name in CONTENT or name == "first.txt":
+            seen.append(sorted(path.name for path in root.rglob("*.library-undo.*")))
+        return real_rename(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+
+    monkeypatch.setattr(os, "rename", rename)
+    filesystem_activation(root).apply(CONTENT)
+
+    assert seen, "the publication phase ran"
+    assert len(seen[0]) == len(CONTENT), (
+        "every member's undo material exists before the first publication rename"
+    )
+    assert list(root.rglob("*.library-undo.*")) == []
+
+
+def test_w2f2_a_failed_undo_names_every_target_it_could_not_restore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The remaining honest limit, asserted rather than described.
+
+    A filesystem that refuses a same-directory rename during recovery leaves that
+    target holding the new bytes while its siblings are back on the old ones. The
+    activation does not report that as success: it fails, and it enumerates every
+    target it could not put back, so an operator knows exactly which paths are
+    untrusted.
+    """
+    root = tmp_path / "projection"
+    (root / "nested").mkdir(parents=True)
+    prior = {relative: b"prior\n" for relative in CONTENT}
+    for relative, payload in prior.items():
+        (root / relative).write_bytes(payload)
+
+    real_rename = os.rename
+
+    def rename(src, dst, *, src_dir_fd=None, dst_dir_fd=None):
+        name = os.fsdecode(dst).rsplit("/", 1)[-1]
+        source = os.fsdecode(src).rsplit("/", 1)[-1]
+        if name == "third.txt":
+            raise OSError(errno.EIO, "injected publication failure", str(dst))
+        if "library-undo" in source and name == "second.txt":
+            raise OSError(errno.EIO, "injected undo failure", str(dst))
+        return real_rename(src, dst, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd)
+
+    monkeypatch.setattr(os, "rename", rename)
+
+    with pytest.raises(ProjectionPublicationFailed) as failure:
+        filesystem_activation(root).apply(CONTENT)
+
+    unrestored = failure.value.unrestored
+    assert [path for path in unrestored if path.endswith("nested/second.txt")], unrestored
+    assert "must be treated as untrusted" in str(failure.value)
+    # The targets it could restore are back on their prior bytes, and nothing
+    # extra is left in the tree.
+    members = _projection_members(root)
+    assert members["first.txt"] == prior["first.txt"]
+    assert members["third.txt"] == prior["third.txt"]
+    assert [name for name in members if "library-" in name] == []

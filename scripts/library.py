@@ -4540,8 +4540,18 @@ def _workspace_prerequisite_statuses(plan: dict) -> dict[str, str]:
 
 
 def _workspace_local_source(catalog: dict, entry: dict, primitive: str) -> Path | None:
-    """Resolve a catalog entry to locally inspectable source content."""
-    raw_source = str(entry.get("source") or "")
+    """Resolve a catalog entry to locally inspectable source content.
+
+    An entry with no `source` resolves to nothing. That reads as obvious and was
+    not what the code did: `Path("")` is `Path(".")`, which exists, so a
+    sourceless entry resolved to the *current directory* and its "content" was
+    every file in the project. Review reached it through a `runtime-config` entry,
+    whose schema has no `source` at all, and the whole-closure coverage check
+    accepted the member because it appeared to have content.
+    """
+    raw_source = str(entry.get("source") or "").strip()
+    if not raw_source:
+        return None
     direct = Path(raw_source).expanduser()
     if direct.exists():
         source = direct
@@ -4637,35 +4647,73 @@ def _admitted_entry_source(entry: dict, resolved: Path, member_root: Path) -> Pa
     return member_root
 
 
-#: Catalog entry fields an installer may resolve content from. The Workspace
-#: mutation gate reads exactly `source`, so anything else is content it never
-#: digested and never admitted.
+#: The one catalog entry field the Workspace mutation gate reads content from.
 _ADMITTED_SOURCE_FIELD = "source"
-_UNADMITTED_SOURCE_FIELDS = ("sources",)
+
+#: Catalog entry keys that carry no content an installer could read: identity,
+#: description, dependency and capability declarations, and metadata. A v2
+#: Workspace member may carry these beside its `source`; anything else is refused.
+#:
+#: This is an allowlist, and the direction matters. Wave 1 of the review broke a
+#: denylist by naming `sources` on an `agent`; wave 2 broke the extended denylist
+#: by naming `base` on a `runtime-config`, whose schema has no `source` at all.
+#: A denylist has to predict every field an installer will ever resolve content
+#: from, and the two rounds of it were wrong in the same way twice. An allowlist
+#: fails the other direction: an entry field nobody has classified refuses the
+#: member until someone does, and adding a content-bearing field to an installer
+#: cannot silently widen what a Workspace mutation will write.
+_INERT_ENTRY_KEYS = frozenset(
+    {
+        "aliases",
+        "author",
+        "capability",
+        "category",
+        "compatibility",
+        "default_scope",
+        "deprecated",
+        "description",
+        "harness",
+        "homepage",
+        "keywords",
+        "kind",
+        "license",
+        "maturity",
+        "metadata",
+        "name",
+        "notes",
+        "replaced_by",
+        "requires",
+        "runtime",
+        "scope",
+        "skill_class",
+        "status",
+        "summary",
+        "tags",
+        "title",
+        "type",
+        "version",
+    }
+)
 
 
-def _unadmitted_source_fields(entry: dict) -> list[str]:
-    """Source-bearing fields on this entry that the gate did not read.
+def _unadmitted_entry_keys(entry: Mapping) -> list[str]:
+    """Entry keys the gate has not classified as free of installer content.
 
-    Review demonstrated the consequence of not asking: an `agent` entry carrying
-    both `source` and `sources.claude` had its `source` digested and admitted,
-    while `_resolve_agent_targets` read `sources.claude` preferentially and
-    installed bytes no operator ever saw -- with the command reporting `applied`
-    and the lock recording the admitted source. The binding rebinds `source`;
-    a member offering the installer somewhere else to read is refused instead.
+    Review demonstrated the cost of guessing twice. An `agent` entry carrying both
+    `source` and `sources.claude` had its `source` digested and admitted while
+    `_resolve_agent_targets` read `sources.claude` and installed bytes no operator
+    ever saw, with the command reporting `applied`. A `runtime-config` entry then
+    did the same through `base`, a field the first repair had no reason to name.
 
-    Adding a field here is part of adding one to an installer. The list is short
-    on purpose: it is the set an installer can resolve a source from, not a
-    denylist of things that look suspicious.
+    So the question asked here is not "does this field look like a source" but
+    "is this field known to carry none". Adding a key to `_INERT_ENTRY_KEYS` is a
+    statement that no installer resolves content from it.
     """
-    found: list[str] = []
-    for field in _UNADMITTED_SOURCE_FIELDS:
-        value = entry.get(field)
-        if isinstance(value, Mapping) and value:
-            found.extend(f"{field}.{key}" for key in sorted(value))
-        elif isinstance(value, str) and value.strip():
-            found.append(field)
-    return found
+    return sorted(
+        str(key)
+        for key in entry
+        if str(key) != _ADMITTED_SOURCE_FIELD and str(key) not in _INERT_ENTRY_KEYS
+    )
 
 
 def _workspace_admitted_catalog(catalog: dict, closure, items, published, contents) -> dict:
@@ -4720,14 +4768,15 @@ def _workspace_admitted_catalog(catalog: dict, closure, items, published, conten
         entry = lookup_entry(
             bound, node.primitive, node.name, fuzzy=False, source_catalog=node.catalog_name
         )
-        unadmitted = _unadmitted_source_fields(entry)
+        unadmitted = _unadmitted_entry_keys(entry)
         if unadmitted:
             raise LibraryError(
-                f"{root_id(node.primitive, node.name)} declares source fields the "
-                f"Workspace mutation gate did not read: {unadmitted}. The gate "
-                f"digested and admitted only its {_ADMITTED_SOURCE_FIELD!r}, so an "
-                "installer reading one of these would write bytes no operator "
-                "decided about. The member is refused rather than partly bound",
+                f"{root_id(node.primitive, node.name)} declares entry fields that "
+                f"are not known to be free of installer content: {unadmitted}. The "
+                f"Workspace mutation gate digested and admitted only its "
+                f"{_ADMITTED_SOURCE_FIELD!r}, so an installer resolving content "
+                "from one of these would write bytes no operator decided about. "
+                "The member is refused rather than partly bound",
                 exit_code=3,
             )
         resolved = _workspace_local_source(catalog, entry, node.primitive)

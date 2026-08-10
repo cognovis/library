@@ -593,14 +593,22 @@ class PublishedContentMismatch(RuntimeError):
 
 @dataclass(frozen=True)
 class _StagedMember:
-    """One member written under a staging name, ready to be renamed into place."""
+    """One member written under a staging name, ready to be renamed into place.
+
+    `undo_name` is the prior target's bytes, already written beside it under a
+    staging name, when there was a prior target. Capturing the undo material
+    *before* the first publication rename makes restoration a pure rename loop:
+    the same single filesystem step as publication, with nothing left that can
+    fail for a new reason halfway through putting a projection back.
+    """
 
     relative: str
     parent_key: str
     final_name: str
     staged_name: str
     payload: bytes
-    prior: bytes | None
+    had_prior: bool
+    undo_name: str
     final_path: Path
 
 
@@ -626,7 +634,9 @@ def _read_beneath(parent: int, name: str, relative: str) -> bytes | None:
         return opened.read()
 
 
-def _assert_atomic_rename(root: Path, key: str, parent: int, token: str) -> None:
+def _assert_atomic_rename(
+    root: Path, key: str, parent: int, token: str, artifacts: list[tuple[str, str]]
+) -> None:
     """Refuse a directory that cannot rename a staged file into place.
 
     Two questions, both answered before a projection byte exists:
@@ -643,6 +653,12 @@ def _assert_atomic_rename(root: Path, key: str, parent: int, token: str) -> None
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     probe = f".library-atomic-probe.{token}"
     moved = f"{probe}.moved"
+    # Registered before either name can exist, so the caller's cleanup owns them
+    # whatever happens next. Review raised `SystemExit` from the probe rename and
+    # watched the probe file and the freshly created root survive, because only
+    # `OSError` cleaned up.
+    artifacts.append((key, probe))
+    artifacts.append((key, moved))
     try:
         handle = os.open(
             probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600, dir_fd=parent
@@ -655,16 +671,13 @@ def _assert_atomic_rename(root: Path, key: str, parent: int, token: str) -> None
     try:
         os.rename(probe, moved, src_dir_fd=parent, dst_dir_fd=parent)
     except OSError as exc:
-        _discard(parent, probe)
         reason = exc.strerror or errno.errorcode.get(exc.errno or 0, "rename refused")
         if exc.errno == errno.EXDEV:
             reason = f"{reason} (EXDEV)"
         raise NonAtomicProjectionTarget(display, reason) from exc
-    try:
-        staged_device = os.stat(moved, dir_fd=parent, follow_symlinks=False).st_dev
-        target_device = os.fstat(parent).st_dev
-    finally:
-        _discard(parent, moved)
+    staged_device = os.stat(moved, dir_fd=parent, follow_symlinks=False).st_dev
+    target_device = os.fstat(parent).st_dev
+    _discard(parent, moved)
     if staged_device != target_device:
         raise NonAtomicProjectionTarget(
             display,
@@ -682,13 +695,19 @@ def _discard(parent: int, name: str) -> None:
         pass
 
 
-def _restore(published: Sequence[_StagedMember], parents: Mapping[str, int], token: str) -> list[str]:
+def _restore(published: Sequence[_StagedMember], parents: Mapping[str, int]) -> list[str]:
     """Put every already-published member back to its prior state.
 
-    Restoration uses the same staged-write-then-rename step as publication, so
-    undoing a member is as atomic as doing it. The prior bytes were captured
-    during staging, before the first rename — reading them here would read
-    whatever this activation just published.
+    Restoration is one rename per member and nothing else. The undo material was
+    written during staging, before the first publication rename, so this loop
+    creates no file, allocates nothing, and can fail only where the publication
+    it is undoing could also have failed. An earlier shape wrote the undo file
+    here, which added a failure mode to the recovery path and left the file
+    behind when the rename after it failed.
+
+    Any exception is contained, not only `OSError`: an undo interrupted halfway
+    must still try the remaining members and still report what it could not put
+    back, rather than replacing the failure that triggered it.
 
     Returns:
         The target paths that could not be restored. Empty means the prior
@@ -697,19 +716,17 @@ def _restore(published: Sequence[_StagedMember], parents: Mapping[str, int], tok
     unrestored: list[str] = []
     for member in reversed(list(published)):
         parent = parents[member.parent_key]
-        undo = f".{member.final_name}.library-undo.{token}"
         try:
-            if member.prior is None:
-                os.unlink(member.final_name, dir_fd=parent)
+            if member.had_prior:
+                os.rename(
+                    member.undo_name,
+                    member.final_name,
+                    src_dir_fd=parent,
+                    dst_dir_fd=parent,
+                )
             else:
-                _create_beneath(parent, undo, member.relative, member.prior)
-                os.rename(undo, member.final_name, src_dir_fd=parent, dst_dir_fd=parent)
-        except OSError:
-            # The undo file is removed even here. Review found a failed undo
-            # leaving `.<name>.library-undo.<token>` inside the projection, where
-            # a recursive reader counts it as content: a failed restore may leave
-            # the target untrusted, but it may not add material to it.
-            _discard(parent, undo)
+                os.unlink(member.final_name, dir_fd=parent)
+        except Exception:  # noqa: BLE001 - the path is the diagnostic
             unrestored.append(str(member.final_path))
     return unrestored
 
@@ -758,6 +775,11 @@ def publish_projection(
     staged: list[_StagedMember] = []
     published: list[_StagedMember] = []
     created: list[Path] = []
+    #: Every staging name this call may bring into existence, registered before
+    #: it can exist. Review interrupted `_create_beneath` inside its `fsync` and
+    #: watched the staging file survive, because the member was registered only
+    #: after it had been created and read back.
+    artifacts: list[tuple[str, str]] = []
     completed = False
     try:
         for relative in relatives:
@@ -771,15 +793,25 @@ def publish_projection(
 
         # Before anything of this projection exists on disk.
         for key in sorted(parents):
-            _assert_atomic_rename(root, key, parents[key], token)
+            _assert_atomic_rename(root, key, parents[key], token, artifacts)
 
         for relative in relatives:
             key = _parent_key(relative)
             parent = parents[key]
             final_name = Path(relative).name
             staged_name = f".{final_name}.library-staging.{token}"
+            undo_name = f".{final_name}.library-undo.{token}"
             payload = content[relative]
+            artifacts.append((key, staged_name))
             _create_beneath(parent, staged_name, relative, payload)
+            # Captured while the prior projection is still the one on disk, and
+            # written beside it now rather than during recovery: an undo that has
+            # to create a file first can fail for a reason the publication never
+            # had, halfway through putting the projection back.
+            prior = _read_beneath(parent, final_name, relative)
+            if prior is not None:
+                artifacts.append((key, undo_name))
+                _create_beneath(parent, undo_name, relative, prior)
             staged.append(
                 _StagedMember(
                     relative=relative,
@@ -787,9 +819,8 @@ def publish_projection(
                     final_name=final_name,
                     staged_name=staged_name,
                     payload=payload,
-                    # Captured here, while the prior projection is still the one
-                    # on disk. This is the only material an undo can use.
-                    prior=_read_beneath(parent, final_name, relative),
+                    had_prior=prior is not None,
+                    undo_name=undo_name,
                     final_path=root.joinpath(*Path(relative).parts),
                 )
             )
@@ -804,7 +835,7 @@ def publish_projection(
                     dst_dir_fd=parent,
                 )
             except OSError as exc:
-                unrestored = _restore(published, parents, token)
+                unrestored = _restore(published, parents)
                 published.clear()
                 raise ProjectionPublicationFailed(
                     f"{member.final_path} could not be renamed into place ({exc})",
@@ -814,7 +845,7 @@ def publish_projection(
                 # An interruption is not a gentler failure than an error. The
                 # members already published are put back before it propagates,
                 # and the original exception is preserved rather than replaced.
-                _restore(published, parents, token)
+                _restore(published, parents)
                 published.clear()
                 raise
             published.append(member)
@@ -838,7 +869,7 @@ def publish_projection(
             if found != member.payload:
                 differing.append(str(member.final_path))
         if differing or normalized_content_digest(observed) != admitted_digest:
-            unrestored = _restore(published, parents, token)
+            unrestored = _restore(published, parents)
             published.clear()
             raise PublishedContentMismatch(
                 "the bytes at the published target paths are not the admitted "
@@ -863,21 +894,26 @@ def publish_projection(
         completed = True
         return activated
     finally:
-        outstanding = {id(member) for member in staged} - {id(member) for member in published}
-        for member in staged:
-            if id(member) in outstanding:
-                _discard(parents[member.parent_key], member.staged_name)
+        # Every name this call registered, whether or not it ever existed. A
+        # cleanup driven by what was successfully created misses exactly the
+        # artifact whose creation was interrupted.
+        for key, name in artifacts:
+            parent = parents.get(key)
+            if parent is not None:
+                _discard(parent, name)
         for descriptor in parents.values():
             os.close(descriptor)
         if not completed:
             # Every directory this activation created, innermost first, and only
             # while empty. A directory that now holds something is either a
-            # pre-existing one or someone else's, and neither is ours to remove.
+            # pre-existing one or someone else's, and neither is ours to remove;
+            # the loop continues past it, because a sibling branch may still be
+            # removable.
             for path in reversed(created):
                 try:
                     path.rmdir()
                 except OSError:
-                    break
+                    continue
 
 
 def filesystem_activation(

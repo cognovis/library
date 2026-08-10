@@ -1932,22 +1932,32 @@ version of it:
 | Post-activation digest over the published paths | The bytes are read back from the real paths and hashed; hashing the argument would confirm only that the writer agrees with itself |
 | `admitted_digest` binding | Content that does not hash to the decision made elsewhere is refused before anything is staged. `repair_projection` binds the receipt's own `projected_content_digest` |
 
-Two of those rows are review repairs rather than original design, and both were
-demonstrated rather than argued. An interruption was treated as a gentler failure
-than an error, so a `KeyboardInterrupt` at the third of three renames walked out
-through `finally` leaving two members new and one prior. And the refusal was
-"before any projection *byte*", not before any mutation: forcing every probe to
-`EXDEV` refused the activation and left a freshly created target root and member
-subdirectory behind.
+Several of those rows are review repairs rather than original design, and each
+was demonstrated rather than argued:
+
+- an interruption was treated as a gentler failure than an error, so a
+  `KeyboardInterrupt` at the third of three renames walked out through `finally`
+  leaving two members new and one prior;
+- the refusal was "before any projection *byte*", not before any mutation:
+  forcing every probe to `EXDEV` refused the activation and left a freshly
+  created target root and member subdirectory behind;
+- cleanup was driven by what had been successfully created, which misses exactly
+  the artifact whose creation was interrupted. `KeyboardInterrupt` raised from
+  the `fsync` inside a staging write, and `SystemExit` raised from the probe
+  rename, each left their file behind — and the leftover file then kept the
+  created directory from being removed. Every staging, undo, and probe name is
+  now registered before it can exist, so cleanup owns it whatever happens.
+
+**Restoration creates nothing.** Undo material is written beside each target
+during staging, before the first publication rename, so putting a projection back
+is one rename per member and no allocation. The earlier shape wrote the undo file
+during recovery, which added a failure mode to the recovery path and left the
+file inside the projection when the rename after it failed. Recovery can now fail
+only where the publication it is undoing could also have failed.
 
 **Refusal is the only fallback.** There is no copy path when rename is
 unavailable, per the `CL-m6cc` finding that approximating a guarantee is the
-defect. The undo path is not an exception to that: it republishes prior bytes
-through the same staged-write-then-rename step, so undoing a member is as atomic
-as doing it, and an undo that fails is reported as its own condition rather than
-folded into the original failure. An undo that fails also removes its own undo
-file, because a failed restore may leave a target untrusted but may not add
-material to the projection that a recursive reader will count as content.
+defect.
 
 **How the Workspace v2 path consumes it.** `gate_workspace_mutation` calls its
 writer with the frozen content it digested. That writer now
@@ -1972,18 +1982,34 @@ and final drift comparisons are deleted rather than kept as a second line of
 defence, because a redundant check that can never fire is the one that gets
 trusted after the real one is removed.
 
-**One source per member, enforced rather than assumed.** The gate reads a
+**One source per member, and the allowlist that enforces it.** The gate reads a
 member's content from the entry's `source`, and the binding rebinds that field.
-Some installers can resolve content from a *second* field: an `agent` entry may
-carry a `sources` map, and `_resolve_agent_targets` prefers it. Review took that
-end to end — an entry declaring an admitted `source` and a different
-`sources.claude` installed the unadmitted bytes, returned `applied`, and recorded
-the admitted source and the verified pin in the lock, which made the restored
-provenance actively false. A v2 member declaring any source field the gate did
-not read is therefore refused by name. That is a real restriction on what a
-cross-catalog Workspace may contain, and it is the fail-closed side of a gate
-that can only admit bytes it has read. Widening it means digesting every declared
-source, not widening the binding.
+Some installers resolve content from a *different* field, and two rounds of
+review found two of them by execution:
+
+- an `agent` entry may carry a `sources` map, and `_resolve_agent_targets`
+  prefers it. An entry declaring an admitted `source` and a different
+  `sources.claude` installed the unadmitted bytes, returned `applied`, and
+  recorded the admitted source and the verified pin in the lock — making the
+  restored provenance actively false;
+- a `runtime-config` entry has **no `source` at all**. Its installer reads `base`
+  and `global_overlay`, and the same counterexample went through a field the
+  first repair had no reason to name.
+
+The first repair was a denylist, and the second round broke it the same way the
+first round broke the original assumption. So the check is an allowlist:
+`_INERT_ENTRY_KEYS` is the set of entry keys stated to carry no content an
+installer can read, and a v2 member whose entry has any other key is refused by
+name. Adding a content-bearing field to an installer can no longer silently widen
+what a Workspace mutation writes; it refuses the member until someone classifies
+the field. Widening the capability means digesting every declared source, not
+widening the binding.
+
+Underneath that sat a plain defect worth naming separately, because it made the
+`runtime-config` member look admissible: `Path("")` is `Path(".")`, which exists,
+so an entry with no `source` resolved to the *current directory* and its "content"
+was every file in the project. A sourceless entry now resolves to nothing, which
+makes the gate's whole-closure coverage check refuse it.
 
 **Provenance is deliberately not rebound.** The bytes came from an admitted
 publication; the *source* is still the catalog the resolution named, and the
@@ -1992,7 +2018,7 @@ the install (`_workspace_restore_member_provenance`). The pin is a stronger
 statement than what a non-v2 install records, which is whatever HEAD the local
 checkout happened to be on when the installer read it.
 
-**Two residuals, stated rather than implied.**
+**Three residuals, stated rather than implied.**
 
 1. The activation's guarantee is over failures the process can observe. Every
    member transitions in one step, no target ever holds a partial file, and any
@@ -2004,7 +2030,16 @@ checkout happened to be on when the installer read it.
    re-running republishes. This is deliberately not written as "atomic across the
    set": a filesystem offers one-step replacement per path, not per set of paths
    under a shared root that other content also lives in.
-2. A harness derivation is a transformation of the admitted bytes, not the
+2. A filesystem that refuses a same-directory rename *during recovery* — one it
+   proved it could perform moments earlier, both in the probe and in the
+   publication being undone — leaves that target holding the new bytes while its
+   restored siblings hold the old ones. Nothing in userspace can undo a rename
+   that will not happen. What the activation does not do is call that success: it
+   raises `ProjectionPublicationFailed`, enumerates every target it could not put
+   back, and says those targets must be treated as untrusted.
+   `tests/test_workspace_v2_atomic_publication.py` asserts that enumeration
+   rather than describing it.
+3. A harness derivation is a transformation of the admitted bytes, not the
    admitted bytes. `SKILL.md` vendored into `.agents/skills/<name>/` is
    byte-identical and is asserted as such; a translated `.mdc` or an injected
    frontmatter block is derived from admitted content by the installer that
