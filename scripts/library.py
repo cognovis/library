@@ -3552,26 +3552,34 @@ def cmd_marketplace_install(
     # has no type to install it as. Rejecting only `blocked` treated both as
     # installable and projected them.
     context = AdmissionContext()
-    decision = evaluate_item(item, context)
+    # The admission axis is deferred to the cache transaction, which digests the
+    # bytes it will write, consults the operator's durable ledger, and refuses
+    # with the exact remedy command. Every other axis is judged here, as before.
+    decision = evaluate_item(item, context, admission_pending_is_blocking=False)
     if decision.admission_state != "installable":
+        # Every applicable explanation, not the first one. These used to be a
+        # fallback for "no block reason was recorded", which was correct while
+        # only one thing could be wrong at a time. Since `CL-lt51` an unpromoted
+        # item also carries the deferred admission reason, and a diagnostic that
+        # named only the admission would send the operator to record a decision
+        # that still would not install the item.
         reasons = [reason.describe() for reason in decision.block_reasons]
-        if not reasons:
-            maturity = str(item.classification.get("maturity") or "stable")
-            if not context.admits_maturity(maturity):
-                reasons = [
-                    f"maturity {maturity!r} is not promoted by this scope; promoting it "
-                    f"is an explicit decision (admitted maturities: "
-                    f"{list(context.admitted_maturities)})"
-                ]
-            elif is_unclassified(item.library_type):
-                reasons = [
-                    "the member fits no existing Library primitive type, so there is "
-                    "no type to install it as; it is listed, not installable"
-                ]
-            else:
-                reasons = [
-                    "no projection target is eligible under the recorded rights"
-                ]
+        maturity = str(item.classification.get("maturity") or "stable")
+        if not context.admits_maturity(maturity):
+            reasons.append(
+                f"maturity {maturity!r} is not promoted by this scope; promoting it "
+                f"is an explicit decision (admitted maturities: "
+                f"{list(context.admitted_maturities)})"
+            )
+        elif is_unclassified(item.library_type):
+            reasons.append(
+                "the member fits no existing Library primitive type, so there is "
+                "no type to install it as; it is listed, not installable"
+            )
+        elif not reasons:
+            reasons = [
+                "no projection target is eligible under the recorded rights"
+            ]
         payload = {
             "status": decision.admission_state,
             "qualified_identity": identity,
@@ -3792,8 +3800,10 @@ def _review_stage(args, repo_root: Path | None):
     if verdict_file is not None:
         return recorded_review(_json.loads(Path(verdict_file).read_text(encoding="utf-8")))
     state = _foreign_state(repo_root)
+    # No workspace is passed: the reviewer of unadmitted foreign instructions runs
+    # powerless and in an empty directory the dispatcher allocates. See
+    # `update_review_acpx.REVIEW_PERMISSIONS`.
     return acpx_review(
-        workspace=repo_root or Path.cwd(),
         artifacts=state.update_root() / "review-artifacts",
         agent=getattr(args, "review_agent", None) or DEFAULT_AGENT,
         model=getattr(args, "review_model", None) or DEFAULT_MODEL,

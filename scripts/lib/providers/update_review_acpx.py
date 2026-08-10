@@ -53,9 +53,27 @@ DEFAULT_AGENT = "codex"
 DEFAULT_MODEL = "gpt-5.6-sol"
 DEFAULT_REASONING = "high"
 
-#: The permission value an update review runs under. A review of foreign content
-#: reads the packet and answers; it needs no approval to write anything.
-REVIEW_PERMISSIONS = "approve-reads"
+#: The permission value an update review runs under: **no tools at all**.
+#:
+#: Wave-1 review found the first version of this module dispatching with
+#: `approve-reads` inside the repository worktree, and that is the exact failure
+#: this bead exists to prevent, one layer up. The prompt embeds the complete
+#: content of a foreign item that nobody has admitted yet, and that content's
+#: entire threat model is that a model follows it. A reviewer holding read
+#: capability can therefore be instructed by the artifact under review to read
+#: `~/.ssh/id_rsa` and put it in its summary -- and the summary is written into a
+#: packet a human then reads.
+#:
+#: The reviewer needs no capability: the whole item is already in its prompt.
+#: This is the capability isolation `~/.agents/standards/security/content-isolation`
+#: describes -- a powerless context that returns a structured answer -- and it is
+#: a blast-radius control, not an injection detector.
+REVIEW_PERMISSIONS = "deny-all"
+
+#: The directory the review runs in. Never the repository: a denied tool call is
+#: the control, and a working directory that contains nothing worth reading is
+#: the belt beside it.
+ISOLATED_WORKSPACE_NAME = "review-workspace"
 
 #: Stable telemetry caller id.
 CALLER = "library-marketplace-update-review"
@@ -100,7 +118,6 @@ def _extract_verdict(answer: str) -> dict[str, Any]:
 
 def acpx_review(
     *,
-    workspace: Path,
     artifacts: Path,
     agent: str = DEFAULT_AGENT,
     model: str = DEFAULT_MODEL,
@@ -110,13 +127,17 @@ def acpx_review(
     timeout_seconds: int = 900,
     runner=subprocess.run,
 ):
-    """A `ReviewDispatch` that asks one agent-shell reviewer about one change set.
+    """A `ReviewDispatch` that asks one powerless reviewer about one change set.
 
     Args:
-        workspace: The directory the reviewer runs in.
         artifacts: Where this dispatch's event and answer files are written. Each
             invocation allocates fresh paths under it; a reused path would let a
-            retry overwrite the evidence of the attempt it is retrying.
+            retry overwrite the evidence of the attempt it is retrying. The
+            reviewer's own empty working directory is created beside them.
+
+    There is deliberately **no `workspace` argument**. The caller does not get to
+    choose where a reviewer of unadmitted foreign instructions runs, because the
+    one choice that matters -- "somewhere with nothing in it" -- is the control.
 
     Returns:
         A callable suitable as `prepare_update(review=...)`.
@@ -135,6 +156,8 @@ def acpx_review(
         attempt = uuid.uuid4().hex[:12]
         events = artifacts / f"update-review-{attempt}.events.ndjson"
         answer = artifacts / f"update-review-{attempt}.answer.md"
+        workspace = artifacts / ISOLATED_WORKSPACE_NAME / attempt
+        workspace.mkdir(parents=True, exist_ok=True)
         command: Sequence[str] = [
             "uv",
             "run",
@@ -214,6 +237,7 @@ def recorded_review(verdict: Mapping[str, Any]):
 
 
 __all__ = [
+    "ISOLATED_WORKSPACE_NAME",
     "CALLER",
     "DEFAULT_AGENT",
     "DEFAULT_DISPATCH_SCRIPT",

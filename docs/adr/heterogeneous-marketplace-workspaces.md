@@ -632,6 +632,60 @@ a current, complete, source-scoped observation of that identity's own source, pe
 `Offline Semantics`. An approval while the source is unreachable is refused: an
 unreachable source cannot authorize substituting the bytes it stands behind.
 
+Adversarial review of this slice demonstrated seven further gaps by execution,
+each of which the text above implied and the first implementation did not have.
+They are recorded because every one of them is a way the flow could look
+complete and decide nothing:
+
+1. **A recorded grant has to work at the surface an operator uses.** The install
+   command's pre-check ran with no ledger and no content, so it answered
+   `pending` for every foreign Skill and returned before the transaction could
+   consult the operator's real decisions — a matching grant could not make the
+   install succeed, and the refusal that renders the exact remedy was never
+   printed. The pre-check now judges every axis it can answer from the item and
+   **defers the admission axis alone** to the transaction, which digests the
+   bytes it will write. A narrower pre-check, not a weaker gate.
+2. **A packet's scan and verdict are bound to the packet's own bytes.** A stored
+   scan whose subject digest and findings were edited, and a verdict naming a
+   different change set, both loaded and were then recorded in the ledger as
+   "digest-bound evidence" for content neither had inspected. A packet is now
+   self-verifying on load: the change-set digest, each item's bytes, each scan's
+   subject *and its recomputation*, and the verdict's subject are all checked,
+   and a packet that disagrees with itself is refused rather than reconciled.
+3. **A refused approval leaves no admission behind.** An approval whose re-pin
+   failed offline had already written the grant, leaving a standing decision for
+   bytes nobody adopted and no decision row anywhere. Every condition that can
+   refuse an approval is now checked before the first durable write; the per-item
+   order is pin, then admit, then install, so an interruption leaves bytes pinned
+   and undecided rather than admitted and unpinned; and an interrupted approval
+   still records what it adopted. A **first** pin now requires a current
+   source-scoped observation too — adoption is the trust act, and a source that
+   cannot be observed cannot stand behind the bytes.
+4. **A packet is evidence, so it is neither replaced nor decided twice.** A
+   rebuild deleted the previous packet before renaming, a second run replaced a
+   rejected packet's review under the same id, and two synchronized rejections
+   both succeeded. Packet ids are now allocated against a fingerprint over the
+   change set, the scans, and the verdict — an identical rerun reuses its packet
+   and a different one gets a fresh id beside it — and the "already decided"
+   check and the append are one locked operation.
+5. **An upstream removal reaches the packet.** The baseline was restricted to the
+   fetched identities, which made the `removed` branch unreachable: an item the
+   operator had admitted and the steward had withdrawn silently vanished from the
+   packet. The baseline now covers every identity pinned for that provider.
+   Approving a packet still installs and deletes nothing for a removal; retiring
+   the receipt stays the explicit named removal act.
+6. **Each approved item projects into its own directory.** Every item received
+   the same target root, so two Skills that each ship a `SKILL.md` overwrote one
+   another. An update now lands where the item already lives — the common parent
+   of its receipt's targets — and otherwise under `<root>/<type>/<name>`.
+7. **The reviewer of unadmitted foreign instructions holds no capability.** The
+   complete content of an item nobody has admitted was placed in a model's
+   context, and that model was dispatched with read permission inside the
+   repository worktree — this bead's own threat model, one layer inward. The
+   review now runs with `deny-all` in an empty directory the dispatcher
+   allocates, and its transport takes no workspace from its caller. It needs no
+   capability: the whole item is already in its prompt.
+
 **The agent boundary is enforced, not requested.**
 `.dcg/packs/library-pin-raise-guard.yaml` blocks `library marketplace
 update-approve`, any adoption flag, and `library admission grant` in an agent

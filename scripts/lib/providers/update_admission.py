@@ -55,7 +55,7 @@ import json
 import os
 import shutil
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -75,7 +75,7 @@ from .executable_admission import (
 )
 from .foreign_cache import TofuPinStore, normalized_member_path
 from .inventory import NormalizedItem
-from .offline import ResolutionEvidence
+from .offline import OfflineRefusal, ResolutionEvidence
 from .state_files import atomic_write_text, exclusive_lock
 from .update_scanner import ScanReport, merged_counts, scan_content
 
@@ -129,6 +129,24 @@ class UpdateFetchFailed(RuntimeError):
     the old revision, so the fetch is staged and published as a whole or not at
     all.
     """
+
+
+class AlreadyDecided(ValueError):
+    """This packet already carries a human decision.
+
+    A `ValueError` so that the CLI's existing refusal path reports it, and a
+    named type so that the approval flow can tell "somebody decided this while I
+    was working" apart from every other way an approval can be refused.
+    """
+
+    def __init__(self, packet_id: str, previous: Mapping[str, Any]) -> None:
+        super().__init__(
+            f"update packet {packet_id} was already {previous.get('decision')} by "
+            f"{previous.get('operator')} at {previous.get('decided_at')}; re-run the "
+            "update to produce a fresh packet for a fresh decision"
+        )
+        self.packet_id = packet_id
+        self.previous = dict(previous)
 
 
 class ReviewUnavailable(RuntimeError):
@@ -656,6 +674,29 @@ class DecisionPacket:
     def scan_digest_for(self, qualified_identity: str) -> str:
         return self.scans[qualified_identity].digest()
 
+    def fingerprint(self) -> str:
+        """What makes this packet *this* packet, independent of its id.
+
+        The change set, the scan of each item, and the reviewer's verdict. Two
+        runs over an unchanged upstream state agree on the first and can differ
+        on the last, which is why the id is allocated against this value rather
+        than against the change set alone.
+        """
+        payload = json.dumps(
+            {
+                "change_set": self.change_set.digest(),
+                "scans": {
+                    identity: report.digest()
+                    for identity, report in sorted(self.scans.items())
+                },
+                "review": self.review.digest() if self.review is not None else None,
+                "review_status": self.review_status,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
     def approval_command(self) -> str:
         """The exact command a human runs to approve this packet.
 
@@ -701,6 +742,7 @@ class DecisionPacket:
         return {
             "schema": PACKET_SCHEMA,
             "packet_id": self.packet_id,
+            "fingerprint": self.fingerprint(),
             "provider_identity": self.provider_identity,
             "created_at": self.created_at,
             "change_set": {
@@ -740,6 +782,95 @@ def _packet_id(provider_identity: str, change_set: ChangeSet) -> str:
 
 
 # -- the quarantine store -----------------------------------------------------
+
+
+def _verify_packet(
+    packet: "DecisionPacket",
+    contents: Mapping[str, Mapping[str, bytes]],
+    *,
+    recorded: Mapping[str, Any],
+) -> None:
+    """Every claim a packet makes about itself, checked against its own bytes.
+
+    Wave-1 review edited a stored packet so that its scanner report named
+    `sha256:aaaa...` and carried no markers, and its reviewer verdict named
+    `sha256:bbbb...`, while the item bytes and the item digest were untouched.
+    Both loaded, the approval succeeded, and the admission ledger then recorded
+    those two digests as the "digest-bound scanner and verdict evidence" for
+    content neither of them had looked at. The packet was evidence in name only.
+
+    The checks below are the ones that make a packet self-verifying, and each is
+    a separate way the file can lie:
+
+    - the recorded change-set digest matches the change set that was rebuilt;
+    - each item's stored bytes reproduce the digest the item claims;
+    - each scan names the bytes it sat next to **and recomputes from them**, so a
+      report whose findings were deleted is refused rather than believed;
+    - the verdict names this change set, not another one;
+    - the fingerprint matches, so `available_packet_id` cannot be steered.
+
+    A malformed packet is refused, never repaired. That is the same rule
+    `AdmissionLedgerStore` applies to a hand-edited ledger, and for the same
+    reason: this file is what stands between an edited disk and an operator
+    believing a decision was reviewed.
+    """
+    if recorded.get("change_set", {}).get("digest") != packet.change_set.digest():
+        raise ValueError(
+            f"update packet {packet.packet_id} records change-set digest "
+            f"{recorded.get('change_set', {}).get('digest')!r}, but its items "
+            f"describe {packet.change_set.digest()}; a packet that disagrees with "
+            "itself is refused rather than reconciled"
+        )
+    for item in packet.change_set.items:
+        identity = item.qualified_identity
+        if item.change == "removed":
+            continue
+        stored = contents.get(identity)
+        if not stored:
+            raise ValueError(
+                f"update packet {packet.packet_id} holds no content for {identity}, "
+                "which its change set says was added or modified"
+            )
+        actual = content_digest(stored)
+        if actual != item.fetched_digest:
+            raise ValueError(
+                f"the stored content for {identity} does not reproduce the digest "
+                f"packet {packet.packet_id} recorded: packet {item.fetched_digest}, "
+                f"stored {actual}"
+            )
+        report = packet.scans.get(identity)
+        if report is None:
+            raise ValueError(
+                f"update packet {packet.packet_id} carries no scan for {identity}; "
+                "an unscanned item is not evidence a decision can be recorded "
+                "against"
+            )
+        if report.content_digest != actual:
+            raise ValueError(
+                f"the scan recorded for {identity} names {report.content_digest} and "
+                f"the stored content is {actual}; a scan of other bytes is not this "
+                "item's scan"
+            )
+        if report != scan_content(stored):
+            raise ValueError(
+                f"the scan recorded for {identity} does not recompute from the "
+                "stored content; the scanner is a pure function of the bytes, so a "
+                "report that cannot be reproduced was edited"
+            )
+    if packet.review is not None and (
+        packet.review.change_set_digest != packet.change_set.digest()
+    ):
+        raise ValueError(
+            f"the reviewer verdict in packet {packet.packet_id} names change set "
+            f"{packet.review.change_set_digest}, and this packet is "
+            f"{packet.change_set.digest()}; a verdict about another change is not a "
+            "review of this one"
+        )
+    if recorded.get("fingerprint") != packet.fingerprint():
+        raise ValueError(
+            f"update packet {packet.packet_id} records fingerprint "
+            f"{recorded.get('fingerprint')!r} and computes {packet.fingerprint()}"
+        )
 
 
 class UpdatePacketStore:
@@ -815,13 +946,50 @@ class UpdatePacketStore:
             return ()
         return tuple(sorted(entry.name for entry in self.staging_root.iterdir()))
 
+    def available_packet_id(self, base_id: str, fingerprint: str) -> str:
+        """A packet id that will not overwrite somebody else's evidence.
+
+        Wave-1 review filed three ways the first version of this store lost
+        evidence, and they share one cause: a deterministic id was treated as
+        permission to replace what already lived there. It is not. Re-running an
+        update over an unchanged upstream state produces the same change set and
+        therefore the same base id, but *not* the same packet -- the reviewer
+        answers again, and the second answer would have silently replaced the
+        first under a packet id somebody may already have rejected.
+
+        So: an existing packet with the same id and the same fingerprint is that
+        packet, and this returns it unchanged. An existing packet with a
+        different fingerprint is different evidence, and this allocates a fresh
+        id beside it rather than over it.
+        """
+        candidate = base_id
+        suffix = 1
+        while True:
+            existing = self.path_for(candidate) / self.PACKET_FILE
+            if not existing.is_file():
+                return candidate
+            try:
+                stored = json.loads(existing.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                stored = {}
+            if stored.get("fingerprint") == fingerprint:
+                return candidate
+            suffix += 1
+            candidate = f"{base_id}-{suffix}"
+
     def write(
         self,
         packet: DecisionPacket,
         contents: Mapping[str, Mapping[str, bytes]],
         prompt: str,
     ) -> Path:
-        """Publish one packet atomically, or publish nothing."""
+        """Publish one packet atomically, or publish nothing.
+
+        Never deletes an existing packet. `available_packet_id` has already
+        guaranteed that this id is either free or holds this exact packet, so a
+        collision here is a concurrent writer that got there first -- and its
+        packet is as good as ours, since the id binds to the fingerprint.
+        """
         staged = self.staging_root / f"{os.getpid()}-{uuid.uuid4().hex}"
         try:
             content_root = staged / self.CONTENT_DIRECTORY
@@ -840,12 +1008,13 @@ class UpdatePacketStore:
             (staged / self.PROMPT_FILE).write_text(prompt, encoding="utf-8")
             final = self.path_for(packet.packet_id)
             final.parent.mkdir(parents=True, exist_ok=True)
-            if final.exists():
-                # Re-running an update over an unchanged upstream state produces
-                # the same packet id. Replacing it with an identical rebuild is
-                # not a change; the decision record is separate and survives.
-                shutil.rmtree(final)
-            os.rename(staged, final)
+            try:
+                os.rename(staged, final)
+            except OSError:
+                if not (final / self.PACKET_FILE).is_file():
+                    raise
+                # Somebody published this exact packet while we were staging it.
+                # Theirs is ours: the id was allocated against the fingerprint.
             return final
         finally:
             shutil.rmtree(staged, ignore_errors=True)
@@ -920,6 +1089,7 @@ class UpdatePacketStore:
             recommendation=payload["recommendation"],
             recommendation_basis=payload["recommendation_basis"],
         )
+        _verify_packet(packet, contents, recorded=payload)
         return packet, contents
 
     # -- decisions ------------------------------------------------------------
@@ -949,12 +1119,24 @@ class UpdatePacketStore:
         decided_at: str,
         change_set_digest: str,
         detail: Mapping[str, Any] | None = None,
+        allow_second: bool = False,
     ) -> dict[str, Any]:
-        """Append one human decision about one packet.
+        """Append one human decision about one packet, and only one.
 
         Append-only for the reason the admission ledger is: somebody later needs
         to see that this packet was rejected on Monday and by whom, even after a
         newer packet for the same source was approved on Tuesday.
+
+        **The check and the append are one locked operation.** Wave-1 review ran
+        two synchronized rejections of the same packet and both succeeded,
+        because the "has this been decided?" read happened outside the lock the
+        append took. Two decision rows for one packet is not an audit trail, it
+        is two people each believing theirs was the decision.
+
+        Args:
+            allow_second: Only for recording what an interrupted approval managed
+                to adopt before it failed. It never bypasses the check for a
+                fresh decision; see `claim_decision`.
         """
         if decision not in DECISIONS:
             raise ValueError(f"a packet decision is one of {list(DECISIONS)}")
@@ -969,6 +1151,17 @@ class UpdatePacketStore:
         }
         with exclusive_lock(self.decisions_path):
             existing = list(self.decisions())
+            if not allow_second:
+                previous = next(
+                    (
+                        entry
+                        for entry in reversed(existing)
+                        if entry.get("packet_id") == packet_id
+                    ),
+                    None,
+                )
+                if previous is not None:
+                    raise AlreadyDecided(packet_id, previous)
             existing.append(row)
             atomic_write_text(
                 self.decisions_path,
@@ -1026,12 +1219,27 @@ def prepare_update(
         fetched[identity] = (item, {entry.path: entry.content for entry in result.files})
 
     library_types = {item.qualified_identity(): item.library_type for item in items}
+    # The baseline covers every identity this provider has pinned, not only the
+    # ones that were fetched. Wave-1 review found the earlier version restricting
+    # it to the fetched set, which made `build_change_set`'s `removed` branch
+    # unreachable: an item the operator had admitted and the steward had since
+    # withdrawn simply vanished from the packet, so the packet was not "exactly
+    # the change set between the pinned admitted state and the fetched state".
+    # An upstream disappearance is one of the more important things an operator
+    # can be told about, and ADR-0011 already has a durable state for it.
+    prefix = f"{provider.identity()}#"
+    library_types.update(_recorded_library_types(state))
+    pinned = sorted(
+        pin.qualified_identity
+        for pin in state.pin_store().pins()
+        if pin.qualified_identity.startswith(prefix)
+    )
     # Two passes: what the operator admitted, and only then the bytes behind it.
     # Looking the content up first would mean reading a cache object for an
     # identity whose decision might not stand, which is a diff against bytes
     # nobody accepted.
     admitted = admitted_baseline(
-        identities=sorted(fetched),
+        identities=sorted(set(fetched) | set(pinned)),
         pin_store=state.pin_store(),
         ledger=state.admission_ledger_store().ledger(),
         library_types=library_types,
@@ -1100,12 +1308,40 @@ def prepare_update(
         recommendation=recommendation,
         recommendation_basis=basis,
     )
+    # The base id is deterministic over the change set, so the same upstream
+    # state is recognizable across runs. It is only *taken* when it is free or
+    # already holds this exact packet: a second run over an unchanged change set
+    # produces a second review, and replacing the first one -- possibly one
+    # somebody had already rejected -- is how the evidence a decision was made
+    # against disappears.
+    final_id = store.available_packet_id(packet_id, packet.fingerprint())
+    if final_id != packet_id:
+        packet = replace(packet, packet_id=final_id)
     store.write(
         packet,
         {item.qualified_identity: dict(item.content) for item in change_set.items if item.content},
         prompt,
     )
     return packet
+
+
+def _recorded_library_types(state) -> dict[str, str]:
+    """Each installed identity's Library type, from its receipt.
+
+    An identity that vanished upstream is not in the fetched inventory, so its
+    type is not on any item this run holds. `admitted_baseline` needs it to ask
+    whether that identity required a decision at all, and the receipt is where
+    the Library wrote it down.
+    """
+    recorded: dict[str, str] = {}
+    for scope in sorted(state.receipt_paths):
+        try:
+            receipts = state.receipt_store(scope).all()
+        except (KeyError, OSError, ValueError):
+            continue
+        for receipt in receipts:
+            recorded.setdefault(receipt.qualified_identity(), receipt.library_type)
+    return recorded
 
 
 def _cached_baseline_content(
@@ -1208,13 +1444,12 @@ def approve_packet(
     """
     store = UpdatePacketStore(state.update_root())
     packet, contents = store.load(packet_id)
+    # An early, cheap refusal for the ordinary case. It is not the guarantee --
+    # `record_decision` holds the check and the append under one lock, so a
+    # decision recorded while this approval is working still refuses it there.
     previous = _already_decided(store, packet_id)
     if previous is not None:
-        raise ValueError(
-            f"update packet {packet_id} was already {previous['decision']} by "
-            f"{previous['operator']} at {previous['decided_at']}; re-run the update "
-            "to produce a fresh packet for a fresh decision"
-        )
+        raise AlreadyDecided(packet_id, previous)
 
     changed = {item.qualified_identity: item for item in packet.change_set.items}
     chosen = tuple(selected) if selected is not None else tuple(sorted(changed))
@@ -1244,14 +1479,22 @@ def approve_packet(
     operator_identity = validated_operator(operator)
     operator_reason = validated_reason(reason)
 
-    approved: list[str] = []
-    receipts: list[str] = []
+    # -- pre-flight ----------------------------------------------------------
+    #
+    # Wave-1 review approved a packet whose re-pin then failed offline, and found
+    # the new digest already recorded as `admitted` with no decision row anywhere
+    # -- a standing grant for bytes the operator did not adopt. Every condition
+    # that can refuse this approval is therefore checked before the first durable
+    # write, so a refusal is a refusal rather than a half-adoption.
+    pin_store = state.pin_store()
+    installable: list[tuple[str, ChangedItem, NormalizedItem, Mapping[str, bytes], str]] = []
     for identity in chosen:
         entry = changed[identity]
         if entry.change == "removed":
-            # An upstream removal is not something to install. It is recorded in
-            # the decision and left to explicit named removal, which ADR-0011
-            # keeps as its own operator act with its own receipt history.
+            # An upstream removal is not something to install. It is reported in
+            # the packet and recorded in the decision, and retiring the receipt
+            # stays ADR-0011's explicit named removal -- its own operator act,
+            # with its own receipt history and its own degraded-source rules.
             continue
         item = items.get(identity)
         if item is None:
@@ -1269,74 +1512,115 @@ def approve_packet(
                 f"this packet recorded: packet {entry.fetched_digest}, stored "
                 f"{actual}. Nothing was approved; re-run the update."
             )
-
-        evidence = (
-            f"{operator_reason} [update packet {packet_id}; change set "
-            f"{packet.change_set.digest()}; scan {packet.scan_digest_for(identity)}; "
-            f"review {packet.review.digest() if packet.review else 'unavailable'}]"
-        )
-        state.admission_ledger_store().decide(
-            ADMITTED,
-            identity,
-            actual,
-            library_type=item.library_type,
-            reviewer=operator_identity,
-            permission_surface=(),
-            decided_at=decided_at,
-            evidence=evidence,
-            supersedes=True,
-        )
-
-        pin_store = state.pin_store()
         existing = pin_store.pin_for(identity)
-        if existing is None:
-            pin_store.pin(identity, actual, observed_at=decided_at)
-        elif existing.normalized_content_digest != actual:
-            observation = availability.get(item.provider_identity)
-            if observation is None:
-                raise ValueError(
-                    f"raising the pin for {identity} needs a current, source-scoped "
-                    f"observation of {item.provider_identity}; approval never re-pins "
-                    "on a recorded observation from the time of the fetch"
+        if existing is None or existing.normalized_content_digest != actual:
+            # Any pin write, first or subsequent. Review found the first-import
+            # branch skipping this entirely, so an operator could adopt a brand
+            # new item from a source that had since gone dark -- while the
+            # docstring promised the opposite. Adoption is the trust act: if the
+            # source cannot be observed now, it cannot stand behind the bytes now.
+            _require_current_observation(identity, item.provider_identity, availability)
+        installable.append((identity, entry, item, stored, actual))
+
+    # -- durable, per item ---------------------------------------------------
+    approved: list[str] = []
+    receipts: list[str] = []
+    ledger = state.admission_ledger_store()
+    try:
+        for identity, entry, item, stored, actual in installable:
+            # Pin first, then admit. A crash between the two leaves bytes pinned
+            # and undecided, which refuses the next install; the reverse leaves a
+            # standing grant for bytes nobody adopted, which is the record that
+            # lies.
+            existing = pin_store.pin_for(identity)
+            if existing is None:
+                pin_store.pin(identity, actual, observed_at=decided_at)
+            elif existing.normalized_content_digest != actual:
+                pin_store.repin(
+                    identity,
+                    actual,
+                    operator=operator_identity,
+                    acknowledged_drift=(existing.normalized_content_digest, actual),
+                    decided_at=decided_at,
+                    availability=availability[item.provider_identity],
                 )
-            pin_store.repin(
+
+            evidence = (
+                f"{operator_reason} [update packet {packet_id}; change set "
+                f"{packet.change_set.digest()}; scan "
+                f"{packet.scan_digest_for(identity)}; review "
+                f"{packet.review.digest() if packet.review else 'unavailable'}]"
+            )
+            ledger.decide(
+                ADMITTED,
                 identity,
                 actual,
-                operator=operator_identity,
-                acknowledged_drift=(existing.normalized_content_digest, actual),
+                library_type=item.library_type,
+                reviewer=operator_identity,
+                permission_surface=(),
                 decided_at=decided_at,
-                availability=observation,
+                evidence=evidence,
+                supersedes=True,
             )
 
-        outcome = install_foreign_item(
-            item,
-            # The reviewed bytes, not a re-fetch. Upstream may have moved between
-            # the packet and this decision, and the human approved the packet.
-            retrieve=lambda stored=stored, item=item: FetchedItem(
-                upstream_id=item.upstream_id,
-                revision=item.upstream_revision,
-                files=tuple(
-                    FetchedFile(path=path, content=payload)
-                    for path, payload in sorted(stored.items())
+            outcome = install_foreign_item(
+                item,
+                # The reviewed bytes, not a re-fetch. Upstream may have moved
+                # between the packet and this decision, and the human approved
+                # the packet.
+                retrieve=lambda stored=stored, item=item: FetchedItem(
+                    upstream_id=item.upstream_id,
+                    revision=item.upstream_revision,
+                    files=tuple(
+                        FetchedFile(path=path, content=payload)
+                        for path, payload in sorted(stored.items())
+                    ),
+                    primary_path=sorted(stored)[0],
                 ),
-                primary_path=sorted(stored)[0],
-            ),
-            object_store=state.object_store(),
-            pin_store=pin_store,
-            receipt_store=state.receipt_store(scope),
-            target=target,
-            activate=_activation(target_root, item),
-            observed_at=decided_at,
-            completeness=CompletenessEvidence.from_manifest(
-                sorted(stored),
-                "the packet stores the complete content the reviewer read and the "
-                "operator approved",
-            ),
-            ledger=state.admission_ledger_store(),
-            present=present,
-        )
-        approved.append(identity)
-        receipts.append(outcome.receipt.id)
+                object_store=state.object_store(),
+                pin_store=pin_store,
+                receipt_store=state.receipt_store(scope),
+                target=target,
+                activate=_activation(
+                    projection_root_for(
+                        state, scope=scope, identity=identity, item=item,
+                        target_root=Path(target_root),
+                    )
+                ),
+                observed_at=decided_at,
+                completeness=CompletenessEvidence.from_manifest(
+                    sorted(stored),
+                    "the packet stores the complete content the reviewer read and the "
+                    "operator approved",
+                ),
+                ledger=ledger,
+                present=present,
+            )
+            approved.append(identity)
+            receipts.append(outcome.receipt.id)
+    except BaseException:
+        # Whatever went wrong, what was already adopted is adopted. Recording it
+        # is the difference between a packet that reads "undecided" over three
+        # live grants and one that names exactly what happened.
+        if approved:
+            store.record_decision(
+                packet_id=packet_id,
+                decision="approved",
+                operator=operator_identity,
+                reason=operator_reason,
+                decided_at=decided_at,
+                change_set_digest=packet.change_set.digest(),
+                detail={
+                    "approved": list(approved),
+                    "declined": sorted(set(changed) - set(approved)),
+                    "recommendation": packet.recommendation,
+                    "against_recommendation": bool(against_recommendation),
+                    "receipts": list(receipts),
+                    "interrupted": True,
+                },
+                allow_second=True,
+            )
+        raise
 
     decision = store.record_decision(
         packet_id=packet_id,
@@ -1362,7 +1646,77 @@ def approve_packet(
     )
 
 
-def _activation(target_root: Path, item: NormalizedItem):
+def _require_current_observation(
+    identity: str,
+    provider_identity: str,
+    availability: Mapping[str, ResolutionEvidence],
+) -> ResolutionEvidence:
+    """A current, complete, source-scoped observation, or a refusal.
+
+    `TofuPinStore.repin` enforces this for a replacement pin and cannot enforce
+    it for a first one, because a first pin is ordinarily written during an
+    install of bytes that just arrived. Approval is different: the bytes arrived
+    when the packet was built, and the decision is being taken now.
+    """
+    observation = availability.get(provider_identity)
+    if observation is None:
+        raise ValueError(
+            f"pinning {identity} needs a current, source-scoped observation of "
+            f"{provider_identity}; approval never pins on a recorded observation "
+            "from the time of the fetch"
+        )
+    reason = observation.degraded_reason()
+    if reason is not None:
+        raise OfflineRefusal(
+            "approve-update",
+            "would-substitute-pinned-content",
+            f"{provider_identity} cannot currently be resolved ({reason}), so it "
+            f"cannot stand behind the bytes being adopted for {identity}",
+        )
+    return observation
+
+
+def projection_root_for(
+    state,
+    *,
+    scope: str,
+    identity: str,
+    item: NormalizedItem,
+    target_root: Path,
+) -> Path:
+    """Where one approved item's projection goes.
+
+    Two rules, and wave-1 review demonstrated the cost of having neither: the
+    first version handed every approved item the same directory, so two Skills
+    that each ship a `SKILL.md` overwrote one another and an all-items approval
+    could not project the set it had just admitted.
+
+    1. **An update lands where the item already lives.** If a receipt in this
+       scope describes this identity and names its targets, their common parent
+       is the root. Choosing a fresh path instead would leave the previously
+       installed copy on disk, unreferenced by the new receipt and still loaded
+       by the harness -- the old bytes winning over the approved ones.
+    2. **Otherwise, one directory per item**, under the caller's root and keyed
+       by the Library type and name, which is the same shape
+       `library marketplace install` defaults to.
+    """
+    try:
+        receipts = state.receipt_store(scope).all()
+    except (KeyError, OSError, ValueError):
+        receipts = ()
+    roots: list[Path] = []
+    for receipt in receipts:
+        if receipt.qualified_identity() != identity:
+            continue
+        parents = {Path(entry.path).parent for entry in receipt.targets}
+        if len(parents) == 1:
+            roots.append(next(iter(parents)))
+    if roots:
+        return roots[-1]
+    return Path(target_root) / item.library_type / item.library_name
+
+
+def _activation(target_root: Path):
     from .wiring import filesystem_activation
 
     return filesystem_activation(Path(target_root))
@@ -1384,12 +1738,6 @@ def reject_packet(
     """
     store = UpdatePacketStore(state.update_root())
     packet, _ = store.load(packet_id)
-    previous = _already_decided(store, packet_id)
-    if previous is not None:
-        raise ValueError(
-            f"update packet {packet_id} was already {previous['decision']} by "
-            f"{previous['operator']} at {previous['decided_at']}"
-        )
     return store.record_decision(
         packet_id=packet_id,
         decision="rejected",
@@ -1403,6 +1751,7 @@ def reject_packet(
 
 __all__ = [
     "CHANGES",
+    "AlreadyDecided",
     "DECISIONS",
     "DECISION_LEDGER_SCHEMA",
     "PACKET_SCHEMA",
@@ -1430,6 +1779,7 @@ __all__ = [
     "approve_packet",
     "build_change_set",
     "prepare_update",
+    "projection_root_for",
     "recommendation_for",
     "reject_packet",
     "review_prompt",
