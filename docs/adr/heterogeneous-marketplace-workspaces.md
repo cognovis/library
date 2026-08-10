@@ -1861,13 +1861,15 @@ retained no-op rather than a deletion or a weaker residual check, because a
 second version of the same refusal is what gets relaxed later while everyone
 assumes the real gate is still there.
 
-**Two residuals, recorded rather than closed.**
+**Three residuals were recorded here. Two are closed; one remains open.**
 
-1. A verified pin proves the *source* has not moved. It does not prove that this
-   repository's catalog document describes that revision, because members are
-   still read from the local checkout rather than fetched at the pin. A catalog
-   document edited between the pin check and the read can still describe a member
-   the pinned revision does not.
+1. **Open.** A verified pin proves the *source* has not moved. It does not prove
+   that this repository's catalog document describes that revision, because
+   members are still read from the local checkout rather than fetched at the pin.
+   A catalog document edited between the pin check and the read can still
+   describe a member the pinned revision does not. Closing it needs an adapter
+   that fetches members *at* the pin, which is a provider-layer change and not
+   one this slice family attempted.
 2. ~~A v2 closure containing an executable member fails the whole resolution
    until a scope operator admits that member's exact bytes, and this slice ships
    no CLI for recording that decision.~~ **Closed by `CL-2wqz`.** The operator
