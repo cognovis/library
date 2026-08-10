@@ -1878,38 +1878,12 @@ assumes the real gate is still there.
    and both refusals name the exact command that would decide the member. The
    gate's semantics are unchanged: it still fails the whole resolution before any
    mutation and never returns a filtered selection.
-3. **The v2 mutation gate detects source drift; it does not prevent its effects.**
-   The gate digests an immutable snapshot and admits a decision about it, and the
-   legacy installers resolve their own source rather than consuming that
-   snapshot. The gap is bridged by comparison — the admitted content is
-   re-derived and compared before the first write, before every member's own
-   installer, and after the last one, and any difference fails the operation with
-   exit 3.
-
-   What that buys and what it does not, stated exactly, because two successively
-   weaker claims were written here first and adversarial review broke both:
-
-   - A source that differs *before* a member's installer runs stops the run
-     before that member is written.
-   - A source that changes *after* its member's pre-check is detected by the
-     final comparison, and the run fails — **but the installer has already
-     published the unadmitted bytes, and nothing rolls them back.** The Workspace
-     journal records the operation; it does not undo a member's projection.
-     Review demonstrated this end to end: exit 3 was returned and
-     `.agents/skills/helper/SKILL.md` still contained content the gate never
-     admitted.
-   - A source changed and changed back inside a single installer's read is
-     invisible to every comparison.
-
-   So the honest claim is: the v2 write path *reports* whether what was installed
-   is what was admitted, and refuses to complete when it is not. It does not
-   guarantee that only admitted bytes reach disk. Closing that requires the
-   installers to consume the gate's frozen content and publish it atomically, or
-   a rollback that restores the pre-operation state — a change to the installer
-   contract, routed forward rather than attempted here. An operator who sees this
-   failure must treat the projection as untrusted and re-run, and
-   `tests/test_provider_review_regressions.py` asserts the post-failure
-   filesystem state so the residual is proven rather than described.
+3. ~~The v2 mutation gate detects source drift; it does not prevent its
+   effects.~~ **Closed by `CL-st5s`** — see `Implementation record (slice 8,
+   CL-st5s)` below. The gate's frozen content is now published before any
+   installer runs, and the catalog those installers resolve against is bound to
+   that publication, so the comparison this entry described has nothing left to
+   compare.
 
 **Legacy neutrality drawdown.** `scripts/lib/source.py` carried 50 findings, more
 than every other legacy module combined. Its URL shapes, clone forms, SSH
@@ -1934,6 +1908,81 @@ path: the knowledge now lives at the sanctioned boundary where a second host
 could be added, and the module that consumes it no longer encodes which host it
 is. It is not the same thing as `source.py` having become provider-independent,
 and reading the zero as that claim would overstate it.
+
+### Implementation record (slice 8, `CL-st5s`)
+
+The last convention-only seam on the Workspace v2 write path. Slice 6 recorded
+that the mutation gate *detected* source drift and did not prevent its effects,
+because the gate digested one read of a mutable source and the installers made a
+second. **The v2 mutation write path now publishes the admitted bytes atomically
+and installs from that publication**, so the two reads become one.
+
+**Publication is the projection write primitive, not a new one.**
+`filesystem_activation` — the same activation `library marketplace install` and
+`repair` go through — gained the whole contract, so no caller gets a weaker
+version of it:
+
+| Property | What it does |
+|---|---|
+| Staged write inside the final directory | The rename that publishes a member is a same-directory rename, so it cannot silently become a cross-device copy |
+| Rename capability probe, per directory, before any projection byte | A target that cannot rename is refused with `NonAtomicProjectionTarget` naming the directory and the reason |
+| Same-device assertion | Cheap, and it keeps the staging-inside-the-target construction honest if it is ever changed |
+| Stage-all, then publish-all, with undo | A failure inside the publication phase restores the members already published, from bytes captured *before* the first rename |
+| Post-activation digest over the published paths | The bytes are read back from the real paths and hashed; hashing the argument would confirm only that the writer agrees with itself |
+| `admitted_digest` binding | Content that does not hash to the decision made elsewhere is refused before anything is staged. `repair_projection` binds the receipt's own `projected_content_digest` |
+
+**Refusal is the only fallback.** There is no copy path when rename is
+unavailable, per the `CL-m6cc` finding that approximating a guarantee is the
+defect. The undo path is not an exception to that: it republishes prior bytes
+through the same staged-write-then-rename step, so undoing a member is as atomic
+as doing it, and an undo that fails is reported as its own condition rather than
+folded into the original failure.
+
+**How the Workspace v2 path consumes it.** `gate_workspace_mutation` calls its
+writer with the frozen content it digested. That writer now
+(`scripts/library.py`, `_install_members`):
+
+1. publishes every member's frozen bytes through `publish_admitted_members`,
+   one activation per member, under a per-operation admitted-content root;
+2. asserts the publication at its final paths against the gate's own digest
+   function;
+3. builds a bound catalog whose members resolve to that publication, verifies
+   each binding against the gate's frozen mapping — not against the publication,
+   which would compare a tampered file with itself — and runs the installers
+   against it;
+4. asserts the publication again after the last installer, and removes it.
+
+**What that changes, precisely.** The v1 installers are unchanged: they still
+resolve a catalog entry to a local source and copy it. What changed is which
+source a v2 mutation gives them. An edit to the catalog checkout during a
+mutation is no longer *detected*; it is unreachable, and so is the
+change-and-change-back that no comparison could ever see. Slice 6's per-member
+and final drift comparisons are deleted rather than kept as a second line of
+defence, because a redundant check that can never fire is the one that gets
+trusted after the real one is removed.
+
+**Provenance is deliberately not rebound.** The bytes came from an admitted
+publication; the *source* is still the catalog the resolution named, and the
+commit is the pin the resolution verified. Both are restored onto the lock after
+the install (`_workspace_restore_member_provenance`). The pin is a stronger
+statement than what a non-v2 install records, which is whatever HEAD the local
+checkout happened to be on when the installer read it.
+
+**Two residuals, stated rather than implied.**
+
+1. Whole-projection atomicity is per target path, not per projection. Every
+   member transitions in one step and no target ever holds a partial file, and a
+   failure *inside* the publication phase is undone — but a process killed
+   mid-phase can leave some members published. The receipt's `planned_targets`
+   already record the intended set, and re-running republishes; this is a smaller
+   claim than "the whole projection is one atomic operation", which a filesystem
+   cannot offer for a set of files under an existing shared root.
+2. A harness derivation is a transformation of the admitted bytes, not the
+   admitted bytes. `SKILL.md` vendored into `.agents/skills/<name>/` is
+   byte-identical and is asserted as such; a translated `.mdc` or an injected
+   frontmatter block is derived from admitted content by the installer that
+   produced it, and the digest assertion covers the admitted publication those
+   derivations are computed from.
 
 ## Migration and Existing Bead Disposition
 

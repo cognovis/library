@@ -57,7 +57,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 from typing import NamedTuple
 
@@ -89,6 +89,7 @@ from lib.lockfile import (
     find_lockfile,
     load_lockfile,
     resolve_lockfile_path,
+    root_id,
     save_lockfile,
 )
 from lib.installed import cmd_installed_impl, format_installed_output
@@ -4598,6 +4599,186 @@ def _workspace_pin_verifier(catalog: dict):
     return verify
 
 
+def _read_source_files(source: Path) -> dict[str, bytes]:
+    """One member's complete content, keyed relative to its source root.
+
+    A file source is one member named by its own file name; a directory source is
+    every file beneath it. Symlinks are skipped rather than followed: a member
+    whose content is decided by a link target is content this Library did not
+    read, and the gate would be digesting a name.
+    """
+    files: dict[str, bytes] = {}
+    if source.is_file():
+        files[source.name] = source.read_bytes()
+        return files
+    for path in sorted(source.rglob("*")):
+        if path.is_file() and not path.is_symlink():
+            files[path.relative_to(source).as_posix()] = path.read_bytes()
+    return files
+
+
+def _admitted_entry_source(entry: dict, resolved: Path, member_root: Path) -> Path:
+    """Where a bound entry must point so its installer reads the admitted bytes.
+
+    The publication mirrors what `_read_source_files` produced, so the mapping is
+    the inverse of that function: a file source becomes the one published file; a
+    directory source becomes the published root, unless the entry itself named a
+    file inside it -- which is how a skill entry names `SKILL.md` while the member
+    is the directory around it.
+
+    This is a derivation, so `_workspace_admitted_catalog` verifies its result
+    against the admitted digest instead of trusting it.
+    """
+    if resolved.is_file():
+        return member_root / resolved.name
+    named = Path(str(entry.get("source") or "")).name
+    if named and (member_root / named).is_file():
+        return member_root / named
+    return member_root
+
+
+def _workspace_admitted_catalog(catalog: dict, closure, items, published, contents) -> dict:
+    """A catalog whose resolved members resolve to the admitted publication.
+
+    ADR-0011's mutation gate freezes and digests a snapshot and then authorizes a
+    mutation. Until `CL-st5s` the mutation was performed by installers that
+    resolved their own source, so the gate's decision and the installer's read
+    were two reads of a mutable thing and the platform compared them afterwards.
+    A comparison reports a difference once the bytes are published; the ADR
+    recorded exactly that as an open residual.
+
+    Binding removes the second read. The installers are unchanged -- they still
+    resolve a catalog entry to a local source -- but for a v2 mutation that source
+    is the admitted publication, which only the gate's own writer produced and
+    whose bytes were hashed at their final paths. An edit to the catalog checkout
+    during the mutation is not detected, because there is nothing to detect: no
+    installer can reach it.
+
+    What is deliberately *not* rebound is provenance. The lock still records the
+    catalog's own source and the pin the resolution verified; see
+    `_workspace_restore_member_provenance`.
+
+    Raises:
+        LibraryError: when a member cannot be bound, or when a bound member does
+            not resolve to the exact bytes the gate admitted.
+    """
+    import copy
+
+    from lib.providers.executable_admission import content_digest
+
+    bound = copy.deepcopy(catalog)
+    by_upstream = {item.upstream_id: item for item in items}
+    for node in closure.nodes:
+        if node.role != "artifact":
+            continue
+        item = by_upstream.get(f"{node.primitive}/{node.name}")
+        if item is None:
+            raise LibraryError(
+                f"{root_id(node.primitive, node.name)} was resolved but has no "
+                "admitted content; a Workspace mutation covers the whole closure "
+                "or none of it",
+                exit_code=3,
+            )
+        member_root = published.get(item.qualified_identity())
+        if member_root is None:
+            raise LibraryError(
+                f"{item.qualified_identity()} was admitted but not published; the "
+                "installer would fall back to the source the gate did not read",
+                exit_code=3,
+            )
+        entry = lookup_entry(
+            bound, node.primitive, node.name, fuzzy=False, source_catalog=node.catalog_name
+        )
+        resolved = _workspace_local_source(catalog, entry, node.primitive)
+        if resolved is None:
+            raise LibraryError(
+                f"{root_id(node.primitive, node.name)} has no locally readable "
+                "source to bind to its admitted content",
+                exit_code=3,
+            )
+        entry["source"] = str(_admitted_entry_source(entry, resolved, member_root))
+        rebound = _workspace_local_source(bound, entry, node.primitive)
+        observed = _read_source_files(rebound) if rebound is not None else {}
+        # Against the gate's own frozen mapping, not against the publication. The
+        # publication is what is being checked, so checking it against itself
+        # would confirm that a tampered file equals the tampered file.
+        admitted = dict(contents.get(item.qualified_identity()) or {})
+        if not observed or not admitted or content_digest(observed) != content_digest(admitted):
+            raise LibraryError(
+                f"{root_id(node.primitive, node.name)} does not resolve to the "
+                "admitted bytes after binding; the mutation is refused rather than "
+                "run against content nobody admitted",
+                exit_code=3,
+            )
+    return bound
+
+
+@contextmanager
+def _admitted_publication_root(repo_root: Path):
+    """A per-operation home for the gate's published bytes, removed afterwards.
+
+    Inside the project, so the publication and the targets it feeds share a
+    filesystem, and so a crash leaves it where an operator will find it rather
+    than in a temporary directory the system may already have cleared. It is not
+    a second copy of the catalog: the installers materialize their own cache from
+    it, and it is removed when the operation ends however it ends.
+    """
+    import uuid
+
+    container = Path(repo_root) / ".library" / "admitted"
+    try:
+        yield container / uuid.uuid4().hex
+    finally:
+        shutil.rmtree(container, ignore_errors=True)
+        try:
+            container.parent.rmdir()
+        except OSError:
+            # `.library` holds something else, or never existed. Either way it is
+            # not this operation's to remove.
+            pass
+
+
+def _workspace_member_provenance(catalog: dict, closure) -> dict:
+    """Each member's catalog source and the pin its resolution verified."""
+    provenance: dict[tuple[str, str], tuple[str, str]] = {}
+    for node in closure.nodes:
+        if node.role != "artifact":
+            continue
+        entry = lookup_entry(
+            catalog, node.primitive, node.name, fuzzy=False, source_catalog=node.catalog_name
+        )
+        source = str(entry.get("source") or "")
+        if source:
+            provenance[(node.primitive, node.name)] = (
+                source,
+                str(node.pin.value if node.pin else ""),
+            )
+    return provenance
+
+
+def _workspace_restore_member_provenance(lock: dict, closure, sources: dict) -> None:
+    """Record the catalog the member came from, not the snapshot it was read from.
+
+    A v2 member is installed from the admitted publication, so the installer
+    honestly records where it read the bytes. That is not what the lock is for:
+    `source` answers "which catalog is this from" and `source_commit` answers "at
+    which revision", and both are known exactly -- the resolution verified the pin
+    before the closure existed. Writing the pin here is stronger than what a
+    non-v2 install records, which is whatever HEAD the local checkout happened to
+    be on when the installer read it.
+    """
+    for (primitive, name), (source, commit) in sources.items():
+        member_id = root_id(primitive, name)
+        for entry in lock.get("installed", []):
+            if entry.get("type") == primitive and entry.get("name") == name:
+                entry["source"] = source
+                if commit:
+                    entry["source_commit"] = commit
+        for receipt in lock.get("receipts", []):
+            if receipt.get("id") == member_id and commit:
+                receipt["definition_commit"] = commit
+
+
 def _workspace_normalized_members(
     catalog: dict, closure, repo_root: Path
 ) -> tuple[list, dict[str, dict[str, bytes]]]:
@@ -4634,13 +4815,7 @@ def _workspace_normalized_members(
         source = _workspace_local_source(catalog, entry, node.primitive)
         if source is None:
             continue
-        files: dict[str, bytes] = {}
-        if source.is_file():
-            files[source.name] = source.read_bytes()
-        else:
-            for path in sorted(source.rglob("*")):
-                if path.is_file() and not path.is_symlink():
-                    files[path.relative_to(source).as_posix()] = path.read_bytes()
+        files = _read_source_files(source)
         if not files:
             continue
 
@@ -4708,36 +4883,6 @@ def _workspace_admission_remedies(refusal, items, contents) -> list[str]:
             )
         )
     return remedies
-
-
-def _workspace_gated_content_drift(
-    catalog: dict, closure, repo_root: Path, admitted
-) -> list[str]:
-    """Members whose source no longer matches the content the gate admitted.
-
-    The admission gate freezes and digests an immutable snapshot, and hands it to
-    the mutation. The legacy installers cannot consume that snapshot — they
-    resolve their own source — so without this comparison the gate binds a
-    decision to bytes nobody guarantees are the ones written. Review demonstrated
-    it end to end: editing a member's source between the snapshot and the install
-    produced a successful run whose installed file contained the edited bytes.
-
-    Returns:
-        The qualified identities whose current content differs, in a stable
-        order. Empty means every admitted member still matches its source.
-    """
-    from lib.providers.executable_admission import content_digest
-
-    _, current = _workspace_normalized_members(catalog, closure, repo_root)
-    drifted: list[str] = []
-    for identity, files in dict(admitted).items():
-        observed = current.get(identity)
-        if observed is None or content_digest(dict(observed)) != content_digest(dict(files)):
-            drifted.append(identity)
-    for identity in current:
-        if identity not in dict(admitted):
-            drifted.append(identity)
-    return sorted(set(drifted))
 
 
 def _workspace_content_matches(source: Path, target: Path) -> bool:
@@ -4955,14 +5100,18 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     from lib.catalog import get_catalogs
     from lib.providers.executable_admission import ResolutionRefused
     from lib.workspace import (
+        assert_published_admitted,
         clear_workspace_journal,
         gate_workspace_mutation,
+        publish_admitted_members,
         recover_workspace_journal,
         workspace_write_lock,
         write_workspace_journal,
     )
 
-    with workspace_write_lock(lock_path):
+    with workspace_write_lock(lock_path), _admitted_publication_root(
+        repo_root
+    ) as admitted_root:
         recover_workspace_journal(lock_path, repo_root)
         current_lock = load_lockfile(lock_path)
         locked_preview = json.loads(json.dumps(current_lock))
@@ -5019,6 +5168,10 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             },
         )
         member_failure: list[tuple[str, int, str]] = []
+        member_provenance: dict[tuple[str, str], tuple[str, str]] = {}
+        #: The normalized items the mutation gate admitted. Only a cross-catalog
+        #: closure produces them, and only that path publishes and binds.
+        admitted_items: list = []
 
         def _install_members(frozen_content=None) -> None:
             """Install every resolved member, recording the first that failed.
@@ -5029,50 +5182,36 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             success over a member that never installed.
 
             `frozen_content` is the exact immutable content the gate digested and
-            admitted. The legacy installers cannot be handed bytes -- they resolve
-            their own source -- so the binding is enforced instead of assumed:
-            every member's source is re-read and compared against the admitted
-            snapshot immediately before anything is written, and again after the
-            last member is installed. A source that changed inside that window
-            fails the whole operation, because the decision was made about
-            different bytes than the ones on disk.
+            admitted, and for a v2 mutation it is the **only** content an
+            installer can reach. It is published atomically into an
+            admitted-content root, that publication is hashed at its final paths,
+            and the catalog the installers run against is bound to it. Slice 6
+            compared the admitted snapshot against a second read of the source
+            instead, which reported an edit only once its bytes were already
+            written; there is nothing left to compare, because there is no second
+            read.
             """
+            installed_catalog = catalog
+            published: dict[str, Path] = {}
             if frozen_content is not None:
-                drifted = _workspace_gated_content_drift(
-                    catalog, closure, repo_root, frozen_content
+                items_now = admitted_items
+                published = publish_admitted_members(
+                    admitted_root, items_now, frozen_content
                 )
-                if drifted:
-                    raise LibraryError(
-                        "Workspace source content changed after the admission gate "
-                        f"digested it: {drifted}. The gate admitted different bytes "
-                        "than the installer would read, so nothing is written",
-                        exit_code=3,
-                    )
+                assert_published_admitted(published, frozen_content)
+                installed_catalog = _workspace_admitted_catalog(
+                    catalog, closure, items_now, published, frozen_content
+                )
+                member_provenance.update(
+                    _workspace_member_provenance(catalog, closure)
+                )
             for primitive, name in closure.artifacts:
-                if frozen_content is not None:
-                    # Per member, immediately before its own installer runs, so
-                    # the unguarded window is one installer's read rather than
-                    # the whole loop. It does not become zero: the installers
-                    # resolve their own source, so a change made and undone
-                    # inside a single read stays invisible. That residual is
-                    # recorded in the ADR rather than papered over.
-                    drifted = _workspace_gated_content_drift(
-                        catalog, closure, repo_root, frozen_content
-                    )
-                    if drifted:
-                        raise LibraryError(
-                            "Workspace source content changed while its members were "
-                            f"being installed: {drifted}. The gate admitted different "
-                            "bytes than the installer would read; nothing further is "
-                            "written",
-                            exit_code=3,
-                        )
                 output_buffer = io.StringIO()
                 with redirect_stdout(output_buffer):
                     rc = _dispatch_use(
                         args,
                         repo_root,
-                        catalog,
+                        installed_catalog,
                         primitive,
                         name,
                         args.scope,
@@ -5087,17 +5226,11 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                         (f"{primitive}:{name}", rc, output_buffer.getvalue().strip())
                     )
                     return
-            if frozen_content is not None:
-                drifted = _workspace_gated_content_drift(
-                    catalog, closure, repo_root, frozen_content
-                )
-                if drifted:
-                    raise LibraryError(
-                        "Workspace source content changed while its members were "
-                        f"being installed: {drifted}. What was installed is not what "
-                        "the gate admitted; re-run to install the current content",
-                        exit_code=3,
-                    )
+            if published:
+                # After the last installer, over the same published paths. An
+                # installer that rewrote the content it was reading from would
+                # otherwise leave a projection nobody admitted.
+                assert_published_admitted(published, frozen_content)
 
         if closure.cross_catalog:
             # ADR-0011 slice 5 refused to materialize a v2 closure because three
@@ -5112,6 +5245,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             # its current bytes -- failing the whole resolution rather than
             # skipping the member.
             items, contents = _workspace_normalized_members(catalog, closure, repo_root)
+            admitted_items.extend(items)
             admission = _foreign_state(repo_root).admission_ledger_store()
             try:
                 # The operator's own decisions, not an empty ledger. Slice 6
@@ -5196,6 +5330,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                     and installed_entry.get("name") == name
                 ):
                     installed_entry["catalog_identity"] = source_identity
+        _workspace_restore_member_provenance(lock, closure, member_provenance)
         lock["requested_roots"] = [
             root
             for root in lock.get("requested_roots", [])

@@ -973,6 +973,118 @@ def gate_workspace_mutation(
     return gate_resolution(items, ledger, contents, mutate=mutate)
 
 
+class AdmittedPublicationMismatch(LibraryError):
+    """The admitted-content publication is not the content the gate admitted.
+
+    Raised by the post-activation check. It is a refusal rather than a repair:
+    something wrote over the bytes an operator's decision was bound to, and
+    re-publishing them would hide whatever did that.
+    """
+
+
+def _member_root(root: Path, item: Any) -> Path:
+    """Where one member's admitted bytes are published.
+
+    Keyed by primitive and library name rather than by qualified identity: a
+    resolved closure holds each `(primitive, name)` exactly once -- the mutation
+    gate refuses a duplicate -- and an identity is a URL, which is not a path.
+    """
+    primitive = str(item.library_type)
+    name = str(item.library_name)
+    for part in (primitive, name):
+        if not part or "/" in part or part in (".", ".."):
+            raise LibraryError(
+                f"member {primitive}:{name} cannot be published: its primitive and "
+                "name must each be a single path component"
+            )
+    return Path(root) / primitive / name
+
+
+def publish_admitted_members(
+    root: Path,
+    items: Sequence[Any],
+    contents: Mapping[str, Mapping[str, bytes]],
+) -> dict[str, Path]:
+    """Publish the gate's frozen content, atomically, one root per member.
+
+    This is the Workspace half of ADR-0011's `Cache Transaction` guarantee. Until
+    `CL-st5s` the gate froze and digested a snapshot and then handed the mutation
+    to installers that resolved their own source, so what was admitted and what
+    was written were two reads of a mutable thing, compared afterwards. Publishing
+    the frozen bytes first makes them the only bytes a member's install can reach.
+
+    Every member goes through `filesystem_activation`, so it inherits that
+    contract whole: containment, a refusal on any target that cannot rename
+    atomically, staged-write-then-rename per file, and a post-activation hash of
+    the published paths against the admitted digest.
+
+    Returns:
+        Qualified identity to the directory its admitted bytes were published in.
+
+    Raises:
+        LibraryError: when a member has no admitted content.
+    """
+    from .providers.executable_admission import content_digest
+    from .providers.wiring import filesystem_activation
+
+    published: dict[str, Path] = {}
+    for item in items:
+        identity = item.qualified_identity()
+        files = dict(contents.get(identity) or {})
+        if not files:
+            raise LibraryError(
+                f"{identity} has no admitted content to publish; a member with no "
+                "bytes cannot be digested, admitted, or written"
+            )
+        member_root = _member_root(root, item)
+        activation = filesystem_activation(
+            member_root, admitted_digest=content_digest(files)
+        )
+        activation.plan(files)
+        activation.apply(files)
+        published[identity] = member_root
+    return published
+
+
+def read_published_member(member_root: Path) -> dict[str, bytes]:
+    """Every published file beneath one member root, keyed by relative path."""
+    found: dict[str, bytes] = {}
+    for path in sorted(Path(member_root).rglob("*")):
+        if path.is_file() and not path.is_symlink():
+            found[path.relative_to(member_root).as_posix()] = path.read_bytes()
+    return found
+
+
+def assert_published_admitted(
+    published: Mapping[str, Path], contents: Mapping[str, Mapping[str, bytes]]
+) -> None:
+    """The published bytes still hash to the admitted digest, read from disk.
+
+    Called after the publication and again after the last installer has run, so
+    the claim covers the whole window in which an installer reads it. It reads
+    the published paths rather than any mapping held in memory: two in-memory
+    values agreeing proves only that this process is self-consistent.
+
+    Raises:
+        AdmittedPublicationMismatch: naming every member that differs.
+    """
+    from .providers.executable_admission import content_digest
+
+    differing: list[str] = []
+    for identity, member_root in sorted(published.items()):
+        admitted = dict(contents.get(identity) or {})
+        observed = read_published_member(member_root)
+        if not admitted or content_digest(observed) != content_digest(admitted):
+            differing.append(identity)
+    if differing:
+        raise AdmittedPublicationMismatch(
+            "the admitted content published for these members is no longer the "
+            f"content the gate admitted: {differing}. The operation is refused; a "
+            "projection built from it would not be the one that was decided",
+            exit_code=3,
+        )
+
+
 def assert_materializable(closure: WorkspaceClosure) -> None:
     """Retained no-op: the conditions this refusal stood in for now hold.
 
