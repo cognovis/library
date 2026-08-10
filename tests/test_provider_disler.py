@@ -32,6 +32,11 @@ from lib.providers.reference_rights import (  # noqa: E402
 from lib.providers.registration import RegistrationError, validate_provider_entry  # noqa: E402
 from lib.providers.wiring import ProviderBuildError, build_provider, marketplace_inventory  # noqa: E402
 
+from foreign_admission_support import (  # noqa: E402
+    admitting_inventory,
+    stand_in_contents,
+)
+
 FIXTURE = (
     REPO_ROOT / "tests" / "fixtures" / "provider_git_org" / "disler-organization.json"
 )
@@ -271,8 +276,20 @@ def test_bundle_decomposition() -> None:
             "how a generic catch-all primitive gets created by accident"
         )
 
+    # `CL-lt51`: this is a foreign steward, so its Skill is admission-required
+    # and discovery -- which fetches no whole item -- reports it as blocked on
+    # exactly that. With the decision recorded it is installable, which is the
+    # claim this test is making: decomposition produced a real, installable Skill
+    # rather than a member the Library could not type.
     skill = next(item for item in report.inventory if item.library_type == "skill")
-    assert skill.admission_state == "installable"
+    assert skill.block_reason_values() == ("executable-admission-pending",)
+    decided = evaluate_inventory(
+        result.inventory,
+        AdmissionContext(),
+        ledger=admitting_inventory(result.inventory),
+        contents=stand_in_contents(result.inventory),
+    )
+    assert decided.decisions[skill.qualified_identity()].admission_state == "installable"
     assert skill.upstream_id.endswith(f"/{LICENSED_REPOSITORY}") or "/" in skill.upstream_id
 
 

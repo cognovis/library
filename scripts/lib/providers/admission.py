@@ -266,6 +266,7 @@ def evaluate_item(
     *,
     ledger: ExecutableAdmissionLedger | None = None,
     contents: Mapping[str, Mapping[str, bytes]] | None = None,
+    admission_pending_is_blocking: bool = True,
 ) -> AdmissionDecision:
     """Evaluate one normalized item against one scope policy.
 
@@ -311,13 +312,31 @@ def evaluate_item(
         reasons.append(runtime_reason)
 
     if executable_admission == "pending":
+        # Two different pending facts, worded apart. Discovery is non-executing
+        # and does not fetch whole items, so it usually has no digest to check a
+        # decision against -- and a reason that claims "no decision is recorded
+        # for its current content digest" when no digest was ever computed sends
+        # an operator looking for a ledger entry they could not have made. The
+        # state is `pending` either way, because "we did not compute what this is"
+        # must never be more permissive than "we computed it and nobody reviewed
+        # it".
+        digested = bool((contents or {}).get(item.qualified_identity()))
+        evidence = (
+            (
+                f"{item.library_type} from this steward is admission-required and "
+                "no admission decision is recorded for its current content digest"
+            )
+            if digested
+            else (
+                f"{item.library_type} from this steward is admission-required and "
+                "this evaluation holds no content for it, so no decision could be "
+                "checked; the decision binds to bytes"
+            )
+        )
         reasons.append(
             BlockReason(
                 reason="executable-admission-pending",
-                evidence=(
-                    f"{item.library_type} is executable and no admission decision is "
-                    "recorded for its current content digest"
-                ),
+                evidence=evidence,
                 source="the scope operator's executable-admission ledger",
             )
         )
@@ -341,8 +360,25 @@ def evaluate_item(
 
     ordered = tuple(sorted(reasons, key=lambda entry: BLOCK_REASONS.index(entry.reason)))
 
+    # `admission_pending_is_blocking=False` is for a caller whose *next* step is
+    # the cache transaction, which digests the bytes it will write, consults the
+    # operator's durable ledger, and refuses with the exact remedy command. Such a
+    # caller wants every other axis judged here -- rights, maturity, runtime,
+    # classification, availability -- without the admission axis, which it cannot
+    # answer, swallowing them.
+    #
+    # The reason stays in `block_reasons` either way: it is a fact about the item
+    # and suppressing it would hide from the caller that a decision is still
+    # owed. Only its effect on the summary state is deferred, and only for a
+    # caller that has somewhere better to answer it.
+    deciding = (
+        ordered
+        if admission_pending_is_blocking
+        else tuple(entry for entry in ordered if entry.reason != "executable-admission-pending")
+    )
+
     eligibility = projection_eligibility(item.rights, subject=item.qualified_identity())
-    if any(reason.reason not in _RIGHTS_REASONS for reason in ordered):
+    if any(reason.reason not in _RIGHTS_REASONS for reason in deciding):
         eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
 
     maturity = str(item.classification.get("maturity") or DEFAULT_MATURITY)
@@ -356,8 +392,8 @@ def evaluate_item(
         # not know what it is" is how a generic catch-all primitive gets created
         # by accident.
         eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
-        admission_state = "blocked" if ordered else "discoverable"
-    elif ordered:
+        admission_state = "blocked" if deciding else "discoverable"
+    elif deciding:
         admission_state = "blocked"
     elif not context.admits_maturity(maturity):
         # Not a block: nothing was observed about this item that forbids it, and

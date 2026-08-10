@@ -48,13 +48,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
+from .classification import FOREIGN, requires_admission
 from .contract import FetchedItem
 from .executable_admission import (
     ADMITTED,
     AdmissionAuthority,
     ExecutableAdmissionLedger,
     admission_refusal,
-    is_executable_type,
 )
 from .foreign_cache import (
     IDENTITY_TRANSFORMATION,
@@ -361,11 +361,19 @@ def _executable_admission_state(
     different executable bytes, and installed successfully: the decision and the
     mutation were about two different payloads, which is precisely the binding
     slice 2's gate exists to hold.
+
+    Stewardship is `foreign` and is not read from the item. This module is the
+    *foreign* cache transaction -- its entry point is `install_foreign_item`, its
+    receipts are `ForeignReceipt`, and every item that reaches it came out of a
+    registered source provider. Consulting the item's classification here would
+    let content decide its own stewardship on a path where the answer is already
+    known by construction.
     """
     return ledger.state_for(
         item.qualified_identity(),
         normalized_content_digest(installed_files),
         library_type=item.library_type,
+        stewardship=FOREIGN,
     )
 
 
@@ -599,7 +607,7 @@ def _install_locked(
         observable. Inert content skips all of it: no decision governs it, so
         there is nothing to hold still.
         """
-        if not is_executable_type(item.library_type):
+        if not requires_admission(item.library_type, FOREIGN):
             return tuple(activate.apply(projected_files))
         with authority.decisions() as decisions:
             state_now = _executable_admission_state(item, decisions, projected_files)
@@ -696,7 +704,7 @@ def _repair_under_the_standing_decision(
     either lands before the write and refuses it or waits for a write that was
     authorized while it happened.
     """
-    if not is_executable_type(receipt.library_type):
+    if not requires_admission(receipt.library_type, FOREIGN):
         return tuple(activate.apply(content))
     authority = _admission_authority(ledger)
     identity = receipt.qualified_identity()
@@ -705,6 +713,7 @@ def _repair_under_the_standing_decision(
             identity,
             normalized_content_digest(content),
             library_type=receipt.library_type,
+            stewardship=FOREIGN,
         )
         if state_now != ADMITTED:
             raise TransactionAborted(

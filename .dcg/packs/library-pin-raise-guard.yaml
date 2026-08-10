@@ -1,0 +1,84 @@
+schema_version: 1
+id: cognovis.library_pin_raise
+name: Cognovis Library Pin Raise Guard
+version: 1.0.0
+description: >-
+  Blocks agent-run adoption of foreign marketplace content. Raising a pin and
+  recording an admission grant are the two acts that make somebody else's
+  model-instructing content effective on this machine, and ADR-0011 (CL-lt51,
+  Human Decision HD-5 of 2026-08-10) makes the human decision the only
+  transition. An agent may prepare the evidence -- fetch into quarantine, scan,
+  dispatch the review, print the packet -- and may not decide on it. The packet
+  itself renders the exact command the agent hands to its human instead.
+keywords:
+  - library
+  - marketplace
+  - admission
+  - update-approve
+  - grant
+destructive_patterns:
+  - name: marketplace-update-approve
+    pattern: '\blibrary(?:\.py)?\b[^;&|]*\bmarketplace\b[^;&|]*\bupdate-approve\b'
+    severity: critical
+    description: Approving a foreign marketplace update packet is blocked for agents
+    explanation: >-
+      `library marketplace update-approve` raises the trust-on-first-use pin,
+      records a digest-bound admission decision, and projects somebody else's
+      content into a path this harness loads as instructions. ADR-0011
+      `Foreign update admission` makes that transition a human act: no scanner
+      verdict and no reviewer verdict adopts anything. Stop here. Print the
+      packet with `library marketplace update-show <packet-id>` and give the
+      human the approval command the packet renders, unchanged.
+  - name: marketplace-update-adopt-flags
+    # No `\b` before `--`: a boundary between a space and a hyphen does not
+    # exist, so an anchored form of this rule silently matches nothing. That is
+    # how the first version of this pattern managed to look correct and guard
+    # nothing at all.
+    pattern: '\blibrary(?:\.py)?\b[^;&|]*\bmarketplace\b[^;&|]*(?:--approve|--adopt|--auto-approve|--against-recommendation)\b'
+    severity: critical
+    description: Adopting a marketplace update through a flag is blocked for agents
+    explanation: >-
+      Adoption is a human act however it is spelled. `--against-recommendation`
+      in particular overrules the packet's own advice, which is the one option
+      that must never be exercised by the party that produced the packet. Hand
+      the rendered approval command to the human.
+  - name: admission-grant
+    pattern: '\blibrary(?:\.py)?\b[^;&|]*\badmission\b[^;&|]*\bgrant\b'
+    severity: critical
+    description: Recording an executable-admission grant is blocked for agents
+    explanation: >-
+      `library admission grant` is the operator act that admits externally
+      sourced executable or model-instructing bytes. ADR-0011 `Executable
+      admission` names the scope operator as the authority -- never a provider,
+      never an upstream manifest, and never an agent acting on their behalf.
+      Recording a denial (`library admission deny`) stays available, because a
+      refusal fails closed. For a grant: show the human the exact command from
+      the install-time refusal or the update packet and let them run it.
+safe_patterns:
+  # Every safe pattern below carries the same trailing negative lookahead, and it
+  # is not redundant: dcg gives a matching safe pattern precedence over a
+  # destructive one, so a safe pattern that merely named the preparation verb
+  # would whitelist an adoption flag appended to the same command. That hole was
+  # demonstrated rather than imagined -- `library marketplace update <name>
+  # --against-recommendation` was allowed by the first version of this pack, and
+  # `tests/test_pin_raise_guard.py` now holds the fix down against both engines.
+  - name: marketplace-update-prepare
+    pattern: '\blibrary(?:\.py)?\b[^;&|]*\bmarketplace\b\s+update(?!-approve)(?![\w-])(?![^;&|]*(?:--approve|--adopt|--auto-approve|--against-recommendation)\b)'
+    description: >-
+      Preparing an update fetches into the quarantine under the cache root,
+      scans, dispatches the review, and writes a decision packet. It raises no
+      pin, records no admission decision, and writes no projected byte, so an
+      agent may run it -- that is the whole point of the split.
+  - name: marketplace-update-read-only
+    pattern: '\blibrary(?:\.py)?\b[^;&|]*\bmarketplace\b\s+(?:update-show|update-list|list|inventory|status)\b(?![^;&|]*(?:--approve|--adopt|--auto-approve|--against-recommendation)\b)'
+    description: Reading packets, inventories, and receipts changes nothing.
+  - name: marketplace-update-reject
+    pattern: '\blibrary(?:\.py)?\b[^;&|]*\bmarketplace\b\s+update-reject\b(?![^;&|]*(?:--approve|--adopt|--auto-approve|--against-recommendation)\b)'
+    description: >-
+      Declining a packet writes only its decision row and leaves pins, admission
+      decisions, and projected bytes byte-identical. A refusal fails closed.
+  - name: admission-read-and-deny
+    pattern: '\blibrary(?:\.py)?\b[^;&|]*\badmission\b\s+(?:show|list|deny)\b'
+    description: >-
+      Auditing decisions is read-only, and recording a denial fails closed. Only
+      the grant is withheld from agents.

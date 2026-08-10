@@ -83,6 +83,8 @@ from lib.providers.wiring import (  # noqa: E402
     repair_projection,
 )
 
+from foreign_admission_support import admitting  # noqa: E402
+
 NOW = "2026-08-09T15:00:00Z"
 PROVIDER = "provider-under-test"
 MIT = "upstream LICENSE (MIT) fetched from the provider on 2026-08-09"
@@ -259,8 +261,13 @@ def test_receipt_status_is_read_from_the_receipt_store(tmp_path: Path) -> None:
 
     state = _state(tmp_path)
     provider = _Provider({"SKILL.md": b"# anchor\n"})
+    anchor = _item()
     install_foreign_item(
-        _item(),
+        anchor,
+        # `CL-lt51`: a foreign steward's Skill is admission-required. This suite
+        # is about legacy-projection disposition, so it records the decision for
+        # exactly the bytes it installs.
+        ledger=admitting(anchor.qualified_identity(), provider.files),
         retrieve=lambda: provider.fetch("skills/anchor", None),
         object_store=state.object_store(),
         pin_store=state.pin_store(),
@@ -399,8 +406,10 @@ def test_non_compliant_blocks_rematerialization(tmp_path: Path) -> None:
     # a receipt and cache object exist to repair from, then register its target
     # as non-compliant and try again.
     other_root = tmp_path / "other"
+    beacon = _item(upstream_id="skills/beacon", library_name="beacon")
     outcome = install_foreign_item(
-        _item(upstream_id="skills/beacon", library_name="beacon"),
+        beacon,
+        ledger=admitting(beacon.qualified_identity(), provider.files),
         retrieve=lambda: provider.fetch("skills/beacon", None),
         object_store=state.object_store(),
         pin_store=state.pin_store(),
@@ -448,8 +457,9 @@ def test_a_compliant_projection_is_not_blocked(tmp_path: Path) -> None:
 
     state = _state(tmp_path)
     provider = _Provider({"SKILL.md": b"# fine\n"})
+    anchor = _item()
     outcome = install_marketplace_item(
-        _item(),
+        anchor,
         provider=provider,
         state=state,
         scope="global",
@@ -457,6 +467,7 @@ def test_a_compliant_projection_is_not_blocked(tmp_path: Path) -> None:
         target_root=root / "anchor",
         non_compliance=register,
         observed_at=NOW,
+        ledger=admitting(anchor.qualified_identity(), provider.files),
     )
     assert (root / "anchor" / "SKILL.md").read_bytes() == b"# fine\n"
     assert outcome.receipt.verified is True

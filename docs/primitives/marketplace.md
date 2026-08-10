@@ -38,6 +38,38 @@ registration. A genuinely required MCP server remains a separate global
 prerequisite assertion. The transport that delivered an artifact contributes
 nothing to that artifact's type, scope, dependencies, or ownership.
 
+**Foreign content is admission-required, and that now includes Skills and
+Prompts** ([ADR-0011](../adr/heterogeneous-marketplace-workspaces.md)
+`Model-instructing foreign content`, `CL-lt51`, Human Decision HD-5 of
+2026-08-10). A Skill, Agent, Prompt, or Standard from a non-first-party steward
+runs no process and is still not inert: an agent harness loads it into a model's
+context so the model will follow it. Installing one therefore needs a
+digest-bound decision recorded with `library admission grant`, exactly as a
+Workflow does, and the install-time refusal names the exact command. First-party
+catalog content is unaffected.
+
+**Updating foreign content is a decision, not a refresh** (`CL-lt51`):
+
+| Command | Effect |
+|---|---|
+| `library marketplace update <name>` | Fetches the current upstream state into the update quarantine under the cache root, computes the change set against the pinned **and admitted** state, runs the deterministic risk scanner and one agent-shell reviewer over it, and writes a decision packet. Raises no pin, records no decision, and writes no projected byte |
+| `library marketplace update-show <packet-id>` | Prints the packet: per-item size, scanner markers, reviewer verdict, recommendation, and the exact approve and decline commands. `--content` prints the whole post-update content |
+| `library marketplace update-list` | Lists packets and any decision recorded about them |
+| `library marketplace update-approve <packet-id>` | The human transition. Records the admission decision with the packet, scan, and verdict digests as evidence, raises the pin, and projects through the atomic publication path. `--item` adopts named items only |
+| `library marketplace update-reject <packet-id>` | Writes one decision row. Pins, ledger admissions, and projected bytes stay byte-identical |
+
+No verdict value adopts anything, a clean scan never skips the review or the
+human gate, and a reviewer that could not be reached is recorded as unavailable
+and forces a `reject` recommendation. The scanner is risk *reduction* rather than
+detection: an injection can be written in plain prose with no shell, no URL, and
+no unusual byte.
+
+**Agents prepare, humans decide.** `.dcg/packs/library-pin-raise-guard.yaml`
+blocks `update-approve`, any adoption flag, and `library admission grant` in an
+agent shell, and leaves the preparation and read-only verbs — and
+`library admission deny`, which fails closed — available. The packet renders the
+exact approval command for the agent to hand over.
+
 **Rights metadata.** A marketplace entry records four independent grants —
 `fetch_authorization`, `install_rights`, `redistribution_rights`,
 `derivative_rights` — each `granted`, `denied`, or `unknown` with a named evidence

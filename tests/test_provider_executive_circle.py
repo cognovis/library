@@ -38,6 +38,8 @@ from lib.providers.wiring import (  # noqa: E402
     marketplace_inventory,
 )
 
+from foreign_admission_support import admitting  # noqa: E402
+
 #: The secret a real subscriber client would hold. It exists in these tests only
 #: so that "the token reaches no artifact" is checkable rather than assumed.
 SUBSCRIBER_TOKEN = "ec-live-2f5a9c41d7e84b0fa6c3e19b7d520148"
@@ -125,6 +127,16 @@ def _presenter(recorder: list[str]):
 def _install(tmp_path: Path, transport: SubscriberTransport, shown: list[str]):
     provider, result = marketplace_inventory(_entry(), mcp_transport=transport)
     item = result.inventory.resolve(f"{EXECUTIVE_CIRCLE_IDENTITY}#{KIT_ID}")
+    # `CL-lt51`: this kit is a foreign steward's Prompt, which is
+    # model-instructing content and therefore admission-required. The suite is
+    # about credential isolation and rights, so it records the decision for
+    # exactly the bytes it retrieves.
+    fetched = provider.fetch(item.upstream_id, item.upstream_revision)
+    # The operator's review of these bytes is not part of the install's transport
+    # budget, so the extra read that produced them is not counted against it.
+    # What the surrounding assertions are about is which tools the *install*
+    # calls and what reaches disk.
+    transport.calls.clear()
     outcome = install_marketplace_item(
         item,
         provider=provider,
@@ -133,6 +145,11 @@ def _install(tmp_path: Path, transport: SubscriberTransport, shown: list[str]):
         target="machine_local",
         target_root=tmp_path / "machine-local" / "decision-brief",
         present=_presenter(shown),
+        ledger=admitting(
+            item.qualified_identity(),
+            {entry.path: entry.content for entry in fetched.files},
+            item.library_type,
+        ),
     )
     return provider, item, outcome
 

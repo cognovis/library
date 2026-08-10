@@ -1029,7 +1029,7 @@ class ComposedNonCompliance:
 def install_marketplace_item(
     item: NormalizedItem,
     *,
-    provider: SourceProvider,
+    provider: SourceProvider | None = None,
     state: "ForeignState",
     scope: str,
     target: str,
@@ -1039,6 +1039,8 @@ def install_marketplace_item(
     present: Callable[[Any], Any] | None = None,
     observed_at: str | None = None,
     non_compliance: NonComplianceRegister | None = None,
+    retrieve: Callable[[], Any] | None = None,
+    completeness: CompletenessEvidence | None = None,
 ) -> InstallOutcome:
     """Install one normalized item through the ordered cache transaction.
 
@@ -1078,7 +1080,23 @@ def install_marketplace_item(
     already refuses to consult. Before `CL-2wqz` the shipped CLI passed nothing
     at all here, so the ledger the gate consulted was never the one an operator
     could write to.
+
+    **`retrieve` and `completeness` are for a caller that already holds the
+    bytes** -- specifically `CL-lt51`'s update approval, which installs the
+    content a human reviewed rather than re-fetching content nobody read.
+    Wave-2 review found that path calling `install_foreign_item` directly, which
+    skipped the two obligations this function exists to add: the durable-retention
+    rights decision taken *before* anything is written, and the `CL-m6cc`
+    non-compliance guard around the target root and the activation. With
+    `install_rights="denied"` an approval still produced a cache object and a
+    receipt. There is one policy path, and this is it.
     """
+    if provider is None and (retrieve is None or completeness is None):
+        raise ValueError(
+            "install_marketplace_item needs a provider, or an explicit retrieve and "
+            "completeness pair; a caller that supplies its own bytes has to say how "
+            "it knows they are complete"
+        )
     if ledger is None:
         ledger = state.admission_ledger_store()
     blocks = _composed_blocks(state, non_compliance)
@@ -1087,14 +1105,18 @@ def install_marketplace_item(
     project(retention, lambda: None, present=present)
     return install_foreign_item(
         item,
-        retrieve=lambda: provider.fetch(item.upstream_id, item.upstream_revision),
+        retrieve=(
+            retrieve
+            if retrieve is not None
+            else (lambda: provider.fetch(item.upstream_id, item.upstream_revision))
+        ),
         object_store=state.object_store(),
         pin_store=state.pin_store(),
         receipt_store=state.receipt_store(scope),
         target=target,
         activate=filesystem_activation(target_root, non_compliance=blocks),
         observed_at=observed_at or _now(),
-        completeness=completeness_for(provider, item),
+        completeness=completeness if completeness is not None else completeness_for(provider, item),
         transformation=transformation,
         ledger=ledger,
         present=present,
@@ -1273,6 +1295,20 @@ class ForeignState:
     def admission_ledger(self) -> ExecutableAdmissionLedger:
         """The decisions that stand right now, as the gate consults them."""
         return self.admission_ledger_store().ledger()
+
+    def update_root(self) -> Path:
+        """Where `CL-lt51` quarantines fetched updates awaiting a human decision.
+
+        Under the cache root and beside the object store, never inside it. A
+        fetched update is lawfully retrieved content that no harness path
+        receives -- ADR-0011 `Caching is not installing` -- but it is also not an
+        object the Library installs from: keeping the two apart is what makes a
+        rejection free, because the bytes an operator declined never entered the
+        store an install reads.
+        """
+        root = Path(self.cache_root) / "updates"
+        root.mkdir(parents=True, exist_ok=True)
+        return root
 
     def non_compliance_register(self) -> NonComplianceRegister:
         """The register of projections no sync or repair may write.

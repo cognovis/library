@@ -59,6 +59,8 @@ from lib.providers.receipts import (  # noqa: E402
     remove_named_receipt,
 )
 
+from foreign_admission_support import admitting  # noqa: E402
+
 PROVIDER = "provider-under-test"
 NOW = "2026-08-09T09:00:00Z"
 LATER = "2026-08-09T12:00:00Z"
@@ -148,8 +150,13 @@ def _installed(tmp_path: Path):
     pins = TofuPinStore(tmp_path / "pins.json")
     receipts = ReceiptStore(tmp_path / "receipts.json")
     projector = _Projector(tmp_path / "harness")
+    item = _item()
     outcome = install_foreign_item(
-        _item(),
+        item,
+        # `CL-lt51`: a foreign steward's Skill is admission-required. This suite
+        # is about offline semantics, so it records the decision for exactly the
+        # bytes it installs; repair then re-derives it from the cached content.
+        ledger=admitting(item.qualified_identity(), UPSTREAM),
         retrieve=lambda: FetchedItem(
             upstream_id="kits/anchor",
             revision=None,
@@ -189,6 +196,10 @@ def test_offline_reinstall_and_verify(tmp_path: Path) -> None:
         availability=UNAVAILABLE,
         activate=projector.activation,
         observed_at=LATER,
+        # Repair is a write of model-instructing content and `CL-lt51` governs it
+        # by the same standing decision the install needed. The decision is
+        # re-derived from the verified cached bytes, not read off the receipt.
+        ledger=admitting(outcome.receipt.qualified_identity(), UPSTREAM),
     )
     assert (projector.root / "SKILL.md").read_bytes() == UPSTREAM["SKILL.md"]
     assert result.integrity.verified

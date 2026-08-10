@@ -58,6 +58,8 @@ from lib.providers.receipts import (  # noqa: E402
     remove_named_receipt,
 )
 from lib.providers import retention  # noqa: E402
+
+from foreign_admission_support import admitting  # noqa: E402
 from lib.providers.retention import (  # noqa: E402
     REQUIRED_SCOPES,
     RETENTION_REFUSALS,
@@ -191,14 +193,19 @@ class _Cache:
     ):
         files = {"SKILL.md": body}
         store = self.project if scope == "project" else self.global_
+        item = _item(
+            provider_identity=provider,
+            upstream_id=upstream_id,
+            upstream_name=name,
+            library_name=name,
+            upstream_revision=revision,
+        )
         return install_foreign_item(
-            _item(
-                provider_identity=provider,
-                upstream_id=upstream_id,
-                upstream_name=name,
-                library_name=name,
-                upstream_revision=revision,
-            ),
+            item,
+            # `CL-lt51`: a foreign steward's Skill is admission-required. This
+            # suite is about retention, so it records the decision for exactly
+            # the bytes it installs.
+            ledger=admitting(item.qualified_identity(), files),
             retrieve=lambda: FetchedItem(
                 upstream_id=upstream_id,
                 revision=revision,
