@@ -130,7 +130,21 @@
   exemption and it is explicit: `apply_receipt_backfill` passes a
   `FirstPartyAdmission` built from the exact `(identity, digest)` pairs it is
   about to re-materialize, rather than the Library's own workflow specs becoming
-  unrestorable.
+  unrestorable. A second review round found two more write paths outside that
+  boundary, both of the "this is not really an install" shape: `repair_projection`
+  verified cache integrity and activated, so a granted workflow that was
+  subsequently refused was written back onto disk from the cache — integrity
+  proves which bytes are present, not that the operator still admits them, and
+  the decision is now re-derived from the verified cached content and held across
+  the activation; and `library workspace use` handed the gate a snapshot for the
+  duration of the whole mutation, so a refusal recorded while the members were
+  installing did not stop them, and the gate and its mutation now run inside
+  `decisions()` with the gate itself untouched. The same round tightened the
+  durable record further: a *missing* `permission_surface` is refused rather than
+  read as the operator's explicit `--no-permissions` claim, and `decided_at` must
+  name a real instant, since `fromisoformat` accepts a calendar date and a naive
+  local datetime and neither can be ordered against the UTC timestamps the CLI
+  writes.
 - *(CL-m6cc, migration)* Legacy cache objects, lock receipts, and already-materialized
   projections now carry honest identity and rights, and the migration that gives them
   one can delete nothing. Receipt migration is **additive and readable**: an unmigrated

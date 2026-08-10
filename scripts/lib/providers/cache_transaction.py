@@ -679,6 +679,46 @@ def _install_locked(
     )
 
 
+def _repair_under_the_standing_decision(
+    receipt: ForeignReceipt,
+    ledger: AdmissionAuthority | None,
+    content: Mapping[str, bytes],
+    *,
+    activate: ProjectionActivation,
+) -> tuple[ReceiptTarget, ...]:
+    """Write a repaired projection only while its admission decision stands.
+
+    The decision is re-derived from the **verified cached content**, not read
+    off the receipt: `receipt.executable_admission` records what was decided
+    when the projection was installed, and the whole point of this check is that
+    the answer may have changed since. As on the install path, the decisions are
+    held still across the activation, so a denial recorded during the repair
+    either lands before the write and refuses it or waits for a write that was
+    authorized while it happened.
+    """
+    if not is_executable_type(receipt.library_type):
+        return tuple(activate.apply(content))
+    authority = _admission_authority(ledger)
+    identity = receipt.qualified_identity()
+    with authority.decisions() as decisions:
+        state_now = decisions.state_for(
+            identity,
+            normalized_content_digest(content),
+            library_type=receipt.library_type,
+        )
+        if state_now != ADMITTED:
+            raise TransactionAborted(
+                "project",
+                admission_refusal(
+                    identity,
+                    normalized_content_digest(content),
+                    receipt.library_type,
+                    state_now,
+                ),
+            )
+        return tuple(activate.apply(content))
+
+
 def reinstall_from_cache(
     *,
     receipt: ForeignReceipt,
@@ -687,6 +727,7 @@ def reinstall_from_cache(
     availability: ProviderAvailability | ResolutionEvidence,
     activate: ProjectionActivation,
     observed_at: str,
+    ledger: AdmissionAuthority | None = None,
 ) -> ReinstallOutcome:
     """Repair a projection from the verified cache, with no remote claim.
 
@@ -699,10 +740,20 @@ def reinstall_from_cache(
     that is installed, because review substituted the stored file between a
     successful `verify` and the read that produced the installed bytes.
 
+    **Repair is an executable write, and admission governs it.** Cache integrity
+    proves which bytes are present; it says nothing about whether the operator
+    currently admits them. Review granted a workflow, installed it, superseded
+    the grant with a refusal, deleted the projection, and repaired: the refused
+    bytes were written back while the ledger still answered `refused`. Repair is
+    the write path an enforcement check written for `install` quietly misses --
+    it makes no remote claim and reads as recovery -- which is the same reason
+    `CL-m6cc` had to add the re-materialization block here separately.
+
     Raises:
-        TransactionAborted: when the cache object fails verification. A repair
-            that installs unverified bytes is the substitution this whole slice
-            exists to prevent.
+        TransactionAborted: when the cache object fails verification, or when the
+            standing admission decision for these exact bytes is not `admitted`.
+            A repair that installs unverified or unadmitted bytes is the
+            substitution this whole slice exists to prevent.
     """
     require_operation("reinstall-from-cache", availability)
     if not isinstance(activate, ProjectionActivation):
@@ -737,7 +788,9 @@ def reinstall_from_cache(
             planned_targets=list(planned),
         )
     )
-    targets = tuple(activate.apply(content))
+    targets = _repair_under_the_standing_decision(
+        receipt, ledger, content, activate=activate
+    )
     produced_paths = tuple(entry.path for entry in targets)
     divergent = set(produced_paths) != set(planned)
     updated = receipt_store.put(

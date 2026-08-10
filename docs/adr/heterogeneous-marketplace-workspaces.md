@@ -478,7 +478,30 @@ way for executable bytes to reach disk with no standing decision about them:
   stored field *types* rather than calling `str()` on them: a hand-edited ledger
   whose reviewer was an integer, whose timestamp was an object, and whose
   permission surface was a bare string otherwise produced a well-formed
-  `admitted` record with a sixteen-character permission surface.
+  `admitted` record with a sixteen-character permission surface. A *missing*
+  `permission_surface` is refused too — an absent declaration is not the
+  operator's explicit `--no-permissions` claim — and `decided_at` must name a
+  real instant: `fromisoformat` accepts a calendar date and a naive local
+  datetime, and neither can be ordered against the UTC timestamps the CLI
+  writes, which is the only thing the field is for.
+
+Two more write paths were found outside that boundary in the second review round,
+both of them the "this is not really an install" shape:
+
+- **Repair is an executable write.** `reinstall_from_cache` verified cache
+  integrity and activated. Integrity proves which bytes are present and says
+  nothing about whether the operator still admits them: review granted a
+  workflow, installed it, superseded the grant with a refusal, deleted the
+  projection, and repaired the refused bytes back onto disk. The decision is now
+  re-derived from the verified cached content — not read off the receipt, which
+  records what was decided at install time — and held across the activation.
+- **A Workspace mutation holds its decisions for its whole write.**
+  `library workspace use` read a snapshot and handed it to
+  `gate_workspace_mutation` for the duration; review superseded the grant while
+  the members were installing and the admitted bytes were written anyway. The
+  gate and its mutation now run inside `AdmissionLedgerStore.decisions()`. The
+  gate itself is untouched — what changed is how long the answer it was given is
+  guaranteed to still be true.
 
 First-party catalog content is the one exemption, and it is explicit. The
 decision above asks the operator whether to trust an *externally sourced*

@@ -789,6 +789,197 @@ def test_a_hand_edited_ledger_entry_is_refused_rather_than_coerced(
     )
 
 
+# -- wave-2 review regressions ------------------------------------------------
+
+
+def test_repair_does_not_reinstall_bytes_whose_grant_was_superseded(
+    tmp_path: Path,
+) -> None:
+    """Wave-2 F1. Cache integrity is not admission.
+
+    Review granted a workflow, installed it, superseded the grant with a
+    refusal, deleted the projection, and repaired it: the refused bytes were
+    written back from the verified cache. Repair is the write path an
+    enforcement check written for `install` quietly misses -- it makes no remote
+    claim and reads as recovery.
+    """
+    from lib.providers.inventory import ProviderAvailability
+    from lib.providers.wiring import repair_projection
+
+    state = _state_for_home(tmp_path)
+    digest = content_digest(ORIGINAL)
+    assert _grant(tmp_path, digest).returncode == 0
+
+    outcome = _install(state, ORIGINAL)
+    projected = [Path(target.path) for target in outcome.receipt.targets]
+    assert projected and all(path.is_file() for path in projected)
+
+    assert (
+        _run(
+            tmp_path,
+            ADMISSION_COMMAND,
+            DENY_VERB,
+            "--identity",
+            IDENTITY,
+            "--digest",
+            digest,
+            "--type",
+            "workflow",
+            "--operator",
+            OPERATOR,
+            "--reason",
+            "a later reading found the deploy step writes outside its worktree",
+            "--supersede",
+        ).returncode
+        == 0
+    )
+
+    for path in projected:
+        path.unlink()
+
+    with pytest.raises(TransactionAborted) as refused:
+        repair_projection(
+            receipt=state.receipt_store("project").get(outcome.receipt.id),
+            state=state,
+            scope="project",
+            target_root=state.cache_root.parent / "projection",
+            availability=ProviderAvailability(state="available", observed_at=NOW),
+            observed_at=NOW,
+        )
+    assert "refused" in str(refused.value)
+    assert not any(path.exists() for path in projected)
+
+
+def test_a_workspace_mutation_holds_its_decisions_for_its_whole_write(
+    tmp_path: Path,
+) -> None:
+    """Wave-2 F2. A snapshot read before the write is not enough.
+
+    Review took the snapshot `library workspace use` used to hand the gate,
+    superseded the grant with a refusal while the members were being installed,
+    and the admitted bytes were written anyway. The CLI now runs the gate and
+    its mutation inside `decisions()`, which holds the same lock a
+    `library admission` write takes -- so this test asserts the property the
+    caller relies on: a decision recorded while a mutation holds the decisions
+    cannot land in the middle of it.
+    """
+    import threading
+
+    store = _state_for_home(tmp_path).admission_ledger_store()
+    digest = content_digest(ORIGINAL)
+    assert _grant(tmp_path, digest).returncode == 0
+
+    mutating = threading.Event()
+    released = threading.Event()
+    landed = threading.Event()
+    seen: list[str] = []
+
+    def _record_denial() -> None:
+        store.decide(
+            "refused",
+            IDENTITY,
+            digest,
+            library_type="workflow",
+            reviewer=OPERATOR,
+            permission_surface=(),
+            decided_at="2026-08-09T17:00:00Z",
+            evidence="withdrawn while the workspace members were installing",
+            supersedes=True,
+        )
+        landed.set()
+
+    with store.decisions() as decisions:
+        assert (
+            decisions.state_for(IDENTITY, digest, library_type="workflow") == "admitted"
+        )
+        writer = threading.Thread(target=_record_denial)
+        writer.start()
+        try:
+            mutating.set()
+            # The denial cannot complete while the mutation holds the decisions.
+            assert not landed.wait(timeout=1.0)
+            seen.append(decisions.state_for(IDENTITY, digest, library_type="workflow"))
+        finally:
+            released.set()
+    writer.join(timeout=30)
+
+    assert seen == ["admitted"]
+    assert landed.is_set()
+    assert (
+        store.ledger().state_for(IDENTITY, digest, library_type="workflow") == "refused"
+    )
+
+
+def test_a_missing_permission_surface_is_not_an_empty_declaration(
+    tmp_path: Path,
+) -> None:
+    """Wave-2 F3. An absent claim is not the claim that nothing was requested."""
+    from lib.providers.executable_admission import (
+        ADMISSION_LEDGER_SCHEMA,
+        AdmissionLedgerStore,
+    )
+
+    store = AdmissionLedgerStore(tmp_path / "executable-admission.json")
+    entry = {
+        "qualified_identity": IDENTITY,
+        "content_digest": content_digest(ORIGINAL),
+        "state": "admitted",
+        "reviewer": OPERATOR,
+        "decided_at": NOW,
+        "evidence": REASON,
+    }
+    store.path.write_text(
+        json.dumps({"schema": ADMISSION_LEDGER_SCHEMA, "decisions": [entry]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError) as refused:
+        store.ledger()
+    assert "permission_surface" in str(refused.value)
+
+
+def test_a_decision_timestamp_has_to_name_an_instant(tmp_path: Path) -> None:
+    """Wave-2 F4. A date and a naive local time are not instants.
+
+    `datetime.fromisoformat` accepts both, and neither can be ordered against
+    the UTC timestamps the CLI writes -- which is the only thing the field is
+    for.
+    """
+    from lib.providers.executable_admission import (
+        ADMISSION_LEDGER_SCHEMA,
+        AdmissionLedgerStore,
+        validated_decided_at,
+    )
+
+    for rejected in ("2026-08-09", "2026-08-09T15:00:00", "some time last week"):
+        with pytest.raises(ValueError):
+            validated_decided_at(rejected)
+    for accepted in ("2026-08-09T15:00:00Z", "2026-08-09T17:00:00+02:00"):
+        assert validated_decided_at(accepted) == accepted
+
+    store = AdmissionLedgerStore(tmp_path / "executable-admission.json")
+    store.path.write_text(
+        json.dumps(
+            {
+                "schema": ADMISSION_LEDGER_SCHEMA,
+                "decisions": [
+                    {
+                        "qualified_identity": IDENTITY,
+                        "content_digest": content_digest(ORIGINAL),
+                        "state": "admitted",
+                        "reviewer": OPERATOR,
+                        "permission_surface": ["filesystem:write"],
+                        "decided_at": "2026-08-09",
+                        "evidence": REASON,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError):
+        store.ledger()
+
+
 def test_there_is_no_bulk_grant_surface(tmp_path: Path) -> None:
     """No `--all`, and no way to admit an identity without naming its bytes."""
     for flag in ("--all", "--every", "--recursive"):

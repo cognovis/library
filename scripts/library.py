@@ -5112,19 +5112,29 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             # its current bytes -- failing the whole resolution rather than
             # skipping the member.
             items, contents = _workspace_normalized_members(catalog, closure, repo_root)
+            admission = _foreign_state(repo_root).admission_ledger_store()
             try:
-                gate_workspace_mutation(
-                    closure,
-                    items,
-                    # The operator's own decisions, not an empty ledger. Slice 6
-                    # constructed one inline, which made every executable member
-                    # of a cross-catalog Workspace permanently unresolvable: the
-                    # gate was correct and the ledger it consulted could not be
-                    # written to by anything.
-                    _foreign_state(repo_root).admission_ledger(),
-                    contents,
-                    mutate=_install_members,
-                )
+                # The operator's own decisions, not an empty ledger. Slice 6
+                # constructed one inline, which made every executable member of a
+                # cross-catalog Workspace permanently unresolvable: the gate was
+                # correct and the ledger it consulted could not be written to by
+                # anything.
+                #
+                # The gate and the mutation it authorizes run inside
+                # `decisions()`, which holds the same lock a `library admission`
+                # write takes. A snapshot read here was demonstrably not enough:
+                # review superseded the grant with a refusal while the members
+                # were being installed, and the admitted bytes were written
+                # anyway. The gate itself is untouched -- what changed is how
+                # long the answer it was given is guaranteed to still be true.
+                with admission.decisions() as decisions:
+                    gate_workspace_mutation(
+                        closure,
+                        items,
+                        decisions,
+                        contents,
+                        mutate=_install_members,
+                    )
             except ResolutionRefused as exc:
                 result.update(
                     {

@@ -678,6 +678,7 @@ def repair_projection(
     availability: Any,
     non_compliance: NonComplianceRegister | None = None,
     observed_at: str | None = None,
+    ledger: AdmissionAuthority | None = None,
 ) -> Any:
     """Reinstall one receipt's projection from the verified cache.
 
@@ -688,6 +689,12 @@ def repair_projection(
     non-compliant projection cannot be re-materialized by future sync **or
     repair**, so the block is checked here against the receipt's own recorded
     and planned targets, and again inside the activation.
+
+    The admission decision is the second control this path used to miss for the
+    same reason. Review granted a workflow, installed it, superseded the grant
+    with a refusal, deleted the projection, and repaired: the refused bytes were
+    written back. The operator's durable decisions are therefore located here and
+    handed to the transaction, exactly as on the install path.
     """
     blocks = _composed_blocks(state, non_compliance)
     guard_rematerialization(
@@ -706,6 +713,7 @@ def repair_projection(
         availability=availability,
         activate=filesystem_activation(target_root, non_compliance=blocks),
         observed_at=observed_at or _now(),
+        ledger=ledger if ledger is not None else state.admission_ledger_store(),
     )
 
 

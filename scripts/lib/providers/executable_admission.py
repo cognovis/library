@@ -226,24 +226,42 @@ def validated_operator(value: str) -> str:
 
 
 def validated_decided_at(value: str) -> str:
-    """When this decision was made, as a parseable instant, or a refusal.
+    """When this decision was made, as a real instant, or a refusal.
 
     An unparseable timestamp is not a cosmetic defect in an audit record. "When
     was this admitted, and was that before or after the incident" is the first
-    question anyone asks of one, and a field that holds `{'not': 'a timestamp'}`
+    question anyone asks of one, and a field holding `{'not': 'a timestamp'}`
     stringified answers it with something that reads like an answer.
+
+    Parsing is not enough on its own, and review said so: `fromisoformat` accepts
+    the calendar date `2026-08-09` and the naive `2026-08-09T15:00:00`, and
+    neither is an instant. A date cannot be ordered against a time on the same
+    day, and a naive value cannot be ordered against the UTC timestamps this CLI
+    writes without guessing whose local clock it came from. Both are refused, so
+    an admission ledger orders.
     """
     if not isinstance(value, str) or not value.strip():
         raise ValueError("an admission decision records when it was made")
     candidate = value.strip()
     try:
-        _dt.datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+        moment = _dt.datetime.fromisoformat(candidate.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError(
             f"{value!r} is not an ISO-8601 instant; an admission decision has to "
             "say when it was made in a form that can be ordered against other "
             "events"
         ) from exc
+    if "T" not in candidate and " " not in candidate:
+        raise ValueError(
+            f"{value!r} is a calendar date, not an instant; a date cannot be "
+            "ordered against the other events of the same day"
+        )
+    if moment.tzinfo is None or moment.utcoffset() is None:
+        raise ValueError(
+            f"{value!r} carries no UTC offset, so it names a moment on somebody's "
+            "local clock rather than an instant; record it with a 'Z' or an "
+            "explicit offset"
+        )
     return candidate
 
 
@@ -666,7 +684,20 @@ class AdmissionLedgerStore:
         # constructor the writer used. A file is editable by anyone who can
         # reach it, and this store is the only thing between an edited file and
         # the gate that consults it.
-        surface = entry.get("permission_surface", [])
+        if "permission_surface" not in entry:
+            # Absence is not the empty declaration. The CLI makes an operator
+            # choose between naming permissions and stating with
+            # `--no-permissions` that the artifact requests none, and a
+            # truncated or hand-edited record that simply drops the field would
+            # otherwise arrive as the second of those -- an evidence claim
+            # nobody made, on a record that still authorizes execution.
+            raise ValueError(
+                "executable-admission entry is missing 'permission_surface'; an "
+                "absent declaration is not the same claim as an empty one, and a "
+                "decision with no recorded surface is not a decision this store "
+                "wrote"
+            )
+        surface = entry["permission_surface"]
         if not isinstance(surface, list) or not all(
             isinstance(item, str) for item in surface
         ):
