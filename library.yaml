@@ -1354,7 +1354,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: cohesive-bead-chain
-      description: 'use when: run 2-4 open, unclaimed, small bug or technical-refactor beads as a linear dependency chain in local Codex context, preserving their commits and close traces. NOT for: one bead, unrelated beads, parallel branches, epics, cross-repo work, or complex chains. boundary: cognovis-beads owns one-bead implementation and cmux-bead-dispatch owns cmux multi-bead sessions; this explicitly invoked outside-cmux route stays local and ends with one opposite-family adversarial session.'
+      description: 'use when: run 2-4 open, unclaimed, small bug or technical-refactor beads as a linear dependency chain in local Codex context, preserving their commits and close traces. NOT for: one bead, unrelated beads, parallel branches, epics, cross-repo work, or complex chains. boundary: cognovis-beads owns one-bead implementation and cmux-bead-dispatch owns independent one-bead sessions; an eligible chain is one repository-scoped Executive Pack and uses the shared per-bead execution loop.'
       source: https://github.com/cognovis/library-core/blob/main/skills/cohesive-bead-chain/SKILL.md
       metadata:
         library:
@@ -1365,10 +1365,9 @@ library:
         - origin:original
         - tier:domain
       requires:
-        - agent:cohesive-bead-chain-orchestrator
-        - agent:executive-pack-agent
         - agent:judge-default
         - skill:bead-execution-loop
+        - skill:executive-pack
         - standard:english-only
         - standard:executive-pack
         - standard:judge-layer
@@ -1469,6 +1468,24 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/event-log/SKILL.md
       requires:
         - standard:english-only
+      tags:
+        - origin:original
+        - tier:domain
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: executive-pack
+      description: 'use when: the current interactive session must own one repository-scoped Executive Pack through ordered Bead loops, aggregate review, and one Session Close. NOT for: spawning a Pack-owner agent, cross-repository Topic coordination, or one Bead. boundary: this skill makes the invoking session the Pack owner; isolated implementer and reviewer contexts remain inside bead-execution-loop.'
+      source: https://github.com/cognovis/library-core/blob/main/skills/executive-pack/SKILL.md
+      requires:
+        - skill:bead-execution-loop
+        - skill:session-close
+        - standard:model-routing
+        - standard:english-only
+        - standard:executive-pack
+        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -2361,40 +2378,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: cohesive-bead-chain-orchestrator
-      description: Compatibility redirect that delivers an eligible repository-local chain as one Executive Pack.
-      source: https://github.com/cognovis/library-core/blob/main/agents/cohesive-bead-chain-orchestrator.md
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - origin:original
-        - tier:domain
-      requires:
-        - agent:executive-pack-agent
-    - name: executive-pack-agent
-      description: Persistent cmux-pane orchestrator for one repository-scoped Executive Pack, one worktree, and one Session Close.
-      source: https://github.com/cognovis/library-core/blob/main/agents/executive-pack-agent.md
-      requires:
-        - agent:doc-changelog-updater
-        - agent:plan-reviewer
-        - skill:acpx-dispatch
-        - skill:bead-execution-loop
-        - skill:cognovis-beads
-        - skill:session-close
-        - standard:executive-pack
-        - standard:model-routing
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: constraint-checker
       description: 'Verifies SLOs, security defaults, and performance constraints against a built artifact. Use proactively after holdout validation to check non-functional requirements. Read-only and execute-only: never modifies code. Information barrier: sees only artifact and constraint definitions.'
       source: https://github.com/cognovis/library-core/blob/main/agents/constraint-checker.md
@@ -2681,13 +2664,15 @@ library:
       default_scope: global
       handlers:
         - agents/topic-agent-handlers
-      description: Persistent cmux-workspace coordinator for human-approved cross-repository Executive Packs and one content-level Topic Finalize.
+      description: Use when a human-approved complex topic needs a persistent coordinator in one cmux workspace with one Executive Pack pane per repository pack and one finalization.
       source: https://github.com/cognovis/library-core/blob/main/agents/topic-agent.md
       requires:
-        - agent:executive-pack-agent
         - skill:cmux
         - skill:cmux-workspace
+        - skill:executive-pack
+        - standard:english-only
         - standard:executive-pack
+        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -2704,6 +2689,20 @@ library:
       tags:
         - origin:original
         - tier:domain
+        - category:command
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+    - name: executive-pack
+      description: Execute one repository-scoped Executive Pack in this invoking session.
+      source: https://github.com/cognovis/library-core/blob/main/prompts/executive-pack.md
+      requires:
+        - skill:executive-pack
+      tags:
+        - origin:original
+        - tier:core
         - category:command
       metadata:
         library:

@@ -26,20 +26,27 @@ def test_executive_pack_primitives_are_registered() -> None:
         "bead-change-reviewer",
         "bead-loop-implementer",
         "bead-lead",
-        "executive-pack-agent",
         "topic-agent",
     ):
         assert _entry(catalog, "agents", agent)
 
     assert _entry(catalog, "skills", "bead-execution-loop")
+    assert _entry(catalog, "skills", "executive-pack")
     assert _entry(catalog, "standards", "executive-pack")
+    assert _entry(catalog, "prompts", "executive-pack")["requires"] == [
+        "skill:executive-pack"
+    ]
     assert _entry(catalog, "prompts", "topic")["requires"] == ["agent:topic-agent"]
+    assert not any(
+        item["name"] in {"executive-pack-agent", "cohesive-bead-chain-orchestrator"}
+        for item in catalog["agents"]
+    )
 
 
 def test_delivery_dependencies_preserve_ownership_boundaries() -> None:
     catalog = _catalog()
     single = set(_entry(catalog, "agents", "bead-loop-implementer")["requires"])
-    pack = set(_entry(catalog, "agents", "executive-pack-agent")["requires"])
+    pack = set(_entry(catalog, "skills", "executive-pack")["requires"])
     lead = set(_entry(catalog, "agents", "bead-lead")["requires"])
 
     assert {"skill:bead-execution-loop", "skill:session-close"} <= single
@@ -54,6 +61,7 @@ def test_delivery_dependencies_preserve_ownership_boundaries() -> None:
     assert {"skill:cmux", "skill:cmux-workspace"} <= set(
         _entry(catalog, "agents", "topic-agent")["requires"]
     )
+    assert "skill:executive-pack" in _entry(catalog, "agents", "topic-agent")["requires"]
 
 
 def test_all_new_dependencies_resolve() -> None:
@@ -80,8 +88,7 @@ def test_all_new_dependencies_resolve() -> None:
                 "bead-loop-implementer",
                 "bead-lead",
                 "bead-fleet-lead",
-                "cohesive-bead-chain-orchestrator",
-                "executive-pack-agent",
+                "executive-pack",
                 "topic-agent",
                 "topic",
             }:
