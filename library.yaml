@@ -544,6 +544,24 @@ library:
       tags:
         - origin:original
         - tier:domain
+    - name: mcp-forge
+      description: 'use when: creating a Python MCP server or migrating a Python MCP server to the stateless 2026-07-28 protocol with the official Python SDK v2. NOT for: non-Python servers or cognovis-tools tool-family work. boundary: unlike mcp-tool-forge, this skill owns complete, generic Python MCP server architecture, implementation, migration, and conformance rather than cognovis-tools entries.'
+      source: https://github.com/cognovis/library/blob/main/skills/mcp-forge/SKILL.md
+      requires:
+        - standard:python
+        - standard:judge-layer
+        - standard:english-only
+        - standard:no-emoji
+      metadata:
+        library:
+          source_catalog: library-platform
+          plane: dev
+          steward: library-platform
+          gascity:
+            exportable: false
+      tags:
+        - origin:original
+        - tier:domain
     - name: skill-forge
       description: 'Create, validate, and audit skills (SKILL.md files). Use when creating a new skill, validating an existing skill for quality and extractable-code violations, or running a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill, check skill, audit skills, skill health check, fleet quality, skill creation, Gas City pack metadata for skills, script declarations, provider-neutral skill design.'
       source: https://github.com/cognovis/library/blob/main/skills/skill-forge/SKILL.md

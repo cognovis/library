@@ -1,0 +1,26 @@
+# Python SDK v1-to-v2 Migration
+
+## Inventory Before Editing
+
+Record the current `mcp` constraint and lockfile version, Python version, server and client entrypoints, `FastMCP` subclasses, low-level handlers, transports, lifespan ownership, session-manager calls, auth providers, and tests. Search for `FastMCP`, `mcp.server.fastmcp`, `streamable_http_app`, `session_manager`, `Mcp-Session-Id`, `initialize`, `ctx.elicit`, resource subscriptions, and positional server constructor arguments.
+
+Classify every stateful value as request-local, process-local cache, durable application state, legacy transport session state, or an accidental protocol-session dependency. Only the last category must be redesigned for stateless correctness.
+
+## Ordered Migration
+
+1. Raise the project to the official Python SDK v2 dependency line and refresh the lockfile with `uv`.
+2. Apply mechanical import and type moves, including `FastMCP` to `MCPServer`, `mcp.server.fastmcp.*` to `mcp.server.mcpserver.*`, `McpError` to `MCPError`, and the separate `mcp-types` types package where required.
+3. Review constructor calls. v2 inserted `title` and `description` before `instructions`; convert optional positional arguments to keywords and preserve explicit identity.
+4. Port server APIs and subclasses. Decorators remain familiar, but context, direct call helpers, transport arguments, lifespan entry, and low-level handlers changed; follow the matching official guide section instead of guessing.
+5. Port any embedded client code, then transport and authorization configuration.
+6. Remove manual `session_manager.run()` ownership when the v2 application or lifespan API owns it. Confirm the documented ASGI and Streamable HTTP lifecycle for the chosen deployment.
+7. Replace server-initiated modern flows with SDK multi-round-trip abstractions. Keep legacy-specific back-channel behavior only when a named supported client requires it.
+8. Address strict schema validation, snake_case model fields, removed extra-field preservation, new error types, and deprecations surfaced by tests.
+
+## Protocol Audit
+
+Verify the final 2026-07-28 behavior through the SDK: no modern initialize handshake or protocol session, per-request protocol and capability metadata, `server/discover`, required `resultType`, cache metadata on cacheable results, `subscriptions/listen`, required Streamable HTTP method/name headers, final error codes, and no SSE resumability. Do not patch these features into application handlers.
+
+## Compatibility
+
+The SDK v2 Streamable HTTP application routes both modern and handshake-era clients by protocol version. Test both. A legacy client may still require sticky routing because its session record is process-local. `stateless_http=True` avoids that legacy session at the cost of legacy back-channels; it does not make the already-sessionless modern path more stateless.
