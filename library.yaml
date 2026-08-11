@@ -1280,6 +1280,30 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: context-handoff
+      description: 'use when: the user explicitly asks to preserve the current conversation before clearing, archiving, or starting a fresh agent chat. NOT for: compaction, session close, implementation handoffs, or automatic memory capture. boundary: this skill writes one continuation-focused handoff to an explicitly active Bead''s notes or `.intake/context-handoff/<session-id>.md`; session-close owns delivery finalization and open-brain skills own durable memory.'
+      source: https://github.com/cognovis/library-core/blob/main/skills/context-handoff/SKILL.md
+      requires:
+        - agent:judge-default
+        - standard:english-only
+        - standard:no-emoji
+        - standard:judge-layer
+      scripts:
+        - path: scripts/resolve_handoff_path.py
+          role: helper
+          entrypoint: false
+          language: python
+          output_contract: json-envelope
+      tags:
+        - origin:original
+        - tier:core
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+          gascity:
+            exportable: false
     - name: codex-guide
       description: Answer documentation questions about OpenAI Codex CLI, including subcommands, config.toml, sandbox modes, profiles, subagents, skills, and MCP integration. Does not run Codex; use acpx for cross-harness execution.
       source: https://github.com/cognovis/library-core/blob/main/skills/codex-guide/SKILL.md
