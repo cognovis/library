@@ -2,6 +2,8 @@
 
 ### Changed
 
+- *(clc-6kuz, cdx)* `-b` and `-bq` require the configured `beads` MCP server and instruct the lifecycle owner to use its typed context, read, claim, update, and close operations after the launcher's read-only bootstrap. The canonical Session Close is resumed through its containment-bound MCP finalization receipt instead of invoking sandboxed local `bd` or Dolt networking.
+
 - *(CL-5i65, Pi extensions)* Bundled Pi extensions can now opt into native
   project-local package registration with `pi_package: true`. The Library
   validates the bundle's `package.json` Pi manifest, merges a settings-relative

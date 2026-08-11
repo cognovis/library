@@ -15,7 +15,11 @@ _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "cdx-bead-workflow.p
 _COMPACT_CONTEXT_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compact-bead-context.py"
 _CDX_BIN = Path(__file__).resolve().parents[1] / "bin" / "cdx"
 _DANGEROUS_CODEX_ARG = "--dangerously-bypass-approvals-and-sandbox"
-_SAFE_BEAD_CODEX_ARGS = ["--sandbox", "workspace-write", "-c", 'approval_policy="never"']
+_SAFE_BEAD_CODEX_ARGS = [
+    "--sandbox",
+    "workspace-write",
+    'approval_policy="never"',
+]
 _READONLY_BEAD_CODEX_ARGS = ["--sandbox", "read-only"]
 
 
@@ -334,8 +338,9 @@ def _assert_safe_bead_permissions(argv: list[str]) -> None:
     assert _DANGEROUS_CODEX_ARG not in argv
     sandbox_index = argv.index("--sandbox")
     assert argv[sandbox_index + 1] == "workspace-write"
-    config_index = argv.index("-c")
-    assert argv[config_index + 1] == 'approval_policy="never"'
+    config_values = [argv[index + 1] for index, value in enumerate(argv[:-1]) if value == "-c"]
+    assert 'approval_policy="never"' in config_values
+    assert "mcp_servers.beads.required=true" in config_values
 
 
 def _assert_readonly_bead_permissions(argv: list[str]) -> None:
@@ -351,6 +356,8 @@ def _assert_dangerous_bead_permissions(argv: list[str]) -> None:
         assert safe_arg not in argv
     for readonly_arg in _READONLY_BEAD_CODEX_ARGS:
         assert readonly_arg not in argv
+    config_values = [argv[index + 1] for index, value in enumerate(argv[:-1]) if value == "-c"]
+    assert "mcp_servers.beads.required=true" in config_values
 
 
 def _write_runtime(
@@ -979,6 +986,13 @@ def test_cdx_bead_modes_invoke_active_loop_through_acpx_only(
     ):
         assert retired_gateway_term not in prompt
     assert "canonical Session Close" in prompt
+    assert "mcp__beads__show" in prompt
+    assert "mcp__beads__context" in prompt
+    assert "mcp__beads__claim" in prompt
+    assert "mcp__beads__update" in prompt
+    assert "mcp__beads__close" in prompt
+    assert "--bead-backend mcp" in prompt
+    assert "bead_mcp_finalization_required" in prompt
     if execution_mode == "quick":
         assert "unconditional explicit Quick" in prompt
 
