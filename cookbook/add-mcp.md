@@ -64,20 +64,10 @@ servers that expose typed tool families over existing Library CLIs or Scripts.
 The generic schema and installer support an `antigravity` registration block,
 but each product declares only the harnesses it actually supports.
 
-`cognovis-tools` is the reference `library-tool-surface` entry. Its job is to register the typed
-tool surface into exactly three coding harness families:
-
-- `claude_code` for `cld`
-- `codex` for `cdx`
-- `cursor` for `cra`
-
-Registration is not orchestration. Claude Code and Codex remain the bead orchestration runners;
-Cursor is an implementation-surface consumer that needs the MCP registration so its agents call
-the server's typed tools directly instead of reconstructing CLI flags.
-
-## Registering cognovis-tools for all supported harnesses
-
-Use the three supported coding-harness keys for cognovis-tools:
+There is no active first-party `library-tool-surface` reference implementation.
+A future entry of that species must own a material protocol invariant that a
+stable CLI plus Skill cannot provide. Register it only for the harnesses that
+consume that invariant:
 
 ```yaml
 install:
@@ -125,7 +115,7 @@ an add URL available: `mobile_strategy: mcp` with `install_url`.
 
 For `species: library-tool-surface`, `coding_strategy` should normally be `mcp`, and the
 `install.mcp` block should register every coding harness surface that will consume the typed tools.
-For `cognovis-tools`, that means `claude_code`, `codex`, and `cursor`.
+The exact harness set is a product decision, not a species-wide default.
 
 ### 3. Fill in capabilities
 
@@ -172,7 +162,7 @@ install:
         env: {}
 ```
 
-Reference example for `cognovis-tools`:
+Generic supervised local-service example:
 
 ```yaml
 install:
@@ -184,14 +174,14 @@ install:
         command: sh
         args:
           - -c
-          - uv run --project ~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
+          - uv run --project ~/.local/share/library/mcp-servers/example-server/source/mcp-servers/example-server example-server-mcp
     codex:
       config_path: ~/.codex/config.toml
       snippet:
         command: sh
         args:
           - -c
-          - uv run --project ~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
+          - uv run --project ~/.local/share/library/mcp-servers/example-server/source/mcp-servers/example-server example-server-mcp
     cursor:
       config_path: ~/.cursor/mcp.json
       snippet:
@@ -199,7 +189,7 @@ install:
         command: sh
         args:
           - -c
-          - uv run --project ~/.local/share/library/mcp-servers/cognovis-tools/cognovis-library-core/mcp-servers/cognovis-tools cognovis-tools-mcp
+          - uv run --project ~/.local/share/library/mcp-servers/example-server/source/mcp-servers/example-server example-server-mcp
 ```
 
 ### Registration smoke
@@ -208,11 +198,8 @@ After registering a `library-tool-surface` server, perform a harness-local smoke
 
 1. Launch the target harness.
 2. Confirm the MCP server appears in the harness config view or `tools/list`.
-3. Verify the typed tool list includes the expected family, for example `bead.*` for
-   `cognovis-tools`.
-
-For this bead, a minimal acceptable manual smoke is Cursor (`~/.cursor/mcp.json`) because `cra` is
-an actively used implementation surface.
+3. Verify the typed tool list includes the expected family from the server's
+   own `tools/list` response.
 
 ### 5. Add to library.yaml
 

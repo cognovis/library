@@ -55,86 +55,21 @@ def test_validator_accepts_quoted_bracketed_argument_hint(tmp_path: Path) -> Non
     assert result.stderr == ""
 
 
-def test_validator_reports_mcp_debt_in_target_fenced_blocks(tmp_path: Path) -> None:
-    skill = tmp_path / "SKILL.md"
-    skill.write_text(
-        "---\n"
-        "name: mcp-debt\n"
-        "description: valid test skill\n"
-        "---\n"
-        "# MCP Debt\n"
-        "Plain body text mentions bd list, git status, and $HANDLERS_DIR.\n"
-        "Inline code mentions `bd show CL-1`, `git diff`, and `$HANDLERS_DIR`.\n"
-        "```bash\n"
-        "bd list --status=open\n"
-        "git status\n"
-        "uv run python \"$HANDLERS_DIR/session-close-runner.py\"\n"
-        "```\n"
-        "```text\n"
-        "bd show CL-1\n"
-        "${HANDLERS_DIR}/session-close-runner.py\n"
-        "```\n"
-        "```python\n"
-        "bd close CL-1\n"
-        "git commit -m test\n"
-        "```\n"
-    )
-
-    result = run_validator(skill, "--strict", "--suggest-mcp")
-
-    assert result.returncode == 1
-    assert result.stdout.count("MCP_DEBT_BD:") == 2
-    assert result.stdout.count("MCP_DEBT_GIT:") == 1
-    assert result.stdout.count("MCP_DEBT_HANDLER_BASH:") == 2
-    assert "mcp__cognovis_tools__bd_* equivalents" in result.stdout
-    assert "mcp__cognovis_tools__git_* equivalents" in result.stdout
-    assert "cognovis-tools MCP server invocation" in result.stdout
-    assert "bd close" not in result.stdout
-    assert "git commit" not in result.stdout
-
-
-def test_validator_debt_count_reports_only_mcp_debt_findings(tmp_path: Path) -> None:
-    skill = tmp_path / "SKILL.md"
-    skill.write_text(
-        "---\n"
-        "name: debt-count\n"
-        "description: valid test skill\n"
-        "---\n"
-        "# Debt Count\n"
-        "Plain body text mentions bd list, git status, and $HANDLERS_DIR.\n"
-        "```text\n"
-        "bd list\n"
-        "git diff\n"
-        "$HANDLERS_DIR/session-close-runner.py\n"
-        "```\n"
-    )
-
-    result = run_validator(skill, "--format=debt-count")
-
-    assert result.returncode == 0
-    assert result.stdout.strip() == "3"
-    assert result.stderr == ""
-
-
-def test_fleet_scan_reports_debt_column_and_total(tmp_path: Path) -> None:
+def test_fleet_scan_reports_skill_metrics(tmp_path: Path) -> None:
     home = tmp_path / "home"
     project = tmp_path / "project"
     skills_root = project / "skills"
     home.mkdir()
     skills_root.mkdir(parents=True)
 
-    debt_skill = skills_root / "debt-skill"
-    debt_skill.mkdir()
-    (debt_skill / "SKILL.md").write_text(
+    measured_skill = skills_root / "measured-skill"
+    measured_skill.mkdir()
+    (measured_skill / "SKILL.md").write_text(
         "---\n"
-        "name: debt-skill\n"
+        "name: measured-skill\n"
         "description: valid test skill\n"
         "---\n"
-        "# Debt Skill\n"
-        "```bash\n"
-        "bd ready\n"
-        "git status\n"
-        "```\n"
+        "# Measured Skill\n"
     )
 
     clean_skill = skills_root / "clean-skill"
@@ -156,7 +91,7 @@ def test_fleet_scan_reports_debt_column_and_total(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert " DEBT" in result.stdout
-    assert "debt-skill" in result.stdout
+    assert "TOKENS" in result.stdout
+    assert "measured-skill" in result.stdout
     assert "clean-skill" in result.stdout
-    assert "Total MCP debt findings: 2" in result.stdout
+    assert "Total skills:            2" in result.stdout

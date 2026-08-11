@@ -13,7 +13,7 @@ from typing import Any
 from ..errors import InstallError
 
 _HEALTHY_STATE = "healthy"
-_SOURCE_REVISION_ENV = "COGNOVIS_TOOLS_SOURCE_REVISION"
+_SOURCE_REVISION_ENV = "LIBRARY_MCP_SOURCE_REVISION"
 
 
 def expand_argv(command_block: dict[str, Any]) -> list[str]:
@@ -28,12 +28,14 @@ def resolve_project_path(project_path: Path, command_block: dict[str, Any]) -> d
     resolved = deepcopy(command_block)
     project = str(project_path)
     normalized_args: list[str] = []
+    previous = ""
     for arg in resolved.get("args", []):
         expanded = os.path.expanduser(str(arg))
-        if expanded.endswith("/mcp-servers/cognovis-tools"):
+        if previous == "--project":
             normalized_args.append(project)
         else:
             normalized_args.append(expanded)
+        previous = expanded
     resolved["args"] = normalized_args
     return resolved
 
@@ -50,14 +52,10 @@ def resolve_supervised_service(
     resolved = deepcopy(raw)
     for key in ("install", "start", "health_check", "restart", "stop", "uninstall"):
         resolved[key] = resolve_project_path(project_path, resolved[key])
-    rollback = deepcopy(resolved["stdio_rollback"])
-    rollback["args"] = [
-        str(project_path)
-        if os.path.expanduser(str(arg)).endswith("/mcp-servers/cognovis-tools")
-        else os.path.expanduser(str(arg))
-        for arg in rollback.get("args", [])
-    ]
-    resolved["stdio_rollback"] = rollback
+    resolved["stdio_rollback"] = resolve_project_path(
+        project_path,
+        resolved["stdio_rollback"],
+    )
     return resolved
 
 
@@ -84,7 +82,7 @@ def run_argv_command(
 
 
 def parse_daemon_status(stdout: str) -> dict[str, Any]:
-    """Parse cognovis-tools-daemon JSON status output."""
+    """Parse a supervised MCP daemon's JSON status output."""
     text = stdout.strip()
     if not text:
         return {}

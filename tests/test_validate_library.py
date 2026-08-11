@@ -515,9 +515,9 @@ def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
 def test_mcp_server_species_library_tool_surface():
     """library-tool-surface MCP entries accept the four coding harness registration keys."""
     entry = {
-        "name": "cognovis-tools",
+        "name": "supervised-test-server",
         "description": "First-party typed Library tool surface.",
-        "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
+        "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/supervised-test-server/pyproject.toml",
         "species": "library-tool-surface",
         "coding_strategy": "mcp",
         "capabilities": {
@@ -528,12 +528,12 @@ def test_mcp_server_species_library_tool_surface():
         "supervised_local_service": {
             "url": "http://127.0.0.1:8765/mcp",
             "health_url": "http://127.0.0.1:8765/health",
-            "install": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "install"]},
-            "start": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "start"]},
-            "health_check": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "status"]},
-            "restart": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "restart"]},
-            "stop": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "stop"]},
-            "uninstall": {"command": "uv", "args": ["run", "cognovis-tools-daemon", "uninstall"]},
+            "install": {"command": "uv", "args": ["run", "supervised-test-server-daemon", "install"]},
+            "start": {"command": "uv", "args": ["run", "supervised-test-server-daemon", "start"]},
+            "health_check": {"command": "uv", "args": ["run", "supervised-test-server-daemon", "status"]},
+            "restart": {"command": "uv", "args": ["run", "supervised-test-server-daemon", "restart"]},
+            "stop": {"command": "uv", "args": ["run", "supervised-test-server-daemon", "stop"]},
+            "uninstall": {"command": "uv", "args": ["run", "supervised-test-server-daemon", "uninstall"]},
             "stdio_rollback": {
                 "type": "stdio",
                 "command": "uv",
@@ -569,7 +569,7 @@ def test_mcp_server_species_library_tool_surface():
 
 def test_supervised_local_service_rejects_non_loopback_url():
     entry = {
-        "name": "cognovis-tools",
+        "name": "supervised-test-server",
         "description": "Invalid supervised service URL.",
         "supervised_local_service": {
             "url": "http://0.0.0.0:8765/mcp",

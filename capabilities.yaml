@@ -55,9 +55,7 @@ capabilities:
     description: Inspect git status, diffs, history, and branch metadata.
     claude:
       tools: [Bash, Read, Grep, Glob]
-      mcpServers: [cognovis-tools]
     codex:
-      mcp_servers: [cognovis-tools]
       sandbox_mode: read-only
   - name: spawn_subagents
     description: Delegate bounded work to harness-native subagents.
@@ -129,18 +127,6 @@ capabilities:
       mcpServers: [playwright]
     codex:
       mcp_servers: [playwright]
-      sandbox_mode: workspace-write
-  - name: manage_agent_sessions
-    description: Start, resume, inspect, and cancel role-scoped provider sessions through the typed cognovis-tools gateway.
-    claude:
-      tools:
-        - mcp__cognovis-tools__agent_session_start
-        - mcp__cognovis-tools__agent_session_continue
-        - mcp__cognovis-tools__agent_session_status
-        - mcp__cognovis-tools__agent_session_cancel
-      mcpServers: [cognovis-tools]
-    codex:
-      mcp_servers: [cognovis-tools]
       sandbox_mode: workspace-write
   - name: update_docs
     description: Edit documentation and changelog files.

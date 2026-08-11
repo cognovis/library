@@ -934,15 +934,15 @@ class TestTopLevelSync:
 
         revision = "a" * 40
         entry = {
-            "name": "cognovis-tools",
+            "name": "supervised-test-server",
             "type": "mcp",
             "marketplace": "cognovis-core",
             "source": (
                 "https://github.com/cognovis/library-core/blob/main/"
-                "mcp-servers/cognovis-tools/pyproject.toml"
+                "mcp-servers/supervised-test-server/pyproject.toml"
             ),
             "source_commit": revision,
-            "cache_path": "mcp:cognovis-tools",
+            "cache_path": "mcp:supervised-test-server",
             "install_target": "claude_code,codex,cursor",
             "install_timestamp": "2026-07-14T00:00:00Z",
             "checksum_sha256": "0" * 64,
@@ -959,7 +959,7 @@ class TestTopLevelSync:
                 "overall": "behind",
                 "entries": [
                     {
-                        "name": "cognovis-tools",
+                        "name": "supervised-test-server",
                         "primitive": "mcp",
                         "upstream_status": "current",
                         "runtime_status": "stale",
@@ -983,7 +983,7 @@ class TestTopLevelSync:
 
         assert rc == 0
         data = json.loads(capsys.readouterr().out)
-        assert data["refreshed"] == ["mcp:cognovis-tools"]
+        assert data["refreshed"] == ["mcp:supervised-test-server"]
         assert data["skipped"] == []
 
     def test_mcp_sync_preserves_actionable_installer_error(
@@ -994,7 +994,7 @@ class TestTopLevelSync:
         from lib.sync_audit import cmd_sync_impl
 
         entry = {
-            "name": "cognovis-tools",
+            "name": "supervised-test-server",
             "type": "mcp",
             "marketplace": "cognovis-core",
         }
@@ -1007,7 +1007,7 @@ class TestTopLevelSync:
             "lib.sync_audit.reinstall_entry",
             MagicMock(
                 side_effect=InstallError(
-                    "codex MCP installer failed for 'cognovis-tools': "
+                    "codex MCP installer failed for 'supervised-test-server': "
                     "tomlkit required for Codex TOML manipulation"
                 )
             ),
@@ -1024,10 +1024,10 @@ class TestTopLevelSync:
         assert result["data"]["synced"] == []
         assert result["data"]["failed"] == [
             {
-                "name": "cognovis-tools",
+                "name": "supervised-test-server",
                 "type": "mcp",
                 "error": (
-                    "codex MCP installer failed for 'cognovis-tools': "
+                    "codex MCP installer failed for 'supervised-test-server': "
                     "tomlkit required for Codex TOML manipulation"
                 ),
             }
@@ -1045,7 +1045,7 @@ class TestHookScript:
         assert hook.exists(), f"Hook script not found at {hook}"
         assert hook.stat().st_mode & 0o111, "Hook script must be executable"
 
-    def test_hook_script_exits_0_on_clean_project(self):
+    def test_hook_script_exits_0_on_clean_project(self, tmp_path):
         """AK7: hook script exits 0 when no drift or behind entries."""
         hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
         result = subprocess.run(
@@ -1053,6 +1053,7 @@ class TestHookScript:
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
+            env={**os.environ, "HOME": str(tmp_path / "isolated-home")},
         )
         assert result.returncode == 0, \
             f"Hook script failed: exit={result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -1107,6 +1108,7 @@ class TestHookScript:
             capture_output=True,
             text=True,
             cwd=str(project_dir),
+            env={**os.environ, "HOME": str(project_dir / "isolated-home")},
         )
         # Exit code 0 (hook always exits 0 — it's informational)
         assert result.returncode == 0, \
@@ -1187,6 +1189,7 @@ class TestHookScript:
 
         env = os.environ.copy()
         env["PATH"] = str(fake_git_dir) + ":" + env.get("PATH", "")
+        env["HOME"] = str(tmp_path / "isolated-home")
 
         result = subprocess.run(
             ["bash", str(hook)],

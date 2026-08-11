@@ -58,9 +58,9 @@ class TestEnsureMcpDeployClone:
     def test_returns_deploy_path_when_subdir_has_pyproject(self, tmp_path):
         """The deploy result binds a clean checkout path to its exact revision."""
         deploy_path = tmp_path / "cognovis-library-core"
-        subdir = deploy_path / "mcp-servers" / "cognovis-tools"
+        subdir = deploy_path / "mcp-servers" / "supervised-test-server"
         subdir.mkdir(parents=True)
-        (subdir / "pyproject.toml").write_text("[project]\nname = 'cognovis-tools'\n")
+        (subdir / "pyproject.toml").write_text("[project]\nname = 'supervised-test-server'\n")
         # Make it look like a git repo so the pull path fires instead of clone
         (deploy_path / ".git").mkdir()
 
@@ -73,7 +73,7 @@ class TestEnsureMcpDeployClone:
             ]
             result = ensure_mcp_deploy_clone(
                 clone_url="https://github.com/cognovis/library-core.git",
-                mcp_subdir="mcp-servers/cognovis-tools",
+                mcp_subdir="mcp-servers/supervised-test-server",
                 deploy_path=deploy_path,
                 dry_run=False,
             )
@@ -84,9 +84,9 @@ class TestEnsureMcpDeployClone:
 
     def test_update_failure_refuses_stale_existing_clone(self, tmp_path):
         deploy_path = tmp_path / "cognovis-library-core"
-        subdir = deploy_path / "mcp-servers" / "cognovis-tools"
+        subdir = deploy_path / "mcp-servers" / "supervised-test-server"
         subdir.mkdir(parents=True)
-        (subdir / "pyproject.toml").write_text("[project]\nname='cognovis-tools'\n")
+        (subdir / "pyproject.toml").write_text("[project]\nname='supervised-test-server'\n")
         (deploy_path / ".git").mkdir()
 
         with patch("subprocess.run") as run:
@@ -101,7 +101,7 @@ class TestEnsureMcpDeployClone:
             with pytest.raises(InstallError, match="potentially stale runtime"):
                 ensure_mcp_deploy_clone(
                     clone_url="https://github.com/cognovis/library-core.git",
-                    mcp_subdir="mcp-servers/cognovis-tools",
+                    mcp_subdir="mcp-servers/supervised-test-server",
                     deploy_path=deploy_path,
                 )
 
@@ -130,7 +130,7 @@ class TestEnsureMcpDeployClone:
 
         result = ensure_mcp_deploy_clone(
             clone_url="https://github.com/cognovis/library-core.git",
-            mcp_subdir="mcp-servers/cognovis-tools",
+            mcp_subdir="mcp-servers/supervised-test-server",
             deploy_path=deploy_path,
             dry_run=True,
         )
@@ -150,7 +150,7 @@ class TestEnsureMcpDeployClone:
             with pytest.raises(InstallError, match="clone"):
                 ensure_mcp_deploy_clone(
                     clone_url="https://github.com/cognovis/library-core.git",
-                    mcp_subdir="mcp-servers/cognovis-tools",
+                    mcp_subdir="mcp-servers/supervised-test-server",
                     deploy_path=deploy_path,
                     dry_run=False,
                 )
@@ -252,59 +252,30 @@ class TestInstallMcpDeployCloneIntegration:
 class TestDeployPathDerivation:
     """Tests for _derive_deploy_path — ensuring only pyproject.toml sources trigger deploy-clone."""
 
-    def test_cognovis_tools_supervised_catalog_paths_match_derived_project_path(self):
-        """cognovis-tools supervised commands point at the installer-derived project path."""
-        catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
-        entry = next(
-            item
-            for item in catalog["library"]["mcp_servers"]
-            if item["name"] == "cognovis-tools"
-        )
-        _, mcp_subdir, deploy_path = _derive_deploy_path(entry, "cognovis-tools")
-        project_path = _project_path_from_deploy(deploy_path, mcp_subdir)
-        supervised_service = entry["supervised_local_service"]
-        command_names = [
-            "install",
-            "start",
-            "health_check",
-            "restart",
-            "stop",
-            "uninstall",
-            "stdio_rollback",
-        ]
-
-        assert project_path is not None
-        expected_project_path = f"~/{project_path.relative_to(Path.home())}"
-        for command_name in command_names:
-            assert expected_project_path in supervised_service[command_name]["args"]
-        assert expected_project_path in supervised_service["legacy_stdio_descriptors"][0][
-            "args"
-        ][-1]
-
     def test_pyproject_source_returns_clone_info(self):
         """pyproject.toml source URL derives clone_url, mcp_subdir, and deploy_path."""
         entry = {
-            "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
+            "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/supervised-test-server/pyproject.toml",
         }
-        clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, "cognovis-tools")
+        clone_url, mcp_subdir, deploy_path = _derive_deploy_path(entry, "supervised-test-server")
 
         assert clone_url == "https://github.com/cognovis/library-core.git"
-        assert mcp_subdir == "mcp-servers/cognovis-tools"
+        assert mcp_subdir == "mcp-servers/supervised-test-server"
         assert deploy_path is not None
         assert "cognovis-library-core" in str(deploy_path)
 
     def test_supervised_source_uses_dedicated_runtime_clone(self):
         entry = {
-            "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/cognovis-tools/pyproject.toml",
+            "source": "https://github.com/cognovis/library-core/blob/main/mcp-servers/supervised-test-server/pyproject.toml",
             "supervised_local_service": {"url": "http://127.0.0.1:8765/mcp"},
         }
 
-        _, _, deploy_path = _derive_deploy_path(entry, "cognovis-tools")
+        _, _, deploy_path = _derive_deploy_path(entry, "supervised-test-server")
 
         assert deploy_path is not None
         assert deploy_path.parts[-3:] == (
             "mcp-servers",
-            "cognovis-tools",
+            "supervised-test-server",
             "cognovis-library-core",
         )
 

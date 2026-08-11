@@ -396,13 +396,6 @@ Exit 2 = file not found / parse error.
 
 Report findings verbatim. Suggest scripts/ extraction for EXTRACTABLE_CODE violations.
 
-Advisory codes emitted for fenced code blocks containing MCP migration targets:
-- `MCP_DEBT_BD` — raw `bd` invocation (should route via MCP tool surface)
-- `MCP_DEBT_GIT` — raw `git` invocation (should route via MCP tool surface)
-- `MCP_DEBT_HANDLER_BASH` — `HANDLERS_DIR` bash expansion pending migration
-
-Advisory codes do not block on their own; use `--strict` to promote them to failures.
-
 ---
 
 ## Mode 3: audit-fleet
@@ -415,7 +408,7 @@ python3 skills/skill-forge/scripts/scan-codex-compat.py
 ```
 
 Use the output to report skill discovery, description hard-limit checks,
-extractable-code detection, MCP migration debt scores, and Codex portability
+extractable-code detection and Codex portability
 findings. Do not dispatch to a separate `skill-auditor` agent; that worker has
 been retired.
 
@@ -457,12 +450,6 @@ If only one primitive still uses a standard, fold it back into that skill's
 `references/`. Drop the catalog entry. Remove `requires_standards:` declarations.
 
 See `meta/docs/PRIMITIVES.md` §7 for full maturity-arc rationale.
-
-## Related Skills
-
-When a skill's core action is calling a cognovis-tools MCP tool, use
-`mcp-tool-forge` to author the tool first. Skill prose that calls MCP tools
-should reference the tool's SKILL.md for the contract.
 
 ## Do NOT
 

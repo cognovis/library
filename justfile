@@ -68,6 +68,6 @@ cdx bead-id:
 cdx-quick bead-id:
     cdx -bq {{bead-id}}
 
-# Launch the shared cognovis-tools review path with a Codex reviewer
+# Launch the shared Bead review path with a Codex reviewer
 cdx-review bead-id:
     cdx -br {{bead-id}}

@@ -168,7 +168,7 @@ The installer is idempotent and uses `ln -sfn` so updates to this repo are immed
 |------|-------------|
 | `-b`/`--bead <id>` | Full bead orchestrator run with session-close |
 | `-bq`/`--bead-quick <id>` | Quick-fix run (lighter orchestration) |
-| `-br`/`--bead-review <id>` | Thin adapter to `bin/lib/bead-review-client.py`. The shared client calls cognovis-tools for `bead_show`, starts a fresh role-scoped reviewer with `agent_session_start`, validates its terminal result, and persists it with `bead_review_write`. Claude defaults to Opus and accepts an explicit `--model`; Codex accepts `-m`/`--model`. The child session has no MCP surface and bypass flags are rejected. Mutually exclusive with `-b`/`-bq`. |
+| `-br`/`--bead-review <id>` | Thin adapter to the current Bead review path. Bead state is read with public `bd` commands and reviewer execution uses ACPX. Claude defaults to Opus and accepts an explicit `--model`; Codex accepts `-m`/`--model`. Bypass flags are rejected. Mutually exclusive with `-b`/`-bq`. |
 
 The review client is the trust boundary: bead-authored fields are serialized into a
 bounded, provenance-tagged untrusted-data envelope; provider output must contain one
@@ -321,7 +321,7 @@ required.
 | **Command / Prompt** | `.claude/commands/<name>.md` (slash cmds) | Not supported in Codex — use skills instead | N/A | TBD | **Per-harness** — Claude Code has first-class slash commands; Codex custom prompt targets are not used by the Library (bead `CL-qzw`) |
 | **Guardrail / Hook** | `.claude/settings.json` `hooks` section (scripts in `.claude/hooks/`) + 15 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | TBD | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
 | **Standard** | Loaded by consuming skills/agents via `requires_standards` | `.agents/standards/<name>/` file convention | TBD | TBD | **Library-managed** — not an invocation primitive; installed as dependency content, never auto-injected |
-| **MCP-Server** | `mcpServers` in `.mcp.json` (or `--mcp-config`) | `mcp_servers` TOML in `~/.codex/config.toml` | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config syntax is not portable. The generic installer supports Claude Code, Codex, OpenCode, Antigravity-compatible JSON config, and Cursor. `cognovis-tools` intentionally declares only Claude Code, Codex, and Cursor Agent. |
+| **MCP-Server** | `mcpServers` in `.mcp.json` (or `--mcp-config`) | `mcp_servers` TOML in `~/.codex/config.toml` | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config syntax is not portable. The generic installer supports Claude Code, Codex, OpenCode, Antigravity-compatible JSON config, and Cursor. Each server declares its supported harnesses. |
 | **Plugin** | External harness bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | TBD | **Per-harness** — both harnesses support their own plugin formats; this is not a Library Package or requested-root type |
 | **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
 | **Workspace** | Library CLI metadata; members project individually | Same | Same | Same | **Metadata-portable** — no harness artifact; resolved members inherit their own portability |

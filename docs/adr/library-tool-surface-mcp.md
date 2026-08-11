@@ -1,13 +1,13 @@
 ---
 adr: "0007"
 title: "Library tool surface as a second species of MCP server"
-status: accepted
+status: superseded
 date: 2026-05-27
 bead: "CL-ugwe"
 deciders:
   - Malte Sussdorff
 supersedes: []
-superseded_by: []
+superseded_by: ["CL-tbsz"]
 related_adrs: ["0002", "0005", "0006"]
 ---
 
@@ -15,9 +15,10 @@ related_adrs: ["0002", "0005", "0006"]
 
 ## Status
 
-Accepted with the 2026-07 Bead-family retirement amendment below. The
-`library-tool-surface` species remains valid, but recurring CLI flag mistakes
-alone are no longer sufficient justification for an MCP wrapper.
+Superseded by `CL-tbsz`, which retired the only first-party implementation.
+The `library-tool-surface` species remains available as a schema category, but
+there is no active first-party example and recurring CLI flag mistakes alone
+are not sufficient justification for an MCP wrapper.
 
 ## Context
 

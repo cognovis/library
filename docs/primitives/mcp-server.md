@@ -32,7 +32,7 @@ The `mcp_server_entry.species` field in `library.yaml` is the discriminator
 | | `external-capability` | `library-tool-surface` |
 |---|---|---|
 | **Provider** | Third-party process or remote service | First-party Library |
-| **Examples** | `open-brain`, `executive-circle`, `pencil`, `heypresto` | `cognovis-tools` (planned) |
+| **Examples** | `open-brain`, `executive-circle`, `pencil`, `heypresto` | No active first-party example |
 | **Backs** | Remote data / encrypted formats / vendor APIs | Library Scripts and a closed enum of CLI verbs |
 | **Why MCP and not CLI** | Protocol is the only access path (encrypted formats, remote service) or the only path that works across harnesses including web/mobile | Eliminates flag-guessing failures on high-frequency CLIs; provides typed, server-validated invocation |
 
@@ -129,11 +129,9 @@ species. Adding a new `script_id` is a catalog edit, not a runtime decision.
   protocol's `tools/list` is the discovery surface; mirroring it creates
   two sources of truth that drift.
 
-**Worked examples.**
-
-| MCP Server | Why it is library-tool-surface |
-|-----------|-------------------------------|
-| `cognovis-tools` | First-party server for provider-session, Git, log, release, and closed-registry Script operations. Its retired `bead_*` family is the counter-example that established the stable-CLI rule above; Beads uses direct `bd`. |
+There is currently no active first-party `library-tool-surface` server. The
+species remains available for a future server that meets the invariant test
+above; ordinary wrappers around stable CLIs do not qualify.
 
 ---
 
@@ -145,9 +143,9 @@ only species-discriminating field is `species` (optional, defaults to
 
 ```yaml
 mcp_servers:
-  - name: cognovis-tools
-    description: First-party Library tool surface for high-frequency CLIs
-    source: https://github.com/cognovis/cognovis-core/tree/main/mcp-servers/cognovis-tools
+  - name: protocol-boundary
+    description: First-party service owning a material protocol invariant
+    source: https://github.com/example/library-services/tree/main/protocol-boundary
     species: library-tool-surface
     coding_strategy: mcp
     install:
@@ -168,13 +166,9 @@ external repo for third-party). The Library installer (`/library use`)
 writes the per-harness MCP registration pointing at the source location. No
 server code is vendored into the consumer project; only registration.
 
-A `library-tool-surface` server registers into the supported launcher harnesses.
-For `cognovis-tools`, that set is exactly Claude Code (`~/.claude.json`), Codex
-(`~/.codex/config.toml`), and Cursor Agent (`~/.cursor/mcp.json`). Per
-ADR-0007, **registration is decoupled from orchestration role**: registering
-the server means agents running in that harness can call its typed tools; it
-does NOT make the harness an orchestration runner. Full bead orchestration
-runs only under Claude Code and Codex; Cursor Agent is an implementation-surface
-consumer that registers the server so its agents do not flag-guess CLIs.
+A `library-tool-surface` server registers only into the launcher harnesses it
+explicitly supports. Per ADR-0007, **registration is decoupled from
+orchestration role**: registering a server means agents in that harness can
+call its tools; it does not make the harness an orchestration runner.
 
 ---

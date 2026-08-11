@@ -1,13 +1,13 @@
 ---
 adr: "0008"
 title: "Intentional release lifecycle: beads are release truth, pipelines are evidence"
-status: accepted
+status: superseded
 date: 2026-05-29
 bead: "CL-khyy.1"
 deciders:
   - Malte Sussdorff
 supersedes: []
-superseded_by: []
+superseded_by: ["CL-tbsz"]
 related_adrs: ["0006", "0007"]
 ---
 
@@ -15,12 +15,13 @@ related_adrs: ["0006", "0007"]
 
 ## Status
 
-Accepted. This ADR locks the repo-agnostic release vocabulary, invariants, and
+Superseded in part by `CL-tbsz`. The release vocabulary, metadata contract,
+and lifecycle invariants remain active, while the private MCP transport was
+retired. This ADR originally locked the repo-agnostic release vocabulary and
 the `cliff.toml` role. It implements nothing. The factual contract (metadata
 schema, lifecycle states, gate-declaration shape) lives in the companion
-standard `standards/release/release-lifecycle.md`; the typed-tool surface that
-operates on it is built under `CL-ugwe.11` (`release.*` in cognovis-tools)
-against this contract.
+standard `standards/release/release-lifecycle.md`; `cognovis-release` helper
+scripts now operate on it through the public `bd` CLI.
 
 ## Context
 
@@ -37,11 +38,9 @@ ordinary pushes *verify*; an explicit release trigger *publishes*; beads are
 marked *released* only after the artifact exists and any repo-specific
 deployment / e2e gate passes.
 
-This ADR also feeds ADR-0007: release truth stored as bead metadata is only
-trustworthy if it is mutated through a closed, server-validated surface. The
-`release.*` family of the `cognovis-tools` `library-tool-surface` server is
-that surface; its safety property (closed catalog, write-once) is what makes
-"metadata is the source of truth" hold.
+Release truth remains guarded by the helper's closed operations, schema
+validation, write-once checks, and gate evidence requirements. It does not
+depend on a continuously running private MCP daemon.
 
 ## Decision
 
@@ -110,24 +109,22 @@ Old closed beads are not swept into release notes. A one-time **baseline
 backfill** marks pre-existing closed beads as `released` under a chosen
 cutoff/version, so the candidate query starts clean.
 
-### Decision 9: The contract is consumed by `cognovis-tools` `release.*`
+### Decision 9: The contract is consumed by `cognovis-release` helpers
 
-This is the ADR-0007 bridge. The lifecycle is operated through the
-`library-tool-surface` server, and the contract carries three tool-level
+The lifecycle is operated through deterministic helper scripts backed by the
+public `bd` CLI, and the contract carries three operation-level
 invariants:
 
 1. **Schema location.** The `release_note` / `release` metadata schema lives in
    `standards/release/release-lifecycle.md` and is referenced by both `bd`
-   metadata usage and the `release.*` MCP tool schemas. It is **not** duplicated
+   metadata usage and the release helper schemas. It is **not** duplicated
    into `library.schema.json`. Single source.
 2. **Named surface.** The decisions imply a minimal closed surface:
-   `release.candidates` (the Decision 3 query), `release.stamp(version,
-   evidence)` (writes `release.*` onto candidate beads), `release.show(version)`
-   (the view). `CL-ugwe.11` implements these; tool naming is fixed here so it is
-   not re-derived.
+   `candidates` (the Decision 3 query), `stamp(version, evidence)` (writes
+   `release.*` onto candidate beads), and `show(version)` (the view).
 3. **Write-once + gate-guarded.** `release.version` on a bead is **write-once,
-   set only via `release.*`** — this is the integrity guarantee behind
-   Decision 2 and the closed-catalog safety property of ADR-0007. `release.stamp`
+   set only via the release helper** — this is the integrity guarantee behind
+   Decision 2. `stamp`
    refuses unless every declared gate (Decision 6) has evidence; on failure beads
    stay unreleased (Decision 7); re-runs are no-ops.
 
@@ -154,7 +151,7 @@ Canonical definition in the standard. Shape:
 ```
 
 `release_note` is author-supplied at/after closure (inclusion intent).
-`release` is written only by `release.stamp` (evidence), and `release.version`
+`release` is written only by the release helper's `stamp` operation (evidence), and `release.version`
 is write-once.
 
 ## Alternatives Considered
@@ -172,8 +169,7 @@ is write-once.
 
 - Release notes become a function of bead metadata; the changelog is generated
   output. Authors set `release_note.include` deliberately.
-- `release.*` tools (`CL-ugwe.11`) gain a locked contract to implement against;
-  `CL-ugwe.11` depends on this ADR.
+- `cognovis-release` helpers have a locked contract to implement against.
 - Each adopting repo must declare its scheme (Decision 4) and gate set
   (Decision 6), and run a baseline backfill (Decision 8) once.
 - `cliff.toml` stays; its role narrows to commit-derived rendering.
@@ -183,7 +179,7 @@ is write-once.
 | Scenario | Recovery |
 |---|---|
 | Bead-sourced changelog proves worse than git-cliff for a repo | That repo documents the bypass (Decision 5) and renders from git-cliff only; the metadata contract still records released-state. |
-| `release.stamp` write-once blocks a legitimate re-version | Correction is an explicit, audited metadata edit; the write-once rule is enforced by `release.*`, not the DB, so an operator override path exists. |
+| `stamp` write-once blocks a legitimate re-version | Correction is an explicit, audited metadata edit; the write-once rule is enforced by the helper, not the DB, so an operator override path exists. |
 | Gate evidence schema too strict for an early repo | `release.e2e_evidence` accepts an artifact-or-URL string; gates are per-repo declared, so a repo can declare a minimal gate set initially. |
 
 ## Success Criteria
@@ -194,17 +190,16 @@ is write-once.
 4. Failure behavior leaves beads unreleased; release runs idempotent.
 5. `cliff.toml` integration-or-bypass rule defined.
 6. MIRA and Polaris named as first rollout targets; others later.
-7. The three cognovis-tools locks (schema location, named surface, write-once +
-   gate-guarded) are stated so `CL-ugwe.11` implements against a fixed contract.
+7. The schema location, named operations, and write-once + gate-guarded
+   behavior are fixed for the release helper.
 
 ## Cross-References
 
 - `standards/release/release-lifecycle.md` — the factual contract (states,
   metadata schema, gate-declaration shape, invariants).
-- [ADR-0007](library-tool-surface-mcp.md) — `library-tool-surface` species;
-  `release.*` is one of its tool families. Write-once is the closed-catalog
-  safety property.
+- [ADR-0007](library-tool-surface-mcp.md) — historical transport decision,
+  superseded for release operations by `CL-tbsz`.
 - [ADR-0006](workflow-primitive.md) — release generation can be a workflow.
 - Epic `CL-khyy` (cross-repo release standard); `CL-khyy.1` (this decision);
-  `CL-ugwe.11` (`release.*` implementation, depends on this ADR).
+  `CL-ugwe.11` (original implementation lineage).
 - Rollout targets: MIRA, Polaris first.

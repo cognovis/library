@@ -207,14 +207,14 @@ class TestCmdStatusImpl:
 
         make_lockfile(tmp_path, source_commit=INSTALLED_SHA)
         lockfile = yaml.safe_load((tmp_path / ".library.lock").read_text())
-        lockfile["installed"][0]["name"] = "cognovis-tools"
+        lockfile["installed"][0]["name"] = "supervised-test-server"
         lockfile["installed"][0]["type"] = "mcp"
         (tmp_path / ".library.lock").write_text(yaml.dump(lockfile))
         catalog = {
             "library": {
                 "mcp_servers": [
                     {
-                        "name": "cognovis-tools",
+                        "name": "supervised-test-server",
                         "supervised_local_service": {
                             "health_check": {"command": "status", "args": []}
                         },
@@ -244,14 +244,14 @@ class TestCmdStatusImpl:
 
         make_lockfile(tmp_path, source_commit=INSTALLED_SHA)
         lockfile = yaml.safe_load((tmp_path / ".library.lock").read_text())
-        lockfile["installed"][0]["name"] = "cognovis-tools"
+        lockfile["installed"][0]["name"] = "supervised-test-server"
         lockfile["installed"][0]["type"] = "mcp"
         (tmp_path / ".library.lock").write_text(yaml.dump(lockfile))
         catalog = {
             "library": {
                 "mcp_servers": [
                     {
-                        "name": "cognovis-tools",
+                        "name": "supervised-test-server",
                         "supervised_local_service": {
                             "health_check": {"command": "status", "args": []}
                         },
@@ -446,7 +446,7 @@ class TestStatusCLI:
         """Top-level status must pass catalog metadata to runtime checks."""
         import library as library_cli
 
-        catalog = {"library": {"mcp_servers": [{"name": "cognovis-tools"}]}}
+        catalog = {"library": {"mcp_servers": [{"name": "supervised-test-server"}]}}
         with patch.object(
             library_cli, "_resolve_catalog_root", return_value=tmp_path
         ), patch.object(

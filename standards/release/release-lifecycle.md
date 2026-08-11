@@ -10,8 +10,8 @@ tags:
 # Release Lifecycle Contract
 
 > Factual contract for [ADR-0008](../../docs/adr/intentional-release-lifecycle.md).
-> Referenced by `bd` metadata usage and by the `cognovis-tools` `release.*`
-> typed-tool schemas (`CL-ugwe.11`). This is the single source for the release
+> Referenced by `bd` metadata usage and the `cognovis-release` helper scripts.
+> This is the single source for the release
 > metadata shape — it is NOT duplicated into `docs/schema/library.schema.json`.
 
 ## Lifecycle states

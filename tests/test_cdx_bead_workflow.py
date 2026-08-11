@@ -980,7 +980,6 @@ def test_cdx_bead_modes_invoke_active_loop_through_acpx_only(
     for retired_gateway_term in (
         "agent_session_start",
         "agent_session_continue",
-        "cognovis-tools",
         "provider-neutral gateway",
         "native Core subagent",
     ):

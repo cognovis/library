@@ -48,10 +48,10 @@ def make_supervised_catalog() -> dict:
         "library": {
             "mcp_servers": [
                 {
-                    "name": "cognovis-tools",
+                    "name": "supervised-test-server",
                     "source": (
                         "https://github.com/cognovis/library-core/blob/main/"
-                        "mcp-servers/cognovis-tools/pyproject.toml"
+                        "mcp-servers/supervised-test-server/pyproject.toml"
                     ),
                     "supervised_local_service": {"url": "http://127.0.0.1:8765/mcp"},
                     "install": {
@@ -131,7 +131,7 @@ def test_regression_supervised_deploy_uses_one_clean_expected_revision(
 
     _patch_harness_helpers(monkeypatch)
     deploy_path = tmp_path / "deploy"
-    project_path = deploy_path / "mcp-servers" / "cognovis-tools"
+    project_path = deploy_path / "mcp-servers" / "supervised-test-server"
     project_path.mkdir(parents=True)
     checkout = McpDeployCheckout(path=deploy_path, source_revision=REMOTE_SHA)
     monkeypatch.setattr(
@@ -151,7 +151,7 @@ def test_regression_supervised_deploy_uses_one_clean_expected_revision(
 
     result = install_mcp(
         make_supervised_catalog(),
-        "cognovis-tools",
+        "supervised-test-server",
         tmp_path,
         scope="global",
         harness="claude_code",
