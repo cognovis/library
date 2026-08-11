@@ -552,6 +552,10 @@ library:
         - standard:judge-layer
         - standard:english-only
         - standard:no-emoji
+      runtime_requirements:
+        binaries:
+          - npx
+          - uv
       metadata:
         library:
           source_catalog: library-platform

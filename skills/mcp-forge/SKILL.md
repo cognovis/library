@@ -37,6 +37,7 @@ Build and migrate Python MCP servers through the official Python SDK v2.
 - Reject TypeScript and every other non-Python server implementation.
 - Route `cognovis-tools` tool families to `mcp-tool-forge`.
 - Do not implement product auth, access-control, PII, or compliance changes without the required human review.
+- Require explicit confirmation before running conformance against a non-local MCP endpoint.
 
 ## Workflow
 

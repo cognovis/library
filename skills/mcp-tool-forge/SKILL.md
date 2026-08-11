@@ -1,10 +1,11 @@
 ---
 name: mcp-tool-forge
 description: >-
-  Author and validate new tools for the cognovis-tools MCP server (library-tool-surface species).
-  Use when adding a new MCP tool family, validating an existing tool against the json-envelope
-  contract, or creating a reference template. Triggers on: mcp tool, cognovis-tools tool,
-  new tool family, tool template, json envelope, library-tool-surface.
+  use when: authoring or validating an individual tool family for the cognovis-tools
+  MCP server and its json-envelope contract. NOT for: building or migrating a complete
+  Python MCP server; route that work to mcp-forge. boundary: mcp-tool-forge owns
+  registry-backed cognovis-tools entries, while mcp-forge owns generic Python server
+  architecture, transports, SDK migration, and conformance.
 requires_standards: [agentic-primitives, development, english-only, no-emoji]
 ---
 

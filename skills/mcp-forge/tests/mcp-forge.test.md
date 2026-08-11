@@ -41,3 +41,21 @@
 **Input:** Follow a migration checklist that places server identity in `DiscoverResult.serverInfo` and uses error `-32004`.
 **Expected behavior:** Reject the RC shapes and return to the final 2026-07-28 specification.
 **Pass criteria:** Identity is associated with result `_meta`, and the final unsupported-version error is `-32022`.
+
+## Test 8 — cognovis-tools server migration
+
+**Input:** Migrate the complete cognovis-tools Python MCP server to SDK v2 and the stateless 2026-07-28 protocol.
+**Expected behavior:** Route the server-wide architecture and migration work to `mcp-forge`.
+**Pass criteria:** Do not route the request to `mcp-tool-forge`, which owns individual cognovis-tools tool families only.
+
+## Test 9 — Multi-worker MRTR and subscriptions
+
+**Input:** Deploy a Streamable HTTP server with four workers, `Resolve(...)`, and change subscriptions.
+**Expected behavior:** Require shared request-state keys and audience plus an external cross-process subscription bus.
+**Pass criteria:** Verification retries MRTR across workers and observes a cross-worker subscription event.
+
+## Test 10 — Local stdio server
+
+**Input:** Create a local Python MCP server launched by an IDE over stdio.
+**Expected behavior:** Use the stdio transport contract and keep stdout protocol-clean.
+**Pass criteria:** Verification exercises modern discovery and any promised legacy handshake over the real subprocess transport.

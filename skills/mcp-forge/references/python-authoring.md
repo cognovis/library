@@ -15,12 +15,21 @@
 - Keep side effects behind narrow application services that can be tested without starting a transport.
 - Use lifespan state or injected dependencies for database pools, HTTP clients, and caches. Close them through the lifespan boundary.
 - Keep tool and list ordering deterministic where the application controls it.
+- Set SDK `cache_hints` deliberately for cacheable list and read results. Use private scope for authenticated, tenant-specific, or per-user data; use public scope only when sharing the result across callers is safe.
+
+## Transport Selection
+
+- Use stdio for local subprocess servers. Keep `mcp.run()` under `if __name__ == "__main__":`, reserve stdout for the protocol, and send operator output through logging to stderr.
+- Use Streamable HTTP for deployed servers. Configure transport arguments on `run()` or `streamable_http_app()`, not on `MCPServer`.
+- For a stdio server that promises legacy compatibility, verify both modern `server/discover` and the handshake-era path; rely on the SDK client's auto probe and fallback instead of implementing negotiation in application code.
 
 ## Stateless Boundary
 
 Assume each modern request can reach any worker. Do not keep correctness-critical cross-request data only in a process-local session object. Persist durable state externally or return an opaque handle that the client supplies on the next call.
 
 `streamable_http_app()` serves modern and legacy protocol eras. The modern 2026-07-28 path is sessionless. The `stateless_http` option changes only the legacy path: enabling it removes legacy back-channels, so server-initiated requests fail and legacy notifications are dropped. Choose it only after examining those legacy behaviors.
+
+Multi-process deployments need two additional shared boundaries. When MRTR or `Resolve(...)` can retry on another worker, configure `RequestStateSecurity` with the same key ring and the same audience across replicas; a stable shared server name supplies that audience unless it is set explicitly. When subscriptions must cross processes, implement `SubscriptionBus` over an external pub/sub backend and pass it to every replica; the SDK's in-memory bus does not cross process boundaries.
 
 ## Protocol Features
 

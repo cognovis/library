@@ -460,9 +460,10 @@ See `meta/docs/PRIMITIVES.md` §7 for full maturity-arc rationale.
 
 ## Related Skills
 
-When a skill's core action is calling a cognovis-tools MCP tool, use
-`mcp-tool-forge` to author the tool first. Skill prose that calls MCP tools
-should reference the tool's SKILL.md for the contract.
+When creating or migrating a complete Python MCP server, use `mcp-forge`. When a
+skill's core action is calling a cognovis-tools MCP tool, use `mcp-tool-forge` to
+author the tool first. Skill prose that calls MCP tools should reference the
+tool's SKILL.md for the contract.
 
 ## Do NOT
 
