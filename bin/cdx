@@ -244,7 +244,10 @@ run_codex_tui() {
 select_bead_codex_permission_args() {
     if ${bead_dangerous_full_auto}; then
         echo "WARNING: --bead-dangerous-full-auto selected; bead-mode Codex will bypass approvals and sandboxing." >&2
-        bead_codex_permission_args=("--dangerously-bypass-approvals-and-sandbox")
+        bead_codex_permission_args=(
+            "--dangerously-bypass-approvals-and-sandbox"
+            "-c" "mcp_servers.beads.required=true"
+        )
         return
     fi
 
@@ -253,7 +256,11 @@ select_bead_codex_permission_args() {
         return
     fi
 
-    bead_codex_permission_args=("--sandbox" "workspace-write" "-c" 'approval_policy="never"')
+    bead_codex_permission_args=(
+        "--sandbox" "workspace-write"
+        "-c" 'approval_policy="never"'
+        "-c" "mcp_servers.beads.required=true"
+    )
 }
 
 sanitize_name() {
@@ -551,7 +558,11 @@ launch_bead_implementation_loop() {
     local worktree_dir
     worktree_dir="$(ensure_bead_worktree "$active_bead")" || return $?
 
-    local prompt="Bead ID: ${active_bead}. Invoke the installed bead-loop-implementer agent exactly once with execution_mode=${execution_mode}, review_preset=standard, and the supplied worktree. That agent owns the complete one-Bead lifecycle: claim, context admission, the shared bead-execution-loop, focused evidence, and canonical Session Close. Run its one opposite-family review through the installed acpx-dispatch.py transport owned by the acpx-dispatch skill, and do not select or reconstruct another review transport. Do not reproduce merge, push, close, sync, or cleanup mechanics outside the lifecycle owner."
+    local prompt="Bead ID: ${active_bead}. Invoke the installed bead-loop-implementer agent exactly once with execution_mode=${execution_mode}, review_preset=standard, and the supplied worktree. That agent owns the complete one-Bead lifecycle: claim, context admission, the shared bead-execution-loop, focused evidence, and canonical Session Close. Run its one opposite-family review through the installed acpx-dispatch.py transport owned by the acpx-dispatch skill, and do not select or reconstruct another review transport. Do not reproduce merge, push, close, sync, or cleanup mechanics outside the lifecycle owner.
+
+This is a Codex MCP-backed Bead run. After this launcher's read-only bootstrap, set the MCP workspace once through mcp__beads__context, then perform every live Bead read or mutation through the configured beads MCP server: mcp__beads__show, mcp__beads__blocked or mcp__beads__list for dependency state, mcp__beads__claim, mcp__beads__update, and mcp__beads__close. Pass workspace_root=${worktree_dir} on every call and do not invoke local bd inside the sandbox.
+
+Before Session Close, write a ccore_beads_mcp_preflight_v1 JSON receipt from fresh mcp__beads__show results. Invoke ccore session-close run with --bead-backend mcp and --bead-mcp-preflight-receipt. A retryable bead_mcp_finalization_required result is the same canonical Session Close awaiting its post-containment MCP action: close exactly the requested Bead through mcp__beads__close, verify closed status through mcp__beads__show, write ccore_beads_mcp_finalize_receipt_v1 using the returned session_id and action_digest, then invoke ccore session-close resume with --bead-mcp-finalization-receipt. Never run local Bead sync for this remote backend."
 
     if [[ "$execution_mode" == "quick" ]]; then
         prompt+=" This is unconditional explicit Quick for every executable leaf and starts with the minimal capability set. Do not run a preliminary bead review or add optional ceremony unless new acceptance evidence requires a named capability."

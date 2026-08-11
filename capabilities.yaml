@@ -30,6 +30,21 @@ capabilities:
       tools: [Bash]
     codex:
       sandbox_mode: workspace-write
+  - name: beads_mcp_lifecycle
+    description: Read and mutate Beads through the configured remote Beads MCP server.
+    claude:
+      tools:
+        - mcp__beads__context
+        - mcp__beads__show
+        - mcp__beads__blocked
+        - mcp__beads__list
+        - mcp__beads__claim
+        - mcp__beads__update
+        - mcp__beads__close
+      mcpServers: [beads]
+    codex:
+      mcp_servers: [beads]
+      sandbox_mode: workspace-write
   - name: bash_read_only
     description: Run read-only shell commands for inspection and local analysis.
     claude:
