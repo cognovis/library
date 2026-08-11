@@ -29,7 +29,7 @@ Build and migrate Python MCP servers through the official Python SDK v2.
 ## Outputs
 
 - Python MCP server code or an evidence-backed migration diff.
-- Focused tests, conformance results, and explicit compatibility evidence.
+- Focused tests, applicable conformance results, and explicit compatibility evidence.
 
 ## Exclusions
 
@@ -45,7 +45,7 @@ Build and migrate Python MCP servers through the official Python SDK v2.
 4. Treat `references/source-hierarchy.md` as the authority order; never implement protocol wire changes by hand when SDK v2 owns them.
 5. Preserve application state only through explicit dependencies, lifespan state, databases, or server-minted handles; never depend on protocol sessions.
 6. Implement the smallest typed vertical slice and keep tool side effects explicit and testable.
-7. Apply every gate in `references/verification.md` and report modern, legacy, and conformance evidence separately.
+7. Apply every applicable gate in `references/verification.md` and report modern, legacy, and conformance-or-N/A evidence separately.
 
 ## Do NOT
 
@@ -61,4 +61,5 @@ Build and migrate Python MCP servers through the official Python SDK v2.
 | `references/python-authoring.md` | Python SDK v2 greenfield contract |
 | `references/migration-v1-v2.md` | Ordered Python SDK v1-to-v2 migration contract |
 | `references/verification.md` | Unit, conformance, and client compatibility gates |
+| `scripts/audit_mcp_v1.py` | Deterministic migration-signal inventory |
 | `tests/mcp-forge.test.md` | Routing and behavior fixtures |

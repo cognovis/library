@@ -554,8 +554,13 @@ library:
         - standard:no-emoji
       runtime_requirements:
         binaries:
-          - npx
           - uv
+      scripts:
+        - path: scripts/audit_mcp_v1.py
+          role: helper
+          entrypoint: false
+          language: python
+          output_contract: json-envelope
       metadata:
         library:
           source_catalog: library-platform
