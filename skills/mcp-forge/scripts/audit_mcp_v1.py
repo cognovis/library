@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# ///
 """Inventory deterministic Python MCP v1 migration signals in a repository."""
 
 from __future__ import annotations
@@ -6,44 +9,72 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import UTC, datetime
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
 
 SIGNALS = (
-    "FastMCP",
-    "mcp.server.fastmcp",
-    "streamable_http_app",
-    "session_manager",
-    "Mcp-Session-Id",
-    "initialize",
-    "ctx.elicit",
-    "ping",
-    "logging/setLevel",
-    "notifications/roots/list_changed",
-    "tasks/",
-    "resources/subscribe",
-    "resources/unsubscribe",
-    "notifications/resources/updated",
+    ("fastmcp", re.compile(r"\bFastMCP\b")),
+    ("fastmcp-module", re.compile(r"\bmcp\.server\.fastmcp\b")),
+    ("mcp-error", re.compile(r"\bMcpError\b")),
+    ("shared-version", re.compile(r"\bmcp\.shared\.version\b")),
+    ("streamable-http-app", re.compile(r"\bstreamable_http_app\b")),
+    ("streamable-http-client", re.compile(r"\bstreamablehttp_client\b")),
+    ("session-manager", re.compile(r"\bsession_manager\b")),
+    ("session-header", re.compile(r"Mcp-Session-Id")),
+    ("initialize-method", re.compile(r"(?<![\w])initialize(?![\w])")),
+    ("elicitation", re.compile(r"\bctx\.elicit\b")),
+    ("ping-method", re.compile(r"(?<![\w])ping(?![\w])")),
+    ("logging-set-level", re.compile(r"logging/setLevel")),
+    ("roots-list-changed", re.compile(r"notifications/roots/list_changed")),
+    (
+        "experimental-tasks",
+        re.compile(r"(?:\bmcp(?:\.[A-Za-z_]\w*)*\.experimental\.tasks\b|io\.modelcontextprotocol/tasks)"),
+    ),
+    ("resource-subscribe", re.compile(r"(?:resources/subscribe|\bsubscribe_resource\b)")),
+    ("resource-unsubscribe", re.compile(r"resources/unsubscribe")),
+    (
+        "resource-updated",
+        re.compile(r"(?:notifications/resources/updated|\bsend_resource_updated\b)"),
+    ),
+    ("get-context", re.compile(r"\bmcp\.get_context\s*\(")),
+    ("context-fastmcp", re.compile(r"\bctx\.fastmcp\b")),
+    ("mcp-cli-dependency", re.compile(r"\bmcp\s*\[\s*cli\s*\]")),
+    ("direct-httpx", re.compile(r"^\s*(?:from\s+httpx\b|import\s+httpx\b)")),
 )
 SKIP_DIRECTORIES = {
     ".agents",
     ".claude",
     ".codex",
+    ".beads",
+    ".eggs",
     ".git",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
+    ".tox",
     "__pycache__",
+    "build",
+    "dist",
+    "env",
+    "htmlcov",
     "node_modules",
+    "site-packages",
+    "venv",
 }
-TEXT_SUFFIXES = {".json", ".lock", ".md", ".py", ".toml", ".txt", ".yaml", ".yml"}
+TEXT_SUFFIXES = {".json", ".py", ".toml", ".txt", ".yaml", ".yml"}
 
 
 def _meta() -> dict[str, str]:
-    generated_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    generated_at = (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     return {
         "contract_version": "1",
         "producer": "audit_mcp_v1",
@@ -99,8 +130,8 @@ def audit(root: Path) -> dict[str, Any]:
             continue
         files_scanned += 1
         for line_number, line in enumerate(lines, start=1):
-            for signal in SIGNALS:
-                if signal in line:
+            for signal, pattern in SIGNALS:
+                if pattern.search(line):
                     matches.append(
                         {
                             "path": str(path.relative_to(resolved)),
@@ -110,14 +141,25 @@ def audit(root: Path) -> dict[str, Any]:
                     )
 
     return {
-        "status": "warning" if read_errors else "ok",
+        "status": "warning" if read_errors or files_scanned == 0 else "ok",
         "summary": f"Found {len(matches)} MCP v1 migration signal matches.",
         "data": {
             "root": str(resolved),
             "files_scanned": files_scanned,
             "matches": matches,
         },
-        "errors": read_errors,
+        "errors": read_errors
+        or (
+            [
+                {
+                    "code": "no-files-scanned",
+                    "message": f"No supported text files were found under {resolved}.",
+                    "suggested_fix": "Pass the repository root and confirm its source files are present.",
+                }
+            ]
+            if files_scanned == 0
+            else []
+        ),
         "next_steps": [
             {
                 "id": "classify-matches",
@@ -127,7 +169,7 @@ def audit(root: Path) -> dict[str, Any]:
             }
         ],
         "open_items": [],
-        "meta": {**_meta(), "signals": list(SIGNALS)},
+        "meta": {**_meta(), "signals": [name for name, _ in SIGNALS]},
     }
 
 

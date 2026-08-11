@@ -558,7 +558,7 @@ library:
       scripts:
         - path: scripts/audit_mcp_v1.py
           role: helper
-          entrypoint: false
+          entrypoint: true
           language: python
           output_contract: json-envelope
       metadata:

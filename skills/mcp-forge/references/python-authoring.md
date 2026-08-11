@@ -20,7 +20,7 @@
 ## Transport Selection
 
 - Use stdio for local subprocess servers. Keep `mcp.run()` under `if __name__ == "__main__":`, reserve stdout for the protocol, and send operator output through logging to stderr.
-- Use Streamable HTTP for deployed servers. Configure transport arguments on `run()` or `streamable_http_app()`, not on `MCPServer`. Set `transport_security=TransportSecuritySettings(...)` with explicit `allowed_hosts` and `allowed_origins` for the deployed hostname; do not rely on localhost defaults or disable validation by changing only `host`.
+- Use Streamable HTTP for deployed servers. Configure transport arguments on `run()` or `streamable_http_app()`, not on `MCPServer`. Set `transport_security=TransportSecuritySettings(...)` with explicit `allowed_hosts` and `allowed_origins` for the deployed hostname; include both the bare hostname and `hostname:*` when non-default ports are valid. Do not rely on localhost defaults or disable validation by changing only `host`.
 - For a stdio server that promises legacy compatibility, verify both modern `server/discover` and the handshake-era path; rely on the SDK client's auto probe and fallback instead of implementing negotiation in application code.
 
 ## Stateless Boundary
