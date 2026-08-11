@@ -2505,6 +2505,11 @@
               "type": "string",
               "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
               "default": "index.ts"
+            },
+            "pi_package": {
+              "description": "Register this bundled Pi extension as a project-local package in .pi/settings.json so plain `pi` loads it.",
+              "type": "boolean",
+              "default": false
             }
           }
         }

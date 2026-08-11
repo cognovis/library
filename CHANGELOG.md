@@ -2,6 +2,15 @@
 
 ### Changed
 
+- *(CL-5i65, Pi extensions)* Bundled Pi extensions can now opt into native
+  project-local package registration with `pi_package: true`. The Library
+  validates the bundle's `package.json` Pi manifest, merges a settings-relative
+  source into `.pi/settings.json` without disturbing existing settings, keeps
+  sync idempotent, and unregisters only that source on removal. `solo-workbench`
+  opts in, so `library pi-extension use solo-workbench` is followed by plain
+  `pi`; Just remains the separate launcher surface for the ACPX clean-room
+  workbench.
+
 - *(CL-2p73, architecture)* ADR-0011 establishes the heterogeneous marketplace,
   cross-catalog Workspace, durable foreign-cache, and distribution-rights
   architecture. Six canonical authority axes and one provider capability contract

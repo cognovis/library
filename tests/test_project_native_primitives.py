@@ -95,6 +95,16 @@ def _bundle_project(tmp_path: Path) -> Path:
     (source / "lib" / "value.ts").write_text('export const value = "ready";\n')
     (source / "prompts").mkdir()
     (source / "prompts" / "system.md").write_text("Use the managed profile.\n")
+    (source / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "@example/pi-workbench",
+                "private": True,
+                "pi": {"extensions": ["./index.ts"]},
+            }
+        )
+        + "\n"
+    )
     catalog = {
         "library": {
             "pi_extensions": [
@@ -103,6 +113,7 @@ def _bundle_project(tmp_path: Path) -> Path:
                     "source": str(source),
                     "bundle": True,
                     "entrypoint": "index.ts",
+                    "pi_package": True,
                 }
             ]
         }
@@ -213,6 +224,11 @@ def test_fix_CL_1w5g_consumer_resolves_solo_workbench_closure(tmp_path: Path) ->
     payload = json.loads(result.stdout)
     assert payload["status"] == "dry-run"
     assert payload["dependency_order"][-1] == "pi-extension:solo-workbench"
+    assert any(
+        operation["operation"] == "register_pi_package"
+        and operation["path"] == str(project / ".pi/settings.json")
+        for operation in payload["operations"]
+    )
     assert set(payload["dependency_order"]) == {
         "pi-extension:fusion-harness",
         "pi-extension:cognovis-bead-harness",
@@ -450,12 +466,25 @@ def test_just_module_preserves_hand_written_root_justfile(tmp_path: Path) -> Non
 def test_pi_extension_bundle_lifecycle(tmp_path: Path) -> None:
     project = _bundle_project(tmp_path)
     target = project / ".agents/pi/extensions/workbench"
+    settings_path = project / ".pi/settings.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        json.dumps({"theme": "dark", "packages": ["npm:existing-package"]}) + "\n"
+    )
 
     installed = _run(project, "pi-extension", "use", "workbench")
     assert installed.returncode == 0, installed.stderr or installed.stdout
     assert (target / "index.ts").is_file()
     assert (target / "lib/value.ts").is_file()
     assert (target / "prompts/system.md").is_file()
+    settings = json.loads(settings_path.read_text())
+    assert settings == {
+        "theme": "dark",
+        "packages": [
+            "npm:existing-package",
+            "../.agents/pi/extensions/workbench",
+        ],
+    }
 
     lock = yaml.safe_load((project / ".library.lock").read_text())
     assert lock["installed"][0]["checksum_type"] == "directory"
@@ -473,10 +502,61 @@ def test_pi_extension_bundle_lifecycle(tmp_path: Path) -> None:
     restored = _run(project, "pi-extension", "sync", "workbench")
     assert restored.returncode == 0, restored.stderr or restored.stdout
     assert '"ready"' in (target / "lib/value.ts").read_text()
+    assert json.loads(settings_path.read_text())["packages"] == [
+        "npm:existing-package",
+        "../.agents/pi/extensions/workbench",
+    ]
 
+    settings_path.write_text(
+        json.dumps(
+            {
+                "theme": "dark",
+                "packages": [
+                    "npm:existing-package",
+                    "../.agents/pi/extensions/workbench",
+                ],
+            }
+        )
+        + "\n"
+    )
     removed = _run(project, "pi-extension", "remove", "workbench")
     assert removed.returncode == 0, removed.stderr or removed.stdout
     assert not target.exists()
+    assert json.loads(settings_path.read_text()) == {
+        "theme": "dark",
+        "packages": ["npm:existing-package"],
+    }
+
+
+def test_pi_extension_bundle_dry_run_reports_pi_registration(tmp_path: Path) -> None:
+    project = _bundle_project(tmp_path)
+
+    result = _run(project, "pi-extension", "use", "workbench", "--dry-run")
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert any(
+        operation["operation"] == "register_pi_package"
+        and operation["path"] == str(project / ".pi/settings.json")
+        for operation in payload["operations"]
+    )
+    assert not (project / ".pi").exists()
+
+
+def test_pi_package_bundle_requires_matching_manifest_before_mutation(
+    tmp_path: Path,
+) -> None:
+    project = _bundle_project(tmp_path)
+    source_manifest = tmp_path / "sources/workbench/package.json"
+    source_manifest.write_text(json.dumps({"name": "broken", "pi": {}}) + "\n")
+
+    result = _run(project, "pi-extension", "use", "workbench")
+
+    assert result.returncode != 0
+    assert "non-empty pi.extensions" in json.loads(result.stdout)["message"]
+    assert not (project / ".agents").exists()
+    assert not (project / ".pi").exists()
+    assert not (project / ".library.lock").exists()
 
 
 def test_pi_extension_bundle_requires_safe_entrypoint(tmp_path: Path) -> None:

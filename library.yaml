@@ -4273,6 +4273,7 @@ library:
       source: https://github.com/cognovis/cognovis-pi/tree/main/extensions/solo-workbench
       bundle: true
       entrypoint: index.ts
+      pi_package: true
       requires:
         - pi-extension:fusion-harness
         - pi-extension:cognovis-bead-harness

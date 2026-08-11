@@ -248,7 +248,10 @@ extensions, profiles, and Just modules are explicit project-native bridge
 primitives from `cognovis/cognovis-pi`. They can be selected directly or through
 a Workspace, while their runtime profile semantics remain distinct from Workspace
 desired state. A Pi profile chooses how a Pi run executes; a Workspace chooses
-which Library-owned capabilities are present.
+which Library-owned capabilities are present. Bundled extensions that declare
+`pi_package: true` are also registered in project-local `.pi/settings.json`, so
+an ordinary `pi` session loads packages such as `solo-workbench`; Just remains a
+separate launcher surface rather than the Pi package installer.
 
 ## Decision log (this session)
 

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +48,113 @@ JUST_ROOT_BLOCK_BEGIN = "# >>> library:just-modules >>>"
 JUST_ROOT_BLOCK_END = "# <<< library:just-modules <<<"
 _ROOT_JUSTFILE_NAMES = ("justfile", "Justfile", ".justfile", "JUSTFILE")
 _DEFAULT_ROOT_JUSTFILE = "Justfile"
+_PI_SETTINGS_PATH = Path(".pi/settings.json")
+
+
+def _is_pi_package(entry: dict[str, Any], primitive: str, bundle: bool) -> bool:
+    enabled = entry.get("pi_package", False)
+    if not isinstance(enabled, bool):
+        raise InstallError(f"'{entry.get('name')}' pi_package must be a boolean.")
+    if enabled and (primitive != "pi-extension" or not bundle):
+        raise InstallError("pi_package is supported only for bundled pi-extension entries.")
+    return enabled
+
+
+def _load_pi_settings(settings_path: Path) -> dict[str, Any]:
+    if not settings_path.exists():
+        return {}
+    try:
+        settings = json.loads(settings_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InstallError(f"Cannot read Pi settings at {settings_path}: {exc}") from exc
+    if not isinstance(settings, dict):
+        raise InstallError(f"Pi settings at {settings_path} must be a JSON object.")
+    packages = settings.get("packages", [])
+    if not isinstance(packages, list):
+        raise InstallError(f"Pi settings 'packages' at {settings_path} must be an array.")
+    return settings
+
+
+def _write_pi_settings(settings_path: Path, settings: dict[str, Any]) -> None:
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", dir=settings_path.parent, prefix=".settings-", suffix=".json", delete=False
+    ) as handle:
+        temporary = Path(handle.name)
+        json.dump(settings, handle, indent=2)
+        handle.write("\n")
+    os.replace(temporary, settings_path)
+
+
+def _pi_package_source(repo_root: Path, target: Path) -> str:
+    settings_dir = (repo_root / _PI_SETTINGS_PATH).parent
+    return Path(os.path.relpath(target, settings_dir)).as_posix()
+
+
+def _resolved_local_package_source(source: object, settings_path: Path) -> Path | None:
+    if isinstance(source, dict):
+        source = source.get("source")
+    if not isinstance(source, str) or not source:
+        return None
+    if source.startswith(("npm:", "git:", "http://", "https://", "ssh://", "git://")):
+        return None
+    candidate = Path(source).expanduser()
+    if not candidate.is_absolute():
+        candidate = settings_path.parent / candidate
+    return candidate.resolve()
+
+
+def _register_pi_package(repo_root: Path, target: Path) -> None:
+    settings_path = repo_root / _PI_SETTINGS_PATH
+    settings = _load_pi_settings(settings_path)
+    packages = list(settings.get("packages", []))
+    resolved_target = target.resolve()
+    if not any(
+        _resolved_local_package_source(package, settings_path) == resolved_target
+        for package in packages
+    ):
+        packages.append(_pi_package_source(repo_root, target))
+        settings["packages"] = packages
+        _write_pi_settings(settings_path, settings)
+
+
+def _unregister_pi_package(repo_root: Path, target: Path) -> bool:
+    settings_path = repo_root / _PI_SETTINGS_PATH
+    if not settings_path.exists():
+        return False
+    settings = _load_pi_settings(settings_path)
+    packages = list(settings.get("packages", []))
+    resolved_target = target.resolve()
+    kept = [
+        package
+        for package in packages
+        if _resolved_local_package_source(package, settings_path) != resolved_target
+    ]
+    if kept == packages:
+        return False
+    settings["packages"] = kept
+    _write_pi_settings(settings_path, settings)
+    return True
+
+
+def _validate_pi_package_manifest(source_dir: Path, entrypoint: str, name: str) -> None:
+    manifest_path = source_dir / "package.json"
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except FileNotFoundError as exc:
+        raise InstallError(f"pi-extension '{name}' declares pi_package but has no package.json.") from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InstallError(f"Invalid Pi package manifest for '{name}': {exc}") from exc
+    extensions = manifest.get("pi", {}).get("extensions") if isinstance(manifest, dict) else None
+    if not isinstance(extensions, list) or not extensions:
+        raise InstallError(
+            f"pi-extension '{name}' package.json must declare a non-empty pi.extensions array."
+        )
+    normalized_entrypoint = f"./{entrypoint}"
+    if entrypoint not in extensions and normalized_entrypoint not in extensions:
+        raise InstallError(
+            f"pi-extension '{name}' package.json does not register entrypoint {entrypoint}."
+        )
 
 
 def require_project_native_request(primitive: str, name: str, scope: str) -> None:
@@ -259,6 +369,7 @@ def install_project_native_file(
     item_name = entry.get("name", name)
     require_project_native_request(primitive, item_name, scope)
     bundle = _is_bundle(entry, primitive)
+    pi_package = _is_pi_package(entry, primitive, bundle)
     suffix = "" if bundle else _extension(entry, item_name)
     target = _target(repo_root, primitive, item_name, suffix, bundle=bundle)
     lockfile_path = find_lockfile(repo_root, global_scope=False)
@@ -284,6 +395,20 @@ def install_project_native_file(
                     "details": f"install {primitive} '{item_name}'",
                     "existing_target": target.exists() or target.is_symlink(),
                 },
+                *(
+                    [
+                        {
+                            "operation": "register_pi_package",
+                            "path": str(repo_root / _PI_SETTINGS_PATH),
+                            "details": (
+                                f"add {_pi_package_source(repo_root, target)} to project-local "
+                                "Pi packages"
+                            ),
+                        }
+                    ]
+                    if pi_package
+                    else []
+                ),
                 {
                     "operation": "write_lockfile",
                     "path": str(lockfile_path),
@@ -349,6 +474,10 @@ def install_project_native_file(
                 raise InstallError(
                     f"{primitive} '{item_name}' bundle has no entrypoint {entrypoint}."
                 )
+            if pi_package:
+                _validate_pi_package_manifest(source_file, entrypoint, item_name)
+                # Fail before artifact mutation if existing Pi settings cannot be merged safely.
+                _load_pi_settings(repo_root / _PI_SETTINGS_PATH)
         elif not source_file.is_file() or source_file.suffix != suffix:
             raise InstallError(
                 f"{primitive} '{item_name}' source must resolve to one file."
@@ -376,6 +505,9 @@ def install_project_native_file(
                 shutil.copy2(str(cached_artifact), str(target))
         else:
             target.symlink_to(cached_artifact, target_is_directory=bundle)
+
+        if pi_package:
+            _register_pi_package(repo_root, target)
 
         installed = target.resolve() if target.is_symlink() else target
         checksum = (
@@ -413,6 +545,7 @@ def install_project_native_file(
                 "cache": str(cache_path),
                 "source_commit": source_commit,
                 "install_mode": install_mode,
+                "pi_package_registered": pi_package,
             },
             message=f"{primitive.title()} '{item_name}' installed at {target}",
         )
@@ -433,11 +566,15 @@ def remove_project_native_file(
     lock_data = load_lockfile(lockfile_path)
     locked = get_entry(lock_data, name, primitive_type=primitive)
     root = repo_root.resolve()
-    target = (
-        resolve_lockfile_path(str(locked["install_target"]), root)
-        if locked
-        else None
-    )
+    if locked:
+        target = resolve_lockfile_path(str(locked["install_target"]), root)
+    elif primitive == "pi-extension":
+        # Receipt reconciliation deletes the target and lock entry before calling
+        # primitive cleanup. Package registration is bundle-only, so its fixed
+        # directory target remains derivable without stale catalog metadata.
+        target = root / PROJECT_NATIVE_TARGETS[primitive] / name
+    else:
+        target = None
     expected_base = (root / PROJECT_NATIVE_TARGETS[primitive]).resolve()
     if not expected_base.is_relative_to(root):
         raise InstallError(
@@ -468,6 +605,9 @@ def remove_project_native_file(
         return dry_run_result(operations, summary=f"Would remove {primitive} '{name}'")
 
     removed = []
+    unregistered = False
+    if primitive == "pi-extension" and target is not None:
+        unregistered = _unregister_pi_package(root, target)
     if target is not None and (target.exists() or target.is_symlink()):
         _remove_target(target)
         removed.append(str(target))
@@ -479,6 +619,10 @@ def remove_project_native_file(
     if primitive == "just-module":
         _write_just_aggregator(repo_root, lock_data)
     return success(
-        data={"name": name, "removed_files": removed},
+        data={
+            "name": name,
+            "removed_files": removed,
+            "pi_package_unregistered": unregistered,
+        },
         message=f"{primitive.title()} '{name}' removed.",
     )
