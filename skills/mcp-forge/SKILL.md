@@ -3,9 +3,8 @@ name: mcp-forge
 description: >-
   use when: creating a Python MCP server or migrating a Python MCP server to the
   stateless 2026-07-28 protocol with the official Python SDK v2. NOT for:
-  non-Python servers or cognovis-tools tool-family work. boundary: unlike
-  mcp-tool-forge, this skill owns complete, generic Python MCP server architecture,
-  implementation, migration, and conformance rather than cognovis-tools entries.
+  non-Python servers. boundary: this skill owns generic Python MCP server
+  architecture, implementation, migration, and conformance.
 requires_standards: [python, judge-layer, english-only, no-emoji]
 compatibility: {}
 metadata: {}
@@ -35,8 +34,8 @@ Build and migrate Python MCP servers through the official Python SDK v2.
 ## Exclusions
 
 - Reject TypeScript and every other non-Python server implementation.
-- Route `cognovis-tools` tool families to `mcp-tool-forge`.
 - Do not implement product auth, access-control, PII, or compliance changes without the required human review.
+- Require explicit confirmation before running conformance against a non-local MCP endpoint.
 
 ## Workflow
 

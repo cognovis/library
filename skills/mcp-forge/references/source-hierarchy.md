@@ -10,7 +10,7 @@ Use sources in this order. A lower source may add a checklist but may not overri
 
 ## Final Specification Guard
 
-The release candidate frozen on 2026-05-21 is not normative. Reject guidance that places server identity in `DiscoverResult.serverInfo` or uses the RC error codes `-32003` or `-32004`. In the final specification, identity is result `_meta`, and the renamed reserved errors include `MissingRequiredClientCapability` at `-32021` and `UnsupportedProtocolVersion` at `-32022`.
+The release candidate frozen on 2026-05-21 is not normative. Reject guidance that places server identity in a top-level `DiscoverResult.serverInfo`; the final location is `_meta["io.modelcontextprotocol/serverInfo"]`. Reject RC error codes `HeaderMismatch -32001`, `MissingRequiredClientCapability -32003`, and `UnsupportedProtocolVersion -32004`; the final reserved codes are `-32020`, `-32021`, and `-32022`. Resource-not-found now uses JSON-RPC Invalid Params `-32602`, not `-32002`.
 
 The SDK is the wire implementation. Server application code should not manually add protocol-version metadata, reimplement `server/discover`, synthesize `resultType`, manage `Mcp-Session-Id`, or reproduce version routing already owned by SDK v2.
 

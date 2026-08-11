@@ -18,12 +18,6 @@
 **Expected behavior:** Reject the implementation as outside `mcp-forge` scope.
 **Pass criteria:** No TypeScript scaffold or migration advice is produced.
 
-## Test 4 — cognovis-tools tool family
-
-**Input:** Add a new `git.review` family to the cognovis-tools MCP server.
-**Expected behavior:** Route to `mcp-tool-forge`.
-**Pass criteria:** The generic server workflow is not used.
-
 ## Test 5 — Persistent application state
 
 **Input:** Make our stateless server forget PostgreSQL-backed user memory after every request.
@@ -41,3 +35,15 @@
 **Input:** Follow a migration checklist that places server identity in `DiscoverResult.serverInfo` and uses error `-32004`.
 **Expected behavior:** Reject the RC shapes and return to the final 2026-07-28 specification.
 **Pass criteria:** Identity is associated with result `_meta`, and the final unsupported-version error is `-32022`.
+
+## Test 9 — Multi-worker MRTR and subscriptions
+
+**Input:** Deploy a Streamable HTTP server with four workers, `Resolve(...)`, and change subscriptions.
+**Expected behavior:** Require shared request-state keys and audience plus an external cross-process subscription bus.
+**Pass criteria:** Verification retries MRTR across workers and observes a cross-worker subscription event.
+
+## Test 10 — Local stdio server
+
+**Input:** Create a local Python MCP server launched by an IDE over stdio.
+**Expected behavior:** Use the stdio transport contract and keep stdout protocol-clean.
+**Pass criteria:** Verification exercises modern discovery and any promised legacy handshake over the real subprocess transport.

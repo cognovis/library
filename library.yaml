@@ -545,13 +545,17 @@ library:
         - origin:original
         - tier:domain
     - name: mcp-forge
-      description: 'use when: creating a Python MCP server or migrating a Python MCP server to the stateless 2026-07-28 protocol with the official Python SDK v2. NOT for: non-Python servers or cognovis-tools tool-family work. boundary: unlike mcp-tool-forge, this skill owns complete, generic Python MCP server architecture, implementation, migration, and conformance rather than cognovis-tools entries.'
+      description: 'use when: creating a Python MCP server or migrating a Python MCP server to the stateless 2026-07-28 protocol with the official Python SDK v2. NOT for: non-Python servers. boundary: this skill owns generic Python MCP server architecture, implementation, migration, and conformance.'
       source: https://github.com/cognovis/library/blob/main/skills/mcp-forge/SKILL.md
       requires:
         - standard:python
         - standard:judge-layer
         - standard:english-only
         - standard:no-emoji
+      runtime_requirements:
+        binaries:
+          - npx
+          - uv
       metadata:
         library:
           source_catalog: library-platform
