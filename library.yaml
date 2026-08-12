@@ -2448,6 +2448,27 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: fhir-publication-reviewer
+      description: Use for a cold read-only critical review before publishing a FHIR Implementation Guide or package. Examines terminology and IP tiers, rendered and packaged output, canonical and downstream compatibility, current narrative, licensing, Git-history exposure, and release evidence. Returns a blocking publication verdict without edits.
+      source: https://github.com/cognovis/library-core/blob/main/agents/fhir-publication-reviewer.md
+      requires:
+        - skill:fhir-ig-development
+        - standard:fhir-ig-authoring
+        - standard:english-only
+        - standard:no-emoji
+      tags:
+        - origin:original
+        - tier:domain
+        - fhir
+        - publication
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+          steward: cognovis-core
+          gascity:
+            exportable: false
     - name: focus-review-agent
       description: 'Bounded read-only focus-aware security review agent. Uses deterministic scripts only for targeting (inventory + cluster ranking), then performs deep review, variant search, challenge, and report synthesis in the agent context. Default caps: top-k 2, min-score 2.0. No remediation or git writes.'
       source: https://github.com/cognovis/library-core/blob/main/agents/focus-review-agent.md
