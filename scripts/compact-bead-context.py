@@ -4,14 +4,8 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from typing import Any
-
-
-DEFAULT_TEXT_LIMIT = 12000
-DEFAULT_NOTES_LIMIT = 2000
-DEFAULT_ENVELOPE_LIMIT = 50000
 
 
 def _untrusted_field(source: str, value: Any, *, content_type: str = "text/plain") -> dict[str, Any]:
@@ -24,21 +18,8 @@ def _untrusted_field(source: str, value: Any, *, content_type: str = "text/plain
     }
 
 
-def _read_limit(name: str, default: int) -> int:
-    try:
-        limit = int(os.environ.get(name, default))
-    except ValueError as exc:
-        raise ValueError(f"{name} must be an integer") from exc
-    if limit < 1:
-        raise ValueError(f"{name} must be greater than zero")
-    return limit
-
-
-def _limit_text(value: Any, limit: int, source: str, limit_name: str) -> str:
-    text = str(value or "").strip()
-    if len(text) <= limit:
-        return text
-    raise ValueError(f"{source} exceeds {limit_name} ({len(text)} > {limit})")
+def _text(value: Any) -> str:
+    return str(value or "").strip()
 
 
 def _metadata_value(metadata: dict[str, Any], key: str) -> str:
@@ -65,38 +46,17 @@ def render_context(payload: Any) -> str:
     metadata = bead.get("metadata") or {}
     if not isinstance(metadata, dict):
         raise ValueError(f"bead.metadata must be object, got {type(metadata).__name__}")
-    text_limit = _read_limit("CDX_BEAD_CONTEXT_TEXT_LIMIT", DEFAULT_TEXT_LIMIT)
-    notes_limit = _read_limit("CDX_BEAD_CONTEXT_NOTES_LIMIT", DEFAULT_NOTES_LIMIT)
-    envelope_limit = _read_limit("CDX_BEAD_CONTEXT_ENVELOPE_LIMIT", DEFAULT_ENVELOPE_LIMIT)
     labels_value = bead.get("labels") or []
     if not isinstance(labels_value, list):
         raise ValueError(f"bead.labels must be list, got {type(labels_value).__name__}")
-    labels = [
-        _limit_text(label, text_limit, f"bead.labels[{index}]", "CDX_BEAD_CONTEXT_TEXT_LIMIT")
-        for index, label in enumerate(labels_value)
-    ]
+    labels = [_text(label) for label in labels_value]
     deps = bead.get("dependencies") or []
     if not isinstance(deps, list):
         raise ValueError(f"bead.dependencies must be list, got {type(deps).__name__}")
 
-    acceptance = _limit_text(
-        bead.get("acceptance_criteria", ""),
-        text_limit,
-        "bead.acceptance_criteria",
-        "CDX_BEAD_CONTEXT_TEXT_LIMIT",
-    )
-    description = _limit_text(
-        bead.get("description", ""),
-        text_limit,
-        "bead.description",
-        "CDX_BEAD_CONTEXT_TEXT_LIMIT",
-    )
-    notes = _limit_text(
-        bead.get("notes", ""),
-        notes_limit,
-        "bead.notes",
-        "CDX_BEAD_CONTEXT_NOTES_LIMIT",
-    )
+    acceptance = _text(bead.get("acceptance_criteria", ""))
+    description = _text(bead.get("description", ""))
+    notes = _text(bead.get("notes", ""))
     dependencies = []
     for index, dep in enumerate(deps):
         if not isinstance(dep, dict):
@@ -113,12 +73,7 @@ def render_context(payload: Any) -> str:
                     ),
                     "title": _untrusted_field(
                         f"bead.dependencies[{index}].title",
-                        _limit_text(
-                            dep.get("title", ""),
-                            text_limit,
-                            f"bead.dependencies[{index}].title",
-                            "CDX_BEAD_CONTEXT_TEXT_LIMIT",
-                        ),
+                        _text(dep.get("title", "")),
                     ),
                     "status": _untrusted_field(
                         f"bead.dependencies[{index}].status",
@@ -170,13 +125,7 @@ def render_context(payload: Any) -> str:
         },
     }
 
-    rendered = json.dumps(envelope, indent=2, sort_keys=True) + "\n"
-    if len(rendered) > envelope_limit:
-        raise ValueError(
-            f"bead context envelope exceeds CDX_BEAD_CONTEXT_ENVELOPE_LIMIT "
-            f"({len(rendered)} > {envelope_limit})"
-        )
-    return rendered
+    return json.dumps(envelope, indent=2, sort_keys=True) + "\n"
 
 
 def main() -> int:
