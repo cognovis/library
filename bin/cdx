@@ -11,7 +11,7 @@
 #   -b, --bead ID   → launch the implementation loop for the given bead ID
 #   -bq, --bead-quick ID → launch the implementation loop in explicit Quick mode
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
-#   --bead-dangerous-full-auto → For bead modes only, bypass approvals and sandbox
+#   --bead-dangerous-full-auto → Deprecated compatibility no-op for implementation modes
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #
@@ -242,23 +242,13 @@ run_codex_tui() {
 }
 
 select_bead_codex_permission_args() {
-    if ${bead_dangerous_full_auto}; then
-        echo "WARNING: --bead-dangerous-full-auto selected; bead-mode Codex will bypass approvals and sandboxing." >&2
-        bead_codex_permission_args=(
-            "--dangerously-bypass-approvals-and-sandbox"
-            "-c" "mcp_servers.beads.required=true"
-        )
-        return
-    fi
-
     if [[ -n "$bead_review_id" ]]; then
         bead_codex_permission_args=("--sandbox" "read-only")
         return
     fi
 
     bead_codex_permission_args=(
-        "--sandbox" "workspace-write"
-        "-c" 'approval_policy="never"'
+        "--dangerously-bypass-approvals-and-sandbox"
         "-c" "mcp_servers.beads.required=true"
     )
 }
@@ -474,8 +464,8 @@ Wrapper flags (consumed by cdx, not passed to codex):
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
          --bead-dangerous-full-auto
-                                For bead modes only, pass Codex's dangerous
-                                approvals+sandbox bypass after explicit opt-in
+                                Deprecated compatibility no-op for Bead
+                                implementation modes, which already use cdx's bypass
 
   Session:
          --no-full-auto          Launch codex without the default --full-auto wrapper
@@ -558,14 +548,12 @@ launch_bead_implementation_loop() {
     local worktree_dir
     worktree_dir="$(ensure_bead_worktree "$active_bead")" || return $?
 
-    local prompt="Bead ID: ${active_bead}. Invoke the installed bead-loop-implementer agent exactly once with execution_mode=${execution_mode}, review_preset=standard, and the supplied worktree. That agent owns the complete one-Bead lifecycle: claim, context admission, the shared bead-execution-loop, focused evidence, and canonical Session Close. Run its one opposite-family review through the installed acpx-dispatch.py transport owned by the acpx-dispatch skill, and do not select or reconstruct another review transport. Do not reproduce merge, push, close, sync, or cleanup mechanics outside the lifecycle owner.
+    local prompt="Execute Bead ${active_bead} in its assigned worktree using the installed bead-implementation-loop skill in this current Codex session with execution mode \`${execution_mode}\`. This current Codex session owns implementation, repairs, verification, and lifecycle completion. Do not delegate implementation or repairs to a subagent. This user-directed current-session ownership overrides any skill instruction that would dispatch a native implementation subagent.
 
-This is a Codex MCP-backed Bead run. After this launcher's read-only bootstrap, set the MCP workspace once through mcp__beads__context, then perform every live Bead read or mutation through the configured beads MCP server: mcp__beads__show, mcp__beads__blocked or mcp__beads__list for dependency state, mcp__beads__claim, mcp__beads__update, and mcp__beads__close. Pass workspace_root=${worktree_dir} on every call and do not invoke local bd inside the sandbox.
-
-Before Session Close, write a ccore_beads_mcp_preflight_v1 JSON receipt from fresh mcp__beads__show results. Invoke ccore session-close run with --bead-backend mcp and --bead-mcp-preflight-receipt. A retryable bead_mcp_finalization_required result is the same canonical Session Close awaiting its post-containment MCP action: close exactly the requested Bead through mcp__beads__close, verify closed status through mcp__beads__show, write ccore_beads_mcp_finalize_receipt_v1 using the returned session_id and action_digest, then invoke ccore session-close resume with --bead-mcp-finalization-receipt. Never run local Bead sync for this remote backend."
+Use the installed acpx-dispatch skill to obtain review feedback from Opus. The current session owns review policy and prompt composition; acpx-dispatch is transport only. Review 1 is adversarial, review 2 is critical, and reviews 3 through 5 are normal. After each review, fix actionable findings above low severity or nits, verify the fixes, and request the next review only if such findings required a fix. Stop when only low-severity findings or nits remain, or after five Opus reviews total."
 
     if [[ "$execution_mode" == "quick" ]]; then
-        prompt+=" This is unconditional explicit Quick for every executable leaf and starts with the minimal capability set. Do not run a preliminary bead review or add optional ceremony unless new acceptance evidence requires a named capability."
+        prompt+=" This is unconditional explicit Quick for every executable leaf and starts with the minimal capability set. Do not add optional ceremony unless new acceptance evidence requires a named capability."
     else
         prompt+=" In auto mode, persist the concise evidence-based capability plan required by the implementation-loop contract before implementation."
     fi
