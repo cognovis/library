@@ -5,7 +5,7 @@ description: >-
   validating an existing skill for quality and extractable-code violations, or running
   a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill,
   check skill, audit skills, skill health check, fleet quality, skill creation,
-  action_boundary declarations, Gas City pack metadata for skills, script declarations,
+  action_boundary declarations, script declarations,
   provider-neutral skill design.
 requires_standards: [agentic-primitives, primitive-placement, judge-layer, english-only, no-emoji]
 ---
@@ -110,9 +110,7 @@ Record the placement decision in the generated catalog snippet or handoff text:
 6. **Runtime requirements:** ask whether the skill needs external binaries such
    as `bun`, `rg`, `sushi`, or `shellcheck`; if yes, declare them under
    `runtime_requirements.binaries`.
-7. **Gas City projection:** if exportable, name the PackV2 target and operational
-   city scope; projection metadata belongs in `library.yaml`.
-8. **Deterministic script routing:** if the value is repeatable parsing, scanning,
+7. **Deterministic script routing:** if the value is repeatable parsing, scanning,
    validation, export, or transformation, dispatch to `script-forge` or bundle a
    Python script before adding prompt prose.
 
@@ -184,26 +182,18 @@ If the user's purpose involves deterministic logic (parsing, scanning, computing
 - Scaffold a stub script file with the chosen contract
 - Register it under `## Resources` in the SKILL.md
 
-### Step 4 — Placement, packability, and provider-neutrality gate
+### Step 4 — Placement and provider-neutrality gate
 
 Ask these questions before writing the final file:
 
 1. **Placement already decided?** Carry forward steward marketplace, plane,
-   product counterpart, repo-local escape, Gas City projection, and script route
+   product counterpart, repo-local escape, and script route
    from the placement gate.
 2. **Provider-neutral?** Does the core skill avoid Claude/Codex-specific tool names,
    model names, and provider auth assumptions? If no, move those details into a
    harness adapter or agent/provider config.
-3. **Gas City export?** Should this skill be exportable to a Gas City PackV2 pack?
-4. **Target surface?** If exportable, choose one: `skill`, `command`, `doctor`,
-   `formula`, `overlay`, `asset`.
-5. **Pack and scope?** Choose pack (`cognovis-base`, `cognovis-specs`, etc.) and
-   scope (`city`, `rig`, `provider`, `global`).
-6. **Runtime requirements?** List binaries, environment variable names, and standards
-   needed by the exported pack surface. Do not put secret values in metadata.
-
-Gas City metadata belongs in the `library.yaml` catalog entry under
-`metadata.library.gascity`, not in provider-specific prompt prose.
+3. **Runtime requirements?** List binaries, environment variable names, and standards
+   needed by the skill. Do not put secret values in metadata.
 
 ### Step 5 — Generate SKILL.md
 
@@ -290,9 +280,7 @@ script from Resources.>
   `effect_type`, `proposal_schema`, `judge`, and `requires_mandate`; never use the
   obsolete `class:` field. See `references/action-boundary.md`.
 - `compatibility: {}` — agentskills.io standard field (currently unused; scaffold it for future use)
-- `metadata: {}` — agentskills.io metadata placeholder. Gas City pack metadata
-  belongs in the `library.yaml` catalog entry under `metadata.library.gascity`,
-  not in provider-specific prompt prose.
+- `metadata: {}` — agentskills.io metadata placeholder.
 - `globs:` — omit unless the skill should trigger on specific file patterns (Cursor 2.2+ fallback)
 - `allowed-tools:` — agentskills.io hyphenated form; emit alongside `tools:` (Claude extension) when the skill restricts tools, otherwise omit both
 - `tools:` — Claude extension form; emit alongside `allowed-tools:` when restricting tools
@@ -351,24 +339,13 @@ After scaffolding, print the library entry for copy-paste:
             name: <product-feature-or-artifact>
             primitive_type: <agent|skill|command|workflow|pack|service|other>
             notes: <why this dev-plane skill supports the product surface>
-          gascity:
-            exportable: <true|false>
-            projections:
-              - target: <skill|command|doctor|formula|overlay|asset>
-                pack: <pack-name>
-                scope: <city|rig|provider|global>
-                session_class: none
-                provider_neutral: true
       tags:
         - origin:original
         - tier:domain
 ```
 
 Omit `scripts:` when no bundled script exists. Omit `product_counterpart:` when
-there is no paired product-plane artifact. Omit or set `exportable: false` when
-the skill should not appear in a Gas City pack. Legacy `gascity.target`,
-`gascity.pack`, and `gascity.scope` may remain on existing catalog entries, but
-new snippets should use `gascity.projections[]`.
+there is no paired product-plane artifact.
 
 ### Step 8 — Auto-validate
 

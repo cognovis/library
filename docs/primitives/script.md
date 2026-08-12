@@ -9,7 +9,7 @@ contracts.
 
 **Key constitutive feature.** Deterministic execution: scripts hold logic that should
 not be re-created by the model. They are callable by skills, agents, commands,
-hooks/guardrails, standards, tests, CI, and Gas City pack exports.
+hooks/guardrails, standards, tests, and CI.
 
 **Language rule.** Cognovis Library scripts are **Python-only**. NORMATIVE.
 
@@ -22,9 +22,7 @@ another primitive or runtime calls it explicitly. Examples:
 
 - a skill says "run `scripts/validate-spec.py`";
 - a hook executes a Python guard script;
-- a Gas City pack command uses the script as `commands/<name>/run.py`;
-- a Gas City doctor check uses the script as `doctor/<name>/run.py`;
-- a formula step calls a script through a command or provider session.
+- a workflow step calls a script through a command or provider session.
 
 **Catalog format.** First-class scripts live under `library.scripts` in
 `library.yaml`:
@@ -38,13 +36,6 @@ another primitive or runtime calls it explicitly. Examples:
   metadata:
     library:
       plane: dev
-      gascity:
-        exportable: true
-        projections:
-          - target: script
-            pack: cognovis-specs
-            scope: rig
-            target_path: assets/scripts/validate-spec.py
 ```
 
 Skills, agents, standards, hooks, and prompts can also declare bundled scripts in
@@ -104,15 +95,13 @@ The preferred general contract is `json-envelope`:
 | Agent helper | `agents/<name>/scripts/<name>.py` when the helper is agent-private |
 | Standard enforcement/tooling | `standards/<name>/scripts/<name>.py` |
 | Guardrail implementation | `guardrails/<name>/<harness-or-purpose>.py` |
-| Gas City export | `assets/scripts/`, `commands/<name>/run.py`, or `doctor/<name>/run.py` |
 
 **When to choose it.** Create a script when:
 
 - logic is deterministic, testable, and over roughly 50 lines;
 - a prompt would otherwise contain a shell/Python pipeline;
 - structured parsing or transformation is required;
-- the same helper will be reused by multiple primitives;
-- Gas City pack export needs a deterministic command or doctor entrypoint.
+- the same helper will be reused by multiple primitives.
 
 **Counter-examples.**
 

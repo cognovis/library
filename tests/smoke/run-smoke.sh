@@ -54,7 +54,7 @@ section() {
 }
 
 # Single EXIT trap registered once at script start — cleans all tmpdirs
-trap 'rm -rf "${TMPDIRS[@]}"' EXIT
+trap 'rm -rf "${TMPDIRS[@]:-}"' EXIT
 
 # ---------------------------------------------------------------------------
 # Utility: make a temp dir, copy fixture, register cleanup
@@ -1350,6 +1350,20 @@ smoke_fleet_migration() {
     fi
 }
 
+# Exercise the retained shell-level fetch, compose, and write path. The helper
+# intentionally excludes its obsolete cookbook wording guard.
+smoke_use_cookbook_path() {
+    section "use-cookbook-path"
+    local ext_script="${SCRIPT_DIR}/use-agent-cookbook-path.sh"
+    local ext_rc=0
+    bash "${ext_script}" || ext_rc=$?
+    if [[ "${ext_rc}" -eq 0 ]]; then
+        pass "use-cookbook-path/all-tests: shell-level compose path passed"
+    else
+        fail "use-cookbook-path/all-tests: shell-level compose path failed"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Harness: library-core (AK3 verification)
 # ---------------------------------------------------------------------------
@@ -1462,6 +1476,7 @@ main() {
             smoke_name_collision
             smoke_lockfile
             smoke_standards
+            smoke_use_cookbook_path
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"

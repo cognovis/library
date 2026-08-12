@@ -42,6 +42,18 @@ def test_command_prompts_remain_registered_as_prompts() -> None:
     assert all("category:command" in entry.get("tags", []) for entry in prompts)
 
 
+def test_platform_forge_descriptions_match_checked_in_frontmatter() -> None:
+    catalog = load_catalog()["library"]
+    catalog_descriptions = {
+        entry["name"]: entry["description"] for entry in catalog["skills"]
+    }
+    for name in ("agent-forge", "hook-forge", "script-forge", "skill-forge", "standard-forge"):
+        frontmatter = yaml.safe_load(
+            (REPO_ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[1]
+        )
+        assert catalog_descriptions[name] == frontmatter["description"]
+
+
 def test_catalog_sources_match_declared_source_ownership() -> None:
     catalog = load_catalog()
     source_urls = {

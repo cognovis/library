@@ -174,12 +174,6 @@ def test_template(name: str, output_contract: str) -> str:
 def catalog_stub(name: str, description: str, role: str, output_contract: str) -> str:
     """Return a Library catalog stub for the generated script."""
     summary = description or f"Deterministically run {name}."
-    target = {
-        "command": "command",
-        "doctor": "doctor",
-        "formula-step": "formula",
-    }.get(role, "script")
-    gascity_target = "asset" if target == "script" else target
     return textwrap.dedent(
         f"""\
         - name: {name}
@@ -189,22 +183,6 @@ def catalog_stub(name: str, description: str, role: str, output_contract: str) -
           language: python
           entrypoint: {name}.py
           output_contract: {output_contract}
-          gascity_targets:
-            - {gascity_target}
-          metadata:
-            library:
-              gascity:
-                exportable: false
-                target: {target}
-                # TODO: choose the correct Gas City pack and scope before committing.
-                pack: cognovis-base
-                scope: global
-                session_class: none
-                provider_neutral: true
-                requires:
-                  binaries: []
-                  env: []
-                  standards: []
           tags:
             - origin:original
             - tier:core
