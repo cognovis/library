@@ -33,15 +33,39 @@ def _init_repo(path: Path) -> Path:
 
 
 def _write_lock(repo: Path, installed: list[dict]) -> None:
+    receipts = []
+    for entry in installed:
+        target = str(entry["install_target"])
+        receipts.append(
+            {
+                "id": f"{entry.get('type', 'skill')}:{entry['name']}@1.0.0",
+                "type": entry.get("type", "skill"),
+                "name": entry["name"],
+                "scope": entry.get("scope", "project"),
+                "catalog_identity": "https://example.invalid/catalog",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "targets": [
+                    {
+                        "path": target,
+                        "kind": "directory" if target.endswith("/") else "file",
+                    }
+                ],
+                "owners_cache": [
+                    f"{entry.get('type', 'skill')}:{entry['name']}"
+                ],
+            }
+        )
     (repo / ".library.lock").write_text(
         yaml.safe_dump(
             {
                 "schema_version": 2,
                 "migration": {"prune_ack_required": False},
                 "requested_roots": [],
-                "receipts": [],
+                "receipts": receipts,
                 "prerequisites": [],
-                "installed": installed,
+                "installed": [],
             }
         ),
         encoding="utf-8",
@@ -80,9 +104,197 @@ def _run_library(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _write_catalog(repo: Path) -> None:
+    source = repo / "source-skill"
+    source.mkdir(exist_ok=True)
+    (source / "SKILL.md").write_text("# Strict root\n", encoding="utf-8")
+    (repo / "library.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "default_dirs": {"skills": [{"default": ".agents/skills/"}]},
+                "library": {
+                    "skills": [
+                        {
+                            "name": "strict-root",
+                            "description": "Strict root fixture",
+                            "source": str(source / "SKILL.md"),
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def _managed_block(repo: Path) -> str:
     content = (repo / ".gitignore").read_text(encoding="utf-8")
     return content[content.index(BEGIN) : content.index(END) + len(END)]
+
+
+def test_use_accepts_current_and_explicit_exact_git_root(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    _write_catalog(repo)
+
+    current = _run_library(repo, "skill", "use", "strict-root", "--json")
+    explicit = _run_library(
+        repo,
+        "skill",
+        "use",
+        "strict-root",
+        "--project",
+        str(repo),
+        "--json",
+    )
+
+    assert current.returncode == 0, current.stderr
+    assert explicit.returncode == 0, explicit.stderr
+    assert json.loads(explicit.stdout)["gitignore"]["path"] == str(repo / ".gitignore")
+
+
+def test_use_accepts_linked_worktree_root(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    (repo / "seed").write_text("seed", encoding="utf-8")
+    _git(repo, "add", "seed")
+    _git(repo, "commit", "-m", "seed", "--quiet")
+    worktree = tmp_path / "linked"
+    _git(repo, "worktree", "add", "-b", "linked-test", str(worktree), "--quiet")
+    _write_catalog(worktree)
+
+    result = _run_library(worktree, "skill", "use", "strict-root", "--json")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["gitignore"]["path"] == str(
+        worktree / ".gitignore"
+    )
+
+
+def test_nested_explicit_project_fails_before_any_mutation(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    _write_catalog(repo)
+    nested = repo / "nested"
+    nested.mkdir()
+    sibling = repo / "sibling.txt"
+    sibling.write_text("keep", encoding="utf-8")
+    _git(repo, "add", "sibling.txt")
+    before_index = _git(repo, "ls-files", "--stage").stdout
+
+    result = _run_library(
+        repo,
+        "skill",
+        "use",
+        "strict-root",
+        "--project",
+        str(nested),
+        "--json",
+    )
+
+    assert result.returncode != 0
+    payload = json.loads(result.stdout)
+    assert "Git worktree top-level exactly" in payload["message"]
+    assert not (nested / ".library.lock").exists()
+    assert not (nested / ".gitignore").exists()
+    assert not (nested / ".agents").exists()
+    assert sibling.read_text(encoding="utf-8") == "keep"
+    assert _git(repo, "ls-files", "--stage").stdout == before_index
+
+
+def test_use_rejects_invalid_existing_inventory_before_install(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    _write_catalog(repo)
+    original_lock = "schema_version: 1\nreceipts: []\n"
+    (repo / ".library.lock").write_text(original_lock, encoding="utf-8")
+
+    result = _run_library(repo, "skill", "use", "strict-root", "--json")
+
+    assert result.returncode != 0
+    assert "schema_version 2" in json.loads(result.stdout)["message"]
+    assert (repo / ".library.lock").read_text(encoding="utf-8") == original_lock
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".agents").exists()
+
+
+@pytest.mark.parametrize(
+    ("lock", "message"),
+    [
+        ({"schema_version": 1, "receipts": []}, "schema_version 2"),
+        ({"schema_version": 2}, "receipts list"),
+        ({"schema_version": 2, "receipts": {}}, "receipts list"),
+        (
+            {"schema_version": 2, "receipts": [{"targets": []}]},
+            "declare project or global scope",
+        ),
+        (
+            {
+                "schema_version": 2,
+                "receipts": [{"scope": "project", "targets": {}}],
+            },
+            "targets list",
+        ),
+        (
+            {
+                "schema_version": 2,
+                "receipts": [{"scope": "project", "targets": [{}]}],
+            },
+            "string path",
+        ),
+        (
+            {
+                "schema_version": 2,
+                "receipts": [
+                    {"scope": "project", "targets": [{"path": ""}]}
+                ],
+            },
+            "must not be empty",
+        ),
+        (
+            {
+                "schema_version": 2,
+                "receipts": [
+                    {"scope": "project", "targets": [{"path": "/absolute"}]}
+                ],
+            },
+            "repository-relative",
+        ),
+        (
+            {
+                "schema_version": 2,
+                "receipts": [
+                    {"scope": "project", "targets": [{"path": "/"}]}
+                ],
+            },
+            "repository-relative",
+        ),
+        (
+            {
+                "schema_version": 2,
+                "receipts": [
+                    {"scope": "project", "targets": [{"path": "../outside"}]}
+                ],
+            },
+            "escapes",
+        ),
+    ],
+)
+def test_sync_rejects_invalid_authoritative_inventory_before_mutation(
+    tmp_path: Path, lock: dict, message: str
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    (repo / ".library.lock").write_text(yaml.safe_dump(lock), encoding="utf-8")
+    gitignore = repo / ".gitignore"
+    gitignore.write_text("user-rule\n", encoding="utf-8")
+    tracked = repo / "tracked.txt"
+    tracked.write_text("tracked", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    index_before = _git(repo, "ls-files", "--stage").stdout
+
+    result = _run_library(repo, "sync", "--scope", "project", "--untrack", "--json")
+
+    assert result.returncode != 0
+    assert message in json.loads(result.stdout)["message"]
+    assert gitignore.read_text(encoding="utf-8") == "user-rule\n"
+    assert _git(repo, "ls-files", "--stage").stdout == index_before
+    assert tracked.exists()
 
 
 def test_use_writes_project_targets_and_bridge_symlinks_only(tmp_path: Path) -> None:
@@ -655,9 +867,8 @@ def test_whitespace_target_names_remain_exact_for_ignore_and_untrack(
         ("nul\x00path", "NUL"),
     ],
 )
-@pytest.mark.parametrize("lock_shape", ["receipt", "legacy"])
 def test_unsafe_line_break_paths_fail_before_gitignore_or_index_mutation(
-    tmp_path: Path, unsafe: str, reason: str, lock_shape: str
+    tmp_path: Path, unsafe: str, reason: str
 ) -> None:
     repo = _init_repo(tmp_path / "repo")
     tracked = repo / "tracked.txt"
@@ -674,38 +885,23 @@ def test_unsafe_line_break_paths_fail_before_gitignore_or_index_mutation(
     gitignore.write_bytes(original_gitignore)
     index_before = _git(repo, "ls-files", "--stage").stdout
 
-    if lock_shape == "receipt":
-        _write_v2_lock(
-            repo,
-            receipts=[
-                {
-                    "id": "prompt:unsafe@1.0.0",
-                    "type": "prompt",
-                    "name": "unsafe",
-                    "scope": "project",
-                    "catalog_identity": "https://example.invalid/catalog",
-                    "resolved_version": "1.0.0",
-                    "verified": True,
-                    "adopted": False,
-                    "targets": [{"path": unsafe, "kind": "file"}],
-                    "owners_cache": ["prompt:unsafe"],
-                }
-            ],
-        )
-    else:
-        _write_v2_lock(
-            repo,
-            receipts=[],
-            installed=[
-                {
-                    "name": "unsafe",
-                    "type": "prompt",
-                    "scope": "project",
-                    "install_target": unsafe,
-                    "bridge_symlinks": [f"{unsafe}-bridge -> safe-target"],
-                }
-            ],
-        )
+    _write_v2_lock(
+        repo,
+        receipts=[
+            {
+                "id": "prompt:unsafe@1.0.0",
+                "type": "prompt",
+                "name": "unsafe",
+                "scope": "project",
+                "catalog_identity": "https://example.invalid/catalog",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "targets": [{"path": unsafe, "kind": "file"}],
+                "owners_cache": ["prompt:unsafe"],
+            }
+        ],
+    )
 
     result = _run_library(repo, "sync", "--scope", "project", "--untrack", "--json")
 

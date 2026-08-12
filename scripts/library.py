@@ -196,7 +196,7 @@ def build_parser() -> argparse.ArgumentParser:
             help="Scope (project or global; default: from catalog entry's default_scope, fallback project)",
         )
         use_p.add_argument(
-            "--target-project",
+            "--target-project", "--project",
             type=Path,
             default=None,
             help=(
@@ -1136,6 +1136,9 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
+
+    if scope == "project":
+        _preflight_managed_project(args, repo_root, allow_missing_lock=True)
 
     # Guard: check harness_support on the main entry BEFORE installing any dependencies.
     # This prevents partial mutations (dep installs) when the requested entry itself
@@ -6880,7 +6883,19 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
-        repo_root = _resolve_lifecycle_project_root(args)
+        try:
+            sync_scope = getattr(args, "scope", DEFAULT_LIFECYCLE_SCOPE)
+            if sync_scope in {"project", "both"}:
+                repo_root = _strict_project_git_root(args)
+                _preflight_managed_project(args, repo_root, allow_missing_lock=False)
+            else:
+                repo_root = _resolve_lifecycle_project_root(args)
+        except LibraryError as exc:
+            if getattr(args, "json", False):
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
         return cmd_sync_all(args, repo_root, catalog)
 
     # Top-level catalog source commands
@@ -7194,6 +7209,37 @@ def _resolve_lifecycle_project_root(args: argparse.Namespace) -> Path | None:
     if explicit_project is not None:
         return explicit_project.expanduser().resolve()
     return _find_git_root(Path.cwd())
+
+
+def _strict_project_git_root(args: argparse.Namespace) -> Path:
+    """Resolve the one root shared by Git, lockfile, installs, and .gitignore."""
+    explicit = getattr(args, "project", None)
+    if explicit is None:
+        explicit = getattr(args, "target_project", None)
+    candidate = explicit.expanduser().resolve() if explicit is not None else Path.cwd()
+    git_root = _find_git_root(candidate)
+    if git_root is None:
+        raise LibraryError("Project installs require a Git worktree top-level")
+    if explicit is not None and candidate != git_root:
+        raise LibraryError(
+            f"--project must name the Git worktree top-level exactly: {git_root}"
+        )
+    return git_root
+
+
+def _preflight_managed_project(
+    args: argparse.Namespace, repo_root: Path, *, allow_missing_lock: bool
+) -> None:
+    """Reject divergent roots and invalid receipt inventories before mutation."""
+    strict_root = _strict_project_git_root(args)
+    if repo_root.resolve() != strict_root:
+        raise LibraryError("Project root must equal the Git worktree top-level")
+    lockfile = strict_root / ".library.lock"
+    if allow_missing_lock and not lockfile.exists():
+        return
+    from lib.gitignore import managed_project_paths
+
+    managed_project_paths(strict_root)
 
 
 def _missing_project_warning() -> str:

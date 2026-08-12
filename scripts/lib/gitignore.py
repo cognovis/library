@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+import yaml
+
 from lib.errors import LibraryError
-from lib.lockfile import load_lockfile
 
 BEGIN_MARKER = "# BEGIN Library-managed project installs"
 END_MARKER = "# END Library-managed project installs"
@@ -19,11 +19,30 @@ LOCK_ARTIFACTS = (
 )
 
 
+def _require_git_top_level(project_root: Path) -> Path:
+    """Return project_root only when it is exactly one Git worktree top-level."""
+    root = project_root.expanduser().resolve()
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise LibraryError("Managed project ignores require a Git worktree top-level")
+    git_root = Path(result.stdout.strip()).resolve()
+    if root != git_root:
+        raise LibraryError(
+            f"Project root must equal the Git worktree top-level: {git_root}"
+        )
+    return root
+
+
 def _project_path(value: object, project_root: Path) -> str | None:
     """Return a normalized repository-relative path without following symlinks."""
     raw = str(value or "")
     if not raw:
-        return None
+        raise LibraryError(".library.lock receipt target path must not be empty")
     if "\n" in raw or "\r" in raw:
         raise LibraryError(
             ".library.lock contains a managed path with a line break; one path "
@@ -34,61 +53,66 @@ def _project_path(value: object, project_root: Path) -> str | None:
             ".library.lock contains a managed path with NUL; Git paths and "
             "pathspec arguments cannot represent NUL bytes"
         )
+    if Path(raw).is_absolute():
+        raise LibraryError(
+            ".library.lock receipt target paths must be repository-relative"
+        )
     trailing_slash = raw.endswith("/")
     path_value = raw[:-1] if trailing_slash else raw
     if not path_value:
         return None
     candidate = Path(path_value)
-    if not candidate.is_absolute():
-        candidate = project_root / candidate
-    normalized_root = Path(os.path.abspath(project_root))
-    normalized_candidate = Path(os.path.abspath(candidate))
-    try:
-        relative = normalized_candidate.relative_to(normalized_root)
-    except ValueError:
-        return None
-    if not relative.parts or relative == Path(".") or ".." in relative.parts:
-        return None
-    rendered = PurePosixPath(*relative.parts).as_posix()
+    if not candidate.parts or candidate == Path(".") or ".." in candidate.parts:
+        raise LibraryError(
+            ".library.lock receipt target path escapes the repository root"
+        )
+    rendered = PurePosixPath(*candidate.parts).as_posix()
     return f"{rendered}/" if trailing_slash else rendered
 
 
 def managed_project_paths(project_root: Path) -> list[str]:
     """Derive lock artifacts, install targets, and bridges from the project lock."""
-    lock = load_lockfile(project_root / ".library.lock")
+    lockfile = project_root / ".library.lock"
+    try:
+        lock = yaml.safe_load(lockfile.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise LibraryError(f"Could not read authoritative {lockfile}: {exc}") from exc
+    if not isinstance(lock, dict) or lock.get("schema_version") != 2:
+        raise LibraryError(
+            ".library.lock must use schema_version 2 for managed project ignores"
+        )
+    receipts = lock.get("receipts")
+    if not isinstance(receipts, list):
+        raise LibraryError(
+            ".library.lock schema_version 2 requires a receipts list for managed project ignores"
+        )
     paths = list(LOCK_ARTIFACTS)
     seen = set(paths)
 
-    receipt_paths: list[str] = []
-    for receipt in lock.get("receipts") or []:
-        if not isinstance(receipt, dict) or receipt.get("scope") != "project":
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            raise LibraryError(".library.lock receipts must contain mappings")
+        scope = receipt.get("scope")
+        if scope not in {"project", "global"}:
+            raise LibraryError(
+                ".library.lock receipts must declare project or global scope"
+            )
+        if scope != "project":
             continue
-        for target in receipt.get("targets") or []:
-            if isinstance(target, dict):
-                relative = _project_path(target.get("path"), project_root)
-                if relative and relative not in seen:
-                    seen.add(relative)
-                    receipt_paths.append(relative)
-
-    legacy_candidates: list[object] = []
-    for entry in lock.get("installed") or []:
-        if not isinstance(entry, dict) or entry.get("scope") != "project":
-            continue
-        legacy_candidates.append(entry.get("install_target"))
-        legacy_candidates.extend(
-            str(bridge).partition(" -> ")[0]
-            for bridge in (entry.get("bridge_symlinks") or [])
-        )
-
-    if receipt_paths:
-        paths.extend(receipt_paths)
-        return paths
-
-    for candidate in legacy_candidates:
-        relative = _project_path(candidate, project_root)
-        if relative and relative not in seen:
-            seen.add(relative)
-            paths.append(relative)
+        targets = receipt.get("targets")
+        if not isinstance(targets, list):
+            raise LibraryError(
+                ".library.lock project receipts must contain a targets list"
+            )
+        for target in targets:
+            if not isinstance(target, dict) or not isinstance(target.get("path"), str):
+                raise LibraryError(
+                    ".library.lock receipt targets must be mappings with a string path"
+                )
+            relative = _project_path(target["path"], project_root)
+            if relative and relative not in seen:
+                seen.add(relative)
+                paths.append(relative)
     return paths
 
 
@@ -197,7 +221,7 @@ def reconcile_project_gitignore(
     project_root: Path, *, untrack: bool = False
 ) -> dict[str, Any]:
     """Write the managed block and optionally remove managed paths from the index."""
-    project_root = project_root.absolute()
+    project_root = _require_git_top_level(project_root)
     managed_paths = managed_project_paths(project_root)
     gitignore = project_root / ".gitignore"
     if gitignore.exists():

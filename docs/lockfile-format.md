@@ -66,6 +66,10 @@ Two lockfile instances exist, sharing the same schema:
 sidecar, and its Workspace lock sidecar in the Library-managed `.gitignore`
 block. Reproducible shared intent belongs in `library.yaml` and Workspace roots;
 generated install receipts and local concurrency state do not belong in Git.
+This managed-ignore lifecycle requires `schema_version: 2` and reads only
+project-owned `receipts[].targets[].path`. Its Git top-level, project root,
+lockfile root, and `.gitignore` root are identical. This restriction does not
+remove legacy lock support from unrelated Library commands.
 
 ### Global lockfile (new — ADR-0003)
 

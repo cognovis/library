@@ -69,6 +69,9 @@ A consumer repository registers only the primitives and Workspaces it needs.
 Library-generated project installs and lock artifacts stay local through the
 CLI-managed `.gitignore` block. Marketplace repositories keep authored source
 primitives at top level and ignore their generated install targets.
+For this lifecycle, the Git top-level, project root, `.library.lock` root, and
+`.gitignore` root are one directory. An explicit `--project` must name that Git
+top-level exactly; linked worktrees are valid independent top-levels.
 
 One repository may use several orthogonal Workspaces. For example, the accepted
 portfolio maps `fhir-management` to both `fhir-ig-authoring` and `python-cli`, and

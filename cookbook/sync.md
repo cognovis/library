@@ -21,10 +21,17 @@ library sync --json
 
 Successful top-level syncs that include project scope reconcile the
 Library-managed block in the project `.gitignore`. The entries come from the
-current project `.library.lock`: lock artifacts, repository-relative install
-targets, and bridge symlinks. User-authored content outside the marked block is
-preserved, stale managed entries are removed, and global or outside-project
-paths are excluded.
+current schema-v2 project `.library.lock`: lock artifacts and only
+project-owned `receipts[].targets[].path` values. The managed-ignore feature
+does not fall back to the deprecated `installed` projection. User-authored
+content outside the marked block is preserved and stale entries are removed;
+malformed, absolute, or escaping targets fail before `.gitignore` or index
+mutation.
+
+Project sync uses one root for Git, `.library.lock`, and `.gitignore`. Without
+`--project`, Library resolves the current Git top-level. An explicit `--project`
+must name that top-level exactly, including when the checkout is a linked
+worktree; nested directories are rejected before mutation.
 
 Tracked managed paths are reported as warnings but remain in the Git index.
 After reviewing the warning, remove exactly those paths from the index while
