@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""
+test_library_coverage.py — Tests for library.yaml coverage of migrated artefacts
+
+Bead: CL-yko
+Tests:
+  1. All cognovis-migrated skills are registered in library.yaml
+  2. All sussdorff-migrated skills are registered in library.yaml
+  3. All cognovis-migrated agents are registered in library.yaml
+  4. All sussdorff-migrated agents are registered in library.yaml
+  5. All cognovis-migrated commands are registered as prompts in library.yaml
+  6. All registered entries have source URLs
+  7. All registered entries have descriptions
+  8. All registered entries have tags
+  9. validate-library.py passes after all entries added
+  10. check-coverage.py script exists and is executable
+
+Run with:
+    uv run pytest tests/test_library_coverage.py -v
+  or:
+    uv run tests/test_library_coverage.py
+"""
+
+import sys
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    print("FAIL: PyYAML is not installed. Run: pip install PyYAML", file=sys.stderr)
+    sys.exit(1)
+
+# ---- Setup ----------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+LIBRARY_YAML = REPO_ROOT / "library.yaml"
+
+
+def load_library():
+    with open(LIBRARY_YAML) as f:
+        return yaml.safe_load(f)
+
+
+def get_registered_names(library_data):
+    """Return sets of registered names per section."""
+    lib = library_data.get("library", {})
+    skills = {e["name"] for e in lib.get("skills", []) if "name" in e}
+    agents = {e["name"] for e in lib.get("agents", []) if "name" in e}
+    prompts = {e["name"] for e in lib.get("prompts", []) if "name" in e}
+    standards = {e["name"] for e in lib.get("standards", []) if "name" in e}
+    return skills, agents, prompts, standards
+
+
+# Expected cognovis skills (names as they appear in library.yaml)
+EXPECTED_COGNOVIS_SKILLS = {
+    "angebotserstellung", "bead-implementation-loop", "cognovis-beads", "billing-reviewer", "binary-explorer",
+    "brand-forge", "bug-triage", "claude-md-pruner", "cmux", "cmux-browser", "cmux-markdown",
+    "collmex-cli", "council", "daily-brief", "dolt", "entropy-scan", "event-log",
+    "infra-principles", "inject-standards", "mail-send",
+    "nbj-audit", "people-query", "playwright-cli",
+    "plugin-management", "portless", "project-context", "project-health", "project-setup",
+    "spec-developer", "standards", "summarize",
+    "sync-standards", "token-cost", "ui-cli", "vision", "vision-author",
+}
+
+# Expected platform-owned skills
+EXPECTED_PLATFORM_SKILLS = {
+    "agent-forge", "hook-forge", "script-forge", "skill-forge", "standard-forge",
+}
+
+# Expected sussdorff skills
+EXPECTED_SUSSDORFF_SKILLS = {
+    "ai-readiness", "amazon", "career-check", "google-invoice", "mm-cli",
+    "linkedin", "transcribe", "hetzner-cloud", "home-infra", "local-vm",
+    "paperless-cli", "piler-cli",
+}
+
+# Expected cognovis agents
+EXPECTED_COGNOVIS_AGENTS = {
+    "bead-orchestrator", "bead-spec-reviewer", "ci-monitor",
+    "constraint-checker",
+    "doc-changelog-updater", "feature-doc-updater", "holdout-validator",
+    "learning-extractor", "pester-test-engineer",
+    "plan-reviewer", "playwright-tester", "prd-generator", "quick-fix", "researcher",
+    "review-agent", "test-author", "uat-validator",
+    "verification-agent",
+}
+
+# Expected sussdorff agents
+EXPECTED_SUSSDORFF_AGENTS: set[str] = set()
+
+RETIRED_COGNOVIS_AGENTS = {
+    "integration-test-runner",
+    "test-engineer",
+}
+
+PRESERVED_COGNOVIS_AGENTS = {
+    "doc-changelog-updater",
+    "pester-test-engineer",
+    "plan-reviewer",
+}
+
+PRESERVED_COGNOVIS_SKILLS = {"spellcheck-test-engineer"}
+
+# Expected prompts (commands only)
+EXPECTED_PROMPTS = {
+    "compact-reference", "install-plugin",
+}
+
+# Expected standards
+EXPECTED_STANDARDS = {
+    "adr-location", "english-only", "execution-result-envelope",
+    "healthcare-control-areas", "no-emoji", "open-brain-http-client",
+    "python-default-bash-exception", "script-first-rule", "tool-standards",
+}
+
+ALLOWED_SOURCE_REPOS = (
+    "cognovis/library",
+    "cognovis/library-core",
+    "sussdorff/library-core",
+    "sussdorff/open-brain",
+    "cognovis/samurai-skills",
+    "cognovis/polaris",
+)
+
+ALLOWED_DEPENDENCY_PREFIXES = (
+    "skill:",
+    "agent:",
+    "prompt:",
+    "standard:",
+    "hook:",
+    "mcp:",
+    "script:",
+)
+
+
+# ---- Tests ----------------------------------------------------------------
+
+def test_cognovis_skills_registered():
+    """All expected cognovis skills must be registered in library.skills."""
+    library = load_library()
+    skills, _, _, _ = get_registered_names(library)
+    missing = EXPECTED_COGNOVIS_SKILLS - skills
+    assert not missing, f"Missing cognovis skills in library.yaml: {sorted(missing)}"
+
+
+def test_platform_skills_registered():
+    """All expected platform-owned skills must be registered in library.skills."""
+    library = load_library()
+    skills, _, _, _ = get_registered_names(library)
+    missing = EXPECTED_PLATFORM_SKILLS - skills
+    assert not missing, f"Missing platform skills in library.yaml: {sorted(missing)}"
+
+
+def test_sussdorff_skills_registered():
+    """All expected sussdorff skills must be registered in library.skills."""
+    library = load_library()
+    skills, _, _, _ = get_registered_names(library)
+    missing = EXPECTED_SUSSDORFF_SKILLS - skills
+    assert not missing, f"Missing sussdorff skills in library.yaml: {sorted(missing)}"
+
+
+def test_cognovis_agents_registered():
+    """All expected cognovis agents must be registered in library.agents."""
+    library = load_library()
+    _, agents, _, _ = get_registered_names(library)
+    missing = EXPECTED_COGNOVIS_AGENTS - agents
+    assert not missing, f"Missing cognovis agents in library.yaml: {sorted(missing)}"
+
+
+def test_retired_agent_catalog_disposition_is_exact_name_aware():
+    """Only the two retired exact agent names leave the install catalog."""
+    library = load_library()
+    skills, agents, _, _ = get_registered_names(library)
+
+    assert RETIRED_COGNOVIS_AGENTS.isdisjoint(agents)
+    assert PRESERVED_COGNOVIS_AGENTS <= agents
+    assert PRESERVED_COGNOVIS_SKILLS <= skills
+
+
+def test_doc_changelog_updater_catalog_matches_conditional_loop_role():
+    """The retained updater must not advertise its retired proactive contract."""
+    agents = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("agents", [])
+    }
+    updater = agents["doc-changelog-updater"]
+
+    assert updater["description"] == (
+        "Updates documentation before the bead implementation loop's single final "
+        "review, only for explicit documentation work or a material user-visible, "
+        "API, configuration, deployment, operator-workflow, or developer-workflow "
+        "change."
+    )
+    assert updater["requires"] == ["skill:inject-standards"]
+
+
+def test_plan_reviewer_catalog_matches_read_only_advisor_role():
+    """The retained plan advisor must not advertise plan-file mutation."""
+    agents = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("agents", [])
+    }
+    reviewer = agents["plan-reviewer"]
+
+    assert reviewer["description"] == (
+        "Optional read-only advisor for a bead implementation lead. Challenges "
+        "the live capability and implementation plan after context admission and "
+        "before executor dispatch, returning READY, REFINE, or HUMAN_DECISION "
+        "without editing files."
+    )
+    assert "requires" not in reviewer
+
+
+def test_regression_bead_orchestrator_installs_spec_reviewer():
+    """The full Bead Claim preflight agent must ship with its orchestrator."""
+    agents = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("agents", [])
+    }
+
+    assert "bead-spec-reviewer" in agents
+    assert "agent:bead-spec-reviewer" in agents["bead-orchestrator"].get(
+        "requires", []
+    )
+
+
+def test_regression_session_close_depends_on_cognovis_beads():
+    """The Session Close installer must use the renamed orchestration overlay."""
+    skills = {
+        entry["name"]: entry
+        for entry in load_library().get("library", {}).get("skills", [])
+    }
+
+    assert "cognovis-beads" in skills
+    requires = skills["session-close"].get("requires", [])
+    assert "skill:cognovis-beads" in requires
+    assert "skill:beads" not in requires
+
+
+def test_sussdorff_agents_registered():
+    """All expected sussdorff agents must be registered in library.agents."""
+    library = load_library()
+    _, agents, _, _ = get_registered_names(library)
+    missing = EXPECTED_SUSSDORFF_AGENTS - agents
+    assert not missing, f"Missing sussdorff agents in library.yaml: {sorted(missing)}"
+
+
+def test_prompts_registered():
+    """All expected commands must be registered in library.prompts."""
+    library = load_library()
+    _, _, prompts, _ = get_registered_names(library)
+    missing = EXPECTED_PROMPTS - prompts
+    assert not missing, f"Missing prompts in library.yaml: {sorted(missing)}"
+
+
+def test_standards_registered():
+    """All expected standards must be registered in library.standards."""
+    library = load_library()
+    _, _, _, standards = get_registered_names(library)
+    missing = EXPECTED_STANDARDS - standards
+    assert not missing, f"Missing standards in library.yaml: {sorted(missing)}"
+
+
+def test_all_entries_have_source_urls():
+    """All new library-core entries must have a source URL (not from_marketplace)."""
+    library = load_library()
+    lib = library.get("library", {})
+
+    errors = []
+    for section_name in ("skills", "agents", "prompts", "standards"):
+        for entry in lib.get(section_name, []):
+            name = entry.get("name", "<unknown>")
+            # Skip impeccable (from_marketplace) and any other marketplace entries
+            if "from_marketplace" in entry:
+                continue
+            if "source" not in entry and "sources" not in entry:
+                errors.append(f"{section_name}/{name}: missing source URL")
+
+    assert not errors, f"Entries without source URLs:\n" + "\n".join(errors)
+
+
+def test_all_entries_have_descriptions():
+    """All library-core entries must have descriptions."""
+    library = load_library()
+    lib = library.get("library", {})
+
+    errors = []
+    for section_name in ("skills", "agents", "prompts", "standards"):
+        for entry in lib.get(section_name, []):
+            name = entry.get("name", "<unknown>")
+            if "from_marketplace" in entry:
+                continue
+            desc = entry.get("description", "").strip()
+            if not desc:
+                errors.append(f"{section_name}/{name}: missing or empty description")
+
+    assert not errors, f"Entries without descriptions:\n" + "\n".join(errors)
+
+
+def test_all_entries_have_tags():
+    """All library-core entries must have at least one tag."""
+    library = load_library()
+    lib = library.get("library", {})
+
+    errors = []
+    for section_name in ("skills", "agents", "prompts", "standards"):
+        for entry in lib.get(section_name, []):
+            name = entry.get("name", "<unknown>")
+            if "from_marketplace" in entry:
+                continue
+            tags = entry.get("tags", [])
+            if not tags:
+                errors.append(f"{section_name}/{name}: missing tags")
+
+    assert not errors, f"Entries without tags:\n" + "\n".join(errors)
+
+
+def test_source_urls_point_to_registered_source_repos():
+    """Source URLs must point to an approved first-party source repo."""
+    library = load_library()
+    lib = library.get("library", {})
+
+    errors = []
+    for section_name in ("skills", "agents", "prompts", "standards"):
+        for entry in lib.get(section_name, []):
+            name = entry.get("name", "<unknown>")
+            if "from_marketplace" in entry:
+                continue
+            source = entry.get("source", "")
+            if source and not any(repo in source for repo in ALLOWED_SOURCE_REPOS):
+                errors.append(f"{section_name}/{name}: source URL does not point to an allowed source repo: {source}")
+
+    assert not errors, f"Entries with wrong source URLs:\n" + "\n".join(errors)
+
+
+def test_requires_format():
+    """requires field must use string format 'type:name' not object format."""
+    library = load_library()
+    lib = library.get("library", {})
+
+    errors = []
+    for section_name in ("skills", "agents", "prompts", "standards"):
+        for entry in lib.get(section_name, []):
+            name = entry.get("name", "<unknown>")
+            requires = entry.get("requires", [])
+            for req in requires:
+                if not isinstance(req, str):
+                    errors.append(f"{section_name}/{name}: requires item must be string, got {type(req).__name__}: {req}")
+                elif not any(req.startswith(p) for p in ALLOWED_DEPENDENCY_PREFIXES):
+                    errors.append(f"{section_name}/{name}: requires item must use a supported typed prefix: {req}")
+
+    assert not errors, f"Invalid requires format:\n" + "\n".join(errors)
+
+
+# ---- Runner ---------------------------------------------------------------
+
+if __name__ == "__main__":
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", __file__, "-v"],
+        capture_output=False
+    )
+    sys.exit(result.returncode)

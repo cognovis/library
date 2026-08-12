@@ -3,7 +3,7 @@ name: script-forge
 description: >-
   Create, validate, and catalog first-class Python script primitives for the Library.
   Use when deterministic helper logic should be reusable across skills, agents, hooks,
-  standards, commands, or Gas City packs. Triggers on create script, script-forge,
+  standards, or commands. Triggers on create script, script-forge,
   first-class script, Python helper, pack command script, doctor script, formula script.
 requires_standards: [agentic-primitives, primitive-placement, english-only, no-emoji]
 ---
@@ -40,8 +40,7 @@ a script is first-class, bundled, repo-local, or product-owned.
 | Repo-local escape hatch? | Keep scripts local when they bake in one repo's filesystem, ADR IDs, credentials, generated paths, or deployment topology. |
 | Harness support? | Ask whether the script works in all harnesses or is harness-specific. For one-harness scripts, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
 | Runtime requirements? | Ask whether the script requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
-| Deterministic route? | Scripts are the destination for deterministic parsing, scanning, validation, export, and transformation logic; wrap them with skills, hooks, agents, standards, or Gas City surfaces only when a caller needs them. |
-| Gas City projection? | PackV2 command, doctor, formula, or asset metadata is catalog metadata; the Python source remains a Library or repo-local script. |
+| Deterministic route? | Scripts are the destination for deterministic parsing, scanning, validation, export, and transformation logic; wrap them with skills, hooks, agents, or standards only when a caller needs them. |
 
 Product-plane refusal message:
 
@@ -61,7 +60,6 @@ Ask these questions, one at a time when not already answered:
 3. **Role:** `helper`, `entrypoint`, `command`, `doctor`, `validator`, `exporter`, or
    `formula-step`.
 4. **Output contract:** `json-envelope`, `bare-value`, or `exit-code`.
-5. **Gas City targets:** `asset`, `command`, `doctor`, or `formula` if pack-exportable.
 6. **Runtime requirements:** binaries, environment variable names, standards.
 
 ## Scaffold
@@ -124,26 +122,12 @@ First-class script:
         name: <product-feature-or-script>
         primitive_type: <command|workflow|service|other>
         notes: <why this dev-plane script supports the product surface>
-      gascity:
-        exportable: <true|false>
-        projections:
-          - target: script
-            pack: <pack-name>
-            scope: <city|rig|provider|global>
-            session_class: none
-            provider_neutral: true
-            requires:
-              binaries: []
-              env: []
-              standards: []
   tags:
     - origin:original
     - tier:core
 ```
 
 Omit `product_counterpart:` when there is no paired product-plane artifact.
-Legacy `gascity.target`, `gascity.pack`, and `gascity.scope` may remain on
-existing catalog entries, but new snippets should use `gascity.projections[]`.
 
 Bundled script declaration inside an owning primitive's catalog entry:
 
@@ -162,14 +146,12 @@ Run Library validation after updating `library.yaml`:
 
 ```bash
 python3 ../meta/scripts/validate-library.py --yaml ../meta/library.yaml
-python3 ../meta/scripts/validate-gascity-export.py --yaml ../meta/library.yaml
 ```
 
 Script-specific checks:
 
 - source or entrypoint ends in `.py`;
 - `language: python`;
-- Gas City export metadata has `target`, `pack`, and `scope` when exportable;
 - bundled scripts are declared in `scripts:`;
 - command/doctor/formula-step script roles set `entrypoint: true`.
 

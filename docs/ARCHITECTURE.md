@@ -52,8 +52,9 @@ with no exclusion or override semantics. Strict functional coupling remains in
 primitive `requires:` metadata. The Library does not add a Package or generic
 bundle root between those two relationships.
 
-The evidence-backed initial cuts and repository mapping are documented in the
-[Workspace Portfolio Audit](research/workspace-portfolio-audit.md). In
+The evidence-backed initial cuts and repository mapping are recorded in
+[ADR-0010](adr/workspace-desired-state-reconciliation.md) and
+[ADR-0011](adr/heterogeneous-marketplace-workspaces.md). In
 particular, `library/meta` directly composes `library-authoring` and
 `python-cli`; `cognovis-pi` consumes `library-authoring` while keeping Pi
 extensions, profiles, and Just modules as separately selected Pi-owned

@@ -215,6 +215,22 @@ sources:
         - first-party
         - team
   marketplaces:
+    - name: polaris
+      source: https://github.com/cognovis/polaris
+      description: Cognovis Polaris product repository and its reusable schema-analysis skill.
+      type: git
+      local_path: /Users/malte/code/polaris
+      writable: false
+      content_types:
+        - skills
+    - name: microsoft-markitdown
+      source: https://github.com/microsoft/markitdown
+      description: Upstream source for the MarkItDown MCP server.
+      type: git
+      local_path: null
+      writable: false
+      content_types:
+        - mcp_servers
     - name: anthropic-official
       source: https://github.com/anthropics
       description: Anthropic-curated Claude plugins and extensions
@@ -285,7 +301,7 @@ sources:
         redistribution_rights: granted
         derivative_rights: granted
         evidence_source: >-
-          per-repository MIT LICENSE recorded with commit pins in /Users/malte/code/library/cognovis-pi/docs/research/indydevdan-pi-repos.md, 2026-08-08. Resolved per repository at normalization: a repository with no observed licence relaxes the licence-derived grants to unknown.
+          per-repository MIT LICENSE checks recorded with commit pins on 2026-08-08. Resolved per repository at normalization: a repository with no observed licence relaxes the licence-derived grants to unknown.
       local_path: null
       writable: false
       content_types:
@@ -337,7 +353,7 @@ sources:
         redistribution_rights: unknown
         derivative_rights: unknown
         evidence_source: >-
-          no published licence or redistribution grant located, 2026-08-08 (docs/research/external-marketplace-reference-matrix.md)
+          no published licence or redistribution grant located, 2026-08-08
         grant_evidence:
           fetch_authorization: >-
             subscriber-token-scoped MCP endpoint recorded in local harness configuration, 2026-08-08
@@ -543,7 +559,7 @@ library:
         - origin:original
         - tier:domain
     - name: skill-forge
-      description: 'Create, validate, and audit skills (SKILL.md files). Use when creating a new skill, validating an existing skill for quality and extractable-code violations, or running a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill, check skill, audit skills, skill health check, fleet quality, skill creation, Gas City pack metadata for skills, script declarations, provider-neutral skill design.'
+      description: 'Create, validate, and audit skills (SKILL.md files). Use when creating a new skill, validating an existing skill for quality and extractable-code violations, or running a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill, check skill, audit skills, skill health check, fleet quality, skill creation, script declarations, provider-neutral skill design.'
       source: https://github.com/cognovis/library/blob/main/skills/skill-forge/SKILL.md
       requires:
         - standard:agentic-primitives
@@ -560,7 +576,7 @@ library:
         - origin:original
         - tier:domain
     - name: script-forge
-      description: Create, validate, and catalog first-class Python script primitives for the Library. Use when deterministic helper logic should be reusable across skills, agents, hooks, standards, commands, or Gas City packs. Triggers on create script, script-forge, first-class script, Python helper, pack command script, doctor script, formula script.
+      description: Create, validate, and catalog first-class Python script primitives for the Library. Use when deterministic helper logic should be reusable across skills, agents, hooks, standards, or commands. Triggers on create script, script-forge, first-class script, Python helper, reusable validation script, or transformation script.
       source: https://github.com/cognovis/library/blob/main/skills/script-forge/SKILL.md
       requires:
         - standard:agentic-primitives
@@ -608,6 +624,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: amazon
       description: Amazon.de automation via playwright-cli with local purchases database. Use for downloading invoices, searching order history, or querying past purchases. Triggers on amazon rechnung, amazon bestellung, amazon order, was habe ich gekauft.
@@ -619,6 +636,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: career-check
       description: Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment. Use when evaluating career positioning or assessing AI impact. Triggers on career check, career analysis, career collapse, AI career, role assessment.
@@ -630,6 +648,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: google-invoice
       description: Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML, and send to accounting. Triggers on google rechnung, google invoice, google one beleg.
@@ -641,6 +660,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: customer-invoice
       description: Create outgoing Cognovis customer invoices with collmex-cli, Timing.app, MoneyMoney travel costs, ZUGFeRD/PDF output, Collmex booking, and visible Apple Mail drafts. Triggers on Ausgangsrechnung, customer invoice, Kundenrechnung, cognovis billing.
@@ -652,6 +672,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: mm-cli
       description: CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts, balances, transactions, cashflow, or spending. Triggers on MoneyMoney, bank accounts, transactions, cashflow, spending, balance.
@@ -663,6 +684,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: linkedin
       description: LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles, reading feeds, writing recommendations, or searching people. Triggers on LinkedIn, profile extraction, connections, feed, LinkedIn search, recommendation.
@@ -674,6 +696,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: transcribe
       description: Transcribe audio files with speaker diarization via AssemblyAI. Supports local files and Plaud AI cloud recordings.
@@ -685,6 +708,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: hetzner-cloud
       description: Manage Hetzner Cloud infrastructure via hcloud CLI and Robot. Use when creating/modifying DNS records, managing servers, switching projects, or transferring domains. Triggers on hetzner, hcloud, dns zone, domain transfer.
@@ -696,6 +720,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: home-infra
       description: 'Home infrastructure overview: hardware, network, services, and CLI tools. Use when finding what runs where, choosing CLI tools, or planning infra changes. Triggers on home infra, home network, what devices, home server.'
@@ -707,6 +732,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: local-vm
       description: Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when SSH fails due to stopped VMs, or to start/stop/check VM status. Triggers on VM not running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox.
@@ -718,6 +744,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: paperless-cli
       description: Interact with Paperless-ngx document management via REST API. Use when searching documents, downloading PDFs, uploading scans, or querying tags. Triggers on paperless, scanned document, document archive.
@@ -729,6 +756,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: piler-cli
       description: CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when querying archived emails, searching mail history, or reading past messages. Triggers on mailpiler, mail archive, piler search, alte mails, email archiv.
@@ -740,6 +768,7 @@ library:
         - tier:project
       metadata:
         library:
+          source_catalog: sussdorff-library-core
           plane: dev
     - name: ingest-content
       description: Save any URL to open-brain memory as curated_content. Detects content type (video/article/doc), extracts via the right tool, and persists with source_url, extraction_date, and content_type metadata.
@@ -751,6 +780,10 @@ library:
         - origin:personal
         - tier:core
         - workflow:memory
+      metadata:
+        library:
+          source_catalog: open-brain
+          plane: dev
     - name: memory-heartbeat
       description: Periodic memory maintenance for open-brain. Runs lifecycle pipeline during work hours, generates daily digest at end-of-day, weekly summary on Fridays.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/memory-heartbeat/SKILL.md
@@ -761,6 +794,10 @@ library:
         - origin:personal
         - tier:core
         - workflow:memory
+      metadata:
+        library:
+          source_catalog: open-brain
+          plane: dev
     - name: ob-migrate
       description: Migrate knowledge into open-brain memory. Interactive (extract from prior chat) or batch (JSONL / Obsidian/Markdown file) mode.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-migrate/SKILL.md
@@ -773,6 +810,7 @@ library:
         - workflow:memory
       metadata:
         library:
+          source_catalog: open-brain
           plane: dev
     - name: ob-search
       description: Search open-brain memory for past observations, session summaries, learnings. Use when "what did I learn", "past sessions", "recall", "remember".
@@ -784,6 +822,10 @@ library:
         - origin:personal
         - tier:core
         - workflow:memory
+      metadata:
+        library:
+          source_catalog: open-brain
+          plane: dev
     - name: ob-triage
       description: Triage open-brain memories with human-in-the-loop review. Classifies into keep/merge/archive/delete/promote and asks for approval before executing.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-triage/SKILL.md
@@ -794,6 +836,10 @@ library:
         - origin:personal
         - tier:core
         - workflow:memory
+      metadata:
+        library:
+          source_catalog: open-brain
+          plane: dev
     - name: aidbox
       description: Aidbox FHIR platform by Health Samurai. Use for FHIR REST API, search, transactions, bundles, access policies, subscriptions, custom resources, terminology, profiles, AccessPolicy, SearchParameter.
       from_marketplace: cognovis-samurai
@@ -2615,7 +2661,7 @@ library:
         - tier:core
         - category:standard
     - name: primitive-placement
-      description: 'Placement rubric for Library primitives: steward marketplace, dev-plane catalog boundaries, product counterparts, repo-local overlays, deterministic script routing, and Gas City projections.'
+      description: 'Placement rubric for Library primitives: steward marketplace, dev-plane catalog boundaries, product counterparts, repo-local overlays, and deterministic script routing.'
       source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/primitive-placement.md
       tier: core
       default_scope: ask
@@ -2663,6 +2709,7 @@ library:
       default_scope: ask
       metadata:
         library:
+          source_catalog: cognovis-library-core
           plane: dev
           steward: cognovis-core
           product_counterpart:
@@ -2683,6 +2730,10 @@ library:
         - tier:core
         - category:standard
         - workflow:beads
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          plane: dev
     - name: cross-bead-review
       description: Cross-bead review checklist, disposition taxonomy, metadata stamps, cohort selector grammar, and project overlay contract shared by stream-reviewer and stream-review.
       source: https://github.com/cognovis/library-core/blob/main/standards/workflow/cross-bead-review.md
@@ -2753,6 +2804,7 @@ library:
         - category:standard
       metadata:
         library:
+          source_catalog: cognovis-library-core
           plane: dev
     - name: meta-parameters
       description: Parameter contract for Claude workflow JavaScript `meta` blocks. Defines required fields (`name`, `description`, `parameters`), supported types (string, list, bool, number), `required` flag, and type-coercion rules consumed by workflow installers.
@@ -3574,6 +3626,10 @@ library:
         - origin:personal
         - workflow:memory
         - hooks-manifest
+      metadata:
+        library:
+          source_catalog: open-brain
+          plane: dev
   mcp_servers:
     - name: open-brain
       description: Stateless memory store via search/save/get — persists observations across sessions

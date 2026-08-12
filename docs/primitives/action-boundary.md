@@ -9,7 +9,7 @@ the primitive format (`SKILL.md` YAML frontmatter for skills, YAML or TOML agent
 metadata for harness-specific agents).
 
 **Catalog metadata compatibility.** `library.yaml` treats `metadata` as an open
-extension bag so nested Library-owned metadata such as `metadata.library.gascity`
+extension bag so nested Library-owned metadata such as `metadata.library.action_boundary`
 can coexist with agentskills-compatible top-level string metadata. External
 consumers that previously expected `metadata` to be a strict string-to-string map
 should ignore nested `metadata.library.*` keys or validate only the top-level

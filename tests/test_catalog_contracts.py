@@ -46,18 +46,34 @@ def test_catalog_sources_match_declared_source_ownership() -> None:
     catalog = load_catalog()
     source_urls = {
         source["name"]: source["source"].rstrip("/")
-        for source in catalog["sources"]["catalogs"]
+        for source_group in ("catalogs", "marketplaces")
+        for source in catalog["sources"][source_group]
+        if str(source.get("source", "")).startswith(("http://", "https://"))
     }
     mismatches: list[str] = []
 
-    for entries in catalog_entries(catalog).values():
+    for (primitive_name, _), entries in catalog_entries(catalog).items():
         for entry in entries:
             metadata = (entry.get("metadata") or {}).get("library") or {}
             source_catalog = metadata.get("source_catalog")
             source = entry.get("source")
-            if not source_catalog or source_catalog not in source_urls:
-                continue
             if not isinstance(source, str) or not source.startswith(("http://", "https://")):
+                continue
+            if not source_catalog:
+                matching_owners = [
+                    name
+                    for name, owner_url in source_urls.items()
+                    if source == owner_url or source.startswith(f"{owner_url}/")
+                ]
+                if primitive_name != "mcp" or len(matching_owners) != 1:
+                    mismatches.append(
+                        f"{entry['name']}: missing source_catalog for {source}"
+                    )
+                continue
+            if source_catalog not in source_urls:
+                mismatches.append(
+                    f"{entry['name']}: undeclared source_catalog {source_catalog}"
+                )
                 continue
             declared = urlsplit(source_urls[source_catalog])
             actual = urlsplit(source)
@@ -71,6 +87,19 @@ def test_catalog_sources_match_declared_source_ownership() -> None:
                 )
 
     assert not mismatches, "\n".join(mismatches)
+
+
+def test_catalog_type_and_name_pairs_are_unique() -> None:
+    duplicates = {
+        key: candidates
+        for key, candidates in catalog_entries(load_catalog()).items()
+        if len(candidates) != 1
+    }
+
+    assert not duplicates, "\n".join(
+        f"duplicate {primitive_type}:{name} ({len(candidates)} entries)"
+        for (primitive_type, name), candidates in duplicates.items()
+    )
 
 
 def test_typed_dependencies_resolve_to_catalog_entries() -> None:
@@ -87,5 +116,30 @@ def test_typed_dependencies_resolve_to_catalog_entries() -> None:
                     unresolved.append(
                         f"{primitive_name}:{name} requires missing {dependency}"
                     )
+
+    assert not unresolved, "\n".join(unresolved)
+
+
+def test_workspace_roots_and_dependency_closures_resolve() -> None:
+    catalog = load_catalog()
+    entries = catalog_entries(catalog)
+    unresolved: list[str] = []
+
+    def visit(owner: str, key: tuple[str, str], seen: set[tuple[str, str]]) -> None:
+        if key in seen:
+            return
+        seen.add(key)
+        candidates = entries.get(key, [])
+        if len(candidates) != 1:
+            unresolved.append(f"{owner} resolves {key[0]}:{key[1]} to {len(candidates)} entries")
+            return
+        for dependency in candidates[0].get("requires") or []:
+            dependency_type, dependency_name = dependency.split(":", 1)
+            visit(owner, (dependency_type, dependency_name), seen)
+
+    for workspace in catalog["library"]["workspaces"]:
+        seen: set[tuple[str, str]] = set()
+        for root in workspace["roots"]:
+            visit(workspace["name"], (root["type"], root["name"]), seen)
 
     assert not unresolved, "\n".join(unresolved)

@@ -32,8 +32,9 @@ becomes a primitive, becomes project-owned and frozen with provenance, or is
 explicitly retired. Until then it remains a protected external-manager path and
 cannot be adopted, replaced, or pruned by Workspace reconciliation.
 
-The current row-by-row dispositions live in
-[Workspace legacy-writer inventory](migration/workspace-legacy-inventory.md).
+The governing desired-state and legacy-writer dispositions are recorded in
+[ADR-0010](adr/workspace-desired-state-reconciliation.md) and
+[ADR-0011](adr/heterogeneous-marketplace-workspaces.md).
 
 ## What it is and why it exists
 

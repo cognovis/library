@@ -110,8 +110,8 @@ def minimal_tooling_entry(**overrides) -> dict:
         "name": "test-entry",
         "description": "A test tooling entry",
         "target_kind": "file",
-        "target_path": ".beads/PRIME.md",
-        "source": "prime/PRIME.md",
+        "target_path": ".agents/policy.md",
+        "source": "project-tooling/policy.md",
     }
     entry.update(overrides)
     return entry
@@ -280,7 +280,7 @@ def test_file_target_requires_source():
         "name": "test-entry",
         "description": "A test tooling entry",
         "target_kind": "file",
-        "target_path": ".beads/PRIME.md",
+        "target_path": ".agents/policy.md",
         # source intentionally omitted
     }
     data = minimal_library({"project_tooling": [entry]})
@@ -497,8 +497,8 @@ def test_sync_runtime_file_target():
         project_root.mkdir()
 
         # Create source file in library
-        source_content = "# Fleet PRIME\nHello from fleet."
-        source_file = lib_root / "prime" / "PRIME.md"
+        source_content = "# Fleet policy\nHello from fleet."
+        source_file = lib_root / "project-tooling" / "policy.md"
         source_file.parent.mkdir(parents=True)
         source_file.write_text(source_content)
 
@@ -507,11 +507,11 @@ def test_sync_runtime_file_target():
 
         entries = [
             {
-                "name": "beads-prime",
-                "description": "Test prime entry",
+                "name": "fleet-policy",
+                "description": "Test policy entry",
                 "target_kind": "file",
-                "target_path": ".beads/PRIME.md",
-                "source": "prime/PRIME.md",
+                "target_path": ".agents/policy.md",
+                "source": "project-tooling/policy.md",
                 "conditions": [{"dir_exists": ".beads"}],
                 "sync_strategy": "overwrite_if_source_newer",
                 "conflict_policy": "canonical_wins",
@@ -523,7 +523,7 @@ def test_sync_runtime_file_target():
         )
         assert result["synced"] >= 1, f"Expected at least 1 synced entry, got: {result}"
 
-        target_file = project_root / ".beads" / "PRIME.md"
+        target_file = project_root / ".agents" / "policy.md"
         assert target_file.exists(), "Target file was not created"
         assert target_file.read_text() == source_content, (
             "Target content does not match source"
@@ -792,8 +792,8 @@ def test_sync_runtime_idempotent():
         project_root.mkdir()
 
         # Set up source
-        source_content = "# Fleet PRIME\nIdempotency check."
-        source_file = lib_root / "prime" / "PRIME.md"
+        source_content = "# Fleet policy\nIdempotency check."
+        source_file = lib_root / "project-tooling" / "policy.md"
         source_file.parent.mkdir(parents=True)
         source_file.write_text(source_content)
 
@@ -801,11 +801,11 @@ def test_sync_runtime_idempotent():
 
         entries = [
             {
-                "name": "beads-prime",
-                "description": "Test prime entry",
+                "name": "fleet-policy",
+                "description": "Test policy entry",
                 "target_kind": "file",
-                "target_path": ".beads/PRIME.md",
-                "source": "prime/PRIME.md",
+                "target_path": ".agents/policy.md",
+                "source": "project-tooling/policy.md",
                 "conditions": [{"dir_exists": ".beads"}],
                 "sync_strategy": "overwrite_if_source_newer",
                 "conflict_policy": "canonical_wins",
@@ -816,7 +816,7 @@ def test_sync_runtime_idempotent():
         result1 = sync.sync_entries(
             entries, library_root=lib_root, project_root=project_root
         )
-        target_file = project_root / ".beads" / "PRIME.md"
+        target_file = project_root / ".agents" / "policy.md"
         content_after_first = target_file.read_text()
 
         # Second run

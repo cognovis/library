@@ -16,8 +16,7 @@ Use this tree to decide which primitive a new capability belongs in.
 ```
 Is the capability purely deterministic logic (>50 lines) that runs NO model?
  └─ YES → SCRIPT (Python-only deterministic helper). Wrap the script in a Skill,
-           Command, Hook, Agent, or Gas City pack surface if the model/runtime
-           needs to call it.
+           Command, Hook, or Agent if the model/runtime needs to call it.
  └─ NO  → Continue below.
 
 Is it a fixed-shape orchestration of multiple subagents — deterministic control
