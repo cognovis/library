@@ -105,10 +105,7 @@ def test_decision_gate_field_set_is_disjoint_from_mandate_required_fields() -> N
 
 
 def test_no_typed_decision_gate_bead_schema_field_is_introduced() -> None:
-    retired_bead_tools = ROOT / "mcp-servers" / "cognovis-tools" / "tools" / "bead_tools.py"
-    retired_validation = ROOT / "mcp-servers" / "cognovis-tools" / "validation.py"
-    assert not retired_bead_tools.exists()
-    assert not retired_validation.exists()
+    assert not (ROOT / "mcp-servers").exists()
 
     scanned_files = [ROOT / "scripts" / "bead-author-check.py"]
 

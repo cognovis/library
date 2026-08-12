@@ -29,7 +29,6 @@ Taxonomy anchor: [PRIMITIVES.md Judge Specialization](https://github.com/cognovi
 | [Human Decision Gate](decision-gate.md) | Markdown `## Human Decision Gate` authoring contract mapped to judge outcomes. |
 | [Stop Taxonomy](stop-taxonomy.md) | Operational stop vocabulary crosswalked to ADR-0003 risk classes and judge outcomes. |
 | [Judge Eval Suite](judge-eval-suite.md) | Evaluation shape and minimum case discipline for judge agents. |
-| [MCP Tool Policy Manifest](mcp-tool-policy-manifest.md) | Deterministic tool policy manifest for `cognovis-tools` call authorization (draft). |
 
 ## Action Boundary Mapping
 

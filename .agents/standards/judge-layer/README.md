@@ -35,7 +35,6 @@ decision controls used before human escalation.
 | [`decision-brief.md`](decision-brief.md) | Compact manager view plus evidence appendix for human operational decisions | Presenting a manager-decidable gate without asking the manager to audit code |
 | [`decision-gate.md`](decision-gate.md) | `## Human Decision Gate` authoring contract mapped to judge outcomes | Authoring a human decision point in a bead |
 | [`stop-taxonomy.md`](stop-taxonomy.md) | Stop vocabulary and operational-risk rules crosswalked to ADR-0003 | Deciding when delivery pressure, risk, evidence, or authority requires a stop |
-| [`mcp-tool-policy-manifest.md`](mcp-tool-policy-manifest.md) | Deterministic cognovis-tools MCP tool policy manifest for transport-layer call authorization | Classifying registered MCP tools and auditing pre-handler `call_tool` authorization decisions |
 | [`judge-eval-suite.md`](judge-eval-suite.md) | Eval discipline: ≥20 cases, all four outcomes, ≥4 ALLOW cases, nine required metrics | Shipping a new judge agent; auditing an existing one |
 
 ## The Deterministic-First / Reasoned-Second Pattern

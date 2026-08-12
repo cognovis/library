@@ -37,12 +37,11 @@ define a parallel authorization object or weaken this schema's validity rules.
 | `revoked_at` | Time the mandate was revoked. |
 | `notes` | Non-authoritative explanation for auditors. |
 
-## Additive Profile: MCP Transport Authorization
+## Optional Profile: Transport Authorization
 
-ADR-0007 defines an additive transport-layer profile for cognovis-tools
-`call_tool` authorization. This profile reuses the Mandate shape above and adds
-fields needed for deterministic pre-handler checks. It does not replace the
-judge-layer Action Proposal flow from ADR-0003.
+Transport adapters may reuse the Mandate shape above with fields needed for
+deterministic pre-handler checks. This profile does not replace the judge-layer
+Action Proposal flow from ADR-0003.
 
 Transport-layer mandates SHOULD include these fields when they authorize
 mutation, session-write, external-side-effect, or high-risk tools. They remain
