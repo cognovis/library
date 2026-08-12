@@ -44,14 +44,18 @@ def test_command_prompts_remain_registered_as_prompts() -> None:
 
 def test_platform_forge_descriptions_match_checked_in_frontmatter() -> None:
     catalog = load_catalog()["library"]
-    catalog_descriptions = {
-        entry["name"]: entry["description"] for entry in catalog["skills"]
+    platform_skills = {
+        entry["name"]: entry
+        for entry in catalog["skills"]
+        if ((entry.get("metadata") or {}).get("library") or {}).get("source_catalog")
+        == "library-platform"
+        and (REPO_ROOT / "skills" / entry["name"] / "SKILL.md").is_file()
     }
-    for name in ("agent-forge", "hook-forge", "script-forge", "skill-forge", "standard-forge"):
+    for name, entry in platform_skills.items():
         frontmatter = yaml.safe_load(
             (REPO_ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[1]
         )
-        assert catalog_descriptions[name] == frontmatter["description"]
+        assert entry["description"] == frontmatter["description"]
 
 
 def test_catalog_sources_match_declared_source_ownership() -> None:

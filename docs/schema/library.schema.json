@@ -76,7 +76,7 @@
           "default": []
         },
         "scripts": {
-          "description": "Catalog of first-class Python script primitives. Scripts are deterministic helpers consumed by skills, agents, hooks, commands, standards, and pack exporters.",
+          "description": "Catalog of first-class Python script primitives. Scripts are deterministic helpers consumed by skills, agents, hooks, commands, and standards.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/script_entry"
@@ -525,7 +525,7 @@
           ]
         },
         "entrypoint": {
-          "description": "True when the script is directly callable by humans, pack commands, doctor checks, or formulas.",
+          "description": "True when the script is directly callable by humans, commands, doctor checks, or formulas.",
           "type": "boolean",
           "default": false
         },

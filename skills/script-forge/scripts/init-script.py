@@ -183,6 +183,10 @@ def catalog_stub(name: str, description: str, role: str, output_contract: str) -
           language: python
           entrypoint: {name}.py
           output_contract: {output_contract}
+          metadata:
+            library:
+              source_catalog: cognovis-library-core
+              plane: dev
           tags:
             - origin:original
             - tier:core

@@ -399,7 +399,7 @@ def merge_generated_entries(
     """Merge generated entries with matching curated catalog rows.
 
     Convention scan should update scanner-owned rows, but it must not erase
-    unrelated manual metadata such as tags, tier/default scope, or Gas City
+    unrelated manual metadata such as tags, tier/default scope, or Library
     annotations from rows that already point at the same source artifact.
     """
     existing_by_source: dict[str, dict[str, Any]] = {}

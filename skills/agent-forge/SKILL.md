@@ -274,7 +274,7 @@ Validator policy:
 - Include decision criteria for judgment calls
 - Include a `## Tool Usage` section with WHEN/HOW per tool to reduce hallucinated tool choice
 - Do not embed deterministic shell/Python workflows in the prompt when bundled Python
-  scripts can do the work predictably. If the helper is reusable or pack-exported,
+  scripts can do the work predictably. If the helper is reusable,
   dispatch to `script-forge`.
 - For helper outputs with multiple fields or actionable failures, use the execution-result contract in `references/execution-result-contract.md`
 

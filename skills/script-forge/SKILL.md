@@ -4,7 +4,7 @@ description: >-
   Create, validate, and catalog first-class Python script primitives for the Library.
   Use when deterministic helper logic should be reusable across skills, agents, hooks,
   standards, or commands. Triggers on create script, script-forge,
-  first-class script, Python helper, pack command script, doctor script, formula script.
+  first-class script, Python helper, reusable validation script, doctor script, or formula script.
 requires_standards: [agentic-primitives, primitive-placement, english-only, no-emoji]
 ---
 
@@ -183,4 +183,4 @@ belongs in the Workspace definition and reconciliation workflow.
 - Do NOT put provider auth secrets in metadata or script defaults.
 - Do NOT hide policy decisions in a script when a model must reason about them.
 - Do NOT make a script first-class if exactly one primitive owns it and no second
-  consumer or pack export exists.
+  consumer exists.

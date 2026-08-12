@@ -576,7 +576,7 @@ library:
         - origin:original
         - tier:domain
     - name: script-forge
-      description: Create, validate, and catalog first-class Python script primitives for the Library. Use when deterministic helper logic should be reusable across skills, agents, hooks, standards, or commands. Triggers on create script, script-forge, first-class script, Python helper, pack command script, doctor script, formula script.
+      description: Create, validate, and catalog first-class Python script primitives for the Library. Use when deterministic helper logic should be reusable across skills, agents, hooks, standards, or commands. Triggers on create script, script-forge, first-class script, Python helper, reusable validation script, doctor script, or formula script.
       source: https://github.com/cognovis/library/blob/main/skills/script-forge/SKILL.md
       requires:
         - standard:agentic-primitives
