@@ -1359,7 +1359,7 @@ def _install_with_deps(
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
 
-    planned_target_error = _validate_project_install_plan(
+    planned_targets, planned_target_error = _validate_project_install_plan(
         args,
         repo_root,
         catalog,
@@ -1509,6 +1509,23 @@ def _install_with_deps(
                     )
                 continue
         install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
+        if dep_scope == "project":
+            revalidation_error = _revalidate_project_member_targets(
+                repo_root,
+                dep_prim,
+                dep_name,
+                planned_targets.get((dep_prim, dep_name), []),
+            )
+            if revalidation_error is not None:
+                if use_json:
+                    print_json(
+                        error_result(
+                            str(revalidation_error), revalidation_error.exit_code
+                        )
+                    )
+                else:
+                    print(f"Error: {revalidation_error}", file=sys.stderr)
+                return revalidation_error.exit_code
         rc = _dispatch_use(
             args,
             repo_root,
@@ -1534,11 +1551,12 @@ def _validate_project_install_plan(
     install_order: list[tuple[str, str]],
     dependency_scope: Callable[[str, str], str],
     harness: str,
-) -> LibraryError | None:
+) -> tuple[dict[tuple[str, str], list[str]], LibraryError | None]:
     """Dry-plan the complete project closure and validate every recorded target."""
     from lib.gitignore import validate_planned_project_target
 
     install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
+    planned_targets: dict[tuple[str, str], list[str]] = {}
     for dep_primitive, dep_name in install_order:
         if dependency_scope(dep_primitive, dep_name) != "project":
             continue
@@ -1559,7 +1577,7 @@ def _validate_project_install_plan(
         try:
             plan = json.loads(captured.getvalue())
         except json.JSONDecodeError:
-            return LibraryError(
+            return planned_targets, LibraryError(
                 f"Could not inspect planned targets for {dep_primitive}:{dep_name}"
             )
         if exit_code != 0:
@@ -1568,21 +1586,63 @@ def _validate_project_install_plan(
                 or plan.get("reason")
                 or "Install planning failed"
             )
-            return LibraryError(
-                str(message)
-            )
+            return planned_targets, LibraryError(str(message))
         targets = plan.get("target_paths")
         if not isinstance(targets, list) or not targets:
-            return LibraryError(
+            return planned_targets, LibraryError(
                 f"Installer plan for {dep_primitive}:{dep_name} did not declare target_paths"
             )
+        normalized_targets: list[str] = []
         for target in targets:
             try:
-                validate_planned_project_target(target, repo_root)
+                normalized_targets.append(
+                    validate_planned_project_target(target, repo_root)
+                )
             except LibraryError as exc:
-                return LibraryError(
+                return planned_targets, LibraryError(
                     f"Unsafe target for {dep_primitive}:{dep_name}: {exc}"
                 )
+        planned_targets[(dep_primitive, dep_name)] = normalized_targets
+
+    if install_mode == "symlink":
+        members = list(planned_targets.items())
+        for (ancestor_member, ancestor_targets) in members:
+            for ancestor in ancestor_targets:
+                ancestor_path = Path(ancestor.rstrip("/"))
+                for descendant_member, descendant_targets in members:
+                    if descendant_member == ancestor_member:
+                        continue
+                    for descendant in descendant_targets:
+                        descendant_path = Path(descendant.rstrip("/"))
+                        nested_under_ancestor = (
+                            descendant_path != ancestor_path
+                            and descendant_path.is_relative_to(ancestor_path)
+                        )
+                        if nested_under_ancestor:
+                            ancestor_label = ":".join(ancestor_member)
+                            descendant_label = ":".join(descendant_member)
+                            return planned_targets, LibraryError(
+                                "Unsafe planned symlink ancestor interaction: "
+                                f"{ancestor_label} target {ancestor} contains "
+                                f"{descendant_label} target {descendant}"
+                            )
+    return planned_targets, None
+
+
+def _revalidate_project_member_targets(
+    repo_root: Path,
+    primitive: str,
+    name: str,
+    targets: list[str],
+) -> LibraryError | None:
+    """Recheck one precomputed member plan against current filesystem state."""
+    from lib.gitignore import validate_planned_project_target
+
+    for target in targets:
+        try:
+            validate_planned_project_target(target, repo_root)
+        except LibraryError as exc:
+            return LibraryError(f"Unsafe target for {primitive}:{name}: {exc}")
     return None
 
 

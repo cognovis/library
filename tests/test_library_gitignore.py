@@ -325,6 +325,63 @@ def test_use_accepts_symlink_ancestor_that_resolves_inside(tmp_path: Path) -> No
     assert (repo / ".agents").is_symlink()
 
 
+def test_use_rejects_planned_symlink_ancestor_interaction_before_mutation(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    dependency_source = repo / "dependency-source"
+    dependency_source.mkdir()
+    (dependency_source / "SKILL.md").write_text("# Dependency\n", encoding="utf-8")
+    prompt_source = repo / "prompt.md"
+    prompt_source.write_text("Prompt\n", encoding="utf-8")
+    (repo / "library.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "default_dirs": {
+                    "skills": [{"default": ".managed/"}],
+                    "prompts": [{"default": ".managed/dep/nested/"}],
+                },
+                "library": {
+                    "skills": [
+                        {
+                            "name": "dep",
+                            "description": "Symlink ancestor dependency",
+                            "source": str(dependency_source / "SKILL.md"),
+                        }
+                    ],
+                    "prompts": [
+                        {
+                            "name": "root",
+                            "description": "Nested prompt",
+                            "source": str(prompt_source),
+                            "requires": ["skill:dep"],
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    tracked = repo / "tracked.txt"
+    tracked.write_text("tracked", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    index_before = _git(repo, "ls-files", "--stage").stdout
+
+    result = _run_library(repo, "prompt", "use", "root", "--symlink", "--json")
+
+    assert result.returncode != 0
+    message = json.loads(result.stdout)["message"]
+    assert "planned symlink ancestor" in message.lower()
+    assert "skill:dep" in message
+    assert "prompt:root" in message
+    assert not (repo / ".managed").exists()
+    assert not (repo / ".library.lock").exists()
+    assert not (repo / ".gitignore").exists()
+    assert _git(repo, "ls-files", "--stage").stdout == index_before
+    cache_root = repo / "home" / ".local" / "share" / "library"
+    assert not cache_root.exists()
+
+
 @pytest.mark.parametrize(
     ("lock", "message"),
     [
