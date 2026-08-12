@@ -93,10 +93,12 @@ def test_render_context_emits_untrusted_provenance_envelope() -> None:
     assert "NESTED_DEPENDENCY_NOTES_SHOULD_NOT_RENDER" not in rendered
 
 
-def test_render_context_rejects_oversized_notes(monkeypatch) -> None:
-    """Long volatile notes are rejected instead of silently truncated."""
+def test_regression_valid_bead_context_has_no_size_limit(monkeypatch) -> None:
+    """Valid bead text is preserved regardless of legacy context limit settings."""
     mod = _load_module()
+    monkeypatch.setenv("CDX_BEAD_CONTEXT_TEXT_LIMIT", "10")
     monkeypatch.setenv("CDX_BEAD_CONTEXT_NOTES_LIMIT", "20")
+    monkeypatch.setenv("CDX_BEAD_CONTEXT_ENVELOPE_LIMIT", "200")
     payload = {
         "id": "CL-note",
         "title": "Notes bead",
@@ -104,56 +106,14 @@ def test_render_context_rejects_oversized_notes(monkeypatch) -> None:
         "issue_type": "task",
         "priority": 2,
         "metadata": {},
-        "description": "Short description",
+        "description": "d" * 12001,
         "notes": "x" * 50,
     }
 
-    with pytest.raises(ValueError, match="bead.notes exceeds CDX_BEAD_CONTEXT_NOTES_LIMIT"):
-        mod.render_context(payload)
+    envelope = json.loads(mod.render_context(payload))
 
-
-def test_render_context_rejects_oversized_envelope(monkeypatch) -> None:
-    """The rendered envelope size limit fails closed independently from field limits."""
-    mod = _load_module()
-    monkeypatch.setenv("CDX_BEAD_CONTEXT_ENVELOPE_LIMIT", "200")
-    payload = {
-        "id": "CL-envelope",
-        "title": "Envelope bead",
-        "status": "open",
-        "issue_type": "task",
-        "priority": 2,
-        "metadata": {},
-        "description": "Short description",
-        "notes": "short note",
-    }
-
-    with pytest.raises(
-        ValueError,
-        match="bead context envelope exceeds CDX_BEAD_CONTEXT_ENVELOPE_LIMIT",
-    ):
-        mod.render_context(payload)
-
-
-def test_render_context_rejects_non_integer_limit_env(monkeypatch) -> None:
-    """Limit environment variables must parse as integers."""
-    mod = _load_module()
-    monkeypatch.setenv("CDX_BEAD_CONTEXT_TEXT_LIMIT", "not-an-integer")
-
-    with pytest.raises(ValueError, match="CDX_BEAD_CONTEXT_TEXT_LIMIT must be an integer"):
-        mod.render_context({"id": "CL-limit", "metadata": {}})
-
-
-@pytest.mark.parametrize("value", ["0", "-5"])
-def test_render_context_rejects_non_positive_limit_env(monkeypatch, value: str) -> None:
-    """Limit environment variables must be positive."""
-    mod = _load_module()
-    monkeypatch.setenv("CDX_BEAD_CONTEXT_ENVELOPE_LIMIT", value)
-
-    with pytest.raises(
-        ValueError,
-        match="CDX_BEAD_CONTEXT_ENVELOPE_LIMIT must be greater than zero",
-    ):
-        mod.render_context({"id": "CL-limit", "metadata": {}})
+    assert _field(envelope, "description")["value"] == "d" * 12001
+    assert _field(envelope, "notes")["value"] == "x" * 50
 
 
 def test_main_rejects_malformed_payload_with_clear_error() -> None:
