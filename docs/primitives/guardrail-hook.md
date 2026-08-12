@@ -54,7 +54,7 @@ Key:
 | Pi | `tool_call`, `tool_result`, `message`, `session_start` | INFERRED — pending vendor doc validation. |
 | OpenCode | Pre-tool-call via `rules` array | INFERRED — pending vendor doc validation. |
 
-Full event-to-harness mapping: see `docs/research/guardrails-mapping.md`. Official Claude Code hook reference: [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks).
+Official Claude Code hook reference: [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks).
 
 **Capability mismatch warnings.** The `/library use-guardrail` cookbook automatically
 detects when a target harness does not support the guardrail's declared purpose and

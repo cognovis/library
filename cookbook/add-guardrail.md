@@ -6,7 +6,7 @@ enforcement primitive that runs outside the LLM loop — the model cannot bypass
 Each guardrail compiles to a per-harness native format (hooks, permission rules,
 approval policies) and declares which harnesses it supports.
 
-See `docs/PRIMITIVES.md` section 4 (Guardrail) and `docs/research/guardrails-mapping.md`
+See `docs/PRIMITIVES.md` section 4 (Guardrail)
 for the full capability matrix.
 
 ## Input
@@ -27,7 +27,7 @@ git pull
 ```
 
 ### 2. Validate Purpose and Harness Compatibility
-Look up the guardrail's purpose in `docs/research/guardrails-mapping.md` to confirm
+Use the guardrail primitive contract to confirm
 which harnesses natively support it:
 
 | Purpose | Claude Code | Codex CLI | Codex Cloud | Pi | OpenCode |

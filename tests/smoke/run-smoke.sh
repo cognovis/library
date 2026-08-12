@@ -1153,7 +1153,6 @@ smoke_migration() {
 #  5. Each model-standard has YAML frontmatter
 #  6. standards-loader.sh supports --load-model-standard operation
 #  7. PRIMITIVES.md cross-references standards-loader and model-standards path
-#  8. agents-format-mapping.md documents agent_base and model_standards fields
 # ---------------------------------------------------------------------------
 smoke_agent_bases() {
     section "agent-bases"
@@ -1173,7 +1172,6 @@ smoke_agent_bases() {
     local cognovis_base="${agent_bases_dir}/cognovis-base.md"
     local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
     local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
-    local format_mapping_doc="${REPO_ROOT}/docs/research/agents-format-mapping.md"
 
     # -----------------------------------------------------------------------
     # CHECK 1: per-harness agent base files exist
@@ -1311,26 +1309,6 @@ smoke_agent_bases() {
         fi
     else
         fail "agent-bases/primitives-model-standard: docs/PRIMITIVES.md NOT found"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 7: agents-format-mapping.md documents new frontmatter fields
-    # -----------------------------------------------------------------------
-    if [[ -f "${format_mapping_doc}" ]]; then
-        local mapping_ok=true
-        if ! grep -q "agent_base\|agent-base" "${format_mapping_doc}" 2>/dev/null; then
-            fail "agent-bases/format-mapping-agent-base: agents-format-mapping.md does NOT document agent_base field"
-            mapping_ok=false
-        fi
-        if ! grep -q "model_standards\|model-standards" "${format_mapping_doc}" 2>/dev/null; then
-            fail "agent-bases/format-mapping-model-standards: agents-format-mapping.md does NOT document model_standards field"
-            mapping_ok=false
-        fi
-        if [[ "${mapping_ok}" == "true" ]]; then
-            pass "agent-bases/format-mapping: agents-format-mapping.md documents agent_base and model_standards fields"
-        fi
-    else
-        fail "agent-bases/format-mapping: docs/research/agents-format-mapping.md NOT found"
     fi
 
     echo "  NOTE  agent-bases/runtime: End-to-end composition (install-time write to harness-native) requires a live library install session."

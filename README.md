@@ -53,8 +53,8 @@ Workspace support and lockfile schema v2 are available through the `library`
 CLI. Ordinary lifecycle operations remain additive and non-pruning; physical
 deletion requires the explicit, provenance-bound Workspace prune flow.
 
-The evidence-backed initial Workspace cuts and repository mapping live in the
-[Workspace Portfolio Audit](docs/research/workspace-portfolio-audit.md).
+The current Workspace architecture and repository mapping are defined by
+ADR-0010 and ADR-0011.
 
 ## Repository roles
 
@@ -179,8 +179,6 @@ Launcher architecture and Beads routing are documented in
   transition.
 - [Harness baseline](docs/harness-baseline.md) — what collaboration repositories
   commit locally.
-- [Workspace Portfolio Audit](docs/research/workspace-portfolio-audit.md) — observed
-  repository families and recommended Workspace cuts.
 
 ## Design principles
 

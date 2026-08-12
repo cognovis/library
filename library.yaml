@@ -20,6 +20,9 @@ default_dirs:
   scripts:
     - default: .agents/scripts/
     - global: ~/.agents/scripts/
+  prompts:
+    - default: .claude/commands/
+    - global: ~/.claude/commands/
   standards:
     - default: .agents/standards/
     - global: ~/.agents/standards/
@@ -130,7 +133,7 @@ sources:
           - .agents/skills/
           - .agents/standards/
           - agents/
-      notes: First-party personal library. Content targets personal workflows identified in docs/audit/skills-origin.json (personal_to_sussdorff_library_core list). Installs tracked via .library.lock per CL-t21.
+      notes: First-party personal Library content. Installs are tracked through Library lock receipts.
       tags:
         - first-party
         - personal
@@ -178,7 +181,7 @@ sources:
           - .agents/skills/
           - .agents/standards/
           - agents/
-      notes: First-party team library. Content covers original Cognovis team skills (origin=ORIGINAL per docs/audit/skills-origin.json). Name-collision and canonical-vs-bridge convention applies per docs/policy/name-collision.md. Installs tracked via .library.lock per CL-t21.
+      notes: First-party Cognovis team content. Name-collision and canonical-vs-bridge rules follow docs/policy/name-collision.md; installs are tracked through Library lock receipts.
       tags:
         - first-party
         - team
@@ -2641,59 +2644,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-  prompts:
-    - name: compact-reference
-      description: Compact reference file(s) using validation-driven workflow (single file or whole skill)
-      source: https://github.com/cognovis/library-core/blob/main/prompts/compact-reference.md
-      tags:
-        - origin:original
-        - tier:domain
-        - category:command
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: executive-pack
-      description: Execute one repository-scoped Executive Pack in this invoking session.
-      source: https://github.com/cognovis/library-core/blob/main/prompts/executive-pack.md
-      requires:
-        - skill:executive-pack
-      tags:
-        - origin:original
-        - tier:core
-        - category:command
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: install-plugin
-      description: 'prompt from cognovis-library-core: install-plugin'
-      source: https://github.com/cognovis/library-core/blob/main/prompts/install-plugin.md
-      tags:
-        - origin:original
-        - tier:domain
-        - category:command
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: topic
-      description: Launch a human-approved complex Topic as one cmux workspace with one persistent pane per Executive Pack.
-      source: https://github.com/cognovis/library-core/blob/main/prompts/topic.md
-      requires:
-        - agent:topic-agent
-      tags:
-        - origin:original
-        - tier:core
-        - category:command
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
   standards:
     - name: agentic-primitives
       description: Decision-tree standard for choosing the right invocation primitive (skill, command, agent, hook). Distills PRIMITIVES.md §3 C1-C6 agent-justification criteria plus counter-examples into an in-context briefing for the *-forge skills. Loaded via requires_standards by skill-forge, agent-forge, hook-forge, and standard-forge so primitive-type selection is consistent and self-correcting.
@@ -4386,6 +4336,33 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           source_commit: dee0415f47d8ae4ccfa7e166bdd682c29f94c33b
+  prompts:
+    - name: compact-reference
+      description: Compact reference file(s) using validation-driven workflow (single file or whole skill)
+      source: https://github.com/cognovis/library-core/blob/main/prompts/compact-reference.md
+      tags: ['origin:original', 'tier:domain', 'category:command']
+      metadata:
+        library: {source_catalog: cognovis-library-core, inventory: convention-scan, plane: dev}
+    - name: executive-pack
+      description: Execute one repository-scoped Executive Pack in this invoking session.
+      source: https://github.com/cognovis/library-core/blob/main/prompts/executive-pack.md
+      requires: ['skill:executive-pack']
+      tags: ['origin:original', 'tier:core', 'category:command']
+      metadata:
+        library: {source_catalog: cognovis-library-core, inventory: convention-scan, plane: dev}
+    - name: install-plugin
+      description: 'prompt from cognovis-library-core: install-plugin'
+      source: https://github.com/cognovis/library-core/blob/main/prompts/install-plugin.md
+      tags: ['origin:original', 'tier:domain', 'category:command']
+      metadata:
+        library: {source_catalog: cognovis-library-core, inventory: convention-scan, plane: dev}
+    - name: topic
+      description: Launch a human-approved complex Topic as one cmux workspace with one persistent pane per Executive Pack.
+      source: https://github.com/cognovis/library-core/blob/main/prompts/topic.md
+      requires: ['agent:topic-agent']
+      tags: ['origin:original', 'tier:core', 'category:command']
+      metadata:
+        library: {source_catalog: cognovis-library-core, inventory: convention-scan, plane: dev}
 project_tooling:
   - name: beads-prime
     description: bd workflow primer — auto-synced from cognovis-library at SessionStart. bd prime emits its content. Fleet policy, not per-project customization.

@@ -319,7 +319,7 @@ spawn fresh-context model subagents. Distinct from **script** (#9 — runs no
 model) and **agent** (#3 — a single context window, not control flow over many).
 Established by [ADR-0006](adr/workflow-primitive.md).
 
-### 15. Workspace
+### 14. Workspace
 
 Details: [Workspace](primitives/workspace.md). A metadata-only requested root
 whose constitutive feature is ownership-aware desired-state reconciliation. It
@@ -402,18 +402,5 @@ Library treats managed skills as read-only and does not override them.
   policy for collision handling, symlink lifecycle, and uninstall completeness.
 - **Workspace Desired State**: [ADR-0010](adr/workspace-desired-state-reconciliation.md)
   — universal ownership, lockfile v2, scope isolation, and safe pruning.
-- **Audit doc** (`docs/audit/skills-origin.md`, CL-23z): This doc's taxonomy is used to
-  classify the intent of every existing artifact. CL-23z inventory uses PRIMITIVES.md
-  definitions to classify all 44 agents in scope.
-- **Agent Format Mapping** (`docs/research/agents-format-mapping.md`, CL-11p): Field
-  mapping for Claude Code ↔ Codex agent translation. Covers new frontmatter fields
-  `agent_base` and `model_standards` introduced in CL-9b1.
 - **Agent Base Prompts** (CL-9b1): Canonical sources at `.agents/agent-bases/` and
   `.agents/model-standards/`. See [Model-Standard](primitives/model-standard.md) and [Agent Base](primitives/agent-base.md) for the composition algorithm.
-- **Research beads**:
-  - `CL-qzw` — Codex Layer 3 (prompts/skills) parity research (source of Codex
-    NORMATIVE claims in this doc)
-  - `CL-xcm` — Hook distribution across harnesses
-  - `CL-11p` — Agent format translation spec (Claude Code ↔ Codex)
-  - `CL-7ii` — Marketplace implementation
-  - `CL-9b1` — Agent Base Prompt composition + Model-Standards implementation
