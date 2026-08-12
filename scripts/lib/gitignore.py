@@ -24,6 +24,16 @@ def _project_path(value: object, project_root: Path) -> str | None:
     raw = str(value or "")
     if not raw:
         return None
+    if "\n" in raw or "\r" in raw:
+        raise LibraryError(
+            ".library.lock contains a managed path with a line break; one path "
+            "cannot be represented as exactly one .gitignore rule"
+        )
+    if "\x00" in raw:
+        raise LibraryError(
+            ".library.lock contains a managed path with NUL; Git paths and "
+            "pathspec arguments cannot represent NUL bytes"
+        )
     trailing_slash = raw.endswith("/")
     path_value = raw[:-1] if trailing_slash else raw
     if not path_value:

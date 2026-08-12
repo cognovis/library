@@ -4653,9 +4653,16 @@ def cmd_sync_all(
 
     gitignore_result = None
     if not dry_run and not all_failed and "project" in scopes_to_check and repo_root:
-        gitignore_result = _reconcile_project_gitignore(
-            repo_root, untrack=getattr(args, "untrack", False)
-        )
+        try:
+            gitignore_result = _reconcile_project_gitignore(
+                repo_root, untrack=getattr(args, "untrack", False)
+            )
+        except LibraryError as exc:
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
         tracked_warning = _tracked_install_warning(gitignore_result)
         if tracked_warning:
             warnings.append(tracked_warning)

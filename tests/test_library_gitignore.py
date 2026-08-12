@@ -644,3 +644,84 @@ def test_whitespace_target_names_remain_exact_for_ignore_and_untrack(
     assert set(_git(repo, "ls-files").stdout.splitlines()) == set(siblings)
     for path in [*tracked_managed, *siblings]:
         assert (repo / path).exists()
+
+
+@pytest.mark.parametrize(
+    ("unsafe", "reason"),
+    [
+        ("line\nfeed", "line break"),
+        ("carriage\rreturn", "line break"),
+        ("crlf\r\npath", "line break"),
+        ("nul\x00path", "NUL"),
+    ],
+)
+@pytest.mark.parametrize("lock_shape", ["receipt", "legacy"])
+def test_unsafe_line_break_paths_fail_before_gitignore_or_index_mutation(
+    tmp_path: Path, unsafe: str, reason: str, lock_shape: str
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    tracked = repo / "tracked.txt"
+    tracked.write_text("tracked", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    gitignore = repo / ".gitignore"
+    original_gitignore = (
+        b"user-rule/\r\n\r\n"
+        + BEGIN.encode()
+        + b"\r\n/.library.lock\r\n"
+        + END.encode()
+        + b"\r\n"
+    )
+    gitignore.write_bytes(original_gitignore)
+    index_before = _git(repo, "ls-files", "--stage").stdout
+
+    if lock_shape == "receipt":
+        _write_v2_lock(
+            repo,
+            receipts=[
+                {
+                    "id": "prompt:unsafe@1.0.0",
+                    "type": "prompt",
+                    "name": "unsafe",
+                    "scope": "project",
+                    "catalog_identity": "https://example.invalid/catalog",
+                    "resolved_version": "1.0.0",
+                    "verified": True,
+                    "adopted": False,
+                    "targets": [{"path": unsafe, "kind": "file"}],
+                    "owners_cache": ["prompt:unsafe"],
+                }
+            ],
+        )
+    else:
+        _write_v2_lock(
+            repo,
+            receipts=[],
+            installed=[
+                {
+                    "name": "unsafe",
+                    "type": "prompt",
+                    "scope": "project",
+                    "install_target": unsafe,
+                    "bridge_symlinks": [f"{unsafe}-bridge -> safe-target"],
+                }
+            ],
+        )
+
+    result = _run_library(repo, "sync", "--scope", "project", "--untrack", "--json")
+
+    assert result.returncode != 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "error"
+    assert reason in payload["message"]
+    assert ".library.lock" in payload["message"]
+    assert gitignore.read_bytes() == original_gitignore
+    assert _git(repo, "ls-files", "--stage").stdout == index_before
+    assert tracked.exists()
+
+    human = _run_library(repo, "sync", "--scope", "project", "--untrack")
+
+    assert human.returncode != 0
+    assert reason in human.stderr
+    assert ".library.lock" in human.stderr
+    assert gitignore.read_bytes() == original_gitignore
+    assert _git(repo, "ls-files", "--stage").stdout == index_before
