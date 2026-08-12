@@ -460,22 +460,6 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-    - name: validate-review-output
-      description: Validate reviewer JSON sidecar output against review-output.schema.json.
-      source: https://github.com/cognovis/library-core/blob/main/scripts/validate-review-output.py
-      language: python
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: manual
-    - name: stream-review/completeness_gate
-      description: Optional runtime completeness gate for stream-review cohorts; validates capability evidence against the completeness-gate schema.
-      source: https://github.com/cognovis/library-core/blob/main/skills/stream-review/scripts/completeness_gate.py
-      language: python
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: manual
   skills:
     - name: pvs-schema-analysis
       description: Analyze a PVS database schema and produce an annotated JSON inventory. Use for MSSQL or PostgreSQL PVS onboarding, schema archaeology, and adapter planning. Bundles references/sql-catalog.md (read-only SQL query catalog, classification/anonymization rules, FHIR mapping patterns) alongside SKILL.md.
@@ -1902,35 +1886,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: stream-review
-      description: >-
-        Run a cross-bead retrospective review on a closed cohort. Spawns the stream-reviewer agent, adversarially verifies findings, routes judge-classified actions through autonomous executors, and presents one deferred HITL block. Use when a stream closes, after a wave completes, or to audit a closed epic.
-      source: https://github.com/cognovis/library-core/blob/main/skills/stream-review/SKILL.md
-      deprecated: true
-      deprecated_reason: >-
-        Superseded by workflow:stream-review (AC1 decision 2026-06-02). The canonical runtime is workflows/stream-review.js. '/library use stream-review' installs the workflow.
-      requires:
-        - agent:stream-reviewer
-        - script:stream-review/cohort_resolve
-        - script:stream-review/cohort_stamp
-        - script:stream-review/completeness_gate
-        - script:triage/audit_log
-        - script:triage/present_decisions
-        - script:validate-review-output
-        - standard:bead-hygiene
-        - standard:completeness-gate
-        - standard:cross-bead-review
-        - standard:english-only
-        - standard:triage-pattern
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-      tags:
-        - workflow
-        - review
-        - deprecated
     - name: stream-verification-ledger
       description: 'use when: creating or refreshing a per-label ledger bead for deferred integration, UAT, or manual acceptance checks recorded on source beads. NOT for: running the tests, approving waivers, or performing a full stream review. boundary: this is the cohort ledger preflight used by stream-reviewer; stream review finds cross-bead defects, while this skill indexes source-bead deferred verification entries.'
       source: https://github.com/cognovis/library-core/blob/main/skills/stream-verification-ledger/SKILL.md
@@ -2047,7 +2002,7 @@ library:
       requires:
         - standard:english-only
         - standard:no-emoji
-        - standard:workflow/parameters
+        - standard:meta-parameters
     - name: workplan
       description: Triage the beads backlog into keep, fold, weed, move, and cluster decisions. Use when reviewing stale work, planning the next batch, or running backlog refinement.
       source: https://github.com/cognovis/library-core/blob/main/skills/workplan/SKILL.md
@@ -3908,46 +3863,10 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-    - name: stream-review
-      description: >-
-        Fully autonomous judge-driven cross-bead coherence review workflow (canonical primitive, AC1 2026-06-02). Runs find→verify→classify→execute without per-finding human prompts. Returns one deferred HITL block for ADR/architecture items and low-confidence findings. Use after a stream closes, a wave completes, or to audit a closed epic. Supersedes skill:stream-review as the runtime. Run via: clw stream-review --cohort <selector>.
-      source: https://github.com/cognovis/library-core/blob/main/workflows/stream-review.js
-      format: claude-workflow-js
-      requires:
-        - agent:stream-reviewer
-        - script:validate-review-output
-        - script:triage/present_decisions
-        - script:triage/audit_log
-        - script:stream-review/completeness_gate
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: manual
     - name: bead-context-pack
       description: Gather code/standards/architecture/prior-work for a bead in parallel fresh-context agents, then synthesize one context pack. Used as the rich-context enrichment step by bead-review (childless epics / large beads) and as a context-isolated replacement for orchestrator Phase 1.
       source: https://github.com/cognovis/library-core/blob/main/workflows/bead-context-pack.js
       format: claude-workflow-js
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: manual
-    - name: quick-fix
-      description: Deterministic quick-fix spine for XS/micro bug/chore/task beads — claim (phase0-claim.py) -> implement -> adversarial review -> JS fix loop (<=2) -> metrics/MoC -> learnings + session-close-runner. Native clw port of the prose quick-fix agent; runs in a per-bead worktree (meta.isolation:worktree).
-      source: https://github.com/cognovis/library-core/blob/main/workflows/quick-fix.js
-      format: claude-workflow-js
-      requires:
-        - agent:codex
-        - agent:review-agent
-        - skill:cognovis-beads
-        - skill:session-close
       tags:
         - origin:original
         - tier:core
@@ -4364,21 +4283,6 @@ library:
       metadata:
         library: {source_catalog: cognovis-library-core, inventory: convention-scan, plane: dev}
 project_tooling:
-  - name: beads-prime
-    description: bd workflow primer — auto-synced from cognovis-library at SessionStart. bd prime emits its content. Fleet policy, not per-project customization.
-    target_kind: file
-    target_path: .beads/PRIME.md
-    source: prime/PRIME.md
-    conditions:
-      - dir_exists: .beads
-    sync_strategy: overwrite_if_source_newer
-    conflict_policy: canonical_wins
-    consumed_by:
-      tool: bd
-      command: bd prime
-    tags:
-      - beads
-      - fleet-policy
   - name: beads-server-mode
     description: Ensures .beads/metadata.json has dolt_mode=server and removes stale embedded-mode fields (database, backend, dolt_server_port, dolt_server_user). Prevents journal corruption from accidental embedded-mode starts.
     target_kind: json_field_enforce

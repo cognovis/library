@@ -90,12 +90,11 @@ never overwritten — the composed prompt is written to the installed copy only.
    This reads the original unmodified persona. Repeat installs always read the same source.
 
 3. Load Layer 3:
-   a) If model_standards is non-empty: load each name via
-         standards-loader.sh --load-model-standard <name>
+   a) If model_standards is non-empty: resolve each name directly from the
+      project-local or user-global model-standards directory.
       Concatenate results in declaration order.
-   b) If model_standards is empty AND model is set: attempt alias-based lookup via
-         standards-loader.sh --load-model-standard <model>
-      (the loader resolves by alias if direct filename lookup fails; silent skip on miss)
+   b) If model_standards is empty AND model is set: attempt the same resolver by
+      model alias (silent skip on miss).
 
 4. Compose: Layer1 + "\n---\n" + Layer2 + ("\n---\n" + Layer3 if Layer3 non-empty)
 
@@ -136,7 +135,7 @@ permissions.
   persona to one model and makes model-swapping harder.
 - Do NOT create a model-standard for a behavior that applies to all models — that
   belongs in the base agent base prompt or a general standard.
-- Do NOT introduce a parallel loader for model-standards — reuse
-  `scripts/standards-loader.sh --load-model-standard <name>` (same contract).
+- Do NOT introduce a parallel loader for model-standards. The composer owns
+  model-standard resolution.
 
 ---

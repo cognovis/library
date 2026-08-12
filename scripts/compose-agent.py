@@ -195,7 +195,6 @@ def resolve_layer1(
       2. ~/.agents/agent-bases/<name>.md
       3. <proj_root>/.agents/golden-prompts/<name>.md
       4. ~/.agents/golden-prompts/<name>.md
-
     When override_dir is provided (e.g. via AGENT_BASES_DIR env var),
     ONLY that directory is searched — no fallback. This enables test isolation.
     """
