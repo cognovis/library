@@ -960,7 +960,7 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
         (["-bq", "CL-smoke"], "quick"),
     ],
 )
-def test_cdx_bead_modes_invoke_active_loop_through_acpx_only(
+def test_cdx_bead_modes_run_skill_in_current_session_with_degraded_opus_reviews(
     tmp_path: Path,
     args: list[str],
     execution_mode: str,
@@ -973,25 +973,25 @@ def test_cdx_bead_modes_invoke_active_loop_through_acpx_only(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert "bead-loop-implementer" in prompt
-    assert "bead-implementation-loop" not in prompt
-    assert f"execution_mode={execution_mode}" in prompt
-    assert "acpx-dispatch.py" in prompt
-    for retired_gateway_term in (
+    assert "bead-implementation-loop" in prompt
+    assert f"execution mode `{execution_mode}`" in prompt
+    assert "current Codex session" in prompt
+    assert "Do not delegate implementation or repairs to a subagent" in prompt
+    assert "acpx-dispatch" in prompt
+    assert "Opus" in prompt
+    assert "Review 1 is adversarial" in prompt
+    assert "review 2 is critical" in prompt
+    assert "reviews 3 through 5 are normal" in prompt
+    assert "only low-severity findings or nits remain" in prompt
+    assert "five Opus reviews total" in prompt
+    for retired_orchestration_term in (
+        "bead-loop-implementer",
         "agent_session_start",
         "agent_session_continue",
-        "provider-neutral gateway",
-        "native Core subagent",
+        "mcp__beads__",
+        "--bead-backend mcp",
     ):
-        assert retired_gateway_term not in prompt
-    assert "canonical Session Close" in prompt
-    assert "mcp__beads__show" in prompt
-    assert "mcp__beads__context" in prompt
-    assert "mcp__beads__claim" in prompt
-    assert "mcp__beads__update" in prompt
-    assert "mcp__beads__close" in prompt
-    assert "--bead-backend mcp" in prompt
-    assert "bead_mcp_finalization_required" in prompt
+        assert retired_orchestration_term not in prompt
     if execution_mode == "quick":
         assert "unconditional explicit Quick" in prompt
 
@@ -1068,7 +1068,7 @@ def test_cdx_bead_modes_wrap_context_as_untrusted_data(
         ["-bq", "CL-smoke"],
     ],
 )
-def test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass(
+def test_cdx_bead_modes_default_to_dangerous_bypass(
     tmp_path: Path,
     args: list[str],
 ) -> None:
@@ -1080,7 +1080,7 @@ def test_cdx_bead_modes_default_to_workspace_write_without_dangerous_bypass(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    _assert_safe_bead_permissions(argv)
+    _assert_dangerous_bead_permissions(argv)
     assert "--bead-dangerous-full-auto" not in argv
     assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
 
@@ -1159,7 +1159,7 @@ def test_cdx_implementer_modes_run_from_bead_worktree(
         ["-bq", "CL-smoke", "--bead-dangerous-full-auto"],
     ],
 )
-def test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass(
+def test_cdx_bead_dangerous_flag_remains_a_compatibility_noop(
     tmp_path: Path,
     args: list[str],
 ) -> None:
@@ -1173,7 +1173,7 @@ def test_cdx_bead_modes_require_explicit_flag_for_dangerous_bypass(
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     _assert_dangerous_bead_permissions(argv)
     assert "--bead-dangerous-full-auto" not in argv
-    assert "WARNING: --bead-dangerous-full-auto selected" in result.stderr
+    assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
 
 
 def test_cdx_review_rejects_dangerous_bypass(tmp_path: Path) -> None:
