@@ -62,33 +62,73 @@ def managed_project_paths(project_root: Path) -> list[str]:
 
 
 def _managed_block(paths: list[str]) -> str:
-    lines = [BEGIN_MARKER, *(f"/{path}" for path in paths), END_MARKER]
+    lines = [
+        BEGIN_MARKER,
+        *(f"/{_escape_gitignore_path(path)}" for path in paths),
+        END_MARKER,
+    ]
     return "\n".join(lines)
 
 
-def _replace_managed_block(content: str, block: str) -> str:
-    """Replace all complete managed blocks while preserving every other byte."""
-    remaining = content
-    insertion_at: int | None = None
-    while True:
-        begin = remaining.find(BEGIN_MARKER)
-        if begin < 0:
-            break
-        end = remaining.find(END_MARKER, begin + len(BEGIN_MARKER))
-        if end < 0:
-            raise LibraryError(
-                f"{BEGIN_MARKER!r} has no matching {END_MARKER!r} in .gitignore"
+def _escape_gitignore_path(path: str) -> str:
+    """Escape a repository-relative path as one literal Git ignore pattern."""
+    escaped: list[str] = []
+    for character in path:
+        if character in {"\\", "*", "?", "[", "]", "!", "#"}:
+            escaped.append("\\")
+        escaped.append(character)
+    return "".join(escaped)
+
+
+def _line_ending(content: str) -> str:
+    """Return the first line ending used by content, defaulting to LF."""
+    for index, character in enumerate(content):
+        if character == "\n":
+            return "\r\n" if index > 0 and content[index - 1] == "\r" else "\n"
+        if character == "\r":
+            return (
+                "\r\n"
+                if index + 1 < len(content) and content[index + 1] == "\n"
+                else "\r"
             )
-        end += len(END_MARKER)
-        if insertion_at is None:
-            insertion_at = begin
-        remaining = remaining[:begin] + remaining[end:]
-    if insertion_at is not None:
-        return remaining[:insertion_at] + block + remaining[insertion_at:]
-    if not remaining:
-        return f"{block}\n"
-    separator = "\n" if remaining.endswith("\n") else "\n\n"
-    return f"{remaining}{separator}{block}\n"
+    return "\n"
+
+
+def _replace_managed_block(content: str, block: str) -> str:
+    """Replace one valid standalone managed block, preserving all other bytes."""
+    markers: list[tuple[str, int, int]] = []
+    offset = 0
+    for line in content.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        if body in {BEGIN_MARKER, END_MARKER}:
+            markers.append((body, offset, offset + len(body)))
+        offset += len(line)
+    if offset < len(content):
+        body = content[offset:]
+        if body in {BEGIN_MARKER, END_MARKER}:
+            markers.append((body, offset, len(content)))
+
+    if markers and [marker for marker, _, _ in markers] != [BEGIN_MARKER, END_MARKER]:
+        raise LibraryError(
+            ".gitignore contains malformed Library-managed markers; expected "
+            "exactly one standalone BEGIN line followed by one standalone END line"
+        )
+
+    newline = _line_ending(content)
+    rendered_block = block.replace("\n", newline)
+    if markers:
+        _, begin, _ = markers[0]
+        _, _, end = markers[1]
+        return content[:begin] + rendered_block + content[end:]
+    if not content:
+        return f"{rendered_block}{newline}"
+    separator = newline if content.endswith(("\n", "\r")) else newline * 2
+    return f"{content}{separator}{rendered_block}{newline}"
+
+
+def _literal_pathspec(path: str) -> str:
+    """Return one repository-rooted Git pathspec with magic disabled."""
+    return f":(top,literal){path.rstrip('/')}"
 
 
 def _tracked_managed_paths(project_root: Path, managed_paths: list[str]) -> list[str]:
@@ -101,7 +141,7 @@ def _tracked_managed_paths(project_root: Path, managed_paths: list[str]) -> list
     if worktree.returncode != 0 or worktree.stdout.strip() != "true":
         return []
     command = ["git", "-C", str(project_root), "ls-files", "-z", "--"]
-    command.extend(path.rstrip("/") for path in managed_paths)
+    command.extend(_literal_pathspec(path) for path in managed_paths)
     result = subprocess.run(command, capture_output=True, check=False)
     if result.returncode != 0:
         raise LibraryError(
@@ -122,17 +162,31 @@ def reconcile_project_gitignore(
     project_root = project_root.absolute()
     managed_paths = managed_project_paths(project_root)
     gitignore = project_root / ".gitignore"
-    old_content = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+    if gitignore.exists():
+        with gitignore.open(encoding="utf-8", newline="") as handle:
+            old_content = handle.read()
+    else:
+        old_content = ""
     new_content = _replace_managed_block(old_content, _managed_block(managed_paths))
     updated = old_content != new_content
     if updated:
-        gitignore.write_text(new_content, encoding="utf-8")
+        with gitignore.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(new_content)
 
     tracked = _tracked_managed_paths(project_root, managed_paths)
     untracked: list[str] = []
     if tracked and untrack:
         result = subprocess.run(
-            ["git", "-C", str(project_root), "rm", "--cached", "-r", "--", *tracked],
+            [
+                "git",
+                "-C",
+                str(project_root),
+                "rm",
+                "--cached",
+                "-r",
+                "--",
+                *(_literal_pathspec(path) for path in tracked),
+            ],
             capture_output=True,
             text=True,
             check=False,

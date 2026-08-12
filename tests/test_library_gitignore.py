@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -238,14 +239,10 @@ def test_tracked_paths_warn_without_untracking_and_dry_run_is_immutable(
     after_normal = _git(repo, "ls-files").stdout
     human = _run_library(repo, "sync", "--scope", "project")
     gitignore_before_dry_run = (repo / ".gitignore").read_text(encoding="utf-8")
-    dry_run = _run_library(
-        repo, "sync", "--scope", "project", "--dry-run", "--json"
-    )
+    dry_run = _run_library(repo, "sync", "--scope", "project", "--dry-run", "--json")
 
     assert result.returncode == 0
-    assert payload["gitignore"]["tracked_paths"] == [
-        ".agents/skills/tracked/SKILL.md"
-    ]
+    assert payload["gitignore"]["tracked_paths"] == [".agents/skills/tracked/SKILL.md"]
     assert any("--untrack" in warning for warning in payload["warnings"])
     assert "Warning:" in human.stdout
     assert "--untrack" in human.stdout
@@ -278,9 +275,7 @@ def test_untrack_removes_managed_paths_from_index_but_keeps_files(
     )
     _git(repo, "add", ".agents/skills/tracked/SKILL.md", "README.md")
 
-    result = _run_library(
-        repo, "sync", "--scope", "project", "--untrack", "--json"
-    )
+    result = _run_library(repo, "sync", "--scope", "project", "--untrack", "--json")
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
@@ -290,3 +285,143 @@ def test_untrack_removes_managed_paths_from_index_but_keeps_files(
     assert managed.exists()
     assert unrelated.exists()
     assert _git(repo, "ls-files").stdout.splitlines() == ["README.md"]
+
+
+def test_marker_text_embedded_in_user_prose_is_preserved(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    prose = (
+        f"Documentation mentions {BEGIN} inline.\r\n"
+        f"It also mentions {END} without declaring a managed block.\r\n"
+    )
+    (repo / ".gitignore").write_text(prose, encoding="utf-8", newline="")
+    _write_lock(repo, [])
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.gitignore import reconcile_project_gitignore
+
+    reconcile_project_gitignore(repo)
+
+    with (repo / ".gitignore").open(encoding="utf-8", newline="") as handle:
+        content = handle.read()
+    assert content.startswith(prose)
+    assert content.count(BEGIN) == 2
+    assert content.count(END) == 2
+    assert content.replace(prose, "", 1).startswith("\r\n" + BEGIN + "\r\n")
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        f"{BEGIN}\n/path\n",
+        f"{END}\n",
+        f"{BEGIN}\n{BEGIN}\n{END}\n{END}\n",
+        f"{BEGIN}\n{END}\n{BEGIN}\n{END}\n",
+    ],
+    ids=["unmatched-begin", "unmatched-end", "nested", "duplicate"],
+)
+def test_malformed_managed_markers_fail_without_writing(
+    tmp_path: Path, malformed: str
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    gitignore = repo / ".gitignore"
+    gitignore.write_text(malformed, encoding="utf-8")
+    _write_lock(repo, [])
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.gitignore import reconcile_project_gitignore
+
+    with pytest.raises(LibraryError):
+        reconcile_project_gitignore(repo)
+
+    assert gitignore.read_text(encoding="utf-8") == malformed
+
+
+def test_special_names_are_ignored_and_untracked_literally(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    managed_names = [
+        "star*name",
+        "question?name",
+        "bracket[name]",
+        "!bang",
+        "#hash",
+        "back\\slash",
+        ":colon",
+    ]
+    siblings = [
+        "starXname",
+        "questionXname",
+        "bracketn",
+        "bang",
+        "hash",
+        "backslash",
+        "colon",
+    ]
+    entries = []
+    for name in [*managed_names, *siblings]:
+        path = repo / name / "content.txt"
+        path.parent.mkdir()
+        path.write_text(name, encoding="utf-8")
+    for name in managed_names:
+        entries.append(
+            {
+                "name": name,
+                "type": "skill",
+                "scope": "project",
+                "install_target": f"{name}/",
+            }
+        )
+    _write_lock(repo, entries)
+    _git(
+        repo,
+        "add",
+        "-f",
+        "--",
+        *(f":(top,literal){name}" for name in [*managed_names, *siblings]),
+    )
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.gitignore import _tracked_managed_paths, reconcile_project_gitignore
+
+    expected_tracked = {f"{name}/content.txt" for name in managed_names}
+    assert (
+        set(_tracked_managed_paths(repo, [f"{name}/" for name in managed_names]))
+        == expected_tracked
+    )
+
+    result = reconcile_project_gitignore(repo, untrack=True)
+
+    assert set(managed_names).issubset(
+        {path.rstrip("/") for path in result["managed_paths"]}
+    )
+    tracked = set(_git(repo, "ls-files").stdout.splitlines())
+    for name in managed_names:
+        exact = f"{name}/content.txt"
+        ignored = subprocess.run(
+            ["git", "-C", str(repo), "check-ignore", "--no-index", "-q", "--stdin"],
+            input="./" + exact + "\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ignored.returncode == 0, exact
+        assert exact in result["untracked_paths"]
+        assert (repo / exact).exists()
+        assert exact not in tracked
+    for name in siblings:
+        sibling = f"{name}/content.txt"
+        check = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "check-ignore",
+                "--no-index",
+                "-q",
+                "--",
+                "./" + sibling,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert check.returncode == 1
+        assert sibling in tracked
+        assert (repo / sibling).exists()
