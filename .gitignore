@@ -33,6 +33,7 @@ tests/__pycache__/
 # No trailing slash: a linked worktree gets these as overlay *symlinks*
 # (scripts/worktree-overlays.py), and git records a symlink as a file, so a
 # directory-only pattern left every worktree permanently dirty.
+.claude/agents/
 .claude/skills
 .agents/skills
 .agents/standards/*
