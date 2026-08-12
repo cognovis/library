@@ -282,6 +282,49 @@ def test_use_rejects_unsafe_dependency_bridge_before_any_mutation(
     assert not outside.exists()
 
 
+@pytest.mark.parametrize("json_output", [True, False])
+def test_use_rejects_symlink_ancestor_that_resolves_outside_before_mutation(
+    tmp_path: Path, json_output: bool
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repo / ".agents").symlink_to(outside, target_is_directory=True)
+    _write_catalog(repo)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("tracked", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    index_before = _git(repo, "ls-files", "--stage").stdout
+    args = ["skill", "use", "strict-root"]
+    if json_output:
+        args.append("--json")
+
+    result = _run_library(repo, *args)
+
+    assert result.returncode != 0
+    output = json.loads(result.stdout)["message"] if json_output else result.stderr
+    assert "resolves outside the Git worktree root" in output
+    assert (repo / ".agents").is_symlink()
+    assert not (outside / "skills" / "strict-root").exists()
+    assert not (repo / ".library.lock").exists()
+    assert not (repo / ".gitignore").exists()
+    assert _git(repo, "ls-files", "--stage").stdout == index_before
+
+
+def test_use_accepts_symlink_ancestor_that_resolves_inside(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    actual = repo / "managed-agents"
+    actual.mkdir()
+    (repo / ".agents").symlink_to(actual, target_is_directory=True)
+    _write_catalog(repo)
+
+    result = _run_library(repo, "skill", "use", "strict-root", "--json")
+
+    assert result.returncode == 0, result.stderr
+    assert (actual / "skills" / "strict-root" / "SKILL.md").exists()
+    assert (repo / ".agents").is_symlink()
+
+
 @pytest.mark.parametrize(
     ("lock", "message"),
     [

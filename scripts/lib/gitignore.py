@@ -90,6 +90,24 @@ def validate_planned_project_target(value: object, project_root: Path) -> str:
     normalized = _project_path(value, project_root, planned=True)
     if normalized is None:
         raise LibraryError("Planned project target must not be empty")
+    root = project_root.resolve()
+    lexical_target = root / normalized.rstrip("/")
+    existing = lexical_target
+    missing_suffix: list[str] = []
+    while not existing.exists() and not existing.is_symlink():
+        if existing == root:
+            break
+        missing_suffix.append(existing.name)
+        existing = existing.parent
+    effective = existing.resolve()
+    for component in reversed(missing_suffix):
+        effective /= component
+    try:
+        effective.relative_to(root)
+    except ValueError as exc:
+        raise LibraryError(
+            f"Planned project target resolves outside the Git worktree root: {value}"
+        ) from exc
     return normalized
 
 
