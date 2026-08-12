@@ -118,7 +118,7 @@ lock-only plan-and-apply operation. It never deletes files; physical deletion
 remains a separate prune decision.
 
 The Workspace route replaces hand-maintained bootstrap capability lists,
-`consumer-projects.yml` primitive refresh lists, and new `project_tooling`
+legacy consumer primitive refresh lists, and new `project_tooling`
 distribution entries. The irreducible bootstrap still installs the Library
 engine and conversational entrypoint because they must exist before a Workspace
 can be resolved. Platform forge Skills move to `library-authoring` rather than
@@ -159,7 +159,7 @@ Per **ADR-0002 Decision 2**, the canonical source for all CLI launchers is `cogn
 | `bin/cld` | Claude Code launcher — full-featured zsh wrapper (~500 lines) |
 | `bin/cdx` | Codex CLI launcher — zsh wrapper, parallel to `cld` (bead `CL-tap`) |
 
-**Deployment:** `bash scripts/install-bin.sh` creates symlinks from `~/.local/bin/{cld,cdx}` into `bin/`.
+**Deployment:** `bash install.sh` creates symlinks from `~/.local/bin/{library,cld,cdx}` into `bin/`.
 The installer is idempotent and uses `ln -sfn` so updates to this repo are immediately reflected.
 
 **Bead modes:** Both launchers are single-bead launchers with three exclusive bead-dispatch flags:

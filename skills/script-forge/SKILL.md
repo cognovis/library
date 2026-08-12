@@ -179,22 +179,21 @@ Run this gate before closeout when a script change may affect downstream project
 repos.
 
 - If a consumer repo executes the script by repo-local path, either promote it
-  to a first-class `library.scripts` primitive or list the copied path under
-  `managed_files` in `consumer-projects.yml`.
+  to a first-class `library.scripts` primitive or declare it in the target
+  Workspace.
 - If a standard, agent, skill, or hook instructs consumer repos to call the
   script, run a consumer updater dry-run:
 
 ```bash
-python3 scripts/update-consumers.py --json
-python3 scripts/update-consumers.py --consumer <name> --json
+library workspace status --all --scope project
 ```
 
 - If the dry-run reports planned changes, either run
-  `python3 scripts/update-consumers.py --consumer <name> --apply --json` and
+  `library workspace sync --all --scope project --apply` and
   finish the target repo commit, or file/follow a consumer propagation bead.
 
 Do not leave ad hoc copy steps in prompts or forge output. Consumer propagation
-belongs in `consumer-projects.yml` plus the updater dry-run/apply workflow.
+belongs in the Workspace definition and reconciliation workflow.
 
 ## Do NOT
 

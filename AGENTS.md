@@ -38,7 +38,7 @@ separate from the target catalog or project where content is installed.
 | Is Runbook a primitive? Is the Workflow executor moving to Pi? | `docs/adr/heterogeneous-marketplace-workspaces.md` | **Primitive and Projection Boundaries** — both answered NO, on recorded evidence |
 | Name collisions, project-local vs. global precedence | `docs/policy/name-collision.md` | — |
 | How does `library.yaml` / lockfile work? | `docs/lockfile-format.md` | — |
-| Tooling (chezmoi, install scripts, etc.) | `docs/project-tooling.md`, `docs/chezmoi-externals.md` | — |
+| Tooling and install scripts | `docs/project-tooling.md` | — |
 | How standards dependencies work | `docs/PRIMITIVES.md` | `### 7. Standard` |
 | What to commit in `.claude/` / `.agents/` / `.codex/` for a collaboration project | `docs/harness-baseline.md` | Baseline Checklist |
 | Beads workflow (issue tracking, session-close protocol) | `bd prime` | run the command — single source of truth |
@@ -50,14 +50,12 @@ it is in `bd prime`.
 
 ## Repository-specific Conventions
 
-### Canonical Launchers (`cld` / `cdx` / `agr` / `cra`)
+### Canonical Launchers (`cld` / `cdx`)
 
 - **Canonical home:** `bin/` (this repo)
   - `bin/cld` — Claude Code launcher (full-featured zsh wrapper)
   - `bin/cdx` — Codex CLI launcher (parallel to `cld`)
-  - `bin/agr` — Antigravity (Gemini CLI) launcher with automatic approvals
-  - `bin/cra` — Cursor Agent launcher (approvals on by default; `--yolo` to auto-approve)
-- **Install:** `bash scripts/install-bin.sh` — symlinks into `~/.local/bin/` (must be on `$PATH`). Idempotent.
+- **Install:** `bash install.sh` — symlinks the CLI and both launchers into `~/.local/bin/` (must be on `$PATH`). Idempotent.
 - **Per ADR `canonical-library-architecture` Decision 2:** launchers live in `bin/`, not in `~/.claude/scripts/`. The `~/.claude/scripts/` directory is no longer on `$PATH`.
 - **Follow-up:** `CMUX_BUNDLED_CLI_PATH` in `cld` still references `~/.claude/scripts/cmux-shim.sh`. Move target is Phase 2 cleanup per the same ADR.
 

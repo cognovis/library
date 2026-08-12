@@ -794,4 +794,3 @@ installed:
 - `cookbook/remove.md` — How `/library <primitive> remove` removes lockfile entries (including GC hints).
 - `cookbook/sync.md` — How `/library sync` uses the lockfile as source of truth (including cache reconciliation).
 - `cookbook/audit.md` — How `/library audit` detects drift (including symlink target verification).
-- `scripts/migrate-lockfile.py` — Migration script to add `marketplace` and `cache_path` to existing lockfiles.

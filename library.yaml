@@ -282,10 +282,7 @@ sources:
         redistribution_rights: granted
         derivative_rights: granted
         evidence_source: >-
-          per-repository MIT LICENSE recorded with commit pins in
-          /Users/malte/code/library/cognovis-pi/docs/research/indydevdan-pi-repos.md,
-          2026-08-08. Resolved per repository at normalization: a repository with
-          no observed licence relaxes the licence-derived grants to unknown.
+          per-repository MIT LICENSE recorded with commit pins in /Users/malte/code/library/cognovis-pi/docs/research/indydevdan-pi-repos.md, 2026-08-08. Resolved per repository at normalization: a repository with no observed licence relaxes the licence-derived grants to unknown.
       local_path: null
       writable: false
       content_types:
@@ -312,8 +309,7 @@ sources:
         redistribution_rights: granted
         derivative_rights: granted
         evidence_source: >-
-          upstream LICENSE (MIT) confirmed via raw.githubusercontent.com HTTP 200
-          and the repository API reporting spdx_id: MIT, 2026-08-08
+          upstream LICENSE (MIT) confirmed via raw.githubusercontent.com HTTP 200 and the repository API reporting spdx_id: MIT, 2026-08-08
       local_path: null
       writable: false
       content_types:
@@ -328,11 +324,7 @@ sources:
     - name: executive-circle
       source: mcp:executive-circle
       description: >-
-        ADR-0011 mcp-content reference provider. Token-scoped and revisionless:
-        MCP is the transport only, so a fetched prompt kit produces a Prompt
-        receipt and never an mcp: dependency, a global ownership edge, or a
-        harness MCP registration. Committed projection is blocked by default
-        because no redistribution grant has been located.
+        ADR-0011 mcp-content reference provider. Token-scoped and revisionless: MCP is the transport only, so a fetched prompt kit produces a Prompt receipt and never an mcp: dependency, a global ownership edge, or a harness MCP registration. Committed projection is blocked by default because no redistribution grant has been located.
       type: git
       provider_kind: mcp-content
       auth_ref: executive-circle-subscriber
@@ -342,12 +334,10 @@ sources:
         redistribution_rights: unknown
         derivative_rights: unknown
         evidence_source: >-
-          no published licence or redistribution grant located, 2026-08-08
-          (docs/research/external-marketplace-reference-matrix.md)
+          no published licence or redistribution grant located, 2026-08-08 (docs/research/external-marketplace-reference-matrix.md)
         grant_evidence:
           fetch_authorization: >-
-            subscriber-token-scoped MCP endpoint recorded in local harness
-            configuration, 2026-08-08
+            subscriber-token-scoped MCP endpoint recorded in local harness configuration, 2026-08-08
       local_path: null
       writable: false
       content_types:
@@ -521,8 +511,6 @@ library:
           source_catalog: library-platform
           plane: dev
           steward: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:core
@@ -539,8 +527,6 @@ library:
           source_catalog: library-platform
           plane: dev
           steward: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -566,8 +552,6 @@ library:
           source_catalog: library-platform
           plane: dev
           steward: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -585,8 +569,6 @@ library:
           source_catalog: library-platform
           plane: dev
           steward: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -609,8 +591,6 @@ library:
           source_catalog: library-platform
           plane: dev
           steward: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -628,8 +608,6 @@ library:
           source_catalog: library-platform
           plane: dev
           steward: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -847,8 +825,6 @@ library:
             repo: mira
             primitive_type: workflow
             notes: Audit-backed counterpart for Mira and Aidbox development; product runtime state and local configuration stay in product repositories.
-          gascity:
-            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -871,8 +847,6 @@ library:
             repo: mira
             primitive_type: workflow
             notes: Audit-backed counterpart for Mira and healthcare FHIR IG work; product-specific IG paths and release state stay in product repos.
-          gascity:
-            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -895,8 +869,6 @@ library:
             repo: mira
             primitive_type: workflow
             notes: Audit-backed counterpart for Mira SQL on FHIR work; product SQL views, schemas, and runtime data stay in the Mira repo.
-          gascity:
-            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -919,8 +891,6 @@ library:
             repo: healthcare-repos
             primitive_type: workflow
             notes: Audit-backed counterpart for healthcare/FHIR type-generation work; generated product code remains owned by each product repository.
-          gascity:
-            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -943,8 +913,6 @@ library:
             repo: mira
             primitive_type: workflow
             notes: Audit-backed counterpart for Mira and healthcare documentation lookup; product implementation decisions stay in product repos.
-          gascity:
-            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -967,8 +935,6 @@ library:
             repo: healthcare-repos
             primitive_type: workflow
             notes: Audit-backed counterpart for FHIR validation work across Cognovis healthcare repositories; concrete IG and runtime behavior stays in the consuming product repository.
-          gascity:
-            exportable: false
       tags:
         - origin:third-party
         - tier:project
@@ -997,8 +963,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-          gascity:
-            exportable: false
     - name: adr-gap
       description: 'Audit a repo for ADR hoist debt and pre-trinity packages. Triggers on: adr gap, hoist debt, adr audit, pre-trinity packages, architecture drift.'
       source: https://github.com/cognovis/library-core/blob/main/skills/adr-gap/SKILL.md
@@ -1236,8 +1200,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-          gascity:
-            exportable: false
     - name: cmux-browser
       description: End-user browser automation with cmux. Use when you need to open sites, interact with pages, wait for state changes, and extract data from cmux browser surfaces.
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux-browser/SKILL.md
@@ -1278,8 +1240,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-          gascity:
-            exportable: false
     - name: code-navigator
       description: 'use when: navigating source code by symbol — find where a function/class is defined (smart_search), see the structural skeleton of a file (smart_outline), or extract one specific function/class AST-bounded (smart_unfold). Works on Python with the built-in AST and uses lightweight structural fallbacks for TS/JS/Go/Rust. NOT for: full-text search inside function bodies (use Grep); files under ~100 lines where plain Read is cheaper than outline. boundary: code-navigator is for symbol-level navigation; Grep is for text; Read is for whole files. Especially useful in polaris and mira (TS).'
       source: https://github.com/cognovis/library-core/blob/main/skills/code-navigator/SKILL.md
@@ -1329,8 +1289,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-          gascity:
-            exportable: false
     - name: codex-guide
       description: Answer documentation questions about OpenAI Codex CLI, including subcommands, config.toml, sandbox modes, profiles, subagents, skills, and MCP integration. Does not run Codex; use acpx for cross-harness execution.
       source: https://github.com/cognovis/library-core/blob/main/skills/codex-guide/SKILL.md
@@ -1532,8 +1490,6 @@ library:
           inventory: convention-scan
           plane: dev
           steward: cognovis-core
-          gascity:
-            exportable: false
     - name: file-inspect
       description: Analyze changed files in a git branch — list modified/added/deleted files, categorize by type (scripts/manifests/docs/other), detect embedded version numbers (SCRIPT_VERSION, $script:ModuleVersion, markdown Version:), and emit structured JSON for downstream tooling (changelog, release-prep, version-bumpers). Triggers on "what changed in this branch", "find files with versions", "categorize changes".
       source: https://github.com/cognovis/library-core/blob/main/skills/file-inspect/SKILL.md
@@ -1703,8 +1659,6 @@ library:
             binaries:
               - bd
               - uv
-          gascity:
-            exportable: false
     - name: people-query
       description: Query open-brain people-aware MCP tools to find discussions, stale contacts, and mentions for a named person.
       source: https://github.com/cognovis/library-core/blob/main/skills/people-query/SKILL.md
@@ -1951,8 +1905,7 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/stream-review/SKILL.md
       deprecated: true
       deprecated_reason: >-
-        Superseded by workflow:stream-review (AC1 decision 2026-06-02). The canonical runtime
-        is workflows/stream-review.js. '/library use stream-review' installs the workflow.
+        Superseded by workflow:stream-review (AC1 decision 2026-06-02). The canonical runtime is workflows/stream-review.js. '/library use stream-review' installs the workflow.
       requires:
         - agent:stream-reviewer
         - script:stream-review/cohort_resolve
@@ -2144,8 +2097,6 @@ library:
             claude_code: supported
             cursor: supported
             codex: supported
-          gascity:
-            exportable: false
           runtime_requirements:
             binaries:
               - ffmpeg
@@ -2467,8 +2418,6 @@ library:
           inventory: convention-scan
           plane: dev
           steward: cognovis-core
-          gascity:
-            exportable: false
     - name: focus-review-agent
       description: 'Bounded read-only focus-aware security review agent. Uses deterministic scripts only for targeting (inventory + cluster ranking), then performs deep review, variant search, challenge, and report synthesis in the agent context. Default caps: top-k 2, min-score 2.0. No remediation or git writes.'
       source: https://github.com/cognovis/library-core/blob/main/agents/focus-review-agent.md
@@ -2670,17 +2619,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: workflow-launcher
-      description: clw shim relay — calls the Workflow tool with a given workflow name and args JSON, then returns the result verbatim. Launched by `clw <workflow-name> [flags]` via `claude --agent workflow-launcher`.
-      source: https://github.com/cognovis/library-core/blob/main/agents/workflow-launcher.md
-      tags:
-        - origin:original
-        - tier:core
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: topic-agent
       default_scope: global
       handlers:
@@ -2767,8 +2705,6 @@ library:
           plane: dev
           steward: library-platform
           source_catalog: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:core
@@ -2783,8 +2719,6 @@ library:
           plane: dev
           steward: library-platform
           source_catalog: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:core
@@ -2799,8 +2733,6 @@ library:
           plane: dev
           steward: library-platform
           source_catalog: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:global
@@ -2815,8 +2747,6 @@ library:
           plane: dev
           steward: library-platform
           source_catalog: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:global
@@ -2834,8 +2764,6 @@ library:
             repo: healthcare-repos
             primitive_type: other
             notes: Audit-backed counterpart for healthcare product control work; product-specific control evidence remains in each product repo.
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:domain
@@ -2905,8 +2833,6 @@ library:
           plane: dev
           steward: library-platform
           source_catalog: library-platform
-          gascity:
-            exportable: false
       tags:
         - origin:original
         - tier:global
@@ -2924,7 +2850,7 @@ library:
         library:
           plane: dev
     - name: meta-parameters
-      description: Parameter contract for Claude workflow JavaScript `meta` blocks. Defines required fields (`name`, `description`, `parameters`), supported types (string, list, bool, number), `required` flag, and type-coercion rules consumed by the `clw` launcher and workflow-launcher agent.
+      description: Parameter contract for Claude workflow JavaScript `meta` blocks. Defines required fields (`name`, `description`, `parameters`), supported types (string, list, bool, number), `required` flag, and type-coercion rules consumed by workflow installers.
       source: https://github.com/cognovis/library-core/blob/main/standards/workflow/parameters.md
       tier: domain
       default_scope: ask
@@ -2979,8 +2905,6 @@ library:
             path: .claude/standards/billing/ai-provenance.md
             primitive_type: other
             notes: Promoted from the primitive-placement C2 audit; concrete badge UI, extension URLs, model providers, and review workflows remain product-owned.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3134,8 +3058,6 @@ library:
             path: input/fsh/
             primitive_type: other
             notes: Exact profiles, extensions, terminology artifacts, canonical URLs, resource contexts, and release history remain authoritative in the product IG repository.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3158,8 +3080,6 @@ library:
             path: .claude/standards/backend/fhir-query-naming.md
             primitive_type: other
             notes: Promoted from the primitive-placement C2 audit; concrete helper names, billing identifiers, and migration history remain in the Mira repo-local overlay.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3181,8 +3101,6 @@ library:
             path: .claude/standards/backend/fhir-sql-patterns.md
             primitive_type: other
             notes: Promoted from the primitive-placement C2 audit; Aidbox table names, Mira billing joins, schemas, and local ViewDefinitions stay in product repositories or skill references.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3246,8 +3164,6 @@ library:
             repo: healthcare-repos
             primitive_type: other
             notes: Audit-backed counterpart for Mira, Polaris, and FHIR repo work; product-specific examples and overlays stay in those repositories.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3321,8 +3237,6 @@ library:
             path: .claude/standards/billing/no-mock-data.md
             primitive_type: other
             notes: Reconciles Mira's billing anti-mock-data rule into a reusable dev-plane boundary; endpoint names, seed commands, FHIR server URLs, tenant examples, and local fixture paths remain product owned.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3573,8 +3487,6 @@ library:
             path: .claude/standards/backend/sql-safety.md
             primitive_type: other
             notes: Promoted from the primitive-placement C2 audit; Mira-specific SQL examples, table names, cache choices, and runtime topology remain in the Mira repo-local overlay.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3597,8 +3509,6 @@ library:
             path: .claude/standards/frontend/sse-first.md
             primitive_type: other
             notes: Reconciles Mira's frontend realtime guidance into a shared transport rule; concrete event names, route topology, reconnect policy details, and product runtime examples stay in Mira.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3621,8 +3531,6 @@ library:
             path: .claude/standards/backend/tdd-api-contracts.md
             primitive_type: other
             notes: Promoted from the primitive-placement C2 audit; concrete ports, route names, seed scripts, and server startup instructions remain product-owned.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -3645,8 +3553,6 @@ library:
             path: .claude/standards/backend/tenant-isolation.md
             primitive_type: other
             notes: Promoted from the primitive-placement C2 audit; concrete tenant names, organization IDs, schema details, and route examples remain in product repositories.
-          gascity:
-            exportable: false
           source_catalog: cognovis-library-core
           inventory: convention-scan
       tags:
@@ -4054,11 +3960,7 @@ library:
           inventory: manual
     - name: stream-review
       description: >-
-        Fully autonomous judge-driven cross-bead coherence review workflow (canonical primitive,
-        AC1 2026-06-02). Runs find→verify→classify→execute without per-finding human prompts.
-        Returns one deferred HITL block for ADR/architecture items and low-confidence findings.
-        Use after a stream closes, a wave completes, or to audit a closed epic.
-        Supersedes skill:stream-review as the runtime. Run via: clw stream-review --cohort <selector>.
+        Fully autonomous judge-driven cross-bead coherence review workflow (canonical primitive, AC1 2026-06-02). Runs find→verify→classify→execute without per-finding human prompts. Returns one deferred HITL block for ADR/architecture items and low-confidence findings. Use after a stream closes, a wave completes, or to audit a closed epic. Supersedes skill:stream-review as the runtime. Run via: clw stream-review --cohort <selector>.
       source: https://github.com/cognovis/library-core/blob/main/workflows/stream-review.js
       format: claude-workflow-js
       requires:
