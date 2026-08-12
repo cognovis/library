@@ -48,6 +48,24 @@ def _write_lock(repo: Path, installed: list[dict]) -> None:
     )
 
 
+def _write_v2_lock(
+    repo: Path, *, receipts: list[dict], installed: list[dict] | None = None
+) -> None:
+    (repo / ".library.lock").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 2,
+                "migration": {"prune_ack_required": False},
+                "requested_roots": [],
+                "receipts": receipts,
+                "prerequisites": [],
+                "installed": installed or [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def _run_library(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["HOME"] = str(repo / "home")
@@ -105,7 +123,8 @@ def test_use_writes_project_targets_and_bridge_symlinks_only(tmp_path: Path) -> 
         ".library.lock",
         ".library.lock.lock",
         ".library.lock.workspace-lock",
-        ".agents/skills/impeccable/",
+        ".agents/skills/impeccable",
+        ".agents/skills/impeccable/SKILL.md",
         ".claude/skills/impeccable",
     ]
     lock = yaml.safe_load((repo / ".library.lock").read_text(encoding="utf-8"))
@@ -134,7 +153,8 @@ def test_use_writes_project_targets_and_bridge_symlinks_only(tmp_path: Path) -> 
         ".library.lock",
         ".library.lock.lock",
         ".library.lock.workspace-lock",
-        ".agents/skills/impeccable/",
+        ".agents/skills/impeccable",
+        ".agents/skills/impeccable/SKILL.md",
         ".claude/skills/impeccable",
     ]
     block = _managed_block(repo)
@@ -425,3 +445,202 @@ def test_special_names_are_ignored_and_untracked_literally(tmp_path: Path) -> No
         assert check.returncode == 1
         assert sibling in tracked
         assert (repo / sibling).exists()
+
+
+def test_sync_uses_receipt_targets_when_installed_projection_is_empty(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    target_specs = [
+        ("generated/file.txt", "file"),
+        ("generated/directory", "directory"),
+        ("bridges/tool", "symlink"),
+    ]
+    for relative, kind in target_specs:
+        path = repo / relative
+        if kind == "directory":
+            path.mkdir(parents=True)
+            (path / "member.txt").write_text("directory", encoding="utf-8")
+        elif kind == "symlink":
+            path.parent.mkdir(parents=True)
+            path.symlink_to("../generated/file.txt")
+        else:
+            path.parent.mkdir(parents=True)
+            path.write_text("file", encoding="utf-8")
+    _write_v2_lock(
+        repo,
+        receipts=[
+            {
+                "id": "skill:receipt-only@1.0.0",
+                "type": "skill",
+                "name": "receipt-only",
+                "scope": "project",
+                "catalog_identity": "https://example.invalid/catalog",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "targets": [
+                    {"path": relative, "kind": kind} for relative, kind in target_specs
+                ],
+                "owners_cache": ["skill:receipt-only"],
+            }
+        ],
+        installed=[],
+    )
+    tracked_files = [
+        "generated/file.txt",
+        "generated/directory/member.txt",
+        "bridges/tool",
+    ]
+    _git(repo, "add", "-f", "--", *tracked_files)
+
+    warning_result = _run_library(repo, "sync", "--scope", "project", "--json")
+
+    assert warning_result.returncode == 0, warning_result.stderr
+    warning_payload = json.loads(warning_result.stdout)
+    assert warning_payload["gitignore"]["managed_paths"][-3:] == [
+        "generated/file.txt",
+        "generated/directory",
+        "bridges/tool",
+    ]
+    assert warning_payload["gitignore"]["tracked_paths"] == sorted(tracked_files)
+    assert any("--untrack" in warning for warning in warning_payload["warnings"])
+
+    untrack_result = _run_library(
+        repo, "sync", "--scope", "project", "--untrack", "--json"
+    )
+
+    assert untrack_result.returncode == 0, untrack_result.stderr
+    untrack_payload = json.loads(untrack_result.stdout)
+    assert untrack_payload["gitignore"]["untracked_paths"] == sorted(tracked_files)
+    assert _git(repo, "ls-files").stdout == ""
+    for relative in tracked_files:
+        assert (repo / relative).exists() or (repo / relative).is_symlink()
+
+
+def test_receipt_targets_override_stale_installed_projection(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    current = repo / "current.txt"
+    stale = repo / "stale.txt"
+    current.write_text("current", encoding="utf-8")
+    stale.write_text("stale", encoding="utf-8")
+    _write_v2_lock(
+        repo,
+        receipts=[
+            {
+                "id": "prompt:current@1.0.0",
+                "type": "prompt",
+                "name": "current",
+                "scope": "project",
+                "catalog_identity": "https://example.invalid/catalog",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "targets": [{"path": "current.txt", "kind": "file"}],
+                "owners_cache": ["prompt:current"],
+            }
+        ],
+        installed=[
+            {
+                "name": "stale",
+                "type": "prompt",
+                "scope": "project",
+                "install_target": "stale.txt",
+            }
+        ],
+    )
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.gitignore import reconcile_project_gitignore
+
+    result = reconcile_project_gitignore(repo)
+
+    assert "current.txt" in result["managed_paths"]
+    assert "stale.txt" not in result["managed_paths"]
+
+
+def test_whitespace_target_names_remain_exact_for_ignore_and_untrack(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    managed_targets = [
+        " leading-file",
+        "trailing-file ",
+        " leading-dir/",
+        "trailing-dir /",
+    ]
+    siblings = ["leading-file", "trailing-file", "leading-dir", "trailing-dir"]
+    tracked_managed: list[str] = []
+    for target in managed_targets:
+        if target.endswith("/"):
+            member = target + "member.txt"
+            path = repo / member
+        else:
+            member = target
+            path = repo / target
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(target, encoding="utf-8")
+        tracked_managed.append(member)
+    for sibling in siblings:
+        path = repo / sibling
+        path.write_text(sibling, encoding="utf-8")
+    _write_v2_lock(
+        repo,
+        receipts=[
+            {
+                "id": "skill:whitespace@1.0.0",
+                "type": "skill",
+                "name": "whitespace",
+                "scope": "project",
+                "catalog_identity": "https://example.invalid/catalog",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "targets": [
+                    {
+                        "path": target,
+                        "kind": "directory" if target.endswith("/") else "file",
+                    }
+                    for target in managed_targets
+                ],
+                "owners_cache": ["skill:whitespace"],
+            }
+        ],
+    )
+    _git(
+        repo,
+        "add",
+        "-f",
+        "--",
+        *(f":(top,literal){path}" for path in [*tracked_managed, *siblings]),
+    )
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.gitignore import reconcile_project_gitignore
+
+    warning = reconcile_project_gitignore(repo)
+
+    assert warning["managed_paths"][-4:] == managed_targets
+    assert warning["tracked_paths"] == sorted(tracked_managed)
+    for path in tracked_managed:
+        check = subprocess.run(
+            ["git", "-C", str(repo), "check-ignore", "--no-index", "-q", "--stdin"],
+            input="./" + path + "\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert check.returncode == 0, path
+    for sibling in siblings:
+        check = subprocess.run(
+            ["git", "-C", str(repo), "check-ignore", "--no-index", "-q", "--", sibling],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert check.returncode == 1, sibling
+
+    untracked = reconcile_project_gitignore(repo, untrack=True)
+
+    assert untracked["untracked_paths"] == sorted(tracked_managed)
+    assert set(_git(repo, "ls-files").stdout.splitlines()) == set(siblings)
+    for path in [*tracked_managed, *siblings]:
+        assert (repo / path).exists()

@@ -21,11 +21,14 @@ LOCK_ARTIFACTS = (
 
 def _project_path(value: object, project_root: Path) -> str | None:
     """Return a normalized repository-relative path without following symlinks."""
-    raw = str(value or "").strip()
+    raw = str(value or "")
     if not raw:
         return None
-    trailing_slash = raw.rstrip().endswith("/")
-    candidate = Path(raw.rstrip("/")).expanduser()
+    trailing_slash = raw.endswith("/")
+    path_value = raw[:-1] if trailing_slash else raw
+    if not path_value:
+        return None
+    candidate = Path(path_value).expanduser()
     if not candidate.is_absolute():
         candidate = project_root / candidate
     normalized_root = Path(os.path.abspath(project_root))
@@ -45,19 +48,37 @@ def managed_project_paths(project_root: Path) -> list[str]:
     lock = load_lockfile(project_root / ".library.lock")
     paths = list(LOCK_ARTIFACTS)
     seen = set(paths)
+
+    receipt_paths: list[str] = []
+    for receipt in lock.get("receipts") or []:
+        if not isinstance(receipt, dict) or receipt.get("scope") != "project":
+            continue
+        for target in receipt.get("targets") or []:
+            if isinstance(target, dict):
+                relative = _project_path(target.get("path"), project_root)
+                if relative and relative not in seen:
+                    seen.add(relative)
+                    receipt_paths.append(relative)
+
+    legacy_candidates: list[object] = []
     for entry in lock.get("installed") or []:
         if not isinstance(entry, dict) or entry.get("scope") != "project":
             continue
-        candidates: list[object] = [entry.get("install_target")]
-        candidates.extend(
+        legacy_candidates.append(entry.get("install_target"))
+        legacy_candidates.extend(
             str(bridge).partition(" -> ")[0]
             for bridge in (entry.get("bridge_symlinks") or [])
         )
-        for candidate in candidates:
-            relative = _project_path(candidate, project_root)
-            if relative and relative not in seen:
-                seen.add(relative)
-                paths.append(relative)
+
+    if receipt_paths:
+        paths.extend(receipt_paths)
+        return paths
+
+    for candidate in legacy_candidates:
+        relative = _project_path(candidate, project_root)
+        if relative and relative not in seen:
+            seen.add(relative)
+            paths.append(relative)
     return paths
 
 
@@ -73,8 +94,15 @@ def _managed_block(paths: list[str]) -> str:
 def _escape_gitignore_path(path: str) -> str:
     """Escape a repository-relative path as one literal Git ignore pattern."""
     escaped: list[str] = []
-    for character in path:
-        if character in {"\\", "*", "?", "[", "]", "!", "#"}:
+    for index, character in enumerate(path):
+        trailing_name_whitespace = character in {" ", "\t"} and path[index + 1 :] in {
+            "",
+            "/",
+        }
+        if (
+            character in {"\\", "*", "?", "[", "]", "!", "#"}
+            or trailing_name_whitespace
+        ):
             escaped.append("\\")
         escaped.append(character)
     return "".join(escaped)
