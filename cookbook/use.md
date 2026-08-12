@@ -24,6 +24,25 @@ harness bridges, and lockfile writes; do not reproduce those steps manually.
 
 4. Inspect `.library.lock` and the reported canonical and bridge targets.
 
+For a successful project-scoped install, Library also reconciles a marked block
+in the project `.gitignore`. The block contains the Library lock artifacts and
+the repository-relative canonical and bridge targets recorded in the current
+project lockfile. Global targets and paths outside the project are never added.
+Subsequent `use` and top-level `sync` runs replace this block, so stale managed
+entries disappear without changing user-authored ignore rules.
+
+If a managed target is already tracked, the command reports the path and leaves
+the Git index unchanged. Review the reported paths, then explicitly remove only
+those generated installs from the index while retaining their working-tree
+files:
+
+```bash
+library <primitive> use <name> --untrack --json
+```
+
+Dry runs never change `.gitignore` or the Git index. Global installs do not
+manage a project `.gitignore`.
+
 Project scope vendors content into the repository's canonical `.agents/` paths.
 Global scope installs into user-global Library roots. Each primitive retains its
 own harness projection and context-loading behavior.

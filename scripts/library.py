@@ -177,6 +177,14 @@ def build_parser() -> argparse.ArgumentParser:
             "--dry-run", action="store_true", help="Show planned writes, no mutation"
         )
         use_p.add_argument(
+            "--untrack",
+            action="store_true",
+            help=(
+                "Remove tracked Library-managed project installs from the Git "
+                "index while keeping working-tree files"
+            ),
+        )
+        use_p.add_argument(
             "--symlink",
             action="store_true",
             help="Install Layer C as a symlink into the cache instead of a vendored copy",
@@ -441,6 +449,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     top_sync_parser.add_argument(
         "--force", action="store_true", help="Re-install all, even if current"
+    )
+    top_sync_parser.add_argument(
+        "--untrack",
+        action="store_true",
+        help=(
+            "Remove tracked Library-managed project installs from the Git index "
+            "while keeping working-tree files"
+        ),
     )
     top_sync_parser.add_argument(
         "--scope",
@@ -1167,9 +1183,32 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
     # Resolve transitive dependencies before installing
     if not dry_run:
-        exit_code = _install_with_deps(
-            args, repo_root, catalog, primitive, name, scope, harness, use_json
+        captured = io.StringIO()
+        output_context = redirect_stdout(captured) if use_json else _null_context()
+        with output_context:
+            exit_code = _install_with_deps(
+                args, repo_root, catalog, primitive, name, scope, harness, use_json
+            )
+        if exit_code != 0 or scope != "project":
+            if use_json:
+                print(captured.getvalue(), end="")
+            return exit_code
+        gitignore_result = _reconcile_project_gitignore(
+            repo_root, untrack=getattr(args, "untrack", False)
         )
+        warning = _tracked_install_warning(gitignore_result)
+        if use_json:
+            install_output = captured.getvalue().strip()
+            try:
+                result = json.loads(install_output)
+            except json.JSONDecodeError:
+                result = success({"install_output": install_output})
+            result["gitignore"] = gitignore_result
+            if warning:
+                result.setdefault("warnings", []).append(warning)
+            print_json(result)
+        else:
+            _print_gitignore_result(gitignore_result, warning=warning)
         return exit_code
 
     # Dry-run: just show the target entry's planned ops (no dep resolution for dry-run)
@@ -1185,6 +1224,45 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         use_json,
         install_mode,
     )
+
+
+@contextmanager
+def _null_context():
+    """Context-manager equivalent of doing nothing, without another import."""
+    yield
+
+
+def _reconcile_project_gitignore(
+    repo_root: Path, *, untrack: bool = False
+) -> dict:
+    from lib.gitignore import reconcile_project_gitignore
+
+    return reconcile_project_gitignore(repo_root, untrack=untrack)
+
+
+def _tracked_install_warning(gitignore_result: dict) -> str | None:
+    tracked = gitignore_result.get("tracked_paths") or []
+    if not tracked:
+        return None
+    return (
+        f"{len(tracked)} Library-managed project path(s) are already tracked by "
+        "Git; rerun with --untrack to remove them from the index while keeping "
+        "the working-tree files"
+    )
+
+
+def _print_gitignore_result(
+    gitignore_result: dict, *, warning: str | None = None
+) -> None:
+    """Render the managed ignore and explicit index changes for humans."""
+    if gitignore_result.get("updated"):
+        print(f"Updated Library-managed ignores in {gitignore_result['path']}")
+    for path in gitignore_result.get("tracked_paths") or []:
+        print(f"  [tracked-managed-path] {path}")
+    for path in gitignore_result.get("untracked_paths") or []:
+        print(f"  [untracked-from-index] {path}")
+    if warning:
+        print(f"Warning: {warning}")
 
 
 def _install_with_deps(
@@ -4573,6 +4651,15 @@ def cmd_sync_all(
             "use --force to refresh them"
         )
 
+    gitignore_result = None
+    if not dry_run and not all_failed and "project" in scopes_to_check and repo_root:
+        gitignore_result = _reconcile_project_gitignore(
+            repo_root, untrack=getattr(args, "untrack", False)
+        )
+        tracked_warning = _tracked_install_warning(gitignore_result)
+        if tracked_warning:
+            warnings.append(tracked_warning)
+
     result = {
         "status": "dry-run" if dry_run else "ok",
         "refreshed": all_refreshed,
@@ -4586,6 +4673,8 @@ def cmd_sync_all(
     }
     if warnings:
         result["warnings"] = warnings
+    if gitignore_result is not None:
+        result["gitignore"] = gitignore_result
 
     if dry_run:
         result["summary"] = (
@@ -4611,6 +4700,8 @@ def cmd_sync_all(
                 f"Synced: {len(all_reconciled_dependencies)} dependencies reconciled, "
                 f"{len(all_refreshed)} refreshed, {len(all_skipped)} skipped (not behind)"
             )
+            if gitignore_result is not None:
+                _print_gitignore_result(gitignore_result)
         for warning in warnings:
             print(f"Warning: {warning}")
 

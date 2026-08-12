@@ -19,6 +19,23 @@ Apply the reported additions and updates:
 library sync --json
 ```
 
+Successful top-level syncs that include project scope reconcile the
+Library-managed block in the project `.gitignore`. The entries come from the
+current project `.library.lock`: lock artifacts, repository-relative install
+targets, and bridge symlinks. User-authored content outside the marked block is
+preserved, stale managed entries are removed, and global or outside-project
+paths are excluded.
+
+Tracked managed paths are reported as warnings but remain in the Git index.
+After reviewing the warning, remove exactly those paths from the index while
+keeping their working-tree files with:
+
+```bash
+library sync --untrack --json
+```
+
+`library sync --dry-run` mutates neither `.gitignore` nor the Git index.
+
 Use `library <primitive> sync <name>` when only one named entry should refresh.
 The engine reads the current lockfile, resolves catalog state, preserves scope,
 updates canonical targets and harness bridges, and records the resulting source

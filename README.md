@@ -65,10 +65,10 @@ The evidence-backed initial Workspace cuts and repository mapping live in the
 | `library/sussdorff-core` | Private personal and operations marketplace content |
 | `library/cognovis-pi` | Pi extensions, profiles, and project-native bridge modules |
 
-A consumer repository registers only the primitives and Workspaces it needs. It
-commits project-local `.agents/` content and `.library.lock`. Marketplace
-repositories keep authored source primitives at top level and normally ignore
-their `.agents/` install targets.
+A consumer repository registers only the primitives and Workspaces it needs.
+Library-generated project installs and lock artifacts stay local through the
+CLI-managed `.gitignore` block. Marketplace repositories keep authored source
+primitives at top level and ignore their generated install targets.
 
 One repository may use several orthogonal Workspaces. For example, the accepted
 portfolio maps `fhir-management` to both `fhir-ig-authoring` and `python-cli`, and

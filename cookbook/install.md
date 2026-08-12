@@ -38,7 +38,8 @@ only the Library engine and conversational entrypoint, while forge Skills move t
 the project-scoped `library-authoring` Workspace.
 
 Do not use `project_tooling` profiles for new repository setup. Consumer projects
-commit their project-local Library artifacts and `.library.lock`; marketplace
-repositories keep authored primitives at their top-level source paths.
+keep generated Library installs and lock artifacts local through the CLI-managed
+`.gitignore` block; marketplace repositories keep authored primitives at their
+top-level source paths.
 
 Workspace lifecycle commands are available through the global `library` CLI.
