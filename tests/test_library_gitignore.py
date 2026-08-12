@@ -725,3 +725,116 @@ def test_unsafe_line_break_paths_fail_before_gitignore_or_index_mutation(
     assert ".library.lock" in human.stderr
     assert gitignore.read_bytes() == original_gitignore
     assert _git(repo, "ls-files", "--stage").stdout == index_before
+
+
+@pytest.mark.parametrize("target_dir", ["~malte/", "~library-user-that-does-not-exist/"])
+def test_use_manages_literal_tilde_username_targets(
+    tmp_path: Path, target_dir: str
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    source = repo / "source-skill"
+    source.mkdir()
+    (source / "SKILL.md").write_text("# Literal tilde\n", encoding="utf-8")
+    (repo / "library.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "default_dirs": {"skills": [{"default": target_dir}]},
+                "library": {
+                    "skills": [
+                        {
+                            "name": "literal-tilde",
+                            "description": "Literal tilde target",
+                            "source": str(source / "SKILL.md"),
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    first = _run_library(repo, "skill", "use", "literal-tilde", "--json")
+
+    assert first.returncode == 0, first.stderr
+    first_payload = json.loads(first.stdout)
+    literal_root = f"{target_dir}literal-tilde"
+    literal_file = f"{literal_root}/SKILL.md"
+    assert literal_root in first_payload["gitignore"]["managed_paths"]
+    assert literal_file in first_payload["gitignore"]["managed_paths"]
+    assert (repo / literal_file).exists()
+    _git(repo, "add", "-f", "--", f":(top,literal){literal_file}")
+
+    warning = _run_library(repo, "skill", "use", "literal-tilde", "--json")
+    human = _run_library(repo, "skill", "use", "literal-tilde")
+
+    assert warning.returncode == 0, warning.stderr
+    warning_payload = json.loads(warning.stdout)
+    assert warning_payload["gitignore"]["tracked_paths"] == [literal_file]
+    assert any("--untrack" in item for item in warning_payload["warnings"])
+    assert human.returncode == 0, human.stderr
+    assert literal_file in human.stdout
+    assert "--untrack" in human.stdout
+
+    untrack = _run_library(
+        repo, "skill", "use", "literal-tilde", "--untrack", "--json"
+    )
+
+    assert untrack.returncode == 0, untrack.stderr
+    untrack_payload = json.loads(untrack.stdout)
+    assert untrack_payload["gitignore"]["untracked_paths"] == [literal_file]
+    assert _git(repo, "ls-files").stdout == ""
+    assert (repo / literal_file).exists()
+
+
+@pytest.mark.parametrize("target_dir", ["~malte/", "~library-user-that-does-not-exist/"])
+def test_sync_manages_literal_tilde_username_receipt_targets(
+    tmp_path: Path, target_dir: str
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    literal_file = f"{target_dir}managed.txt"
+    path = repo / literal_file
+    path.parent.mkdir()
+    path.write_text("managed", encoding="utf-8")
+    sibling = repo / "README.md"
+    sibling.write_text("tracked sibling", encoding="utf-8")
+    _write_v2_lock(
+        repo,
+        receipts=[
+            {
+                "id": "prompt:tilde@1.0.0",
+                "type": "prompt",
+                "name": "tilde",
+                "scope": "project",
+                "catalog_identity": "https://example.invalid/catalog",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "targets": [{"path": literal_file, "kind": "file"}],
+                "owners_cache": ["prompt:tilde"],
+            }
+        ],
+    )
+    _git(repo, "add", "-f", "--", f":(top,literal){literal_file}", "README.md")
+
+    warning = _run_library(repo, "sync", "--scope", "project", "--json")
+    human = _run_library(repo, "sync", "--scope", "project")
+
+    assert warning.returncode == 0, warning.stderr
+    warning_payload = json.loads(warning.stdout)
+    assert literal_file in warning_payload["gitignore"]["managed_paths"]
+    assert warning_payload["gitignore"]["tracked_paths"] == [literal_file]
+    assert any("--untrack" in item for item in warning_payload["warnings"])
+    assert human.returncode == 0, human.stderr
+    assert literal_file in human.stdout
+    assert "--untrack" in human.stdout
+
+    untrack = _run_library(
+        repo, "sync", "--scope", "project", "--untrack", "--json"
+    )
+
+    assert untrack.returncode == 0, untrack.stderr
+    untrack_payload = json.loads(untrack.stdout)
+    assert untrack_payload["gitignore"]["untracked_paths"] == [literal_file]
+    assert _git(repo, "ls-files").stdout.splitlines() == ["README.md"]
+    assert path.exists()
+    assert sibling.exists()

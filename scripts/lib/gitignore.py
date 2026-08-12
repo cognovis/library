@@ -38,7 +38,7 @@ def _project_path(value: object, project_root: Path) -> str | None:
     path_value = raw[:-1] if trailing_slash else raw
     if not path_value:
         return None
-    candidate = Path(path_value).expanduser()
+    candidate = Path(path_value)
     if not candidate.is_absolute():
         candidate = project_root / candidate
     normalized_root = Path(os.path.abspath(project_root))

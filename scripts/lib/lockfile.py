@@ -73,7 +73,10 @@ def resolve_lockfile_path(path_value: str | Path, project_root: Path) -> Path:
     entries may still be absolute. Readers must use this helper instead of
     allowing ``Path`` to resolve relative values against the process CWD.
     """
-    path = Path(str(path_value).rstrip("/")).expanduser()
+    raw = str(path_value).rstrip("/")
+    if raw.startswith("~/"):
+        return Path.home() / raw[2:]
+    path = Path(raw)
     if path.is_absolute():
         return path
     return project_root / path
