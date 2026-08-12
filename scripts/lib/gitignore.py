@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -38,8 +39,10 @@ def _require_git_top_level(project_root: Path) -> Path:
     return root
 
 
-def _project_path(value: object, project_root: Path) -> str | None:
-    """Return a normalized repository-relative path without following symlinks."""
+def _project_path(
+    value: object, project_root: Path, *, planned: bool = False
+) -> str | None:
+    """Validate and normalize one receipt or planned project target."""
     raw = str(value or "")
     if not raw:
         raise LibraryError(".library.lock receipt target path must not be empty")
@@ -53,7 +56,8 @@ def _project_path(value: object, project_root: Path) -> str | None:
             ".library.lock contains a managed path with NUL; Git paths and "
             "pathspec arguments cannot represent NUL bytes"
         )
-    if Path(raw).is_absolute():
+    raw_path = Path(raw)
+    if raw_path.is_absolute() and not planned:
         raise LibraryError(
             ".library.lock receipt target paths must be repository-relative"
         )
@@ -62,12 +66,31 @@ def _project_path(value: object, project_root: Path) -> str | None:
     if not path_value:
         return None
     candidate = Path(path_value)
+    if planned:
+        planned_path = candidate if candidate.is_absolute() else project_root / candidate
+        absolute = Path(os.path.abspath(planned_path))
+        root = Path(os.path.abspath(project_root))
+        try:
+            relative = absolute.relative_to(root)
+        except ValueError as exc:
+            raise LibraryError(
+                f"Planned project target escapes the Git worktree root: {raw}"
+            ) from exc
+        candidate = relative
     if not candidate.parts or candidate == Path(".") or ".." in candidate.parts:
         raise LibraryError(
             ".library.lock receipt target path escapes the repository root"
         )
     rendered = PurePosixPath(*candidate.parts).as_posix()
     return f"{rendered}/" if trailing_slash else rendered
+
+
+def validate_planned_project_target(value: object, project_root: Path) -> str:
+    """Return one safe repository-relative target derived by an installer plan."""
+    normalized = _project_path(value, project_root, planned=True)
+    if normalized is None:
+        raise LibraryError("Planned project target must not be empty")
+    return normalized
 
 
 def managed_project_paths(project_root: Path) -> list[str]:

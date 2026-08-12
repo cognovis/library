@@ -214,6 +214,74 @@ def test_use_rejects_invalid_existing_inventory_before_install(tmp_path: Path) -
     assert not (repo / ".agents").exists()
 
 
+@pytest.mark.parametrize("unsafe_dir", ["ABSOLUTE", "../escaped/"])
+@pytest.mark.parametrize("json_output", [True, False])
+def test_use_rejects_unsafe_planned_target_before_any_mutation(
+    tmp_path: Path, unsafe_dir: str, json_output: bool
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    outside = tmp_path / "outside"
+    resolved_dir = str(outside) + "/" if unsafe_dir == "ABSOLUTE" else unsafe_dir
+    _write_catalog(repo)
+    catalog = yaml.safe_load((repo / "library.yaml").read_text(encoding="utf-8"))
+    catalog["default_dirs"]["skills"] = [{"default": resolved_dir}]
+    (repo / "library.yaml").write_text(yaml.safe_dump(catalog), encoding="utf-8")
+    sibling = repo / "tracked.txt"
+    sibling.write_text("tracked", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    index_before = _git(repo, "ls-files", "--stage").stdout
+    args = ["skill", "use", "strict-root"]
+    if json_output:
+        args.append("--json")
+
+    result = _run_library(repo, *args)
+
+    assert result.returncode != 0
+    output = json.loads(result.stdout)["message"] if json_output else result.stderr
+    assert "escapes the Git worktree root" in output
+    assert not (repo / ".library.lock").exists()
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".agents").exists()
+    assert not (outside / "strict-root").exists()
+    assert not (tmp_path / "escaped" / "strict-root").exists()
+    assert _git(repo, "ls-files", "--stage").stdout == index_before
+
+
+def test_use_rejects_unsafe_dependency_bridge_before_any_mutation(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    outside = tmp_path / "outside-bridge"
+    _write_catalog(repo)
+    catalog = yaml.safe_load((repo / "library.yaml").read_text(encoding="utf-8"))
+    dependency_source = repo / "dependency-source"
+    dependency_source.mkdir()
+    (dependency_source / "SKILL.md").write_text("# Dependency\n", encoding="utf-8")
+    catalog["default_dirs"]["skills"].append(
+        {"claude_bridge": str(outside) + "/"}
+    )
+    catalog["library"]["skills"][0]["requires"] = ["skill:dependency"]
+    catalog["library"]["skills"].append(
+        {
+            "name": "dependency",
+            "description": "Unsafe bridge dependency",
+            "source": str(dependency_source / "SKILL.md"),
+        }
+    )
+    (repo / "library.yaml").write_text(yaml.safe_dump(catalog), encoding="utf-8")
+
+    result = _run_library(repo, "skill", "use", "strict-root", "--json")
+
+    assert result.returncode != 0
+    message = json.loads(result.stdout)["message"]
+    assert "skill:dependency" in message
+    assert "escapes the Git worktree root" in message
+    assert not (repo / ".library.lock").exists()
+    assert not (repo / ".gitignore").exists()
+    assert not (repo / ".agents").exists()
+    assert not outside.exists()
+
+
 @pytest.mark.parametrize(
     ("lock", "message"),
     [

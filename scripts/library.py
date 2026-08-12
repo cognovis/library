@@ -57,6 +57,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 from typing import Mapping, NamedTuple
@@ -1358,6 +1359,25 @@ def _install_with_deps(
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
 
+    planned_target_error = _validate_project_install_plan(
+        args,
+        repo_root,
+        catalog,
+        install_order,
+        dependency_scope,
+        harness,
+    )
+    if planned_target_error is not None:
+        if use_json:
+            print_json(
+                error_result(
+                    str(planned_target_error), planned_target_error.exit_code
+                )
+            )
+        else:
+            print(f"Error: {planned_target_error}", file=sys.stderr)
+        return planned_target_error.exit_code
+
     # Pre-flight runtime and catalog-contract gate for the FULL resolved install
     # order. Runtime requirements must fail before any install/dependency
     # mutation occurs; otherwise a missing binary on a later dependency would
@@ -1505,6 +1525,65 @@ def _install_with_deps(
             return rc
 
     return 0
+
+
+def _validate_project_install_plan(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    install_order: list[tuple[str, str]],
+    dependency_scope: Callable[[str, str], str],
+    harness: str,
+) -> LibraryError | None:
+    """Dry-plan the complete project closure and validate every recorded target."""
+    from lib.gitignore import validate_planned_project_target
+
+    install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
+    for dep_primitive, dep_name in install_order:
+        if dependency_scope(dep_primitive, dep_name) != "project":
+            continue
+        captured = io.StringIO()
+        with redirect_stdout(captured):
+            exit_code = _dispatch_use(
+                args,
+                repo_root,
+                catalog,
+                dep_primitive,
+                dep_name,
+                "project",
+                harness,
+                True,
+                True,
+                install_mode,
+            )
+        try:
+            plan = json.loads(captured.getvalue())
+        except json.JSONDecodeError:
+            return LibraryError(
+                f"Could not inspect planned targets for {dep_primitive}:{dep_name}"
+            )
+        if exit_code != 0:
+            message = (
+                plan.get("message")
+                or plan.get("reason")
+                or "Install planning failed"
+            )
+            return LibraryError(
+                str(message)
+            )
+        targets = plan.get("target_paths")
+        if not isinstance(targets, list) or not targets:
+            return LibraryError(
+                f"Installer plan for {dep_primitive}:{dep_name} did not declare target_paths"
+            )
+        for target in targets:
+            try:
+                validate_planned_project_target(target, repo_root)
+            except LibraryError as exc:
+                return LibraryError(
+                    f"Unsafe target for {dep_primitive}:{dep_name}: {exc}"
+                )
+    return None
 
 
 def _check_upstream_status_for_entry(

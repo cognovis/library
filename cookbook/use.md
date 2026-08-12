@@ -38,6 +38,9 @@ Project installs use one root for Git, installation, `.library.lock`, and
 An explicit `--project` must itself be exactly that top-level; a nested directory
 is rejected before installation or lock/index changes. Linked worktrees are
 normal valid top-levels.
+Before installation, Library dry-plans the complete requested dependency closure
+and validates every canonical, bridge, and helper target reported by the actual
+installers. An unsafe planned target fails before files or lock state are written.
 
 If a managed target is already tracked, the command reports the path and leaves
 the Git index unchanged. Review the reported paths, then explicitly remove only
