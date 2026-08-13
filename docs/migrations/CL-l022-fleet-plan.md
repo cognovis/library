@@ -98,12 +98,12 @@ delivery boundary has published them.
 
 | Git root | Commit | Baseline receipt |
 | --- | --- | --- |
-| `/Users/malte/code/library/meta` | current CL-l022 platform delivery commit | Existing `library-authoring` and `python-cli` roots retained; `cognovis-base` added. |
-| `/Users/malte/code/library/cognovis-core` | `8c7aec70a8839e06689773fc91df6b270c330476` | Four baseline Skills; historical `.library.lock` ignore removed. |
-| `/Users/malte/code/library/sussdorff-core` | `b9d8d3cc5b8b13bfe7d4601fe63701a9f75d6888` | Four baseline Skills; first committed project lock. |
-| `/Users/malte/code/library/cognovis-pi` | `24c6bef146c865de7538350b80d83cbc42506b0b` | Existing `library-authoring` root retained; four baseline Skills added. |
-| `/Users/malte/code/open-brain` | `d271631767fcc0970bdea6a36e8b2f081f11c2b2` | Four baseline Skills; 2,183 non-integration tests passed during commit. |
-| `/Users/malte/code/polaris` | `e115ed0aba0a05a6cc9f0ed7f6789e6f1f7ae8aa` | Four baseline Skills; historical `.library.lock` ignore removed. |
+| `/Users/malte/code/library/meta` | `4fd9a30f` | Existing `library-authoring` and `python-cli` roots retained; `cognovis-base` added and projections reconciled. |
+| `/Users/malte/code/library/cognovis-core` | `5e9845ee` | Four baseline Skills; project projections clean. |
+| `/Users/malte/code/library/sussdorff-core` | `48f22c8` | Four baseline Skills; first committed project lock and clean projections. |
+| `/Users/malte/code/library/cognovis-pi` | `f72094c` | Existing `library-authoring` root retained; four baseline Skills added. |
+| `/Users/malte/code/open-brain` | `d982ba6` | Four baseline Skills; 2,183 non-integration tests passed during commit. |
+| `/Users/malte/code/polaris` | `fc685b62e` | Four baseline Skills; project projections clean and push checks passed. |
 
 The rollout exposed and repaired two platform defects before fleet-wide use:
 the root-level Library Skill is now explicitly installed as a single-file
@@ -122,5 +122,7 @@ bridges; it never deletes a Skill entry or source from a catalog.
    global receipts are not recommendations.
 2. Create the explicit CL-rm8o bootstrap receipt/manifest before removing any
    matching global projection.
-3. Produce a receipt-level global disposition table after each replacement is
-   committed. Preserve uncertain or drifted content as unmanaged/deferred.
+3. Apply the receipt-level decision in
+   `docs/migrations/CL-l022-global-disposition.md`: only the 28 Library-owned
+   global Skill projections are conditional removal candidates; the remaining
+   78 receipts are retained as Bootstrap or deferred state.
