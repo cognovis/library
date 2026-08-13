@@ -452,6 +452,18 @@ library:
           source_catalog: cognovis-library-core
           inventory: manual
   skills:
+    - name: library
+      description: Inspect a repository's Library state and recommend explicit project-local Workspaces or primitives before installation.
+      source: https://github.com/cognovis/library/blob/main/SKILL.md
+      metadata:
+        library:
+          source_catalog: library-platform
+          inventory: convention-scan
+          plane: dev
+      tags:
+        - origin:original
+        - tier:core
+        - category:skill
     - name: pvs-schema-analysis
       description: Analyze a PVS database schema and produce an annotated JSON inventory. Use for MSSQL or PostgreSQL PVS onboarding, schema archaeology, and adapter planning. Bundles references/sql-catalog.md (read-only SQL query catalog, classification/anonymization rules, FHIR mapping patterns) alongside SKILL.md.
       source: https://github.com/cognovis/polaris/blob/main/.claude/skills/pvs-schema-analysis/SKILL.md
@@ -4224,6 +4236,41 @@ library:
         - origin:original
         - tier:core
   workspaces:
+    - name: cognovis-base
+      description: Minimal project-local baseline for Cognovis repositories using Library and Beads.
+      source: https://github.com/cognovis/library/blob/main/workspaces/cognovis-base.yaml
+      schema_version: 2
+      version: 0.1.0
+      status: stable
+      catalogs:
+        - alias: platform
+          identity: https://github.com/cognovis/library
+          pin:
+            kind: commit
+            value: c2f597410c4969c5fb9c77f34f7cc93168bb1202
+        - alias: core
+          identity: https://github.com/cognovis/library-core
+          pin:
+            kind: commit
+            value: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
+      roots:
+        - type: skill
+          name: library
+          catalog: platform
+        - type: skill
+          name: cognovis-beads
+          catalog: core
+        - type: skill
+          name: inject-standards
+          catalog: core
+        - type: skill
+          name: ob-cli
+          catalog: core
+      metadata:
+        library:
+          source_catalog: library-platform
+          inventory: manual
+          source_commit: 123f450894be49563b59ce99f5e06410bdd63431
     - name: library-authoring
       description: Shared authoring baseline for Library primitive repositories.
       source: https://github.com/cognovis/library/blob/main/workspaces/library-authoring.yaml

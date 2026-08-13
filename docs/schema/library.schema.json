@@ -2112,6 +2112,12 @@
       "additionalProperties": false
     },
     "workspace_entry": {
+      "oneOf": [
+        {"$ref": "#/$defs/workspace_entry_v1"},
+        {"$ref": "#/$defs/workspace_entry_v2"}
+      ]
+    },
+    "workspace_entry_v1": {
       "description": "A convention-scanned Workspace manifest plus source-catalog metadata.",
       "type": "object",
       "required": [
@@ -2210,6 +2216,136 @@
         "constraint": {
           "type": "string",
           "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+        }
+      }
+    },
+    "workspace_entry_v2": {
+      "description": "A pinned cross-catalog Workspace manifest plus source-catalog metadata.",
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "source",
+        "schema_version",
+        "version",
+        "catalogs",
+        "roots"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/source_ref"
+        },
+        "schema_version": {
+          "const": 2
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["experimental", "stable", "deprecated"]
+        },
+        "standing_context_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "catalogs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/workspace_declared_catalog"}
+        },
+        "roots": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/workspace_root_v2"}
+        },
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        }
+      }
+    },
+    "workspace_declared_catalog": {
+      "type": "object",
+      "required": ["alias", "identity", "pin"],
+      "additionalProperties": false,
+      "properties": {
+        "alias": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pin": {
+          "type": "object",
+          "required": ["kind", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {"const": "commit"},
+            "value": {
+              "type": "string",
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+            }
+          }
+        }
+      }
+    },
+    "workspace_root_v2": {
+      "type": "object",
+      "required": ["type", "name", "catalog"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "skill",
+            "agent",
+            "prompt",
+            "script",
+            "standard",
+            "guardrail",
+            "mcp",
+            "model-standard",
+            "agent-base",
+            "workflow",
+            "pi-extension",
+            "pi-profile",
+            "just-module",
+            "runtime-config"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "constraint": {
+          "type": "string",
+          "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+        },
+        "catalog": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
         }
       }
     },

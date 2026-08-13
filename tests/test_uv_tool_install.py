@@ -83,12 +83,10 @@ def test_uv_tool_install_carries_the_catalog_for_commands_outside_a_checkout(
         check=False,
     )
 
-    assert initialized.returncode == 2
-    assert json.loads(initialized.stdout) == {
-        "status": "error",
-        "message": "Canonical Workspace 'cognovis-base' is unavailable in the selected catalog.",
-        "exit_code": 2,
-    }
+    assert initialized.returncode == 0, initialized.stderr or initialized.stdout
+    initialized_payload = json.loads(initialized.stdout)
+    assert initialized_payload["status"] == "applied"
+    assert initialized_payload["reference"] == "library-platform:cognovis-base"
 
     workspaces = subprocess.run(
         [str(bin_dir / "library"), "workspace", "list", "--json"],
