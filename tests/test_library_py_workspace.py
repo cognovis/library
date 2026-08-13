@@ -1621,11 +1621,10 @@ def test_addition_failure_stops_before_workspace_registration_or_prune(
     capsys.readouterr()
 
     assert rc == 1
-    lock = yaml.safe_load((project / ".library.lock").read_text())
-    assert {root["id"] for root in lock["requested_roots"]} == {"skill:python-dev"}
-    assert {receipt["id"] for receipt in lock["receipts"]} == {"skill:python-dev"}
-    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
     assert not (project / ".agents" / "skills" / "python-test").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
 
 
 def test_final_lock_write_failure_leaves_recoverable_addition_journal(

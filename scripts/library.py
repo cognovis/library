@@ -6531,6 +6531,7 @@ def _workspace_collision_analysis(
     )
     blockers: list[str] = []
     replacements: list[str] = []
+    targets: set[str] = set()
     planned_owners: dict[Path, str] = {}
     for primitive, name, source_catalog in artifacts:
         catalog_entry = lookup_entry(
@@ -6568,6 +6569,7 @@ def _workspace_collision_analysis(
             continue
         for raw_target in planned.get("target_paths") or []:
             path = canonical_manager_path(Path(str(raw_target)))
+            targets.add(str(path))
             member_id = f"{primitive}:{name}"
             prior_owner = planned_owners.get(path)
             if prior_owner and prior_owner != member_id:
@@ -6603,7 +6605,49 @@ def _workspace_collision_analysis(
     return {
         "blockers": sorted(set(blockers)),
         "replacements": sorted(set(replacements)),
+        "targets": sorted(targets),
     }
+
+
+def _workspace_capture_rollback(
+    rollback_root: Path, paths: list[str], state_files: list[Path]
+) -> list[tuple[Path, Path | None]]:
+    """Capture exact pre-mutation state for one Workspace transaction."""
+    captured: list[tuple[Path, Path | None]] = []
+    for index, target in enumerate([*(Path(path) for path in paths), *state_files]):
+        backup = rollback_root / str(index)
+        if target.is_symlink():
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            backup.symlink_to(target.readlink())
+        elif target.is_dir():
+            shutil.copytree(target, backup, symlinks=True)
+        elif target.is_file():
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(target, backup)
+        else:
+            backup = None
+        captured.append((target, backup))
+    return captured
+
+
+def _workspace_restore_rollback(
+    captured: list[tuple[Path, Path | None]],
+) -> None:
+    """Restore a failed Workspace transaction without retaining partial members."""
+    for target, backup in reversed(captured):
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        elif target.is_dir():
+            shutil.rmtree(target)
+        if backup is None:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if backup.is_symlink():
+            target.symlink_to(backup.readlink())
+        elif backup.is_dir():
+            shutil.copytree(backup, target, symlinks=True)
+        else:
+            shutil.copy2(backup, target)
 
 
 def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
@@ -6751,6 +6795,11 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             },
         )
         member_failure: list[tuple[str, int, str]] = []
+        rollback = _workspace_capture_rollback(
+            admitted_root / "rollback",
+            locked_collision["targets"],
+            [lock_path, repo_root / ".gitignore"],
+        )
         member_provenance: dict[tuple[str, str], tuple[str, str]] = {}
         #: The normalized items the mutation gate admitted. Only a cross-catalog
         #: closure produces them, and only that path publishes and binds.
@@ -6869,6 +6918,8 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
 
         if member_failure:
             member, rc, message = member_failure[0]
+            _workspace_restore_rollback(rollback)
+            clear_workspace_journal(lock_path)
             _print_workspace_result(
                 {
                     **result,
