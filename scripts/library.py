@@ -6340,6 +6340,7 @@ def _workspace_restore_member_provenance(lock: dict, closure, sources: dict) -> 
         for receipt in lock.get("receipts", []):
             if receipt.get("id") == member_id and commit:
                 receipt["definition_commit"] = commit
+                receipt["source_commit"] = commit
 
 
 def _workspace_normalized_members(

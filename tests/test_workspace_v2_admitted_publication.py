@@ -352,6 +352,7 @@ def test_the_lock_records_the_catalog_source_and_the_verified_pin(
         receipt = receipts.get(f"skill:{name}")
         assert receipt is not None
         assert receipt["definition_commit"] == pins[alias]
+        assert receipt["source_commit"] == pins[alias]
 
     # The admitted publication is not left behind as a second copy of the content.
     assert not (project / ".library" / "admitted").exists()
