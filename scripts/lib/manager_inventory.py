@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
-import json
-import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Protocol
-
-import yaml
-
-from .errors import LibraryError
 
 
 def canonical_manager_path(path: Path) -> Path:
@@ -27,41 +20,6 @@ class ManagerInventoryAdapter(Protocol):
 
     def managed_paths(self) -> set[Path]:
         """Return absolute managed destination paths."""
-
-
-class ChezmoiInventoryAdapter:
-    """Read the destination inventory exposed by chezmoi."""
-
-    name = "chezmoi"
-
-    def managed_paths(self) -> set[Path]:
-        executable = shutil.which("chezmoi")
-        if executable is None:
-            return set()
-        result = subprocess.run(
-            [
-                executable,
-                "managed",
-                "--format=json",
-                "--path-style=absolute",
-                "--no-pager",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=20,
-        )
-        if result.returncode != 0:
-            raise LibraryError(
-                f"chezmoi inventory failed: {result.stderr.strip() or 'unknown error'}"
-            )
-        try:
-            payload = json.loads(result.stdout or "[]")
-        except json.JSONDecodeError as exc:
-            raise LibraryError("chezmoi inventory returned invalid JSON") from exc
-        if not isinstance(payload, list):
-            raise LibraryError("chezmoi inventory must be a JSON list")
-        return {canonical_manager_path(Path(str(item))) for item in payload}
 
 
 class ProjectToolingInventoryAdapter:
@@ -105,58 +63,20 @@ class ProjectToolingInventoryAdapter:
         return paths
 
 
-class ConsumerUpdaterInventoryAdapter:
-    """Managed-file targets declared for one consumer project."""
-
-    name = "consumer-updater"
-
-    def __init__(self, manifest_path: Path, project_root: Path) -> None:
-        self.manifest_path = manifest_path
-        self.project_root = project_root.resolve()
-
-    def managed_paths(self) -> set[Path]:
-        if not self.manifest_path.exists():
-            return set()
-        try:
-            payload = yaml.safe_load(self.manifest_path.read_text()) or {}
-        except (OSError, yaml.YAMLError) as exc:
-            raise LibraryError(
-                f"consumer updater inventory failed: {self.manifest_path}"
-            ) from exc
-        paths: set[Path] = set()
-        for consumer in payload.get("consumers") or []:
-            raw_root = str(consumer.get("root") or "")
-            expanded_root = Path(
-                os.path.expandvars(os.path.expanduser(raw_root))
-            ).resolve()
-            if expanded_root != self.project_root:
-                continue
-            for item in consumer.get("managed_files") or []:
-                target = item.get("target")
-                if target:
-                    paths.add(canonical_manager_path(self.project_root / str(target)))
-        return paths
-
-
 def workspace_manager_adapters(
     *, catalog: dict, project_root: Path, platform_root: Path, scope: str
 ) -> list[ManagerInventoryAdapter]:
     """Return every manager adapter relevant to the selected Workspace scope."""
     if scope == "global":
-        return [ChezmoiInventoryAdapter()]
-    return [
-        ProjectToolingInventoryAdapter(catalog, project_root),
-        ConsumerUpdaterInventoryAdapter(
-            platform_root / "consumer-projects.yml", project_root
-        ),
-    ]
+        return []
+    return [ProjectToolingInventoryAdapter(catalog, project_root)]
 
 
 def collect_managed_paths(
     adapters: list[ManagerInventoryAdapter] | None = None,
 ) -> dict[str, str]:
     """Return absolute path to manager-name ownership claims."""
-    selected = adapters if adapters is not None else [ChezmoiInventoryAdapter()]
+    selected = adapters if adapters is not None else []
     managed: dict[str, str] = {}
     for adapter in selected:
         for path in adapter.managed_paths():

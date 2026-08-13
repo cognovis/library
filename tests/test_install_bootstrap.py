@@ -39,6 +39,10 @@ def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) ->
     assert installed_cli.is_symlink()
     assert installed_cli.resolve() == (REPO_ROOT / "bin" / "library").resolve()
     assert os.access(installed_cli, os.X_OK)
+    for launcher in ("cld", "cdx"):
+        installed_launcher = home / ".local" / "bin" / launcher
+        assert installed_launcher.is_symlink()
+        assert installed_launcher.resolve() == (REPO_ROOT / "bin" / launcher).resolve()
 
     consumer_dir = tmp_path / "consumer"
     consumer_dir.mkdir()

@@ -34,10 +34,8 @@ Consequences and deferred to a follow-up spike, not built as part of this ADR.
 > only concrete Pi orchestration design places git, Beads, and gate side effects
 > inside the orchestration layer — violating Decision 4's inert spine.
 >
-> The checks are re-runnable:
-> `uv run python scripts/checks/pi_workflow_executor_evidence.py --output docs/research/pi-workflow-executor-evidence.json`.
-> If that runner ever reports `supersede-adr-0006`, a supersession ADR may be
-> written. Until then this branch is closed. Pi remains fully supported as a
+> If new evidence justifies supersession, record it in a successor ADR. Until
+> then this branch is closed. Pi remains fully supported as a
 > **runtime target** for Pi extensions and Pi profiles, which is a different axis
 > than executor authority.
 
@@ -237,17 +235,16 @@ and resume wins available today.
 - **CL-uqug (2026-05-25):** Hook and permission preservation audit completed.
   `WorkflowRuntime` now enforces a fail-closed guardrail: `MutatingExecutionBlockedError`
   is raised for any adapter whose preservation status is not `verified`. Currently no
-  listed adapter is approved for mutating execution. Capability matrix and Claude leaf
-  smoke evidence are in `docs/audit/hook-permission-preservation.md`. Codex-specific
-  hook preservation smoke completed in CL-pabj (2026-05-25): both adapters are now `blocked` (see docs/audit/hook-permission-preservation.md).
+  listed adapter is approved for mutating execution. Hook-preservation evidence was
+  recorded by CL-uqug and CL-pabj; both adapters are now `blocked`.
 - **ADAPTER_PRESERVATION_STATUS update criteria (CL-182u, 2026-05-25):** The
   `ADAPTER_PRESERVATION_STATUS` dict in `scripts/lib/workflow_runtime.py` is the
   machine-checked registry that controls whether mutating workflow execution is
   permitted for an adapter. Update criteria:
   1. **Status -> `verified`:** The adapter's PreToolUse hooks (destructive-command
      guard, `bead-author-check`, `permissions.yml`) are confirmed to fire inside
-     workflow leaves. Evidence: a positive smoke test in `docs/audit/` plus a
-     passing test in `tests/test_workflow_runtime_spike.py` or a successor file.
+     workflow leaves. Evidence requires a positive smoke result plus a passing
+     test in `tests/test_workflow_runtime_spike.py` or a successor file.
   2. **Status -> `blocked`:** The adapter's leaf smoke returned an unauthenticated
      or permission-bypassed result, or the hook fire could not be confirmed.
   3. **Status -> `separate-harness`:** The adapter runs in a separate harness
@@ -260,7 +257,7 @@ and resume wins available today.
      is treated as blocked. `MutatingExecutionBlockedError` is raised. `readOnly=True`
      bypasses this check and is required for safe read-only execution.
   6. **To add a new verified adapter:** open a bead, run the hook-preservation
-     smoke for that adapter (see `docs/audit/hook-permission-preservation.md`),
+     smoke for that adapter,
      update the dict in `workflow_runtime.py`, and add or update test coverage.
 - Before the runtime is trusted on any mutating workflow, it MUST be verified that
   PreToolUse hooks (the destructive-command guard, `bead-author-check`,

@@ -127,25 +127,6 @@ This agent verifies runtime frontmatter emission.
     return agent_file
 
 
-def make_agent_with_legacy_frontmatter(tmp_path: Path) -> Path:
-    """Create an agent fixture that uses the one-release frontmatter alias."""
-    agent_file = tmp_path / "agent-with-legacy-frontmatter.md"
-    agent_file.write_text(
-        """---
-name: legacy-frontmatter-agent
-description: Agent with legacy composer frontmatter
-golden_prompt_extends: cognovis-base
-model_standards: []
----
-
-# Legacy Frontmatter Agent
-
-This agent verifies the legacy frontmatter alias.
-"""
-    )
-    return agent_file
-
-
 def make_agent_with_legacy_agent_base_extends(tmp_path: Path) -> Path:
     """Create an agent fixture that uses the legacy agent_base_extends field."""
     agent_file = tmp_path / "agent-with-legacy-agent-base-extends.md"
@@ -160,6 +141,25 @@ model_standards: []
 # Legacy Agent Base Agent
 
 This agent verifies the legacy agent_base_extends field.
+"""
+    )
+    return agent_file
+
+
+def make_agent_with_legacy_frontmatter(tmp_path: Path) -> Path:
+    """Create an agent fixture that uses the one-release frontmatter alias."""
+    agent_file = tmp_path / "agent-with-legacy-frontmatter.md"
+    agent_file.write_text(
+        """---
+name: legacy-frontmatter-agent
+description: Agent with legacy composer frontmatter
+golden_prompt_extends: cognovis-base
+model_standards: []
+---
+
+# Legacy Frontmatter Agent
+
+This agent verifies the legacy frontmatter alias.
 """
     )
     return agent_file
@@ -189,12 +189,8 @@ def test_compose_accepts_legacy_frontmatter_alias(tmp_path):
 
     rc, stdout, stderr = run_compose(agent_file, base_dir)
     assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
-    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout, (
-        f"Layer 1 marker not found for legacy alias.\nstdout: {stdout}\nstderr: {stderr}"
-    )
-    assert "Legacy Frontmatter Agent" in stdout, (
-        f"Layer 2 body not found for legacy alias.\nstdout: {stdout}\nstderr: {stderr}"
-    )
+    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout
+    assert "Legacy Frontmatter Agent" in stdout
     assert (
         "DeprecationWarning: golden_prompt_extends is deprecated; "
         "use agent_base."
@@ -223,7 +219,6 @@ def test_compose_finds_legacy_global_agent_base_dir(tmp_path, git_marker_kind):
     (ancestor_base_dir / "cognovis-base.md").write_text(
         "---\nname: cognovis-base\n---\n\nANCESTOR_AGENT_BASE_MARKER\n"
     )
-
     repo = ancestor / "repo"
     repo.mkdir()
     git_marker = repo / ".git"
@@ -231,7 +226,6 @@ def test_compose_finds_legacy_global_agent_base_dir(tmp_path, git_marker_kind):
         git_marker.mkdir()
     else:
         git_marker.write_text("gitdir: /tmp/test-git-dir\n")
-
     home = tmp_path / "home"
     legacy_dir = home / ".agents" / "golden-prompts"
     legacy_dir.mkdir(parents=True)
@@ -240,15 +234,9 @@ def test_compose_finds_legacy_global_agent_base_dir(tmp_path, git_marker_kind):
     agent_file = repo / "agent-with-base.md"
     agent_file.write_text((FIXTURES_DIR / "agent-with-base.md").read_text())
 
-    rc, stdout, stderr = run_compose(
-        agent_file,
-        None,
-        extra_env={"HOME": str(home)},
-    )
+    rc, stdout, stderr = run_compose(agent_file, None, extra_env={"HOME": str(home)})
     assert rc == 0, f"compose-agent.py exited {rc}: {stderr}"
-    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout, (
-        f"Layer 1 marker not found from legacy global dir.\nstdout: {stdout}\nstderr: {stderr}"
-    )
+    assert "COGNOVIS_BASE_LAYER1_MARKER" in stdout
     assert "ANCESTOR_AGENT_BASE_MARKER" not in stdout
     assert (
         "DeprecationWarning: agent_base 'auto' resolved "

@@ -7,7 +7,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from lib.manager_inventory import (
-    ConsumerUpdaterInventoryAdapter,
     ProjectToolingInventoryAdapter,
     canonical_manager_path,
     collect_managed_paths,
@@ -47,19 +46,9 @@ def test_collect_managed_paths_resolves_symlinked_ancestors_only(
     }
 
 
-def test_legacy_project_manager_adapters_report_exact_targets(tmp_path: Path) -> None:
+def test_project_tooling_manager_reports_exact_targets(tmp_path: Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    manifest = tmp_path / "consumer-projects.yml"
-    manifest.write_text(
-        "version: 1\n"
-        "consumers:\n"
-        "  - name: fixture\n"
-        f"    root: {project}\n"
-        "    managed_files:\n"
-        "      - source: source.py\n"
-        "        target: scripts/managed.py\n"
-    )
     catalog = {
         "project_tooling": [
             {
@@ -73,13 +62,11 @@ def test_legacy_project_manager_adapters_report_exact_targets(tmp_path: Path) ->
     managed = collect_managed_paths(
         [
             ProjectToolingInventoryAdapter(catalog, project),
-            ConsumerUpdaterInventoryAdapter(manifest, project),
         ]
     )
 
     assert managed == {
         str((project / ".gitignore").resolve()): "project-tooling",
-        str((project / "scripts/managed.py").resolve()): "consumer-updater",
     }
 
 

@@ -10,9 +10,7 @@
 > format is the Anthropic Workflow JS surface, the native tool is the canonical
 > executor, and the native parse-check deploy gate stays in force. Pi remains a
 > supported **runtime target** for Pi extensions and Pi profiles — a different
-> axis from executor authority. Re-run
-> `scripts/checks/pi_workflow_executor_evidence.py` before reopening the question;
-> the recorded verdict is `docs/research/pi-workflow-executor-evidence.json`.
+> axis from executor authority. ADR-0011 records the evidence and decision.
 >
 > **Workflow source ownership is unconstrained.** A Workflow may be first-party or
 > come from an external marketplace through the ADR-0011 provider contract. An

@@ -32,8 +32,9 @@ becomes a primitive, becomes project-owned and frozen with provenance, or is
 explicitly retired. Until then it remains a protected external-manager path and
 cannot be adopted, replaced, or pruned by Workspace reconciliation.
 
-The current row-by-row dispositions live in
-[Workspace legacy-writer inventory](migration/workspace-legacy-inventory.md).
+The governing desired-state and legacy-writer dispositions are recorded in
+[ADR-0010](adr/workspace-desired-state-reconciliation.md) and
+[ADR-0011](adr/heterogeneous-marketplace-workspaces.md).
 
 ## What it is and why it exists
 
@@ -184,25 +185,10 @@ uv run python /path/to/library/scripts/sync_project_tooling.py \
 
 ## Registered use cases
 
-### 1. beads-prime — PRIME.md fleet primer
+The Library deliberately does not project `.beads/PRIME.md`; the upstream
+Beads CLI owns `bd prime` and its workflow context.
 
-```yaml
-- name: beads-prime
-  target_kind: file
-  target_path: .beads/PRIME.md
-  source: prime/PRIME.md
-  conditions:
-    - dir_exists: .beads
-  sync_strategy: overwrite_if_source_newer
-  conflict_policy: canonical_wins
-  consumed_by: {tool: bd, command: bd prime}
-```
-
-Syncs the bd workflow primer from `cognovis-library/prime/PRIME.md` into every beads-enabled
-project. `bd prime` emits this content. Previously this was a hardcoded block in the
-SessionStart hook; now it is schema-driven and version-controlled alongside related content.
-
-### 2. beads-server-mode — Enforce dolt_mode=server
+### 1. beads-server-mode — Enforce dolt_mode=server
 
 ```yaml
 - name: beads-server-mode
@@ -220,7 +206,7 @@ Ensures `.beads/metadata.json` is in server mode and removes stale embedded-mode
 that can trigger journal corruption. This replaces the `enforce_server_mode()` function
 in the SessionStart hook (which is kept for now as a safety net during migration).
 
-### 3. beads-post-commit-hook — bd export on commit
+### 2. beads-post-commit-hook — bd export on commit
 
 ```yaml
 - name: beads-post-commit-hook

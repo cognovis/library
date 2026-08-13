@@ -295,8 +295,8 @@ def enforce_classifications(
 _HEADER = """# Legacy projection inventory (ADR-0011, `CL-m6cc` AC5)
 
 > **Generated. Do not edit.** Regenerate with
-> `uv run python scripts/checks/legacy_projection_inventory.py`. The machine-readable
-> form is `docs/reports/legacy-projection-inventory.json`; this document renders it.
+> `uv run python scripts/checks/legacy_projection_inventory.py`. Use `--output-json`
+> when a machine-readable artifact is needed for an explicit audit.
 
 This inventory replaces the name-matched survey in ADR-0011
 `Legacy Projection Disposition`. Provenance here is derived **only** from a

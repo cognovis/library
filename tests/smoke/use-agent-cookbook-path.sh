@@ -4,15 +4,14 @@
 # Bead: CL-o16
 #
 # Tests the full fetch -> compose -> write flow that an agent would execute when
-# following the cookbook steps in cookbook/use.md Step 6.5 and cookbook/sync.md
-# Step 4.5. Does NOT invoke compose-agent.py directly via its Python interface;
+# following the shell-level fetch, compose, and write sequence. It does NOT
+# invoke compose-agent.py directly via its Python interface;
 # instead, it exercises the shell-level cookbook sequence.
 #
 # Tests:
 #   1. Fetch agent file + compose (cognovis-base marker present in installed file)
 #   2. Idempotent re-run: identical installed body after second fetch+compose
 #   3. Graceful degradation: missing Layer 1 (cognovis-base absent) -> warn, keep uncomposed
-#   4. cookbook/use.md Step 6.5 wording is unchanged (guard against accidental edits)
 #
 # Usage:
 #   bash tests/smoke/use-agent-cookbook-path.sh
@@ -299,44 +298,6 @@ else
         fi
     else
         fail "graceful-degradation/file-exists: installed file NOT found — sync must not abort on missing layer"
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# Test 4: cookbook/use.md Step 6.5 wording is unchanged (AK7 guard)
-# ---------------------------------------------------------------------------
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Test 4: cookbook/use.md Step 6.5 wording is unchanged (AK7)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-USE_MD="${REPO_ROOT}/cookbook/use.md"
-if [[ ! -f "${USE_MD}" ]]; then
-    fail "use-md-unchanged/exists: cookbook/use.md not found"
-else
-    # Verify Step 6.5 section heading exists
-    if grep -q "^### 6\.5: Build/Compose Agent Body" "${USE_MD}"; then
-        pass "use-md-unchanged/heading: Step 6.5 heading present"
-    else
-        fail "use-md-unchanged/heading: Step 6.5 heading missing or altered in cookbook/use.md"
-    fi
-
-    # Verify key invariant phrases from the original Step 6.5 are still present
-    MISSING=0
-    for phrase in \
-        "agent_base" \
-        "compose-agent.py" \
-        "graceful degradation" \
-        "from-scratch" \
-        "Idempotency"
-    do
-        if ! grep -q "${phrase}" "${USE_MD}"; then
-            fail "use-md-unchanged/phrase: '${phrase}' missing from cookbook/use.md — Step 6.5 may have been altered"
-            MISSING=$((MISSING + 1))
-        fi
-    done
-    if [[ "${MISSING}" -eq 0 ]]; then
-        pass "use-md-unchanged/phrases: all Step 6.5 invariant phrases present in cookbook/use.md"
     fi
 fi
 

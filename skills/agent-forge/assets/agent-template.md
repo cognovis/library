@@ -37,11 +37,9 @@ Provide numbered, actionable steps that the agent should follow:
 - If a helper returns multiple fields or actionable failures, require the `execution-result` JSON envelope
 - Use bare stdout only for single atomic values (for example one path, one UUID, or one count)
 
-## Packability
+## Portability
 
-- Gas City session class: `polecat` for bounded one-shot work, `crew` for persistent coordination, or `none` if not pack-exported
-- Keep the core prompt provider-neutral; put Claude/Codex-specific startup flags, auth assumptions, and model defaults in harness adapters or Gas City provider config
-- Declare Gas City export metadata in `library.yaml` under `metadata.library.gascity`, not in this prompt body
+- Keep the core prompt provider-neutral; put Claude/Codex-specific startup flags, auth assumptions, and model defaults in harness adapters
 
 ## Best Practices
 

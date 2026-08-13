@@ -137,28 +137,9 @@ silently-skipped-entry reporting.
 
 ## Consumer Project Updates
 
-`consumer-projects.yml` and `scripts/update-consumers.py` are transitional legacy
-distribution mechanisms under ADR-0010. Do not add new consumers, primitives, or
-managed-file responsibilities. Once Workspace reconciliation is available, each
-consumer owns its direct and Workspace roots and uses Workspace status/sync instead.
-
-Until a listed legacy consumer has migrated, the updater may still propagate its
-existing entries after a catalog publish. Run a dry-run first:
-
-```bash
-uv run python <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --json
-uv run python <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer polaris --consumer mira --json
-```
-
-If the dry-run reports planned changes and the user asked to propagate them,
-apply the selected consumers:
-
-```bash
-uv run python <LIBRARY_SKILL_DIR>/scripts/update-consumers.py --consumer <name> --apply --json
-```
-
-After `--apply`, inspect each target repo, run its smoke checks, then commit and
-push in that repo. The updater intentionally does not commit, push, or open PRs.
+Use registered Workspaces for project distribution. Inspect the intended changes
+with `library workspace status --all --scope project`, then reconcile through
+`library workspace sync --all --scope project --apply` when the user requested it.
 
 ## Commands
 

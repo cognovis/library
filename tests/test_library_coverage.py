@@ -21,7 +21,6 @@ Run with:
     uv run tests/test_library_coverage.py
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -35,18 +34,11 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_YAML = REPO_ROOT / "library.yaml"
-AUDIT_JSON = REPO_ROOT / "docs" / "audit" / "skills-origin.json"
-CHECK_COVERAGE_SCRIPT = REPO_ROOT / "scripts" / "check-coverage.py"
 
 
 def load_library():
     with open(LIBRARY_YAML) as f:
         return yaml.safe_load(f)
-
-
-def load_audit():
-    with open(AUDIT_JSON) as f:
-        return json.load(f)
 
 
 def get_registered_names(library_data):
@@ -340,13 +332,6 @@ def test_source_urls_point_to_registered_source_repos():
                 errors.append(f"{section_name}/{name}: source URL does not point to an allowed source repo: {source}")
 
     assert not errors, f"Entries with wrong source URLs:\n" + "\n".join(errors)
-
-
-def test_check_coverage_script_exists():
-    """scripts/check-coverage.py must exist."""
-    assert CHECK_COVERAGE_SCRIPT.exists(), (
-        f"scripts/check-coverage.py not found at {CHECK_COVERAGE_SCRIPT}"
-    )
 
 
 def test_requires_format():

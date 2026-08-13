@@ -288,7 +288,8 @@ member," split the Workspace instead of adding an override.
 | `engineering-lobby` | global | Deferred until its member list, bootstrap receipts, collision path, and manager inventory adapter satisfy the lobby gates |
 
 The evidence-backed initial portfolio and repository mapping live in
-[Workspace Portfolio Audit](../research/workspace-portfolio-audit.md).
+[ADR-0010](../adr/workspace-desired-state-reconciliation.md) and
+[ADR-0011](../adr/heterogeneous-marketplace-workspaces.md).
 
 The term **Library Workspace** should be used when ambiguity is possible. It is
 not a Git worktree, filesystem directory, cmux workspace, product runtime

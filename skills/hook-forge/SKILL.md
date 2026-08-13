@@ -52,8 +52,7 @@ gate and before installation or catalog snippets.
 | Repo-local escape hatch? | Keep hooks local when matchers, paths, settings, or environment assumptions are repo-specific. Promote only reusable detection logic or generic lifecycle wiring. |
 | Harness support? | Ask whether the hook works in all harnesses or is harness-specific. For one-harness hooks, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
 | Runtime requirements? | Ask whether the hook requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
-| Deterministic script route? | Reusable detection or validation logic belongs in a Python script; the hook should be the lifecycle binding around it. Use `script-forge` for shared or pack-exported logic. |
-| Gas City projection? | A hook may project to provider hook wiring, command, or doctor surfaces; projection metadata belongs in `library.yaml`, not hook code. |
+| Deterministic script route? | Reusable detection or validation logic belongs in a Python script; the hook should be the lifecycle binding around it. Use `script-forge` for shared logic. |
 
 Product-plane refusal message:
 
@@ -130,8 +129,8 @@ More inline examples (Black, gofmt, notifications): `assets/templates/simple_hoo
 4. Install: `uv run scripts/hook_manager.py install PreToolUse --command "uv run .claude/hooks/pre_tool_use.py"`
 5. Test: `echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' | uv run .claude/hooks/pre_tool_use.py`
 
-If the Python helper should also be exported into a Gas City pack or reused by a
-skill/agent/doctor check, scaffold it with `script-forge` and declare the hook as
+If the Python helper should also be reused by another skill, agent, or check,
+scaffold it with `script-forge` and declare the hook as
 the lifecycle binding around that script. Keep provider/runtime metadata in
 `library.yaml`, not in hook code.
 
