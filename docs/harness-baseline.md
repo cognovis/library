@@ -64,7 +64,7 @@ changes.
 
 | File/Dir | Purpose |
 |---|---|
-| .claude/skills/ | Project-local skills installed via `/library` |
+| .claude/skills/ | Repository-owned Claude skills; receipt-owned Library projections are generated content |
 | .claude/doc-config.yml | Documentation routing config |
 | .claude/uat-config.yml | UAT test configuration |
 | .claude/scenario-config.yml | Scenario-based testing config |
@@ -76,8 +76,16 @@ changes.
 | File/Dir | Purpose |
 |---|---|
 | .agents/standards/ | Domain-specific standards shared across harnesses |
-| .agents/skills/ | Installed skills committed at project level; see mira for reference implementation |
+| .agents/skills/ | Repository-owned cross-harness skills authored and committed by the project |
 | .agents/orchestrator-config.yml | Orchestrator routing configuration (project-local). The **global** fallback `~/.agents/orchestrator-config.yml` is self-healed on every `cld`/`cdx` launch from the canonical catalog source (`bin/lib/orchestrator-config-sync.zsh`), so it never silently drifts. |
+
+Library projections and repository-owned primitives can coexist below the same
+harness directory. A project-scoped schema-v2 receipt owns only its exact
+`receipts[].targets[].path` destinations. `library use` and `library sync` add
+those generated destinations to the Library-managed `.gitignore` block;
+unreceipted repository-owned siblings remain visible to Git and should be
+committed. Do not ignore `.agents/skills/`, `.claude/skills/`, or another whole
+harness directory merely because it contains a Library projection.
 
 **MUST NOT be committed:**
 

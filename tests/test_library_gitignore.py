@@ -687,6 +687,81 @@ def test_untrack_removes_managed_paths_from_index_but_keeps_files(
     assert _git(repo, "ls-files").stdout.splitlines() == ["README.md"]
 
 
+def test_mira_shaped_migration_preserves_repository_owned_skill(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path / "mira")
+    generated = repo / ".agents" / "skills" / "library-generated" / "SKILL.md"
+    repository_owned = repo / ".agents" / "skills" / "mira-owned" / "SKILL.md"
+    generated.parent.mkdir(parents=True)
+    repository_owned.parent.mkdir(parents=True)
+    generated.write_text("# Generated projection\n", encoding="utf-8")
+    repository_owned.write_text("# Mira-owned primitive\n", encoding="utf-8")
+    _write_v2_lock(
+        repo,
+        receipts=[
+            {
+                "id": "skill:library-generated@1.0.0",
+                "type": "skill",
+                "name": "library-generated",
+                "scope": "project",
+                "catalog_identity": "https://example.invalid/catalog",
+                "resolved_version": "1.0.0",
+                "verified": True,
+                "adopted": False,
+                "targets": [
+                    {
+                        "path": ".agents/skills/library-generated",
+                        "kind": "directory",
+                    }
+                ],
+                "owners_cache": ["skill:library-generated"],
+            }
+        ],
+    )
+    tracked_before = [
+        ".agents/skills/library-generated/SKILL.md",
+        ".agents/skills/mira-owned/SKILL.md",
+    ]
+    _git(repo, "add", "-f", "--", *tracked_before)
+
+    normal = _run_library(repo, "sync", "--scope", "project", "--json")
+
+    assert normal.returncode == 0, normal.stderr
+    normal_payload = json.loads(normal.stdout)
+    assert normal_payload["gitignore"]["tracked_paths"] == [tracked_before[0]]
+    assert normal_payload["gitignore"]["managed_paths"][-1] == (
+        ".agents/skills/library-generated"
+    )
+    assert ".agents/skills/mira-owned" not in _managed_block(repo)
+    assert any("--untrack" in warning for warning in normal_payload["warnings"])
+    assert _git(repo, "ls-files").stdout.splitlines() == tracked_before
+
+    migrated = _run_library(
+        repo, "sync", "--scope", "project", "--untrack", "--json"
+    )
+
+    assert migrated.returncode == 0, migrated.stderr
+    migrated_payload = json.loads(migrated.stdout)
+    assert migrated_payload["gitignore"]["untracked_paths"] == [tracked_before[0]]
+    assert generated.exists()
+    assert repository_owned.exists()
+    assert _git(repo, "ls-files").stdout.splitlines() == [tracked_before[1]]
+    ignored_sibling = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "check-ignore",
+            "--no-index",
+            "--quiet",
+            tracked_before[1],
+        ],
+        check=False,
+    )
+    assert ignored_sibling.returncode == 1
+
+
 def test_marker_text_embedded_in_user_prose_is_preserved(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path / "repo")
     prose = (
