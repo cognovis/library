@@ -351,6 +351,8 @@ def test_the_lock_records_the_catalog_source_and_the_verified_pin(
     for name, alias in (("python-dev", "core"), ("helper", "upstream")):
         receipt = receipts.get(f"skill:{name}")
         assert receipt is not None
+        assert receipt["source"] == entries[name]["source"]
+        assert "admitted" not in receipt["source"]
         assert receipt["definition_commit"] == pins[alias]
         assert receipt["source_commit"] == pins[alias]
 

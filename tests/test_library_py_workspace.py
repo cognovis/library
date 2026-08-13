@@ -1627,7 +1627,7 @@ def test_addition_failure_stops_before_workspace_registration_or_prune(
     assert not (project / ".library.lock.workspace-journal.json").exists()
 
 
-def test_final_lock_write_failure_leaves_recoverable_addition_journal(
+def test_final_lock_write_failure_rolls_back_the_complete_workspace_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1659,9 +1659,49 @@ def test_final_lock_write_failure_leaves_recoverable_addition_journal(
     with pytest.raises(LockfileError, match="injected final lock write failure"):
         module._workspace_use(args, project, load_catalog(project))
 
-    assert (project / ".library.lock.workspace-journal.json").exists()
-    lock = yaml.safe_load((project / ".library.lock").read_text())
-    assert {root["type"] for root in lock["requested_roots"]} == {"skill"}
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".agents" / "skills" / "python-test").exists()
+
+
+def test_gitignore_reconciliation_failure_rolls_back_the_complete_workspace_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+
+    def fail_gitignore(_repo_root: Path) -> dict:
+        raise RuntimeError("injected Gitignore reconciliation failure")
+
+    monkeypatch.setattr(module, "_reconcile_project_gitignore", fail_gitignore)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(RuntimeError, match="injected Gitignore reconciliation failure"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".agents" / "skills" / "python-test").exists()
 
 
 def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(

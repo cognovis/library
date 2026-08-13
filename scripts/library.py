@@ -6339,6 +6339,7 @@ def _workspace_restore_member_provenance(lock: dict, closure, sources: dict) -> 
                     entry["source_commit"] = commit
         for receipt in lock.get("receipts", []):
             if receipt.get("id") == member_id and commit:
+                receipt["source"] = source
                 receipt["definition_commit"] = commit
                 receipt["source_commit"] = commit
 
@@ -6651,6 +6652,21 @@ def _workspace_restore_rollback(
             shutil.copy2(backup, target)
 
 
+@contextmanager
+def _workspace_transaction_guard(lock_path: Path, rollback_state) -> None:
+    """Restore the captured pre-state when any Workspace mutation raises."""
+    try:
+        yield
+    except BaseException:
+        captured = rollback_state()
+        if captured is not None:
+            _workspace_restore_rollback(captured)
+            from lib.workspace import clear_workspace_journal
+
+            clear_workspace_journal(lock_path)
+        raise
+
+
 def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     from lib.workspace import (
         apply_plan_ownership,
@@ -6737,9 +6753,12 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         write_workspace_journal,
     )
 
-    with workspace_write_lock(lock_path), _admitted_publication_root(
-        repo_root
-    ) as admitted_root:
+    rollback = None
+    with (
+        workspace_write_lock(lock_path),
+        _admitted_publication_root(repo_root) as admitted_root,
+        _workspace_transaction_guard(lock_path, lambda: rollback),
+    ):
         recover_workspace_journal(lock_path, repo_root)
         current_lock = load_lockfile(lock_path)
         locked_preview = json.loads(json.dumps(current_lock))
@@ -6987,6 +7006,8 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             prerequisite_statuses=_workspace_prerequisite_statuses(applied_plan),
         )
         save_lockfile(lock_path, lock)
+        if getattr(args, "reconcile_gitignore", False):
+            result["gitignore"] = _reconcile_project_gitignore(repo_root)
         clear_workspace_journal(lock_path)
     result.update(
         {
@@ -6996,12 +7017,6 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             "digest": applied_plan["digest"],
         }
     )
-    # `library init` owns the first-use Git hygiene lifecycle. General Workspace
-    # commands retain their existing contract; the fixed initializer explicitly
-    # asks for CL-1les reconciliation after its authoritative v2 lock is saved.
-    if getattr(args, "reconcile_gitignore", False):
-        gitignore_result = _reconcile_project_gitignore(repo_root)
-        result["gitignore"] = gitignore_result
     _print_workspace_result(result, json_mode=args.json)
     return 0
 
