@@ -29,9 +29,9 @@ def test_filter_suppresses_command_noise_but_preserves_markers() -> None:
             "command": "bd show noisy",
             "aggregated_output": (
                 "huge bead json should not print\n"
-                "## LEAF_DISPATCH workflow=full slot=implementation adapter=cursor-composer\n"
+                "## LEAF_DISPATCH workflow=full slot=implementation adapter=codex-impl\n"
                 "regular command output should not print\n"
-                "## CURSOR_AGENT_START adapter=cursor-impl model=composer-2.5\n"
+                "## CODEX_AGENT_START adapter=codex-impl model=gpt-5.5\n"
             ),
             "exit_code": 0,
         },
@@ -44,7 +44,7 @@ def test_filter_suppresses_command_noise_but_preserves_markers() -> None:
 
     assert result.returncode == 0
     assert "## LEAF_DISPATCH workflow=full" in result.stdout
-    assert "## CURSOR_AGENT_START adapter=cursor-impl" in result.stdout
+    assert "## CODEX_AGENT_START adapter=codex-impl" in result.stdout
     assert "huge bead json" not in result.stdout
     assert "regular command output" not in result.stdout
     assert "Reading additional input" not in result.stdout

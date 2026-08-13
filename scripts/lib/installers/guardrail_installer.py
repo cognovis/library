@@ -61,12 +61,6 @@ def install_guardrail(
     Returns:
         Operation result dict.
     """
-    if harness in ("cursor", "opencode"):
-        return error_result(
-            f"Guardrail install for harness '{harness}' is not supported. "
-            "Guardrail hooks for Cursor and OpenCode are not managed by this installer."
-        )
-
     # 1. Catalog lookup
     entry = lookup_entry(catalog, "guardrail", name)
     guardrail_name = entry.get("name", name)

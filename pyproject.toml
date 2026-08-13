@@ -11,6 +11,21 @@ dependencies = [
     "mcp>=1.27.1,<2",
 ]
 
+[project.scripts]
+library = "scripts.library:main"
+cld = "scripts.launchers:cld"
+cdx = "scripts.launchers:cdx"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["scripts", "scripts.lib", "scripts.lib.installers", "scripts.lib.providers"]
+
+[tool.setuptools.package-data]
+scripts = ["library.yaml", "bin/*", "bin/lib/*"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

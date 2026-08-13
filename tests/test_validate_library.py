@@ -380,17 +380,15 @@ def test_schema_accepts_runtime_requirements_on_installable_primitive_shapes():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_schema_accepts_closed_harness_support_registry():
-    """Harness support accepts the closed set of known harness identifiers."""
+def test_schema_accepts_active_harness_support_registry():
+    """Harness support accepts only Claude Code, Codex, and Pi."""
     entry = _base_skill_entry()
     entry["metadata"] = {
         "library": {
             "harness_support": {
                 "claude_code": "supported",
                 "codex": "not-supported",
-                "cursor": "planned",
-                "opencode": "supported",
-                "gemini": "planned",
+                "pi": "planned",
             }
         }
     }
@@ -400,13 +398,14 @@ def test_schema_accepts_closed_harness_support_registry():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_schema_rejects_unknown_harness_support_id():
-    """Harness support is a closed enum of known harness identifiers."""
+@pytest.mark.parametrize("retired_harness", ["cursor", "opencode", "gemini", "antigravity"])
+def test_schema_rejects_retired_harness_support_id(retired_harness: str):
+    """Harness support is a closed enum that excludes retired harnesses."""
     entry = _base_skill_entry()
     entry["metadata"] = {
         "library": {
             "harness_support": {
-                "pi": "planned",
+                retired_harness: "planned",
             }
         }
     }
@@ -414,7 +413,7 @@ def test_schema_rejects_unknown_harness_support_id():
     result = _run_validator(_make_library_yaml(entry))
 
     assert result.returncode == 1
-    assert "pi" in result.stdout + result.stderr
+    assert retired_harness in result.stdout + result.stderr
 
 
 def test_schema_rejects_invalid_harness_support_status():
@@ -423,7 +422,7 @@ def test_schema_rejects_invalid_harness_support_status():
     entry["metadata"] = {
         "library": {
             "harness_support": {
-                "cursor": "experimental",
+                "claude_code": "experimental",
             }
         }
     }
@@ -453,7 +452,7 @@ def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
         "metadata": {
             "library": {
                 "harness_support": {
-                    "cursor": "planned",
+                    "claude_code": "planned",
                 }
             }
         },
@@ -467,7 +466,7 @@ def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
         "metadata": {
             "library": {
                 "harness_support": {
-                    "cursor": "planned",
+                    "claude_code": "planned",
                 }
             }
         },
@@ -513,7 +512,7 @@ def test_mcp_and_project_tooling_entries_exclude_harness_support_metadata():
 
 
 def test_mcp_server_species_library_tool_surface():
-    """library-tool-surface MCP entries accept the four coding harness registration keys."""
+    """library-tool-surface MCP entries accept active coding harness registration keys."""
     entry = {
         "name": "supervised-test-server",
         "description": "First-party typed Library tool surface.",
@@ -549,14 +548,6 @@ def test_mcp_server_species_library_tool_surface():
                 "codex": {
                     "config_path": "~/.codex/config.toml",
                     "snippet": {"url": "http://127.0.0.1:8765/mcp"},
-                },
-                "antigravity": {
-                    "config_path": "~/.gemini/config/mcp_config.json",
-                    "snippet": {"type": "http", "url": "http://127.0.0.1:8765/mcp"},
-                },
-                "cursor": {
-                    "config_path": "~/.cursor/mcp.json",
-                    "snippet": {"type": "http", "url": "http://127.0.0.1:8765/mcp"},
                 },
             }
         },

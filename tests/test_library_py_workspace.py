@@ -124,10 +124,6 @@ def _write_fixture(project: Path) -> tuple[Path, Path]:
                     "claude_bridge": ".claude/skills/",
                     "global_claude_bridge": "~/.claude/skills/",
                 },
-                {
-                    "cursor_bridge": ".cursor/skills/",
-                    "global_cursor_bridge": "~/.cursor/skills/",
-                },
             ]
         },
         "sources": {

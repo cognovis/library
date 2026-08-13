@@ -22,7 +22,6 @@ from typing import Any
 
 SUPPORTED_SCRIPT_ADAPTERS = {
     "codex-impl": "codex-impl.py",
-    "cursor-composer": "cursor-impl.py",
     "agy-impl": "agy-impl.py",
 }
 

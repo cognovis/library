@@ -2,10 +2,10 @@
 """
 test_library_py_harness_materializer.py — Tests for CL-3kq: always_apply/globs harness materialization
 
-AK1: skill use with always_apply: true writes harness artifact for each harness (Claude Code, Codex, Cursor)
-AK2: skill use with globs writes Cursor .mdc frontmatter; emits warning for Claude Code and Codex
+AK1: skill use with always_apply: true writes harness artifacts for Claude Code and Codex
+AK2: skill use with globs emits warnings because no supported harness has a native projection
 AK3: Existing installs without the fields are unaffected (no regression)
-AK4: Tests cover all three harness paths and the no-field fallback
+AK4: Tests cover supported harness paths and the no-field fallback
 
 Run with:
     uv run pytest tests/test_library_py_harness_materializer.py -v
@@ -150,6 +150,7 @@ def project_always_apply(tmp_path: Path, fixture_skill_dir: Path) -> Path:
     """Project directory with always_apply: true skill."""
     proj = tmp_path / "test-project-always"
     proj.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(proj)], check=True)
     (proj / "library.yaml").write_text(
         FIXTURE_LIBRARY_YAML_ALWAYS_APPLY.format(
             skill_source=str(fixture_skill_dir / "SKILL.md")
@@ -165,6 +166,7 @@ def project_globs_only(tmp_path: Path, fixture_skill_dir: Path) -> Path:
     """Project directory with globs-only skill (no always_apply)."""
     proj = tmp_path / "test-project-globs"
     proj.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(proj)], check=True)
     (proj / "library.yaml").write_text(
         FIXTURE_LIBRARY_YAML_GLOBS_ONLY.format(
             skill_source=str(fixture_skill_dir / "SKILL.md")
@@ -180,6 +182,7 @@ def project_no_fields(tmp_path: Path, fixture_skill_dir: Path) -> Path:
     """Project directory with a plain skill (no always_apply, no globs)."""
     proj = tmp_path / "test-project-plain"
     proj.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(proj)], check=True)
     (proj / "library.yaml").write_text(
         FIXTURE_LIBRARY_YAML_NO_FIELDS.format(
             skill_source=str(fixture_skill_dir / "SKILL.md")
@@ -195,6 +198,7 @@ def project_standard_always_apply(tmp_path: Path, fixture_standard_dir: Path) ->
     """Project directory with always_apply standard."""
     proj = tmp_path / "test-project-std-always"
     proj.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(proj)], check=True)
     (proj / "library.yaml").write_text(
         FIXTURE_LIBRARY_YAML_STANDARD_ALWAYS_APPLY.format(
             standard_source=str(fixture_standard_dir / "always-standard.md")
@@ -366,103 +370,11 @@ class TestAlwaysApplyCodex:
 
 
 # ---------------------------------------------------------------------------
-# AK1: always_apply: true — Cursor (.cursor/rules/<name>.mdc)
-# ---------------------------------------------------------------------------
-
-class TestAlwaysApplyCursor:
-    """AK1c: always_apply: true writes .cursor/rules/<name>.mdc with alwaysApply: true."""
-
-    def test_skill_use_always_apply_creates_cursor_mdc(self, project_always_apply: Path):
-        """After installing always-skill, .cursor/rules/always-skill.mdc must exist."""
-        result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "always-skill", "--json"],
-            capture_output=True,
-            text=True,
-            cwd=str(project_always_apply),
-        )
-        assert result.returncode == 0, (
-            f"skill use failed: {result.returncode}\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
-        mdc_path = project_always_apply / ".cursor" / "rules" / "always-skill.mdc"
-        assert mdc_path.exists(), f"Expected {mdc_path} to exist"
-
-    def test_cursor_mdc_has_always_apply_frontmatter(self, project_always_apply: Path):
-        """The .mdc file must have alwaysApply: true in frontmatter."""
-        subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "always-skill", "--json"],
-            capture_output=True,
-            text=True,
-            cwd=str(project_always_apply),
-        )
-        mdc_path = project_always_apply / ".cursor" / "rules" / "always-skill.mdc"
-        content = mdc_path.read_text()
-        assert "alwaysApply: true" in content, (
-            f"Expected 'alwaysApply: true' in .mdc frontmatter:\n{content}"
-        )
-
-    def test_cursor_mdc_has_skill_reference(self, project_always_apply: Path):
-        """The .mdc file must reference the SKILL.md path."""
-        subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "always-skill", "--json"],
-            capture_output=True,
-            text=True,
-            cwd=str(project_always_apply),
-        )
-        mdc_path = project_always_apply / ".cursor" / "rules" / "always-skill.mdc"
-        content = mdc_path.read_text()
-        assert "@.agents/skills/always-skill/SKILL.md" in content, (
-            f"Expected skill reference in .mdc:\n{content}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AK2: globs only (no always_apply) — Cursor gets .mdc, Claude Code/Codex get warning
+# AK2: globs only (no always_apply) — supported harnesses emit warnings
 # ---------------------------------------------------------------------------
 
 class TestGlobsOnly:
     """AK2: globs set but always_apply not set."""
-
-    def test_globs_skill_creates_cursor_mdc(self, project_globs_only: Path):
-        """Installing globs-only skill must create .cursor/rules/<name>.mdc."""
-        result = subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "globs-skill", "--json"],
-            capture_output=True,
-            text=True,
-            cwd=str(project_globs_only),
-        )
-        assert result.returncode == 0, (
-            f"skill use failed: {result.returncode}\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
-        mdc_path = project_globs_only / ".cursor" / "rules" / "globs-skill.mdc"
-        assert mdc_path.exists(), f"Expected {mdc_path} to exist"
-
-    def test_globs_skill_mdc_has_glob_patterns(self, project_globs_only: Path):
-        """The .mdc file must include the globs in its frontmatter."""
-        subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "globs-skill", "--json"],
-            capture_output=True,
-            text=True,
-            cwd=str(project_globs_only),
-        )
-        mdc_path = project_globs_only / ".cursor" / "rules" / "globs-skill.mdc"
-        content = mdc_path.read_text()
-        assert "*.py" in content, f"Expected '*.py' glob in .mdc:\n{content}"
-
-    def test_globs_skill_no_always_apply_in_mdc(self, project_globs_only: Path):
-        """The .mdc for globs-only skill must NOT have alwaysApply: true."""
-        subprocess.run(
-            [sys.executable, str(LIBRARY_PY), "skill", "use", "globs-skill", "--json"],
-            capture_output=True,
-            text=True,
-            cwd=str(project_globs_only),
-        )
-        mdc_path = project_globs_only / ".cursor" / "rules" / "globs-skill.mdc"
-        content = mdc_path.read_text()
-        assert "alwaysApply: true" not in content, (
-            f"globs-only skill should NOT have alwaysApply: true:\n{content}"
-        )
 
     def test_globs_skill_emits_warning_not_claude_md(self, project_globs_only: Path):
         """Globs-only skill must emit a warning for Claude Code and NOT modify CLAUDE.md."""
@@ -539,20 +451,15 @@ class TestNoFieldsNoRegression:
             f"AGENTS.md was modified by plain skill install (regression!)"
         )
 
-    def test_plain_skill_does_not_create_cursor_mdc(self, project_no_fields: Path):
-        """Plain skill install must NOT create any .cursor/rules/*.mdc."""
+    def test_plain_skill_does_not_create_retired_harness_files(self, project_no_fields: Path):
+        """Plain skill install must not create a retired harness directory."""
         subprocess.run(
             [sys.executable, str(LIBRARY_PY), "skill", "use", "plain-skill", "--json"],
             capture_output=True,
             text=True,
             cwd=str(project_no_fields),
         )
-        cursor_rules = project_no_fields / ".cursor" / "rules"
-        if cursor_rules.exists():
-            mdc_files = list(cursor_rules.glob("*.mdc"))
-            assert len(mdc_files) == 0, (
-                f"Unexpected .mdc files created by plain skill: {mdc_files}"
-            )
+        assert not (project_no_fields / ".cursor").exists()
 
     def test_plain_skill_still_installs_correctly(self, project_no_fields: Path):
         """Plain skill install must still create the canonical directory."""
@@ -645,18 +552,18 @@ class TestDryRunHarnessOps:
         data = json.loads(result.stdout)
         ops = data.get("operations", [])
         op_names = [op.get("operation") for op in ops]
-        # Must include a harness op for claude_md, agents_md, and cursor
+        # Must include a harness operation for Claude Code or Codex.
         harness_related = [n for n in op_names if n and "harness" in n.lower()]
         harness_paths = [
             op.get("path", "") for op in ops
-            if any(x in op.get("path", "") for x in ["CLAUDE.md", "AGENTS.md", ".mdc"])
+            if any(x in op.get("path", "") for x in ["CLAUDE.md", "AGENTS.md"])
         ]
         assert len(harness_related) > 0 or len(harness_paths) > 0, (
             f"Expected harness ops in dry-run operations, got: {ops}"
         )
 
     def test_dry_run_always_apply_no_mutation(self, project_always_apply: Path):
-        """Dry-run with always_apply must NOT mutate CLAUDE.md, AGENTS.md, or .cursor/."""
+        """Dry-run with always_apply must not mutate supported harness files."""
         claude_before = (project_always_apply / "CLAUDE.md").read_text()
         agents_before = (project_always_apply / "AGENTS.md").read_text()
         result = subprocess.run(
@@ -675,6 +582,4 @@ class TestDryRunHarnessOps:
         assert (project_always_apply / "AGENTS.md").read_text() == agents_before, (
             "AGENTS.md was modified during dry-run"
         )
-        assert not (project_always_apply / ".cursor").exists(), (
-            ".cursor dir was created during dry-run"
-        )
+        assert not (project_always_apply / ".cursor").exists()

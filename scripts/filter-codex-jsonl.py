@@ -13,9 +13,9 @@ MARKER_PREFIXES = (
     "### Phase Progress",
     "phase: ",
     "## LEAF_DISPATCH",
-    "## CURSOR_AGENT_START",
-    "## CURSOR_AGENT_EXIT",
-    "## CURSOR_AGENT_STDERR_TAIL",
+    "## CODEX_AGENT_START",
+    "## CODEX_AGENT_EXIT",
+    "## CODEX_AGENT_STDERR_TAIL",
     "## ABORT_REASON",
     "## PARTIAL_REASON",
 )

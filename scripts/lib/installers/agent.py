@@ -54,8 +54,6 @@ def _resolve_agent_source(entry: dict, harness: str = "all") -> str:
             return sources_map["claude"]
         if harness == "codex" and sources_map.get("codex"):
             return sources_map["codex"]
-        if harness == "opencode" and sources_map.get("opencode"):
-            return sources_map["opencode"]
         # For "all" or any unmatched harness, prefer claude source
         if sources_map.get("claude"):
             return sources_map["claude"]
@@ -81,7 +79,7 @@ def _harness_missing_sources(entry: dict, harness: str) -> list[str]:
     sources_map = entry.get("sources") or {}
     if not sources_map:
         return []
-    harness_key = {"claude_code": "claude", "codex": "codex", "opencode": "opencode"}.get(harness, harness)
+    harness_key = {"claude_code": "claude", "codex": "codex"}.get(harness, harness)
     if sources_map and harness_key not in sources_map:
         return [entry.get("name", "unknown")]
     return []
@@ -103,18 +101,11 @@ def install_agent(
         repo_root: Project root.
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
-        harness: Target harness ('claude_code', 'codex', 'opencode', 'all').
+        harness: Target harness ('claude_code', 'codex', 'pi', 'all').
 
     Returns:
         Operation result dict.
     """
-    if harness == "cursor":
-        return error_result(
-            f"Agent install for harness '{harness}' is not supported. "
-            "Cursor agents (.cursor/agents/) are not currently implemented by the library installer. "
-            "Use harness 'claude_code', 'codex', or 'opencode' instead."
-        )
-
     prim = get_primitive("agent")
 
     # 1. Catalog lookup
@@ -492,16 +483,11 @@ def _resolve_agent_targets(
             targets.append(target("claude_code", sources_map["claude"], ".md"))
         if sources_map.get("codex"):
             targets.append(target("codex", sources_map["codex"], ".toml", "-codex"))
-        if sources_map.get("opencode"):
-            targets.append(target("opencode", sources_map["opencode"], ".md", "-opencode"))
         if targets:
             return targets, harness_missing
 
     if harness == "codex" and sources_map.get("codex"):
         return [target("codex", sources_map["codex"], ".toml", "-codex")], harness_missing
-
-    if harness == "opencode" and sources_map.get("opencode"):
-        return [target("opencode", sources_map["opencode"], ".md", "-opencode")], harness_missing
 
     if not sources_map and entry.get("source"):
         source = entry["source"]
@@ -512,8 +498,6 @@ def _resolve_agent_targets(
             ], harness_missing
         if harness == "codex":
             return [target("codex", source, ".toml", "-codex", build_from_unified=True)], harness_missing
-        if harness == "opencode":
-            return [target("opencode", source, ".md", "-opencode", build_from_unified=True)], harness_missing
         return [target("claude_code", source, ".md", build_from_unified=True)], harness_missing
 
     try:
@@ -529,9 +513,6 @@ def _resolve_agent_targets(
 
     if harness != "all":
         harness_missing = _harness_missing_sources(entry, harness)
-
-    if harness == "opencode":
-        return [target("opencode", source, ".md", "-opencode")], harness_missing
 
     return [target("claude_code", source, ".md")], harness_missing
 
@@ -549,12 +530,6 @@ def _resolve_agent_base(
         if codex_path is not None:
             return codex_path
         return (Path.home() / ".codex" / "agents") if scope == "global" else (repo_root / ".codex" / "agents")
-    if harness == "opencode":
-        opencode_path = _resolve_opencode_agent_base(catalog, scope, repo_root)
-        if opencode_path is not None:
-            return opencode_path
-        return (Path.home() / ".opencode" / "agents") if scope == "global" else (repo_root / ".opencode" / "agents")
-
     install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
     canonical_base = install_paths["canonical"]
     if canonical_base is None:
@@ -581,26 +556,6 @@ def _resolve_codex_agent_base(
             if scope == "project" and key == "default_codex":
                 return _expand_agent_path(value, home, repo_root)
             if scope == "global" and key == "global_codex":
-                return _expand_agent_path(value, home, repo_root)
-    return None
-
-
-def _resolve_opencode_agent_base(
-    catalog: dict,
-    scope: str,
-    repo_root: Path,
-) -> Path | None:
-    """Resolve default_dirs.agents default_opencode/global_opencode, if configured."""
-    default_dirs = catalog.get("default_dirs", {}) or {}
-    dirs_for_type = default_dirs.get("agents", []) or []
-    home = Path.home()
-    for entry in dirs_for_type:
-        if not isinstance(entry, dict):
-            continue
-        for key, value in entry.items():
-            if scope == "project" and key == "default_opencode":
-                return _expand_agent_path(value, home, repo_root)
-            if scope == "global" and key == "global_opencode":
                 return _expand_agent_path(value, home, repo_root)
     return None
 
@@ -713,19 +668,12 @@ def remove_agent(
         repo_root: Project root.
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
-        harness: Target harness for removal ('claude_code', 'codex', 'opencode', 'all').
+        harness: Target harness for removal ('claude_code', 'codex', 'pi', 'all').
             Use 'all' to remove from every supported harness.
 
     Returns:
         Operation result dict.
     """
-    # Mirror install_agent: cursor agent install is not supported, so remove is not either.
-    if harness == "cursor":
-        return error_result(
-            f"Agent remove for harness 'cursor' is not supported. "
-            "Cursor agents (.cursor/agents/) are not implemented by the library installer."
-        )
-
     # Refuse unsafe names before building any install-target or handler-root
     # paths. Without this guard a name containing a path separator or a '..'
     # segment (e.g. '../shared') would be interpolated into handler_root and
@@ -742,7 +690,7 @@ def remove_agent(
     # Build the list of install targets to remove.
     if harness == "all":
         harness_targets = []
-        for h in ("claude_code", "codex", "opencode"):
+        for h in ("claude_code", "codex"):
             base = _resolve_agent_base(catalog, prim, scope, repo_root, h)
             ext = ".toml" if h == "codex" else ".md"
             harness_targets.append(base / f"{name}{ext}")
@@ -756,7 +704,7 @@ def remove_agent(
     # caller only asked about one harness.
     allowed_roots = [
         _resolve_agent_base(catalog, prim, scope, repo_root, h)
-        for h in ("claude_code", "codex", "opencode")
+        for h in ("claude_code", "codex")
     ]
     lock_entry = get_entry(load_lockfile(lockfile_path), name, primitive_type="agent")
     bridge_targets, skipped_bridges = _recorded_bridge_targets(

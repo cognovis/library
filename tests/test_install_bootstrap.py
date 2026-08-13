@@ -1,4 +1,5 @@
 import os
+import importlib.util
 import subprocess
 from pathlib import Path
 
@@ -12,13 +13,41 @@ PLATFORM_SKILLS = {
 }
 
 
+def _load_bootstrap_receipts_module():
+    script = REPO_ROOT / "scripts" / "register-bootstrap-receipts.py"
+    spec = importlib.util.spec_from_file_location("bootstrap_receipts", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_bootstrap_receipts_ignore_retired_harness_skill_links(tmp_path: Path) -> None:
+    """Only supported harness skill links become bootstrap receipt targets."""
+    module = _load_bootstrap_receipts_module()
+    source = tmp_path / "source"
+    source.mkdir()
+    home = tmp_path / "home"
+    for relative in (".agents/skills", ".claude/skills", ".codex/skills", ".opencode/skills"):
+        target_dir = home / relative
+        target_dir.mkdir(parents=True)
+        (target_dir / "example").symlink_to(source)
+
+    links = module.matching_links(home, "example", source)
+
+    assert links == [
+        home / ".agents" / "skills" / "example",
+        home / ".claude" / "skills" / "example",
+        home / ".codex" / "skills" / "example",
+    ]
+
+
 def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()
     (home / ".agents").mkdir()
     (home / ".claude").mkdir()
     (home / ".codex").mkdir()
-    (home / ".opencode").mkdir()
 
     env = os.environ.copy()
     env["HOME"] = str(home)
@@ -35,107 +64,10 @@ def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) ->
 
     assert result.returncode == 0, result.stderr
 
-    installed_cli = home / ".local" / "bin" / "library"
-    assert installed_cli.is_symlink()
-    assert installed_cli.resolve() == (REPO_ROOT / "bin" / "library").resolve()
-    assert os.access(installed_cli, os.X_OK)
-    for launcher in ("cld", "cdx"):
-        installed_launcher = home / ".local" / "bin" / launcher
-        assert installed_launcher.is_symlink()
-        assert installed_launcher.resolve() == (REPO_ROOT / "bin" / launcher).resolve()
-
-    consumer_dir = tmp_path / "consumer"
-    consumer_dir.mkdir()
-
-    # A subprocess is required here: this test covers shell PATH lookup, the
-    # bootstrap symlink, and the launcher's interpreter/runtime boundary.
-    def run_wrapped(*args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["library", *args],
-            cwd=consumer_dir,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-    def run_direct(*args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [
-                "uv",
-                "run",
-                "--script",
-                str(REPO_ROOT / "scripts" / "library.py"),
-                *args,
-            ],
-            cwd=consumer_dir,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-    wrapped = run_wrapped("skill", "list", "--json")
-    direct = run_direct("skill", "list", "--json")
-
-    assert wrapped.returncode == direct.returncode == 0
-    assert wrapped.stdout == direct.stdout
-
-    wrapped_top_level = run_wrapped("audit", "--help")
-    direct_top_level = run_direct("audit", "--help")
-
-    assert wrapped_top_level.returncode == direct_top_level.returncode == 0
-    assert wrapped_top_level.stdout == direct_top_level.stdout
-
-    wrapped_failure = run_wrapped(
-        "skill", "use", "zzz-does-not-exist", "--dry-run"
-    )
-    direct_failure = run_direct(
-        "skill", "use", "zzz-does-not-exist", "--dry-run"
-    )
-
-    assert wrapped_failure.returncode == direct_failure.returncode == 2
-    assert wrapped_failure.stdout == direct_failure.stdout
-
-    help_result = run_wrapped("--help")
-    version_result = run_wrapped("--version")
-
-    assert help_result.returncode == 0
-    assert help_result.stdout.startswith("usage: library ")
-    assert "Canonical grammar: library <primitive> <verb>" in help_result.stdout
-    assert "uv run --script" not in help_result.stdout
-    assert version_result.stdout.startswith("library ")
-
-    documented_shapes = (
-        ("workspace", "status", "--all", "--scope", "project", "--help"),
-        ("workspace", "sync", "--all", "--scope", "project", "--help"),
-        ("skill", "list", "--help"),
-        ("audit", "--help"),
-    )
-    for args in documented_shapes:
-        parsed = run_wrapped(*args)
-        assert parsed.returncode == 0, parsed.stderr
-
-    for skill_root in (
-        home / ".agents" / "skills",
-        home / ".claude" / "skills",
-        home / ".codex" / "skills",
-        home / ".opencode" / "skills",
-    ):
-        for name, expected_target in PLATFORM_SKILLS.items():
-            installed = skill_root / name
-            assert installed.is_symlink(), f"{installed} was not created as a symlink"
-            assert installed.resolve() == expected_target.resolve()
-        for forge in (
-            "skill-forge",
-            "agent-forge",
-            "standard-forge",
-            "script-forge",
-            "hook-forge",
-        ):
-            assert not (skill_root / forge).exists()
-
-    lock = yaml.safe_load((home / ".config" / "library" / "global.lock").read_text())
-    assert [root["id"] for root in lock["requested_roots"]] == ["skill:library"]
-    assert lock["receipts"][0]["bootstrap_owned"] is True
+    assert "Installing the Library control plane with uv" in result.stdout
+    assert not (home / ".agents" / "skills" / "library").exists()
+    assert not (home / ".claude" / "skills" / "library").exists()
+    assert not (home / ".codex" / "skills" / "library").exists()
 
 
 def test_bootstrap_documents_the_installed_cli_contract() -> None:
@@ -159,7 +91,6 @@ def test_bootstrap_documents_the_installed_cli_contract() -> None:
     assert "uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py" not in skill
     assert "uv run --script scripts/library.py" not in bootstrap_docs
     assert "uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py" not in bootstrap_docs
-    assert "library --help" in skill
     assert "library --help" in install_cookbook
     assert "library <primitive> use <name> --dry-run --json" in add_cookbook
     assert "irreducible global bootstrap" in normalized_readme
@@ -167,7 +98,7 @@ def test_bootstrap_documents_the_installed_cli_contract() -> None:
     assert "dialog-oriented" in install_cookbook
 
 
-def test_install_sh_adopts_exact_historical_forge_link_without_recreating_others(
+def test_install_sh_leaves_historical_forge_link_outside_bootstrap_scope(
     tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
@@ -188,11 +119,17 @@ def test_install_sh_adopts_exact_historical_forge_link_without_recreating_others
     )
 
     assert result.returncode == 0, result.stderr
-    assert f"{home / '.local' / 'bin'} is not in $PATH" in result.stdout
-    lock = yaml.safe_load((home / ".config" / "library" / "global.lock").read_text())
-    assert {root["id"] for root in lock["requested_roots"]} == {
-        "skill:library",
-        "skill:skill-forge",
-    }
+    assert "Installing the Library control plane with uv" in result.stdout
     assert historical.is_symlink()
     assert not (skill_root / "agent-forge").exists()
+
+
+def test_packaged_launcher_copies_remain_identical_to_compatibility_copies() -> None:
+    for relative in ("cld", "cdx", "lib/orchestrator-config-sync.zsh"):
+        assert (REPO_ROOT / "bin" / relative).read_bytes() == (
+            REPO_ROOT / "scripts" / "bin" / relative
+        ).read_bytes()
+
+
+def test_install_script_is_executable() -> None:
+    assert os.access(REPO_ROOT / "install.sh", os.X_OK)

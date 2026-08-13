@@ -762,7 +762,7 @@ class TestWorkflowListAndSync:
 # ---------------------------------------------------------------------------
 
 class TestMcpUse:
-    def test_mcp_use_defaults_to_global_lockfile(self, project_dir, tmp_path):
+    def test_mcp_use_is_retired_without_global_lockfile_mutation(self, project_dir, tmp_path):
         result = run_library(
             "mcp", "use", "test-mcp-server", "--dry-run", "--json",
             cwd=project_dir,
@@ -772,16 +772,10 @@ class TestMcpUse:
             },
         )
 
-        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert result.returncode == 1, f"stdout={result.stdout}\nstderr={result.stderr}"
         data = json.loads(result.stdout)
-        lockfile_changes = data.get("lockfile_changes", [])
-        assert lockfile_changes == [
-            {
-                "path": str(tmp_path / "home" / ".config" / "library" / "global.lock"),
-                "operation": "upsert",
-                "entry": "test-mcp-server",
-            }
-        ]
+        assert data["message"].startswith("MCP registration lifecycle is retired.")
+        assert not (tmp_path / "home" / ".config" / "library" / "global.lock").exists()
 
     def test_mcp_use_rejects_project_scope_before_mutation(self, project_dir, tmp_path):
         claude_settings = tmp_path / "settings.json"
@@ -797,11 +791,11 @@ class TestMcpUse:
         assert result.returncode != 0
         data = json.loads(result.stdout)
         assert data["status"] == "error"
-        assert "user-global" in data["message"]
+        assert data["message"].startswith("MCP registration lifecycle is retired.")
         assert not claude_settings.exists()
         assert not (project_dir / ".library.lock").exists()
 
-    def test_mcp_use_exits_zero(self, project_dir, tmp_path):
+    def test_mcp_use_is_retired(self, project_dir, tmp_path):
         # mcp needs target config files — point to temp files
         claude_settings = tmp_path / "settings.json"
         result = run_library(
@@ -812,7 +806,10 @@ class TestMcpUse:
                 "CLAUDE_SETTINGS_FILE": str(claude_settings),
             },
         )
-        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert result.returncode == 1, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert json.loads(result.stdout)["message"].startswith(
+            "MCP registration lifecycle is retired."
+        )
 
     def test_mcp_use_no_not_yet_implemented(self, project_dir, tmp_path):
         claude_settings = tmp_path / "settings.json"
@@ -864,7 +861,7 @@ class TestMcpUse:
 # ---------------------------------------------------------------------------
 
 class TestMcpRemove:
-    def test_mcp_remove_defaults_to_global_lockfile(self, project_dir, tmp_path):
+    def test_mcp_remove_is_retired_without_global_lockfile_mutation(self, project_dir, tmp_path):
         result = run_library(
             "mcp", "remove", "test-mcp-server", "--dry-run", "--json",
             cwd=project_dir,
@@ -874,20 +871,10 @@ class TestMcpRemove:
             },
         )
 
-        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert result.returncode == 1, f"stdout={result.stdout}\nstderr={result.stderr}"
         data = json.loads(result.stdout)
-        lockfile_ops = [
-            operation
-            for operation in data.get("operations", [])
-            if operation.get("operation") == "remove_lockfile_entry"
-        ]
-        assert lockfile_ops == [
-            {
-                "operation": "remove_lockfile_entry",
-                "path": str(tmp_path / "home" / ".config" / "library" / "global.lock"),
-                "details": "remove 'test-mcp-server'",
-            }
-        ]
+        assert data["message"].startswith("MCP registration lifecycle is retired.")
+        assert not (tmp_path / "home" / ".config" / "library" / "global.lock").exists()
 
     def test_regression_mcp_project_remove_is_lock_only_cleanup(self, project_dir, tmp_path):
         (project_dir / ".library.lock").write_text(
@@ -965,7 +952,7 @@ class TestMcpRemove:
         assert data["status"] == "error"
         assert "project-scoped MCP registration" in data["message"]
 
-    def test_mcp_remove_exits_zero(self, project_dir, tmp_path):
+    def test_mcp_remove_is_retired_without_a_project_legacy_record(self, project_dir, tmp_path):
         claude_settings = tmp_path / "settings.json"
         run_library(
             "mcp", "use", "test-mcp-server", "--json",
@@ -983,7 +970,10 @@ class TestMcpRemove:
                 "CLAUDE_SETTINGS_FILE": str(claude_settings),
             },
         )
-        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert result.returncode == 1, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert json.loads(result.stdout)["message"].startswith(
+            "MCP registration lifecycle is retired."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1489,13 +1479,18 @@ class TestCmuxBeadDispatchE2E:
         assert "judge-default" in names
         assert names[-1] == "cmux-bead-dispatch"
 
-    def test_dry_run_install_exits_zero(self):
+    def test_dry_run_install_rejects_retired_global_scope(self):
         result = run_library(
             "skill", "use", "cmux-bead-dispatch", "--dry-run", "--json",
             "--scope", "global",
             cwd=REPO_ROOT,
         )
-        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert result.returncode == 1, f"stdout={result.stdout}\nstderr={result.stderr}"
+        assert json.loads(result.stdout) == {
+            "status": "error",
+            "message": "Global Library desired state is not supported; use the current Git repository.",
+            "exit_code": 1,
+        }
 
     def test_dispatch_has_requires_in_catalog(self):
         import sys as _sys
@@ -1609,8 +1604,8 @@ mcp_servers: []
 class TestDefaultScopeFromCatalog:
     """CL-brl: cmd_use honors default_scope from catalog entries."""
 
-    def test_global_default_scope_uses_global_lockfile(self, project_dir_with_default_scope):
-        """Entry with default_scope: global installs to global lockfile without --scope."""
+    def test_global_default_scope_is_ignored_for_project_desired_state(self, project_dir_with_default_scope):
+        """Historical global metadata cannot select a retired global lockfile."""
         result = run_library(
             "standard", "use", "global-standard", "--dry-run", "--json",
             cwd=project_dir_with_default_scope,
@@ -1618,15 +1613,14 @@ class TestDefaultScopeFromCatalog:
         assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
         data = json.loads(result.stdout)
         assert data["status"] == "dry-run"
-        # The lockfile operation should target the global lockfile (~/.library.lock)
         lockfile_ops = [
             op for op in data.get("operations", [])
             if op.get("operation") == "write_lockfile"
         ]
         assert len(lockfile_ops) == 1, f"Expected one lockfile op, got: {lockfile_ops}"
         lockfile_path = lockfile_ops[0]["path"]
-        assert lockfile_path == str(Path.home() / ".config" / "library" / "global.lock"), (
-            f"Expected global lockfile at ~/.config/library/global.lock, got: {lockfile_path}"
+        assert lockfile_path == str(project_dir_with_default_scope / ".library.lock"), (
+            f"Expected project lockfile, got: {lockfile_path}"
         )
 
     def test_project_default_scope_uses_project_lockfile(self, project_dir_with_default_scope):

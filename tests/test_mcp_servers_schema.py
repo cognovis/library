@@ -112,7 +112,7 @@ def test_markitdown_uses_official_versioned_mcp():
     assert markitdown["capabilities"]["auth"] == "none"
 
     harnesses = markitdown["install"]["mcp"]
-    assert set(harnesses) == {"claude_code", "codex", "cursor"}
+    assert set(harnesses) == {"claude_code", "codex"}
     for block in harnesses.values():
         snippet = block["snippet"]
         assert snippet["command"] == "uvx"
@@ -334,13 +334,6 @@ def test_full_example_from_bead_description():
                         "codex": {
                             "config_path": "~/.codex/config.toml",
                             "snippet": {"url": "https://open-brain.sussdorff.org/mcp"},
-                        },
-                        "opencode": {
-                            "config_path": "~/.config/opencode/opencode.json",
-                            "snippet": {
-                                "type": "remote",
-                                "url": "https://open-brain.sussdorff.org/mcp",
-                            },
                         },
                         "claude_ai": {
                             "install_url": "https://claude.ai/example",

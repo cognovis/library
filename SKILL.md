@@ -1,449 +1,82 @@
 ---
 name: library
-description: Explicitly invoked interface for installing, using, adding, pushing, removing, syncing, listing, or searching private Library primitives.
-argument-hint: "<primitive|search|installed|status|audit|sync|catalog> [verb] [name-or-query] [options]"
+description: Inspect a repository's Library state and recommend explicit project-local Workspaces or primitives before installation.
+argument-hint: "<init|status|primitive> [verb] [name-or-query] [options]"
 disable-model-invocation: true
 ---
 
 # The Library
 
-A meta-skill for private-first distribution of agentics (skills, agents, prompts, and workflows) across agents, devices, and teams.
+Use this skill only when the user explicitly invokes Library distribution or
+asks what Library capabilities a repository should use.
 
-## Variables
+The Library has one normal desired-state scope: the current Git repository.
+The global bootstrap is deliberately limited to the `library`, `cld`, and `cdx`
+executables, global instruction entrypoints, launcher runtime configuration, and
+the OpenBrain MCP singleton. It is not a primitive-installation scope.
 
-> Update these after forking and cloning the library repo.
+## Inspect and recommend
 
-- **LIBRARY_REPO_URL**: `<your forked repo url>`
-- **LIBRARY_YAML_PATH**: `~/.claude/skills/library/library.yaml`
-- **LIBRARY_SKILL_DIR**: `~/.claude/skills/library/`
-
-## How It Works
-
-The Library is a catalog of references to your agentics. Committed `library.yaml`
-entries point to published HTTPS Git sources; development checkouts are not install
-registries. Nothing is fetched until you ask for it.
-
-**The `library.yaml` is a catalog, not a manifest.** Entries define what's *available* — not what gets installed. You pull specific items on demand with `/library <primitive> use <name>`.
-
-## Command Grammar
-
-Primitive-scoped commands use the primitive name before the verb:
-
-```text
-/library <primitive> <verb> [name-or-query]
-```
-
-Valid primitive names are singular. The temporary project-native bridge adds
-`pi-extension`, `pi-profile`, and `just-module` for artifacts that Open Skills
-does not model.
-
-The `/library` skill is the chat-facing wrapper. Deterministic catalog parsing,
-filtering, dependency resolution, and install/update behavior live in
-`scripts/library.py`. Keep this skill focused on dispatch rules, user-facing
-decisions, and fallback behavior when the CLI is unavailable.
-
-## Invocation Guidance
-
-When invoked without arguments:
-
-1. Run the canonical help command:
-
-   ```bash
-   library --help
-   ```
-
-2. Derive the available values from that output instead of maintaining another
-   static command inventory. Present a concise overview of:
-   - primitive names;
-   - primitive verbs;
-   - global commands;
-   - common options; and
-   - representative examples assembled from the current grammar.
-3. Also mention the guided `install`, `add`, and `push` workflows documented in
-   this skill, because they require user decisions rather than direct CLI
-   delegation.
-4. Do not mutate state. End by asking which operation the user wants to run.
-
-When the invocation is incomplete:
-
-1. Identify the next missing required value.
-2. Read the relevant CLI `--help`, show only the valid choices for that value,
-   and ask for it. Do not ask again for values already supplied.
-3. Do not execute the operation until all required values are known.
-
-When the invocation is complete, delegate it to the canonical CLI as described
-below. For a mutating CLI operation, show the supported dry-run preview first
-unless the user has explicitly asked to skip the preview.
-
-## CLI Delegation
-
-**For deterministic operations, call the globally installed `library` command:**
+Before recommending an addition, inspect the repository without mutation:
 
 ```bash
-# List all skills in JSON (machine-readable):
-library skill list --json
-
-# Dry-run install of a skill (preview without mutation):
-library skill use <name> --dry-run --json
-
-# Install a standard to global scope:
-library standard use <name> --scope global
+library status --offline --json
+library workspace list --scope project --json
 ```
 
-```bash
-# Search across all primitives:
-library search <keyword>
+Use observable repository facts such as language, package manager, CI files,
+tracked harness configuration, and existing `.library.lock` roots. Clearly
+separate those facts from recommendations. For each recommendation, state why a
+Workspace or direct primitive fits and ask the user to confirm it. Never infer
+selection from the retired global lock and never install before confirmation.
 
-# Check upstream status for all installed entries (no clone):
-library status --json
+## Representative flow
+
+Evidence: `pyproject.toml` and `uv.lock` are present, and `library status
+--offline --json` reports no registered Python development Workspace.
+
+Recommendation: add `cognovis-library-core:python-cli`; its declared roots
+provide the Python development and test procedures that match those files.
+
+Confirmation: ask, “Should I add `cognovis-library-core:python-cli` to this
+repository?” Do not run an installation command until the user explicitly says
+yes.
+
+After that confirmation, use the deterministic public command:
+
+```bash
+library workspace use cognovis-library-core:python-cli --scope project
+```
+
+## Deterministic commands
+
+```bash
+# Register exactly the canonical baseline in the current Git worktree.
+library init
+
+# Explore before selecting additional desired state.
+library workspace list --scope project
+library workspace show <catalog>:<workspace> --scope project
+library workspace use <catalog>:<workspace> --scope project --dry-run --json
+
+# Install a user-confirmed direct primitive.
+library skill use <name> --scope project --dry-run --json
+library skill use <name> --scope project
+
+# Inspect repository health without mutation.
 library status --offline --json
 ```
 
-```bash
-# See what is installed across project and global scopes:
-library installed
-library installed --diff-catalog
-library installed --offline
-```
-
-```bash
-# Detect local drift across all primitives (exit 2 if drift):
-library audit --drift-only --json
-```
-
-```bash
-# Sync all installed entries reported behind by status, dry-run first:
-library sync --dry-run
-library sync
-```
-
-**The CLI handles all primitives and verbs** (use, remove, sync, audit, list, search) for
-all primitive types (skill, agent, prompt, script, standard, guardrail, mcp, model-standard,
-agent-base, workflow, pi-extension, pi-profile, just-module). Dependency resolution, lockfile writes, and harness selection are all
-handled by the CLI — do NOT implement these manually.
-
-**Developing the CLI** (modifying `scripts/library.py` or `scripts/lib/*.py`):
-read [standards/library-cli/invariants.md](standards/library-cli/invariants.md)
-before touching lifecycle verbs (`status`, `audit`, `sync`, `installed`). It
-captures the platform-internal rules that aren't enforced by the schema or
-tests — lockfile lookup, catalog-diff math, offline mode, default scope, and
-silently-skipped-entry reporting.
-
-**Interpreting JSON output**: The CLI returns a JSON object with:
-- `status`: `"ok"`, `"dry-run"`, `"blocked"`, or `"error"`
-- `data`: operation-specific results (name, canonical path, cache path, etc.)
-- `operations`: (dry-run only) list of planned write operations
-- `message`: human-readable summary
-
-## Consumer Project Updates
-
-Use registered Workspaces for project distribution. Inspect the intended changes
-with `library workspace status --all --scope project`, then reconcile through
-`library workspace sync --all --scope project --apply` when the user requested it.
-
-## Commands
-
-| Command                                  | Purpose                                  |
-| ---------------------------------------- | ---------------------------------------- |
-| `/library install`                       | First-time setup: fork, clone, configure |
-| `/library <primitive> list`              | Show catalog entries for one primitive   |
-| `/library <primitive> use <name>`        | Pull from source (install or refresh)    |
-| `/library <primitive> add <details>`     | Register a new catalog entry             |
-| `/library <primitive> push <name>`       | Push local changes back to source        |
-| `/library <primitive> remove <name>`     | Remove from catalog and optionally local |
-| `/library <primitive> sync [name]`       | Re-pull all installed entries of one primitive type, or just the named entry |
-| `/library <primitive> audit`             | Detect local drift for one primitive type |
-| `/library <primitive> search <keyword>`  | Search within a primitive section        |
-| `/library search <keyword>`              | Search across all primitives             |
-| `/library installed [--diff-catalog]`    | Show installed entries, source, scope, upstream status, and precedence |
-| `/library audit [--drift-only]`          | Detect local drift across project and global scopes; exit 2 on drift |
-| `/library status [--offline]`            | Check upstream SHA across project and global scopes (no clone) |
-| `/library sync [--dry-run] [--force]`    | Re-sync entries reported behind across project and global scopes; use `--force` for all |
-
-### Installed View
-
-Use `/library installed` when the user asks what is installed or where an entry
-came from. It reads project and global lockfiles without requiring the current
-directory to contain `library.yaml`. Project-scope reads only use a project
-lockfile when the current directory is inside a git worktree or when
-`--project <path>` is passed; this prevents stray `.library.lock` files in
-home or scratch directories from being reported as project installs.
-
-Examples:
-
-```bash
-library installed
-library installed --scope project --primitive skill
-library installed --project /path/to/project
-```
-
-```bash
-library installed --offline
-library installed --diff-catalog --json
-```
-
-The `precedence` column is `active` for the entry the harness should load.
-When the same `(primitive, name)` exists in both project and global scope, the
-project entry wins and the global entry is shown as `shadowed`.
-
-With `--diff-catalog`, catalog classification is computed against the union of
-project and global installed entries even when the visible table is filtered by
-`--scope`. This avoids suggesting that globally installed entries should be
-installed again at project scope. JSON output includes `catalog_source` so the
-caller can see which `library.yaml` was used.
-
-Use `--offline` for inventory-only checks when network calls are unwanted. The
-installed rows still render, but `upstream` is reported as `unknown`.
-
-## Cookbook
-
-The cookbook files provide supplementary guidance for operations that require
-human judgment (scope selection, name collision resolution, first-time setup).
-They do NOT contain install/remove/sync mechanics — those are handled by
-`scripts/library.py`.
-
-| Command | Cookbook                                   | Use When                                                     |
-| ------- | ------------------------------------------ | ------------------------------------------------------------ |
-| install | [cookbook/install.md](cookbook/install.md) | First-time setup on a new device                             |
-| add     | [cookbook/add.md](cookbook/add.md)         | User wants to register a new skill/agent/prompt in catalog   |
-| push    | [cookbook/push.md](cookbook/push.md)       | User improved a skill locally and wants to update the source |
-
-For `use`, `remove`, `sync`, `list`, `search`, and `audit` — call the CLI directly.
-The cookbook does not document these operations since the CLI handles them deterministically.
-
-## Source Format
-
-Committed `source` fields in `library.yaml` support these formats:
-
-- `https://github.com/org/repo/blob/main/path/to/SKILL.md` — GitHub browser URL
-- `https://raw.githubusercontent.com/org/repo/main/path/to/SKILL.md` — GitHub raw URL
-
-Both GitHub URL formats are supported. Local filesystem sources are forbidden in
-committed catalogs because they bypass the source repository's review and CI path.
-Parse org, repo, branch, and file path from the URL structure. For private repos,
-use the configured GitHub authentication.
-
-**Important:** The source points to a specific file (SKILL.md, AGENT.md, or prompt file). We always pull the entire parent directory, not just the file.
-
-## Source Parsing Rules
-
-Historical v1 entries may contain local paths. The parser recognizes them only
-for compatibility, status, and migration; do not create a new catalog entry or
-refresh content from an unpublished development checkout.
-
-**GitHub browser URLs** match `https://github.com/<org>/<repo>/blob/<branch>/<path>`:
-- Parse: `org`, `repo`, `branch`, `file_path`
-- Clone URL: `https://github.com/<org>/<repo>.git`
-- File location within repo: `<path>`
-
-**GitHub raw URLs** match `https://raw.githubusercontent.com/<org>/<repo>/<branch>/<path>`:
-- Parse: `org`, `repo`, `branch`, `file_path`
-- Clone URL: `https://github.com/<org>/<repo>.git`
-- File location within repo: `<path>`
-
-## GitHub Workflow
-
-When working with GitHub sources, prefer `gh api` for accessing single files (e.g., reading a SKILL.md to check metadata). For pulling entire skill directories, clone into a temp dir per the steps below.
-
-**Fetching (use):**
-1. Clone the repo with `git clone --depth 1 <clone_url>` into a temporary directory
-2. Navigate to the parent directory of the referenced file
-3. Copy that entire directory to the target local directory
-4. The temporary directory is cleaned up automatically
-
-**Pushing (push):**
-1. Clone the repo with `git clone --depth 1 <clone_url>` into a temporary directory
-2. Overwrite the skill directory in the clone with the local version
-3. Stage only the relevant changes: `git add <skill_directory_path>`
-4. Commit with message: `library: updated <skill name> <what changed>`
-5. Push to remote
-6. The temporary directory is cleaned up automatically
-
-## Typed Dependencies
-
-The `requires` field uses typed references to avoid ambiguity:
-- `skill:name` — references a skill in the library catalog
-- `agent:name` — references an agent in the library catalog
-- `prompt:name` — references a prompt in the library catalog
-- `script:name` — references a deterministic Script or CLI distribution
-- `standard:name` — references a standard in the library catalog
-
-When resolving dependencies: look up each reference in `library.yaml`, fetch all dependencies first (recursively), then fetch the requested item.
-
-## Target Directories
-
-By default, items are installed to the directory for their primitive and scope
-from `library.yaml`:
-
-```yaml
-default_dirs:
-    skills:
-        - default: .agents/skills/                    # canonical, project-local
-        - global: ~/.agents/skills/                   # canonical, user-global
-        - claude_bridge: .claude/skills/              # Claude bridge, project-local
-        - global_claude_bridge: ~/.claude/skills/     # Claude bridge, user-global
-    agents:
-        - default: .claude/agents/
-        - global: ~/.claude/agents/
-    prompts:
-        - default: .claude/commands/
-        - global: ~/.claude/commands/
-    scripts:
-        - default: .agents/scripts/
-        - global: ~/.agents/scripts/
-    standards:
-        - default: .agents/standards/
-        - global: ~/.agents/standards/
-    workflows:
-        - default: .claude/workflows/
-        - global: ~/.claude/workflows/
-```
-
-- If the user says "global" or "globally", use the `global` directory for the primitive.
-- If the user specifies a custom path, use that path.
-- Otherwise, use the `default` directory for the primitive.
-
-Skills are cross-harness by default: `.agents/skills/<name>` is canonical and
-Claude Code reaches it through `.claude/skills/<name>`. Codex reads
-`.agents/skills/` directly.
-
-Workflows are stored at the Claude workflow location for both project and global
-scope. Codex and Cursor have no native workflow executor; `.claude/workflows/`
-is the conservative cross-harness storage location for future use.
-
-## Validating library.yaml
-
-The `library.yaml` catalog is validated against a formal JSON Schema at `docs/schema/library.schema.json`.
-
-### Running validation
-
-```bash
-# Via just (recommended)
-just validate-library
-
-# Via Python directly
-python3 scripts/validate-library.py
-
-# With custom paths
-python3 scripts/validate-library.py --yaml /path/to/library.yaml --schema /path/to/schema.json
-```
-
-Exit code `0` means PASS; exit code `1` means FAIL (errors printed to stdout).
-
-### Schema coverage
-
-The schema (`docs/schema/library.schema.json`) covers:
-
-| Section | Status | Description |
-|---------|--------|-------------|
-| `default_dirs` | Defined | Per-primitive directory mappings per harness |
-| `library.skills` | Defined | Skill catalog entries with source, requires, install paths |
-| `library.agents` | Defined | Agent catalog entries with format-translation hints |
-| `library.prompts` | Defined | Command/prompt catalog entries |
-| `library.scripts` | Defined | First-class Python script catalog entries |
-| `library.standards` | Defined | Standards catalog entries |
-| `library.guardrails` | Defined | Capability matrix per harness |
-| `library.mcp_servers` | Defined | Canonical MCP server model |
-| `library.model_standards` | Defined | Layer 3 model-standard catalog entries |
-| `library.agent_bases` | Defined | Layer 1 agent base prompt catalog entries |
-| `library.workflows` | Defined | Deterministic workflow orchestration specs |
-| `sources.catalogs` | Defined | First-party source repositories |
-| `sources.marketplaces` | Defined | Third-party source providers |
-| `project_tooling` | Defined | Fleet-wide project file/hook distribution policy |
-
-Deprecated root aliases for `guardrails`, `mcp_servers`, `model_standards`,
-`catalog`, and `marketplaces` are accepted for read compatibility, but new
-edits should use the canonical locations above. `agent_bases` has no root-level
-compatibility alias.
-
-### Pre-commit hook integration
-
-Add this to `.git/hooks/pre-commit` (or `scripts/pre-commit`):
-
-```bash
-#!/bin/sh
-uv run python scripts/validate-library.py --quiet
-```
-
-Or install automatically:
-
-```bash
-echo 'uv run python scripts/validate-library.py --quiet' >> .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-```
-
-### Extending the schema
-
-When a new bead adds a section to `library.yaml`:
-
-1. Edit `docs/schema/library.schema.json`
-2. Replace the stub `additionalProperties: true` with a proper `$defs` entry
-3. Run `just validate-library` to confirm the new schema accepts the updated `library.yaml`
-4. Commit schema + `library.yaml` changes together
-
-## Library Repo Sync
-
-The library skill itself lives in `<LIBRARY_SKILL_DIR>` as a cloned git repo. When running `add` (which modifies `library.yaml`), always:
-1. `git pull` in the library directory first to get latest
-2. Make the changes
-3. `git add library.yaml && git commit && git push`
-
-This keeps the catalog in sync across devices.
-
-## Example Filled Library File
-
-```yaml
-default_dirs:
-  skills:
-    - default: .agents/skills/
-    - global: ~/.agents/skills/
-    - claude_bridge: .claude/skills/
-    - global_claude_bridge: ~/.claude/skills/
-  agents:
-    - default: .claude/agents/
-    - global: ~/.claude/agents/
-  prompts:
-    - default: .claude/commands/
-    - global: ~/.claude/commands/
-  standards:
-    - default: .agents/standards/
-    - global: ~/.agents/standards/
-
-library:
-  skills:
-    - name: firecrawl
-      description: Scrape, crawl, and search websites using Firecrawl CLI
-      source: /Users/me/projects/tools/skills/firecrawl/SKILL.md
-
-    - name: meta-skill
-      description: Creates new Agent Skills following best practices
-      source: /Users/me/projects/tools/skills/meta-skill/SKILL.md
-
-    - name: diagram-kroki
-      description: Generate diagrams via Kroki HTTP API supporting 28+ languages
-      source: https://github.com/myorg/private-skills/blob/main/skills/diagram-kroki/SKILL.md
-      requires: [skill:firecrawl]
-
-    - name: green-screen-captions
-      description: Generate and burn AI-powered captions onto green screen videos
-      source: https://raw.githubusercontent.com/myorg/video-tools/main/skills/green-screen-captions/SKILL.md
-      requires: [agent:video-processor, prompt:caption-style]
-
-  agents:
-    - name: video-processor
-      description: Processes video files with ffmpeg and whisper transcription
-      source: /Users/me/projects/tools/agents/video-processor/AGENT.md
-
-    - name: code-reviewer
-      description: Reviews code for quality, security, and performance
-      source: https://github.com/myorg/agent-configs/blob/main/agents/code-reviewer/AGENT.md
-
-  prompts:
-    - name: caption-style
-      description: Style guide for generating video captions
-      source: /Users/me/projects/content/prompts/caption-style.md
-
-    - name: commit-message
-      description: Standardized commit message format for all projects
-      source: https://github.com/myorg/team-prompts/blob/main/prompts/commit-message.md
-```
+`library init` takes no Workspace selector. It is fixed to `cognovis-base`,
+fails before mutation outside an eligible Git root, and fails clearly when the
+canonical Workspace is not published in the selected catalog.
+
+`library status` is the read-only health boundary. Its JSON report covers
+desired state, projections, managed-Gitignore hygiene, bootstrap prerequisites,
+and unmanaged supported-harness content. Exit 0 is healthy, exit 2 signals a
+deterministic repair, exit 3 asks for a human decision, and exit 1 indicates a
+check failure.
+
+Only Claude Code, Codex, and Pi are supported Library projection targets.
+`--scope global` is rejected deterministically in human and JSON output before
+catalog, lockfile, filesystem, or installer mutation.

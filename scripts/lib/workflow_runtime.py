@@ -54,7 +54,6 @@ ADAPTER_PRESERVATION_STATUS: dict[str, str] = {
     "claude-agent": "blocked",
     "codex-impl": "blocked",
     "codex-exec": "blocked",
-    "cursor-composer": "not-applicable",
 }
 
 _MUTATING_ALLOWED_STATUSES = frozenset({"verified"})

@@ -14,9 +14,9 @@
 
 ## Overview
 
-Library lockfiles record Library intent and materialized state. Most primitives
-may use either the project or global lockfile; MCP registrations are always
-user-global and therefore exist only in the global lockfile. They provide:
+Library lockfiles record repository-local Library intent and materialized state.
+The historical global lock is migration inventory only; no current lifecycle
+command creates or reconciles it. They provide:
 
 - **Reproducibility**: any clone of the project can restore the locked roots and
   exact source pins. Legacy v1 sync reads the flat lock entries; v2 reconciliation
@@ -71,27 +71,21 @@ project-owned `receipts[].targets[].path`. Its Git top-level, project root,
 lockfile root, and `.gitignore` root are identical. This restriction does not
 remove legacy lock support from unrelated Library commands.
 
-### Global lockfile (new — ADR-0003)
+### Historical global lockfile
 
-`~/.config/library/global.lock` records globally installed items (installed with
-`/library <primitive> use <name> --global`) and every MCP registration:
-
-```
-~/.config/library/
-└── global.lock         ← global lockfile (NOT git-tracked; user-local only)
-```
-
-The global lockfile uses the same schema as the per-project lockfile. It is NOT committed
-to version control — it is a user-local file managed by `library` tooling. The path
-`~/.config/library/` follows the XDG Base Directory specification for user configuration.
+`~/.config/library/global.lock` is read-only migration inventory. It grants no
+desired-state authority and is never created, written, or reconciled by current
+Library lifecycle commands. Bootstrap-owned OpenBrain registration lives instead
+in `~/.config/library/bootstrap.json`.
 
 ### Concurrent writers
 
-Both lockfiles are shared mutable state. The global one especially: a bulk
-`library agent sync --scope global` and a launcher's self-heal install are two
-processes writing one file, and CL-1f36 recorded what that cost — interleaved
-YAML, a half-written `install_timestamp` inside another entry's target list, and
-24 of 27 sync entries failing with "Invalid YAML".
+The project lockfile and the separate bootstrap manifest are shared mutable
+state. Historical global lockfiles remain read-only migration inventory; no
+public lifecycle command writes them. CL-1f36 recorded the cost of concurrent
+writers before the project-only contract — interleaved YAML, a half-written
+`install_timestamp` inside another entry's target list, and 24 of 27 sync
+entries failing with "Invalid YAML".
 
 Two rules make that safe, and both are needed:
 
@@ -116,29 +110,24 @@ transient `<lockfile>.*.staged` file are tool-local and gitignored.
 
 ### MCP scope and ownership
 
-`library mcp use <name>` and `library mcp remove <name>` default to global scope.
-`--scope global` remains accepted for explicit automation. Project-scoped MCP use and
-sync are rejected before any harness configuration or lockfile mutation. Explicit
-`library mcp remove <name> --scope project` is a migration-only exception: it removes
-only the matching legacy project lock record and never unregisters a harness, stops a
-service, or changes global state. This matches the actual ownership boundary: supported
-MCP harness registrations are stored in user-global config files, so their authoritative
-lock records live in `~/.config/library/global.lock`.
+The public MCP registration lifecycle is retired. `library mcp use <name>`
+returns a typed error before it reads or writes desired state, including during a
+dry run. `library bootstrap install` is the sole supported registration owner:
+it manages the enumerated OpenBrain singleton in its product manifest and never
+creates a global lockfile.
 
-During migration, a provenance-less harness registration may be adopted only when its
-complete normalized descriptor exactly matches the catalog's current snippet or one
-explicitly declared legacy descriptor. Normalization excludes only `_origin`; extra,
-missing, or changed fields and entries with foreign provenance are never overwritten.
-Lower-level MCP install and removal functions reject project scope. Removing a stale
-historical MCP record from a project lockfile must use the explicit lock-only CLI path,
-because ordinary MCP removal also unregisters the global service.
+`library mcp remove <name> --scope project` remains a migration-only exception.
+It removes only a matching legacy project-lock record and never unregisters a
+harness, stops a service, or changes global state. All other MCP removal forms,
+including an explicit global scope, return the same typed retirement error.
 
 ---
 
 ## Schema v2 Target Format
 
-The file remains YAML and uses the same project and global locations. Schema v2
-separates user intent from materialized state:
+The current write format remains YAML at the repository-local `.library.lock`.
+Historical global lockfiles are migration inventory only and are not a Schema v2
+write location. Schema v2 separates user intent from materialized state:
 
 ```yaml
 schema_version: 2
@@ -181,7 +170,7 @@ receipts:
 
 prerequisites:
   - id: mcp:example-server
-    scope: global
+    scope: project
     constraint: ">=1.0.0,<2.0.0"
     requested_by:
       - workspace:python-cli
@@ -194,7 +183,7 @@ prerequisites:
 | `id` | YES | Stable root identity unique within the selected lock scope. |
 | `type` | YES | Any directly requestable artifact primitive type or `workspace`. Package is not a Library root type. |
 | `name` | YES | Catalog name of the requested primitive. |
-| `scope` | YES | `project` or `global`; every resolved member must use the same scope. |
+| `scope` | YES | `project`; every resolved member uses the repository scope. |
 | `catalog_identity` | YES | Stable identity of the catalog that supplied the root. |
 | `constraint` | Optional | User-requested compatible version range or pin. |
 | `resolved_version` | YES | Version selected by the last complete resolution. |
@@ -505,26 +494,6 @@ Layer C is recorded as `install_target`. The harness directory at Layer C is a
 Layer-B cache is a per-machine resolver source, not a runtime path. `--symlink`
 keeps Layer C as a symlink into the Layer-B cache for local development.
 
-**Global install example (ADR-0003):**
-
-```yaml
-installed:
-  - name: agent-forge
-    type: skill
-    marketplace: cognovis-core
-    source: https://github.com/cognovis/library-core/blob/9b1e72c98f3e21/.claude/skills/agent-forge/SKILL.md
-    source_commit: 9b1e72c98f3e21abc00000000000000000000000000000000000000000000000
-    cache_path: /Users/malte/.local/share/library/skills/cognovis-core/agent-forge@9b1e72c98f3e21/
-    install_target: /Users/malte/.agents/skills/agent-forge/
-    install_timestamp: 2026-05-12T07:30:00Z
-    checksum_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
-    content_sha256: 9483a09400000000000000000000000000000000000000000000000000000000
-    install_mode: vendor
-    license: MIT
-    bridge_symlinks:
-      - /Users/malte/.claude/skills/agent-forge -> /Users/malte/.agents/skills/agent-forge/
-```
-
 **Project-scoped install example (ADR-0003):**
 
 ```yaml
@@ -558,7 +527,7 @@ installed:
 | `source` | YES | string | Published HTTPS Git source used for the install. A migrated v1 entry may retain a historical local path until it is verified and refreshed; committed catalog definitions may not create new local-source entries. |
 | `source_commit` | YES | string | Git commit SHA of the source repo at install time. Historical non-git entries may contain `local` and remain migration-protected. |
 | `cache_path` | YES | string | Absolute Layer-B cache path (`~/.local/share/library/skills/<marketplace>/<name>@<first-14-hex-chars-of-source_commit>/`). Empty string `""` for migrated entries pending next sync. |
-| `install_target` | YES | string | Relative (project) or absolute (global) path of the install directory (trailing slash required). |
+| `install_target` | YES | string | Repository-relative path of the install directory (trailing slash required). Absolute global targets are historical migration inventory and cannot be newly written. |
 | `install_timestamp` | YES | string | ISO 8601 UTC datetime of the install or last refresh. |
 | `checksum_sha256` | YES | string | Backward-compatible SHA-256 hex digest (64 chars). New entries compute it from the local installed content. |
 | `checksum_type` | NO | string | `file` (default) or `directory`. Skills and standards use `directory`; agents and prompts use `file`. Entries without this field are treated as unknown by `library audit`. |
@@ -660,11 +629,9 @@ the lock record was written.
 - General `library sync` remains conservative and non-pruning while reading and
   refreshing schema v2 receipts.
 
-Global-only primitive types such as MCP and catalog entries declared with
-`default_scope: global` are prerequisite assertions when reached from a project
-root. They are checked against the global lock before project mutation and
-recorded as non-owning project-lock assertions, but never become project receipts
-or project ownership edges.
+Schema v2 has no global prerequisite or receipt scope. MCP registration is not a
+Workspace dependency: its public lifecycle is retired, and the enumerated
+OpenBrain singleton belongs only to the bootstrap product manifest.
 
 Ownership-derived prune requires a verified, clean receipt. Explicit named
 primitive removal is separate user consent, but uses the same exact-target,

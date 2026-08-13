@@ -22,24 +22,32 @@ consumer-project profile.
    library --help
    ```
 
-4. Start a new session in each detected harness and verify that the `/library`
-   Skill is discoverable.
+4. Run the explicit bootstrap provisioner:
 
-The installer links `bin/library` into `~/.local/bin/library` and links the
-platform checkout into detected harness Skill roots. The global command is the
-deterministic shell interface; the `/library` Skill remains the dialog-oriented
-entrypoint for operations that require advice or decisions.
+   ```bash
+   library bootstrap install
+   ```
+
+The installer delegates to `uv tool install` for the deterministic `library`,
+`cld`, and `cdx` executables. Bootstrap then records only its enumerated product
+targets, adopts existing operator-owned instruction entrypoints without changing
+their content, and adds the OpenBrain singleton where compatible. It does not
+link the checkout into harness Skill roots.
 
 ## Bootstrap boundary
 
-The released installer also links the five platform forge Skills globally. Under
-ADR-0010 that is transitional: the irreducible pre-Workspace bootstrap contains
-only the Library engine and conversational entrypoint, while forge Skills move to
-the project-scoped `library-authoring` Workspace.
+The released installer does not install Library Skills or other primitives
+globally. Forge Skills and conversational entrypoints belong in repository-local
+Workspace or direct-primitive installs.
+
+The Library Skill remains the dialog-oriented operator surface for inspecting a
+repository, explaining recommendations, and obtaining confirmation before the
+deterministic CLI changes project desired state.
 
 Do not use `project_tooling` profiles for new repository setup. Consumer projects
 keep generated Library installs and lock artifacts local through the CLI-managed
 `.gitignore` block; marketplace repositories keep authored primitives at their
 top-level source paths.
 
-Workspace lifecycle commands are available through the global `library` CLI.
+Workspace lifecycle commands are available through the `library` CLI but manage
+only the current Git repository.

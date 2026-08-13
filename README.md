@@ -101,10 +101,10 @@ From a platform checkout:
 bash install.sh
 ```
 
-The installer links only the irreducible Library conversational entrypoint into
-detected harness directories, installs the deterministic CLI as
-`~/.local/bin/library`, and records exact bootstrap receipts. Optional forge
-Skills belong in a project Workspace. The installer is idempotent. Ensure
+The installer installs the deterministic CLI and launchers through `uv tool`.
+Then run `library bootstrap install` to create the small, separately receipted
+product bootstrap. It refuses to overwrite operator-owned instruction or
+runtime files. Optional forge Skills belong in a project Workspace. Ensure
 `~/.local/bin` is on `PATH`, then verify the command from any directory:
 
 ```bash
@@ -125,7 +125,7 @@ library workspace status --all --scope project
 library workspace sync --all --scope project
 library skill list
 library skill use python-dev --dry-run --json
-library standard use english-only --scope global
+library standard use english-only --scope project
 library installed --diff-catalog
 library status --offline --json
 library audit
@@ -154,17 +154,18 @@ secrets, customer facts, routing profiles, or repository-specific policy.
 
 ## Launchers
 
-Canonical harness launchers live in `bin/`:
+Packaged harness launchers live in `scripts/bin/`:
 
 | Launcher | Harness |
 |----------|---------|
-| `bin/cld` | Claude Code |
-| `bin/cdx` | Codex CLI |
+| `scripts/bin/cld` | Claude Code |
+| `scripts/bin/cdx` | Codex CLI |
 
 Install them with:
 
 ```bash
 bash install.sh
+library bootstrap install
 ```
 
 Launcher architecture and Beads routing are documented in

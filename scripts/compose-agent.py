@@ -20,7 +20,7 @@ Algorithm:
   8. Exit non-zero if a required layer is missing.
 
 Usage:
-  compose-agent.py <agent-file> [--harness=claude|codex|opencode]
+  compose-agent.py <agent-file> [--harness=claude|codex]
 
 Environment variables (for testing / overrides):
   AGENT_BASES_DIR      — Override the agent-bases search directory.
@@ -435,7 +435,7 @@ def main() -> int:
     parser.add_argument("agent_file", type=Path, help="Path to the agent .md file.")
     parser.add_argument(
         "--harness",
-        choices=["claude", "codex", "opencode"],
+        choices=["claude", "codex"],
         default="claude",
         help="Target harness (default: claude). 'codex' escapes output for TOML embedding.",
     )

@@ -35,10 +35,6 @@
           "codex": {
             "$ref": "#/$defs/codex_binding"
           },
-          "opencode": {
-            "type": "object",
-            "additionalProperties": true
-          },
           "pi": {
             "type": "object",
             "additionalProperties": true

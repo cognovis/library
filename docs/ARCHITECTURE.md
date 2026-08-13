@@ -6,16 +6,16 @@ This repo (`cognovis/library`) is a fork of [`disler/the-library`](https://githu
 
 One **platform and aggregate catalog index** (this repo) that resolves content
 from several catalog sources and distributes skills, agents, prompts, hooks,
-workflows, and project-native bridge artifacts across **multiple harnesses**
-(Claude Code, OpenAI Codex CLI, Pi, Cursor, and OpenCode where supported) via a
+workflows, and project-native bridge artifacts across the supported harnesses
+(Claude Code, OpenAI Codex CLI, and Pi) via a
 **per-repo desired-state pull** model — not deploy-all.
 
 ## Library Workspace control plane
 
 [ADR-0010](adr/workspace-desired-state-reconciliation.md) adds a desired-state
 control plane above artifact installation. A **Library Workspace** is a
-metadata-only catalog primitive that names typed requested roots for one project
-or the user-global lobby. It has no harness file of its own.
+metadata-only catalog primitive that names typed requested roots for one Git
+repository. It has no harness file of its own.
 
 The lockfile owns the deep behavior:
 
@@ -33,12 +33,10 @@ requested roots (direct artifact primitives + Workspaces)
 
 Ownership is universal rather than Workspace-private. A shared receipt survives
 while any requested root reaches it. Persisted owner edges explain a plan but
-never replace fresh resolution. Project and global closures are isolated in
-their existing lock scopes; a global Workspace can define the lobby only because
-all direct global Library roots share `~/.config/library/global.lock`.
-Intrinsically global dependencies such as MCP are checked as global-lock
-prerequisites for a project root. The project lock records the non-owning
-assertion, but it never becomes a project artifact receipt or ownership edge.
+never replace fresh resolution. ADR-0012 removes the global primitive lock and
+global Workspace lobby. The only machine-global state is its explicit bootstrap
+allowlist: the `library`, `cld`, and `cdx` executables, global instruction
+entrypoints, launcher runtime configuration, and the OpenBrain MCP singleton.
 Project-owned receipt paths are serialized relative to the project lock root, so
 a committed desired state survives worktree cleanup and repository relocation.
 Global targets and Layer-B cache provenance remain absolute.
@@ -93,12 +91,11 @@ differs. The `cdx` wrapper (bead `CL-tap`) parallels `cld`.
    monorepo enforced).
 2. **Catalog** — a reviewed catalog change registers the source pointer and
    metadata in `library.yaml`. Catalog is pointers-only, not content.
-3. **Distribute** — `library <primitive> use <name>` pulls the referenced item into
-   the primitive's canonical location as a vendored copy by default. For skills,
-   that is `.agents/skills/` project-local or `~/.agents/skills/` global, with a
-   Claude bridge under `.claude/skills/` or `~/.claude/skills/`. Layer-B cache
-   paths are per-machine resolver inputs, not committed runtime targets. Each
-   repo pulls only what it needs.
+3. **Distribute** — `library <primitive> use <name>` pulls the referenced item
+   into the current Git repository as a vendored copy by default. For skills,
+   that is `.agents/skills/` with a Claude bridge under `.claude/skills/`.
+   Layer-B cache paths are per-machine resolver inputs, not committed runtime
+   targets. Each repo pulls only what it needs.
 4. **Use** — invoked normally once in place. Same as any native skill/agent.
 
 A Workspace adds an optional desired-state route across stages 2 and 3:
@@ -153,15 +150,16 @@ marketplaces, source content lives under top-level `skills/`, `standards/`,
 
 ## Launchers (cld/cdx)
 
-Per **ADR-0002 Decision 2**, the canonical source for all CLI launchers is `cognovis-library/bin/`:
+The packaged source for all CLI launchers is `cognovis-library/scripts/bin/`:
 
 | File | Description |
 |------|-------------|
-| `bin/cld` | Claude Code launcher — full-featured zsh wrapper (~500 lines) |
-| `bin/cdx` | Codex CLI launcher — zsh wrapper, parallel to `cld` (bead `CL-tap`) |
+| `scripts/bin/cld` | Claude Code launcher — full-featured zsh wrapper (~500 lines) |
+| `scripts/bin/cdx` | Codex CLI launcher — zsh wrapper, parallel to `cld` (bead `CL-tap`) |
 
-**Deployment:** `bash install.sh` creates symlinks from `~/.local/bin/{library,cld,cdx}` into `bin/`.
-The installer is idempotent and uses `ln -sfn` so updates to this repo are immediately reflected.
+**Deployment:** `uv tool install` owns the packaged Library control plane. The
+transitional `install.sh` delegates to that installation route and no longer
+creates global Library skill links into a mutable checkout.
 
 **Bead modes:** Both launchers are single-bead launchers with three exclusive bead-dispatch flags:
 
@@ -177,7 +175,7 @@ terminal typed result record with a supported verdict. No metadata write occurs 
 malformed response or failed provider turn. The MCP transport is pinned to the local
 loopback endpoint.
 
-**Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch. `scripts/coordinator_callback.py` (CL-t32e) provides a standalone, tested exactly-once delivery executor for this contract (atomic lock + state file per `(run_id, event)`); it is not yet wired into `bin/cld`/`bin/cdx` — that lifecycle wiring is scoped to CL-gzvu (`cld`) and CL-eqiq (`cdx`), which will replace the best-effort prompt-injected contract described above with calls to this executor.
+**Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch. `scripts/coordinator_callback.py` (CL-t32e) provides a standalone, tested exactly-once delivery executor for this contract (atomic lock + state file per `(run_id, event)`); it is not yet wired into `scripts/bin/cld`/`scripts/bin/cdx` — that lifecycle wiring is scoped to CL-gzvu (`cld`) and CL-eqiq (`cdx`), which will replace the best-effort prompt-injected contract described above with calls to this executor.
 
 **Route profiles** (`--route-profile NAME`): Both launchers accept an optional `--route-profile` flag
 that selects a named profile from `orchestrator-config.yml`. The selected name is passed explicitly as a
@@ -315,17 +313,17 @@ Not all primitives travel equally well across harnesses. The table below shows w
 primitive types are portable and where per-harness translation or adaptation is
 required.
 
-| Primitive | Claude Code | Codex CLI | Pi | OpenCode | Portability |
-|-----------|-------------|-----------|-----|----------|-------------|
-| **Skill** | `.claude/skills/<name>/SKILL.md` | `.agents/skills/<name>/SKILL.md` | own skill loader | TBD | **Portable** — shared SKILL.md format (Open Agent Skills Standard); only install path differs |
-| **Agent** | YAML frontmatter `.claude/agents/<name>.md` | TOML `.codex/agents/<name>.toml` (per-repo; `~/.codex/agents/<name>.toml` for global/personal) | N/A | TBD | **Per-harness translation** — same concept, divergent formats; translation spec: bead `CL-11p` |
-| **Command / Prompt** | `.claude/commands/<name>.md` (slash cmds) | Not supported in Codex — use skills instead | N/A | TBD | **Per-harness** — Claude Code has first-class slash commands; Codex custom prompt targets are not used by the Library (bead `CL-qzw`) |
-| **Guardrail / Hook** | `.claude/settings.json` `hooks` section (scripts in `.claude/hooks/`) + 15 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | TBD | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
-| **Standard** | Loaded by consuming skills/agents via `requires_standards` | `.agents/standards/<name>/` file convention | TBD | TBD | **Library-managed** — not an invocation primitive; installed as dependency content, never auto-injected |
-| **MCP-Server** | `mcpServers` in `.mcp.json` (or `--mcp-config`) | `mcp_servers` TOML in `~/.codex/config.toml` | N/A | TBD | **Library-managed** — per-harness provisioning; protocol is standard but config syntax is not portable. The generic installer supports Claude Code, Codex, OpenCode, Antigravity-compatible JSON config, and Cursor. Each server declares its supported harnesses. |
-| **Plugin** | External harness bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | TBD | **Per-harness** — both harnesses support their own plugin formats; this is not a Library Package or requested-root type |
-| **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
-| **Workspace** | Library CLI metadata; members project individually | Same | Same | Same | **Metadata-portable** — no harness artifact; resolved members inherit their own portability |
+| Primitive | Claude Code | Codex CLI | Pi | Portability |
+|-----------|-------------|-----------|-----|-------------|
+| **Skill** | `.claude/skills/<name>/SKILL.md` | `.agents/skills/<name>/SKILL.md` | own skill loader | **Portable** — shared SKILL.md format (Open Agent Skills Standard); only install path differs |
+| **Agent** | YAML frontmatter `.claude/agents/<name>.md` | TOML `.codex/agents/<name>.toml` (per-repo) | N/A | **Per-harness translation** — same concept, divergent formats; translation spec: bead `CL-11p` |
+| **Command / Prompt** | `.claude/commands/<name>.md` (slash cmds) | Not supported in Codex — use skills instead | N/A | **Per-harness** — Claude Code has first-class slash commands; Codex custom prompt targets are not used by the Library (bead `CL-qzw`) |
+| **Guardrail / Hook** | `.claude/settings.json` `hooks` section (scripts in `.claude/hooks/`) + 15 lifecycle events | 3 events only (SessionStart, SessionEnd, Stop) | different event model | **Harness-specific** — shared concept, incompatible event sets; not cross-portable without an adapter (bead `CL-xcm`) |
+| **Standard** | Loaded by consuming skills/agents via `requires_standards` | `.agents/standards/<name>/` file convention | TBD | **Library-managed** — not an invocation primitive; installed as dependency content, never auto-injected |
+| **MCP-Server** | supported configuration | supported configuration | project-native ownership | **Library-managed** — configuration is harness-specific. |
+| **Plugin** | External harness bundle installed via `/install-plugin` | `codex plugin` + `.codex-plugin/plugin.json` | N/A | **Per-harness** — both harnesses support their own plugin formats; this is not a Library Package or requested-root type |
+| **Marketplace** | `library add-marketplace <url>` in catalog | Same catalog | Same catalog | **Catalog-level** — harness-agnostic; the catalog is portable, installed artifacts may not be |
+| **Workspace** | Library CLI metadata; members project individually | Same | Same | **Metadata-portable** — no harness artifact; resolved members inherit their own portability |
 
 **Reading the table:**
 - *Portable* means the same artifact file works across all harnesses that support the primitive.

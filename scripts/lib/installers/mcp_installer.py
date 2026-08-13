@@ -46,7 +46,7 @@ from .mcp_supervised_service import (
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Harnesses whose config files install-mcp.py can write, in install order.
-_WRITABLE_MCP_HARNESSES = ["claude_code", "codex", "opencode", "antigravity", "cursor"]
+_WRITABLE_MCP_HARNESSES = ["claude_code", "codex"]
 # Full set for an "all" install: writable configs plus URL-only (manual) harnesses.
 _ALL_MCP_HARNESSES = _WRITABLE_MCP_HARNESSES + ["claude_ai", "claude_ios"]
 
@@ -765,27 +765,6 @@ def _mcp_config_path(harness: str) -> Path | None:
                 str(Path.home() / ".codex" / "config.toml"),
             )
         )
-    if harness == "opencode":
-        return Path(
-            os.environ.get(
-                "OPENCODE_CONFIG_FILE",
-                str(Path.home() / ".config" / "opencode" / "opencode.json"),
-            )
-        )
-    if harness == "antigravity":
-        return Path(
-            os.environ.get(
-                "GEMINI_SETTINGS_FILE",
-                str(Path.home() / ".gemini" / "config" / "mcp_config.json"),
-            )
-        )
-    if harness == "cursor":
-        return Path(
-            os.environ.get(
-                "CURSOR_MCP_FILE",
-                str(Path.home() / ".cursor" / "mcp.json"),
-            )
-        )
     if harness == "claude_code":
         # User-scoped MCP lives in ~/.claude.json `mcpServers`, not settings.json.
         return Path(
@@ -924,18 +903,6 @@ def _install_to_harness(mod, name: str, block: dict, harness: str, dry_run: bool
             fn = getattr(mod, "install_codex", None)
             if fn:
                 return fn(name, block, dry_run=dry_run, remove=False)
-        elif harness == "opencode":
-            fn = getattr(mod, "install_opencode", None)
-            if fn:
-                return fn(name, block, dry_run=dry_run, remove=False)
-        elif harness == "antigravity":
-            fn = getattr(mod, "install_antigravity", None)
-            if fn:
-                return fn(name, block, dry_run=dry_run, remove=False)
-        elif harness == "cursor":
-            fn = getattr(mod, "install_cursor", None)
-            if fn:
-                return fn(name, block, dry_run=dry_run, remove=False)
         elif harness in ("claude_ai", "claude_ios"):
             fn = getattr(mod, "install_url_only", None)
             if fn:
@@ -963,18 +930,6 @@ def _remove_from_harness(mod, name: str, harness: str) -> int:
                 return fn(name, {}, dry_run=False, remove=True)
         elif harness == "codex":
             fn = getattr(mod, "install_codex", None)
-            if fn:
-                return fn(name, {}, dry_run=False, remove=True)
-        elif harness == "opencode":
-            fn = getattr(mod, "install_opencode", None)
-            if fn:
-                return fn(name, {}, dry_run=False, remove=True)
-        elif harness == "antigravity":
-            fn = getattr(mod, "install_antigravity", None)
-            if fn:
-                return fn(name, {}, dry_run=False, remove=True)
-        elif harness == "cursor":
-            fn = getattr(mod, "install_cursor", None)
             if fn:
                 return fn(name, {}, dry_run=False, remove=True)
         elif harness in ("claude_ai", "claude_ios"):

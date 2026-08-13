@@ -270,6 +270,17 @@ def test_compose_dispatches_cognovis_base_alias_by_harness(tmp_path):
     print("PASS test_compose_dispatches_cognovis_base_alias_by_harness")
 
 
+def test_compose_rejects_retired_harness(tmp_path):
+    """The composition CLI exposes only active harness targets."""
+    base_dir = make_base_dir(tmp_path)
+    agent_file = FIXTURES_DIR / "agent-with-base.md"
+
+    rc, _stdout, stderr = run_compose(agent_file, base_dir, harness="opencode")
+
+    assert rc == 2
+    assert "invalid choice" in stderr
+
+
 def test_compose_with_base_contains_layer2(tmp_path):
     """Composed output includes Layer 2 (agent persona body)."""
     base_dir = make_base_dir(tmp_path)

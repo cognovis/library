@@ -3,14 +3,19 @@
 > **Bead**: CL-mfz | **Epic**: CL-36o | **Last updated**: 2026-04-30
 >
 > **Scope**: This cookbook covers how to add a server to the `library.mcp_servers:` catalog in
-> `library.yaml`, including the canonical per-harness `install.mcp` blocks that the installer or
-> a human operator will later materialize. It does NOT cover the installer implementation itself.
+> `library.yaml`, including the canonical per-harness `install.mcp` blocks that a
+> future approved lifecycle or a human operator may materialize. It does NOT cover
+> installer implementation or general MCP registration.
 
 ## Overview
 
-`library.mcp_servers:` is the canonical registry for MCP servers in the cognovis-library. Each entry
-defines a server once; the `/library mcp use <name>` command translates the canonical
-definition into the correct harness-specific config.
+`library.mcp_servers:` is the canonical catalog for MCP server definitions in the
+cognovis-library. An entry describes a server and its supported harness snippets,
+but it does not authorize a general registration lifecycle. `library mcp use` is
+retired and never writes a global lockfile or harness configuration. The only
+currently supported product-owned registration is the enumerated OpenBrain
+singleton managed by `library bootstrap install`; other registrations require a
+future product decision or explicit operator action.
 
 ## Schema
 
@@ -40,12 +45,6 @@ library:
           codex:
             config_path: ~/.codex/config.toml
             snippet: { ... }
-          antigravity:
-            config_path: ~/.gemini/config/mcp_config.json
-            snippet: { ... }
-          cursor:
-            config_path: ~/.cursor/mcp.json
-            snippet: { ... }
           claude_ai:
             install_url: https://...        # URL for manual add
           claude_ios:
@@ -61,8 +60,8 @@ Use `species: external-capability` for third-party capability providers such as 
 `executive-circle`, or `heypresto`. Use `species: library-tool-surface` for first-party Library
 servers that expose typed tool families over existing Library CLIs or Scripts.
 
-The generic schema and installer support an `antigravity` registration block,
-but each product declares only the harnesses it actually supports.
+The catalog records only the supported Library harness snippets: Claude Code,
+Codex, and manual Claude clients where an install URL is available.
 
 There is no active first-party `library-tool-surface` reference implementation.
 A future entry of that species must own a material protocol invariant that a
@@ -78,11 +77,6 @@ install:
     codex:
       config_path: ~/.codex/config.toml
       snippet: {command: uv}
-    cursor:
-      config_path: ~/.cursor/mcp.json
-      snippet:
-        type: stdio
-        command: uv
 ```
 
 ## Deciding `coding_strategy` vs `mobile_strategy`
@@ -147,19 +141,6 @@ install:
       snippet:
         command: <command-name>
         args: [<arg>, <arg>]
-    antigravity:
-      config_path: ~/.gemini/config/mcp_config.json
-      snippet:
-        command: <command-name>
-        args: [<arg>, <arg>]
-        env: {}
-    cursor:
-      config_path: ~/.cursor/mcp.json
-      snippet:
-        type: stdio
-        command: <command-name>
-        args: [<arg>, <arg>]
-        env: {}
 ```
 
 Generic supervised local-service example:
@@ -182,19 +163,12 @@ install:
         args:
           - -c
           - uv run --project ~/.local/share/library/mcp-servers/example-server/source/mcp-servers/example-server example-server-mcp
-    cursor:
-      config_path: ~/.cursor/mcp.json
-      snippet:
-        type: stdio
-        command: sh
-        args:
-          - -c
-          - uv run --project ~/.local/share/library/mcp-servers/example-server/source/mcp-servers/example-server example-server-mcp
 ```
 
-### Registration smoke
+### Future registration smoke
 
-After registering a `library-tool-surface` server, perform a harness-local smoke check:
+When a future approved lifecycle or an operator materializes a
+`library-tool-surface` server, perform a harness-local smoke check:
 
 1. Launch the target harness.
 2. Confirm the MCP server appears in the harness config view or `tools/list`.
@@ -231,7 +205,9 @@ The following are NOT part of this bead or cookbook:
 - **Secrets / auth token storage** — handled by a separate security-model bead.
 - **Mobile install instructions** — the `install_url` fields are stored here, but the UI
   for presenting them to users is a follow-up bead.
-- **Removing or updating a server** — `/library mcp remove <name>` and `/library sync`.
+- **Removing or updating a server registration** — out of scope for the
+  project-local lifecycle. `library bootstrap install` owns only OpenBrain;
+  `library mcp remove <name> --scope project` is legacy lock cleanup only.
 
 ## Reference
 

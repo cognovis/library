@@ -32,8 +32,6 @@ def resolve_install_paths(
         Dict with keys:
           canonical  — canonical install directory (Layer C, symlink target)
           bridge     — Claude harness bridge path (None if not applicable)
-          cursor_bridge        — Cursor project bridge path when configured
-          global_cursor_bridge — Cursor global bridge path when configured
     """
     default_dirs = data.get("default_dirs", {}) or {}
     subdir_key = primitive.install_subdir
@@ -42,8 +40,6 @@ def resolve_install_paths(
         return {
             "canonical": None,
             "bridge": None,
-            "cursor_bridge": None,
-            "global_cursor_bridge": None,
         }
 
     dirs_for_type = default_dirs.get(subdir_key, []) or []
@@ -54,8 +50,6 @@ def resolve_install_paths(
 
     canonical: Optional[Path] = None
     bridge: Optional[Path] = None
-    cursor_bridge: Optional[Path] = None
-    global_cursor_bridge: Optional[Path] = None
     home = Path.home()
     root = repo_root or Path.cwd()
 
@@ -69,21 +63,15 @@ def resolve_install_paths(
                     canonical = path
                 elif key == "claude_bridge":
                     bridge = path
-                elif key == "cursor_bridge":
-                    cursor_bridge = path
             elif scope == "global":
                 if key == "global":
                     canonical = path
                 elif key == "global_claude_bridge":
                     bridge = path
-                elif key == "global_cursor_bridge":
-                    global_cursor_bridge = path
 
     return {
         "canonical": canonical,
         "bridge": bridge,
-        "cursor_bridge": cursor_bridge,
-        "global_cursor_bridge": global_cursor_bridge,
     }
 
 

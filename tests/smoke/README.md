@@ -22,10 +22,6 @@ tests/smoke/
 │   └── fixtures/
 │       └── hello-world/
 │           └── SKILL.md               # Stub fixture (Pi unavailable)
-└── opencode/
-    └── fixtures/
-        └── hello-world/
-            └── SKILL.md               # Stub fixture (OpenCode unavailable)
 ```
 
 ## Running
@@ -38,7 +34,6 @@ bash tests/smoke/run-smoke.sh
 bash tests/smoke/run-smoke.sh claude-code
 bash tests/smoke/run-smoke.sh codex
 bash tests/smoke/run-smoke.sh pi
-bash tests/smoke/run-smoke.sh opencode
 
 # Via just (if just is installed)
 just test-smoke
@@ -117,18 +112,6 @@ This table documents every architectural claim from `docs/ARCHITECTURE.md` and
 
 ---
 
-### OpenCode Harness
-
-| # | Claim | Status | Evidence |
-|---|-------|--------|---------|
-| 19 | OpenCode project-local primary: `.opencode/skills/<name>/SKILL.md` | MANUAL_VERIFICATION_REQUIRED | OpenCode runtime not locally available. Path TBD per architecture docs. |
-| 20 | OpenCode project-local fallback 1: `.claude/skills/<name>/SKILL.md` | MANUAL_VERIFICATION_REQUIRED | Same |
-| 21 | OpenCode project-local fallback 2: `.agents/skills/<name>/SKILL.md` | MANUAL_VERIFICATION_REQUIRED | Same |
-| 22 | OpenCode has no global skill path defined yet | MANUAL_VERIFICATION_REQUIRED | `docs/ARCHITECTURE.md` marks OpenCode paths as "TBD" — no normative source |
-
-**OpenCode result: 2 PASS (fixture stubs verified), 5 SKIP (MANUAL_VERIFICATION_REQUIRED)**
-
----
 
 ### Name Collision Policy (CL-b4o)
 
@@ -156,7 +139,7 @@ Validates the 7 structural decisions in `docs/policy/name-collision.md`.
 ```
 PASS: 24  (across all harnesses including name-collision policy)
 FAIL:  0
-SKIP: 11  (MANUAL_VERIFICATION_REQUIRED — Pi + OpenCode runtime unavailable)
+SKIP: 6  (MANUAL_VERIFICATION_REQUIRED — Pi runtime unavailable)
 ```
 
 ### Claims confirmed end-to-end (post-CL-83q polarity inversion)
@@ -178,7 +161,6 @@ SKIP: 11  (MANUAL_VERIFICATION_REQUIRED — Pi + OpenCode runtime unavailable)
 
 ### Claims requiring manual verification
 - All Pi harness paths (runtime unavailable)
-- All OpenCode harness paths (runtime unavailable; paths marked TBD in architecture docs)
 
 ---
 
@@ -196,8 +178,8 @@ SKIP: 11  (MANUAL_VERIFICATION_REQUIRED — Pi + OpenCode runtime unavailable)
    Claude Code or Codex within a shell script to test actual skill loading.
 2. **Git symlink tracking** — requires at least one committed symlink in the repo.
    Once `.claude/skills/<name>` symlinks are committed, the test will verify mode 120000.
-3. **Pi and OpenCode** — runtimes not available locally; tests are stubs pending when
-   those runtimes become available locally. Structural stubs are provided as a scaffold.
+3. **Pi** — runtime paths are not available locally; tests are stubs pending when
+   the runtime becomes available locally. Structural stubs are provided as a scaffold.
 
 ## Intentional Non-Goals
 

@@ -48,7 +48,6 @@ def _library_skill_targets() -> tuple[Path, ...]:
         home / ".claude" / "skills" / "library",
         home / ".codex" / "skills" / "library",
         home / ".agents" / "skills" / "library",
-        home / ".opencode" / "skills" / "library",
     )
     return tuple(candidate for candidate in candidates if candidate.parent.parent.is_dir())
 

@@ -45,10 +45,8 @@ def test_fleet_scan_checks_non_claude_harness_roots(tmp_path: Path) -> None:
     for root, name in (
         (home / ".agents" / "skills", "agents-only"),
         (home / ".codex" / "skills", "codex-only"),
-        (home / ".opencode" / "skills", "opencode-only"),
         (project / ".agents" / "skills", "project-agents"),
         (project / ".codex" / "skills", "project-codex"),
-        (project / ".opencode" / "skills", "project-opencode"),
     ):
         skill_dir = root / name
         skill_dir.mkdir(parents=True)
@@ -68,10 +66,8 @@ def test_fleet_scan_checks_non_claude_harness_roots(tmp_path: Path) -> None:
     for name in (
         "agents-only",
         "codex-only",
-        "opencode-only",
         "project-agents",
         "project-codex",
-        "project-opencode",
     ):
         assert name in result.stdout
 

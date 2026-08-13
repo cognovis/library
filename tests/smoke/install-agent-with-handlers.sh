@@ -4,7 +4,7 @@
 # Bead: CL-ii7a
 #
 # Tests:
-#   1. library.py installs a fixture agent prompt for Claude, Codex, and OpenCode.
+#   1. library.py installs a fixture agent prompt for Claude Code and Codex.
 #   2. Declared private handler assets are copied beside each harness prompt.
 #   3. A clean project needs no separate skill install to receive the handler.
 #
@@ -57,7 +57,6 @@ default_dirs:
   agents:
     - default: .claude/agents/
     - default_codex: .codex/agents/
-    - default_opencode: .opencode/agents/
 
 library:
   agents:
@@ -66,7 +65,6 @@ library:
       sources:
         claude: ${FIXTURE_DIR}/handler-agent.md
         codex: ${FIXTURE_DIR}/handler-agent.toml
-        opencode: ${FIXTURE_DIR}/handler-agent.md
       handlers:
         - handlers/fixture-handler.sh
   skills: []
@@ -101,8 +99,7 @@ echo "--------------------------------------------------"
 
 for target in \
     ".claude/agents/handler-agent.md" \
-    ".codex/agents/handler-agent.toml" \
-    ".opencode/agents/handler-agent.md"; do
+    ".codex/agents/handler-agent.toml"; do
     if [[ -f "${PROJECT_DIR}/${target}" ]]; then
         pass "installed ${target}"
     else
@@ -117,8 +114,7 @@ echo "--------------------------------------------------"
 
 for target in \
     ".claude/agents/handler-agent-handlers/handlers/fixture-handler.sh" \
-    ".codex/agents/handler-agent-handlers/handlers/fixture-handler.sh" \
-    ".opencode/agents/handler-agent-handlers/handlers/fixture-handler.sh"; do
+    ".codex/agents/handler-agent-handlers/handlers/fixture-handler.sh"; do
     if [[ -f "${PROJECT_DIR}/${target}" ]] && grep -q "HANDLER_AGENT_PRIVATE_HANDLER" "${PROJECT_DIR}/${target}"; then
         pass "installed ${target}"
     else

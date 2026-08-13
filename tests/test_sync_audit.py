@@ -97,6 +97,7 @@ def project_dir(tmp_path):
     )
     (tmp_path / "library.yaml").write_text(library_yaml)
     (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
 
     return tmp_path
 
@@ -696,6 +697,10 @@ class TestAuditClaudeAgentFrontmatter:
 # ---------------------------------------------------------------------------
 
 class TestTopLevelSync:
+    @pytest.fixture(autouse=True)
+    def seeded_project_lock(self, project_dir: Path) -> None:
+        self._make_lockfile_with_entries(project_dir)
+
     def _make_library_yaml(self, project_dir: Path) -> None:
         """Write a minimal library.yaml."""
         (project_dir / "library.yaml").write_text(
@@ -705,7 +710,7 @@ class TestTopLevelSync:
         )
 
     def _make_lockfile_with_entries(self, project_dir: Path) -> None:
-        """Write a .library.lock with two entries."""
+        """Write a schema-v2 project lock with two installed entries."""
         entries = [
             {
                 "name": "agent-current",
@@ -736,7 +741,40 @@ class TestTopLevelSync:
                 "bridge_symlinks": [],
             },
         ]
-        (project_dir / ".library.lock").write_text(yaml.dump({"installed": entries}))
+        receipts = [
+            {
+                "id": f"agent:{entry['name']}@legacy",
+                "type": "agent",
+                "name": entry["name"],
+                "scope": "project",
+                "catalog_identity": "unknown",
+                "resolved_version": "legacy",
+                "verified": False,
+                "adopted": False,
+                "prune_blocked_reason": "legacy-unverified",
+                "owners_cache": [f"agent:{entry['name']}"],
+                "targets": [
+                    {
+                        "path": f".claude/agents/{entry['name']}",
+                        "kind": "directory",
+                    }
+                ],
+            }
+            for entry in entries
+        ]
+        (project_dir / ".library.lock").write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": 2,
+                    "migration": {"prune_ack_required": False},
+                    "requested_roots": [],
+                    "receipts": receipts,
+                    "prerequisites": [],
+                    "installed": entries,
+                },
+                sort_keys=False,
+            )
+        )
 
     def test_sync_all_subcommand_exists(self, project_dir):
         """library.py sync --help must not error."""
@@ -807,7 +845,40 @@ class TestTopLevelSync:
                 "bridge_symlinks": [],
             },
         ]
-        (tmp_path / ".library.lock").write_text(yaml.dump({"installed": entries}))
+        receipts = [
+            {
+                "id": f"skill:{entry['name']}@legacy",
+                "type": "skill",
+                "name": entry["name"],
+                "scope": "project",
+                "catalog_identity": "unknown",
+                "resolved_version": "legacy",
+                "verified": False,
+                "adopted": False,
+                "prune_blocked_reason": "legacy-unverified",
+                "owners_cache": [f"skill:{entry['name']}"],
+                "targets": [
+                    {
+                        "path": f".agents/skills/{entry['name']}",
+                        "kind": "directory",
+                    }
+                ],
+            }
+            for entry in entries
+        ]
+        (tmp_path / ".library.lock").write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": 2,
+                    "migration": {"prune_ack_required": False},
+                    "requested_roots": [],
+                    "receipts": receipts,
+                    "prerequisites": [],
+                    "installed": entries,
+                },
+                sort_keys=False,
+            )
+        )
 
         # Simulate status: agent-current is current, agent-behind is behind
         def mock_ls_remote(cmd, **kwargs):
@@ -943,7 +1014,7 @@ class TestTopLevelSync:
             ),
             "source_commit": revision,
             "cache_path": "mcp:supervised-test-server",
-            "install_target": "claude_code,codex,cursor",
+            "install_target": "claude_code,codex",
             "install_timestamp": "2026-07-14T00:00:00Z",
             "checksum_sha256": "0" * 64,
             "checksum_type": "file",
@@ -1117,22 +1188,13 @@ class TestHookScript:
         assert "Library Drift Summary" in result.stdout or "DRIFT" in result.stdout, \
             f"Expected drift summary in output, got: {result.stdout}"
 
-    def test_hook_script_outputs_both_sections_when_drift_and_behind(self, tmp_path):
-        """AK7: hook prints both '### Local drift' and '### Upstream drift' sections."""
+    def test_hook_script_outputs_local_drift_section(self, tmp_path):
+        """AK7: hook reports project-local content drift without changing state."""
         hook = REPO_ROOT / "scripts" / "hooks" / "library-drift-summary.sh"
 
-        # --- Local drift entry (directory hash mismatch) ---
         cache_dir_drift = tmp_path / "cache-drifted"
         cache_dir_drift.mkdir(parents=True)
         (cache_dir_drift / "SKILL.md").write_bytes(b"original content")
-
-        # --- Upstream-behind entry (source_commit differs from remote) ---
-        cache_dir_behind = tmp_path / "cache-behind"
-        cache_dir_behind.mkdir(parents=True)
-        (cache_dir_behind / "SKILL.md").write_bytes(b"behind content")
-
-        from lib.lockfile import compute_directory_hash
-        behind_hash = compute_directory_hash(cache_dir_behind)
 
         entries = [
             {
@@ -1149,46 +1211,56 @@ class TestHookScript:
                 "license": "unknown",
                 "bridge_symlinks": [],
             },
-            {
-                "name": "behind-skill",
-                "type": "skill",
-                "marketplace": "local",
-                "source": "https://github.com/test/repo-behind",
-                "source_commit": "oldsha1111111111111111111111111111111111111",
-                "cache_path": str(cache_dir_behind) + "/",
-                "install_target": str(tmp_path / ".agents/skills/behind-skill") + "/",
-                "install_timestamp": "2024-01-01T00:00:00Z",
-                "checksum_sha256": behind_hash,
-                "checksum_type": "directory",
-                "license": "unknown",
-                "bridge_symlinks": [],
-            },
         ]
 
-        (tmp_path / ".library.lock").write_text(yaml.dump({"installed": entries}))
+        (tmp_path / ".library.lock").write_text(
+            yaml.safe_dump(
+                {
+                    "schema_version": 2,
+                    "migration": {"prune_ack_required": False},
+                    "requested_roots": [
+                        {
+                            "id": "skill:drifted-skill",
+                            "type": "skill",
+                            "name": "drifted-skill",
+                            "scope": "project",
+                        }
+                    ],
+                    "receipts": [
+                        {
+                            "id": "skill:drifted-skill@legacy",
+                            "type": "skill",
+                            "name": "drifted-skill",
+                            "scope": "project",
+                            "catalog_identity": "unknown",
+                            "resolved_version": "legacy",
+                            "verified": False,
+                            "adopted": False,
+                            "prune_blocked_reason": "legacy-unverified",
+                            "owners_cache": ["skill:drifted-skill"],
+                            "targets": [
+                                {
+                                    "path": "cache-drifted",
+                                    "kind": "directory",
+                                }
+                            ],
+                        }
+                    ],
+                    "prerequisites": [],
+                    "installed": entries,
+                },
+                sort_keys=False,
+            )
+        )
         (tmp_path / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
             "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
         (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
-
-        # Create a fake `git` wrapper that returns a known SHA for ls-remote
-        fake_git_dir = tmp_path / "fake-git-bin"
-        fake_git_dir.mkdir()
-        fake_git = fake_git_dir / "git"
-        fake_git.write_text(
-            "#!/bin/bash\n"
-            "if [[ \"$1\" == \"ls-remote\" ]]; then\n"
-            "    printf 'abc123newsha111111111111111111111111111111\\tHEAD\\n'\n"
-            "    exit 0\n"
-            "fi\n"
-            "exec /usr/bin/git \"$@\"\n"
-        )
-        fake_git.chmod(0o755)
+        subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
 
         env = os.environ.copy()
-        env["PATH"] = str(fake_git_dir) + ":" + env.get("PATH", "")
         env["HOME"] = str(tmp_path / "isolated-home")
 
         result = subprocess.run(
@@ -1200,11 +1272,9 @@ class TestHookScript:
         )
 
         assert result.returncode == 0, \
-            f"Hook should exit 0 even with drift+behind: exit={result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}"
+            f"Hook should exit 0 with drift: exit={result.returncode}\nstdout={result.stdout}\nstderr={result.stderr}"
         assert "### Local drift" in result.stdout, \
             f"Expected '### Local drift' section in output, got:\n{result.stdout}"
-        assert "### Upstream drift" in result.stdout, \
-            f"Expected '### Upstream drift' section in output, got:\n{result.stdout}"
 
 
 # ---------------------------------------------------------------------------
@@ -1264,6 +1334,7 @@ class TestWorkflowAuditMissingFile:
 
         project = tmp_path / "project"
         project.mkdir()
+        subprocess.run(["git", "init", "--quiet", str(project)], check=True)
         (project / "library.yaml").write_text(
             "default_dirs:\n  workflows:\n    - default: .claude/workflows/\n\n"
             "library:\n  workflows:\n    - name: test-workflow\n"
@@ -1393,6 +1464,7 @@ model_standards: []
 
     (tmp_path / "library.yaml").write_text(library_yaml)
     (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
     return tmp_path
 
 

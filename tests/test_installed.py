@@ -11,6 +11,8 @@ from pathlib import Path
 
 import yaml
 
+from scripts.lib.lockfile import save_lockfile
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_PY = REPO_ROOT / "scripts" / "library.py"
 PYTHON = sys.executable
@@ -19,6 +21,10 @@ PYTHON = sys.executable
 PROJECT_SHA = "1111111111111111111111111111111111111111"
 GLOBAL_SHA = "2222222222222222222222222222222222222222"
 REMOTE_SHA = "9999999999999999999999999999999999999999"
+MISSING_PROJECT_SCOPE_WARNING = (
+    "project scope skipped because the current directory is not inside a "
+    "git worktree; pass --project <path> to inspect a project lockfile"
+)
 
 
 def run_library(*args: str, cwd: Path, home: Path, extra_env: dict[str, str] | None = None):
@@ -39,6 +45,11 @@ def run_library(*args: str, cwd: Path, home: Path, extra_env: dict[str, str] | N
 def write_lockfile(path: Path, entries: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.dump({"installed": entries}))
+
+
+def write_v2_project_lockfile(path: Path, entries: list[dict]) -> None:
+    """Write a project lock through the current authoritative schema."""
+    save_lockfile(path, {"installed": entries})
 
 
 def init_git(project: Path) -> None:
@@ -91,7 +102,7 @@ def write_minimal_catalog(project: Path) -> None:
     )
 
 
-def test_installed_detects_precedence_conflict(tmp_path: Path):
+def test_installed_reports_retired_global_lock_as_shadowed_inventory(tmp_path: Path):
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
@@ -107,9 +118,9 @@ def test_installed_detects_precedence_conflict(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
 
-    by_scope = {item["scope"]: item for item in data["entries"]}
-    assert by_scope["project"]["precedence"] == "active"
-    assert by_scope["global"]["precedence"] == "shadowed"
+    assert [(item["scope"], item["name"]) for item in data["entries"]] == [
+        ("project", "shared")
+    ]
     assert data["precedence_conflicts"] == [
         {
             "name": "shared",
@@ -149,7 +160,7 @@ def test_installed_diff_catalog_classifies_available_and_orphan(tmp_path: Path):
     project.mkdir()
     init_git(project)
     write_minimal_catalog(project)
-    write_lockfile(
+    write_v2_project_lockfile(
         project / ".library.lock",
         [
             entry("installed-skill"),
@@ -170,7 +181,7 @@ def test_installed_diff_catalog_classifies_available_and_orphan(tmp_path: Path):
     }
 
 
-def test_installed_runs_without_library_yaml_when_global_lockfile_exists(tmp_path: Path):
+def test_installed_ignores_global_lock_without_a_project(tmp_path: Path):
     cwd = tmp_path / "anywhere"
     home = tmp_path / "home"
     cwd.mkdir()
@@ -179,9 +190,8 @@ def test_installed_runs_without_library_yaml_when_global_lockfile_exists(tmp_pat
     result = run_library("installed", "--json", cwd=cwd, home=home)
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
-    assert [(item["scope"], item["name"]) for item in data["entries"]] == [
-        ("global", "global-only")
-    ]
+    assert data["entries"] == []
+    assert data["precedence_conflicts"] == []
 
 
 def test_installed_empty_lockfiles_exit_zero(tmp_path: Path):
@@ -201,7 +211,7 @@ def test_installed_scope_and_primitive_filters(tmp_path: Path):
     home = tmp_path / "home"
     project.mkdir()
     init_git(project)
-    write_lockfile(
+    write_v2_project_lockfile(
         project / ".library.lock",
         [
             entry("project-skill"),
@@ -231,7 +241,7 @@ def test_sync_dry_run_refreshes_same_set_status_reports_behind(tmp_path: Path):
     project.mkdir()
     init_git(project)
     write_minimal_catalog(project)
-    write_lockfile(
+    write_v2_project_lockfile(
         project / ".library.lock",
         [
             entry(
@@ -294,7 +304,7 @@ def test_sync_dry_run_refreshes_same_set_status_reports_behind(tmp_path: Path):
     sync_data = json.loads(sync.stdout)
     assert set(sync_data["refreshed"]) == behind_labels
     assert "agent:agent-unknown" in sync_data["skipped"]
-    assert sync_data["unknown_skipped"] == 1
+    assert sync_data["unknown_skipped"] == 0
     assert sync_data["skipped_by_status"]["unknown"] == ["agent:agent-unknown"]
     assert "warnings" in sync_data
 
@@ -341,7 +351,7 @@ def test_installed_diff_catalog_uses_all_scopes_for_classification(tmp_path: Pat
     }
 
 
-def test_status_audit_and_sync_run_outside_catalog_checkout(tmp_path: Path):
+def test_lifecycle_commands_outside_git_ignore_retired_global_lock(tmp_path: Path):
     cwd = tmp_path / "anywhere"
     home = tmp_path / "home"
     cwd.mkdir()
@@ -357,26 +367,28 @@ def test_status_audit_and_sync_run_outside_catalog_checkout(tmp_path: Path):
     )
 
     status = run_library("status", "--offline", "--json", cwd=cwd, home=home)
-    assert status.returncode == 0, status.stderr
+    assert status.returncode == 2, status.stderr
     status_data = json.loads(status.stdout)
-    assert [(item["scope"], item["name"]) for item in status_data["entries"]] == [
-        ("global", "global-only")
-    ]
+    assert status_data["status"] == "repair_available"
+    assert status_data["entries"] == []
+    assert status_data["health"]["desired_state"]["status"] == "missing"
+    assert status_data["warnings"] == [MISSING_PROJECT_SCOPE_WARNING]
 
     audit = run_library("audit", "--json", cwd=cwd, home=home)
     assert audit.returncode == 0, audit.stderr
     audit_data = json.loads(audit.stdout)
-    assert [(item["scope"], item["name"]) for item in audit_data["entries"]] == [
-        ("global", "global-only")
-    ]
-    assert audit_data["entries"][0]["catalog_status"] == "foreign"
     assert audit_data["status"] == "clean"
+    assert audit_data["entries"] == []
+    assert audit_data["warnings"] == [MISSING_PROJECT_SCOPE_WARNING]
 
     sync = run_library("sync", "--dry-run", "--json", cwd=cwd, home=home)
-    assert sync.returncode == 0, sync.stderr
+    assert sync.returncode == 1, sync.stderr
     sync_data = json.loads(sync.stdout)
-    assert sync_data["skipped_by_status"]["unknown"] == ["skill:global-only"]
-    assert sync_data["warnings"]
+    assert sync_data == {
+        "status": "error",
+        "message": "Project installs require a Git worktree top-level",
+        "exit_code": 1,
+    }
 
 
 def test_installed_offline_does_not_call_git_for_upstream_status(tmp_path: Path):

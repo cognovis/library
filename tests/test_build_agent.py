@@ -556,6 +556,7 @@ def test_library_agent_use_builds_single_source_for_both_harnesses(tmp_path: Pat
     model_standards_dir = make_model_standards(tmp_path, ["sonnet", "gpt-5.6-terra"])
     project = tmp_path / "project"
     project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
     (project / "library.yaml").write_text(
         "default_dirs:\n"
         "  agents:\n"

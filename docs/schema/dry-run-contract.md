@@ -4,7 +4,8 @@ contract_version: "1"
 
 This document defines the JSON envelope emitted by `scripts/library.py <primitive> use --dry-run --json`.
 The contract applies to skill, standard, agent, prompt, script, model-standard, agent-base, workflow,
-MCP, and guardrail installers.
+and guardrail installers. Public MCP registration is retired and returns a typed
+error instead of a dry-run envelope.
 
 ## Schema
 
@@ -45,7 +46,7 @@ MCP, and guardrail installers.
     },
     "harness_routing": {
       "type": ["string", "null"],
-      "enum": ["claude_code", "codex", "opencode", "all", null]
+      "enum": ["claude_code", "codex", "pi", "all", null]
     },
     "conflict_policy": {
       "type": "string",
@@ -125,10 +126,10 @@ Agent with Codex routing:
 Simple-file primitives (`prompt`, `script`, `model-standard`, `agent-base`, `workflow`) use the same envelope with
 their resolved single target file in `target_paths`.
 
-MCP and guardrail installers use global harness config files as targets. MCP use and remove operations
-also use the global lockfile by default; explicit `--scope global` is equivalent. Project-scoped MCP use
-and sync are rejected before a dry-run envelope or mutation is produced. `mcp remove --scope project`
-instead emits a lock-only cleanup operation for a legacy project record and never reports a harness or
-service mutation. Guardrail scope behavior remains unchanged.
-Env-var overrides are honored: `CLAUDE_SETTINGS_FILE`, `CODEX_CONFIG_FILE`, `CODEX_HOOKS_FILE`,
-`OPENCODE_CONFIG_FILE`.
+Guardrail installers use their harness configuration files as targets. Public MCP
+registration lifecycle is retired: `library bootstrap install` owns only the
+OpenBrain singleton through its product manifest, while `mcp remove --scope project`
+performs legacy project-lock cleanup without a harness or service mutation. Every
+other MCP lifecycle invocation returns a typed retirement error before a dry-run
+envelope or mutation is produced. Guardrail scope behavior remains unchanged.
+Env-var overrides are honored: `CLAUDE_SETTINGS_FILE`, `CODEX_CONFIG_FILE`, and `CODEX_HOOKS_FILE`.

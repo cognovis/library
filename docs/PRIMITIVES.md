@@ -52,8 +52,8 @@ Must it fire regardless of what the model decides?
  └─ YES → GUARDRAIL / HOOK (runs outside the LLM loop)
  └─ NO  → Continue below.
 
-Does it define the authoritative Library-managed environment for one project
-class or the global lobby, including safe retirement of obsolete members?
+Does it define the authoritative Library-managed environment for one project,
+including safe retirement of obsolete members?
  └─ YES → WORKSPACE (metadata-only desired-state root; no harness artifact)
  └─ NO  → Continue below.
 
@@ -118,24 +118,24 @@ action itself.
 Quick answer to "is primitive X portable between harnesses?"
 Jump to the linked section for details, costs, and `NORMATIVE`/`INFERRED` labels.
 
-| # | Primitive | Format portable? | Claude Code | Codex CLI | Codex Cloud | Pi | OpenCode | Details |
-|---|-----------|------------------|-------------|-----------|-------------|----|----|---------|
-| 1 | [Skill](primitives/skill.md) | **YES** — shared SKILL.md (Open Agent Skills Standard) | full text at session start | name+desc at startup, full on-demand | n/a | n/a | n/a | details |
-| 2 | [Command](primitives/command.md) | partial — same intent, different formats | `.claude/commands/*.md` (slash) | TBD (CL-qzw) | n/a | n/a | n/a | details |
-| 3 | [Agent](primitives/agent.md) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | `.opencode/agents/*.md` (Markdown, same format as Claude Code) | details |
-| 3a | [Action Boundary](primitives/action-boundary.md) | partial — shared keys, primitive-native serialization | YAML frontmatter on skills/agents | YAML for skills, TOML for agents | n/a | unverified | unverified | metadata |
-| 4 | [Guardrail/Hook](primitives/guardrail-hook.md) | **NO** — event coverage diverges | 15 events | 8 events (PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | `rules` array (INFERRED) | details |
-| 5 | [Package](primitives/package.md) | **RETIRED Library concept** — external ecosystem packages remain distribution formats | n/a | n/a | n/a | n/a | n/a | retirement note |
-| 6 | [Marketplace](primitives/marketplace.md) | yes — distribution layer | yes | yes | yes | yes | yes | details |
-| 7 | [Standard](primitives/standard.md) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | n/a | details |
-| 8 | [MCP-Server](primitives/mcp-server.md) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | yes (only path) | yes | details |
-| 9 | [Script](primitives/script.md) | **YES** — Python file plus Library metadata | callable from skills/hooks/commands | callable from skills/hooks | callable from CI/export | callable through adapters | callable through adapters | details |
-| 10 | [Model-Standard](primitives/model-standard.md) | partial — concept portable, mechanism per-harness | yes | yes | partial | unverified | unverified | details |
-| 11 | [Agent Base (Agent Base Prompt)](primitives/agent-base.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition into agent system prompt | install-time composition into agent system prompt | partial | unverified | unverified | details |
-| 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | n/a | details |
-| 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | n/a | details |
-| 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files and extension bundles | files and directories | Pi-native | verified | verified | project-only; Open Skills stays authoritative for methods |
-| 15 | [Workspace](primitives/workspace.md) | **YES** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | members inherit support | metadata-only desired-state root |
+| # | Primitive | Format portable? | Claude Code | Codex CLI | Codex Cloud | Pi | Details |
+|---|-----------|------------------|-------------|-----------|-------------|----|---------|
+| 1 | [Skill](primitives/skill.md) | **YES** — shared SKILL.md (Open Agent Skills Standard) | full text at session start | name+desc at startup, full on-demand | n/a | n/a | details |
+| 2 | [Command](primitives/command.md) | partial — same intent, different formats | `.claude/commands/*.md` (slash) | TBD (CL-qzw) | n/a | n/a | details |
+| 3 | [Agent](primitives/agent.md) | **NO** — harness-specific format | `.claude/agents/*.md` (YAML) | `.codex/agents/*.toml` (TOML) | n/a | n/a | details |
+| 3a | [Action Boundary](primitives/action-boundary.md) | partial — shared keys, primitive-native serialization | YAML frontmatter on skills/agents | YAML for skills, TOML for agents | n/a | unverified | metadata |
+| 4 | [Guardrail/Hook](primitives/guardrail-hook.md) | **NO** — event coverage diverges | 15 events | 8 events (PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop) | `approval_policy` only | `tool_call`, `tool_result`, `message`, `session_start` (INFERRED) | details |
+| 5 | [Package](primitives/package.md) | **RETIRED Library concept** — external ecosystem packages remain distribution formats | n/a | n/a | n/a | n/a | retirement note |
+| 6 | [Marketplace](primitives/marketplace.md) | yes — distribution layer | yes | yes | yes | yes | details |
+| 7 | [Standard](primitives/standard.md) | **YES** — shared markdown, harness-agnostic | inject via hook + `requires_standards:` | `requires_standards:` + AGENTS.md adapter | n/a | n/a | details |
+| 8 | [MCP-Server](primitives/mcp-server.md) | yes — protocol-level | yes (also CLI+Skill preferred when shell access) | yes (also CLI+Skill preferred) | n/a | applicable through cognovis-pi | details |
+| 9 | [Script](primitives/script.md) | **YES** — Python file plus Library metadata | callable from skills/hooks/commands | callable from skills/hooks | callable from CI/export | callable through adapters | details |
+| 10 | [Model-Standard](primitives/model-standard.md) | partial — concept portable, mechanism per-harness | yes | yes | partial | unverified | details |
+| 11 | [Agent Base (Agent Base Prompt)](primitives/agent-base.md) | **YES** — shared markdown base layer, harness composition varies | install-time composition into agent system prompt | install-time composition into agent system prompt | partial | unverified | details |
+| 12 | [System-Prompt](primitives/system-prompt.md) | partial — concept portable, flags differ per harness | `--system-prompt[-file]`, `--tools`, `--bare`, cld registry | TBD — Codex flag parity unverified | n/a | n/a | details |
+| 13 | [Workflow](primitives/workflow.md) | **YES** — shared JS spec (Anthropic Workflow API) | native Workflow tool (gated by `CLAUDE_CODE_WORKFLOWS`) or Library runtime | Library runtime via `codex exec` (INFERRED) | n/a | n/a | details |
+| 14 | [Project-Native Pi/Just Bridge](primitives/project-native-pi-bridge.md) | **NO** — temporary harness-native projection | files and extension bundles | files and directories | Pi-native | verified | project-only; Open Skills stays authoritative for methods |
+| 15 | [Workspace](primitives/workspace.md) | **YES** — Library metadata, no harness artifact | members project individually | members project individually | members inherit support | members inherit support | metadata-only desired-state root |
 
 **How to read this:**
 - **portable** = same source file works in multiple harnesses (no translation needed)
@@ -174,25 +174,18 @@ metadata:
     harness_support:
       claude_code: supported      # or not-supported, planned
       codex: not-supported
-      cursor: supported
+      pi: supported
 ```
 
 Harness IDs are a closed enum maintained by the Library schema, not an open
-catalog-derived registry. Accepted IDs are `claude_code`, `codex`, `cursor`,
-`opencode`, and `gemini`. Omitting a key means "no explicit claim" (install
-proceeds). Use `planned` for harnesses where support is in progress. The install
-gate fires before dependency installs to prevent partial mutations.
+catalog-derived registry. The current product IDs are `claude_code`, `codex`,
+and `pi`. Omitting a key means "no explicit claim" (install proceeds). Use
+`planned` for a supported harness where support is in progress. The install gate
+fires before dependency installs to prevent partial mutations.
 
-Cursor projection is supported for skills and rules. Project-scope skill
-installs write the canonical files to `.agents/skills/<name>/` and create a
-Cursor bridge symlink at `.cursor/skills/<name>/`; global installs use
-`~/.agents/skills/<name>/` with a `~/.cursor/skills/<name>/` bridge. Cursor
-rules generated from `always_apply` or `globs` are materialized as
-`.cursor/rules/<name>.mdc`. Agent, MCP, and guardrail installs for Cursor are
-not currently implemented and are rejected with compatibility errors before
-target writes. OpenCode agent installs are supported — `--harness opencode`
-targets `.opencode/agents/<name>.md` (project) or `~/.opencode/agents/<name>.md`
-(global). OpenCode MCP and guardrail installs are rejected by the library installer.
+Cursor, OpenCode, Antigravity, and other retired harnesses are not current
+Library projection targets. Historical ADR evidence may still name them, but
+the active CLI only accepts the three current product IDs.
 
 `metadata.library.harness_support` belongs to primitive entry metadata. MCP
 server entries use `install.mcp` as the source of truth for harness-specific MCP

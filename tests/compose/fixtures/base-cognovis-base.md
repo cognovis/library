@@ -3,7 +3,7 @@ name: cognovis-base
 version: "2026.05.01"
 description: Test fixture for cognovis-base agent base prompt (Layer 1)
 scope: global
-harnesses: [claude-code, codex, opencode]
+harnesses: [claude-code, codex]
 ---
 
 # Cognovis Base Agent Base Prompt

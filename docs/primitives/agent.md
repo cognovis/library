@@ -34,11 +34,6 @@ lookups.
 for global). NORMATIVE — Codex has first-class subagents (default/worker/explorer
 built-ins plus custom TOML).
 
-**Format (OpenCode).** Markdown in `.opencode/agents/<name>.md` (project) or
-`~/.opencode/agents/<name>.md` (global). Uses the same Markdown format as Claude Code.
-Install via `library agent use --harness opencode <name>`; remove via
-`library agent remove --harness opencode <name>`.
-
 **`handlers` field — private agent-owned assets.** NORMATIVE.
 
 An agent catalog entry may declare a `handlers` field: an array of asset paths
@@ -60,8 +55,7 @@ When `library agent use my-agent` runs, the installer:
 1. Validates every declared path exists under the agent source directory (path
    traversal attempts are rejected).
 2. Copies the assets into `<agents-base>/my-agent-handlers/` alongside the
-   installed prompt file, for every requested harness (claude\_code, codex,
-   opencode).
+   installed prompt file, for every requested harness (claude\_code and codex).
 3. On reinstall, clears the `my-agent-handlers/` directory first, so handlers
    that were removed or renamed since the last install do not linger on disk.
 4. Detects handler-only catalog changes (declared handlers set changed while the

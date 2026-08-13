@@ -23,10 +23,10 @@ Supported verbs: list, use, remove, sync, search, audit
 Options:
   --json        Machine-readable JSON output
   --dry-run     Show planned operations without mutating files
-  --scope       project (default) or global
+  --scope       project only (global desired state is retired)
   --target-project
                 Project root for project-scoped writes
-  --harness     claude_code, codex, cursor, opencode, antigravity, or all (where applicable)
+  --harness     claude_code, codex, pi, or all (where applicable)
 
 Exit codes:
   0  success
@@ -39,7 +39,7 @@ Exit codes:
 Usage examples:
   library skill list
   library skill list --json
-  library standard use english-only --scope global
+  library standard use english-only --scope project
   library skill use dolt --dry-run --json
   library skill use dolt --symlink --json
   library search firecrawl
@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import io
+from importlib.resources import files
 import json
 import os
 import shutil
@@ -59,6 +60,7 @@ import sys
 import tempfile
 from collections.abc import Callable
 from contextlib import contextmanager, redirect_stdout
+from hashlib import sha256
 from pathlib import Path
 from typing import Mapping, NamedTuple
 
@@ -83,6 +85,7 @@ from lib.errors import (
     EXIT_DRIFT,
     EXIT_FAILURE,
     EXIT_NOT_FOUND,
+    EXIT_DECISION_REQUIRED,
     EXIT_SUCCESS,
     LibraryError,
 )
@@ -111,7 +114,10 @@ from lib.sync_audit import cmd_audit_impl, cmd_sync_impl, reinstall_entry
 
 VALID_PRIMITIVES = all_primitive_names()
 VALID_VERBS = ["list", "use", "remove", "sync", "search", "audit"]
-DEFAULT_LIFECYCLE_SCOPE = "both"
+DEFAULT_LIFECYCLE_SCOPE = "project"
+PROJECT_ONLY_SCOPE_ERROR = (
+    "Global Library desired state is not supported; use the current Git repository."
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -193,8 +199,8 @@ def build_parser() -> argparse.ArgumentParser:
         use_p.add_argument(
             "--scope",
             choices=["project", "global"],
-            default=None,
-            help="Scope (project or global; default: from catalog entry's default_scope, fallback project)",
+            default="project",
+            help="Scope (project only)",
         )
         use_p.add_argument(
             "--target-project", "--project",
@@ -210,9 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
             choices=[
                 "claude_code",
                 "codex",
-                "cursor",
-                "opencode",
-                "antigravity",
+                "pi",
                 "all",
             ],
             default="all",
@@ -258,9 +262,7 @@ def build_parser() -> argparse.ArgumentParser:
             choices=[
                 "claude_code",
                 "codex",
-                "cursor",
-                "opencode",
-                "antigravity",
+                "pi",
                 "all",
             ],
             default="claude_code",
@@ -300,9 +302,7 @@ def build_parser() -> argparse.ArgumentParser:
             choices=[
                 "claude_code",
                 "codex",
-                "cursor",
-                "opencode",
-                "antigravity",
+                "pi",
                 "all",
             ],
             default="all",
@@ -340,6 +340,30 @@ def build_parser() -> argparse.ArgumentParser:
         )
 
     # Top-level search (cross-primitive)
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize the current Git repository with cognovis-base",
+    )
+    init_parser.add_argument(
+        "--project",
+        type=Path,
+        default=None,
+        help="Git worktree top-level to initialize (default: current repository)",
+    )
+    init_parser.add_argument("--json", action="store_true", help="Output JSON")
+
+    bootstrap_parser = subparsers.add_parser(
+        "bootstrap", help="Provision or inspect the enumerated global product bootstrap"
+    )
+    bootstrap_verb_sub = bootstrap_parser.add_subparsers(dest="verb", metavar="verb")
+    for verb, help_text in (
+        ("install", "Install global bootstrap entrypoints and singleton configuration"),
+        ("status", "Inspect global bootstrap entrypoints and singleton configuration"),
+        ("remove", "Remove bootstrap targets proven by the product manifest"),
+    ):
+        item = bootstrap_verb_sub.add_parser(verb, help=help_text)
+        item.add_argument("--json", action="store_true", help="Output JSON")
+
     search_parser = subparsers.add_parser(
         "search",
         help="Search across all primitives",
@@ -355,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
     top_audit_parser.add_argument("--json", action="store_true", help="Output JSON")
     top_audit_parser.add_argument(
         "--scope",
-        choices=["project", "global", "both"],
+        choices=["project", "global"],
         default=DEFAULT_LIFECYCLE_SCOPE,
         help=f"Scope to audit (default: {DEFAULT_LIFECYCLE_SCOPE})",
     )
@@ -387,7 +411,7 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--json", action="store_true", help="Output JSON")
     status_parser.add_argument(
         "--scope",
-        choices=["project", "global", "both"],
+        choices=["project", "global"],
         default=DEFAULT_LIFECYCLE_SCOPE,
         help=f"Scope to check (default: {DEFAULT_LIFECYCLE_SCOPE})",
     )
@@ -411,9 +435,9 @@ def build_parser() -> argparse.ArgumentParser:
     installed_parser.add_argument("--json", action="store_true", help="Output JSON")
     installed_parser.add_argument(
         "--scope",
-        choices=["project", "global", "both"],
-        default="both",
-        help="Scope to show (default: both)",
+        choices=["project", "global"],
+        default="project",
+        help="Scope to show (default: project)",
     )
     installed_parser.add_argument(
         "--primitive",
@@ -461,7 +485,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     top_sync_parser.add_argument(
         "--scope",
-        choices=["project", "global", "both"],
+        choices=["project", "global"],
         default=DEFAULT_LIFECYCLE_SCOPE,
         help=f"Scope to sync (default: {DEFAULT_LIFECYCLE_SCOPE})",
     )
@@ -473,7 +497,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     top_sync_parser.add_argument(
         "--harness",
-        choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+        choices=["claude_code", "codex", "pi", "all"],
         default="all",
     )
 
@@ -937,7 +961,7 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     use_parser.add_argument("--target-project", type=Path, default=None)
     use_parser.add_argument(
         "--harness",
-        choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+        choices=["claude_code", "codex", "pi", "all"],
         default="all",
     )
     use_parser.add_argument("--dry-run", action="store_true")
@@ -953,7 +977,7 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     status_parser.add_argument("--target-project", type=Path, default=None)
     status_parser.add_argument(
         "--harness",
-        choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+        choices=["claude_code", "codex", "pi", "all"],
         default="all",
     )
     status_parser.add_argument("--json", action="store_true")
@@ -973,7 +997,7 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     sync_parser.add_argument("--target-project", type=Path, default=None)
     sync_parser.add_argument(
         "--harness",
-        choices=["claude_code", "codex", "cursor", "opencode", "antigravity", "all"],
+        choices=["claude_code", "codex", "pi", "all"],
         default="all",
     )
     sync_parser.add_argument("--verify-receipts", action="store_true")
@@ -1026,20 +1050,12 @@ def cmd_list(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
 
 def _resolve_default_scope(catalog: dict, primitive: str, name: str) -> str:
-    """Return scope from catalog entry's default_scope field, falling back to 'project'.
+    """Return the sole supported desired-state scope.
 
-    Uses the same lookup semantics (fuzzy=True) as the installer so that keyword
-    queries and exact names both resolve to the same entry and scope.
+    Catalog metadata may retain historical ``default_scope`` values as migration
+    evidence, but it cannot create a second, user-global desired state.
     """
-    try:
-        entry = lookup_entry(catalog, primitive, name, fuzzy=True)
-        default_scope = entry.get("default_scope", "project")
-        if default_scope == "global":
-            return "global"
-        # 'ask' and 'project' both fall back to project for CLI invocations
-        return "project"
-    except Exception:
-        return "project"
+    return "project"
 
 
 def _resolve_command_scope(
@@ -1050,12 +1066,7 @@ def _resolve_command_scope(
 ) -> str:
     """Resolve public CLI scope while enforcing primitive filesystem invariants."""
     if primitive == "mcp":
-        if explicit_scope == "project":
-            raise LibraryError(
-                "MCP registrations are user-global and cannot use project scope. "
-                "Omit --scope or pass --scope global."
-            )
-        return "global"
+        return "project"
     if primitive in {"pi-extension", "pi-profile", "just-module"}:
         if explicit_scope == "global":
             raise LibraryError(
@@ -1064,7 +1075,23 @@ def _resolve_command_scope(
         return "project"
     if explicit_scope is not None:
         return explicit_scope
-    return _resolve_default_scope(catalog, primitive, name)
+    return "project"
+
+
+MCP_LIFECYCLE_RETIRED_ERROR = (
+    "MCP registration lifecycle is retired. The supported OpenBrain singleton is "
+    "managed by `library bootstrap install`; `library mcp remove <name> --scope "
+    "project` only removes a legacy project lock record."
+)
+
+
+def _retired_mcp_lifecycle_result(*, json_mode: bool) -> int:
+    """Report that public MCP registration cannot recreate global desired state."""
+    if json_mode:
+        print_json(error_result(MCP_LIFECYCLE_RETIRED_ERROR, EXIT_FAILURE))
+    else:
+        print(f"Error: {MCP_LIFECYCLE_RETIRED_ERROR}", file=sys.stderr)
+    return EXIT_FAILURE
 
 
 def _check_harness_support(entry: dict, harness: str) -> str | None:
@@ -1073,9 +1100,7 @@ def _check_harness_support(entry: dict, harness: str) -> str | None:
         "claude": "claude_code",
         "claude_code": "claude_code",
         "codex": "codex",
-        "cursor": "cursor",
-        "opencode": "opencode",
-        "gemini": "gemini",
+        "pi": "pi",
     }
     normalized = harness_map.get(harness)
     if normalized is None:
@@ -1129,6 +1154,9 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             print(f"Error: {msg}", file=sys.stderr)
         return EXIT_FAILURE
 
+    if primitive == "mcp":
+        return _retired_mcp_lifecycle_result(json_mode=use_json)
+
     try:
         scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
     except LibraryError as exc:
@@ -1156,34 +1184,6 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
                 return EXIT_FAILURE
         except Exception:
             pass  # lookup failures are handled downstream
-
-    # Reject unsupported harness/primitive combinations BEFORE any dependency
-    # install or dry-run dispatch. This enforces AC8 ("fail before
-    # dry-run/real-install side effects"): otherwise the per-installer checks
-    # (agent.py, mcp_installer.py, guardrail_installer.py) only fire after
-    # _install_with_deps has already materialized dependencies.
-    #
-    # cursor: no agent/mcp/guardrail support. opencode: no mcp/guardrail
-    # support, but opencode agents ARE supported via the agent installer's
-    # sources_map (see agent.py _resolve_agent_source), so they must not be
-    # rejected here.
-    CURSOR_UNSUPPORTED_PRIMITIVES = {"agent", "mcp", "guardrail"}
-    OPENCODE_UNSUPPORTED_PRIMITIVES = {"mcp", "guardrail"}
-    cursor_rejected = harness == "cursor" and primitive in CURSOR_UNSUPPORTED_PRIMITIVES
-    opencode_rejected = (
-        harness == "opencode" and primitive in OPENCODE_UNSUPPORTED_PRIMITIVES
-    )
-    if cursor_rejected or opencode_rejected:
-        msg = (
-            f"{primitive.capitalize()} install for harness '{harness}' is not supported. "
-            f"{primitive.capitalize()} configuration for Cursor and OpenCode is not managed by this installer. "
-            "Use harness 'claude_code' or 'codex' instead."
-        )
-        if use_json:
-            print_json(error_result(msg, EXIT_FAILURE))
-        else:
-            print(f"Error: {msg}", file=sys.stderr)
-        return EXIT_FAILURE
 
     # Resolve transitive dependencies before installing
     if not dry_run:
@@ -2562,9 +2562,6 @@ def _use_mcp(
     for key in [
         "CLAUDE_SETTINGS_FILE",
         "CODEX_CONFIG_FILE",
-        "OPENCODE_CONFIG_FILE",
-        "GEMINI_SETTINGS_FILE",
-        "CURSOR_MCP_FILE",
     ]:
         if key in os.environ:
             env_overrides[key] = os.environ[key]
@@ -2985,8 +2982,10 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         return EXIT_FAILURE
 
     if primitive == "mcp":
-        # Project scope is a migration-only lock-record cleanup for MCP.
-        scope = explicit_scope or "global"
+        # The project form remains a narrow migration-only lock-record cleanup.
+        if explicit_scope != "project":
+            return _retired_mcp_lifecycle_result(json_mode=use_json)
+        scope = "project"
     elif primitive in {"pi-extension", "pi-profile", "just-module"}:
         try:
             scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
@@ -3175,7 +3174,6 @@ def _dispatch_remove(
         for key in [
             "CLAUDE_SETTINGS_FILE",
             "CODEX_CONFIG_FILE",
-            "OPENCODE_CONFIG_FILE",
         ]:
             if key in os.environ:
                 env_overrides[key] = os.environ[key]
@@ -3486,10 +3484,29 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
     else:
         overall = "unknown"
 
+    health = _repository_health(repo_root)
+    health_states = {item.get("status") for item in health.values()}
+    if "decision_required" in health_states:
+        health_status = "decision_required"
+        health_exit = EXIT_DECISION_REQUIRED
+    elif "repair_available" in health_states or "missing" in health_states:
+        health_status = "repair_available"
+        health_exit = EXIT_DRIFT
+    else:
+        health_status = "healthy"
+        health_exit = EXIT_SUCCESS
+
+    status = (
+        "repair_available"
+        if health_status == "healthy" and overall == "behind"
+        else health_status
+    )
     combined_result = {
-        "status": "ok",
+        "status": status,
         "entries": all_entries,
-        "overall": overall,
+        "overall": status if status != "healthy" else overall,
+        "upstream_overall": overall,
+        "health": health,
     }
     if warnings:
         combined_result["warnings"] = warnings
@@ -3497,14 +3514,20 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
     if use_json:
         print_json(combined_result)
     else:
-        if overall == "current":
-            print(f"Status: ALL CURRENT ({len(all_entries)} entries)")
-        elif overall == "behind":
+        if health_status == "decision_required":
+            print("Status: DECISION REQUIRED")
+        elif status == "repair_available":
+            print("Status: REPAIR AVAILABLE")
+        elif overall == "current":
+            print(f"Status: HEALTHY ({len(all_entries)} entries)")
+        else:
+            print(f"Status: UNKNOWN ({len(all_entries)} entries checked)")
+        if overall == "behind":
             behind_count = sum(
                 1 for e in all_entries if e.get("needs_refresh", e.get("behind"))
             )
             print(
-                f"Status: BEHIND ({behind_count}/{len(all_entries)} entries need update)"
+                f"BEHIND ({behind_count}/{len(all_entries)} entries need update)"
             )
             for e in all_entries:
                 if e.get("behind"):
@@ -3520,12 +3543,633 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
                         f"  RUNTIME: {e['primitive']}:{e['name']} "
                         f"({runtime} != {installed}; {e.get('runtime_status', 'unknown')})"
                     )
-        else:
-            print(f"Status: UNKNOWN ({len(all_entries)} entries checked)")
         for warning in warnings:
             print(f"Warning: {warning}")
 
-    return EXIT_DRIFT if overall == "behind" else 0
+    if health_exit != EXIT_SUCCESS:
+        return health_exit
+    return EXIT_DRIFT if overall == "behind" else EXIT_SUCCESS
+
+
+def _repository_health(repo_root: Path | None) -> dict[str, dict]:
+    """Inspect one repository without installing, adopting, or deleting content."""
+    if repo_root is None:
+        missing = {"status": "missing", "reason": "current directory is not a Git worktree"}
+        return {
+            "desired_state": missing,
+            "projections": {"status": "not_applicable", "missing": [], "drifted": []},
+            "git_hygiene": {"status": "repair_available", "reason": missing["reason"]},
+            "bootstrap": _bootstrap_health(),
+            "unmanaged_primitives": {"status": "not_applicable", "paths": []},
+        }
+
+    lock_path = repo_root / ".library.lock"
+    if not lock_path.exists():
+        return {
+            "desired_state": {"status": "missing", "requested_roots": [], "receipts": 0},
+            "projections": {"status": "clean", "missing": [], "drifted": []},
+            "git_hygiene": {"status": "repair_available", "reason": ".library.lock is missing"},
+            "bootstrap": _bootstrap_health(),
+            "unmanaged_primitives": _unmanaged_primitive_health(repo_root, []),
+        }
+
+    try:
+        lock = load_lockfile(lock_path)
+        from lib.gitignore import BEGIN_MARKER, END_MARKER, managed_project_paths
+
+        managed_paths = managed_project_paths(repo_root)
+    except LibraryError as exc:
+        return {
+            "desired_state": {"status": "repair_available", "reason": str(exc)},
+            "projections": {"status": "repair_available", "missing": [], "drifted": []},
+            "git_hygiene": {"status": "repair_available", "reason": str(exc)},
+            "bootstrap": _bootstrap_health(),
+            "unmanaged_primitives": {"status": "not_applicable", "paths": []},
+        }
+
+    project_receipts = [
+        receipt
+        for receipt in lock.get("receipts", [])
+        if isinstance(receipt, dict) and receipt.get("scope") == "project"
+    ]
+    receipt_paths = [
+        str(target.get("path"))
+        for receipt in project_receipts
+        for target in receipt.get("targets", [])
+        if isinstance(target, dict) and isinstance(target.get("path"), str)
+    ]
+    projection_missing, projection_drifted = _projection_health(repo_root, project_receipts)
+    requested_ids = {
+        str(root.get("id", ""))
+        for root in lock.get("requested_roots", [])
+        if isinstance(root, dict)
+    }
+    orphaned = sorted(
+        str(receipt.get("id", ""))
+        for receipt in project_receipts
+        if not set(str(owner) for owner in receipt.get("owners_cache", [])) & requested_ids
+    )
+    resolution_blockers: list[str] = []
+    try:
+        from lib.workspace import build_workspace_plan
+
+        fresh_plan = build_workspace_plan(
+            catalog=_status_catalog(repo_root),
+            lock=lock,
+            repo_root=repo_root,
+            scope="project",
+            pin_verifier=None,
+        )
+        resolution_blockers = sorted(set(fresh_plan.get("blockers", [])))
+    except (LibraryError, OSError) as exc:
+        resolution_blockers = [str(exc)]
+    gitignore = repo_root / ".gitignore"
+    gitignore_content = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+    managed_entries = _managed_gitignore_entries(gitignore_content, BEGIN_MARKER, END_MARKER)
+    from lib.gitignore import _escape_gitignore_path
+
+    expected_entries = [f"/{_escape_gitignore_path(path)}" for path in managed_paths]
+    stale_managed_paths = sorted(
+        entry.removeprefix("/") for entry in managed_entries if entry not in expected_entries
+    )
+    missing_managed_paths = sorted(
+        entry.removeprefix("/") for entry in expected_entries if entry not in managed_entries
+    )
+    tracked_managed_paths = _tracked_paths(repo_root, managed_paths)
+    gitignore_clean = (
+        managed_entries == expected_entries
+        and not stale_managed_paths
+        and not missing_managed_paths
+    )
+    projection_problem = bool(projection_missing or projection_drifted or orphaned)
+    desired_problem = bool(orphaned or resolution_blockers)
+    return {
+        "desired_state": {
+            "status": "repair_available" if desired_problem else "healthy",
+            "requested_roots": [str(root.get("id", "")) for root in lock.get("requested_roots", [])],
+            "receipts": len(lock.get("receipts", [])),
+            "freshness": "stale" if resolution_blockers else "current",
+            "resolution_blockers": resolution_blockers,
+            "pending_reconciliation": projection_problem or bool(resolution_blockers),
+        },
+        "projections": {
+            "status": "repair_available" if projection_problem else "clean",
+            "missing": projection_missing,
+            "drifted": projection_drifted,
+            "conflicting": [],
+            "orphaned": orphaned,
+        },
+        "git_hygiene": {
+            "status": "clean" if gitignore_clean else "repair_available",
+            "managed_paths": managed_paths,
+            "missing_managed_paths": missing_managed_paths,
+            "stale_managed_paths": stale_managed_paths,
+            "tracked_managed_paths": tracked_managed_paths,
+            "authoritative_lock": {"schema_version": lock.get("schema_version"), "tracked": _is_tracked(repo_root, ".library.lock")},
+        },
+        "bootstrap": _bootstrap_health(),
+        "unmanaged_primitives": _unmanaged_primitive_health(repo_root, receipt_paths),
+    }
+
+
+def _status_catalog(repo_root: Path) -> dict:
+    """Load the same repository-selected catalog that lifecycle status observes."""
+    # A consumer repository owns desired state but does not carry the Library
+    # catalog. Resolve its nearest catalog when present, otherwise use the
+    # catalog bundled with the installed control plane.
+    del repo_root
+    catalog_root = _resolve_catalog_root()
+    return load_catalog(catalog_root)
+
+
+def _projection_health(repo_root: Path, receipts: list[dict]) -> tuple[list[str], list[str]]:
+    """Return missing and tampered project targets from exact receipt evidence."""
+    missing: list[str] = []
+    drifted: list[str] = []
+    for receipt in receipts:
+        for target in receipt.get("targets", []):
+            if not isinstance(target, dict) or not isinstance(target.get("path"), str):
+                continue
+            path_value = target["path"].rstrip("/")
+            path = repo_root / path_value
+            if not path.exists() and not path.is_symlink():
+                missing.append(path_value)
+                continue
+            expected_digest = target.get("content_sha256")
+            if expected_digest and path.is_file():
+                actual_digest = sha256(path.read_bytes()).hexdigest()
+                if actual_digest != expected_digest:
+                    drifted.append(path_value)
+            elif target.get("kind") == "symlink" and path.is_symlink():
+                if target.get("link_target") != str(path.readlink()):
+                    drifted.append(path_value)
+    return sorted(set(missing)), sorted(set(drifted))
+
+
+def _managed_gitignore_entries(content: str, begin_marker: str, end_marker: str) -> list[str]:
+    """Read only the one well-formed managed block, without changing it."""
+    lines = content.splitlines()
+    if lines.count(begin_marker) != 1 or lines.count(end_marker) != 1:
+        return []
+    begin = lines.index(begin_marker)
+    end = lines.index(end_marker)
+    if end <= begin:
+        return []
+    return lines[begin + 1 : end]
+
+
+def _tracked_paths(repo_root: Path, paths: list[str]) -> list[str]:
+    """Return receipt-derived managed paths already present in the Git index."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "ls-files", "-z", "--", *paths],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+    return sorted(item.decode(errors="surrogateescape") for item in result.stdout.split(b"\0") if item)
+
+
+def _is_tracked(repo_root: Path, path: str) -> bool:
+    """Return whether one repository-relative path is tracked by Git."""
+    return subprocess.run(
+        ["git", "-C", str(repo_root), "ls-files", "--error-unmatch", "--", path],
+        capture_output=True,
+        check=False,
+    ).returncode == 0
+
+
+def _bootstrap_manifest_path(home: Path) -> Path:
+    """Return the product-owned manifest for the bootstrap allowlist."""
+    return home / ".config" / "library" / "bootstrap.json"
+
+
+def _bootstrap_health(home: Path | None = None) -> dict[str, object]:
+    """Report the exact bootstrap contract without treating it as desired state."""
+    home = home or Path.home()
+    manifest_path = _bootstrap_manifest_path(home)
+    required_commands = ("library", "cld", "cdx")
+    missing = [name for name in required_commands if shutil.which(name) is None]
+    if not manifest_path.is_file():
+        missing.append("bootstrap_manifest")
+        return {"status": "repair_available", "missing": missing}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        missing.append("bootstrap_manifest")
+        return {"status": "repair_available", "missing": missing}
+    for key, record in (manifest.get("targets") or {}).items():
+        if not _bootstrap_manifest_target_matches(record):
+            missing.append(key)
+    return {"status": "ready" if not missing else "repair_available", "missing": sorted(set(missing))}
+
+
+def _bootstrap_paths(home: Path) -> dict[str, Path]:
+    """Return every mutable target in the intentionally small bootstrap contract."""
+    return {
+        "agents_entrypoint": home / ".agents" / "AGENTS.md",
+        "claude_entrypoint": home / ".claude" / "CLAUDE.md",
+        "launcher_runtime": home / ".agents" / "orchestrator-config.yml",
+        "openbrain_claude": home / ".claude.json",
+        "openbrain_codex": home / ".codex" / "config.toml",
+        "openbrain_pi": home / ".pi" / "settings.json",
+    }
+
+
+def _bootstrap_instruction_content() -> str:
+    return "# Library bootstrap entrypoint\n\n@~/.agents/AGENTS.md\n"
+
+
+def _bootstrap_agents_content() -> str:
+    return "# Library bootstrap\n\nThis file is product bootstrap state, not Library desired state.\n"
+
+
+def _bootstrap_runtime_content() -> str:
+    return "# Product-owned launcher runtime configuration.\nversion: 1\n"
+
+
+def _bootstrap_codex_content() -> str:
+    return "[mcp_servers.open-brain]\nurl = \"https://open-brain.sussdorff.org/mcp\"\n"
+
+
+def _bootstrap_openbrain_descriptor() -> dict[str, str]:
+    """Return the stable HTTP descriptor shared by bootstrap MCP projections."""
+    return {"type": "http", "url": "https://open-brain.sussdorff.org/mcp"}
+
+
+def _bootstrap_openbrain_descriptor_matches(
+    descriptor: object, *, require_type: bool
+) -> bool:
+    """Accept the stable OpenBrain descriptor and Library's migration receipt."""
+    if not isinstance(descriptor, dict):
+        return False
+    expected = _bootstrap_openbrain_descriptor()
+    if not require_type:
+        expected = {"url": expected["url"]}
+    normalized = {key: value for key, value in descriptor.items() if key != "_origin"}
+    return normalized == expected
+
+
+def _bootstrap_json_content(container_key: str) -> str:
+    """Render a new JSON MCP config when no operator config exists."""
+    return json.dumps(
+        {container_key: {"open-brain": _bootstrap_openbrain_descriptor()}},
+        indent=2,
+    ) + "\n"
+
+
+def _bootstrap_content() -> dict[str, str]:
+    """Return exact initial content for every bootstrap-owned path."""
+    return {
+        "agents_entrypoint": _bootstrap_agents_content(),
+        "claude_entrypoint": _bootstrap_instruction_content(),
+        "launcher_runtime": _bootstrap_runtime_content(),
+        "openbrain_claude": _bootstrap_json_content("mcpServers"),
+        "openbrain_codex": _bootstrap_codex_content(),
+        "openbrain_pi": _bootstrap_json_content("mcpServers"),
+    }
+
+
+def _bootstrap_merge_json_mcp(path: Path, container_key: str) -> bool:
+    """Add OpenBrain to one JSON config without replacing operator-owned entries."""
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_bootstrap_json_content(container_key), encoding="utf-8")
+        return True
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    entries = payload.setdefault(container_key, {})
+    if not isinstance(entries, dict):
+        return False
+    descriptor = _bootstrap_openbrain_descriptor()
+    existing = entries.get("open-brain")
+    if existing is None:
+        entries["open-brain"] = descriptor
+        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        return True
+    return _bootstrap_openbrain_descriptor_matches(existing, require_type=True)
+
+
+def _bootstrap_json_mcp_is_compatible(path: Path, container_key: str) -> bool:
+    """Return whether an existing JSON config can receive OpenBrain unchanged."""
+    if not path.exists():
+        return True
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    entries = payload.get(container_key)
+    if entries is None:
+        return True
+    if not isinstance(entries, dict):
+        return False
+    existing = entries.get("open-brain")
+    return existing is None or _bootstrap_openbrain_descriptor_matches(
+        existing, require_type=True
+    )
+
+
+def _bootstrap_merge_codex_mcp(path: Path) -> bool:
+    """Add OpenBrain to Codex TOML without replacing operator-owned config."""
+    try:
+        import tomlkit
+    except ImportError:
+        return False
+    if path.exists():
+        try:
+            document = tomlkit.parse(path.read_text(encoding="utf-8"))
+        except (OSError, tomlkit.exceptions.ParseError):
+            return False
+    else:
+        document = tomlkit.document()
+    servers = document.get("mcp_servers")
+    if servers is None:
+        servers = tomlkit.table()
+        document["mcp_servers"] = servers
+    existing = servers.get("open-brain")
+    if existing is not None:
+        return _bootstrap_openbrain_descriptor_matches(existing, require_type=False)
+    entry = tomlkit.table()
+    entry["url"] = "https://open-brain.sussdorff.org/mcp"
+    servers["open-brain"] = entry
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(tomlkit.dumps(document), encoding="utf-8")
+    return True
+
+
+def _bootstrap_codex_mcp_is_compatible(path: Path) -> bool:
+    """Return whether an existing Codex config can receive OpenBrain unchanged."""
+    if not path.exists():
+        return True
+    try:
+        import tomlkit
+    except ImportError:
+        return False
+    try:
+        document = tomlkit.parse(path.read_text(encoding="utf-8"))
+    except (OSError, tomlkit.exceptions.ParseError):
+        return False
+    servers = document.get("mcp_servers")
+    if servers is None:
+        return True
+    if not isinstance(servers, dict):
+        return False
+    existing = servers.get("open-brain")
+    return existing is None or _bootstrap_openbrain_descriptor_matches(
+        existing, require_type=False
+    )
+
+
+def _bootstrap_manifest_target_matches(record: dict[str, object]) -> bool:
+    """Return whether one manifest target still has its bootstrap-owned state."""
+    path = Path(str(record.get("path") or ""))
+    kind = str(record.get("kind") or "file")
+    if not path.is_file():
+        return False
+    if kind == "operator_file":
+        return True
+    if kind == "file":
+        return sha256(path.read_bytes()).hexdigest() == str(record.get("sha256") or "")
+    if kind == "json_mcp":
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        entries = payload.get(str(record.get("container") or ""), {})
+        return isinstance(entries, dict) and _bootstrap_openbrain_descriptor_matches(
+            entries.get("open-brain"), require_type=True
+        )
+    if kind == "toml_mcp":
+        try:
+            import tomlkit
+        except ImportError:
+            return False
+        try:
+            payload = tomlkit.parse(path.read_text(encoding="utf-8"))
+        except (OSError, tomlkit.exceptions.ParseError):
+            return False
+        entries = payload.get("mcp_servers", {})
+        return isinstance(entries, dict) and _bootstrap_openbrain_descriptor_matches(
+            entries.get("open-brain"), require_type=False
+        )
+    return False
+
+
+def _bootstrap_install_conflicts(paths: dict[str, Path]) -> list[str]:
+    """Preflight every bootstrap target before writing any target."""
+    conflicts: list[str] = []
+    for key in ("agents_entrypoint", "claude_entrypoint", "launcher_runtime"):
+        path = paths[key]
+        if path.exists() and not path.is_file():
+            conflicts.append(key)
+    if not _bootstrap_json_mcp_is_compatible(paths["openbrain_claude"], "mcpServers"):
+        conflicts.append("openbrain_claude")
+    if not _bootstrap_codex_mcp_is_compatible(paths["openbrain_codex"]):
+        conflicts.append("openbrain_codex")
+    if not _bootstrap_json_mcp_is_compatible(paths["openbrain_pi"], "mcpServers"):
+        conflicts.append("openbrain_pi")
+    return conflicts
+
+
+def _write_bootstrap_manifest(home: Path, paths: dict[str, Path]) -> Path:
+    """Persist exact byte receipts for targets safely created by bootstrap."""
+    manifest_path = _bootstrap_manifest_path(home)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    targets: dict[str, dict[str, str]] = {}
+    for key, path in paths.items():
+        if key == "openbrain_claude":
+            targets[key] = {"path": str(path), "kind": "json_mcp", "container": "mcpServers"}
+        elif key == "openbrain_pi":
+            targets[key] = {"path": str(path), "kind": "json_mcp", "container": "mcpServers"}
+        elif key == "openbrain_codex":
+            targets[key] = {"path": str(path), "kind": "toml_mcp"}
+        elif key in {"agents_entrypoint", "claude_entrypoint", "launcher_runtime"}:
+            targets[key] = {"path": str(path), "kind": "operator_file"}
+        else:
+            targets[key] = {
+                "path": str(path),
+                "kind": "file",
+                "sha256": sha256(path.read_bytes()).hexdigest(),
+            }
+    manifest_path.write_text(
+        json.dumps({"schema_version": 1, "targets": targets}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    """Provision only the ADR-0012 bootstrap allowlist under the current HOME."""
+    home = Path.home()
+    paths = _bootstrap_paths(home)
+    content = _bootstrap_content()
+    conflicts: list[str] = []
+    if args.verb == "install":
+        conflicts = _bootstrap_install_conflicts(paths)
+        if conflicts:
+            payload = {
+                "status": "repair_available",
+                "bootstrap": {key: str(path) for key, path in paths.items()},
+                "conflicts": conflicts,
+                "missing": [],
+            }
+            if getattr(args, "json", False):
+                print_json(payload)
+            else:
+                print("Bootstrap: REPAIR AVAILABLE")
+                for key in conflicts:
+                    print(f"  conflict: {key}")
+            return EXIT_DRIFT
+        for key in ("agents_entrypoint", "claude_entrypoint", "launcher_runtime"):
+            path = paths[key]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                path.write_text(content[key], encoding="utf-8")
+        _bootstrap_merge_json_mcp(paths["openbrain_claude"], "mcpServers")
+        _bootstrap_merge_codex_mcp(paths["openbrain_codex"])
+        _bootstrap_merge_json_mcp(paths["openbrain_pi"], "mcpServers")
+        _write_bootstrap_manifest(home, paths)
+    elif args.verb == "status":
+        health = _bootstrap_health(home)
+        payload = {
+            "status": health["status"],
+            "bootstrap": health,
+            "bootstrap_targets": {key: str(path) for key, path in paths.items()},
+            "missing": health["missing"],
+            "conflicts": [],
+        }
+        if getattr(args, "json", False):
+            print_json(payload)
+        else:
+            print("Bootstrap: " + ("READY" if health["status"] == "ready" else "REPAIR AVAILABLE"))
+            for key in health["missing"]:
+                print(f"  missing: {key}")
+        return EXIT_SUCCESS if health["status"] == "ready" else EXIT_DRIFT
+    elif args.verb == "remove":
+        manifest_path = _bootstrap_manifest_path(home)
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            conflicts.append("bootstrap_manifest")
+        else:
+            for key, record in (manifest.get("targets") or {}).items():
+                if not _bootstrap_manifest_target_matches(record):
+                    conflicts.append(str(key))
+            if not conflicts:
+                for record in (manifest.get("targets") or {}).values():
+                    path = Path(str(record["path"]))
+                    kind = str(record.get("kind") or "file")
+                    if kind == "file":
+                        path.unlink()
+                    elif kind == "operator_file":
+                        # These bootstrap entrypoints are operator-authored state
+                        # once created, so product cleanup never deletes them.
+                        continue
+                    elif kind == "json_mcp":
+                        payload = json.loads(path.read_text(encoding="utf-8"))
+                        entries = payload.get(str(record["container"]), {})
+                        if _bootstrap_openbrain_descriptor_matches(
+                            entries.get("open-brain"), require_type=True
+                        ):
+                            del entries["open-brain"]
+                            if not entries:
+                                payload.pop(str(record["container"]), None)
+                            path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+                    elif kind == "toml_mcp":
+                        import tomlkit
+
+                        payload = tomlkit.parse(path.read_text(encoding="utf-8"))
+                        entries = payload.get("mcp_servers", {})
+                        if _bootstrap_openbrain_descriptor_matches(
+                            entries.get("open-brain"), require_type=False
+                        ):
+                            del entries["open-brain"]
+                            if not entries:
+                                del payload["mcp_servers"]
+                            path.write_text(tomlkit.dumps(payload), encoding="utf-8")
+                manifest_path.unlink()
+    missing = [] if args.verb == "remove" and not conflicts else [
+        key for key, path in paths.items() if not path.is_file()
+    ]
+    payload = {
+        "status": "ok" if not missing and not conflicts else "repair_available",
+        "bootstrap": {key: str(path) for key, path in paths.items()},
+        "missing": missing,
+        "conflicts": conflicts,
+    }
+    if getattr(args, "json", False):
+        print_json(payload)
+    else:
+        print("Bootstrap: " + ("READY" if not missing else "REPAIR AVAILABLE"))
+        for key, path in paths.items():
+            print(f"  {key}: {path}")
+    return EXIT_SUCCESS if not missing and not conflicts else EXIT_DRIFT
+
+
+def _unmanaged_primitive_health(repo_root: Path, receipt_paths: list[str]) -> dict[str, object]:
+    """List supported-harness content not owned by a project receipt."""
+    owned = [Path(path.rstrip("/")) for path in receipt_paths]
+    file_targets = (
+        (repo_root / ".agents" / "skills", "**/SKILL.md"),
+        (repo_root / ".claude" / "skills", "**/SKILL.md"),
+        (repo_root / ".claude" / "agents", "**/*.md"),
+        (repo_root / ".codex" / "agents", "**/*.toml"),
+        (repo_root / ".claude" / "commands", "**/*.md"),
+        (repo_root / ".agents" / "scripts", "**/*.py"),
+        (repo_root / ".agents" / "model-standards", "**/*.md"),
+        (repo_root / ".agents" / "agent-bases", "**/*.md"),
+    )
+    bundle_roots = (
+        repo_root / ".agents" / "standards",
+        repo_root / ".claude" / "hooks",
+        repo_root / ".codex" / "hooks",
+        repo_root / ".claude" / "workflows",
+        repo_root / ".agents" / "pi" / "extensions",
+        repo_root / ".agents" / "pi" / "profiles",
+        repo_root / ".agents" / "just",
+    )
+
+    def is_owned_or_tracked(relative: Path, target: Path) -> bool:
+        if any(
+            relative.is_relative_to(path) or path.is_relative_to(relative)
+            for path in owned
+        ):
+            return True
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files", "-z", "--", str(relative)],
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode == 0 and bool(result.stdout.rstrip(b"\0"))
+
+    found: set[str] = set()
+    for base, pattern in file_targets:
+        if not base.exists():
+            continue
+        for target in base.glob(pattern):
+            if not target.is_file():
+                continue
+            relative = target.relative_to(repo_root)
+            if not is_owned_or_tracked(relative, target):
+                found.add(relative.as_posix())
+    for root in bundle_roots:
+        if not root.is_dir():
+            continue
+        for target in root.iterdir():
+            if not target.is_file() and not target.is_dir():
+                continue
+            relative = target.relative_to(repo_root)
+            if is_owned_or_tracked(relative, target):
+                continue
+            rendered = relative.as_posix()
+            found.add(rendered + "/" if target.is_dir() else rendered)
+    return {"status": "decision_required" if found else "clean", "paths": sorted(found)}
 
 
 def cmd_installed(args: argparse.Namespace) -> int:
@@ -6174,6 +6818,12 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             "digest": applied_plan["digest"],
         }
     )
+    # `library init` owns the first-use Git hygiene lifecycle. General Workspace
+    # commands retain their existing contract; the fixed initializer explicitly
+    # asks for CL-1les reconciliation after its authoritative v2 lock is saved.
+    if getattr(args, "reconcile_gitignore", False):
+        gitignore_result = _reconcile_project_gitignore(repo_root)
+        result["gitignore"] = gitignore_result
     _print_workspace_result(result, json_mode=args.json)
     return 0
 
@@ -6961,10 +7611,62 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # ADR-0012 has one mutation boundary: no public command may route desired
+    # state through the retired user-global lock. Keep this before catalog,
+    # repository, lockfile, and installer resolution so JSON and human callers
+    # receive the same deterministic result without any observable mutation.
+    if getattr(args, "scope", None) in {"global", "both"}:
+        if getattr(args, "json", False):
+            print_json(error_result(PROJECT_ONLY_SCOPE_ERROR, EXIT_FAILURE))
+        else:
+            print(f"Error: {PROJECT_ONLY_SCOPE_ERROR}", file=sys.stderr)
+        return EXIT_FAILURE
+
     # No subcommand given
     if not args.primitive:
         parser.print_help()
         return EXIT_FAILURE
+
+    if args.primitive == "init":
+        use_json = getattr(args, "json", False)
+        try:
+            catalog_root = _resolve_catalog_root()
+            repo_root = _strict_project_git_root(args)
+            catalog = load_catalog(catalog_root)
+            try:
+                from lib.workspace import resolve_workspace
+
+                resolve_workspace(catalog, "cognovis-base")
+            except LibraryError as exc:
+                if exc.exit_code == EXIT_NOT_FOUND:
+                    raise LibraryError(
+                        "Canonical Workspace 'cognovis-base' is unavailable in the selected catalog.",
+                        exit_code=EXIT_NOT_FOUND,
+                    ) from exc
+                raise
+            init_args = argparse.Namespace(
+                reference="cognovis-base",
+                scope="project",
+                target_project=repo_root,
+                harness="all",
+                dry_run=False,
+                replace_with_catalog_content=False,
+                reconcile_gitignore=True,
+                json=use_json,
+            )
+            return _workspace_use(init_args, repo_root, catalog)
+        except LibraryError as exc:
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+
+    if args.primitive == "bootstrap":
+        if not getattr(args, "verb", None):
+            parser.parse_args(["bootstrap", "--help"])
+            return EXIT_FAILURE
+        return cmd_bootstrap(args)
 
     # Top-level search
     if args.primitive == "search":
@@ -7245,7 +7947,13 @@ def _resolve_catalog_root() -> Path:
     try:
         return find_repo_root()
     except LibraryError:
-        return find_repo_root(TOOL_ROOT)
+        try:
+            return find_repo_root(TOOL_ROOT)
+        except LibraryError:
+            packaged_catalog = Path(str(files("scripts").joinpath("library.yaml")))
+            if packaged_catalog.is_file():
+                return packaged_catalog.parent
+            raise
 
 
 def _select_workspace_catalog(
