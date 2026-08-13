@@ -50,3 +50,4 @@ tests/__pycache__/
 
 # Beads JSONL export is local; Dolt is the source of truth.
 .beads/issues.jsonl
+.beads.gate.lock
