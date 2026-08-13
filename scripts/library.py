@@ -106,7 +106,12 @@ from lib.output import (
 from lib.primitives import PRIMITIVES, all_primitive_names, get_primitive
 from lib.status import cmd_status_impl
 from lib.source import ParsedSource, parse_source
-from lib.sync_audit import cmd_audit_impl, cmd_sync_impl, reinstall_entry
+from lib.sync_audit import (
+    classify_catalog_provenance,
+    cmd_audit_impl,
+    cmd_sync_impl,
+    reinstall_entry,
+)
 
 
 VALID_PRIMITIVES = all_primitive_names()
@@ -4618,6 +4623,7 @@ def cmd_sync_all(
         "current": [],
         "path_unchanged": [],
         "unknown": [],
+        "orphaned": [],
         "other": [],
     }
     warnings: list[str] = []
@@ -4708,6 +4714,16 @@ def cmd_sync_all(
                 entry_label = f"{entry_type}:{entry_name}"
                 key = (entry_name, entry_type)
 
+                catalog_provenance = classify_catalog_provenance(entry, catalog, s)
+                if catalog_provenance["catalog_status"] == "orphaned":
+                    all_skipped.append(entry_label)
+                    skipped_by_status["orphaned"].append(entry_label)
+                    warnings.append(
+                        f"skipped orphaned entry {entry_label}; remove it with "
+                        f"`{catalog_provenance['removal_command']}`"
+                    )
+                    continue
+
                 status_entry = status_by_key.get(key, {})
                 upstream_status = status_entry.get("upstream_status", "unknown")
                 runtime_needs_refresh = bool(status_entry.get("needs_refresh"))
@@ -4787,6 +4803,7 @@ def cmd_sync_all(
             f"`library {primitive} remove {entry_name} --scope global`."
         )
     unknown_skipped = len(still_unknown)
+    orphaned_skipped = len(skipped_by_status["orphaned"])
     if still_unknown:
         warnings.append(
             f"skipped {unknown_skipped} entries with unknown upstream status; "
@@ -4816,6 +4833,7 @@ def cmd_sync_all(
         "skipped": all_skipped,
         "skipped_by_status": skipped_by_status,
         "unknown_skipped": unknown_skipped,
+        "orphaned_skipped": orphaned_skipped,
         "failed": all_failed,
         "total_refreshed": len(all_refreshed),
         "total_skipped": len(all_skipped),
