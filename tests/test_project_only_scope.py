@@ -70,7 +70,7 @@ def test_global_scope_is_rejected_before_catalog_or_filesystem_mutation(
 
 
 @pytest.mark.parametrize("json_mode", [False, True])
-def test_init_is_fixed_to_the_canonical_workspace_and_fails_cleanly_when_absent(
+def test_init_uses_the_tool_catalog_when_a_repository_catalog_lacks_the_workspace(
     tmp_path: Path, json_mode: bool
 ) -> None:
     _init_git_repository(tmp_path)
@@ -79,17 +79,13 @@ def test_init_is_fixed_to_the_canonical_workspace_and_fails_cleanly_when_absent(
 
     result = _run(tmp_path, *command)
 
-    assert result.returncode == 2
-    assert not (tmp_path / ".library.lock").exists()
-    assert not (tmp_path / ".gitignore").exists()
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert (tmp_path / ".library.lock").exists()
+    assert (tmp_path / ".gitignore").exists()
     if json_mode:
-        assert json.loads(result.stdout)["message"] == (
-            "Canonical Workspace 'cognovis-base' is unavailable in the selected catalog."
-        )
+        assert json.loads(result.stdout)["status"] == "applied"
     else:
-        assert result.stderr.endswith(
-            "Error: Canonical Workspace 'cognovis-base' is unavailable in the selected catalog.\n"
-        )
+        assert "Workspace use: applied" in result.stdout
 
 
 @pytest.mark.parametrize(

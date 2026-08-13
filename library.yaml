@@ -4254,7 +4254,7 @@ library:
           identity: https://github.com/cognovis/library
           pin:
             kind: commit
-            value: c2f597410c4969c5fb9c77f34f7cc93168bb1202
+            value: 00c43f828ca3cce7d29e949f44bced59c7e5e121
         - alias: core
           identity: https://github.com/cognovis/library-core
           pin:

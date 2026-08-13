@@ -3933,7 +3933,24 @@ def _bootstrap_manifest_target_matches(record: dict[str, object]) -> bool:
     if not path.is_file():
         return False
     if kind == "operator_file":
-        return True
+        key = str(record.get("contract") or "")
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError:
+            return False
+        if key == "agents_entrypoint":
+            return bool(content.strip())
+        if key == "claude_entrypoint":
+            return "@~/.agents/AGENTS.md" in content
+        if key == "launcher_runtime":
+            try:
+                import yaml
+
+                parsed = yaml.safe_load(content)
+            except yaml.YAMLError:
+                return False
+            return isinstance(parsed, dict) and bool(parsed)
+        return False
     if kind == "file":
         return sha256(path.read_bytes()).hexdigest() == str(record.get("sha256") or "")
     if kind == "json_mcp":
@@ -3990,7 +4007,11 @@ def _write_bootstrap_manifest(home: Path, paths: dict[str, Path]) -> Path:
         elif key == "openbrain_codex":
             targets[key] = {"path": str(path), "kind": "toml_mcp"}
         elif key in {"agents_entrypoint", "claude_entrypoint", "launcher_runtime"}:
-            targets[key] = {"path": str(path), "kind": "operator_file"}
+            targets[key] = {
+                "path": str(path),
+                "kind": "operator_file",
+                "contract": key,
+            }
         else:
             targets[key] = {
                 "path": str(path),
@@ -5960,7 +5981,11 @@ def _workspace_pin_verifier(catalog: dict):
                 "against their source and refuses to report an unverified pin "
                 "as verified"
             )
-        return source_revision(entry.identity, catalog=catalog)
+        return source_revision(
+            entry.identity,
+            catalog=catalog,
+            expected_revision=entry.pin.value,
+        )
 
     return verify
 
@@ -5980,6 +6005,93 @@ def _read_source_files(source: Path) -> dict[str, bytes]:
     for path in sorted(source.rglob("*")):
         if path.is_file() and not path.is_symlink():
             files[path.relative_to(source).as_posix()] = path.read_bytes()
+    return files
+
+
+def _workspace_pinned_source_files(
+    catalog: dict, entry: dict, primitive: str, pin: str
+) -> dict[str, bytes] | None:
+    """Read one Workspace member from the exact declared catalog commit."""
+    import subprocess
+
+    source_name = str(
+        entry.get("metadata", {}).get("library", {}).get("source_catalog") or ""
+    )
+    source_catalog = next(
+        (
+            item
+            for item in catalog.get("sources", {}).get("catalogs", [])
+            if item.get("name") == source_name and item.get("local_path")
+        ),
+        None,
+    )
+    if source_catalog is None:
+        return None
+    repo = Path(str(source_catalog["local_path"])).expanduser().resolve()
+    raw_source = str(entry.get("source") or "")
+    direct = Path(raw_source).expanduser()
+    if direct.exists():
+        try:
+            relative = direct.resolve().relative_to(repo).as_posix()
+        except ValueError:
+            # The admitted-content catalog deliberately points outside the
+            # source checkout. Its bytes are already frozen and must not be
+            # looked up in the original repository again.
+            return None
+    else:
+        marker = "/blob/" if "/blob/" in raw_source else "/tree/"
+        if marker not in raw_source:
+            return None
+        suffix = raw_source.split(marker, 1)[1]
+        _revision, separator, relative = suffix.partition("/")
+        if not separator:
+            return None
+    if not relative:
+        raise LibraryError(
+            f"{root_id(primitive, entry.get('name'))} has no repository-relative "
+            "source path"
+        )
+    library_metadata = entry.get("metadata", {}).get("library", {})
+    if (
+        primitive == "skill"
+        and relative.lower().endswith("/skill.md")
+        and library_metadata.get("skill_bundle") != "file"
+    ):
+        relative = relative.rsplit("/", 1)[0]
+    listing = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", pin, "--", relative],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if listing.returncode != 0:
+        raise LibraryError(
+            f"{root_id(primitive, entry.get('name'))} cannot list declared "
+            f"commit {pin}: {listing.stderr.strip()}"
+        )
+    paths = [line for line in listing.stdout.splitlines() if line]
+    if not paths:
+        raise LibraryError(
+            f"{root_id(primitive, entry.get('name'))} is absent from declared "
+            f"commit {pin}"
+        )
+    prefix = relative.rstrip("/") + "/"
+    files: dict[str, bytes] = {}
+    for path in paths:
+        blob = subprocess.run(
+            ["git", "show", f"{pin}:{path}"],
+            cwd=repo,
+            capture_output=True,
+            check=False,
+        )
+        if blob.returncode != 0:
+            raise LibraryError(
+                f"{root_id(primitive, entry.get('name'))} cannot read {path} "
+                f"from declared commit {pin}"
+            )
+        key = path[len(prefix) :] if path.startswith(prefix) else Path(path).name
+        files[key] = blob.stdout
     return files
 
 
@@ -6267,7 +6379,14 @@ def _workspace_normalized_members(
         source = _workspace_local_source(catalog, entry, node.primitive)
         if source is None:
             continue
-        files = _read_source_files(source)
+        pinned = (
+            _workspace_pinned_source_files(
+                catalog, entry, node.primitive, node.pin.value
+            )
+            if node.pin
+            else None
+        )
+        files = pinned if pinned is not None else _read_source_files(source)
         if not files:
             continue
 

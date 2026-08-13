@@ -17,7 +17,7 @@ baseline. Its direct roots are deliberately limited to:
   skill.
 
 The declared catalogs are pinned to `cognovis/library` commit
-`c2f597410c4969c5fb9c77f34f7cc93168bb1202` and `cognovis/library-core` commit
+`00c43f828ca3cce7d29e949f44bced59c7e5e121` and `cognovis/library-core` commit
 `5aa05ca2f5a45d09c15fddb73c69201a477579ee`. The resolved project closure is
 exactly those four Skills. The core pin governs the source catalog content; a
 later project-lock migration in that catalog does not change this Workspace pin.

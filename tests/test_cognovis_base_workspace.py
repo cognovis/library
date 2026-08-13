@@ -196,7 +196,7 @@ def test_cognovis_base_refuses_when_the_production_pin_verifier_observes_drift(
 
     monkeypatch.setattr(
         "lib.providers.wiring.source_revision",
-        lambda identity, **_kwargs: "0" * 40 if identity.endswith("library-core") else "c2f597410c4969c5fb9c77f34f7cc93168bb1202",
+        lambda identity, **_kwargs: "0" * 40,
     )
 
     with pytest.raises(LibraryError, match="pin drift"):

@@ -139,7 +139,7 @@ def test_bootstrap_install_adopts_existing_operator_owned_files(tmp_path: Path) 
     for path, text in (
         (agents, "# Operator rules\n"),
         (runtime, "default_profile: operator\n"),
-        (claude, "# Operator Claude rules\n"),
+        (claude, "# Operator Claude rules\n\n@~/.agents/AGENTS.md\n"),
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
@@ -157,7 +157,9 @@ def test_bootstrap_install_adopts_existing_operator_owned_files(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
     assert agents.read_text(encoding="utf-8") == "# Operator rules\n"
     assert runtime.read_text(encoding="utf-8") == "default_profile: operator\n"
-    assert claude.read_text(encoding="utf-8") == "# Operator Claude rules\n"
+    assert claude.read_text(encoding="utf-8") == (
+        "# Operator Claude rules\n\n@~/.agents/AGENTS.md\n"
+    )
     payload = json.loads(result.stdout)
     assert payload["conflicts"] == []
     assert (home / ".config" / "library" / "bootstrap.json").is_file()
@@ -354,7 +356,10 @@ def test_bootstrap_status_and_repository_status_share_operator_safe_health(
     )
     for path, content in (
         (home / ".agents" / "AGENTS.md", "# Operator rules\n"),
-        (home / ".claude" / "CLAUDE.md", "# Operator Claude rules\n"),
+        (
+            home / ".claude" / "CLAUDE.md",
+            "# Operator Claude rules\n\n@~/.agents/AGENTS.md\n",
+        ),
         (home / ".agents" / "orchestrator-config.yml", "default_profile: operator\n"),
     ):
         path.write_text(content, encoding="utf-8")
