@@ -24,6 +24,37 @@ harness bridges, and lockfile writes; do not reproduce those steps manually.
 
 4. Inspect `.library.lock` and the reported canonical and bridge targets.
 
+For a successful project-scoped install, Library also reconciles a marked block
+in the project `.gitignore`. Commit `.library.lock` as repository desired state;
+the block contains only its transient `.library.lock.lock` and
+`.library.lock.workspace-lock` sidecars plus the repository-relative targets
+recorded by project-owned v2 receipts. It does not consult the deprecated
+`installed` projection for this block. Global, absolute, malformed, and
+escaping targets are rejected or excluded before mutation.
+Subsequent `use` and top-level `sync` runs replace this block, so stale managed
+entries disappear without changing user-authored ignore rules.
+
+Project installs use one root for Git, installation, `.library.lock`, and
+`.gitignore`. With no `--project`, Library uses `git rev-parse --show-toplevel`.
+An explicit `--project` must itself be exactly that top-level; a nested directory
+is rejected before installation or lock/index changes. Linked worktrees are
+normal valid top-levels.
+Before installation, Library dry-plans the complete requested dependency closure
+and validates every canonical, bridge, and helper target reported by the actual
+installers. An unsafe planned target fails before files or lock state are written.
+
+If a managed target is already tracked, the command reports the path and leaves
+the Git index unchanged. Review the reported paths, then explicitly remove only
+those generated installs from the index while retaining their working-tree
+files:
+
+```bash
+library <primitive> use <name> --untrack --json
+```
+
+Dry runs never change `.gitignore` or the Git index. Global installs do not
+manage a project `.gitignore`.
+
 Project scope vendors content into the repository's canonical `.agents/` paths.
 Global scope installs into user-global Library roots. Each primitive retains its
 own harness projection and context-loading behavior.

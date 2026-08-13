@@ -31,6 +31,17 @@ assert LIBRARY_SPEC is not None and LIBRARY_SPEC.loader is not None
 LIBRARY_MODULE = importlib.util.module_from_spec(LIBRARY_SPEC)
 LIBRARY_SPEC.loader.exec_module(LIBRARY_MODULE)
 
+
+def init_git_project(project: Path) -> None:
+    """Initialize an intended lifecycle project as a Git top-level."""
+    subprocess.run(
+        ["git", "init", "--quiet", str(project)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 # Minimal fixture library.yaml for tempdir tests
 FIXTURE_LIBRARY_YAML = """
 default_dirs:
@@ -216,6 +227,7 @@ def project_dir(
     """Create a minimal project directory with library.yaml pointing to local fixtures."""
     proj = tmp_path / "test-project"
     proj.mkdir()
+    init_git_project(proj)
 
     yaml_content = FIXTURE_LIBRARY_YAML.format(
         skill_source=str(fixture_skill_dir / "SKILL.md"),
@@ -230,6 +242,7 @@ def dry_run_contract_project(tmp_path: Path) -> Path:
     """Create a project with one local-source fixture for every installable primitive."""
     project = tmp_path / "dry-run-contract-project"
     project.mkdir()
+    init_git_project(project)
     hooks_dir = project / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "contract.py").write_text("print('contract hook')\n")
@@ -281,6 +294,7 @@ def agent_handlers_project(tmp_path: Path, agent_handler_fixture_dir: Path) -> P
     """Create a clean project that installs a fixture agent with handlers."""
     project = tmp_path / "agent-handlers-project"
     project.mkdir()
+    init_git_project(project)
     _write_agent_handler_project(
         project / "library.yaml",
         agent_handler_fixture_dir,
@@ -294,6 +308,7 @@ def cursor_project(tmp_path: Path) -> Path:
     """Project fixture for cursor harness skill install tests."""
     proj = tmp_path / "cursor-project"
     proj.mkdir()
+    init_git_project(proj)
     skill_dir = tmp_path / "cursor-test-skill"
     skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text(
@@ -336,6 +351,7 @@ def harness_support_project(
     """Create a project with unsupported Codex entries across primitive types."""
     proj = tmp_path / "harness-support-project"
     proj.mkdir()
+    init_git_project(proj)
     prompt_file = tmp_path / "unsupported-prompt.md"
     prompt_file.write_text("# Unsupported Prompt\n")
     script_file = tmp_path / "unsupported-script.py"
@@ -404,6 +420,7 @@ def runtime_requirements_project(tmp_path: Path) -> Path:
     """Create a project with runtime requirement fixtures and dependency edges."""
     project = tmp_path / "runtime-requirements-project"
     project.mkdir()
+    init_git_project(project)
     sources = tmp_path / "runtime-sources"
     sources.mkdir()
 
@@ -574,6 +591,7 @@ class TestDryRunContractUniformity:
         """
         target_project = tmp_path / "explicit-target-project"
         target_project.mkdir()
+        init_git_project(target_project)
 
         result = subprocess.run(
             [
@@ -647,6 +665,7 @@ class TestDryRunContractUniformity:
     ):
         project = tmp_path / "missing-handler-project"
         project.mkdir()
+        init_git_project(project)
         _write_agent_handler_project(
             project / "library.yaml",
             agent_handler_fixture_dir,
@@ -683,6 +702,7 @@ class TestDryRunContractUniformity:
     ):
         project = tmp_path / "traversal-handler-project"
         project.mkdir()
+        init_git_project(project)
         source_dir = tmp_path / "agent-source"
         source_dir.mkdir()
         (source_dir / "handler-agent.md").write_text(
@@ -1035,6 +1055,7 @@ class TestDryRunContractUniformity:
 
         project = tmp_path / "handler-change-project"
         project.mkdir()
+        init_git_project(project)
         _write_agent_handler_project(
             project / "library.yaml",
             source_dir,
@@ -1112,17 +1133,16 @@ class TestDryRunContractUniformity:
         assert agent_dirs["global_opencode"] == "~/.opencode/agents/"
 
     @pytest.mark.parametrize(
-        ("scope", "expected"),
+        "scope",
         [
-            ("project", ".opencode/agents"),
-            ("global", str(Path.home() / ".opencode" / "agents")),
+            "project",
+            "global",
         ],
     )
     def test_opencode_agent_base_uses_opencode_default_dirs(
         self,
         dry_run_contract_project: Path,
         scope: str,
-        expected: str,
     ):
         from lib.installers.agent import _resolve_agent_base
 
@@ -1138,9 +1158,9 @@ class TestDryRunContractUniformity:
         )
 
         if scope == "project":
-            assert base == dry_run_contract_project / expected
+            assert base == dry_run_contract_project / ".opencode" / "agents"
         else:
-            assert base == Path(expected)
+            assert base == Path.home() / ".opencode" / "agents"
 
     def test_opencode_agent_real_install_and_remove_avoid_claude_artifacts(
         self,
@@ -1498,6 +1518,7 @@ class TestDryRunContractUniformity:
         with tempfile.TemporaryDirectory() as tmpdir:
             proj = Path(tmpdir) / "smoke-project"
             proj.mkdir()
+            init_git_project(proj)
             skill_src = Path(tmpdir) / "smoke-skill"
             skill_src.mkdir()
             (skill_src / "SKILL.md").write_text(
@@ -2122,6 +2143,7 @@ class TestSkillDryRun:
         """Running the CLI from a normal project should use the CLI catalog and target cwd."""
         target_project = tmp_path / "external-project"
         target_project.mkdir()
+        init_git_project(target_project)
 
         result = subprocess.run(
             [
@@ -2150,6 +2172,7 @@ class TestSkillDryRun:
         """--target-project should decouple the install target from the catalog cwd."""
         target_project = tmp_path / "explicit-target"
         target_project.mkdir()
+        init_git_project(target_project)
 
         result = subprocess.run(
             [
@@ -2282,6 +2305,7 @@ library:
         """Dry-run JSON should expose the resolved clone URL and source path."""
         project = tmp_path / "project"
         project.mkdir()
+        init_git_project(project)
         (project / "library.yaml").write_text(self._catalog_yaml())
 
         result = subprocess.run(
@@ -2810,6 +2834,7 @@ class TestSimpleFileDirectoryEntrypoint:
 
         project = tmp_path / "project"
         project.mkdir()
+        init_git_project(project)
         (project / "library.yaml").write_text(
             f"""
 default_dirs:

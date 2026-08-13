@@ -90,6 +90,10 @@ changes.
 | .agents/skills/*/cache/ | Generated cache directories | `.agents/skills/*/cache/` |
 | Library receipt targets under supported harness paths | Generated projections restored from committed `.library.lock` | Exact paths in the CL-1les marker-delimited managed block |
 
+Commit `.library.lock` as repository desired state. Only its transient
+`.library.lock.lock` and `.library.lock.workspace-lock` sidecars belong in the
+managed ignore block.
+
 ### .codex/ (Codex CLI)
 
 **MUST be committed:**

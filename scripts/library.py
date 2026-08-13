@@ -57,6 +57,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 from typing import Mapping, NamedTuple
@@ -177,6 +178,14 @@ def build_parser() -> argparse.ArgumentParser:
             "--dry-run", action="store_true", help="Show planned writes, no mutation"
         )
         use_p.add_argument(
+            "--untrack",
+            action="store_true",
+            help=(
+                "Remove tracked Library-managed project installs from the Git "
+                "index while keeping working-tree files"
+            ),
+        )
+        use_p.add_argument(
             "--symlink",
             action="store_true",
             help="Install Layer C as a symlink into the cache instead of a vendored copy",
@@ -188,7 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
             help="Scope (project or global; default: from catalog entry's default_scope, fallback project)",
         )
         use_p.add_argument(
-            "--target-project",
+            "--target-project", "--project",
             type=Path,
             default=None,
             help=(
@@ -441,6 +450,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     top_sync_parser.add_argument(
         "--force", action="store_true", help="Re-install all, even if current"
+    )
+    top_sync_parser.add_argument(
+        "--untrack",
+        action="store_true",
+        help=(
+            "Remove tracked Library-managed project installs from the Git index "
+            "while keeping working-tree files"
+        ),
     )
     top_sync_parser.add_argument(
         "--scope",
@@ -1121,6 +1138,9 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
 
+    if scope == "project":
+        _preflight_managed_project(args, repo_root, allow_missing_lock=True)
+
     # Guard: check harness_support on the main entry BEFORE installing any dependencies.
     # This prevents partial mutations (dep installs) when the requested entry itself
     # does not support the target harness.
@@ -1167,9 +1187,32 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
     # Resolve transitive dependencies before installing
     if not dry_run:
-        exit_code = _install_with_deps(
-            args, repo_root, catalog, primitive, name, scope, harness, use_json
+        captured = io.StringIO()
+        output_context = redirect_stdout(captured) if use_json else _null_context()
+        with output_context:
+            exit_code = _install_with_deps(
+                args, repo_root, catalog, primitive, name, scope, harness, use_json
+            )
+        if exit_code != 0 or scope != "project":
+            if use_json:
+                print(captured.getvalue(), end="")
+            return exit_code
+        gitignore_result = _reconcile_project_gitignore(
+            repo_root, untrack=getattr(args, "untrack", False)
         )
+        warning = _tracked_install_warning(gitignore_result)
+        if use_json:
+            install_output = captured.getvalue().strip()
+            try:
+                result = json.loads(install_output)
+            except json.JSONDecodeError:
+                result = success({"install_output": install_output})
+            result["gitignore"] = gitignore_result
+            if warning:
+                result.setdefault("warnings", []).append(warning)
+            print_json(result)
+        else:
+            _print_gitignore_result(gitignore_result, warning=warning)
         return exit_code
 
     # Dry-run: just show the target entry's planned ops (no dep resolution for dry-run)
@@ -1185,6 +1228,45 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         use_json,
         install_mode,
     )
+
+
+@contextmanager
+def _null_context():
+    """Context-manager equivalent of doing nothing, without another import."""
+    yield
+
+
+def _reconcile_project_gitignore(
+    repo_root: Path, *, untrack: bool = False
+) -> dict:
+    from lib.gitignore import reconcile_project_gitignore
+
+    return reconcile_project_gitignore(repo_root, untrack=untrack)
+
+
+def _tracked_install_warning(gitignore_result: dict) -> str | None:
+    tracked = gitignore_result.get("tracked_paths") or []
+    if not tracked:
+        return None
+    return (
+        f"{len(tracked)} Library-managed project path(s) are already tracked by "
+        "Git; rerun with --untrack to remove them from the index while keeping "
+        "the working-tree files"
+    )
+
+
+def _print_gitignore_result(
+    gitignore_result: dict, *, warning: str | None = None
+) -> None:
+    """Render the managed ignore and explicit index changes for humans."""
+    if gitignore_result.get("updated"):
+        print(f"Updated Library-managed ignores in {gitignore_result['path']}")
+    for path in gitignore_result.get("tracked_paths") or []:
+        print(f"  [tracked-managed-path] {path}")
+    for path in gitignore_result.get("untracked_paths") or []:
+        print(f"  [untracked-from-index] {path}")
+    if warning:
+        print(f"Warning: {warning}")
 
 
 def _install_with_deps(
@@ -1276,6 +1358,25 @@ def _install_with_deps(
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return exc.exit_code
+
+    planned_targets, planned_target_error = _validate_project_install_plan(
+        args,
+        repo_root,
+        catalog,
+        install_order,
+        dependency_scope,
+        harness,
+    )
+    if planned_target_error is not None:
+        if use_json:
+            print_json(
+                error_result(
+                    str(planned_target_error), planned_target_error.exit_code
+                )
+            )
+        else:
+            print(f"Error: {planned_target_error}", file=sys.stderr)
+        return planned_target_error.exit_code
 
     # Pre-flight runtime and catalog-contract gate for the FULL resolved install
     # order. Runtime requirements must fail before any install/dependency
@@ -1408,6 +1509,23 @@ def _install_with_deps(
                     )
                 continue
         install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
+        if dep_scope == "project":
+            revalidation_error = _revalidate_project_member_targets(
+                repo_root,
+                dep_prim,
+                dep_name,
+                planned_targets.get((dep_prim, dep_name), []),
+            )
+            if revalidation_error is not None:
+                if use_json:
+                    print_json(
+                        error_result(
+                            str(revalidation_error), revalidation_error.exit_code
+                        )
+                    )
+                else:
+                    print(f"Error: {revalidation_error}", file=sys.stderr)
+                return revalidation_error.exit_code
         rc = _dispatch_use(
             args,
             repo_root,
@@ -1424,6 +1542,108 @@ def _install_with_deps(
             return rc
 
     return 0
+
+
+def _validate_project_install_plan(
+    args: argparse.Namespace,
+    repo_root: Path,
+    catalog: dict,
+    install_order: list[tuple[str, str]],
+    dependency_scope: Callable[[str, str], str],
+    harness: str,
+) -> tuple[dict[tuple[str, str], list[str]], LibraryError | None]:
+    """Dry-plan the complete project closure and validate every recorded target."""
+    from lib.gitignore import validate_planned_project_target
+
+    install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
+    planned_targets: dict[tuple[str, str], list[str]] = {}
+    for dep_primitive, dep_name in install_order:
+        if dependency_scope(dep_primitive, dep_name) != "project":
+            continue
+        captured = io.StringIO()
+        with redirect_stdout(captured):
+            exit_code = _dispatch_use(
+                args,
+                repo_root,
+                catalog,
+                dep_primitive,
+                dep_name,
+                "project",
+                harness,
+                True,
+                True,
+                install_mode,
+            )
+        try:
+            plan = json.loads(captured.getvalue())
+        except json.JSONDecodeError:
+            return planned_targets, LibraryError(
+                f"Could not inspect planned targets for {dep_primitive}:{dep_name}"
+            )
+        if exit_code != 0:
+            message = (
+                plan.get("message")
+                or plan.get("reason")
+                or "Install planning failed"
+            )
+            return planned_targets, LibraryError(str(message))
+        targets = plan.get("target_paths")
+        if not isinstance(targets, list) or not targets:
+            return planned_targets, LibraryError(
+                f"Installer plan for {dep_primitive}:{dep_name} did not declare target_paths"
+            )
+        normalized_targets: list[str] = []
+        for target in targets:
+            try:
+                normalized_targets.append(
+                    validate_planned_project_target(target, repo_root)
+                )
+            except LibraryError as exc:
+                return planned_targets, LibraryError(
+                    f"Unsafe target for {dep_primitive}:{dep_name}: {exc}"
+                )
+        planned_targets[(dep_primitive, dep_name)] = normalized_targets
+
+    if install_mode == "symlink":
+        members = list(planned_targets.items())
+        for (ancestor_member, ancestor_targets) in members:
+            for ancestor in ancestor_targets:
+                ancestor_path = Path(ancestor.rstrip("/"))
+                for descendant_member, descendant_targets in members:
+                    if descendant_member == ancestor_member:
+                        continue
+                    for descendant in descendant_targets:
+                        descendant_path = Path(descendant.rstrip("/"))
+                        nested_under_ancestor = (
+                            descendant_path != ancestor_path
+                            and descendant_path.is_relative_to(ancestor_path)
+                        )
+                        if nested_under_ancestor:
+                            ancestor_label = ":".join(ancestor_member)
+                            descendant_label = ":".join(descendant_member)
+                            return planned_targets, LibraryError(
+                                "Unsafe planned symlink ancestor interaction: "
+                                f"{ancestor_label} target {ancestor} contains "
+                                f"{descendant_label} target {descendant}"
+                            )
+    return planned_targets, None
+
+
+def _revalidate_project_member_targets(
+    repo_root: Path,
+    primitive: str,
+    name: str,
+    targets: list[str],
+) -> LibraryError | None:
+    """Recheck one precomputed member plan against current filesystem state."""
+    from lib.gitignore import validate_planned_project_target
+
+    for target in targets:
+        try:
+            validate_planned_project_target(target, repo_root)
+        except LibraryError as exc:
+            return LibraryError(f"Unsafe target for {primitive}:{name}: {exc}")
+    return None
 
 
 def _check_upstream_status_for_entry(
@@ -4573,6 +4793,22 @@ def cmd_sync_all(
             "use --force to refresh them"
         )
 
+    gitignore_result = None
+    if not dry_run and not all_failed and "project" in scopes_to_check and repo_root:
+        try:
+            gitignore_result = _reconcile_project_gitignore(
+                repo_root, untrack=getattr(args, "untrack", False)
+            )
+        except LibraryError as exc:
+            if use_json:
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
+        tracked_warning = _tracked_install_warning(gitignore_result)
+        if tracked_warning:
+            warnings.append(tracked_warning)
+
     result = {
         "status": "dry-run" if dry_run else "ok",
         "refreshed": all_refreshed,
@@ -4586,6 +4822,8 @@ def cmd_sync_all(
     }
     if warnings:
         result["warnings"] = warnings
+    if gitignore_result is not None:
+        result["gitignore"] = gitignore_result
 
     if dry_run:
         result["summary"] = (
@@ -4611,6 +4849,8 @@ def cmd_sync_all(
                 f"Synced: {len(all_reconciled_dependencies)} dependencies reconciled, "
                 f"{len(all_refreshed)} refreshed, {len(all_skipped)} skipped (not behind)"
             )
+            if gitignore_result is not None:
+                _print_gitignore_result(gitignore_result)
         for warning in warnings:
             print(f"Warning: {warning}")
 
@@ -6782,7 +7022,19 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"Error: {exc}", file=sys.stderr)
             return exc.exit_code
-        repo_root = _resolve_lifecycle_project_root(args)
+        try:
+            sync_scope = getattr(args, "scope", DEFAULT_LIFECYCLE_SCOPE)
+            if sync_scope in {"project", "both"}:
+                repo_root = _strict_project_git_root(args)
+                _preflight_managed_project(args, repo_root, allow_missing_lock=False)
+            else:
+                repo_root = _resolve_lifecycle_project_root(args)
+        except LibraryError as exc:
+            if getattr(args, "json", False):
+                print_json(error_result(str(exc), exc.exit_code))
+            else:
+                print(f"Error: {exc}", file=sys.stderr)
+            return exc.exit_code
         return cmd_sync_all(args, repo_root, catalog)
 
     # Top-level catalog source commands
@@ -7096,6 +7348,37 @@ def _resolve_lifecycle_project_root(args: argparse.Namespace) -> Path | None:
     if explicit_project is not None:
         return explicit_project.expanduser().resolve()
     return _find_git_root(Path.cwd())
+
+
+def _strict_project_git_root(args: argparse.Namespace) -> Path:
+    """Resolve the one root shared by Git, lockfile, installs, and .gitignore."""
+    explicit = getattr(args, "project", None)
+    if explicit is None:
+        explicit = getattr(args, "target_project", None)
+    candidate = explicit.expanduser().resolve() if explicit is not None else Path.cwd()
+    git_root = _find_git_root(candidate)
+    if git_root is None:
+        raise LibraryError("Project installs require a Git worktree top-level")
+    if explicit is not None and candidate != git_root:
+        raise LibraryError(
+            f"--project must name the Git worktree top-level exactly: {git_root}"
+        )
+    return git_root
+
+
+def _preflight_managed_project(
+    args: argparse.Namespace, repo_root: Path, *, allow_missing_lock: bool
+) -> None:
+    """Reject divergent roots and invalid receipt inventories before mutation."""
+    strict_root = _strict_project_git_root(args)
+    if repo_root.resolve() != strict_root:
+        raise LibraryError("Project root must equal the Git worktree top-level")
+    lockfile = strict_root / ".library.lock"
+    if allow_missing_lock and not lockfile.exists():
+        return
+    from lib.gitignore import managed_project_paths
+
+    managed_project_paths(strict_root)
 
 
 def _missing_project_warning() -> str:

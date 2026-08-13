@@ -65,10 +65,15 @@ ADR-0010 and ADR-0011.
 | `library/sussdorff-core` | Private personal and operations marketplace content |
 | `library/cognovis-pi` | Pi extensions, profiles, and project-native bridge modules |
 
-A consumer repository registers only the primitives and Workspaces it needs. It
-commits project-local `.agents/` content and `.library.lock`. Marketplace
-repositories keep authored source primitives at top level and normally ignore
-their `.agents/` install targets.
+A consumer repository registers only the primitives and Workspaces it needs.
+The committed `.library.lock` records repository desired state. Library-generated
+project installs and the transient `.library.lock.lock` and
+`.library.lock.workspace-lock` sidecars stay local through the CLI-managed
+`.gitignore` block. Marketplace repositories keep authored source primitives at
+top level and ignore their generated install targets.
+For this lifecycle, the Git top-level, project root, `.library.lock` root, and
+`.gitignore` root are one directory. An explicit `--project` must name that Git
+top-level exactly; linked worktrees are valid independent top-levels.
 
 One repository may use several orthogonal Workspaces. For example, the accepted
 portfolio maps `fhir-management` to both `fhir-ig-authoring` and `python-cli`, and

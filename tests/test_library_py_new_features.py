@@ -338,6 +338,7 @@ mcp_servers:
 @pytest.fixture
 def project_dir(tmp_path):
     """Create a minimal project directory with all fixtures."""
+    run_git("init", cwd=tmp_path)
     # Create fixture files
     agent_dir = tmp_path / "fixture-agent"
     agent_dir.mkdir()
@@ -1558,6 +1559,7 @@ description: A standard that should install project-scoped by default
 @pytest.fixture
 def project_dir_with_default_scope(tmp_path):
     """Project dir fixture extended with standards that have default_scope set."""
+    run_git("init", cwd=tmp_path)
     global_std_dir = tmp_path / "fixture-global-standard"
     global_std_dir.mkdir()
     (global_std_dir / "global-standard.md").write_text(FIXTURE_GLOBAL_SCOPE_STANDARD_MD)

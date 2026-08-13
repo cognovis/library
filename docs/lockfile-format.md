@@ -54,15 +54,22 @@ Two lockfile instances exist, sharing the same schema:
 
 ```
 <project-root>/
-├── .library.lock       ← per-project lockfile (committed to git)
+├── .library.lock       ← committed desired-state and materialization manifest
 ├── library.yaml
 ├── .agents/
 │   └── skills/
 └── ...
 ```
 
-`.library.lock` must be **committed to git** so all collaborators share the same install
-manifest. It should NOT be gitignored.
+`.library.lock` is the committed repository desired-state and materialization
+manifest. Successful project-scoped `library use` and top-level `library sync`
+runs keep it visible to Git while adding only its transient write-lock sidecar
+and Workspace lock sidecar to the Library-managed `.gitignore` block. Generated
+receipt targets and local concurrency state do not belong in Git.
+This managed-ignore lifecycle requires `schema_version: 2` and reads only
+project-owned `receipts[].targets[].path`. Its Git top-level, project root,
+lockfile root, and `.gitignore` root are identical. This restriction does not
+remove legacy lock support from unrelated Library commands.
 
 ### Global lockfile (new — ADR-0003)
 
