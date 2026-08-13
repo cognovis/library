@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -2237,6 +2238,11 @@ def workspace_journal_path(lock_path: Path) -> Path:
     return lock_path.with_name(f"{lock_path.name}.workspace-journal.json")
 
 
+def workspace_rollback_path(lock_path: Path) -> Path:
+    """Return the durable rollback tree for one scope transaction."""
+    return lock_path.with_name(f"{lock_path.name}.workspace-rollback")
+
+
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp-{os.getpid()}")
@@ -2254,6 +2260,28 @@ def write_workspace_journal(lock_path: Path, payload: dict[str, Any]) -> Path:
 def clear_workspace_journal(lock_path: Path) -> None:
     """Remove a completed transaction journal."""
     workspace_journal_path(lock_path).unlink(missing_ok=True)
+    shutil.rmtree(workspace_rollback_path(lock_path), ignore_errors=True)
+
+
+def _restore_workspace_use(payload: dict[str, Any]) -> None:
+    """Restore the durable pre-state captured for an interrupted use."""
+    for item in reversed(payload.get("rollback") or []):
+        target = Path(str(item.get("target") or ""))
+        backup_value = item.get("backup")
+        backup = Path(str(backup_value)) if backup_value else None
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        elif target.is_dir():
+            shutil.rmtree(target)
+        if backup is None:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if backup.is_symlink():
+            target.symlink_to(backup.readlink())
+        elif backup.is_dir():
+            shutil.copytree(backup, target, symlinks=True)
+        else:
+            shutil.copy2(backup, target)
 
 
 def workspace_journal_digest(lock_path: Path) -> str | None:
@@ -2289,6 +2317,10 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
     except (OSError, json.JSONDecodeError) as exc:
         raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
     if payload.get("operation") != "prune":
+        if payload.get("operation") == "use" and payload.get("rollback") is not None:
+            _restore_workspace_use(payload)
+            clear_workspace_journal(lock_path)
+            return []
         if payload.get("operation") in {"use", "adopt", "remove"}:
             clear_workspace_journal(lock_path)
             return []

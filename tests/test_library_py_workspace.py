@@ -1704,6 +1704,58 @@ def test_gitignore_reconciliation_failure_rolls_back_the_complete_workspace_tran
     assert not (project / ".agents" / "skills" / "python-test").exists()
 
 
+def test_next_use_recovers_an_interrupted_workspace_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+    from lib.workspace import (
+        recover_workspace_journal,
+        workspace_rollback_path,
+        write_workspace_journal,
+    )
+
+    module = _library_module()
+    lock_path = project / ".library.lock"
+    target = project / ".agents" / "skills" / "python-dev"
+    rollback_root = workspace_rollback_path(lock_path)
+    captured = module._workspace_capture_rollback(
+        rollback_root, [str(target)], [lock_path, project / ".gitignore"]
+    )
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(path),
+                    "backup": str(backup) if backup is not None else None,
+                }
+                for path, backup in captured
+            ],
+        },
+    )
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("partial\n")
+    lock_path.write_text("installed: []\n")
+    (project / ".gitignore").write_text("partial\n")
+
+    recover_workspace_journal(lock_path, project)
+
+    assert not target.exists()
+    assert not lock_path.exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not rollback_root.exists()
+
+
 def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(
     tmp_path: Path,
 ) -> None:

@@ -6749,6 +6749,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         gate_workspace_mutation,
         publish_admitted_members,
         recover_workspace_journal,
+        workspace_rollback_path,
         workspace_write_lock,
         write_workspace_journal,
     )
@@ -6802,6 +6803,14 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             for root in current_lock.get("requested_roots", [])
             if root.get("type") != "workspace"
         }
+        member_failure: list[tuple[str, int, str]] = []
+        rollback_root = workspace_rollback_path(lock_path)
+        shutil.rmtree(rollback_root, ignore_errors=True)
+        rollback = _workspace_capture_rollback(
+            rollback_root,
+            locked_collision["targets"],
+            [lock_path, repo_root / ".gitignore"],
+        )
         write_workspace_journal(
             lock_path,
             {
@@ -6812,13 +6821,14 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                 "artifacts": [
                     f"{primitive}:{name}" for primitive, name in closure.artifacts
                 ],
+                "rollback": [
+                    {
+                        "target": str(target),
+                        "backup": str(backup) if backup is not None else None,
+                    }
+                    for target, backup in rollback
+                ],
             },
-        )
-        member_failure: list[tuple[str, int, str]] = []
-        rollback = _workspace_capture_rollback(
-            admitted_root / "rollback",
-            locked_collision["targets"],
-            [lock_path, repo_root / ".gitignore"],
         )
         member_provenance: dict[tuple[str, str], tuple[str, str]] = {}
         #: The normalized items the mutation gate admitted. Only a cross-catalog
