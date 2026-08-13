@@ -507,7 +507,7 @@ fi
 
 # ── Shared bead implementation loop ─────────────────────────────
 
-launch_bead_implementation_loop() {
+launch_bead_mode() {
     local active_bead="$1"
     local execution_mode="$2"
 
@@ -548,14 +548,27 @@ launch_bead_implementation_loop() {
     local worktree_dir
     worktree_dir="$(ensure_bead_worktree "$active_bead")" || return $?
 
-    local prompt="Execute Bead ${active_bead} in its assigned worktree using the installed bead-implementation-loop skill in this current Codex session with execution mode \`${execution_mode}\`. This current Codex session owns implementation, repairs, verification, and lifecycle completion. Do not delegate implementation or repairs to a subagent. This user-directed current-session ownership overrides any skill instruction that would dispatch a native implementation subagent.
-
-Use the installed acpx-dispatch skill to obtain review feedback from Opus. The current session owns review policy and prompt composition; acpx-dispatch is transport only. Review 1 is adversarial, review 2 is critical, and reviews 3 through 5 are normal. After each review, fix actionable findings above low severity or nits, verify the fixes, and request the next review only if such findings required a fix. Stop when only low-severity findings or nits remain, or after five Opus reviews total."
-
     if [[ "$execution_mode" == "quick" ]]; then
-        prompt+=" This is unconditional explicit Quick for every executable leaf and starts with the minimal capability set. Do not add optional ceremony unless new acceptance evidence requires a named capability."
+        local prompt="Execute Bead ${active_bead} in its assigned worktree using the installed bead-implementation-loop skill in this current Codex session with execution mode \`quick\`. This current Codex session owns implementation, repairs, verification, and lifecycle completion. Do not delegate implementation or repairs to a subagent. This user-directed current-session ownership overrides any skill instruction that would dispatch a native implementation subagent.
+
+Use the installed acpx-dispatch skill to obtain review feedback from Opus. The current session owns review policy and prompt composition; acpx-dispatch is transport only. Review 1 is adversarial, review 2 is critical, and reviews 3 through 5 are normal. After each review, fix actionable findings above low severity or nits, verify the fixes, and request the next review only if such findings required a fix. Stop when only low-severity findings or nits remain, or after five Opus reviews total. This is unconditional explicit Quick for every executable leaf and starts with the minimal capability set. Do not add optional ceremony unless new acceptance evidence requires a named capability."
     else
-        prompt+=" In auto mode, persist the concise evidence-based capability plan required by the implementation-loop contract before implementation."
+        local prompt="Execute Bead ${active_bead} in its assigned worktree in this current Codex session with execution mode \`auto\`.
+
+This current Codex session is the sole implementation and delivery owner. It owns planning, TDD, implementation, repairs, focused verification, the Bead commit, and lifecycle completion. Do not invoke bead-implementation-loop, bead-loop-implementer, bead-implementer, fix-agent, or any other implementation or repair subagent.
+
+Before implementation, derive and persist a concise evidence-based capability plan covering the Acceptance Criteria, implementation seams, applicable standards and ADRs, TDD seams, and focused Means of Compliance.
+
+Use the installed acpx-dispatch skill solely as transport for Opus reviews. The current Codex session owns review policy, complete prompt composition, finding disposition, repairs, and convergence decisions. Opus is read-only and must not edit files, mutate Beads, commit, or perform lifecycle actions.
+
+Run at most seven sequential Opus review rounds:
+1. Review 1: adversarial review.
+2. Review 2: critical review.
+3. Reviews 3 through 7: normal full-candidate reviews, including verification of prior repairs and detection of regressions introduced by those repairs.
+
+After each review, classify every finding by severity. Fix every actionable in-scope finding above \`low\` or \`nit\`, verify the repair with focused tests, and refresh the complete review subject. Request another review only when at least one such finding required a repair. Stop when the latest review contains no actionable findings above \`low\` or \`nit\`. Low-severity findings and nits are advisory and do not require repair. Never exceed seven total Opus reviews. Each review must examine the current complete candidate, not only the latest repair diff.
+
+After review convergence, run the focused Means of Compliance, create the Bead-labelled commit, and invoke the installed session-close skill exactly once for this Bead and worktree. Do not hand-run merge, push, Bead close, sync, or worktree cleanup alongside Session Close."
     fi
 
     prompt+="
@@ -594,12 +607,12 @@ $(coordinator_callback_contract impl)"
 }
 
 if [[ -n "$bead_id" ]]; then
-    launch_bead_implementation_loop "$bead_id" auto
+    launch_bead_mode "$bead_id" auto
     exit $?
 fi
 
 if [[ -n "$bead_quick_id" ]]; then
-    launch_bead_implementation_loop "$bead_quick_id" quick
+    launch_bead_mode "$bead_quick_id" quick
     exit $?
 fi
 
