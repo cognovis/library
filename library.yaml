@@ -1465,6 +1465,12 @@ library:
         - standard:english-only
         - standard:executive-pack
         - standard:no-emoji
+      scripts:
+        - path: skills/executive-pack/scripts/pack_review_contract.py
+          role: helper
+          entrypoint: false
+          language: python
+          output_contract: json-envelope
       tags:
         - origin:original
         - tier:domain
