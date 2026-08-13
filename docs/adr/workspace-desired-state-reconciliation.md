@@ -9,8 +9,8 @@ deciders:
 supersedes: []
 superseded_by: []
 amends: ["0003", "0004", "0005", "library-yaml-information-model"]
-amended_by: ["0011"]
-related_adrs: ["0002", "0011"]
+amended_by: ["0011", "0012"]
+related_adrs: ["0002", "0011", "0012"]
 ---
 
 # ADR-0010: Universal Library ownership and Workspace desired-state reconciliation
@@ -20,6 +20,12 @@ related_adrs: ["0002", "0011"]
 Accepted and implemented by `CL-r7n6`; the first Cognovis marketplace
 definition is tracked by `clc-tzn5`. Legacy v1 lockfiles remain readable as
 conservative migration input, while all new writes use the v2 ownership model.
+
+Amended by ADR-0012. Ownership-aware reconciliation and the Workspace primitive
+remain accepted, but normal desired state now has exactly one scope: a Git
+repository. The global lobby, its budgets, global requested roots, global
+receipts, and global Workspace command forms are superseded. The historical
+global lock is read-only migration input until dispositioned.
 
 ## Context
 
@@ -34,9 +40,9 @@ This matters at two distinct scopes:
 - A repository class such as a Python CLI should be able to opt into the same
   Skills, Standards, Agents, Workflows, and operating rules without copying a
   large `AGENTS.md` into every repository.
-- The user-global baseline, or lobby, should remain deliberately small. Library
-  content that is no longer part of that baseline should be identifiable and
-  removable without treating every globally installed file as disposable.
+- A repository baseline should remain deliberate and reviewable. ADR-0012
+  establishes that the historical user-global baseline grew too large to serve
+  that purpose and moves all artifact desired state to Git repositories.
 
 Dependency closures do not fill this gap. `requires:` correctly says what one
 primitive needs in order to function, but it does not say which independently
@@ -147,11 +153,9 @@ repeated directory name as a Workspace:
 - a consumer asking for "all except one member" is evidence that the Workspace
   is too coarse and must be split, not a reason to add exclusions or overrides.
 
-The global lobby is stricter: by default at most five direct roots, at most 15
-receipts, no domain or customer content, and deterministically calculable
-standing context within one percent. Top-level `workspace_policy` may lower
-these limits for a deployment. Unknown context cost blocks lobby publication
-rather than counting as zero.
+> **ADR-0012 amendment:** The global-lobby admission policy is retired. No
+> Workspace may be registered globally. Project closure budgets remain valid;
+> the `cognovis-base` Workspace is governed as a project Workspace.
 
 ### Decision 3a: Composition is many-to-many and unordered
 
@@ -174,14 +178,16 @@ This permits deliberate orthogonal composition. For example,
 `library/meta` can register `library-authoring` and `python-cli`. A one-member
 alias with no independent lifecycle purpose should remain a direct primitive root.
 
-### Decision 4: Reconciliation is scope-homogeneous
+### Decision 4: Reconciliation is repository-local
 
-One operation reconciles exactly one lockfile scope:
+> **ADR-0012 amendment:** One operation reconciles exactly one Git repository.
+> The former global row is historical migration input and is not a writable
+> lifecycle scope.
 
 | Scope | Lockfile | Permitted targets |
 |-------|----------|-------------------|
 | Project | `<project>/.library.lock` | Project-local Library targets only |
-| Global lobby | `~/.config/library/global.lock` | User-global Library targets only |
+| Historical global inventory | `~/.config/library/global.lock` | Read-only during migration; no permitted new targets |
 
 A Workspace-owned artifact closure cannot mix project and global targets. A
 project lock cannot claim ownership of a global artifact, and a global lock
@@ -204,9 +210,9 @@ Library-owned global direct root and global Workspace root lives in the single
 global lock. Projects that require reproducibility declare project-local roots;
 they do not create hidden ownership edges to ambient global content.
 
-A global Workspace can therefore define the lobby, while a project Workspace
-can define a repository-class baseline. They use the same schema and resolver but
-never share receipt ownership.
+No Workspace defines a global lobby. Repository-class baselines use the project
+lock. Product bootstrap prerequisites are checked against the ADR-0012 bootstrap
+manifest or exact receipts, never a global primitive lock.
 
 ### Decision 5: Requested roots and receipts replace the flat installed list
 
@@ -316,7 +322,7 @@ a candidate deletion. A missing or stale digest fails closed.
 
 ### Decision 7: The Workspace command surface is explicit about deletion
 
-The v1 CLI surface is:
+The original v1 CLI surface was:
 
 ```text
 library workspace list [--scope project|global] [--json]
@@ -392,6 +398,12 @@ explicit `--prune --apply` capability.
 Every command supports stable JSON output. Scope may be inferred only when
 exactly one target lock is possible; when both a project and global lock are
 plausible, omission fails and asks for `--scope`.
+
+> **ADR-0012 amendment:** Current Workspace lifecycle commands are project-only.
+> `--scope project` is redundant compatibility syntax; `--scope global` fails
+> before mutation. `library init` is a separate fixed shortcut for registering
+> `cognovis-base`, materializing its closure, and reconciling CL-1les's managed
+> Gitignore block. It takes no Workspace selector.
 
 ### Decision 8: Pruning is provenance-bound and fail-closed
 
@@ -577,8 +589,8 @@ real primitive or dependency remains with its owning project or tool.
 - Orthogonal Workspaces can be composed without creating a combined variant for
   every repository class.
 - Shared dependencies survive until their final owner disappears.
-- The global lobby can be inspected and deliberately reduced without touching
-  foreign or unverified state.
+- The historical global inventory can be inspected and deliberately reduced
+  during ADR-0012 migration without touching foreign or unverified state.
 - A repository remains functional if Workspace metadata disappears: installed
   primitives keep their native behavior, while future desired-state reconciliation
   becomes unavailable until the definition is restored.
@@ -593,8 +605,8 @@ real primitive or dependency remains with its owning project or tool.
 - Safe prune requires complete catalog availability and cannot proceed offline.
 - Workspace introduces a metadata-only primitive category with no harness
   projection, which must be explained explicitly in primitive documentation.
-- Global desired state is ambient user tooling, not a reproducible project
-  dependency.
+- Repository-local desired state requires explicit initialization in each
+  regularly maintained repository instead of relying on ambient user tooling.
 - Schema v1 deliberately omits nested Workspaces and cross-catalog manifest
   roots; consumers compose catalogs by registering several direct Workspaces.
 
@@ -631,8 +643,10 @@ canonical primitives that already own those contracts.
 
 ### Exclude global Workspaces permanently
 
-Rejected. A global lobby is a legitimate desired-state scope once all global
-Library roots share the universal global lock. Cross-scope edges remain forbidden.
+Originally rejected because a universal global lock made a lobby mechanically
+possible. ADR-0012 supersedes that conclusion after operational evidence showed
+the global scope growing beyond a deliberate baseline. Global Workspaces are now
+permanently excluded; the enumerated bootstrap is not desired-state composition.
 
 ### Ship nested Workspaces and cross-catalog manifest roots in v1
 

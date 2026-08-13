@@ -8,8 +8,8 @@ deciders:
   - Malte Sussdorff
 supersedes: ["0001"]
 superseded_by: []
-amended_by: ["0010"]
-related_adrs: ["0001", "0010"]
+amended_by: ["0010", "0012"]
+related_adrs: ["0001", "0010", "0012"]
 ---
 
 # ADR-0002: Library-core repos as canonical source; harness dirs as deployment targets; full marketplace removal
@@ -18,13 +18,13 @@ related_adrs: ["0001", "0010"]
 
 Accepted. **Supersedes ADR-0001.**
 
-Amended by ADR-0010. The source/deployment split and removal of the two Claude
-plugin marketplaces remain accepted. The planned hand-maintained bootstrap
-capability list for fleet-wide essentials is superseded by a small global
-Workspace. The irreducible Library engine and conversational entrypoint remain a
-bootstrap prerequisite; forge Skills move to `library-authoring`. Historical
-`/library use` examples below describe the conversational interface at the time;
-the deterministic CLI now uses `library <primitive> use <name>`.
+Amended by ADR-0010 and ADR-0012. The source/deployment split and removal of the
+two Claude plugin marketplaces remain accepted. ADR-0010's small global
+Workspace replacement is itself superseded by ADR-0012: normal Library desired
+state is repository-local, while only an enumerated product bootstrap remains
+global. Historical `/library use` examples below describe the conversational
+interface at the time; the deterministic CLI now uses
+`library <primitive> use <name>`.
 
 > **Terminology clarification (added 2026-05-12 in conjunction with
 > ADR-0003)**: The term *marketplace* in this ADR refers
@@ -170,13 +170,14 @@ content artefacts (only for personal config), so any drift is
 detectable as "canonical version differs from deployed version" and
 resolved by re-deploying from the canonical source.
 
-### Decision 4: Defer `uv tool install` packaging
+### Decision 4: Package the control plane with `uv tool install`
 
-`uv tool install` is the right answer **if** cld/cdx become Python
-tools. For zsh scripts it doesn't apply. A Python rewrite is a
-separate, larger decision driven by cross-platform need (Windows
-team members, CI runners) — not by this ADR. Plain zsh + symlink
-install is correct for now.
+> **ADR-0012 amendment:** The earlier deferral is superseded. The Library is a
+> Python package with a console entrypoint and is installed and upgraded through
+> `uv tool install`. `cld` and `cdx` are exposed as bundled launcher entrypoints;
+> their implementation language does not determine package ownership. Symlinks
+> into a mutable source checkout and `install.sh` are transitional migration
+> mechanisms, not the final deployment contract.
 
 ## Final-state architecture
 
@@ -519,14 +520,15 @@ from per-project vs fleet-wide install variants.
 
 ### Option F: `uv tool install` packaging
 
-**Description**: Rewrite cld/cdx as Python tools, distribute via
+**Description**: Package the Library control plane and launcher entrypoints for
 `uv tool install`.
 
 **Pros**: Modern packaging story; cross-platform; clean update path.
 
-**Cons**: cld is non-trivial zsh integrating dolt, git, cmux,
-worktree creation. Python rewrite is substantial work driven by
-needs (cross-platform, complexity) not yet urgent.
+**Cons**: cld is non-trivial zsh integrating dolt, git, cmux, and worktree
+creation. Packaging must preserve that behavior even if launcher resources stay
+in zsh.
 
-**Rejected because**: Out of scope for removal decision. Decision 4
-codifies the deferral.
+**Status**: Originally deferred as out of scope for the removal decision.
+ADR-0012 accepts uv tool packaging without requiring a Python rewrite of the
+launcher implementations.
