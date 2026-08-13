@@ -9,6 +9,7 @@ deciders:
 supersedes: []
 superseded_by: []
 amends: ["0003", "0010"]
+amended_by: ["0012"]
 retains: ["0006"]
 related_adrs: ["0003", "0004", "0005", "0006", "0010"]
 ---
@@ -20,6 +21,11 @@ related_adrs: ["0003", "0004", "0005", "0006", "0010"]
 Accepted as the normative architecture for source providers, normalized
 inventory, admission, distribution rights, durable foreign-resource caching, and
 cross-catalog Workspace composition.
+
+Amended by ADR-0012 only at the deployment boundary: cross-catalog Workspaces
+compose repository-local desired state, and foreign provider content may project
+only to Claude Code, Codex, and Pi targets. Historical discussion of global
+projections remains inventory evidence, not authority for new global installs.
 
 Two sub-decisions carry a qualified status and say so in their own sections:
 

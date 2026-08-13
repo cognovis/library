@@ -9,8 +9,8 @@ deciders:
   - Malte Sussdorff
 supersedes: []
 superseded_by: []
-amended_by: ["0010", "0011"]
-related_adrs: ["0002", "0010", "0011"]
+amended_by: ["0010", "0011", "0012"]
+related_adrs: ["0002", "0010", "0011", "0012"]
 ---
 
 # ADR-0003: Three-layer skill deployment + marketplace-symmetric primitives
@@ -49,6 +49,13 @@ Two elements are replaced:
 ADR-0011 additionally adds distribution-rights state, executable admission,
 fail-closed retention, and an operator-explicit purge on top of this ADR's
 retention policy. Migration grants no deletion authority.
+
+ADR-0012 removes the user-global artifact scope. The global lockfile and global
+skill/agent/standard projection examples below are retained as historical design
+and migration evidence only. Layer B may remain a user cache, but all normal
+Layer-C ownership and requested roots are project-local. The only global targets
+are the enumerated bootstrap product contract, which is not represented as a
+primitive scope.
 
 The title's "Harness Symlink" and the `upgrade`, `pin`, `edit`, `gc`, and `push`
 commands below record the 2026-05 design, not the released CLI. Canonical Layer-C
