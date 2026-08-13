@@ -31,6 +31,16 @@ assert LIBRARY_SPEC is not None and LIBRARY_SPEC.loader is not None
 LIBRARY_MODULE = importlib.util.module_from_spec(LIBRARY_SPEC)
 LIBRARY_SPEC.loader.exec_module(LIBRARY_MODULE)
 
+
+def init_git_project(project: Path) -> None:
+    """Initialize an intended lifecycle project as a Git top-level."""
+    subprocess.run(
+        ["git", "init", "--quiet", str(project)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
 # Minimal fixture library.yaml for tempdir tests
 FIXTURE_LIBRARY_YAML = """
 default_dirs:
@@ -216,6 +226,7 @@ def project_dir(
     """Create a minimal project directory with library.yaml pointing to local fixtures."""
     proj = tmp_path / "test-project"
     proj.mkdir()
+    init_git_project(proj)
 
     yaml_content = FIXTURE_LIBRARY_YAML.format(
         skill_source=str(fixture_skill_dir / "SKILL.md"),
@@ -230,6 +241,7 @@ def dry_run_contract_project(tmp_path: Path) -> Path:
     """Create a project with one local-source fixture for every installable primitive."""
     project = tmp_path / "dry-run-contract-project"
     project.mkdir()
+    init_git_project(project)
     hooks_dir = project / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "contract.py").write_text("print('contract hook')\n")
@@ -281,6 +293,7 @@ def agent_handlers_project(tmp_path: Path, agent_handler_fixture_dir: Path) -> P
     """Create a clean project that installs a fixture agent with handlers."""
     project = tmp_path / "agent-handlers-project"
     project.mkdir()
+    init_git_project(project)
     _write_agent_handler_project(
         project / "library.yaml",
         agent_handler_fixture_dir,
@@ -294,6 +307,7 @@ def cursor_project(tmp_path: Path) -> Path:
     """Project fixture for cursor harness skill install tests."""
     proj = tmp_path / "cursor-project"
     proj.mkdir()
+    init_git_project(proj)
     skill_dir = tmp_path / "cursor-test-skill"
     skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text(

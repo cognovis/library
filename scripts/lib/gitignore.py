@@ -14,7 +14,6 @@ from lib.errors import LibraryError
 BEGIN_MARKER = "# BEGIN Library-managed project installs"
 END_MARKER = "# END Library-managed project installs"
 LOCK_ARTIFACTS = (
-    ".library.lock",
     ".library.lock.lock",
     ".library.lock.workspace-lock",
 )

@@ -54,18 +54,18 @@ Two lockfile instances exist, sharing the same schema:
 
 ```
 <project-root>/
-├── .library.lock       ← local per-project materialization manifest
+├── .library.lock       ← committed desired-state and materialization manifest
 ├── library.yaml
 ├── .agents/
 │   └── skills/
 └── ...
 ```
 
-`.library.lock` is a local materialization manifest. Successful project-scoped
-`library use` and top-level `library sync` runs include it, its write-lock
-sidecar, and its Workspace lock sidecar in the Library-managed `.gitignore`
-block. Reproducible shared intent belongs in `library.yaml` and Workspace roots;
-generated install receipts and local concurrency state do not belong in Git.
+`.library.lock` is the committed repository desired-state and materialization
+manifest. Successful project-scoped `library use` and top-level `library sync`
+runs keep it visible to Git while adding only its transient write-lock sidecar
+and Workspace lock sidecar to the Library-managed `.gitignore` block. Generated
+receipt targets and local concurrency state do not belong in Git.
 This managed-ignore lifecycle requires `schema_version: 2` and reads only
 project-owned `receipts[].targets[].path`. Its Git top-level, project root,
 lockfile root, and `.gitignore` root are identical. This restriction does not

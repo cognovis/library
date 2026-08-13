@@ -338,6 +338,7 @@ mcp_servers:
 @pytest.fixture
 def project_dir(tmp_path):
     """Create a minimal project directory with all fixtures."""
+    run_git("init", cwd=tmp_path)
     # Create fixture files
     agent_dir = tmp_path / "fixture-agent"
     agent_dir.mkdir()

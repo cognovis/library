@@ -25,11 +25,12 @@ harness bridges, and lockfile writes; do not reproduce those steps manually.
 4. Inspect `.library.lock` and the reported canonical and bridge targets.
 
 For a successful project-scoped install, Library also reconciles a marked block
-in the project `.gitignore`. The block contains the Library lock artifacts and
-the repository-relative targets recorded by project-owned v2 receipts in the
-current `.library.lock`. It does not consult the deprecated `installed`
-projection for this block. Global, absolute, malformed, and escaping targets
-are rejected or excluded before mutation.
+in the project `.gitignore`. Commit `.library.lock` as repository desired state;
+the block contains only its transient `.library.lock.lock` and
+`.library.lock.workspace-lock` sidecars plus the repository-relative targets
+recorded by project-owned v2 receipts. It does not consult the deprecated
+`installed` projection for this block. Global, absolute, malformed, and
+escaping targets are rejected or excluded before mutation.
 Subsequent `use` and top-level `sync` runs replace this block, so stale managed
 entries disappear without changing user-authored ignore rules.
 

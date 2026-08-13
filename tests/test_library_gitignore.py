@@ -500,7 +500,6 @@ def test_use_writes_project_targets_and_bridge_symlinks_only(tmp_path: Path) -> 
     assert result.returncode == 0, result.stderr
     use_payload = json.loads(result.stdout)
     assert use_payload["gitignore"]["managed_paths"] == [
-        ".library.lock",
         ".library.lock.lock",
         ".library.lock.workspace-lock",
         ".agents/skills/impeccable",
@@ -530,7 +529,6 @@ def test_use_writes_project_targets_and_bridge_symlinks_only(tmp_path: Path) -> 
 
     outcome = reconcile_project_gitignore(repo)
     assert outcome["managed_paths"] == [
-        ".library.lock",
         ".library.lock.lock",
         ".library.lock.workspace-lock",
         ".agents/skills/impeccable",
@@ -565,16 +563,22 @@ def test_sync_writes_lock_artifacts_and_current_project_targets(tmp_path: Path) 
     assert result.returncode == 0
     payload = json.loads(result.stdout)
     assert payload["gitignore"]["managed_paths"] == [
-        ".library.lock",
         ".library.lock.lock",
         ".library.lock.workspace-lock",
         ".agents/skills/current/",
     ]
-    assert _managed_block(repo).splitlines()[1:4] == [
-        "/.library.lock",
+    assert _managed_block(repo).splitlines()[1:3] == [
         "/.library.lock.lock",
         "/.library.lock.workspace-lock",
     ]
+    assert "/.library.lock\n" not in _managed_block(repo)
+    ignored_lockfile = subprocess.run(
+        ["git", "-C", str(repo), "check-ignore", "--quiet", ".library.lock"],
+        check=False,
+    )
+    assert ignored_lockfile.returncode == 1
+    _git(repo, "add", ".library.lock")
+    assert ".library.lock" in _git(repo, "ls-files").stdout.splitlines()
 
 
 def test_reconcile_preserves_user_content_and_prunes_stale_entries(

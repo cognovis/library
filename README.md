@@ -66,9 +66,11 @@ ADR-0010 and ADR-0011.
 | `library/cognovis-pi` | Pi extensions, profiles, and project-native bridge modules |
 
 A consumer repository registers only the primitives and Workspaces it needs.
-Library-generated project installs and lock artifacts stay local through the
-CLI-managed `.gitignore` block. Marketplace repositories keep authored source
-primitives at top level and ignore their generated install targets.
+The committed `.library.lock` records repository desired state. Library-generated
+project installs and the transient `.library.lock.lock` and
+`.library.lock.workspace-lock` sidecars stay local through the CLI-managed
+`.gitignore` block. Marketplace repositories keep authored source primitives at
+top level and ignore their generated install targets.
 For this lifecycle, the Git top-level, project root, `.library.lock` root, and
 `.gitignore` root are one directory. An explicit `--project` must name that Git
 top-level exactly; linked worktrees are valid independent top-levels.
