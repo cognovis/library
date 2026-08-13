@@ -665,6 +665,7 @@ class TestDryRunContractUniformity:
     ):
         project = tmp_path / "missing-handler-project"
         project.mkdir()
+        init_git_project(project)
         _write_agent_handler_project(
             project / "library.yaml",
             agent_handler_fixture_dir,
@@ -701,6 +702,7 @@ class TestDryRunContractUniformity:
     ):
         project = tmp_path / "traversal-handler-project"
         project.mkdir()
+        init_git_project(project)
         source_dir = tmp_path / "agent-source"
         source_dir.mkdir()
         (source_dir / "handler-agent.md").write_text(
@@ -1053,6 +1055,7 @@ class TestDryRunContractUniformity:
 
         project = tmp_path / "handler-change-project"
         project.mkdir()
+        init_git_project(project)
         _write_agent_handler_project(
             project / "library.yaml",
             source_dir,
@@ -1130,17 +1133,16 @@ class TestDryRunContractUniformity:
         assert agent_dirs["global_opencode"] == "~/.opencode/agents/"
 
     @pytest.mark.parametrize(
-        ("scope", "expected"),
+        "scope",
         [
-            ("project", ".opencode/agents"),
-            ("global", str(Path.home() / ".opencode" / "agents")),
+            "project",
+            "global",
         ],
     )
     def test_opencode_agent_base_uses_opencode_default_dirs(
         self,
         dry_run_contract_project: Path,
         scope: str,
-        expected: str,
     ):
         from lib.installers.agent import _resolve_agent_base
 
@@ -1156,9 +1158,9 @@ class TestDryRunContractUniformity:
         )
 
         if scope == "project":
-            assert base == dry_run_contract_project / expected
+            assert base == dry_run_contract_project / ".opencode" / "agents"
         else:
-            assert base == Path(expected)
+            assert base == Path.home() / ".opencode" / "agents"
 
     def test_opencode_agent_real_install_and_remove_avoid_claude_artifacts(
         self,
@@ -1516,6 +1518,7 @@ class TestDryRunContractUniformity:
         with tempfile.TemporaryDirectory() as tmpdir:
             proj = Path(tmpdir) / "smoke-project"
             proj.mkdir()
+            init_git_project(proj)
             skill_src = Path(tmpdir) / "smoke-skill"
             skill_src.mkdir()
             (skill_src / "SKILL.md").write_text(
@@ -2302,6 +2305,7 @@ library:
         """Dry-run JSON should expose the resolved clone URL and source path."""
         project = tmp_path / "project"
         project.mkdir()
+        init_git_project(project)
         (project / "library.yaml").write_text(self._catalog_yaml())
 
         result = subprocess.run(
@@ -2830,6 +2834,7 @@ class TestSimpleFileDirectoryEntrypoint:
 
         project = tmp_path / "project"
         project.mkdir()
+        init_git_project(project)
         (project / "library.yaml").write_text(
             f"""
 default_dirs:
