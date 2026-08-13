@@ -3,9 +3,9 @@
 ## What This Is
 
 A harness is the project-local configuration surface that lets agentic coding tools
-work consistently in a repository. Examples include Claude Code's `.claude/`,
-Codex CLI's `.codex/`, Cursor's `.cursor/`, and the shared `.agents/` tree used
-by the library platform.
+work consistently in a repository. The supported Library projections are Claude
+Code's `.claude/`, Codex CLI's `.codex/`, Pi project paths, and the shared
+`.agents/` tree used by the library platform.
 
 Collaboration projects need a committed baseline so another developer can clone
 the repository and get the same rules, agents, commands, standards, and safe
@@ -16,14 +16,17 @@ A Library Workspace selects reusable Library-owned parts of that baseline. It
 does not replace repository-owned `AGENTS.md`, permissions, product instructions,
 customer facts, or runtime configuration. A repository may register several
 orthogonal Workspaces; their union is recorded through one project lockfile.
+Under ADR-0012, Library projections are generated project-local targets: their
+receipt paths are maintained in CL-1les's marker-delimited `.gitignore` block and
+are not committed. Repository-authored primitives without Library receipts remain
+ordinary source and may be committed in the same parent directories.
 
 ## Baseline Checklist
 
 ### Library desired state
 
-The table describes the lockfile v2 target accepted in ADR-0010. Until
-`CL-r7n6` lands, `.library.lock` remains the released v1 additive installed list
-and no Workspace command is available.
+The table describes the implemented lockfile v2 target accepted in ADR-0010 and
+restricted to repository-local desired state by ADR-0012.
 
 **MUST be committed when the project uses Library-managed primitives:**
 
@@ -33,7 +36,8 @@ and no Workspace command is available.
 
 Workspace manifests themselves remain versioned catalog content and are not
 copied into the consumer repository. A clone restores the selected roots through
-`library workspace sync --all --scope project` or conservative `library sync`.
+`library workspace sync --all --scope project` or conservative `library sync`;
+`--scope project` is compatibility syntax under ADR-0012.
 The project may add direct primitive roots that intentionally survive Workspace
 changes.
 
@@ -60,11 +64,11 @@ changes.
 | .claude/anatomy.json | Generated runtime state | `.claude/anatomy.json` |
 | .claude/buglog.json | Generated runtime log | `.claude/buglog.json` |
 
-**OPTIONAL but useful:**
+**OPTIONAL but useful when repository-owned:**
 
 | File/Dir | Purpose |
 |---|---|
-| .claude/skills/ | Repository-owned Claude skills; receipt-owned Library projections are generated content |
+| .claude/skills/ | Repository-authored Claude skills; Library-generated bridges are ignored from their authoritative receipt paths |
 | .claude/doc-config.yml | Documentation routing config |
 | .claude/uat-config.yml | UAT test configuration |
 | .claude/scenario-config.yml | Scenario-based testing config |
@@ -76,22 +80,15 @@ changes.
 | File/Dir | Purpose |
 |---|---|
 | .agents/standards/ | Domain-specific standards shared across harnesses |
-| .agents/skills/ | Repository-owned cross-harness skills authored and committed by the project |
+| .agents/skills/ | Repository-authored skills only; Library-installed receipt targets are generated and gitignored |
 | .agents/orchestrator-config.yml | Orchestrator routing configuration (project-local). The **global** fallback `~/.agents/orchestrator-config.yml` is self-healed on every `cld`/`cdx` launch from the canonical catalog source (`bin/lib/orchestrator-config-sync.zsh`), so it never silently drifts. |
-
-Library projections and repository-owned primitives can coexist below the same
-harness directory. A project-scoped schema-v2 receipt owns only its exact
-`receipts[].targets[].path` destinations. `library use` and `library sync` add
-those generated destinations to the Library-managed `.gitignore` block;
-unreceipted repository-owned siblings remain visible to Git and should be
-committed. Do not ignore `.agents/skills/`, `.claude/skills/`, or another whole
-harness directory merely because it contains a Library projection.
 
 **MUST NOT be committed:**
 
 | File/Dir | Reason | .gitignore pattern |
 |---|---|---|
 | .agents/skills/*/cache/ | Generated cache directories | `.agents/skills/*/cache/` |
+| Library receipt targets under supported harness paths | Generated projections restored from committed `.library.lock` | Exact paths in the CL-1les marker-delimited managed block |
 
 ### .codex/ (Codex CLI)
 
@@ -115,37 +112,15 @@ Codex stores credentials user-global in `~/.codex/auth.json`. There is no docume
 project-local secret file for Codex today — no gitignore entries required for credentials.
 
 
-### .cursor/ (Cursor)
-
-**MUST be committed when used:**
-
-| File/Dir | Purpose | Notes |
-|---|---|---|
-| .cursor/skills/ | Cursor skill bridge symlinks | `/library skill use --harness cursor` creates `.cursor/skills/<name>/` pointing at `.agents/skills/<name>/` |
-| .cursor/rules/ | Cursor rules generated from skill `always_apply` or `globs` | Materialized as `.cursor/rules/<name>.mdc` |
-
-**MUST NOT be committed:**
-
-| File/Dir | Reason | .gitignore pattern |
-|---|---|---|
-| .cursor/settings.local.json | May contain credentials or machine-local overrides | `.cursor/settings.local.json` |
-
-Cursor **MCP servers** are managed by the library installer: `/library mcp use
-<name> --harness cursor` (or the default `--harness all`) writes the server into
-the global `~/.cursor/mcp.json` under the standard `mcpServers` map, tagged with
-`_origin` for idempotent re-install and clean `--remove`. The generic MCP
-installer also supports Antigravity-compatible registrations in
-`~/.gemini/config/mcp_config.json`; individual products may intentionally omit
-that harness. Cursor **agent and guardrail** projection remain unmanaged today;
-requests for those primitives with `--harness cursor` fail with a compatibility
-message before target writes.
-
 ## Project-Local vs User-Global Separation
 
-**Project-local** (`.claude/`, `.agents/`, `.codex/`, `.cursor/`) is anything
+**Project-local** (`.claude/`, `.agents/`, `.codex/`, and Pi project paths) is anything
 the whole team needs to collaborate effectively.
 
-- Rules, agents, commands, standards, and credentials-free permissions are committed.
+- Repository-authored rules, agents, commands, standards, and credentials-free
+  permissions are committed.
+- Library-generated projections are restored from `.library.lock` and ignored at
+  their exact receipt paths; parent harness directories are not ignored wholesale.
 - Ephemeral state and secret-bearing overrides are gitignored.
 
 **User-global** (`~/.claude/`, `~/.agents/`, `~/.codex/`) is personal,
@@ -227,8 +202,6 @@ Add these harness-specific patterns to your project's `.gitignore`:
 # Cross-harness skills cache
 .agents/skills/*/cache/
 
-# Cursor harness - secret-bearing local settings
-.cursor/settings.local.json
 ```
 
 ## Generalizing Beyond .claude/
@@ -239,13 +212,13 @@ The same principles apply to all harnesses:
 |---|---|---|---|
 | Claude Code | `.claude/` | `CLAUDE.md` + `settings.json` | `settings.local.json` |
 | Codex CLI | `.codex/` | `AGENTS.md` (symlink to `~/.agents/AGENTS.md`) | no documented project-local secret file; credentials in `~/.codex/auth.json` |
-| Cursor | `.cursor/` | `.cursorrules` / `CURSOR.md` | `.cursor/settings.local.json` |
 | Cross-harness | `.agents/` | `AGENTS.md` (shared) | - |
+| Pi | project-native paths owned with `cognovis-pi` | project instructions | product-specific |
 
-As harnesses mature, the library distribution system (`library <primitive> use`) installs
-into both project-local and user-global paths automatically. Keeping the
-project-local directories committed and secrets-free ensures the install state is
-reproducible for the whole team.
+The Library distribution system (`library <primitive> use`) installs only to the
+current project. Keeping `.library.lock` committed, repository-authored harness
+content tracked, and exact generated receipt targets ignored makes the install
+state reproducible for the whole team without committing generated projections.
 
 In the target CLI contract, primitive operations use
 `library <primitive> use <name>`. Workspace operations add composition and

@@ -13,6 +13,7 @@
 | 0009 | [git-hook-chain-existing-composition.md](git-hook-chain-existing-composition.md) | Accepted | Existing git-hook chain composition contract |
 | 0010 | [workspace-desired-state-reconciliation.md](workspace-desired-state-reconciliation.md) | Accepted | Universal ownership and Workspace desired state |
 | 0011 | [heterogeneous-marketplace-workspaces.md](heterogeneous-marketplace-workspaces.md) | Accepted | Heterogeneous marketplace Workspaces |
+| 0012 | [project-local-library-environments.md](project-local-library-environments.md) | Accepted | Repository-local desired state and explicit global bootstrap; amends 0002, 0003, 0010, and 0011 |
 | — | [library-yaml-information-model.md](library-yaml-information-model.md) | Accepted | Catalog section ownership; amended by 0010 |
 | — | [per-harness-agent-base-files.md](per-harness-agent-base-files.md) | Accepted | Harness-specific base prompt files |
 
