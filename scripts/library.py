@@ -7640,6 +7640,16 @@ def main(argv: list[str] | None = None) -> int:
             catalog_root = _resolve_catalog_root()
             repo_root = _strict_project_git_root(args)
             catalog = load_catalog(catalog_root)
+            init_catalog_args = argparse.Namespace(
+                reference="cognovis-base",
+                verb="use",
+            )
+            catalog = _select_workspace_catalog(
+                init_catalog_args,
+                repo_root=repo_root,
+                catalog_root=catalog_root,
+                catalog=catalog,
+            )
             try:
                 from lib.workspace import resolve_workspace
 
