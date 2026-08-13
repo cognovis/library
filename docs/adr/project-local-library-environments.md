@@ -25,7 +25,9 @@ force.
 
 Implementation is tracked by CL-rm8o. Fleet migration and publication of
 `cognovis-base` are tracked separately by CL-l022. CL-1les is a prerequisite for
-the managed-Gitignore part of `library init` and `library status`.
+the managed-Gitignore part of `library init` and `library status`. The normative
+consumer baseline is updated in `docs/harness-baseline.md`; Library-generated
+receipt targets are ignored while repository-authored primitives remain tracked.
 
 ## Context
 
