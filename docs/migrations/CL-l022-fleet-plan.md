@@ -88,6 +88,34 @@ repository commit SHA. A healthy result covers supported Claude Code, Codex,
 and applicable Pi projections; unsupported harness targets are not migration
 evidence.
 
+## Executed fleet receipts
+
+The first migration pass produced the following repository-local commits. Each
+lock retains its pre-existing requested roots and adds `cognovis-base`; a clean
+baseline closure contains `library`, `cognovis-beads`, `inject-standards`, and
+`ob-cli`. These commits are consumer evidence only after their repository-owned
+delivery boundary has published them.
+
+| Git root | Commit | Baseline receipt |
+| --- | --- | --- |
+| `/Users/malte/code/library/meta` | current CL-l022 platform delivery commit | Existing `library-authoring` and `python-cli` roots retained; `cognovis-base` added. |
+| `/Users/malte/code/library/cognovis-core` | `8c7aec70a8839e06689773fc91df6b270c330476` | Four baseline Skills; historical `.library.lock` ignore removed. |
+| `/Users/malte/code/library/sussdorff-core` | `b9d8d3cc5b8b13bfe7d4601fe63701a9f75d6888` | Four baseline Skills; first committed project lock. |
+| `/Users/malte/code/library/cognovis-pi` | `24c6bef146c865de7538350b80d83cbc42506b0b` | Existing `library-authoring` root retained; four baseline Skills added. |
+| `/Users/malte/code/open-brain` | `d271631767fcc0970bdea6a36e8b2f081f11c2b2` | Four baseline Skills; 2,183 non-integration tests passed during commit. |
+| `/Users/malte/code/polaris` | `e115ed0aba0a05a6cc9f0ed7f6789e6f1f7ae8aa` | Four baseline Skills; historical `.library.lock` ignore removed. |
+
+The rollout exposed and repaired two platform defects before fleet-wide use:
+the root-level Library Skill is now explicitly installed as a single-file
+bundle instead of copying the full platform repository, and fixed `library
+init` resolves `cognovis-base` from the packaged tool catalog when the target
+repository owns a different `library.yaml`.
+
+Global Skill projections remain in place until all six commits are published
+and their Workspace catalog pins resolve from those published sources. Removal
+then targets only the 28 global Skill receipts and their recorded harness
+bridges; it never deletes a Skill entry or source from a catalog.
+
 ## Residual decisions
 
 1. Review repository-specific additions after each initialization; historical
