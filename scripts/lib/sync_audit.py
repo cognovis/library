@@ -643,7 +643,7 @@ def cmd_audit_impl(
         # Upstream-drift check: did the catalog source move beyond what's pinned
         # in the lockfile? This is independent of local-tamper drift.
         entry_type = entry.get("type", "")
-        catalog_provenance = _classify_catalog_provenance(
+        catalog_provenance = classify_catalog_provenance(
             entry,
             catalog,
             scope,
@@ -767,7 +767,7 @@ def _catalog_entry_for(entry: dict, catalog: dict) -> dict | None:
     return None
 
 
-def _classify_catalog_provenance(
+def classify_catalog_provenance(
     entry: dict[str, Any],
     catalog: dict[str, Any],
     scope: str,

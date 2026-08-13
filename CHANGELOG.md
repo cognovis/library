@@ -37,6 +37,8 @@
 
 ### Fixed
 
+- *(CL-il5i, sync)* Top-level `library sync` now skips installed entries that their producing catalog deliberately removed, reports the exact explicit removal command, and continues refreshing current entries. Dry-run uses the same `orphaned` classification, so removed catalog entries are no longer advertised as refreshable and cannot fail an otherwise valid propagation run.
+
 - *(CL-1f36, lockfile)* A bulk `library agent sync --scope global` no longer
   corrupts `~/.config/library/global.lock` when a second Library process writes
   it. Both lockfiles were rewritten through a truncating `open(path, "w")` after

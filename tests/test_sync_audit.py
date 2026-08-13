@@ -926,6 +926,103 @@ class TestTopLevelSync:
             "skill:skill-unchanged"
         ]
 
+    @pytest.mark.parametrize("dry_run", [True, False])
+    def test_sync_all_skips_same_catalog_orphan_and_continues(
+        self, tmp_path, capsys, monkeypatch, dry_run
+    ):
+        """A removed catalog entry must not block refreshes still in the catalog."""
+        import argparse
+        import library as library_cli
+
+        catalog_identity = "https://github.com/example/catalog"
+        entries = [
+            {
+                "name": "removed-script",
+                "type": "script",
+                "source": "https://github.com/example/catalog/blob/main/removed.py",
+                "source_commit": "1" * 40,
+                "catalog_identity": catalog_identity,
+            },
+            {
+                "name": "current-script",
+                "type": "script",
+                "source": "https://github.com/example/catalog/blob/main/current.py",
+                "source_commit": "1" * 40,
+                "catalog_identity": catalog_identity,
+            },
+        ]
+        (tmp_path / ".library.lock").write_text(
+            yaml.safe_dump({"installed": entries}), encoding="utf-8"
+        )
+        catalog = {
+            "catalog_identity": catalog_identity,
+            "library": {
+                "scripts": [
+                    {
+                        "name": "current-script",
+                        "source": entries[1]["source"],
+                    }
+                ]
+            },
+        }
+        monkeypatch.setattr(
+            library_cli,
+            "cmd_status_impl",
+            lambda **_kwargs: {
+                "status": "ok",
+                "overall": "behind",
+                "entries": [
+                    {
+                        "name": entry["name"],
+                        "primitive": entry["type"],
+                        "upstream_status": "behind",
+                        "remote_sha": "2" * 40,
+                    }
+                    for entry in entries
+                ],
+            },
+        )
+        monkeypatch.setattr(
+            library_cli, "_entry_source_path_changed", lambda **_kwargs: True
+        )
+        refreshed = []
+
+        def fake_reinstall(_catalog, entry, *_args):
+            if entry["name"] == "removed-script":
+                raise AssertionError("orphaned entry reached reinstall")
+            refreshed.append(f"{entry['type']}:{entry['name']}")
+
+        monkeypatch.setattr(library_cli, "reinstall_entry", fake_reinstall)
+        monkeypatch.setattr(
+            library_cli,
+            "_reconcile_project_gitignore",
+            lambda *_args, **_kwargs: {"status": "unchanged"},
+        )
+        args = argparse.Namespace(
+            json=True,
+            dry_run=dry_run,
+            force=False,
+            scope="project",
+            harness="all",
+            untrack=False,
+        )
+
+        rc = library_cli.cmd_sync_all(args, tmp_path, catalog)
+
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert refreshed == ([] if dry_run else ["script:current-script"])
+        assert data["refreshed"] == ["script:current-script"]
+        assert data["skipped_by_status"]["orphaned"] == [
+            "script:removed-script"
+        ]
+        assert data["orphaned_skipped"] == 1
+        assert data["failed"] == []
+        assert data["warnings"] == [
+            "skipped orphaned entry script:removed-script; remove it with "
+            "`library script remove removed-script --scope project`"
+        ]
+
     def test_regression_sync_refreshes_stale_supervised_runtime(
         self, tmp_path, capsys, monkeypatch
     ):
