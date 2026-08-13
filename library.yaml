@@ -460,6 +460,7 @@ library:
           source_catalog: library-platform
           inventory: convention-scan
           plane: dev
+          skill_bundle: file
       tags:
         - origin:original
         - tier:core

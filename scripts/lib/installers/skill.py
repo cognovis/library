@@ -193,14 +193,20 @@ def install_skill(
         return result
 
     # 5. Fetch source and get commit SHA
-    source_dir, source_commit, temp_root = _fetch_source_dir(parsed, skill_name)
+    library_metadata = entry.get("metadata", {}).get("library", {})
+    file_bundle = library_metadata.get("skill_bundle") == "file"
+    source_dir, source_commit, temp_root = _fetch_source_dir(
+        parsed,
+        skill_name,
+        file_bundle=file_bundle,
+    )
 
     try:
         # Recompute cache_path with real commit SHA
         cache_path = compute_cache_path("skill", marketplace, skill_name, source_commit)
 
         # 5b. Materialize cache (Layer B)
-        materialize_cache(source_dir, cache_path)
+        materialize_cache(source_dir, cache_path, overwrite=file_bundle)
 
         # 6. Create canonical install (Layer C)
         materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
@@ -295,7 +301,10 @@ def _resolve_entry_source(catalog: dict, entry: dict) -> str:
 
 
 def _fetch_source_dir(
-    parsed: ParsedSource, skill_name: str
+    parsed: ParsedSource,
+    skill_name: str,
+    *,
+    file_bundle: bool = False,
 ) -> tuple[Path, str, Optional[Path]]:
     """Fetch the skill source directory.
 
@@ -311,6 +320,15 @@ def _fetch_source_dir(
             raise InstallError(
                 f"Local source path does not exist: {parsed.raw}"
             )
+        if file_bundle:
+            if not local.is_file():
+                raise InstallError(
+                    f"File-bundled skill source is not a file: {parsed.raw}"
+                )
+            temporary = Path(tempfile.mkdtemp(prefix="library-skill-file-"))
+            shutil.copy2(local, temporary / local.name)
+            commit = get_local_commit_sha(local)
+            return temporary, commit, temporary
         # The source is the SKILL.md file — we want the parent directory
         source_dir = local.parent if local.is_file() else local
         commit = get_local_commit_sha(source_dir)
@@ -349,6 +367,16 @@ def _fetch_source_dir(
                 raise InstallError(
                     f"Skill source path is not a file for blob/raw URL: {parsed.file_path}"
                 )
+            if file_bundle:
+                if not source_path.is_file():
+                    shutil.rmtree(str(tmp), ignore_errors=True)
+                    raise InstallError(
+                        f"File-bundled skill source is not a file: {parsed.raw}"
+                    )
+                bundle = tmp / ".library-file-bundle"
+                bundle.mkdir()
+                shutil.copy2(source_path, bundle / source_path.name)
+                return bundle, commit, tmp
             source_dir = source_path.parent if source_path.is_file() else source_path
             return source_dir, commit, tmp
 

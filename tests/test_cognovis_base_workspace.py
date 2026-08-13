@@ -178,6 +178,16 @@ def test_cognovis_base_publication_preserves_preexisting_catalog_skills() -> Non
     assert "library" in names
 
 
+def test_library_skill_uses_a_bounded_project_install_source() -> None:
+    catalog = load_catalog(REPO_ROOT)
+    entry = next(
+        skill for skill in catalog["library"]["skills"] if skill["name"] == "library"
+    )
+
+    assert entry["source"].endswith("/SKILL.md")
+    assert entry["metadata"]["library"]["skill_bundle"] == "file"
+
+
 def test_cognovis_base_refuses_when_the_production_pin_verifier_observes_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

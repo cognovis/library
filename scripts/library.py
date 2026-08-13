@@ -5926,7 +5926,14 @@ def _workspace_local_source(catalog: dict, entry: dict, primitive: str) -> Path 
         if not separator:
             return None
         source = Path(str(source_catalog["local_path"])).expanduser() / relative
-    if primitive == "skill" and source.is_file() and source.name.lower() == "skill.md":
+    library_metadata = entry.get("metadata", {}).get("library", {})
+    file_bundle = library_metadata.get("skill_bundle") == "file"
+    if (
+        primitive == "skill"
+        and source.is_file()
+        and source.name.lower() == "skill.md"
+        and not file_bundle
+    ):
         return source.parent
     return source if source.exists() else None
 
