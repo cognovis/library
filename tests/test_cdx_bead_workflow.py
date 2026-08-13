@@ -953,47 +953,55 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
     assert "trigger-flash" not in prompt
 
 
-@pytest.mark.parametrize(
-    ("args", "execution_mode"),
-    [
-        (["-b", "CL-smoke", "--exec"], "auto"),
-        (["-bq", "CL-smoke"], "quick"),
-    ],
-)
-def test_cdx_bead_modes_run_skill_in_current_session_with_degraded_opus_reviews(
+def test_regression_cl_f0hw_standard_bead_uses_current_session_review_loop(
     tmp_path: Path,
-    args: list[str],
-    execution_mode: str,
 ) -> None:
     result, _argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
         tmp_path,
-        args,
+        ["-b", "CL-smoke", "--exec"],
     )
 
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
-    assert "bead-implementation-loop" in prompt
-    assert f"execution mode `{execution_mode}`" in prompt
-    assert "current Codex session" in prompt
-    assert "Do not delegate implementation or repairs to a subagent" in prompt
-    assert "acpx-dispatch" in prompt
-    assert "Opus" in prompt
-    assert "Review 1 is adversarial" in prompt
-    assert "review 2 is critical" in prompt
-    assert "reviews 3 through 5 are normal" in prompt
-    assert "only low-severity findings or nits remain" in prompt
-    assert "five Opus reviews total" in prompt
-    for retired_orchestration_term in (
-        "bead-loop-implementer",
+    for required_contract_term in (
+        "execution mode `auto`",
+        "sole implementation and delivery owner",
+        "Do not invoke bead-implementation-loop",
+        "at most seven sequential Opus review rounds",
+        "Review 1: adversarial review",
+        "Review 2: critical review",
+        "Reviews 3 through 7: normal full-candidate reviews",
+        "above `low` or `nit`",
+        "latest review contains no actionable findings above `low` or `nit`",
+        "exactly once",
+    ):
+        assert required_contract_term in prompt
+    for forbidden_contract_term in (
+        "using the installed bead-implementation-loop skill",
+        "reviews 3 through 5 are normal",
+        "five Opus reviews total",
         "agent_session_start",
         "agent_session_continue",
         "mcp__beads__",
         "--bead-backend mcp",
     ):
-        assert retired_orchestration_term not in prompt
-    if execution_mode == "quick":
-        assert "unconditional explicit Quick" in prompt
+        assert forbidden_contract_term not in prompt
+
+
+def test_cdx_quick_bead_keeps_existing_current_session_contract(tmp_path: Path) -> None:
+    result, _argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = _run_cdx_launcher(
+        tmp_path,
+        ["-bq", "CL-smoke"],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "execution mode `quick`" in prompt
+    assert "current Codex session" in prompt
+    assert "Do not delegate implementation or repairs to a subagent" in prompt
+    assert "unconditional explicit Quick" in prompt
 
 
 def test_cdx_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
