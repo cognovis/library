@@ -1,11 +1,9 @@
 """Recorded distribution rights for the ADR-0011 reference providers.
 
 This module is **data, not policy**. It transcribes ADR-0011
-`Resolved rights for the reference providers` — which is itself backed by
-`docs/research/external-marketplace-reference-matrix.md` — so that the recorded
-state of a real provider can be asserted rather than constructed in a test
-fixture. The composition rules live in `providers.rights` and name no provider
-at all.
+`Resolved rights for the reference providers` so that the recorded state of a
+real provider can be asserted rather than constructed in a test fixture. The
+composition rules live in `providers.rights` and name no provider at all.
 
 It sits beside the provider adapters for the same reason they do: naming a
 provider is legitimate at the adapter boundary and nowhere else. The
@@ -64,8 +62,7 @@ _SUBSCRIBER_EVIDENCE = (
 )
 
 _NO_GRANT_LOCATED = (
-    "no published licence or redistribution grant located, 2026-08-08 "
-    "(docs/research/external-marketplace-reference-matrix.md)"
+    "no published licence or redistribution grant located, 2026-08-08"
 )
 
 REFERENCE_PROVIDER_RIGHTS: Mapping[str, Rights] = {

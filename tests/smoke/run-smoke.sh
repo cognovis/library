@@ -54,7 +54,7 @@ section() {
 }
 
 # Single EXIT trap registered once at script start — cleans all tmpdirs
-trap 'rm -rf "${TMPDIRS[@]}"' EXIT
+trap 'rm -rf "${TMPDIRS[@]:-}"' EXIT
 
 # ---------------------------------------------------------------------------
 # Utility: make a temp dir, copy fixture, register cleanup
@@ -844,90 +844,20 @@ print_summary() {
 # ---------------------------------------------------------------------------
 # Standards smoke tests
 #
-# Validates the structural guarantees of the standards dependency model:
-#  1. Loader script exists
-#  2. Loader script is executable
-#  3. Loader resolves project-local over global
-#  4. Loader emits a warning for missing standards
-#  5. Adapter generation fails
-#  6. Standard install path does not mutate harness context files
-#  7. SessionStart drift hook files are absent
-#  8. Catalog does not register a standard drift guardrail
-#  9. PRIMITIVES.md documents requires_standards loading
-# 10. Loader still reads .agents/standards/<name>.md
+# Validates the structural guarantees of the standards dependency model.
 # ---------------------------------------------------------------------------
 smoke_standards() {
     section "standards"
 
-    local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
     local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
     local standard_installer="${REPO_ROOT}/scripts/lib/installers/standard.py"
     local library_yaml="${REPO_ROOT}/library.yaml"
     local drift_hook_dir="${REPO_ROOT}/hooks/standards""-drift-check"
 
-    # -----------------------------------------------------------------------
-    # CHECK 1: Loader script exists
-    # -----------------------------------------------------------------------
-    if [[ -f "${loader_script}" ]]; then
-        pass "standards/loader-script: scripts/standards-loader.sh exists"
+    if ! test -e "${REPO_ROOT}/scripts/standards-loader.sh"; then
+        pass "standards/legacy-loader-removed: standards-loader.sh is absent"
     else
-        fail "standards/loader-script: scripts/standards-loader.sh NOT found"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 2: Loader script is executable
-    # -----------------------------------------------------------------------
-    if [[ -x "${loader_script}" ]]; then
-        pass "standards/loader-executable: scripts/standards-loader.sh is executable"
-    else
-        fail "standards/loader-executable: scripts/standards-loader.sh is NOT executable"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 3: Loader implements project-local > global precedence
-    # -----------------------------------------------------------------------
-    if [[ -f "${loader_script}" ]]; then
-        if grep -q "project-local ALWAYS overrides global" "${loader_script}" 2>/dev/null; then
-            pass "standards/loader-precedence: loader script documents project-local precedence"
-        else
-            fail "standards/loader-precedence: loader script does NOT document project-local precedence"
-        fi
-    else
-        fail "standards/loader-precedence: loader script not found"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 4: Missing standard emits warning and exits successfully
-    # -----------------------------------------------------------------------
-    if [[ -f "${loader_script}" ]]; then
-        local missing_output
-        if missing_output="$("${loader_script}" --load "__missing_standard_for_smoke__" 2>&1 >/dev/null)"; then
-            if grep -q "WARNING" <<<"${missing_output}"; then
-                pass "standards/loader-warn-on-missing: loader warns and continues"
-            else
-                fail "standards/loader-warn-on-missing: loader did not print warning text"
-            fi
-        else
-            fail "standards/loader-warn-on-missing: loader exited nonzero for missing standard"
-        fi
-    else
-        fail "standards/loader-warn-on-missing: loader script not found"
-    fi
-
-    # -----------------------------------------------------------------------
-    # CHECK 5: Adapter generation fails
-    # -----------------------------------------------------------------------
-    if [[ -f "${loader_script}" ]]; then
-        local adapter_output
-        if adapter_output="$("${loader_script}" --generate-adapter 2>&1 >/dev/null)"; then
-            fail "standards/adapter-removed: adapter generation succeeded"
-        elif grep -q "adapter generation has been removed" <<<"${adapter_output}"; then
-            pass "standards/adapter-removed: adapter generation fails with removal message"
-        else
-            fail "standards/adapter-removed: adapter generation failed with unexpected message"
-        fi
-    else
-        fail "standards/adapter-removed: loader script not found"
+        fail "standards/legacy-loader-removed: standards-loader.sh still exists"
     fi
 
     # -----------------------------------------------------------------------
@@ -968,32 +898,21 @@ smoke_standards() {
     # -----------------------------------------------------------------------
     # CHECK 9: PRIMITIVES.md documents requires_standards loading
     # -----------------------------------------------------------------------
-    if [[ -f "${primitives_doc}" ]]; then
+    standard_doc="${REPO_ROOT}/docs/primitives/standard.md"
+    if [[ -f "${primitives_doc}" && -f "${standard_doc}" ]]; then
         if grep -q "requires_standards" "${primitives_doc}" 2>/dev/null \
-            && grep -q "Never auto-injected" "${primitives_doc}" 2>/dev/null; then
+            && grep -q "Never auto-injected" "${standard_doc}" 2>/dev/null; then
             pass "standards/primitives-updated: PRIMITIVES.md documents scoped standard loading"
         else
             fail "standards/primitives-updated: PRIMITIVES.md does NOT document scoped standard loading"
         fi
     else
-        fail "standards/primitives-updated: docs/PRIMITIVES.md NOT found"
+        fail "standards/primitives-updated: primitive documentation not found"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 10: Loader reads from .agents/standards/
-    # -----------------------------------------------------------------------
-    if [[ -f "${loader_script}" ]]; then
-        if grep -q '\.agents/standards' "${loader_script}" 2>/dev/null; then
-            pass "standards/loader-path: loader reads from .agents/standards/"
-        else
-            fail "standards/loader-path: loader does NOT reference .agents/standards/"
-        fi
-    else
-        fail "standards/loader-path: loader script not found"
-    fi
-
     echo "  NOTE  standards/runtime: End-to-end requires_standards loading requires a live consuming primitive."
-    echo "        Structural checks above confirm the removed adapter path fails closed."
+    echo "        Structural checks above confirm the retired loader and drift adapter paths stay absent."
 }
 
 # ---------------------------------------------------------------------------
@@ -1003,16 +922,14 @@ smoke_standards() {
 #  2. ~/.agents/standards/ contains at least 60 standards files
 #  3. Required core standards are present in ~/.agents/standards/
 #  4. Each present standard has valid YAML frontmatter (name, version, description)
-#  5. standards-loader.sh --load resolves core standards from ~/.agents/standards/
-#  6. At least one SKILL.md in claude-code-plugins has requires_standards: frontmatter
-#  7. inject-subagent-standards.py is absent
+#  5. At least one SKILL.md in claude-code-plugins has requires_standards: frontmatter
+#  6. inject-subagent-standards.py is absent
 # ---------------------------------------------------------------------------
 smoke_migration() {
     section "migration"
 
     local global_standards_dir="${HOME}/.agents/standards"
     local ccp_skills_root="${HOME}/code/claude-code-plugins"
-    local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
 
     # -----------------------------------------------------------------------
     # CHECK 1: ~/.agents/standards/ directory exists
@@ -1088,28 +1005,6 @@ smoke_migration() {
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 5: Loader resolves core standards from ~/.agents/standards/
-    # -----------------------------------------------------------------------
-    if [[ -f "${loader_script}" ]]; then
-        local loaded_content
-        if loaded_content="$(bash "${loader_script}" --load english-only 2>/dev/null)" && \
-           echo "${loaded_content}" | grep -q "English"; then
-            pass "migration/loader-resolves-english-only: loader resolves english-only from ~/.agents/standards/"
-        else
-            fail "migration/loader-resolves-english-only: loader failed to resolve english-only standard"
-        fi
-
-        if loaded_content="$(bash "${loader_script}" --load tool-standards 2>/dev/null)" && \
-           echo "${loaded_content}" | grep -q "tool\|Tool"; then
-            pass "migration/loader-resolves-tool-standards: loader resolves tool-standards from ~/.agents/standards/"
-        else
-            fail "migration/loader-resolves-tool-standards: loader failed to resolve tool-standards"
-        fi
-    else
-        fail "migration/loader-resolves-standards: loader script not found at ${loader_script}"
-    fi
-
-    # -----------------------------------------------------------------------
     # CHECK 6: SKILL.md files in claude-code-plugins have requires_standards:
     # Note: This check requires ~/code/claude-code-plugins to be cloned locally.
     # It fails (not skips) if the directory is missing — the smoke_migration harness
@@ -1151,9 +1046,8 @@ smoke_migration() {
 #  3. cognovis-base.md is retained as a dependency alias
 #  4. model-standards directory exists with at least 2 .md files
 #  5. Each model-standard has YAML frontmatter
-#  6. standards-loader.sh supports --load-model-standard operation
-#  7. PRIMITIVES.md cross-references standards-loader and model-standards path
-#  8. agents-format-mapping.md documents agent_base and model_standards fields
+#  6. compose-agent.py owns model-standard resolution
+#  7. PRIMITIVES.md documents model-standards and composition
 # ---------------------------------------------------------------------------
 smoke_agent_bases() {
     section "agent-bases"
@@ -1171,9 +1065,8 @@ smoke_agent_bases() {
         model_standards_dir="${sibling_model_standards_dir}"
     fi
     local cognovis_base="${agent_bases_dir}/cognovis-base.md"
-    local loader_script="${REPO_ROOT}/scripts/standards-loader.sh"
+    local composer_script="${REPO_ROOT}/scripts/compose-agent.py"
     local primitives_doc="${REPO_ROOT}/docs/PRIMITIVES.md"
-    local format_mapping_doc="${REPO_ROOT}/docs/research/agents-format-mapping.md"
 
     # -----------------------------------------------------------------------
     # CHECK 1: per-harness agent base files exist
@@ -1281,25 +1174,25 @@ smoke_agent_bases() {
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 5: standards-loader.sh supports --load-model-standard
+    # CHECK 5: compose-agent.py owns model-standard resolution
     # -----------------------------------------------------------------------
-    if [[ -f "${loader_script}" ]]; then
-        if grep -q "load-model-standard\|model.standard\|model_standard" "${loader_script}" 2>/dev/null; then
-            pass "agent-bases/loader-model-standard: standards-loader.sh supports model-standard loading"
+    if [[ -f "${composer_script}" ]]; then
+        if grep -q "resolve_layer3" "${composer_script}" 2>/dev/null; then
+            pass "agent-bases/composer-model-standard: compose-agent.py resolves model standards"
         else
-            fail "agent-bases/loader-model-standard: standards-loader.sh does NOT support --load-model-standard"
+            fail "agent-bases/composer-model-standard: compose-agent.py lacks model-standard resolution"
         fi
     else
-        fail "agent-bases/loader-model-standard: standards-loader.sh not found"
+        fail "agent-bases/composer-model-standard: compose-agent.py not found"
     fi
 
     # -----------------------------------------------------------------------
-    # CHECK 6: PRIMITIVES.md §10 cross-references standards-loader and model-standards path
+    # CHECK 6: PRIMITIVES.md cross-references model-standards
     # -----------------------------------------------------------------------
     if [[ -f "${primitives_doc}" ]]; then
         local cross_ref_ok=true
-        if ! grep -q "standards-loader\|model-standards" "${primitives_doc}" 2>/dev/null; then
-            fail "agent-bases/primitives-model-standard: PRIMITIVES.md §10 does NOT cross-reference standards-loader or model-standards path"
+        if ! grep -q "model-standards" "${primitives_doc}" 2>/dev/null; then
+            fail "agent-bases/primitives-model-standard: PRIMITIVES.md does NOT cross-reference model-standards"
             cross_ref_ok=false
         fi
         if ! grep -q "three.layer\|three layer\|Layer 1\|Layer 2\|Layer 3\|composition" "${primitives_doc}" 2>/dev/null; then
@@ -1307,34 +1200,14 @@ smoke_agent_bases() {
             cross_ref_ok=false
         fi
         if [[ "${cross_ref_ok}" == "true" ]]; then
-            pass "agent-bases/primitives-model-standard: PRIMITIVES.md §10 references standards-loader and composition model"
+            pass "agent-bases/primitives-model-standard: PRIMITIVES.md references model-standards and composition"
         fi
     else
         fail "agent-bases/primitives-model-standard: docs/PRIMITIVES.md NOT found"
     fi
 
-    # -----------------------------------------------------------------------
-    # CHECK 7: agents-format-mapping.md documents new frontmatter fields
-    # -----------------------------------------------------------------------
-    if [[ -f "${format_mapping_doc}" ]]; then
-        local mapping_ok=true
-        if ! grep -q "agent_base\|agent-base" "${format_mapping_doc}" 2>/dev/null; then
-            fail "agent-bases/format-mapping-agent-base: agents-format-mapping.md does NOT document agent_base field"
-            mapping_ok=false
-        fi
-        if ! grep -q "model_standards\|model-standards" "${format_mapping_doc}" 2>/dev/null; then
-            fail "agent-bases/format-mapping-model-standards: agents-format-mapping.md does NOT document model_standards field"
-            mapping_ok=false
-        fi
-        if [[ "${mapping_ok}" == "true" ]]; then
-            pass "agent-bases/format-mapping: agents-format-mapping.md documents agent_base and model_standards fields"
-        fi
-    else
-        fail "agent-bases/format-mapping: docs/research/agents-format-mapping.md NOT found"
-    fi
-
     echo "  NOTE  agent-bases/runtime: End-to-end composition (install-time write to harness-native) requires a live library install session."
-    echo "        Structural checks above confirm the files, frontmatter, and loader support satisfy the composition contract."
+    echo "        Structural checks above confirm the files, frontmatter, and composer satisfy the composition contract."
 }
 
 # ---------------------------------------------------------------------------
@@ -1477,33 +1350,17 @@ smoke_fleet_migration() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# smoke_use_cookbook_path (CL-o16)
-#  Delegates to tests/smoke/use-agent-cookbook-path.sh for a self-contained
-#  end-to-end test of the /library use cookbook path (fetch -> compose -> write).
-#  That script exercises:
-#    1. Full fetch+compose produces cognovis-base marker in installed file
-#    2. Idempotent re-run: zero diff between run1 and run2
-#    3. Graceful degradation when Layer 1 is absent (warn + keep uncomposed)
-#    4. cookbook/use.md Step 6.5 wording unchanged (AK7 guard)
-# ---------------------------------------------------------------------------
+# Exercise the retained shell-level fetch, compose, and write path. The helper
+# intentionally excludes its obsolete cookbook wording guard.
 smoke_use_cookbook_path() {
     section "use-cookbook-path"
-
     local ext_script="${SCRIPT_DIR}/use-agent-cookbook-path.sh"
-    if [[ ! -f "${ext_script}" ]]; then
-        fail "use-cookbook-path/script-exists: use-agent-cookbook-path.sh not found at ${ext_script}"
-        return
-    fi
-
     local ext_rc=0
     bash "${ext_script}" || ext_rc=$?
-
     if [[ "${ext_rc}" -eq 0 ]]; then
-        pass "use-cookbook-path/all-tests: use-agent-cookbook-path.sh exited 0 (all checks passed)"
+        pass "use-cookbook-path/all-tests: shell-level compose path passed"
     else
-        fail "use-cookbook-path/all-tests: use-agent-cookbook-path.sh exited ${ext_rc} (one or more checks failed)"
-        OVERALL_EXIT=1
+        fail "use-cookbook-path/all-tests: shell-level compose path failed"
     fi
 }
 
@@ -1607,14 +1464,11 @@ main() {
         library-core)
             smoke_library_core
             ;;
-        use-cookbook-path)
-            smoke_use_cookbook_path
-            ;;
         all)
-            # Note: smoke_migration and smoke_fleet_migration are intentionally excluded from 'all'.
-            # They validate user-global state (~/.agents/standards/, ~/code/claude-code-plugins)
+            # Note: stateful migration and installed-agent-base checks are excluded from 'all'.
+            # They validate installed or user-global state outside this platform checkout
             # and would fail on clean CI/dev homes.
-            # Run explicitly: ./run-smoke.sh migration | ./run-smoke.sh fleet-migration
+            # Run explicitly when their external fixtures are available.
             smoke_claude_code
             smoke_codex
             smoke_pi
@@ -1622,12 +1476,11 @@ main() {
             smoke_name_collision
             smoke_lockfile
             smoke_standards
-            smoke_agent_bases
             smoke_use_cookbook_path
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|agent-bases|migration|fleet-migration|library-core|use-cookbook-path|all]"
+            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|agent-bases|migration|fleet-migration|library-core|all]"
             exit 1
             ;;
     esac

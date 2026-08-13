@@ -26,9 +26,7 @@ def test_dispatch_and_workspace_are_installable_skills() -> None:
         "skill:cmux-workspace",
         "skill:cognovis-beads",
     ]
-    assert dispatch["metadata"]["library"]["gascity"]["exportable"] is False
     assert dispatch["scripts"][0]["entrypoint"] is True
-    assert workspace["metadata"]["library"]["gascity"]["exportable"] is False
 
 
 def test_retired_runtime_entries_are_absent() -> None:

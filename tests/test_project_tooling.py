@@ -14,7 +14,7 @@ Tests:
   8.  conflict_policy enum accepts only valid values; rejects unknown
   9.  conditions language (dir_exists / file_exists / command_available / env_set) accepted
   10. fields section (json_field_enforce) validates correctly
-  11. Full beads-prime example validates cleanly
+  11. Full file-projection example validates cleanly
   12. Actual library.yaml with project_tooling section passes validator
   13. sync_project_tooling.py: file target sync works (integration test, temp dirs)
   14. sync_project_tooling.py: json_field_enforce ensure/remove works
@@ -110,8 +110,8 @@ def minimal_tooling_entry(**overrides) -> dict:
         "name": "test-entry",
         "description": "A test tooling entry",
         "target_kind": "file",
-        "target_path": ".beads/PRIME.md",
-        "source": "prime/PRIME.md",
+        "target_path": ".agents/policy.md",
+        "source": "project-tooling/policy.md",
     }
     entry.update(overrides)
     return entry
@@ -280,7 +280,7 @@ def test_file_target_requires_source():
         "name": "test-entry",
         "description": "A test tooling entry",
         "target_kind": "file",
-        "target_path": ".beads/PRIME.md",
+        "target_path": ".agents/policy.md",
         # source intentionally omitted
     }
     data = minimal_library({"project_tooling": [entry]})
@@ -418,37 +418,30 @@ def test_gitignore_patch_fields():
     print("PASS test_gitignore_patch_fields")
 
 
-def test_full_beads_prime_example():
-    """The full beads-prime entry from the bead description validates cleanly."""
+def test_full_file_projection_example():
+    """A complete project-tooling file projection validates cleanly."""
     schema = load_schema()
     data = minimal_library(
         {
             "project_tooling": [
                 {
-                    "name": "beads-prime",
-                    "description": (
-                        "bd workflow primer — auto-synced from cognovis-library at SessionStart. "
-                        "bd prime emits its content. Fleet policy, not per-project customization."
-                    ),
+                    "name": "policy-file",
+                    "description": "Project policy file managed by the Library runtime.",
                     "target_kind": "file",
-                    "target_path": ".beads/PRIME.md",
-                    "source": "prime/PRIME.md",
+                    "target_path": ".agents/POLICY.md",
+                    "source": "runtime-configs/POLICY.md",
                     "conditions": [
-                        {"dir_exists": ".beads"},
+                        {"dir_exists": ".agents"},
                     ],
                     "sync_strategy": "overwrite_if_source_newer",
                     "conflict_policy": "canonical_wins",
-                    "consumed_by": {
-                        "tool": "bd",
-                        "command": "bd prime",
-                    },
-                    "tags": ["beads", "fleet-policy"],
+                    "tags": ["policy", "fleet-policy"],
                 }
             ]
         }
     )
-    assert_valid(data, schema, "full beads-prime example")
-    print("PASS test_full_beads_prime_example")
+    assert_valid(data, schema, "full file-projection example")
+    print("PASS test_full_file_projection_example")
 
 
 def test_library_yaml_has_project_tooling():
@@ -504,8 +497,8 @@ def test_sync_runtime_file_target():
         project_root.mkdir()
 
         # Create source file in library
-        source_content = "# Fleet PRIME\nHello from fleet."
-        source_file = lib_root / "prime" / "PRIME.md"
+        source_content = "# Fleet policy\nHello from fleet."
+        source_file = lib_root / "project-tooling" / "policy.md"
         source_file.parent.mkdir(parents=True)
         source_file.write_text(source_content)
 
@@ -514,11 +507,11 @@ def test_sync_runtime_file_target():
 
         entries = [
             {
-                "name": "beads-prime",
-                "description": "Test prime entry",
+                "name": "fleet-policy",
+                "description": "Test policy entry",
                 "target_kind": "file",
-                "target_path": ".beads/PRIME.md",
-                "source": "prime/PRIME.md",
+                "target_path": ".agents/policy.md",
+                "source": "project-tooling/policy.md",
                 "conditions": [{"dir_exists": ".beads"}],
                 "sync_strategy": "overwrite_if_source_newer",
                 "conflict_policy": "canonical_wins",
@@ -530,7 +523,7 @@ def test_sync_runtime_file_target():
         )
         assert result["synced"] >= 1, f"Expected at least 1 synced entry, got: {result}"
 
-        target_file = project_root / ".beads" / "PRIME.md"
+        target_file = project_root / ".agents" / "policy.md"
         assert target_file.exists(), "Target file was not created"
         assert target_file.read_text() == source_content, (
             "Target content does not match source"
@@ -799,8 +792,8 @@ def test_sync_runtime_idempotent():
         project_root.mkdir()
 
         # Set up source
-        source_content = "# Fleet PRIME\nIdempotency check."
-        source_file = lib_root / "prime" / "PRIME.md"
+        source_content = "# Fleet policy\nIdempotency check."
+        source_file = lib_root / "project-tooling" / "policy.md"
         source_file.parent.mkdir(parents=True)
         source_file.write_text(source_content)
 
@@ -808,11 +801,11 @@ def test_sync_runtime_idempotent():
 
         entries = [
             {
-                "name": "beads-prime",
-                "description": "Test prime entry",
+                "name": "fleet-policy",
+                "description": "Test policy entry",
                 "target_kind": "file",
-                "target_path": ".beads/PRIME.md",
-                "source": "prime/PRIME.md",
+                "target_path": ".agents/policy.md",
+                "source": "project-tooling/policy.md",
                 "conditions": [{"dir_exists": ".beads"}],
                 "sync_strategy": "overwrite_if_source_newer",
                 "conflict_policy": "canonical_wins",
@@ -823,7 +816,7 @@ def test_sync_runtime_idempotent():
         result1 = sync.sync_entries(
             entries, library_root=lib_root, project_root=project_root
         )
-        target_file = project_root / ".beads" / "PRIME.md"
+        target_file = project_root / ".agents" / "policy.md"
         content_after_first = target_file.read_text()
 
         # Second run
@@ -1008,7 +1001,7 @@ ALL_TESTS = [
     test_project_tooling_profiles_field,
     test_git_hook_chain_existing_field,
     test_gitignore_patch_fields,
-    test_full_beads_prime_example,
+    test_full_file_projection_example,
     test_library_yaml_has_project_tooling,
     test_sync_runtime_file_target,
     test_sync_runtime_json_field_enforce,

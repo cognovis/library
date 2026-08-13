@@ -4,8 +4,7 @@ description: >-
   Create and review agents (subagents). Use when creating specialized AI
   assistants, reviewing/auditing existing agents, deciding between agent vs skill vs
   command, scaffolding judge agents, or asking about agent best practices, multi-agent pipelines, and model selection.
-  Also use when making agents Gas City-packable, choosing polecat vs crew semantics,
-  or separating provider-neutral core prompts from harness adapters.
+  Also use when separating provider-neutral core prompts from harness adapters.
   MUST BE USED when the user says "create agent", "new subagent", "review agent",
   "audit agent", "agent vs skill", or asks about multi-agent architecture.
 disableModelInvocation: true
@@ -47,12 +46,6 @@ If no criterion holds, do NOT proceed to Agent Creation Workflow — dispatch to
 | **C6** | Multi-phase stateful orchestration (>3 phases that must run in sequence) | "phase 1, then phase 2, then phase 3 with checkpoints", "session-close pipeline" |
 | **C7** | Pre-action gate that decides whether a proposed side effect may execute | "judge", "validator", "guardrail before tool call", "authorization check before action" |
 
-Gas City session shape is not a standalone agent justification. Only set
-`metadata.library.gascity.session_class` after C1-C7 already justify an agent.
-Use `polecat` for one-shot agent work, `crew` for persistent coordination or
-interactive sessions, and `none` when the primitive should export as a command,
-script, hook, formula, or overlay instead of an agent.
-
 **If no criterion holds**, output the following message and stop:
 
 ```
@@ -76,8 +69,7 @@ After C1-C7 justify an agent, classify source ownership and plane using
 | Repo-local escape hatch? | Keep agents local when prompts name product paths, private ADRs, local credentials, or one repo's topology. |
 | Harness support? | Ask whether the agent works in all harnesses or is harness-specific. For one-harness agents, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
 | Runtime requirements? | Ask whether the agent requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
-| Deterministic script route? | Move collection, parsing, polling, export, or validation logic into Python scripts; use `script-forge` if reusable or pack-exported. |
-| Gas City projection? | `polecat`/`crew` is metadata after agent justification and placement; it never justifies creating an agent by itself. |
+| Deterministic script route? | Move collection, parsing, polling, export, or validation logic into Python scripts; use `script-forge` if reusable. |
 
 Product-plane refusal message:
 
@@ -122,10 +114,8 @@ Define before writing any code:
 - Standalone or part of a pipeline?
 - Steward marketplace, plane, repo-local escape decision, and product counterpart
 - Harness support and runtime binary requirements for the catalog entry
-- Gas City session class if packable: `polecat` for one-shot work, `crew` for
-  persistent coordination/interactive sessions, or `none` if not exported as an agent
 - Provider-neutral core prompt? Keep Claude/Codex-specific details in harness adapters
-  or Gas City provider/agent config, not in the reusable prompt body.
+  or provider config, not in the reusable prompt body.
 
 Patterns: single-purpose, pipeline stage, orchestrator, meta-agent.
 Single responsibility keeps agents composable and token-efficient.
@@ -284,7 +274,7 @@ Validator policy:
 - Include decision criteria for judgment calls
 - Include a `## Tool Usage` section with WHEN/HOW per tool to reduce hallucinated tool choice
 - Do not embed deterministic shell/Python workflows in the prompt when bundled Python
-  scripts can do the work predictably. If the helper is reusable or pack-exported,
+  scripts can do the work predictably. If the helper is reusable,
   dispatch to `script-forge`.
 - For helper outputs with multiple fields or actionable failures, use the execution-result contract in `references/execution-result-contract.md`
 
@@ -315,10 +305,10 @@ and plugin-level. Consult your harness documentation for the exact directory nam
 
 Document usage examples, expected inputs, and when to use vs other agents.
 
-### Step 9: Library Packability Metadata
+### Step 9: Library Catalog Metadata
 
-When the agent should be installable through Library or exported into Gas City,
-print a `library.yaml` snippet with `metadata.library.gascity`.
+When the agent should be installable through Library, print a `library.yaml`
+snippet with ownership and portability metadata.
 
 ```yaml
 - name: <agent-name>
@@ -334,30 +324,13 @@ print a `library.yaml` snippet with `metadata.library.gascity`.
         name: <product-feature-or-agent>
         primitive_type: agent
         notes: <why this dev-plane agent supports the product surface>
-      gascity:
-        exportable: <true|false>
-        projections:
-          - target: agent
-            pack: <cognovis-base|cognovis-wave|cognovis-specs|...>
-            scope: <city|rig|provider|global>
-            session_class: <polecat|crew>
-            provider_neutral: true
-            requires:
-              binaries: [bd]
-              env: []
-              standards: []
 ```
 
 Rules:
-- `polecat` means bounded one-shot work: bead workers, reviewers, verifiers,
-  validators, doc updaters.
-- `crew` means persistent named session: mayor, wave lead, spec lead, release lead.
-- Provider defaults belong in Gas City `agent.toml`/provider config or harness
+- Provider defaults belong in provider config or harness
   adapters, not in the provider-neutral core prompt.
 - Bundled deterministic helpers must be Python scripts and declared in `scripts:`.
 - Omit `product_counterpart:` when there is no paired product-plane artifact.
-  Legacy `gascity.target`, `gascity.pack`, and `gascity.scope` may remain on
-  existing catalog entries, but new snippets should use `gascity.projections[]`.
 
 **After deployment:** Immediately run the Agent Review Workflow on the newly created agent
 to catch issues before the agent is used in production.

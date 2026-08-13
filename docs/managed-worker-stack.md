@@ -1,8 +1,8 @@
 # Managed Worker Stack — slot model and library mapping
 
 > Cross-cutting reference for how the cognovis library implements Nate Jones's
-> "managed worker" model. Reading order: this file → ADR-0003 in cognovis-core
-> → the five judge-layer standards. Last updated 2026-05-14.
+> "managed worker" model. Reading order: this file → the judge-layer architecture
+> ADR in cognovis-core → the five judge-layer standards.
 
 ## The Five-Slot Model
 
@@ -29,7 +29,7 @@ agent products are missing.
 
 | Slot | Target shape | Current library state | Direction |
 |------|--------------|------------------------|-----------|
-| **Orchestration** | Archon, GasCity, or Pi (runtime-agnostic adapter) | `bead-orchestrator` + cmux panes (throwaway, working) | Migrate, don't extend. The catalog is the durable asset; the runtime is rented. |
+| **Orchestration** | Current Bead execution loop with replaceable runtime adapters | Bead execution loop + cmux surfaces | Keep the catalog durable and runtime-specific projection replaceable. |
 | **Coordination** | beads / bd | `bd` — already correct | Keep. Validates against Nate's five structural tests (persistent state, defined verbs, ownership, permissions, history). |
 | **Judgment** | Generic judge + specialist judges, structured proposals, mandate-shaped authorization, paired evals | **Fully built** in cognovis-core/clc-oxg (2026-05-14): five judge-layer standards, `judge-default` agent, 24-case eval suite, Phase 4.5 orchestrator gate, deterministic+reasoned hybrid architecture. First consumer in `open-brain` (Memory-Write Judge). | Extend with specialist judges when prompt complexity justifies splitting (authorization, privacy, reversibility, quality, security). |
 | **Continuity** | OpenBrain with structured judgment on writes and retrieval contract on reads | OpenBrain at `~/code/open-brain`; Memory-Write Judge live; provenance-labeled metadata on every save. Read-time retrieval contract pending (`open-brain-ekn.4`). | Extend. The seven-question Retrieval Contract is the next durable shape. |
@@ -63,14 +63,12 @@ markdown plus Python types. None of it is coupled to bead-orchestrator's phase
 numbering or cmux's pane model.
 
 This is deliberate. The orchestration slot is the one Nate names as unowned,
-which means it will churn: Archon, GasCity, OpenClaw, Hermes, Pi, and whichever
+which means it will churn: OpenClaw, Hermes, Pi, and whichever
 runtime emerges as the Kubernetes-equivalent will compete on shape. Our bet is
 that the catalog survives whichever runtime wins. The bead-orchestrator is the
 current implementation, not the destination.
 
-**Migration discipline:** when an orchestrator candidate stabilizes (currently
-Archon as the open-source frontrunner, GasCity as Nate's named candidate, Pi as
-the lightweight fallback), the adapter pattern is:
+**Migration discipline:** when an orchestrator candidate stabilizes, the adapter pattern is:
 
 ```
 library/runtimes/<adapter-name>/
@@ -83,9 +81,6 @@ Build one adapter at a time, throwaway quality, with the same pilot. Pick the
 adapter that fights you least. Sunset bead-orchestrator only after the winning
 adapter is production-proven for 30+ days.
 
-See `cognovis-core/docs/research/gascity-migration-plan.md` and
-`cognovis-core/docs/research/gascity-vs-archon-orchestration-comparison.md` for
-the current adapter-evaluation work.
 
 ## Reading Order for Newcomers
 
@@ -101,14 +96,10 @@ the current adapter-evaluation work.
 5. **`open-brain/docs/features/memory-write-judge.md`** — how a real consumer
    implements the contracts (typed dataclasses, deterministic-first gate,
    integration with save_memory)
-6. **`cognovis-core/docs/research/judge-layer-thread-2026-05-14.md`** — the
-   research note: which Nate articles fed which decisions, the implementation
-   thread, quality trajectory across the review cycles
 
 ## Open Questions
 
-- **Which orchestrator wins?** Archon, GasCity, Pi, or something later. Adapter
-  pattern is the hedge. Decision deferred.
+- **Which later orchestrator wins?** The adapter pattern remains the hedge.
 - **Reasoned-gate hooks in OpenBrain.** The hybrid architecture supports a
   `reasoned_gate` callback that runs after deterministic ALLOW. No reasoned gate
   ships today; v1 is purely deterministic. The hook is documented but unwired.

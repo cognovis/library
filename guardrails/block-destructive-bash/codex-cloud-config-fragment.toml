@@ -29,7 +29,6 @@
 #
 # References:
 #   - https://github.com/openai/codex (Codex CLI config docs)
-#   - docs/research/guardrails-mapping.md
 #   - library.yaml guardrails[block-destructive-bash]
 #
 # INFERRED: approval_policy values confirmed from Codex CLI README at time of

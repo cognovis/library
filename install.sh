@@ -13,7 +13,7 @@
 # Safe to re-run. Idempotent.
 #
 # Post-install:
-#   - `library` works in any shell through ~/.local/bin/library.
+#   - `library`, `cld`, and `cdx` work through ~/.local/bin.
 #   - `/library <verb>` works in every present harness.
 #   - Updates: pull the canonical checkout, then re-run this installer.
 
@@ -69,6 +69,13 @@ case "$META_ROOT/" in
         echo "  warn  This checkout is a disposable worktree. Reinstall from the canonical checkout after delivery." ;;
 esac
 _link "$META_ROOT/bin/library" "$LOCAL_BIN/library"
+for launcher in cld cdx; do
+    if ! test -f "$META_ROOT/bin/$launcher"; then
+        echo "ERROR: required launcher is missing at $META_ROOT/bin/$launcher" >&2
+        exit 1
+    fi
+    _link "$META_ROOT/bin/$launcher" "$LOCAL_BIN/$launcher"
+done
 case ":${PATH}:" in
     *":${LOCAL_BIN}:"*) ;;
     *) echo "  warn  ${LOCAL_BIN} is not in \$PATH; add to ~/.zshrc:"
@@ -135,9 +142,8 @@ mkdir -p "$LIBRARY_HOME/skills" "$LIBRARY_HOME/agents" "$LIBRARY_HOME/prompts" "
 echo ""
 echo "Library cache home: $LIBRARY_HOME"
 
-# Record exact receipt-backed ownership for current bootstrap links. Historical
-# forge links are adopted only when they still point exactly at this checkout;
-# the bootstrap no longer creates them.
+# Record exact receipt-backed ownership for the bootstrap links. These receipts
+# are part of the removal and audit safety contract, not migration history.
 uv run --script "$META_ROOT/scripts/register-bootstrap-receipts.py" --meta-root "$META_ROOT"
 
 # --- Phase 4: summary ------------------------------------------------------
@@ -147,6 +153,7 @@ echo "Done."
 echo ""
 echo "Next steps:"
 echo "  - In any shell: library --help"
+echo "  - Launch Claude Code or Codex: cld / cdx"
 echo "  - In any harness: /library"
 echo "  - Optional forge skills belong in a project Workspace, not the global bootstrap"
 echo "  - To inspect available Skills: library skill list"

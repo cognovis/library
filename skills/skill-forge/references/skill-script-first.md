@@ -155,7 +155,7 @@ When creating a new skill or rewriting an existing one:
 
 The `skill-forge` skill dispatches validate-skill.py as part of its
 create and improve mode workflow — it runs the validator after every rewrite to confirm
-no EXTRACTABLE_CODE remains. If the helper is reusable across primitives or should
-be exported into a Gas City pack, scaffold it with `script-forge` and register it
+no EXTRACTABLE_CODE remains. If the helper is reusable across primitives, scaffold
+it with `script-forge` and register it
 under `library.scripts`; otherwise declare it as a bundled Python script in the
 owning primitive's catalog entry.

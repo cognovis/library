@@ -378,7 +378,7 @@ def _meta_static_violations(meta_literal: str) -> list[str]:
 
     Per standards/workflow/parameters.md the meta block MUST be a pure
     JSON-parseable literal — no functions, dynamic expressions, or template
-    literals — so a launcher (clw) can read it statically without executing the
+    literals — so an installer can read it statically without executing the
     spec. `node --check` only proves syntactic validity; this enforces the static
     contract. Scans string/comment-aware and flags, in the code region (outside
     strings/comments): a template-literal value (backtick), a parenthesis (call /

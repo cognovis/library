@@ -36,9 +36,9 @@ and which were root-level exceptions.
 | `skills` | `library.skills` | `library.skills` | primitive catalog | `scripts/lib/catalog.py`, installers, search, resolver |
 | `agents` | `library.agents` | `library.agents` | primitive catalog | `scripts/lib/catalog.py`, agent installer, resolver |
 | `prompts` | `library.prompts` | `library.prompts` | primitive catalog | `scripts/lib/catalog.py`, simple-file installer |
-| `scripts` | `library.scripts` | `library.scripts` | primitive catalog | `scripts/lib/catalog.py`, simple-file installer, Gas City validator |
+| `scripts` | `library.scripts` | `library.scripts` | primitive catalog | `scripts/lib/catalog.py`, simple-file installer, dependency resolver |
 | `standards` | `library.standards` | `library.standards` | primitive catalog | `scripts/lib/catalog.py`, standard installer, dependency resolver |
-| `guardrails` | root | `library.guardrails` | primitive catalog | guardrail installer, list/search, Gas City validator |
+| `guardrails` | root | `library.guardrails` | primitive catalog | guardrail installer, list/search, dependency resolver |
 | `mcp_servers` | root | `library.mcp_servers` | primitive catalog | MCP installer, list/search, resolver |
 | `model_standards` | root | `library.model_standards` | primitive catalog | simple-file installer, agent composer inputs |
 | `agent_bases` | n/a | `library.agent_bases` | primitive catalog | simple-file installer, agent composer inputs |

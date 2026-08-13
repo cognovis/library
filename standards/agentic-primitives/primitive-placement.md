@@ -1,6 +1,6 @@
 ---
 name: primitive-placement
-description: Placement rubric for Library primitives, product counterparts, repo-local overlays, deterministic scripts, and Gas City projections.
+description: Placement rubric for Library primitives, product counterparts, repo-local overlays, and deterministic scripts.
 tags:
   - origin:original
   - tier:core
@@ -12,14 +12,12 @@ tags:
 > Scope: Placement guidance for forge skills that already use
 > `agentic-primitives` to choose primitive type. This page classifies where a
 > primitive belongs before scaffolding: platform source, marketplace source,
-> repo-local overlay, product-plane feature, Gas City projection, or
-> deterministic script.
+> repo-local overlay, product-plane feature, or deterministic script.
 
-ADR-0005 in `docs/adr/library-plane-vocabulary.md` is the vocabulary anchor:
-library-platform is the dev-plane catalog and compiler, marketplaces are
-stewarded primitive sources, Gas City PackV2 is a runtime projection target,
-and product-plane runtime agents are product features rather than Library
-primitives.
+ADR-0005 in `docs/adr/library-plane-vocabulary.md` is the historical vocabulary
+anchor: library-platform is the dev-plane catalog and compiler, marketplaces
+are stewarded primitive sources, and product-plane runtime agents are product
+features rather than Library primitives.
 
 ## Placement Record
 
@@ -31,15 +29,11 @@ Every forge should be able to name these fields before writing files:
 | Plane | catalog value `dev`, or product-plane refusal | Library catalog entries are dev-plane primitives; product-plane artifacts are redirected to product repos. |
 | Product counterpart | `none` or `repo + path/name/primitive_type/notes` | Paired product work supported by a dev primitive. |
 | Repo-local escape | `none` or path plus ADR-heavy rationale | Reason a primitive remains inside a product repo overlay. |
-| Gas City projection | `none`, `overlay`, `asset`, `command`, `doctor`, `formula`, `agent`, or `script` | PackV2 output shape, not source ownership. |
-| Operational city | `global`, `city`, `rig`, or `provider` | Runtime scope where a projection is consumed. |
 | Deterministic script | `none`, `bundled`, or `first-class` | Repeatable Python logic that should not live in prompt prose. |
 
 Catalog metadata belongs under `metadata.library.*`; source files stay
 portable. Use `metadata.library.product_counterpart` for references to
-product-plane work. Migration-plan city names such as `cognovis-healthcare`
-and `cognovis-agentics` belong in projection targets, pack names, or notes as
-described by ADR-0005 and the migration plan, not in `scope`.
+product-plane work.
 
 ## Platform Boundary
 
@@ -58,7 +52,6 @@ ADRs, local credentials, or product paths.
 |---------|----------------|----------------|
 | Create a Claude/Codex helper that developers use while editing Mira | Dev-plane Library primitive or repo-local overlay | Continue if primitive type is correct. |
 | Create an agent that runs inside Mira for end users | Product-plane feature | Refuse Library primitive creation; create or reference a product repo bead instead. |
-| Expose this dev helper through Gas City PackV2 | Dev-plane source with runtime projection | Keep source in Library; add catalog projection metadata. |
 | Generate code that ships in Polaris runtime | Product-plane artifact | Keep in Polaris; Library may only reference a counterpart. |
 
 Product-plane refusal is not a rejection of the product work. It is a source of
@@ -106,8 +99,7 @@ helper.
 
 Repeatable parsing, scanning, validation, export, and transformation logic over
 roughly 50 lines belongs in Python script form. Use `script-forge` when the
-script is reusable across primitives or can project into a Gas City command,
-doctor, formula, or asset. Keep it bundled only when one owning primitive is
+script is reusable across primitives. Keep it bundled only when one owning primitive is
 the sole realistic consumer.
 
 ## Examples
@@ -118,7 +110,7 @@ the sole realistic consumer.
 | Mira `.agents/skills/mira-aidbox` | Repo-local dev-plane overlay | Depends on Mira paths, Polaris-owned Aidbox setup, and local deployment assumptions. Keep generalized FHIR/Aidbox facts in the Samurai marketplace skills. |
 | Mira `.claude/agents/aidbox-fhir` | Repo-local dev-plane overlay | Depends on Mira paths, Aidbox setup, and local workflow assumptions. Promote only generalized FHIR guidance. |
 | Mira runtime billing or patient agent | Product-plane feature | Create a Mira bead and implementation artifact; Library may host reviewer skills or standards that support it. |
-| FHIR terminology package validator | First-class Python script plus healthcare/FHIR standard | Deterministic checks can project to Gas City `doctor`; factual FHIR rules stay in standards. |
+| FHIR terminology package validator | First-class Python script plus healthcare/FHIR standard | Deterministic checks belong in the script; factual FHIR rules stay in standards. |
 | Gitleaks or destructive-command enforcement | Hook plus reusable Python script if shared | Non-bypassable lifecycle control is a hook; shared detection logic is a script. |
 
 ## Product Counterpart Metadata
@@ -135,14 +127,6 @@ metadata:
       name: billing-assistant
       primitive_type: agent
       notes: "Paired Mira bead: MIRA-123."
-    gascity:
-      exportable: true
-      projections:
-        - target: overlay
-          pack: cognovis-healthcare
-          scope: rig
-          session_class: none
-          provider_neutral: true
 ```
 
 If the requested artifact itself is under `product_counterpart.path`, it is not

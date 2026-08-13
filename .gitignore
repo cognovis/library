@@ -28,6 +28,7 @@ tests/__pycache__/
 **/__pycache__/
 .session-close.lock
 .session-close-state.json
+.session-close-state.json.owned-manifest
 
 # Library-installed primitives in this marketplace repo (source lives in top-level primitive dirs)
 # No trailing slash: a linked worktree gets these as overlay *symlinks*

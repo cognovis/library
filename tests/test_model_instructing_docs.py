@@ -119,12 +119,6 @@ class TestNoDocumentContradictsIt:
             f"inert: {offenders}"
         )
 
-    def test_the_reference_matrix_shows_the_new_state_for_foreign_skills(self):
-        body = _text(DOCS / "research" / "external-marketplace-reference-matrix.md")
-        assert "executable_admission: inert" not in body
-        assert "CL-lt51" in body
-
-
 class TestTheDocumentedVocabularyMatchesTheCode:
     def test_every_documented_type_is_actually_admission_required(self):
         from lib.providers.classification import (

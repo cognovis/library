@@ -556,8 +556,8 @@ nor prune a still-managed target. Removing a legacy mechanism requires verified
 equivalence, receipts, and no remaining consumer inventory; ADR-0010 does not
 reinterpret historical writes as Library ownership.
 
-The authoritative per-target dispositions and writer-disable gates are recorded
-in [Workspace legacy-writer inventory](../migration/workspace-legacy-inventory.md).
+The authoritative desired-state and writer-disable contract is recorded here;
+historical per-target audit evidence remains available in version history.
 
 The irreducible bootstrap writes verified adopted receipts for every Library
 path it materializes, including the engine and conversational entrypoint. It is

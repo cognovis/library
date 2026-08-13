@@ -94,7 +94,6 @@ the standard belongs.
 | Harness support? | Ask whether the standard works in all harnesses or is harness-specific. For one-harness standards, set `metadata.library.harness_support.<harness>: supported` and mark the others `not-supported`. |
 | Runtime requirements? | Ask whether the standard requires external binaries such as `bun`, `rg`, `sushi`, or `shellcheck`; declare them under `runtime_requirements.binaries` when needed. |
 | Deterministic script route? | Parsing, validation, export, or transformation logic belongs in `script-forge`; standards may state the factual rules the script checks. |
-| Gas City projection? | Gas City projection metadata describes generated PackV2 output only; it does not make Gas City the source owner. Use `metadata.library.gascity.projections[]` when exporting. |
 
 Product-plane refusal block:
 
@@ -261,7 +260,7 @@ remains pure context. Scripts are called from outside: by hooks (rules) or by
 skills (domains).
 
 All standard scripts must be Python. If the script should be reused
-independently or exported into a Gas City command/doctor/formula surface,
+independently,
 scaffold it with `script-forge` and register it under `library.scripts`.
 
 Output contract: scripts with multiple distinguishable failure modes follow the
@@ -323,23 +322,6 @@ Field guidance:
 | `default_scope` | `ask` (prompt the user on `/library standard use`), `global` (install user-globally without prompting) | `global` is reserved for tier `global` |
 | `source` | `blob` URL to entry file for **single-entry** standards; `tree` URL to the folder for **folder-form-with-siblings** | Mismatch causes the installer to drop sibling files |
 
-**Optional: Gas City export.** Only add this block when the standard should be
-materialized into a Gas City pack:
-
-```yaml
-  metadata:
-    library:
-      plane: dev
-      gascity:
-        exportable: true
-        projections:
-          - target: overlay
-            pack: <pack-name>
-            scope: <city|rig|provider|global>
-            session_class: none
-            provider_neutral: true
-```
-
 If the standard supports paired product documentation, add a pointer without
 moving product documentation into Library:
 
@@ -355,8 +337,7 @@ moving product documentation into Library:
         notes: <why this dev-plane standard supports the product surface>
 ```
 
-Omit `metadata:` entirely when the standard has neither a Gas City projection
-nor a product counterpart. Most standards have neither.
+Omit `metadata:` entirely when the standard has no product counterpart.
 
 Do **not** create a `_triggers.yml` file for folder-form standards. The
 delivery contract is `library.standards:` catalog registration plus explicit
@@ -384,24 +365,22 @@ Or alongside existing standards:
 Run this gate before closeout when creating, changing, promoting, or demoting a
 standard that may be installed in downstream project repos.
 
-- Check `consumer-projects.yml` for consumers of the standard or its workflow
+- Check registered Workspaces for consumers of the standard or its workflow
   bundle.
 - If the standard is listed, run a consumer updater dry-run:
 
 ```bash
-python3 scripts/update-consumers.py --json
-python3 scripts/update-consumers.py --consumer <name> --json
+library workspace status --all --scope project
 ```
 
 - If the dry-run reports planned changes, either run
-  `python3 scripts/update-consumers.py --consumer <name> --apply --json` and
+  `library workspace sync --all --scope project --apply` and
   finish the target repo commit, or file/follow a consumer propagation bead.
-- If the standard is not listed in `consumer-projects.yml`, state that no
+- If the standard is not present in a registered Workspace, state that no
   managed consumer update is required.
 
-The updater is a release propagation check, not standard authoring logic. Do
-not copy project-local `.agents/standards/**` files by hand when the consumer is
-configured for updater-managed sync.
+Workspace reconciliation is a release propagation check, not standard authoring
+logic. Do not copy project-local `.agents/standards/**` files by hand.
 
 ## Promotion / Demotion
 
@@ -460,7 +439,6 @@ Read the standard file and evaluate each rule:
 | **Catalog `tier`** | One of `core`, `domain`, or `global` | Missing or unrecognized value |
 | **Catalog `default_scope`** | One of `ask` or `global` | Missing or unrecognized value |
 | **Dependency reachability** | Consumers use `requires_standards: [<id>]`; no `_triggers.yml` needed | Standard relies on keyword auto-injection |
-| **Gas City metadata (optional)** | If present, `metadata.library.gascity.exportable` is boolean and `target`/`pack`/`scope` are set | Half-filled metadata block |
 | **Scripts (optional)** | Any scripts are Python `.py` files and declared in catalog `scripts:` when bundled | Shell scripts or undeclared reusable helpers |
 
 ### Output Format
@@ -485,7 +463,6 @@ Status: PASS | WARN | FAIL
 | Catalog tier | PASS | `tier: domain` |
 | Catalog default_scope | PASS | `default_scope: ask` |
 | Dependency reachability | PASS | Load via `requires_standards: [<id>]` |
-| Gas City metadata | n/a | Not exportable |
 
 Recommendations:
 - <actionable fix for each FAIL/WARN>
@@ -518,4 +495,3 @@ or "domain and rule and maturity" wording when the v2 contract says otherwise.
 - Add or require `_triggers.yml` for folder-form standards — use catalog entries and `requires_standards:` instead.
 - Use imperative language ("Run this command", "Execute step 3") in standard content.
 - Embed workflow logic in `scripts/` — scripts are deterministic enforcement/tooling, not model-invoked workflow (that is a skill).
-- Add `metadata.library.gascity:` blocks unless the standard is genuinely Gas City-packable. Half-filled metadata is worse than none.

@@ -53,8 +53,8 @@ Workspace support and lockfile schema v2 are available through the `library`
 CLI. Ordinary lifecycle operations remain additive and non-pruning; physical
 deletion requires the explicit, provenance-bound Workspace prune flow.
 
-The evidence-backed initial Workspace cuts and repository mapping live in the
-[Workspace Portfolio Audit](docs/research/workspace-portfolio-audit.md).
+The current Workspace architecture and repository mapping are defined by
+ADR-0010 and ADR-0011.
 
 ## Repository roles
 
@@ -139,8 +139,8 @@ or global baselines. Existing parallel mechanisms are transitional:
 - the ADR-0002 hand-maintained capability list becomes a deliberately small
   global `engineering-lobby` Workspace; only the Library engine and its chat
   entrypoint remain in the irreducible pre-Workspace bootstrap;
-- `consumer-projects.yml` and `scripts/update-consumers.py` retire after each
-  consumer owns equivalent direct or Workspace roots; and
+- legacy consumer manifests and updater scripts have retired in favor of
+  direct or Workspace roots; and
 - `project_tooling` accepts no new capability-distribution responsibilities.
 
 Legacy targets remain protected external ownership until their replacement has
@@ -155,13 +155,11 @@ Canonical harness launchers live in `bin/`:
 |----------|---------|
 | `bin/cld` | Claude Code |
 | `bin/cdx` | Codex CLI |
-| `bin/agr` | Antigravity |
-| `bin/cra` | Cursor Agent |
 
 Install them with:
 
 ```bash
-bash scripts/install-bin.sh
+bash install.sh
 ```
 
 Launcher architecture and Beads routing are documented in
@@ -181,8 +179,6 @@ Launcher architecture and Beads routing are documented in
   transition.
 - [Harness baseline](docs/harness-baseline.md) — what collaboration repositories
   commit locally.
-- [Workspace Portfolio Audit](docs/research/workspace-portfolio-audit.md) — observed
-  repository families and recommended Workspace cuts.
 
 ## Design principles
 
