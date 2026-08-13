@@ -16,11 +16,13 @@ fails and names the file, instead of the damage surfacing months later as a vagu
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 
 import pytest
 
 REAL_GLOBAL_LOCKFILE = Path.home() / ".config" / "library" / "global.lock"
+REAL_MODEL_STANDARDS = Path.home() / ".agents" / "model-standards"
 
 
 def _fingerprint(path: Path) -> str | None:
@@ -32,16 +34,32 @@ def _fingerprint(path: Path) -> str | None:
 
 
 @pytest.fixture(autouse=True, scope="session")
-def operator_library_state_is_read_only() -> None:
-    """Fail the run if the suite mutated the operator's real global lockfile."""
+def operator_library_state_is_read_only(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Isolate global state and fail if the operator lockfile changes."""
     before = _fingerprint(REAL_GLOBAL_LOCKFILE)
-    yield
-    after = _fingerprint(REAL_GLOBAL_LOCKFILE)
-    if before != after:
-        pytest.fail(
-            f"The test suite modified {REAL_GLOBAL_LOCKFILE}. Tests must never "
-            "write to the operator's real library state. A global-scope install "
-            "in a test needs its HOME isolated *and* a lockfile path that is "
-            "resolved at call time (see lib.lockfile._global_lockfile_path).",
-            pytrace=False,
-        )
+    isolated_home = tmp_path_factory.mktemp("library-test-home")
+    original_environment = {
+        name: os.environ.get(name)
+        for name in ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "MODEL_STANDARDS_DIR")
+    }
+    os.environ["HOME"] = str(isolated_home)
+    os.environ["XDG_CONFIG_HOME"] = str(isolated_home / ".config")
+    os.environ["XDG_DATA_HOME"] = str(isolated_home / ".local" / "share")
+    os.environ["MODEL_STANDARDS_DIR"] = str(REAL_MODEL_STANDARDS)
+    try:
+        yield
+    finally:
+        for name, value in original_environment.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        after = _fingerprint(REAL_GLOBAL_LOCKFILE)
+        if before != after:
+            pytest.fail(
+                f"The test suite modified {REAL_GLOBAL_LOCKFILE}. Tests must never "
+                "write to the operator's real library state. A global-scope install "
+                "in a test needs its HOME isolated *and* a lockfile path that is "
+                "resolved at call time (see lib.lockfile._global_lockfile_path).",
+                pytrace=False,
+            )

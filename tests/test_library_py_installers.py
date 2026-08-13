@@ -41,6 +41,7 @@ def init_git_project(project: Path) -> None:
         text=True,
     )
 
+
 # Minimal fixture library.yaml for tempdir tests
 FIXTURE_LIBRARY_YAML = """
 default_dirs:
@@ -350,6 +351,7 @@ def harness_support_project(
     """Create a project with unsupported Codex entries across primitive types."""
     proj = tmp_path / "harness-support-project"
     proj.mkdir()
+    init_git_project(proj)
     prompt_file = tmp_path / "unsupported-prompt.md"
     prompt_file.write_text("# Unsupported Prompt\n")
     script_file = tmp_path / "unsupported-script.py"
@@ -418,6 +420,7 @@ def runtime_requirements_project(tmp_path: Path) -> Path:
     """Create a project with runtime requirement fixtures and dependency edges."""
     project = tmp_path / "runtime-requirements-project"
     project.mkdir()
+    init_git_project(project)
     sources = tmp_path / "runtime-sources"
     sources.mkdir()
 
@@ -588,6 +591,7 @@ class TestDryRunContractUniformity:
         """
         target_project = tmp_path / "explicit-target-project"
         target_project.mkdir()
+        init_git_project(target_project)
 
         result = subprocess.run(
             [
@@ -2136,6 +2140,7 @@ class TestSkillDryRun:
         """Running the CLI from a normal project should use the CLI catalog and target cwd."""
         target_project = tmp_path / "external-project"
         target_project.mkdir()
+        init_git_project(target_project)
 
         result = subprocess.run(
             [
@@ -2164,6 +2169,7 @@ class TestSkillDryRun:
         """--target-project should decouple the install target from the catalog cwd."""
         target_project = tmp_path / "explicit-target"
         target_project.mkdir()
+        init_git_project(target_project)
 
         result = subprocess.run(
             [
