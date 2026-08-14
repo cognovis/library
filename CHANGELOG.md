@@ -37,6 +37,12 @@
 
 ### Fixed
 
+- *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
+  revision and read the implementation loop, execution loop, and loop-owner agent
+  directly from that source. The canonical developer checkout wins over an older
+  installed catalog clone, stale home-scoped projections no longer define bead
+  behavior, and launcher prompts no longer duplicate reviewer ordering or rounds.
+
 - *(CL-il5i, sync)* Top-level `library sync` now skips installed entries that their producing catalog deliberately removed, reports the exact explicit removal command, and continues refreshing current entries. Dry-run uses the same `orphaned` classification, so removed catalog entries are no longer advertised as refreshable and cannot fail an otherwise valid propagation run.
 
 - *(CL-1f36, lockfile)* A bulk `library agent sync --scope global` no longer

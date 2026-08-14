@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,12 +24,45 @@ _SAFE_BEAD_CODEX_ARGS = [
     'approval_policy="never"',
 ]
 _READONLY_BEAD_CODEX_ARGS = ["--sandbox", "read-only"]
+_SYSTEM_GIT = shutil.which("git")
 
 
 def _write_launcher_executable(path: Path, content: str) -> Path:
     path.write_text(content, encoding="utf-8")
     path.chmod(0o755)
     return path
+
+
+def _write_core_authority(tmp_path: Path) -> Path:
+    assert _SYSTEM_GIT is not None
+    root = tmp_path / "cognovis-core-authority"
+    required = (
+        "skills/bead-implementation-loop/SKILL.md",
+        "skills/bead-execution-loop/SKILL.md",
+        "agents/bead-loop-implementer.md",
+    )
+    for relative in required:
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"current authority: {relative}\n", encoding="utf-8")
+    subprocess.run([_SYSTEM_GIT, "init", "-q", root], check=True)
+    subprocess.run([_SYSTEM_GIT, "-C", root, "add", "."], check=True)
+    subprocess.run(
+        [
+            _SYSTEM_GIT,
+            "-C",
+            root,
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
+            "test authority",
+        ],
+        check=True,
+    )
+    return root
 
 
 def _write_codex_capture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
@@ -230,6 +264,10 @@ def _run_cdx_launcher(
         _write_launcher_uv_mock(tmp_path)
     home = tmp_path / "home"
     home.mkdir()
+    stale_skill = home / ".agents" / "skills" / "bead-implementation-loop" / "SKILL.md"
+    stale_skill.parent.mkdir(parents=True)
+    stale_skill.write_text("stale home projection\n", encoding="utf-8")
+    authority_root = _write_core_authority(tmp_path)
     if with_bead_reviewer_skill:
         skill_path = home / ".agents" / "skills" / "bead-reviewer" / "SKILL.md"
         skill_path.parent.mkdir(parents=True)
@@ -252,6 +290,8 @@ def _run_cdx_launcher(
     env["CDX_WORKTREE_ROOT"] = str(tmp_path / "worktrees")
     env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(compact_context_script)
     env["CLD_COMPACT_OUTPUT"] = "0"
+    env["COGNOVIS_CORE_AUTHORITY_ROOT"] = str(authority_root)
+    env["BEAD_LOOP_AUTHORITY_GIT_BIN"] = str(_SYSTEM_GIT)
     if bead_payload is not None:
         env["BD_PAYLOAD_JSON"] = json.dumps(bead_payload)
     if env_overrides:
@@ -1011,11 +1051,18 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
+    expected_revision = subprocess.run(
+        [_SYSTEM_GIT, "-C", tmp_path / "cognovis-core-authority", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert f"Git revision {expected_revision}" in prompt
     assert "Coordinator callback" not in prompt
     assert "trigger-flash" not in prompt
 
 
-def test_standard_bead_uses_installed_loop_with_current_session_ownership(
+def test_regression_cdx_bead_uses_current_core_authority_with_current_session_ownership(
     tmp_path: Path,
 ) -> None:
     result, _argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = (
@@ -1028,20 +1075,32 @@ def test_standard_bead_uses_installed_loop_with_current_session_ownership(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
+    expected_revision = subprocess.run(
+        [_SYSTEM_GIT, "-C", tmp_path / "cognovis-core-authority", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert f"Git revision {expected_revision}" in prompt
     for required_contract_term in (
         "execution mode `auto`",
-        "using the installed bead-implementation-loop skill",
+        "caller route `codex-owned`",
+        "cognovis-core-authority",
+        "skills/bead-implementation-loop/SKILL.md",
+        "skills/bead-execution-loop/SKILL.md",
+        "agents/bead-loop-implementer.md",
+        "revision-bound source files supersede same-named home-scoped projections",
         "This current Codex session owns implementation",
         "Do not delegate implementation or repairs to a subagent",
-        "Use the installed acpx-dispatch skill",
-        "Review 1 is adversarial, review 2 is critical",
-        "reviews 3 through 5 are normal",
-        "above low severity or nits",
-        "after five Opus reviews total",
         "persist the concise evidence-based capability plan",
     ):
         assert required_contract_term in prompt
     for forbidden_contract_term in (
+        "using the installed bead-implementation-loop skill",
+        "Review 1 is adversarial, review 2 is critical",
+        "reviews 3 through 5 are normal",
+        "after five Opus reviews total",
+        "stale home projection",
         "sole implementation and delivery owner",
         "Do not invoke bead-implementation-loop",
         "seven sequential Opus review rounds",
