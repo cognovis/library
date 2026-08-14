@@ -501,7 +501,9 @@ def test_use_writes_project_targets_and_bridge_symlinks_only(tmp_path: Path) -> 
     use_payload = json.loads(result.stdout)
     assert use_payload["gitignore"]["managed_paths"] == [
         ".library.lock.lock",
+        ".library.lock.workspace-journal.json",
         ".library.lock.workspace-lock",
+        ".library.lock.workspace-rollback",
         ".agents/skills/impeccable",
         ".agents/skills/impeccable/SKILL.md",
         ".claude/skills/impeccable",
@@ -530,7 +532,9 @@ def test_use_writes_project_targets_and_bridge_symlinks_only(tmp_path: Path) -> 
     outcome = reconcile_project_gitignore(repo)
     assert outcome["managed_paths"] == [
         ".library.lock.lock",
+        ".library.lock.workspace-journal.json",
         ".library.lock.workspace-lock",
+        ".library.lock.workspace-rollback",
         ".agents/skills/impeccable",
         ".agents/skills/impeccable/SKILL.md",
         ".claude/skills/impeccable",
@@ -564,12 +568,16 @@ def test_sync_writes_lock_artifacts_and_current_project_targets(tmp_path: Path) 
     payload = json.loads(result.stdout)
     assert payload["gitignore"]["managed_paths"] == [
         ".library.lock.lock",
+        ".library.lock.workspace-journal.json",
         ".library.lock.workspace-lock",
+        ".library.lock.workspace-rollback",
         ".agents/skills/current/",
     ]
-    assert _managed_block(repo).splitlines()[1:3] == [
+    assert _managed_block(repo).splitlines()[1:5] == [
         "/.library.lock.lock",
+        "/.library.lock.workspace-journal.json",
         "/.library.lock.workspace-lock",
+        "/.library.lock.workspace-rollback",
     ]
     assert "/.library.lock\n" not in _managed_block(repo)
     ignored_lockfile = subprocess.run(
@@ -579,6 +587,33 @@ def test_sync_writes_lock_artifacts_and_current_project_targets(tmp_path: Path) 
     assert ignored_lockfile.returncode == 1
     _git(repo, "add", ".library.lock")
     assert ".library.lock" in _git(repo, "ls-files").stdout.splitlines()
+
+
+def test_transaction_artifacts_remain_ignored_during_interrupted_recovery(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path / "repo")
+    _write_lock(repo, [])
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.gitignore import reconcile_project_gitignore
+
+    reconcile_project_gitignore(repo)
+    journal = repo / ".library.lock.workspace-journal.json"
+    rollback = repo / ".library.lock.workspace-rollback"
+    journal.write_text("{}\n", encoding="utf-8")
+    rollback.mkdir()
+    (rollback / "0").write_text("captured\n", encoding="utf-8")
+
+    for artifact in (
+        ".library.lock.workspace-journal.json",
+        ".library.lock.workspace-rollback/0",
+    ):
+        ignored = subprocess.run(
+            ["git", "-C", str(repo), "check-ignore", "--quiet", artifact],
+            check=False,
+        )
+        assert ignored.returncode == 0
+    assert "workspace" not in _git(repo, "status", "--short").stdout
 
 
 def test_reconcile_preserves_user_content_and_prunes_stale_entries(

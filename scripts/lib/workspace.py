@@ -2263,12 +2263,64 @@ def clear_workspace_journal(lock_path: Path) -> None:
     shutil.rmtree(workspace_rollback_path(lock_path), ignore_errors=True)
 
 
-def _restore_workspace_use(payload: dict[str, Any]) -> None:
-    """Restore the durable pre-state captured for an interrupted use."""
-    for item in reversed(payload.get("rollback") or []):
-        target = Path(str(item.get("target") or ""))
+def _validated_use_rollback(
+    lock_path: Path, repo_root: Path, payload: dict[str, Any]
+) -> list[tuple[Path, Path | None]]:
+    """Validate all recovery paths before returning a bounded rollback plan."""
+    root = repo_root.expanduser().resolve()
+    rollback_root = Path(
+        os.path.abspath(workspace_rollback_path(lock_path).expanduser())
+    )
+    state_targets = {
+        Path(os.path.abspath(lock_path.expanduser())),
+        root / ".gitignore",
+    }
+    managed_roots = tuple(
+        root / name for name in (".agents", ".claude", ".codex", ".cursor")
+    )
+    validated: list[tuple[Path, Path | None]] = []
+    seen: set[Path] = set()
+    for item in payload.get("rollback") or []:
+        if not isinstance(item, dict):
+            raise LibraryError("Workspace use journal rollback entry is invalid")
+        target = Path(
+            os.path.abspath(Path(str(item.get("target") or "")).expanduser())
+        )
+        if target in seen:
+            raise LibraryError("Workspace use journal contains duplicate rollback targets")
+        seen.add(target)
+        target_parent = target.parent.resolve()
+        bounded = target in state_targets or any(
+            target == managed_root or target.is_relative_to(managed_root)
+            for managed_root in managed_roots
+        )
+        parent_bounded = target_parent == root or target_parent.is_relative_to(root)
+        if not bounded or not parent_bounded:
+            raise LibraryError(
+                f"Workspace use journal rollback target is outside Library-managed roots: {target}"
+            )
         backup_value = item.get("backup")
-        backup = Path(str(backup_value)) if backup_value else None
+        backup = (
+            Path(os.path.abspath(Path(str(backup_value)).expanduser()))
+            if backup_value
+            else None
+        )
+        if backup is not None and (
+            backup.parent != rollback_root or not backup.name.isdecimal()
+        ):
+            raise LibraryError(
+                f"Workspace use journal backup is outside its transaction root: {backup}"
+            )
+        validated.append((target, backup))
+    return validated
+
+
+def _restore_workspace_use(
+    lock_path: Path, repo_root: Path, payload: dict[str, Any]
+) -> None:
+    """Restore the validated durable pre-state for an interrupted use."""
+    rollback = _validated_use_rollback(lock_path, repo_root, payload)
+    for target, backup in reversed(rollback):
         if target.is_symlink() or target.is_file():
             target.unlink()
         elif target.is_dir():
@@ -2318,7 +2370,7 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
         raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
     if payload.get("operation") != "prune":
         if payload.get("operation") == "use" and payload.get("rollback") is not None:
-            _restore_workspace_use(payload)
+            _restore_workspace_use(lock_path, repo_root, payload)
             clear_workspace_journal(lock_path)
             return []
         if payload.get("operation") in {"use", "adopt", "remove"}:

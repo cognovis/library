@@ -198,7 +198,9 @@ installed: []
     (tmp_path / ".gitignore").write_text(
         """# BEGIN Library-managed project installs
 /.library.lock.lock
+/.library.lock.workspace-journal.json
 /.library.lock.workspace-lock
+/.library.lock.workspace-rollback
 /.agents/skills/owned/SKILL.md
 /stale-generated-target
 # END Library-managed project installs
@@ -283,7 +285,9 @@ installed: []
     (tmp_path / ".gitignore").write_text(
         """# BEGIN Library-managed project installs
 /.library.lock.lock
+/.library.lock.workspace-journal.json
 /.library.lock.workspace-lock
+/.library.lock.workspace-rollback
 /.agents/skills/my\\#skill/SKILL.md
 # END Library-managed project installs
 """,

@@ -1715,7 +1715,6 @@ def test_next_use_recovers_an_interrupted_workspace_transaction(
     _write_fixture(project)
     monkeypatch.setenv("HOME", str(home))
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    from lib.catalog import load_catalog
     from lib.workspace import (
         recover_workspace_journal,
         workspace_rollback_path,
@@ -1754,6 +1753,99 @@ def test_next_use_recovers_an_interrupted_workspace_transaction(
     assert not (project / ".gitignore").exists()
     assert not (project / ".library.lock.workspace-journal.json").exists()
     assert not rollback_root.exists()
+
+
+def test_interrupted_use_refuses_a_tampered_outside_rollback_target(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("keep\n")
+    lock_path = project / ".library.lock"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [{"target": str(outside), "backup": None}],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="outside Library-managed roots"):
+        recover_workspace_journal(lock_path, project)
+
+    assert outside.read_text() == "keep\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_interrupted_use_refuses_a_traversing_rollback_target(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    protected = project / "protected.txt"
+    protected.write_text("keep\n")
+    lock_path = project / ".library.lock"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(project / ".agents" / ".." / "protected.txt"),
+                    "backup": None,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="outside Library-managed roots"):
+        recover_workspace_journal(lock_path, project)
+
+    assert protected.read_text() == "keep\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_interrupted_use_refuses_a_tampered_outside_backup_path(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    target = project / ".agents" / "skills" / "owned"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("current\n")
+    outside_backup = tmp_path / "outside-backup"
+    outside_backup.mkdir()
+    (outside_backup / "SKILL.md").write_text("tampered\n")
+    lock_path = project / ".library.lock"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {"target": str(target), "backup": str(outside_backup)}
+            ],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="outside its transaction root"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "current\n"
+    assert (outside_backup / "SKILL.md").read_text() == "tampered\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
 
 
 def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(
