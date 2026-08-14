@@ -1815,6 +1815,90 @@ def test_next_use_recovers_an_interrupted_workspace_transaction(
     assert not rollback_root.exists()
 
 
+def test_next_use_recovers_an_interruption_during_rollback_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    original_capture = module._workspace_capture_rollback
+
+    def interrupt_capture(rollback_root, paths, state_files):
+        rollback_root.mkdir()
+        raise KeyboardInterrupt("injected interruption during rollback capture")
+
+    monkeypatch.setattr(module, "_workspace_capture_rollback", interrupt_capture)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="rollback capture"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    monkeypatch.setattr(module, "_workspace_capture_rollback", original_capture)
+    assert module._workspace_use(args, project, load_catalog(project)) == 0
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").is_file()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_workspace_use_restores_a_target_when_interrupted_before_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    target = project / ".agents" / "skills" / "python-dev"
+    original_dispatch = module._dispatch_use
+
+    def interrupt_install(*call_args, **call_kwargs):
+        if call_args[7]:
+            return original_dispatch(*call_args, **call_kwargs)
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text("partial\n", encoding="utf-8")
+        raise KeyboardInterrupt("injected interruption before checkpoint")
+
+    monkeypatch.setattr(module, "_dispatch_use", interrupt_install)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="before checkpoint"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not target.exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+
+
 def test_interrupted_use_refuses_a_tampered_outside_rollback_target(
     tmp_path: Path,
 ) -> None:

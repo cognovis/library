@@ -6638,16 +6638,15 @@ def _workspace_capture_rollback(
 
 @contextmanager
 def _workspace_transaction_guard(
-    lock_path: Path, repo_root: Path, rollback_state
+    lock_path: Path, repo_root: Path
 ) -> None:
     """Recover a failed Workspace transaction only from integrity-bound state."""
     try:
         yield
     except BaseException as exc:
-        captured = rollback_state()
-        if captured is not None:
-            from lib.workspace import recover_workspace_journal
+        from lib.workspace import recover_workspace_journal, workspace_journal_path
 
+        if workspace_journal_path(lock_path).exists():
             try:
                 recover_workspace_journal(lock_path, repo_root)
             except LibraryError as recovery_exc:
@@ -6742,6 +6741,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         prepare_workspace_rollback,
         publish_admitted_members,
         recover_workspace_journal,
+        begin_workspace_use_mutation,
         workspace_journal_path,
         workspace_path_state,
         workspace_write_lock,
@@ -6755,7 +6755,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     with (
         workspace_write_lock(lock_path),
         _admitted_publication_root(repo_root) as admitted_root,
-        _workspace_transaction_guard(lock_path, repo_root, lambda: rollback),
+        _workspace_transaction_guard(lock_path, repo_root),
     ):
         recover_workspace_journal(lock_path, repo_root)
         current_lock = load_lockfile(lock_path)
@@ -6803,6 +6803,18 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         member_failure: list[tuple[str, int, str]] = []
         if rollback_root is None:
             rollback_root = prepare_workspace_rollback(lock_path)
+        journal_base = {
+            "operation": "use",
+            "phase": "capturing",
+            "reference": args.reference,
+            "scope": args.scope,
+            "definition_commit": definition_commit,
+            "artifacts": [
+                f"{primitive}:{name}" for primitive, name in closure.artifacts
+            ],
+            "rollback": [],
+        }
+        write_workspace_journal(lock_path, journal_base)
         rollback = _workspace_capture_rollback(
             rollback_root,
             locked_collision["targets"],
@@ -6812,6 +6824,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             lock_path,
             {
                 "operation": "use",
+                "phase": "ready",
                 "reference": args.reference,
                 "scope": args.scope,
                 "definition_commit": definition_commit,
@@ -6871,6 +6884,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                     _workspace_member_provenance(catalog, closure)
                 )
             for primitive, name in closure.artifacts:
+                begin_workspace_use_mutation(lock_path)
                 output_buffer = io.StringIO()
                 with redirect_stdout(output_buffer):
                     rc = _dispatch_use(

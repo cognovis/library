@@ -2408,6 +2408,20 @@ def checkpoint_workspace_use(lock_path: Path, repo_root: Path) -> None:
         elif item.get("backup_state") is not None:
             raise LibraryError("Workspace use journal has state for a missing backup")
         item["target_state"] = workspace_path_state(target)
+    payload["phase"] = "ready"
+    write_workspace_journal(lock_path, payload)
+
+
+def begin_workspace_use_mutation(lock_path: Path) -> None:
+    """Durably mark the target set as in-flight before an installer can mutate it."""
+    path = workspace_journal_path(lock_path)
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
+    if payload.get("operation") != "use" or payload.get("phase") != "ready":
+        raise LibraryError("Workspace use mutation requires a captured rollback plan")
+    payload["phase"] = "mutating"
     write_workspace_journal(lock_path, payload)
 
 
@@ -2420,7 +2434,10 @@ def _validated_use_rollback(
         expected_target = item.get("target_state")
         if not isinstance(expected_target, dict):
             raise LibraryError("Workspace use journal target state is missing")
-        if workspace_path_state(target) != expected_target:
+        if (
+            payload.get("phase") != "mutating"
+            and workspace_path_state(target) != expected_target
+        ):
             raise LibraryError(
                 f"Workspace use journal target integrity check failed: {target}"
             )
@@ -2493,6 +2510,18 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
         payload = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
+    if payload.get("operation") == "use" and payload.get("phase") == "capturing":
+        if payload.get("rollback") != []:
+            raise LibraryError("Workspace capture journal contains an invalid rollback plan")
+        rollback_root = workspace_rollback_path(lock_path)
+        if rollback_root.is_symlink() or (
+            rollback_root.exists() and not rollback_root.is_dir()
+        ):
+            raise LibraryError(
+                f"Workspace rollback root is not a real directory: {rollback_root}"
+            )
+        clear_workspace_journal(lock_path)
+        return []
     if payload.get("operation") != "prune":
         if payload.get("operation") == "use" and payload.get("rollback") is not None:
             _restore_workspace_use(lock_path, repo_root, payload)
