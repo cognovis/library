@@ -2263,10 +2263,46 @@ def clear_workspace_journal(lock_path: Path) -> None:
     shutil.rmtree(workspace_rollback_path(lock_path), ignore_errors=True)
 
 
-def _validated_use_rollback(
+def workspace_path_state(path: Path) -> dict[str, str]:
+    """Return a deterministic kind-and-content descriptor for one path."""
+    try:
+        if path.is_symlink():
+            digest = hashlib.sha256(os.fsencode(path.readlink())).hexdigest()
+            return {"kind": "symlink", "sha256": digest}
+        if not path.exists():
+            return {"kind": "missing"}
+        if path.is_file():
+            return {"kind": "file", "sha256": compute_checksum(path)}
+        if not path.is_dir():
+            raise LibraryError(f"Workspace rollback path has unsupported type: {path}")
+        digest = hashlib.sha256()
+        digest.update(b"directory\0")
+        for child in sorted(path.rglob("*"), key=lambda item: item.relative_to(path).as_posix()):
+            relative = child.relative_to(path).as_posix().encode()
+            digest.update(relative)
+            digest.update(b"\0")
+            if child.is_symlink():
+                digest.update(b"symlink\0")
+                digest.update(os.fsencode(child.readlink()))
+            elif child.is_dir():
+                digest.update(b"directory")
+            elif child.is_file():
+                digest.update(b"file\0")
+                digest.update(compute_checksum(child).encode())
+            else:
+                raise LibraryError(
+                    f"Workspace rollback path has unsupported nested type: {child}"
+                )
+            digest.update(b"\0")
+        return {"kind": "directory", "sha256": digest.hexdigest()}
+    except OSError as exc:
+        raise LibraryError(f"Could not inspect Workspace rollback path: {path}") from exc
+
+
+def _use_rollback_paths(
     lock_path: Path, repo_root: Path, payload: dict[str, Any]
-) -> list[tuple[Path, Path | None]]:
-    """Validate all recovery paths before returning a bounded rollback plan."""
+) -> list[tuple[dict[str, Any], Path, Path | None]]:
+    """Return journal entries whose target and backup paths are bounded."""
     root = repo_root.expanduser().resolve()
     rollback_root = Path(
         os.path.abspath(workspace_rollback_path(lock_path).expanduser())
@@ -2278,7 +2314,7 @@ def _validated_use_rollback(
     managed_roots = tuple(
         root / name for name in (".agents", ".claude", ".codex", ".cursor")
     )
-    validated: list[tuple[Path, Path | None]] = []
+    validated: list[tuple[dict[str, Any], Path, Path | None]] = []
     seen: set[Path] = set()
     for item in payload.get("rollback") or []:
         if not isinstance(item, dict):
@@ -2310,6 +2346,62 @@ def _validated_use_rollback(
         ):
             raise LibraryError(
                 f"Workspace use journal backup is outside its transaction root: {backup}"
+            )
+        validated.append((item, target, backup))
+    return validated
+
+
+def checkpoint_workspace_use(lock_path: Path, repo_root: Path) -> None:
+    """Bind the journal to the exact target states after one mutation step."""
+    path = workspace_journal_path(lock_path)
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
+    if payload.get("operation") != "use" or payload.get("rollback") is None:
+        raise LibraryError("Workspace use checkpoint requires an active use journal")
+    for item, target, backup in _use_rollback_paths(lock_path, repo_root, payload):
+        if backup is not None:
+            expected_backup = item.get("backup_state")
+            actual_backup = workspace_path_state(backup)
+            if (
+                not isinstance(expected_backup, dict)
+                or expected_backup.get("kind") == "missing"
+                or actual_backup != expected_backup
+            ):
+                raise LibraryError(
+                    f"Workspace use journal backup integrity check failed: {backup}"
+                )
+        elif item.get("backup_state") is not None:
+            raise LibraryError("Workspace use journal has state for a missing backup")
+        item["target_state"] = workspace_path_state(target)
+    write_workspace_journal(lock_path, payload)
+
+
+def _validated_use_rollback(
+    lock_path: Path, repo_root: Path, payload: dict[str, Any]
+) -> list[tuple[Path, Path | None]]:
+    """Validate every path and captured state before returning a rollback plan."""
+    validated: list[tuple[Path, Path | None]] = []
+    for item, target, backup in _use_rollback_paths(lock_path, repo_root, payload):
+        expected_target = item.get("target_state")
+        if not isinstance(expected_target, dict):
+            raise LibraryError("Workspace use journal target state is missing")
+        if workspace_path_state(target) != expected_target:
+            raise LibraryError(
+                f"Workspace use journal target integrity check failed: {target}"
+            )
+        expected_backup = item.get("backup_state")
+        if backup is None:
+            if expected_backup is not None:
+                raise LibraryError("Workspace use journal has state for a missing backup")
+        elif (
+            not isinstance(expected_backup, dict)
+            or expected_backup.get("kind") == "missing"
+            or workspace_path_state(backup) != expected_backup
+        ):
+            raise LibraryError(
+                f"Workspace use journal backup integrity check failed: {backup}"
             )
         validated.append((target, backup))
     return validated

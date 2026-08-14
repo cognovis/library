@@ -1716,7 +1716,9 @@ def test_next_use_recovers_an_interrupted_workspace_transaction(
     monkeypatch.setenv("HOME", str(home))
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     from lib.workspace import (
+        checkpoint_workspace_use,
         recover_workspace_journal,
+        workspace_path_state,
         workspace_rollback_path,
         write_workspace_journal,
     )
@@ -1736,6 +1738,10 @@ def test_next_use_recovers_an_interrupted_workspace_transaction(
                 {
                     "target": str(path),
                     "backup": str(backup) if backup is not None else None,
+                    "target_state": workspace_path_state(path),
+                    "backup_state": (
+                        workspace_path_state(backup) if backup is not None else None
+                    ),
                 }
                 for path, backup in captured
             ],
@@ -1745,6 +1751,7 @@ def test_next_use_recovers_an_interrupted_workspace_transaction(
     (target / "SKILL.md").write_text("partial\n")
     lock_path.write_text("installed: []\n")
     (project / ".gitignore").write_text("partial\n")
+    checkpoint_workspace_use(lock_path, project)
 
     recover_workspace_journal(lock_path, project)
 
@@ -1845,6 +1852,102 @@ def test_interrupted_use_refuses_a_tampered_outside_backup_path(
 
     assert (target / "SKILL.md").read_text() == "current\n"
     assert (outside_backup / "SKILL.md").read_text() == "tampered\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_interrupted_use_refuses_target_drift_without_a_backup(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    lock_path = project / ".library.lock"
+    target = project / ".agents" / "skills" / "new-skill"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import (
+        recover_workspace_journal,
+        workspace_path_state,
+        write_workspace_journal,
+    )
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(target),
+                    "backup": None,
+                    "target_state": workspace_path_state(target),
+                    "backup_state": None,
+                }
+            ],
+        },
+    )
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("operator content\n")
+
+    with pytest.raises(LibraryError, match="target integrity check failed"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "operator content\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+@pytest.mark.parametrize("backup_change", ["missing", "corrupted"])
+def test_interrupted_use_refuses_missing_or_corrupted_backup_before_mutation(
+    tmp_path: Path,
+    backup_change: str,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    lock_path = project / ".library.lock"
+    target = project / ".agents" / "skills" / "owned"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("original\n")
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import (
+        checkpoint_workspace_use,
+        recover_workspace_journal,
+        workspace_path_state,
+        workspace_rollback_path,
+        write_workspace_journal,
+    )
+
+    module = _library_module()
+    captured = module._workspace_capture_rollback(
+        workspace_rollback_path(lock_path), [str(target)], []
+    )
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(path),
+                    "backup": str(backup),
+                    "target_state": workspace_path_state(path),
+                    "backup_state": workspace_path_state(backup),
+                }
+                for path, backup in captured
+                if backup is not None
+            ],
+        },
+    )
+    (target / "SKILL.md").write_text("transaction content\n")
+    checkpoint_workspace_use(lock_path, project)
+    backup = captured[0][1]
+    assert backup is not None
+    if backup_change == "missing":
+        shutil.rmtree(backup)
+    else:
+        (backup / "SKILL.md").write_text("corrupted\n")
+
+    with pytest.raises(LibraryError, match="backup integrity check failed"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "transaction content\n"
     assert (project / ".library.lock.workspace-journal.json").exists()
 
 

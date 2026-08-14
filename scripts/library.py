@@ -6632,38 +6632,25 @@ def _workspace_capture_rollback(
     return captured
 
 
-def _workspace_restore_rollback(
-    captured: list[tuple[Path, Path | None]],
-) -> None:
-    """Restore a failed Workspace transaction without retaining partial members."""
-    for target, backup in reversed(captured):
-        if target.is_symlink() or target.is_file():
-            target.unlink()
-        elif target.is_dir():
-            shutil.rmtree(target)
-        if backup is None:
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if backup.is_symlink():
-            target.symlink_to(backup.readlink())
-        elif backup.is_dir():
-            shutil.copytree(backup, target, symlinks=True)
-        else:
-            shutil.copy2(backup, target)
-
-
 @contextmanager
-def _workspace_transaction_guard(lock_path: Path, rollback_state) -> None:
-    """Restore the captured pre-state when any Workspace mutation raises."""
+def _workspace_transaction_guard(
+    lock_path: Path, repo_root: Path, rollback_state
+) -> None:
+    """Recover a failed Workspace transaction only from integrity-bound state."""
     try:
         yield
-    except BaseException:
+    except BaseException as exc:
         captured = rollback_state()
         if captured is not None:
-            _workspace_restore_rollback(captured)
-            from lib.workspace import clear_workspace_journal
+            from lib.workspace import recover_workspace_journal
 
-            clear_workspace_journal(lock_path)
+            try:
+                recover_workspace_journal(lock_path, repo_root)
+            except LibraryError as recovery_exc:
+                raise LibraryError(
+                    "Workspace transaction failed and automatic recovery refused "
+                    f"unsafe state: {recovery_exc}"
+                ) from exc
         raise
 
 
@@ -6745,10 +6732,12 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     from lib.providers.executable_admission import ResolutionRefused
     from lib.workspace import (
         assert_published_admitted,
+        checkpoint_workspace_use,
         clear_workspace_journal,
         gate_workspace_mutation,
         publish_admitted_members,
         recover_workspace_journal,
+        workspace_path_state,
         workspace_rollback_path,
         workspace_write_lock,
         write_workspace_journal,
@@ -6758,7 +6747,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     with (
         workspace_write_lock(lock_path),
         _admitted_publication_root(repo_root) as admitted_root,
-        _workspace_transaction_guard(lock_path, lambda: rollback),
+        _workspace_transaction_guard(lock_path, repo_root, lambda: rollback),
     ):
         recover_workspace_journal(lock_path, repo_root)
         current_lock = load_lockfile(lock_path)
@@ -6825,6 +6814,12 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                     {
                         "target": str(target),
                         "backup": str(backup) if backup is not None else None,
+                        "target_state": workspace_path_state(target),
+                        "backup_state": (
+                            workspace_path_state(backup)
+                            if backup is not None
+                            else None
+                        ),
                     }
                     for target, backup in rollback
                 ],
@@ -6883,6 +6878,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                         "vendor",
                         source_catalog=artifact_sources[(primitive, name)],
                     )
+                checkpoint_workspace_use(lock_path, repo_root)
                 if rc != 0:
                     member_failure.append(
                         (f"{primitive}:{name}", rc, output_buffer.getvalue().strip())
@@ -6948,8 +6944,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
 
         if member_failure:
             member, rc, message = member_failure[0]
-            _workspace_restore_rollback(rollback)
-            clear_workspace_journal(lock_path)
+            recover_workspace_journal(lock_path, repo_root)
             _print_workspace_result(
                 {
                     **result,
@@ -7016,8 +7011,10 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             prerequisite_statuses=_workspace_prerequisite_statuses(applied_plan),
         )
         save_lockfile(lock_path, lock)
+        checkpoint_workspace_use(lock_path, repo_root)
         if getattr(args, "reconcile_gitignore", False):
             result["gitignore"] = _reconcile_project_gitignore(repo_root)
+            checkpoint_workspace_use(lock_path, repo_root)
         clear_workspace_journal(lock_path)
     result.update(
         {
