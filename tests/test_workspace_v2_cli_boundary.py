@@ -182,6 +182,27 @@ def _pin_manifest_to_sources(project: Path, manifest_path: Path) -> dict[str, st
     return heads
 
 
+def _commit_consumer_revision(project: Path, path: str, content: str) -> str:
+    """Commit one consumer-repository revision without changing catalog pins."""
+    target = project / path
+    target.write_text(content)
+    for command in (
+        ["git", "config", "user.email", "test@example.invalid"],
+        ["git", "config", "user.name", "Test"],
+        ["git", "add", path],
+        ["git", "commit", "-q", "-m", f"consumer {path}"],
+    ):
+        subprocess.run(command, cwd=project, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return head.stdout.strip()
+
+
 def test_a_v2_manifest_whose_source_cannot_answer_refuses_and_writes_nothing(
     tmp_path: Path,
 ) -> None:
@@ -322,6 +343,58 @@ def test_regression_repeated_use_preserves_lock_when_checkout_is_ahead_of_pin(
 
     assert second.returncode == 0, second.stdout + second.stderr
     assert lock_path.read_bytes() == stable_lock
+
+
+def test_regression_workspace_cache_paths_follow_pins_not_consumer_revisions(
+    tmp_path: Path,
+) -> None:
+    """Pinned Workspace caches remain byte-stable when the consumer advances."""
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    manifest_path = _write_v2_fixture(project)
+    _pin_manifest_to_sources(project, manifest_path)
+    _commit_consumer_revision(
+        project, "library.yaml", (project / "library.yaml").read_text()
+    )
+
+    first = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:engineering",
+        "--scope",
+        "project",
+        "--json",
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+    lock_path = project / ".library.lock"
+    initial_lock = lock_path.read_bytes()
+    lock = yaml.safe_load(initial_lock)
+    cache_entries = [*lock["receipts"], *lock["installed"]]
+    assert all(
+        entry["cache_path"].rstrip("/").endswith(f"@{entry['source_commit'][:14]}")
+        for entry in cache_entries
+    )
+
+    _commit_consumer_revision(
+        project, "consumer-revision.txt", "consumer advanced\n"
+    )
+    second = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:engineering",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert lock_path.read_bytes() == initial_lock
 
 
 def test_an_unknown_declared_commit_is_refused_before_mutation(tmp_path: Path) -> None:

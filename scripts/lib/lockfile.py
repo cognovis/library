@@ -744,6 +744,27 @@ def restore_unchanged_install_timestamps(
             receipt["install_timestamp"] = timestamp
 
 
+def restore_cache_path_source_commit(cache_path: str, source_commit: str) -> str:
+    """Return a cache path whose revision suffix matches recorded provenance.
+
+    Workspace installers read an admitted snapshot beneath the consumer
+    repository, so their transient cache path can inherit the consumer's HEAD.
+    The durable lock instead identifies the catalog bytes by their verified
+    source pin. Cache paths without an ``@revision`` suffix (for example MCP
+    entries) are intentionally left unchanged.
+    """
+    raw = str(cache_path)
+    trimmed = raw.rstrip("/")
+    prefix, separator, _ = trimmed.rpartition("@")
+    if not separator or not prefix:
+        return raw
+    if source_commit in ("local", "") or len(source_commit) < 7:
+        tag = source_commit or "local"
+    else:
+        tag = source_commit[:14]
+    return f"{prefix}@{tag}{'/' if raw.endswith('/') else ''}"
+
+
 def upsert_entry(
     data: dict[str, Any],
     entry: dict[str, Any],

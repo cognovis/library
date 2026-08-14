@@ -93,6 +93,7 @@ from lib.lockfile import (
     find_lockfile,
     load_lockfile,
     resolve_lockfile_path,
+    restore_cache_path_source_commit,
     restore_unchanged_install_timestamps,
     root_id,
     save_lockfile,
@@ -6703,11 +6704,17 @@ def _workspace_restore_member_provenance(lock: dict, closure, sources: dict) -> 
                 entry["source"] = source
                 if commit:
                     entry["source_commit"] = commit
+                    entry["cache_path"] = restore_cache_path_source_commit(
+                        str(entry.get("cache_path") or ""), commit
+                    )
         for receipt in lock.get("receipts", []):
             if receipt.get("id") == member_id and commit:
                 receipt["source"] = source
                 receipt["definition_commit"] = commit
                 receipt["source_commit"] = commit
+                receipt["cache_path"] = restore_cache_path_source_commit(
+                    str(receipt.get("cache_path") or ""), commit
+                )
 
 
 def _workspace_normalized_members(
