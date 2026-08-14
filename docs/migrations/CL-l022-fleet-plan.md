@@ -1,5 +1,10 @@
 # CL-l022 Fleet Migration Plan
 
+> Historical record: this document describes the CL-l022 worktree-era migration
+> pass and is not evidence of current canonical projection health. The refreshed
+> canonical inventory and cutover gates are maintained in
+> `CL-31po-recovery-status.md`.
+
 ## Purpose and boundary
 
 This is a read-only migration plan for the repository-local Library environment

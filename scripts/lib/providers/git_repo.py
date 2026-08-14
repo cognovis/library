@@ -190,6 +190,27 @@ class GitRepoProvider(SourceProvider):
         """
         return self._resolve_commit()
 
+    def verify_revision(self, revision: str) -> str:
+        """Prove that one immutable commit exists without comparing it to HEAD."""
+        normalized = revision.strip().lower()
+        if len(normalized) != _HEX40 or any(
+            character not in "0123456789abcdef" for character in normalized
+        ):
+            raise ProviderTransportError(
+                f"declared revision must be a full commit SHA: {revision!r}"
+            )
+        url = (
+            f"{self.api_base}/repos/{self._owner}/{self._repository}/commits/"
+            f"{normalized}"
+        )
+        payload = self.transport.get_json(url, self._headers())
+        observed = str(payload.get("sha") or "") if isinstance(payload, dict) else ""
+        if observed.lower() != normalized:
+            raise ProviderTransportError(
+                f"declared commit {normalized} was not returned by {url}"
+            )
+        return normalized
+
     def member_manifest(
         self, upstream_id: str, revision: str | None = None
     ) -> Sequence[str]:

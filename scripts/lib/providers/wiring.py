@@ -209,6 +209,7 @@ def source_revision(
     catalog: Mapping[str, Any],
     http_transport: Any = None,
     expected_revision: str | None = None,
+    allow_remote: bool = True,
 ) -> str:
     """What one registered source currently serves, as a commit.
 
@@ -267,6 +268,10 @@ def source_revision(
                     f"{identity} has a local checkout at {path} that is not a "
                     "tracked working tree, so it serves no commit to verify against"
                 )
+        if not allow_remote:
+            raise LookupError(
+                f"offline verification cannot inspect remote-only source {identity}"
+            )
         from .git_repo import GitRepoProvider
 
         options: dict[str, Any] = {
@@ -275,7 +280,10 @@ def source_revision(
         }
         if http_transport is not None:
             options["transport"] = http_transport
-        return GitRepoProvider(**options).current_revision()
+        provider = GitRepoProvider(**options)
+        if expected_revision:
+            return provider.verify_revision(expected_revision)
+        return provider.current_revision()
 
     raise LookupError(
         f"{identity} is not a registered source on this machine, so nothing can "

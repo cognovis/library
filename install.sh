@@ -57,6 +57,11 @@ clone_or_update() {
   source="$1"
   checkout="$2"
   if test -d "$checkout/.git"; then
+    if ! git -C "$checkout" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo "Error: managed checkout is incomplete: $checkout" >&2
+      echo "Move it aside after preserving any needed files, then re-run install.sh --fresh." >&2
+      return 1
+    fi
     current_origin="$(git -C "$checkout" remote get-url origin)"
     if test "$current_origin" != "$source"; then
       echo "Error: managed checkout has a different origin: $checkout" >&2
@@ -66,7 +71,8 @@ clone_or_update() {
     return
   fi
   if test -e "$checkout"; then
-    echo "Error: managed checkout path already exists and is not a Git checkout: $checkout" >&2
+    echo "Error: managed checkout is incomplete: $checkout" >&2
+    echo "Move it aside after preserving any needed files, then re-run install.sh --fresh." >&2
     return 1
   fi
   mkdir -p "$(dirname "$checkout")"

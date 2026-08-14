@@ -121,40 +121,42 @@ def _write_fresh_machine_sources(tmp_path: Path) -> tuple[Path, Path]:
     )
     subprocess.run(["git", "init", "--quiet", str(platform)], check=True)
     platform_pin = _git_commit(platform, "fixture platform content")
-    catalog["library"]["workspaces"] = [
-        {
-            "name": "cognovis-base",
-            "description": "Fresh-machine fixture Workspace.",
-            "schema_version": 2,
-            "version": "1.0.0",
-            "status": "stable",
-            "catalogs": [
-                {
-                    "alias": "platform",
-                    "identity": "https://github.com/cognovis/library",
-                    "pin": {"kind": "commit", "value": platform_pin},
-                },
-                {
-                    "alias": "core",
-                    "identity": "https://github.com/cognovis/library-core",
-                    "pin": {"kind": "commit", "value": core_pin},
-                },
-            ],
-            "roots": [
-                {"type": "skill", "name": "library", "catalog": "platform"},
-                *[
-                    {"type": "skill", "name": name, "catalog": "core"}
-                    for name in ("cognovis-beads", "inject-standards", "ob-cli")
-                ],
-            ],
-            "metadata": {
-                "library": {
-                    "source_catalog": "library-platform",
-                    "source_commit": platform_pin,
-                }
+    workspace_manifest = {
+        "name": "cognovis-base",
+        "description": "Fresh-machine fixture Workspace.",
+        "schema_version": 2,
+        "version": "1.0.0",
+        "status": "stable",
+        "catalogs": [
+            {
+                "alias": "platform",
+                "identity": "https://github.com/cognovis/library",
+                "pin": {"kind": "commit", "value": platform_pin},
             },
-        }
-    ]
+            {
+                "alias": "core",
+                "identity": "https://github.com/cognovis/library-core",
+                "pin": {"kind": "commit", "value": core_pin},
+            },
+        ],
+        "roots": [
+            {"type": "skill", "name": "library", "catalog": "platform"},
+            *[
+                {"type": "skill", "name": name, "catalog": "core"}
+                for name in ("cognovis-beads", "inject-standards", "ob-cli")
+            ],
+        ],
+        "metadata": {
+            "library": {
+                "source_catalog": "library-platform",
+                "source_commit": platform_pin,
+            }
+        },
+    }
+    catalog["library"]["workspaces"] = [workspace_manifest]
+    (platform / "workspaces" / "cognovis-base.yaml").write_text(
+        yaml.safe_dump(workspace_manifest, sort_keys=False), encoding="utf-8"
+    )
     (platform / "library.yaml").write_text(
         yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8"
     )
@@ -300,6 +302,34 @@ def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
         text=True,
         check=False,
     )
+    repository_status = subprocess.run(
+        [str(bin_dir / "library"), "status", "--project", str(project), "--offline", "--json"],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    workspace_status = subprocess.run(
+        [
+            str(bin_dir / "library"),
+            "workspace",
+            "status",
+            "--all",
+            "--scope",
+            "project",
+            "--target-project",
+            str(project),
+            "--harness",
+            "all",
+            "--json",
+        ],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
     assert installed.returncode == 0, installed.stderr or installed.stdout
     assert installed_again.returncode == 0, (
@@ -308,10 +338,69 @@ def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
     assert (bin_dir / "library").is_file()
     assert (source_dir / "library-platform" / ".git").is_dir()
     assert (source_dir / "cognovis-library-core" / ".git").is_dir()
+    assert (tmp_path / "config" / "library" / "catalog-sources.json").is_file()
+    assert (home / ".config" / "library" / "bootstrap.json").is_file()
     assert (project / ".library.lock").is_file()
     for name in ("library", "cognovis-beads", "inject-standards", "ob-cli"):
         assert (project / ".agents" / "skills" / name / "SKILL.md").is_file()
     assert not (home / ".agents" / "skills").exists()
+    assert repository_status.returncode == 0, (
+        repository_status.stderr or repository_status.stdout
+    )
+    repository_payload = json.loads(repository_status.stdout)
+    assert repository_payload["status"] == "healthy"
+    assert repository_payload["health"]["desired_state"]["status"] == "healthy"
+    assert repository_payload["health"]["projections"]["status"] == "clean"
+    assert repository_payload["health"]["bootstrap"]["status"] == "ready"
+    assert workspace_status.returncode == 0, workspace_status.stderr or workspace_status.stdout
+    assert json.loads(workspace_status.stdout)["status"] == "converged"
+
+
+def test_fresh_machine_installer_refuses_an_incomplete_managed_checkout(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "managed-sources"
+    incomplete = source_dir / "library-platform"
+    (incomplete / ".git").mkdir(parents=True)
+    sentinel = incomplete / "partial-clone-state"
+    sentinel.write_text("preserve for operator recovery\n", encoding="utf-8")
+    home = tmp_path / "home"
+    bin_dir = tmp_path / "bin"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(tmp_path / "config"),
+            "XDG_DATA_HOME": str(tmp_path / "data"),
+            "UV_TOOL_DIR": str(tmp_path / "tools"),
+            "UV_TOOL_BIN_DIR": str(bin_dir),
+        }
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "install.sh"),
+            "--fresh",
+            "--platform-source",
+            str(REPO_ROOT),
+            "--core-source",
+            str(REPO_ROOT),
+            "--source-dir",
+            str(source_dir),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "managed checkout is incomplete" in result.stderr
+    assert "Move it aside after preserving any needed files" in result.stderr
+    assert sentinel.read_text(encoding="utf-8") == "preserve for operator recovery\n"
+    assert not (bin_dir / "library").exists()
+    assert not (tmp_path / "config" / "library" / "catalog-sources.json").exists()
 
 
 def test_bootstrap_install_writes_only_the_enumerated_global_contract(

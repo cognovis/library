@@ -67,16 +67,21 @@ def test_library_authoring_roots_resolve_standalone() -> None:
     }
 
 
-def test_platform_lock_registers_python_and_authoring_workspaces() -> None:
+def test_platform_lock_registers_baseline_python_and_authoring_workspaces() -> None:
     lock = yaml.safe_load((REPO_ROOT / ".library.lock").read_text())
 
     assert {(root["type"], root["name"]) for root in lock["requested_roots"]} == {
         ("workspace", "library-authoring"),
         ("workspace", "python-cli"),
+        ("workspace", "cognovis-base"),
     }
     assert {receipt["id"] for receipt in lock["receipts"]} == {
         "skill:agent-forge",
         "skill:hook-forge",
+        "skill:inject-standards",
+        "skill:library",
+        "skill:cognovis-beads",
+        "skill:ob-cli",
         "skill:python-dev",
         "skill:python-test",
         "skill:script-forge",

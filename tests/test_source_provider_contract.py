@@ -45,6 +45,7 @@ from lib.providers.registration import (  # noqa: E402
     RegistrationError,
     register_provider,
 )
+from lib.providers.wiring import source_revision  # noqa: E402
 
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "provider_git_repo"
 MATTPOCOCK = "https://github.com/mattpocock/skills"
@@ -84,6 +85,72 @@ def _provider(transport: RecordedTransport | None = None) -> GitRepoProvider:
         ref="main",
         transport=transport,
     )
+
+
+def test_remote_source_verifies_the_declared_commit_instead_of_branch_head() -> None:
+    declared = "1" * 40
+    branch_head = "2" * 40
+    identity = "https://github.com/acme/kit"
+    commit_url = f"https://api.github.com/repos/acme/kit/commits/{declared}"
+    transport = RecordedTransport(
+        {
+            "json": {
+                "https://api.github.com/repos/acme/kit/git/ref/heads/main": {
+                    "object": {"sha": branch_head}
+                },
+                commit_url: {"sha": declared},
+            }
+        }
+    )
+    catalog = {
+        "sources": {
+            "catalogs": [
+                {
+                    "name": "fixture",
+                    "source": identity,
+                    "default_branch": "main",
+                }
+            ]
+        }
+    }
+
+    verified = source_revision(
+        identity,
+        catalog=catalog,
+        http_transport=transport,
+        expected_revision=declared,
+    )
+
+    assert verified == declared
+    assert transport.requests == [commit_url]
+
+
+def test_remote_source_refuses_network_when_remote_access_is_disabled() -> None:
+    declared = "1" * 40
+    identity = "https://github.com/acme/kit"
+    transport = RecordedTransport({"json": {}})
+    catalog = {
+        "sources": {
+            "catalogs": [
+                {
+                    "name": "fixture",
+                    "source": identity,
+                    "default_branch": "main",
+                }
+            ]
+        }
+    }
+
+    with pytest.raises(LookupError, match="offline verification"):
+        source_revision(
+            identity,
+            catalog=catalog,
+            http_transport=transport,
+            expected_revision=declared,
+            allow_remote=False,
+        )
+
+    assert transport.requests == []
 
 
 # ---------------------------------------------------------------------------

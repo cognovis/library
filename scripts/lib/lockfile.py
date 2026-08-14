@@ -530,6 +530,25 @@ def save_lockfile(lockfile_path: Path, data: dict[str, Any]) -> None:
         if scope == "project"
         else data
     )
+    if lockfile_path.is_file():
+        try:
+            existing = yaml.safe_load(lockfile_path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            existing = None
+
+        def without_install_timestamps(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {
+                    key: without_install_timestamps(item)
+                    for key, item in value.items()
+                    if key != "install_timestamp"
+                }
+            if isinstance(value, list):
+                return [without_install_timestamps(item) for item in value]
+            return value
+
+        if without_install_timestamps(existing) == without_install_timestamps(serialized):
+            return
     document = yaml.dump(
         serialized,
         default_flow_style=False,
@@ -626,6 +645,42 @@ def mutate_lockfile(lockfile_path: Path) -> Iterator[dict[str, Any]]:
             state["data"] = None
 
 
+def _project_path_equivalent(existing: str, incoming: str) -> bool:
+    """Compare persisted relative targets with installer-time absolute targets."""
+    if existing == incoming:
+        return True
+    existing_path = Path(existing.rstrip("/"))
+    incoming_path = Path(incoming.rstrip("/"))
+    relative, absolute = (
+        (existing_path, incoming_path)
+        if not existing_path.is_absolute() and incoming_path.is_absolute()
+        else (incoming_path, existing_path)
+    )
+    if relative.is_absolute() or not absolute.is_absolute():
+        return False
+    return absolute.parts[-len(relative.parts) :] == relative.parts
+
+
+def _bridge_symlinks_equivalent(existing: list[str], incoming: list[str]) -> bool:
+    if len(existing) != len(incoming):
+        return False
+    for existing_bridge, incoming_bridge in zip(existing, incoming, strict=True):
+        existing_path, existing_separator, existing_target = existing_bridge.partition(
+            " -> "
+        )
+        incoming_path, incoming_separator, incoming_target = incoming_bridge.partition(
+            " -> "
+        )
+        if (
+            not existing_separator
+            or not incoming_separator
+            or existing_target != incoming_target
+            or not _project_path_equivalent(existing_path, incoming_path)
+        ):
+            return False
+    return True
+
+
 def upsert_entry(
     data: dict[str, Any],
     entry: dict[str, Any],
@@ -652,6 +707,31 @@ def upsert_entry(
 
     for i, existing in enumerate(installed):
         if existing.get("name") == name and existing.get("type") == primitive_type:
+            stable_fields = (
+                "name",
+                "type",
+                "source_commit",
+                "checksum_sha256",
+                "checksum_type",
+                "content_sha256",
+                "install_mode",
+                "scope",
+            )
+            unchanged_materialization = all(
+                existing.get(key) == entry.get(key) for key in stable_fields
+            ) and _project_path_equivalent(
+                str(existing.get("install_target") or ""),
+                str(entry.get("install_target") or ""),
+            )
+            unchanged_materialization = (
+                unchanged_materialization
+                and _bridge_symlinks_equivalent(
+                    list(existing.get("bridge_symlinks") or []),
+                    list(entry.get("bridge_symlinks") or []),
+                )
+            )
+            if unchanged_materialization and existing.get("install_timestamp"):
+                entry["install_timestamp"] = existing["install_timestamp"]
             installed[i] = entry
             break
     else:
