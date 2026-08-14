@@ -98,18 +98,26 @@ delivery boundary has published them.
 
 | Git root | Commit | Baseline receipt |
 | --- | --- | --- |
-| `/Users/malte/code/library/meta` | `4fd9a30f` | Existing `library-authoring` and `python-cli` roots retained; `cognovis-base` added and projections reconciled. |
-| `/Users/malte/code/library/cognovis-core` | `5e9845ee` | Four baseline Skills; project projections clean. |
-| `/Users/malte/code/library/sussdorff-core` | `48f22c8` | Four baseline Skills; first committed project lock and clean projections. |
-| `/Users/malte/code/library/cognovis-pi` | `f72094c` | Existing `library-authoring` root retained; four baseline Skills added. |
-| `/Users/malte/code/open-brain` | `d982ba6` | Four baseline Skills; 2,183 non-integration tests passed during commit. |
-| `/Users/malte/code/polaris` | `fc685b62e` | Four baseline Skills; project projections clean and push checks passed. |
+| `/Users/malte/code/library/meta` | `4af6d01f` | Existing `library-authoring` and `python-cli` roots retained; `cognovis-base` added, projections reconciled, and transaction recovery paths ignored. |
+| `/Users/malte/code/library/cognovis-core` | `bb9bf6ea` | Four baseline Skills; project projections and transaction Git hygiene clean. |
+| `/Users/malte/code/library/sussdorff-core` | `3e35c5ef` | Four baseline Skills; committed project lock, clean projections, and transaction Git hygiene clean. |
+| `/Users/malte/code/library/cognovis-pi` | `bc3460e2` | Existing `library-authoring` root retained; four baseline Skills added and transaction Git hygiene clean. |
+| `/Users/malte/code/open-brain` | `49ce91b6` | Four baseline Skills; transaction Git hygiene clean; 2,183 non-integration tests passed during commit. |
+| `/Users/malte/code/polaris` | `8e1d4538` | Four baseline Skills; project projections clean and push checks passed. |
 
 The rollout exposed and repaired two platform defects before fleet-wide use:
 the root-level Library Skill is now explicitly installed as a single-file
 bundle instead of copying the full platform repository, and fixed `library
 init` resolves `cognovis-base` from the packaged tool catalog when the target
 repository owns a different `library.yaml`.
+
+The final repair pass also made interrupted Workspace transactions durable and
+bounded: recovery validates every target and backup before mutation, rejects
+path traversal and paths outside Library-managed roots, and keeps the journal
+and rollback tree ignored in every Fleet repository. The focused recovery,
+Git-hygiene, and status suite passed 61 tests; all six repository status checks
+reported clean projections and clean Git hygiene. Bootstrap remains explicitly
+`repair_available` until the later cutover creates and verifies its manifest.
 
 Global Skill projections remain in place until all six commits are published
 and their Workspace catalog pins resolve from those published sources. Removal
