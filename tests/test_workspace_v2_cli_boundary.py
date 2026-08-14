@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -267,6 +268,60 @@ def test_a_source_moving_after_the_pin_still_installs_the_pinned_bytes(
     assert not (installed / "NOTES.md").exists()
     manifest = yaml.safe_load(manifest_path.read_text())
     assert manifest["catalogs"][0]["pin"]["value"] == heads["core"]
+
+
+def test_regression_repeated_use_preserves_lock_when_checkout_is_ahead_of_pin(
+    tmp_path: Path,
+) -> None:
+    """A newer catalog HEAD must not churn a pinned Workspace receipt timestamp."""
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    manifest_path = _write_v2_fixture(project)
+    _pin_manifest_to_sources(project, manifest_path)
+
+    (project / "team-core" / "README.md").write_text("Checkout advanced after pin.\n")
+    subprocess.run(["git", "add", "README.md"], cwd=project / "team-core", check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "advance checkout"],
+        cwd=project / "team-core",
+        check=True,
+    )
+
+    first = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:engineering",
+        "--scope",
+        "project",
+        "--json",
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+    lock_path = project / ".library.lock"
+    initial_lock = lock_path.read_bytes()
+    stable_lock = re.sub(
+        r"install_timestamp: '[^']+'",
+        "install_timestamp: '2000-01-01T00:00:00Z'",
+        initial_lock.decode(),
+    ).encode()
+    lock_path.write_bytes(stable_lock)
+
+    second = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:engineering",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert lock_path.read_bytes() == stable_lock
 
 
 def test_an_unknown_declared_commit_is_refused_before_mutation(tmp_path: Path) -> None:

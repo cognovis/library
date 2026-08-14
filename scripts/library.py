@@ -93,6 +93,7 @@ from lib.lockfile import (
     find_lockfile,
     load_lockfile,
     resolve_lockfile_path,
+    restore_unchanged_install_timestamps,
     root_id,
     save_lockfile,
 )
@@ -7377,6 +7378,7 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
                 ):
                     installed_entry["catalog_identity"] = source_identity
         _workspace_restore_member_provenance(lock, closure, member_provenance)
+        restore_unchanged_install_timestamps(lock, current_lock)
         lock["requested_roots"] = [
             root
             for root in lock.get("requested_roots", [])

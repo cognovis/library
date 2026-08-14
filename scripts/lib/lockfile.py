@@ -681,6 +681,69 @@ def _bridge_symlinks_equivalent(existing: list[str], incoming: list[str]) -> boo
     return True
 
 
+def _materialization_equivalent(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
+    """Return whether two entries describe the same installed materialization."""
+    stable_fields = (
+        "name",
+        "type",
+        "source_commit",
+        "checksum_sha256",
+        "checksum_type",
+        "content_sha256",
+        "install_mode",
+        "scope",
+    )
+    return (
+        all(existing.get(key) == incoming.get(key) for key in stable_fields)
+        and _project_path_equivalent(
+            str(existing.get("install_target") or ""),
+            str(incoming.get("install_target") or ""),
+        )
+        and _bridge_symlinks_equivalent(
+            list(existing.get("bridge_symlinks") or []),
+            list(incoming.get("bridge_symlinks") or []),
+        )
+    )
+
+
+def restore_unchanged_install_timestamps(
+    data: dict[str, Any], previous: dict[str, Any]
+) -> None:
+    """Restore timestamps after pinned Workspace provenance is finalized.
+
+    Cross-catalog installers temporarily record the checkout revision they read
+    from. Workspace finalization then replaces that revision with the verified
+    immutable pin. Compare only after that final provenance is present so a
+    checkout whose HEAD is ahead of the pin does not churn an unchanged receipt.
+    """
+    previous_entries = {
+        (str(entry.get("type") or ""), str(entry.get("name") or "")): entry
+        for entry in previous.get("installed", [])
+        if isinstance(entry, dict)
+    }
+    timestamps: dict[str, str] = {}
+    for entry in data.get("installed", []):
+        if not isinstance(entry, dict):
+            continue
+        key = (str(entry.get("type") or ""), str(entry.get("name") or ""))
+        prior = previous_entries.get(key)
+        if (
+            prior is not None
+            and prior.get("install_timestamp")
+            and _materialization_equivalent(prior, entry)
+        ):
+            timestamp = str(prior["install_timestamp"])
+            entry["install_timestamp"] = timestamp
+            timestamps[root_id(key[0], key[1])] = timestamp
+
+    for receipt in data.get("receipts", []):
+        if not isinstance(receipt, dict):
+            continue
+        timestamp = timestamps.get(str(receipt.get("id") or ""))
+        if timestamp:
+            receipt["install_timestamp"] = timestamp
+
+
 def upsert_entry(
     data: dict[str, Any],
     entry: dict[str, Any],
@@ -707,30 +770,9 @@ def upsert_entry(
 
     for i, existing in enumerate(installed):
         if existing.get("name") == name and existing.get("type") == primitive_type:
-            stable_fields = (
-                "name",
-                "type",
-                "source_commit",
-                "checksum_sha256",
-                "checksum_type",
-                "content_sha256",
-                "install_mode",
-                "scope",
-            )
-            unchanged_materialization = all(
-                existing.get(key) == entry.get(key) for key in stable_fields
-            ) and _project_path_equivalent(
-                str(existing.get("install_target") or ""),
-                str(entry.get("install_target") or ""),
-            )
-            unchanged_materialization = (
-                unchanged_materialization
-                and _bridge_symlinks_equivalent(
-                    list(existing.get("bridge_symlinks") or []),
-                    list(entry.get("bridge_symlinks") or []),
-                )
-            )
-            if unchanged_materialization and existing.get("install_timestamp"):
+            if _materialization_equivalent(existing, entry) and existing.get(
+                "install_timestamp"
+            ):
                 entry["install_timestamp"] = existing["install_timestamp"]
             installed[i] = entry
             break
