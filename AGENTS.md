@@ -30,7 +30,7 @@ separate from the target catalog or project where content is installed.
 |---|---|---|
 | What is a Skill / Agent / Hook / Standard / Plugin / Marketplace exactly? | `docs/PRIMITIVES.md` | matching `### N. <name>` section |
 | Orchestrator system prompt vs. agent system prompt (which one am I editing?) | `docs/primitives/system-prompt.md` (orchestrator) + `docs/primitives/agent-base.md` (agent Layer 1) | — |
-| Is primitive X portable between Claude Code, Codex, Pi, OpenCode? | `docs/PRIMITIVES.md` | **Portability Matrix (TL;DR)** — top of file, after Decision Tree |
+| Is primitive X portable between Claude Code, Codex, or Pi? | `docs/PRIMITIVES.md` | **Portability Matrix (TL;DR)** — top of file, after Decision Tree |
 | Which primitive should I create for this new capability? | `docs/PRIMITIVES.md` | **Quick Decision Tree** — very top |
 | How is this repo structured (4-layer stack, install paths)? | `docs/ARCHITECTURE.md` | The 4-layer Agentic Stack |
 | Which design decisions were made and why? | `docs/adr/` | matching ADR filename |
@@ -50,14 +50,13 @@ it is in `bd prime`.
 
 ## Repository-specific Conventions
 
-### Canonical Launchers (`cld` / `cdx`)
+### Packaged Launchers (`cld` / `cdx`)
 
-- **Canonical home:** `bin/` (this repo)
-  - `bin/cld` — Claude Code launcher (full-featured zsh wrapper)
-  - `bin/cdx` — Codex CLI launcher (parallel to `cld`)
-- **Install:** `bash install.sh` — symlinks the CLI and both launchers into `~/.local/bin/` (must be on `$PATH`). Idempotent.
-- **Per ADR `canonical-library-architecture` Decision 2:** launchers live in `bin/`, not in `~/.claude/scripts/`. The `~/.claude/scripts/` directory is no longer on `$PATH`.
-- **Follow-up:** `CMUX_BUNDLED_CLI_PATH` in `cld` still references `~/.claude/scripts/cmux-shim.sh`. Move target is Phase 2 cleanup per the same ADR.
+- **Packaged home:** `scripts/bin/` (this repo)
+  - `scripts/bin/cld` — Claude Code launcher (full-featured zsh wrapper)
+  - `scripts/bin/cdx` — Codex CLI launcher (parallel to `cld`)
+- **Install:** `bash install.sh`, then `library bootstrap install`. The first command installs the CLI and launchers with `uv tool`; the second safely creates the receipted product bootstrap without overwriting operator-owned files.
+- **Compatibility copies:** `bin/` remains synchronized with `scripts/bin/` for source-checkout users until the legacy launcher path is formally retired.
 
 ### `library.yaml` Schema Ownership (serialized)
 

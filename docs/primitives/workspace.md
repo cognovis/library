@@ -7,8 +7,8 @@
 > Workspace definition is tracked by marketplace bead `clc-tzn5`.
 
 **Definition.** A versioned, metadata-only Library desired-state root that names
-a reusable set of typed roots contributing to one project or the user-global
-lobby. A scope may register several Workspaces.
+a reusable set of typed roots contributing to one repository. A project may
+register several Workspaces.
 
 **Key constitutive feature.** Ownership-aware reconciliation. A Workspace does
 not merely install a collection; it lets the Library resolve the complete root
@@ -23,20 +23,20 @@ is never copied into a harness directory.
 automation manages it through:
 
 ```text
-library workspace list [--scope project|global] [--json]
-library workspace show <catalog>:<name> [--scope project|global] [--json]
+library workspace list [--scope project] [--json]
+library workspace show <catalog>:<name> [--scope project] [--json]
 library workspace validate <manifest-or-catalog-reference> [--json]
-library workspace use <catalog>:<name> --scope project|global [--dry-run] [--replace-with-catalog-content] [--json]
-library workspace status [<catalog>:<name>|--all] --scope project|global [--json]
-library workspace explain <type>:<name> --scope project|global [--json]
-library workspace sync [<catalog>:<name>|--all] --scope project|global [--verify-receipts] [--json]
-library workspace sync [<catalog>:<name>|--all] --prune [--apply] --scope project|global [--json]
-library workspace sync [<catalog>:<name>|--all] --prune --apply --acknowledge-plan <digest> --scope project|global [--json]
-library workspace recover --scope project|global [--json]
-library workspace recover --scope project|global --discard --acknowledge-plan <journal-digest> [--json]
-library workspace adopt <catalog>:<workspace> <type>:<name> --definition-commit <pin> --scope project|global [--json]
-library workspace adopt <catalog>:<workspace> --from-direct [<type>:<name>|--all-reachable] --scope project|global [--apply --acknowledge-plan <digest>] [--json]
-library workspace remove <catalog>:<name> --scope project|global [--json]
+library workspace use <catalog>:<name> --scope project [--dry-run] [--replace-with-catalog-content] [--json]
+library workspace status [<catalog>:<name>|--all] --scope project [--json]
+library workspace explain <type>:<name> --scope project [--json]
+library workspace sync [<catalog>:<name>|--all] --scope project [--verify-receipts] [--json]
+library workspace sync [<catalog>:<name>|--all] --prune [--apply] --scope project [--json]
+library workspace sync [<catalog>:<name>|--all] --prune --apply --acknowledge-plan <digest> --scope project [--json]
+library workspace recover --scope project [--json]
+library workspace recover --scope project --discard --acknowledge-plan <journal-digest> [--json]
+library workspace adopt <catalog>:<workspace> <type>:<name> --definition-commit <pin> --scope project [--json]
+library workspace adopt <catalog>:<workspace> --from-direct [<type>:<name>|--all-reachable] --scope project [--apply --acknowledge-plan <digest>] [--json]
+library workspace remove <catalog>:<name> --scope project [--json]
 ```
 
 Every operational command supports `--json`. `list`, `show`, `validate`, and
@@ -121,11 +121,14 @@ does not produce a closure at all, so nothing can report a live, moving member
 set as pinned. A source that answers with a different value, with nothing, or
 with an error is fail-closed drift naming both values.
 
-The honest residual: a verified pin proves the *source* has not moved. It does
-not prove that this repository's catalog document describes that revision,
-because members are still read locally until an adapter fetches at the pin. That
-is the second half of the same guarantee, it belongs to the provider slice, and
-it is why materialization is refused meanwhile.
+Pin verification proves that the declared commit is available from the selected
+catalog source. Before mutation, every resolved member is then read from that
+exact commit in the configured catalog checkout, normalized into an inventory
+item, admitted as immutable content, and rebound to the gate's published bytes.
+If the checkout is unavailable, the commit is absent, or one member cannot be
+read completely at the pin, the whole closure fails before mutation. The
+fresh-machine installer prepares these portable catalog checkouts and registers
+them by source identity.
 
 **Pin drift is never silent.** Registering a v2 Workspace also records the
 identity and pin of every catalog it declared. A later resolution that finds a
@@ -147,14 +150,13 @@ closure or none of it; a partial selection is the silent skip the
 executable-admission gate exists to refuse. The writer receives the exact
 immutable content the gate digested; it never sources its own bytes.
 
-**A v2 Workspace resolves, validates, and previews; it does not install yet.**
-`library workspace use` refuses to materialize a closure with declared catalogs.
-Installing it safely needs the declared pin verified against the source, its
-members normalized into inventory items, and the mutation gate in the write
-path, which is reference-adapter work. The current installer would instead fetch
-each member from the live catalog and ignore the pin entirely — shipping a
-`catalogs:` block that looks pinned and is not, which is worse than not
-installing.
+**A v2 Workspace installs only through pinned executable admission.**
+`library workspace use` verifies every declared commit, reads each member from
+that commit, requires normalized content for the complete cross-catalog closure,
+and passes the frozen bytes through `gate_workspace_mutation`. The installers
+receive only the gate's published content while receipts retain the original
+catalog identity and pin. No member is fetched from a moving branch during the
+mutation, and an incomplete or unverified closure is refused as a unit.
 
 > **This approval is FINAL as of 2026-08-09.** The ADR-0010 two-consumer evidence
 > gate was **amended, not satisfied** — a Human Decision by Malte Sussdorff
@@ -224,8 +226,8 @@ all known. The check runs in the plan and again in the preflight immediately
 before deletion, and a prune plan that records no resolved catalog closure at all
 is refused rather than read as "every owner is registered".
 
-**Composition.** A project or global scope may register several Workspaces. The
-effective desired state is their unordered set union together with direct roots
+**Composition.** A project may register several Workspaces. The effective desired
+state is their unordered set union together with direct roots
 and all `requires:` dependencies. Cross-catalog composition uses qualified roots
 inside one v2 manifest; composing at the scope boundary with one Workspace per
 catalog remains valid and is what v1 consumers do. There are no overlay,
@@ -233,38 +235,32 @@ exclusion, precedence, or last-writer-wins semantics: version conflicts, target
 collisions, and scope mismatches fail before mutation, whether the collision
 arises inside one manifest or between two Workspaces in the same scope.
 
-**Scope.** One Workspace use is either project-scoped or global-scoped, and its
-entire closure stays in that scope. A project Workspace cannot own global
-artifacts. A global Workspace can define the lobby because every direct global
-Library root shares the same global lock.
-
-An intrinsically global dependency such as MCP is a prerequisite assertion when
-reached from a project Workspace. The project gains no ownership edge or artifact
-receipt, but its lock records the non-owning assertion for reproducibility. Use
-and sync fail before mutation until the compatible global root is present.
+**Scope.** Every Workspace use is project-scoped and its entire closure stays in
+that repository. A Workspace cannot own global artifacts or create a global
+prerequisite assertion. MCP registration is outside Workspace composition: its
+public lifecycle is retired, while the enumerated OpenBrain singleton belongs to
+the product bootstrap manifest.
 
 **Load semantics.** Installed is not the same as loaded. Every member keeps its
 own trigger and context behavior. Workspace status groups members by load
-semantics so a global lobby can be audited for standing context without forcing
-every installed primitive into every prompt.
+semantics without forcing every installed primitive into every prompt.
 
 **Portability.** The manifest is harness-neutral Library metadata. Its resolved
 members inherit their individual portability and projection behavior. The
-Workspace itself has no Claude Code, Codex, Pi, Cursor, or OpenCode file format.
+Workspace itself has no Claude Code, Codex, or Pi file format.
 
-**When to choose it.** Use a Workspace when a project class or global lobby
-needs a reusable, reviewable desired-state baseline and must safely retire
+**When to choose it.** Use a Workspace when a project needs a reusable,
+reviewable desired-state baseline and must safely retire
 Library-managed content that leaves that baseline. Prefer several orthogonal
 Workspaces over combined variants: a FHIR Python repository can use both
 `fhir-ig-authoring` and `python-cli`.
 
 Admission requires at least two independently meaningful, standalone-installable
-roots and evidence from two committed consumer locks. The default policy caps
-project closures at 30 receipts and the global lobby at five direct roots, 15
-receipts, no domain or customer content, and one percent standing context.
-Deployments may lower these values through top-level `workspace_policy`; the
-catalog schema rejects invalid budgets. If a consumer wants "all except one
-member," split the Workspace instead of adding an override.
+roots and evidence from two committed consumer locks. The default policy caps a
+project closure at 30 receipts. Deployments may lower this value through the
+project `workspace_policy`; the catalog schema rejects invalid budgets. If a
+consumer wants "all except one member," split the Workspace instead of adding
+an override.
 
 **Counter-examples.**
 
@@ -285,7 +281,6 @@ member," split the Workspace instead of adding an override.
 | `python-cli` | project | First pilot: shared Python CLI development and test baseline composed from canonical primitives |
 | `library-authoring` + `python-cli` | same project | Two directly registered Workspaces in `library/meta`; neither is nested in the other |
 | `fhir-ig-authoring` | project | Conditional candidate only if at least two independent roots survive its `requires:` audit |
-| `engineering-lobby` | global | Deferred until its member list, bootstrap receipts, collision path, and manager inventory adapter satisfy the lobby gates |
 
 The evidence-backed initial portfolio and repository mapping live in
 [ADR-0010](../adr/workspace-desired-state-reconciliation.md) and

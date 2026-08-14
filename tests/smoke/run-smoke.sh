@@ -2,7 +2,7 @@
 # run-smoke.sh — Cross-harness smoke test runner
 #
 # Usage: ./tests/smoke/run-smoke.sh [harness]
-#   harness: claude-code | codex | pi | opencode | name-collision | all (default: all)
+#   harness: claude-code | codex | pi | name-collision | all (default: all)
 #
 # Returns: exit code 0 on all PASS, 1 on any FAIL
 #
@@ -357,42 +357,6 @@ smoke_pi() {
     echo "          Global primary:         ~/.pi/agent/skills/hello-world/SKILL.md"
     echo "          Global fallback:        ~/.agents/skills/hello-world/SKILL.md"
     echo "        Manual verification required when Pi runtime is available."
-}
-
-# ---------------------------------------------------------------------------
-# Harness: opencode (stub)
-# ---------------------------------------------------------------------------
-smoke_opencode() {
-    section "opencode"
-
-    local fixture_src="${SCRIPT_DIR}/opencode/fixtures/${FIXTURE_NAME}"
-
-    # CHECK 1: fixture stub exists
-    if [[ -f "${fixture_src}/SKILL.md" ]]; then
-        pass "opencode/fixture-stub: fixture SKILL.md exists at ${fixture_src}/SKILL.md"
-    else
-        fail "opencode/fixture-stub: fixture SKILL.md NOT found at ${fixture_src}/SKILL.md"
-    fi
-
-    # CHECK 2: fixture has STUB status marker
-    if grep -q "FIXTURE_STATUS: STUB" "${fixture_src}/SKILL.md" 2>/dev/null; then
-        pass "opencode/fixture-stub: SKILL.md correctly marked as STUB"
-    else
-        fail "opencode/fixture-stub: SKILL.md missing FIXTURE_STATUS: STUB marker"
-    fi
-
-    # CHECK 3: All remaining checks are stubs
-    skip "opencode/install: OpenCode runtime not locally available"
-    skip "opencode/discovery-order: OpenCode runtime not locally available"
-    skip "opencode/symlink: OpenCode runtime not locally available"
-    skip "opencode/git-symlink: OpenCode runtime not locally available"
-    skip "opencode/runtime: OpenCode runtime not locally available"
-
-    echo "  NOTE  opencode: Expected install paths (from architecture docs):"
-    echo "          Project-local primary:  .opencode/skills/hello-world/SKILL.md"
-    echo "          Project-local fallback: .claude/skills/hello-world/SKILL.md"
-    echo "          Project-local fallback: .agents/skills/hello-world/SKILL.md"
-    echo "        Manual verification required when OpenCode runtime is available."
 }
 
 # ---------------------------------------------------------------------------
@@ -1440,9 +1404,6 @@ main() {
         pi)
             smoke_pi
             ;;
-        opencode)
-            smoke_opencode
-            ;;
         name-collision)
             smoke_name_collision
             ;;
@@ -1472,7 +1433,6 @@ main() {
             smoke_claude_code
             smoke_codex
             smoke_pi
-            smoke_opencode
             smoke_name_collision
             smoke_lockfile
             smoke_standards
@@ -1480,7 +1440,7 @@ main() {
             ;;
         *)
             echo "ERROR: Unknown harness '${harness}'"
-            echo "Usage: $0 [claude-code|codex|pi|opencode|name-collision|lockfile|standards|agent-bases|migration|fleet-migration|library-core|all]"
+            echo "Usage: $0 [claude-code|codex|pi|name-collision|lockfile|standards|agent-bases|migration|fleet-migration|library-core|all]"
             exit 1
             ;;
     esac

@@ -56,8 +56,9 @@ Dry runs never change `.gitignore` or the Git index. Global installs do not
 manage a project `.gitignore`.
 
 Project scope vendors content into the repository's canonical `.agents/` paths.
-Global scope installs into user-global Library roots. Each primitive retains its
-own harness projection and context-loading behavior.
+Global Library desired state is retired; every public primitive lifecycle is
+repository-local. Each primitive retains its own harness projection and
+context-loading behavior.
 
 Strict dependencies come from typed `requires:` metadata and resolve
 transitively. Committed catalog entries use published HTTPS Git sources; a

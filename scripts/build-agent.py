@@ -38,7 +38,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 COMPOSE_SCRIPT = SCRIPT_DIR / "compose-agent.py"
 DEFAULT_MODELS_REGISTRY = REPO_ROOT / "models.yaml"
 DEFAULT_CAPABILITIES_REGISTRY = REPO_ROOT / "capabilities.yaml"
-SUPPORTED_HARNESSES = {"claude", "codex", "opencode"}
+SUPPORTED_HARNESSES = {"claude", "codex"}
 COMPOSER_ONLY_KEYS = {
     "agent_base",
     "agent_base_extends",
@@ -47,12 +47,11 @@ COMPOSER_ONLY_KEYS = {
     "requires",
     "capabilities",
 }
-HARNESS_OVERRIDE_KEYS = {"claude", "codex", "opencode"}
-MODEL_HARNESS_KEYS = {"claude", "claude-code", "codex", "opencode"}
+HARNESS_OVERRIDE_KEYS = {"claude", "codex"}
+MODEL_HARNESS_KEYS = {"claude", "claude-code", "codex"}
 HARNESS_REGISTRY_KEYS = {
     "claude": "claude-code",
     "codex": "codex",
-    "opencode": "opencode",
 }
 CODEX_TOML_FIELDS = {
     "name",
@@ -811,7 +810,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--harness",
         default="all",
-        choices=["all", "claude", "codex", "opencode"],
+        choices=["all", "claude", "codex"],
         help="Harness artifact to build (default: all).",
     )
     parser.add_argument(

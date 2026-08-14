@@ -238,8 +238,10 @@ def test_a_verified_pin_installs_a_v2_workspace(tmp_path: Path) -> None:
     assert (project / ".agents" / "skills" / "helper").exists()
 
 
-def test_pin_drift_is_fail_closed_and_never_re_pinned(tmp_path: Path) -> None:
-    """A source that moved refuses, names both values, and writes nothing."""
+def test_a_source_moving_after_the_pin_still_installs_the_pinned_bytes(
+    tmp_path: Path,
+) -> None:
+    """A later source commit cannot change an immutable Workspace closure."""
     project = tmp_path / "project"
     home = tmp_path / "home"
     project.mkdir()
@@ -259,15 +261,34 @@ def test_pin_drift_is_fail_closed_and_never_re_pinned(tmp_path: Path) -> None:
         "--json",
     )
 
-    assert used.returncode != 0
-    message = (used.stdout or "") + (used.stderr or "")
-    assert "pin drift" in message
-    assert heads["core"] in message, "the refusal names the declared pin"
-    assert not (project / ".library.lock").exists()
-    # And the manifest still declares the original pin: drift is never resolved
-    # by quietly adopting whatever the source now serves.
+    assert used.returncode == 0, used.stdout + used.stderr
+    installed = project / ".agents" / "skills" / "python-dev"
+    assert (installed / "SKILL.md").exists()
+    assert not (installed / "NOTES.md").exists()
     manifest = yaml.safe_load(manifest_path.read_text())
     assert manifest["catalogs"][0]["pin"]["value"] == heads["core"]
+
+
+def test_an_unknown_declared_commit_is_refused_before_mutation(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    manifest_path = _write_v2_fixture(project)
+    _pin_manifest_to_sources(project, manifest_path)
+    catalog = yaml.safe_load((project / "library.yaml").read_text())
+    catalog["library"]["workspaces"][0]["catalogs"][0]["pin"]["value"] = "f" * 40
+    (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+
+    used = _run(
+        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
+        "--json",
+    )
+
+    assert used.returncode != 0
+    assert "does not contain declared commit" in used.stdout + used.stderr
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents" / "skills").exists()
 
 
 def test_the_cli_rejects_a_v1_manifest_carrying_a_catalog_qualifier(

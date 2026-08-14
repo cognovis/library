@@ -95,7 +95,6 @@ def test_recorded_codex_bridge_is_removed(project: Path, monkeypatch):
         lambda catalog, prim, scope, repo_root, harness: {
             "claude_code": repo_root / ".claude" / "agents",
             "codex": repo_root / ".codex" / "agents",
-            "opencode": repo_root / ".opencode" / "agents",
         }[harness],
     )
 
@@ -113,7 +112,7 @@ def test_no_orphan_remains_for_any_harness(project: Path, monkeypatch):
     monkeypatch.setattr(
         "lib.installers.agent._resolve_agent_base",
         lambda catalog, prim, scope, repo_root, harness: repo_root
-        / {"claude_code": ".claude", "codex": ".codex", "opencode": ".opencode"}[harness]
+        / {"claude_code": ".claude", "codex": ".codex"}[harness]
         / "agents",
     )
 
@@ -131,7 +130,7 @@ def test_dry_run_plan_lists_every_path_the_real_removal_deletes(project: Path, m
     monkeypatch.setattr(
         "lib.installers.agent._resolve_agent_base",
         lambda catalog, prim, scope, repo_root, harness: repo_root
-        / {"claude_code": ".claude", "codex": ".codex", "opencode": ".opencode"}[harness]
+        / {"claude_code": ".claude", "codex": ".codex"}[harness]
         / "agents",
     )
 
@@ -195,7 +194,7 @@ def test_bridge_outside_managed_directories_is_preserved(project: Path, monkeypa
     monkeypatch.setattr(
         "lib.installers.agent._resolve_agent_base",
         lambda catalog, prim, scope, repo_root, harness: repo_root
-        / {"claude_code": ".claude", "codex": ".codex", "opencode": ".opencode"}[harness]
+        / {"claude_code": ".claude", "codex": ".codex"}[harness]
         / "agents",
     )
 
@@ -212,7 +211,7 @@ def test_already_absent_bridge_is_reported_not_fatal(project: Path, monkeypatch)
     monkeypatch.setattr(
         "lib.installers.agent._resolve_agent_base",
         lambda catalog, prim, scope, repo_root, harness: repo_root
-        / {"claude_code": ".claude", "codex": ".codex", "opencode": ".opencode"}[harness]
+        / {"claude_code": ".claude", "codex": ".codex"}[harness]
         / "agents",
     )
 

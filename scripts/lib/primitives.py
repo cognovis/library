@@ -90,7 +90,7 @@ PRIMITIVES: list[PrimitiveInfo] = [
         yaml_section="library.mcp_servers",
         yaml_key="library/mcp_servers",
         legacy_yaml_keys=["mcp_servers"],
-        description="MCP server configurations for Claude/Codex/OpenCode",
+        description="MCP server configurations for Claude Code and Codex",
         install_subdir=None,  # handled by install-mcp.py
     ),
     PrimitiveInfo(

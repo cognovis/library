@@ -38,7 +38,6 @@ HARNESS_SKILL_DIRS = (
     ".agents/skills",
     ".claude/skills",
     ".codex/skills",
-    ".opencode/skills",
 )
 
 

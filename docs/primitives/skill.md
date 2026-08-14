@@ -19,9 +19,6 @@ harness — see Cost table below:
   present; no fresh read occurs.
 - **Codex CLI**: only the skill name and description are loaded at startup. When
   the model infers relevance, the harness fetches the full SKILL.md on first use.
-- **Cursor**: skills are projected through `.cursor/skills/<name>/` as a symlink
-  to the canonical `.agents/skills/<name>/` project install. Global installs use
-  `~/.cursor/skills/<name>/` pointing to `~/.agents/skills/<name>/`.
 
 In both harnesses, the `description` field is what the model matches against to
 decide relevance — only the timing of the full-text load differs.
@@ -35,17 +32,8 @@ decide relevance — only the timing of the full-text load differs.
 
 **Format.** SKILL.md — shared format (Open Agent Skills Standard). Install paths
 differ: `.agents/skills/<name>/SKILL.md` (canonical, read by Codex natively and by
-Claude Code through the `.claude/skills/<name>` bridge symlink and by Cursor
-through the `.cursor/skills/<name>` bridge symlink). NORMATIVE for these tools.
-
-**Cursor projection.** Project-scope Cursor installs use
-`.cursor/skills/<name>/` as a symlink to `.agents/skills/<name>/`. Global-scope
-Cursor installs use `~/.cursor/skills/<name>/` as a symlink to
-`~/.agents/skills/<name>/`. Cursor rules generated from `always_apply` or
-`globs` are written to `.cursor/rules/<name>.mdc` by the harness materializer.
-Agent, MCP, and guardrail installs are not supported for Cursor by the library
-installer; those primitive requests fail with a compatibility message instead
-of writing `.cursor/agents/`, MCP config, or guardrail hooks.
+Claude Code through the `.claude/skills/<name>` bridge symlink). NORMATIVE for
+the supported harnesses.
 
 **When to choose it.** Use a skill when:
 - The capability should be available without the user remembering a command.
@@ -54,8 +42,8 @@ of writing `.cursor/agents/`, MCP config, or guardrail hooks.
 
 **`always_apply` and `globs` fields.**
 Skills support two optional fields that control when the harness injects them:
-- `always_apply: true` — forces the skill into context unconditionally (analogous to a guardrail for context injection purposes). Use sparingly: it adds startup context cost for every session. On install, the installer writes an `@<path>` import into `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) and a `.cursor/rules/<name>.mdc` with `alwaysApply: true` frontmatter (Cursor).
-- `globs: ["*.py", ...]` — suggests the skill when a matching file is present in the edit context. Cursor writes a `.mdc` with `globs:` frontmatter. Claude Code and Codex do not support glob-scoped injection natively; a warning is emitted on install and no harness file is modified for those harnesses.
+- `always_apply: true` — forces the skill into context unconditionally (analogous to a guardrail for context injection purposes). Use sparingly: it adds startup context cost for every session. On install, the installer writes an `@<path>` import into `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex).
+- `globs: ["*.py", ...]` — suggests the skill when a matching file is present in the edit context. The supported harnesses do not support glob-scoped injection natively; a warning is emitted on install and no harness file is modified.
 
 **`model:` field — FORBIDDEN in skills.** NORMATIVE.
 Skills must not include a `model:` frontmatter field. Model selection is the
@@ -63,7 +51,7 @@ responsibility of the *agent* that consumes the skill, not the skill itself.
 
 Rationale: `model:` is a Claude Code-specific frontmatter extension. Including it in a
 SKILL.md creates harness lock-in — the skill will fail to load or be ignored under
-Codex, Cursor, or any harness that does not understand the field. Skills are
+Codex or any harness that does not understand the field. Skills are
 harness-agnostic context files. If a skill's *content* implicitly requires a certain
 reasoning tier (e.g. "this task needs deep analysis"), document that as a prose note
 inside the skill body; do not pin it in frontmatter.

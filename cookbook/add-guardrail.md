@@ -30,13 +30,13 @@ git pull
 Use the guardrail primitive contract to confirm
 which harnesses natively support it:
 
-| Purpose | Claude Code | Codex CLI | Codex Cloud | Pi | OpenCode |
-|---------|-------------|-----------|-------------|-----|----------|
-| `pre-tool-veto` | NATIVE (PreToolUse) | WORKAROUND (SessionStart) | BLUNT (approval_policy) | NATIVE | NATIVE |
-| `post-tool-reaction` | NATIVE (PostToolUse) | NOT SUPPORTED | NOT SUPPORTED | NATIVE | NOT SUPPORTED |
-| `session-init` | NATIVE (SessionStart) | NATIVE (SessionStart) | NOT SUPPORTED | PARTIAL | NOT SUPPORTED |
-| `cleanup` | NATIVE (Stop/PreCompact) | PARTIAL (Stop only) | NOT SUPPORTED | NOT SUPPORTED | NOT SUPPORTED |
-| `audit-log` | NATIVE (PostToolUse) | NOT SUPPORTED | NOT SUPPORTED | NATIVE | NOT SUPPORTED |
+| Purpose | Claude Code | Codex CLI | Codex Cloud | Pi |
+|---------|-------------|-----------|-------------|-----|
+| `pre-tool-veto` | NATIVE (PreToolUse) | WORKAROUND (SessionStart) | BLUNT (approval_policy) | NATIVE |
+| `post-tool-reaction` | NATIVE (PostToolUse) | NOT SUPPORTED | NOT SUPPORTED | NATIVE |
+| `session-init` | NATIVE (SessionStart) | NATIVE (SessionStart) | NOT SUPPORTED | PARTIAL |
+| `cleanup` | NATIVE (Stop/PreCompact) | PARTIAL (Stop only) | NOT SUPPORTED | NOT SUPPORTED |
+| `audit-log` | NATIVE (PostToolUse) | NOT SUPPORTED | NOT SUPPORTED | NATIVE |
 
 If a harness is listed as NOT SUPPORTED: omit it from the `capability` section.
 If a harness is WORKAROUND or BLUNT: document the limitation in the `capability.note` field.
@@ -56,7 +56,6 @@ For each supported harness, create the handler file:
 | `codex_cli` | `guardrails/<name>/codex-cli.mjs` | Node ESM module |
 | `codex_cloud` | `guardrails/<name>/codex-cloud-config-fragment.toml` | TOML config fragment |
 | `pi` | `guardrails/<name>/pi-extension.ts` | TypeScript extension |
-| `opencode` | `guardrails/<name>/opencode-fragment.json` | JSON rules fragment |
 
 **Claude Code hook contract** (the primary implementation):
 - Read `$CLAUDE_TOOL_INPUT` JSON for tool input
@@ -112,14 +111,10 @@ library:
           recommended_value: all
           note: "..."
           mismatch_warning: "..."
-        opencode:                        # omit if NOT SUPPORTED
-          mechanism: permission-rule
-          config_key: rules
       sources:
         claude_code: guardrails/<name>/claude-code.sh
         codex_cli: guardrails/<name>/codex-cli.mjs     # omit if not created
         codex_cloud: guardrails/<name>/codex-cloud-config-fragment.toml
-        opencode: guardrails/<name>/opencode-fragment.json
       tags:
         - <relevant-tags>
 ```

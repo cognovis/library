@@ -116,7 +116,7 @@
           "default": []
         },
         "workflows": {
-          "description": "Catalog of deterministic workflow orchestration specs. Stored as Claude workflow JavaScript; Codex and Cursor have no native workflow executor.",
+          "description": "Catalog of deterministic workflow orchestration specs. Stored as Claude workflow JavaScript; Codex has no native workflow executor.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/workflow_entry"
@@ -249,31 +249,10 @@
       "default": []
     },
     "workspace_policy": {
-      "description": "Selected-scope safety budgets for Workspace resolution.",
+      "description": "Project-scoped safety budgets for Workspace resolution.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "global": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "max_roots": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 5
-            },
-            "max_receipts": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 15
-            },
-            "max_standing_context_fraction": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 0.01
-            }
-          }
-        },
         "project": {
           "type": "object",
           "additionalProperties": false,
@@ -614,26 +593,8 @@
             "planned"
           ]
         },
-        "cursor": {
-          "description": "Support status in Cursor harness.",
-          "type": "string",
-          "enum": [
-            "supported",
-            "not-supported",
-            "planned"
-          ]
-        },
-        "opencode": {
-          "description": "Support status in OpenCode harness.",
-          "type": "string",
-          "enum": [
-            "supported",
-            "not-supported",
-            "planned"
-          ]
-        },
-        "gemini": {
-          "description": "Support status in Gemini harness.",
+        "pi": {
+          "description": "Support status in Pi harness.",
           "type": "string",
           "enum": [
             "supported",
@@ -1434,7 +1395,7 @@
           ]
         },
         "coding_strategy": {
-          "description": "How coding harnesses (Claude Code, Codex, OpenCode) should consume this server: cli = install the CLI wrapper package, mcp = add to harness MCP config.",
+          "description": "How coding harnesses (Claude Code, Codex) should consume this server: cli = install the CLI wrapper package, mcp = add to harness MCP config.",
           "type": "string",
           "enum": [
             "cli",
@@ -1509,7 +1470,7 @@
               }
             },
             "mcp": {
-              "description": "Per-harness MCP config hints when coding_strategy or mobile_strategy is mcp. Keys are supported harness names (claude_code, codex, opencode, antigravity, cursor, claude_ai, claude_ios). Registration into a harness means agents running in it can call the server's typed tools; it does NOT imply the harness orchestrates Library workflows. Values are open objects — the translator bead will define stricter schemas.",
+              "description": "Per-harness MCP config hints for the supported Library harnesses.",
               "type": "object",
               "properties": {
                 "claude_code": {
@@ -1530,54 +1491,6 @@
                 },
                 "codex": {
                   "description": "Config hints for Codex (~/.codex/config.toml).",
-                  "type": "object",
-                  "properties": {
-                    "config_path": {
-                      "description": "Path to the harness config file that receives the snippet.",
-                      "type": "string"
-                    },
-                    "snippet": {
-                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
-                      "type": "object",
-                      "additionalProperties": true
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                "opencode": {
-                  "description": "Config hints for OpenCode (~/.config/opencode/opencode.json).",
-                  "type": "object",
-                  "properties": {
-                    "config_path": {
-                      "description": "Path to the harness config file that receives the snippet.",
-                      "type": "string"
-                    },
-                    "snippet": {
-                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
-                      "type": "object",
-                      "additionalProperties": true
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                "antigravity": {
-                  "description": "Config hints for Antigravity-compatible MCP registration.",
-                  "type": "object",
-                  "properties": {
-                    "config_path": {
-                      "description": "Path to the harness config file that receives the snippet.",
-                      "type": "string"
-                    },
-                    "snippet": {
-                      "description": "Canonical MCP server descriptor. Structure is harness-specific — translator bead enforces exact shape.",
-                      "type": "object",
-                      "additionalProperties": true
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                "cursor": {
-                  "description": "Config hints for Cursor (Cursor Agent, launched via `cra`). Implementation-surface consumer per ADR-0007 — registers the server so its agents call typed tools; not an orchestration runner.",
                   "type": "object",
                   "properties": {
                     "config_path": {
@@ -1767,11 +1680,6 @@
               "description": "Capability declaration for Pi harness (TypeScript extensions in .pi/extensions/*.ts).",
               "type": "object",
               "additionalProperties": true
-            },
-            "opencode": {
-              "description": "Capability declaration for OpenCode (permission rules in opencode.json). Pre-tool gates.",
-              "type": "object",
-              "additionalProperties": true
             }
           }
         },
@@ -1794,10 +1702,6 @@
             },
             "pi": {
               "description": "Path to the Pi TypeScript extension file (.ts).",
-              "type": "string"
-            },
-            "opencode": {
-              "description": "Path to the OpenCode permission rule fragment (JSON).",
               "type": "string"
             }
           }
@@ -2208,6 +2112,12 @@
       "additionalProperties": false
     },
     "workspace_entry": {
+      "oneOf": [
+        {"$ref": "#/$defs/workspace_entry_v1"},
+        {"$ref": "#/$defs/workspace_entry_v2"}
+      ]
+    },
+    "workspace_entry_v1": {
       "description": "A convention-scanned Workspace manifest plus source-catalog metadata.",
       "type": "object",
       "required": [
@@ -2306,6 +2216,136 @@
         "constraint": {
           "type": "string",
           "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+        }
+      }
+    },
+    "workspace_entry_v2": {
+      "description": "A pinned cross-catalog Workspace manifest plus source-catalog metadata.",
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "source",
+        "schema_version",
+        "version",
+        "catalogs",
+        "roots"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/source_ref"
+        },
+        "schema_version": {
+          "const": 2
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["experimental", "stable", "deprecated"]
+        },
+        "standing_context_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "catalogs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/workspace_declared_catalog"}
+        },
+        "roots": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/workspace_root_v2"}
+        },
+        "metadata": {
+          "$ref": "#/$defs/entry_metadata"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        }
+      }
+    },
+    "workspace_declared_catalog": {
+      "type": "object",
+      "required": ["alias", "identity", "pin"],
+      "additionalProperties": false,
+      "properties": {
+        "alias": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pin": {
+          "type": "object",
+          "required": ["kind", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {"const": "commit"},
+            "value": {
+              "type": "string",
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+            }
+          }
+        }
+      }
+    },
+    "workspace_root_v2": {
+      "type": "object",
+      "required": ["type", "name", "catalog"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "skill",
+            "agent",
+            "prompt",
+            "script",
+            "standard",
+            "guardrail",
+            "mcp",
+            "model-standard",
+            "agent-base",
+            "workflow",
+            "pi-extension",
+            "pi-profile",
+            "just-module",
+            "runtime-config"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "constraint": {
+          "type": "string",
+          "pattern": "^(?:(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)(?:,(?:<=|>=|==|<|>)[0-9]+\\.[0-9]+\\.[0-9]+)*$"
+        },
+        "catalog": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
         }
       }
     },

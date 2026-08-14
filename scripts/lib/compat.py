@@ -107,8 +107,6 @@ def _compare_versions(current: str, operator: str, required: str) -> bool:
 _HARNESS_VERSION_COMMANDS: dict[str, tuple[list[str], str]] = {
     "claude_code": (["claude", "--version"], r"(\d+\.\d+[\.\d]*)"),
     "codex": (["codex", "--version"], r"(\d+\.\d+[\.\d]*)"),
-    "opencode": (["opencode", "--version"], r"(\d+\.\d+[\.\d]*)"),
-    "cursor": (["cursor", "--version"], r"(\d+\.\d+[\.\d]*)"),
 }
 
 

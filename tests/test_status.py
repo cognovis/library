@@ -442,6 +442,88 @@ class TestCmdStatusImpl:
 # ---------------------------------------------------------------------------
 
 class TestStatusCLI:
+    def test_status_json_reports_repair_available_when_upstream_is_behind(
+        self, tmp_path, capsys, monkeypatch
+    ):
+        """Top-level JSON status and exit code describe the same repair state."""
+        import argparse
+        import library as library_cli
+
+        monkeypatch.setattr(
+            library_cli,
+            "cmd_status_impl",
+            lambda **kwargs: {
+                "overall": "behind",
+                "entries": [{"name": "fixture", "primitive": "skill", "behind": True}],
+            },
+        )
+        monkeypatch.setattr(
+            library_cli,
+            "_repository_health",
+            lambda _root: {
+                "desired_state": {"status": "healthy"},
+                "projections": {"status": "clean"},
+                "git_hygiene": {"status": "clean"},
+                "bootstrap": {"status": "ready"},
+                "unmanaged_primitives": {"status": "clean"},
+            },
+        )
+
+        result = library_cli.cmd_status(
+            argparse.Namespace(json=True, scope="project", offline=True), tmp_path, {}
+        )
+
+        assert result == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["status"] == "repair_available"
+        assert payload["overall"] == "repair_available"
+        assert payload["upstream_overall"] == "behind"
+
+    def test_status_human_output_keeps_behind_entry_detail_when_repair_is_available(
+        self, tmp_path, capsys, monkeypatch
+    ):
+        """Human status retains actionable upstream detail alongside the repair state."""
+        import argparse
+        import library as library_cli
+
+        monkeypatch.setattr(
+            library_cli,
+            "cmd_status_impl",
+            lambda **kwargs: {
+                "overall": "behind",
+                "entries": [
+                    {
+                        "name": "fixture",
+                        "primitive": "skill",
+                        "behind": True,
+                        "installed_sha": "a" * 40,
+                        "remote_sha": "b" * 40,
+                    }
+                ],
+            },
+        )
+        monkeypatch.setattr(
+            library_cli,
+            "_repository_health",
+            lambda _root: {
+                "desired_state": {"status": "healthy"},
+                "projections": {"status": "clean"},
+                "git_hygiene": {"status": "clean"},
+                "bootstrap": {"status": "ready"},
+                "unmanaged_primitives": {"status": "clean"},
+            },
+        )
+
+        result = library_cli.cmd_status(
+            argparse.Namespace(json=False, scope="project", offline=True), tmp_path, {}
+        )
+
+        assert result == 2
+        output = capsys.readouterr().out
+        assert "Status: REPAIR AVAILABLE" in output
+        assert "BEHIND (1/1 entries need update)" in output
+        assert "BEHIND: skill:fixture (aaaaaaaa -> bbbbbbbb)" in output
+
     def test_status_main_loads_catalog_for_runtime_classification(self, tmp_path):
         """Top-level status must pass catalog metadata to runtime checks."""
         import library as library_cli
@@ -487,17 +569,16 @@ class TestStatusCLI:
         assert "entries" in data
         assert "overall" in data
 
-    def test_status_exits_0_when_all_current(self, tmp_path):
-        """status exits 0 when all entries are current or no entries."""
+    def test_status_exits_2_when_repository_setup_is_missing(self, tmp_path):
+        """Repository health reports missing desired state as repair available."""
         (tmp_path / "library.yaml").write_text(
             "default_dirs:\n  skills:\n    - default: .agents/skills/\n"
             "library:\n  skills: []\n  agents: []\n  prompts: []\n  standards: []\n"
             "marketplaces: []\nguardrails: []\nmcp_servers: []\nmodel_standards: []\n"
         )
         result = run_library("status", "--scope=project", "--project", str(tmp_path), "--json", cwd=tmp_path)
-        # No entries = current/unknown, exit 0
-        assert result.returncode in (0,), \
-            f"Expected exit 0, got {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        assert result.returncode == 2
+        assert json.loads(result.stdout)["overall"] == "repair_available"
 
     def test_status_exits_2_when_behind_via_unit(self):
         """AK3: status exits 2 when any entry is behind — tested via unit test (subprocess mock)."""

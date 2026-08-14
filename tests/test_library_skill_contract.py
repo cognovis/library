@@ -21,34 +21,27 @@ def test_library_skill_requires_explicit_user_invocation() -> None:
 
     assert frontmatter["disable-model-invocation"] is True
     assert frontmatter["argument-hint"] == (
-        "<primitive|search|installed|status|audit|sync|catalog> "
+        "<init|status|primitive> "
         "[verb] [name-or-query] [options]"
     )
 
 
-def test_bare_library_invocation_derives_non_mutating_cli_help() -> None:
-    text = read_skill()
-    normalized = text.lower()
-
-    assert "## Invocation Guidance" in text
-    assert "When invoked without arguments" in text
-    assert "library --help" in text
-    assert "globally installed `library` command" in text
-    assert "uv run --script <LIBRARY_SKILL_DIR>/scripts/library.py" not in text
-    assert "derive the available values from that output" in normalized
-    assert "primitive names" in text
-    assert "primitive verbs" in text
-    assert "global commands" in text
-    assert "common options" in text
-    assert "representative examples" in text
-    assert "Do not mutate state" in text
-
-
-def test_partial_and_complete_invocations_have_distinct_routing() -> None:
+def test_library_skill_defines_project_local_inspection_and_recommendation() -> None:
     text = read_skill()
 
-    assert "When the invocation is incomplete" in text
-    assert "next missing required value" in text
-    assert "show only the valid choices" in text
-    assert "When the invocation is complete" in text
-    assert "delegate it to the canonical CLI" in text
+    assert "## Inspect and recommend" in text
+    assert "library status --offline --json" in text
+    assert "library workspace list --scope project --json" in text
+    assert "ask the user to confirm it" in text
+    assert "retired global lock" in text.lower()
+    assert "never install before confirmation" in text.lower()
+
+
+def test_library_skill_defines_confirmed_project_local_installation() -> None:
+    text = read_skill()
+
+    assert "library init" in text
+    assert "library workspace use cognovis-library-core:python-cli --scope project" in text
+    assert "library skill use <name> --scope project" in text
+    assert "`library init` takes no Workspace selector." in text
+    assert "`--scope global` is rejected deterministically" in text

@@ -15,7 +15,7 @@ overridden by the model.
 **Trigger semantics.** The harness fires guardrails at predefined lifecycle events. The
 mechanism differs per harness: hooks run as external processes (Claude Code, Codex CLI),
 TypeScript extension handlers execute in-process (Pi), or static policies gate tool
-calls before execution (Codex Cloud, OpenCode).
+calls before execution (Codex Cloud).
 
 **Cross-harness capability matrix (NORMATIVE unless noted).**
 
@@ -25,7 +25,6 @@ calls before execution (Codex Cloud, OpenCode).
 | Codex CLI | hooks (limited) | `hooks.json` | command hook | YES | YES | YES |
 | Codex Cloud | `approval_policy` | `config.toml` | static TOML | BLUNT (all tools) | NO | NO |
 | Pi | TypeScript extensions | `.pi/extensions/*.ts` | TypeScript | YES | YES | PARTIAL |
-| OpenCode | permission rules | `opencode.json` | JSON rules | YES | NO | NO |
 
 Key:
 - **YES** — full native support.
@@ -52,7 +51,6 @@ Key:
 | Codex CLI | 8 events: PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SessionStart, UserPromptSubmit, Stop | NORMATIVE for Codex CLI 0.130.0 — per `scripts/install-hook.py` and local feature checks. No `SessionEnd`, `SubagentStart`, `SubagentStop`, `StopFailure`, `Notification`, `PermissionDenied`, or `PostToolUseFailure` equivalent listed. |
 | Codex Cloud | Pre-tool call via `approval_policy` | NORMATIVE. Static policy only; no event scripting. |
 | Pi | `tool_call`, `tool_result`, `message`, `session_start` | INFERRED — pending vendor doc validation. |
-| OpenCode | Pre-tool-call via `rules` array | INFERRED — pending vendor doc validation. |
 
 Official Claude Code hook reference: [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks).
 
@@ -88,7 +86,7 @@ PreToolUse/PostToolUse hooks.
 
 | Guardrail | Why it is a guardrail |
 |-----------|----------------------|
-| `block-destructive-bash` (PreToolUse) | Blocks irreversible commands (recursive deletes, force-pushes, DROP TABLE). Must fire on every Bash tool call regardless of model reasoning. Model cannot bypass. Compiles to 4 harnesses: Claude Code (PreToolUse hook), Codex CLI (PreToolUse hook), Codex Cloud (approval_policy), OpenCode (permission rules). |
+| `block-destructive-bash` (PreToolUse) | Blocks irreversible commands (recursive deletes, force-pushes, DROP TABLE). Must fire on every Bash tool call regardless of model reasoning. Model cannot bypass. Compiles to Claude Code (PreToolUse hook), Codex CLI (PreToolUse hook), and Codex Cloud (approval_policy). |
 | `auto-capture.py` (PostToolUse) | Captures tool calls for audit. Must fire on every tool use regardless of what the model decides. Model cannot opt out. |
 | `bd-cache-invalidator.py` (PreToolUse) | Invalidates beads cache. Must run before specific tool types unconditionally to keep cache consistent. |
 | SessionStart context-loader hooks | Inject standards and skill context before the model sees any user input. Must run before model reasoning begins — model cannot be trusted to load its own context reliably. |

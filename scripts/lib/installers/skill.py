@@ -6,7 +6,7 @@ Implements the three-layer cache model (ADR-0003):
   Layer B: Cache (~/.local/share/library/skills/<marketplace>/<name>@<14hex>/)
   Layer C: Harness (.agents/skills/<name>/ vendored copy by default)
 
-For Claude Code and Cursor: adds bridge symlinks to Layer C.
+For Claude Code: adds a bridge symlink to Layer C.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def install_skill(
         scope: 'project' or 'global'.
         dry_run: If True, return planned ops without mutating.
         install_mode: 'vendor' (default) or 'symlink'.
-        harness: Target harness ('claude_code', 'cursor', 'all').
+        harness: Target harness ('claude_code', 'codex', 'pi', 'all').
 
     Returns:
         Operation result dict.
@@ -100,11 +100,6 @@ def install_skill(
     install_paths = resolve_install_paths(catalog, prim, scope=scope, repo_root=repo_root)
     canonical_base = install_paths["canonical"]
     bridge_base = install_paths["bridge"]
-    cursor_bridge_base = (
-        install_paths["global_cursor_bridge"]
-        if scope == "global"
-        else install_paths["cursor_bridge"]
-    )
 
     if canonical_base is None:
         raise InstallError(
@@ -114,11 +109,6 @@ def install_skill(
 
     canonical_dir = canonical_base / skill_name
     bridge_dir = (bridge_base / skill_name) if bridge_base and harness in ("all", "claude_code") else None
-    cursor_bridge_dir = (
-        cursor_bridge_base / skill_name
-        if cursor_bridge_base and harness in ("all", "cursor")
-        else None
-    )
 
     # 4. Dry-run mode
     if dry_run:
@@ -143,15 +133,6 @@ def install_skill(
                 if op.get("operation") == "create_bridge_symlink":
                     op["target"] = str(canonical_dir)
                     op["details"] = f"Claude bridge symlink {bridge_dir} -> {canonical_dir}"
-        if cursor_bridge_dir:
-            ops.append(
-                {
-                    "operation": "create_bridge_symlink",
-                    "path": str(cursor_bridge_dir),
-                    "target": str(canonical_dir),
-                    "details": f"Cursor bridge symlink {cursor_bridge_dir} -> {canonical_dir}",
-                }
-            )
         # Add lockfile write op
         lockfile_path = find_lockfile(repo_root, global_scope=(scope == "global"))
         ops.append(
@@ -178,12 +159,10 @@ def install_skill(
             summary=(
                 f"Would install skill '{skill_name}' to {canonical_dir}"
                 + (f" with bridge {bridge_dir}" if bridge_dir else "")
-                + (f" with cursor bridge {cursor_bridge_dir}" if cursor_bridge_dir else "")
             ),
             target_paths=[
                 str(canonical_dir),
                 *([str(bridge_dir)] if bridge_dir else []),
-                *([str(cursor_bridge_dir)] if cursor_bridge_dir else []),
             ],
             harness_routing=harness,
             conflict_policy="overwrite",
@@ -209,20 +188,25 @@ def install_skill(
             "canonical": str(canonical_dir),
             "install_target": str(canonical_dir),
             "bridge": str(bridge_dir) if bridge_dir else None,
-            "cursor_bridge": str(cursor_bridge_dir) if cursor_bridge_dir else None,
             "install_mode": install_mode,
         }
         return result
 
     # 5. Fetch source and get commit SHA
-    source_dir, source_commit, temp_root = _fetch_source_dir(parsed, skill_name)
+    library_metadata = entry.get("metadata", {}).get("library", {})
+    file_bundle = library_metadata.get("skill_bundle") == "file"
+    source_dir, source_commit, temp_root = _fetch_source_dir(
+        parsed,
+        skill_name,
+        file_bundle=file_bundle,
+    )
 
     try:
         # Recompute cache_path with real commit SHA
         cache_path = compute_cache_path("skill", marketplace, skill_name, source_commit)
 
         # 5b. Materialize cache (Layer B)
-        materialize_cache(source_dir, cache_path)
+        materialize_cache(source_dir, cache_path, overwrite=file_bundle)
 
         # 6. Create canonical install (Layer C)
         materialize_install_target(canonical_dir, cache_path, install_mode=install_mode)
@@ -238,16 +222,6 @@ def install_skill(
             )
             create_harness_symlink(bridge_dir, persisted_target)
             bridge_symlink_strs.append(f"{bridge_dir} -> {persisted_target}")
-        if cursor_bridge_dir:
-            persisted_target = (
-                Path(os.path.relpath(canonical_dir, start=cursor_bridge_dir.parent))
-                if scope == "project"
-                else canonical_dir
-            )
-            create_harness_symlink(cursor_bridge_dir, persisted_target)
-            bridge_symlink_strs.append(
-                f"{cursor_bridge_dir} -> {persisted_target}"
-            )
 
         # 8. Write lockfile — hash local installed content (all files matter)
         try:
@@ -289,7 +263,6 @@ def install_skill(
                 "name": skill_name,
                 "canonical": str(canonical_dir),
                 "bridge": str(bridge_dir) if bridge_dir else None,
-                "cursor_bridge": str(cursor_bridge_dir) if cursor_bridge_dir else None,
                 "cache": str(cache_path),
                 "source_commit": source_commit,
                 "install_mode": install_mode,
@@ -298,7 +271,6 @@ def install_skill(
             message=(
                 f"Skill '{skill_name}' installed at {canonical_dir}"
                 + (f" with bridge {bridge_dir}" if bridge_dir else "")
-                + (f" with cursor bridge {cursor_bridge_dir}" if cursor_bridge_dir else "")
             ),
         )
     finally:
@@ -329,7 +301,10 @@ def _resolve_entry_source(catalog: dict, entry: dict) -> str:
 
 
 def _fetch_source_dir(
-    parsed: ParsedSource, skill_name: str
+    parsed: ParsedSource,
+    skill_name: str,
+    *,
+    file_bundle: bool = False,
 ) -> tuple[Path, str, Optional[Path]]:
     """Fetch the skill source directory.
 
@@ -345,6 +320,15 @@ def _fetch_source_dir(
             raise InstallError(
                 f"Local source path does not exist: {parsed.raw}"
             )
+        if file_bundle:
+            if not local.is_file():
+                raise InstallError(
+                    f"File-bundled skill source is not a file: {parsed.raw}"
+                )
+            temporary = Path(tempfile.mkdtemp(prefix="library-skill-file-"))
+            shutil.copy2(local, temporary / local.name)
+            commit = get_local_commit_sha(local)
+            return temporary, commit, temporary
         # The source is the SKILL.md file — we want the parent directory
         source_dir = local.parent if local.is_file() else local
         commit = get_local_commit_sha(source_dir)
@@ -383,6 +367,16 @@ def _fetch_source_dir(
                 raise InstallError(
                     f"Skill source path is not a file for blob/raw URL: {parsed.file_path}"
                 )
+            if file_bundle:
+                if not source_path.is_file():
+                    shutil.rmtree(str(tmp), ignore_errors=True)
+                    raise InstallError(
+                        f"File-bundled skill source is not a file: {parsed.raw}"
+                    )
+                bundle = tmp / ".library-file-bundle"
+                bundle.mkdir()
+                shutil.copy2(source_path, bundle / source_path.name)
+                return bundle, commit, tmp
             source_dir = source_path.parent if source_path.is_file() else source_path
             return source_dir, commit, tmp
 

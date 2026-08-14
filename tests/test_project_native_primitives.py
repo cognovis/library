@@ -53,6 +53,7 @@ def _project(tmp_path: Path) -> Path:
     project = tmp_path / "consumer"
     sources = tmp_path / "sources"
     project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
     sources.mkdir()
     (sources / "workbench.ts").write_text("export const workbench = true;\n")
     (sources / "development.json").write_text('{"profile":"development"}\n')
@@ -89,6 +90,7 @@ def _bundle_project(tmp_path: Path) -> Path:
     project = tmp_path / "consumer"
     source = tmp_path / "sources" / "workbench"
     project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
     source.mkdir(parents=True)
     (source / "index.ts").write_text('export { value } from "./lib/value.ts";\n')
     (source / "lib").mkdir()
@@ -127,6 +129,7 @@ def _mixed_dependency_project(tmp_path: Path) -> Path:
     sources = tmp_path / "mixed-sources"
     skill_source = sources / "helper"
     project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
     skill_source.mkdir(parents=True)
     (skill_source / "SKILL.md").write_text(
         "---\nname: helper\ndescription: Mixed dependency fixture.\n---\n"
@@ -575,7 +578,9 @@ def test_project_native_rejects_global_scope_before_mutation(tmp_path: Path) -> 
     project = _project(tmp_path)
     result = _run(project, "pi-extension", "use", "workbench", "--scope", "global")
     assert result.returncode != 0
-    assert "project-only" in json.loads(result.stdout)["message"]
+    assert json.loads(result.stdout)["message"] == (
+        "Global Library desired state is not supported; use the current Git repository."
+    )
     assert not (project / ".agents").exists()
     assert not (project / ".library.lock").exists()
 
@@ -663,6 +668,7 @@ def _stale_closure_project(tmp_path: Path) -> tuple[Path, Path]:
     project = tmp_path / "stale-consumer"
     sources = tmp_path / "stale-sources"
     project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
     sources.mkdir()
     (sources / "old-dep.ts").write_text("export const dep = 1;\n")
     (sources / "steady-dep.ts").write_text("export const steady = true;\n")
@@ -777,7 +783,7 @@ def test_unrefreshable_stale_project_native_dependency_blocks_root_install(
     assert result.returncode != 0, result.stdout
     message = result.stdout + result.stderr
     assert "old-dep" in message
-    assert "library pi-extension sync old-dep" in message
+    assert "has no source field" in message
 
     # Pre-root non-mutation: nothing installed, nothing rewritten.
     assert not (project / ".agents" / "pi" / "extensions" / "new-root.ts").exists()

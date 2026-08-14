@@ -81,7 +81,7 @@ changes.
 |---|---|
 | .agents/standards/ | Domain-specific standards shared across harnesses |
 | .agents/skills/ | Repository-authored skills only; Library-installed receipt targets are generated and gitignored |
-| .agents/orchestrator-config.yml | Orchestrator routing configuration (project-local). The **global** fallback `~/.agents/orchestrator-config.yml` is self-healed on every `cld`/`cdx` launch from the canonical catalog source (`bin/lib/orchestrator-config-sync.zsh`), so it never silently drifts. |
+| .agents/orchestrator-config.yml | Orchestrator routing configuration (project-local). The product bootstrap owns the optional global fallback `~/.agents/orchestrator-config.yml`; packaged launchers use `scripts/bin/lib/orchestrator-config-sync.zsh` for compatibility while the source-checkout copy remains synchronized. |
 
 **MUST NOT be committed:**
 
@@ -147,7 +147,7 @@ so a fresh bead worktree starts without them. Hygiene review, standards
 resolution, and session-close gates then behave differently from the main
 checkout for no reason the operator can see.
 
-Both launchers bootstrap the same overlay set through one resolver,
+Both packaged launchers bootstrap the same overlay set through one resolver,
 `scripts/worktree-overlays.py`, which never overwrites anything the worktree
 already owns and never links a source that is missing from the main checkout:
 

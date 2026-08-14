@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -2237,6 +2238,11 @@ def workspace_journal_path(lock_path: Path) -> Path:
     return lock_path.with_name(f"{lock_path.name}.workspace-journal.json")
 
 
+def workspace_rollback_path(lock_path: Path) -> Path:
+    """Return the durable rollback tree for one scope transaction."""
+    return lock_path.with_name(f"{lock_path.name}.workspace-rollback")
+
+
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp-{os.getpid()}")
@@ -2253,7 +2259,223 @@ def write_workspace_journal(lock_path: Path, payload: dict[str, Any]) -> Path:
 
 def clear_workspace_journal(lock_path: Path) -> None:
     """Remove a completed transaction journal."""
+    rollback_root = workspace_rollback_path(lock_path)
+    if rollback_root.is_symlink() or (
+        rollback_root.exists() and not rollback_root.is_dir()
+    ):
+        raise LibraryError(
+            f"Workspace rollback root is not a real directory: {rollback_root}"
+        )
+    if rollback_root.exists():
+        shutil.rmtree(rollback_root)
     workspace_journal_path(lock_path).unlink(missing_ok=True)
+
+
+def prepare_workspace_rollback(lock_path: Path) -> Path:
+    """Refuse pre-existing rollback state before the first capture write."""
+    rollback_root = workspace_rollback_path(lock_path)
+    if rollback_root.is_symlink() or rollback_root.exists():
+        raise LibraryError(
+            "Workspace rollback root already exists; inspect or recover it before "
+            f"starting another mutation: {rollback_root}"
+        )
+    return rollback_root
+
+
+def workspace_path_state(path: Path) -> dict[str, str]:
+    """Return a deterministic kind-and-content descriptor for one path."""
+    try:
+        if path.is_symlink():
+            digest = hashlib.sha256(os.fsencode(path.readlink())).hexdigest()
+            return {"kind": "symlink", "sha256": digest}
+        if not path.exists():
+            return {"kind": "missing"}
+        if path.is_file():
+            return {"kind": "file", "sha256": compute_checksum(path)}
+        if not path.is_dir():
+            raise LibraryError(f"Workspace rollback path has unsupported type: {path}")
+        digest = hashlib.sha256()
+        digest.update(b"directory\0")
+        for child in sorted(path.rglob("*"), key=lambda item: item.relative_to(path).as_posix()):
+            relative = child.relative_to(path).as_posix().encode()
+            digest.update(relative)
+            digest.update(b"\0")
+            if child.is_symlink():
+                digest.update(b"symlink\0")
+                digest.update(os.fsencode(child.readlink()))
+            elif child.is_dir():
+                digest.update(b"directory")
+            elif child.is_file():
+                digest.update(b"file\0")
+                digest.update(compute_checksum(child).encode())
+            else:
+                raise LibraryError(
+                    f"Workspace rollback path has unsupported nested type: {child}"
+                )
+            digest.update(b"\0")
+        return {"kind": "directory", "sha256": digest.hexdigest()}
+    except OSError as exc:
+        raise LibraryError(f"Could not inspect Workspace rollback path: {path}") from exc
+
+
+def _use_rollback_paths(
+    lock_path: Path, repo_root: Path, payload: dict[str, Any]
+) -> list[tuple[dict[str, Any], Path, Path | None]]:
+    """Return journal entries whose target and backup paths are bounded."""
+    root = repo_root.expanduser().resolve()
+    rollback_root = Path(
+        os.path.abspath(workspace_rollback_path(lock_path).expanduser())
+    )
+    rollback_entries = payload.get("rollback")
+    if not isinstance(rollback_entries, list):
+        raise LibraryError("Workspace use journal rollback plan is invalid")
+    requires_rollback_root = any(
+        isinstance(item, dict) and item.get("backup") for item in rollback_entries
+    )
+    if rollback_root.is_symlink() or (
+        rollback_root.exists() and not rollback_root.is_dir()
+    ):
+        raise LibraryError(
+            f"Workspace rollback root is not a real directory: {rollback_root}"
+        )
+    state_targets = {
+        Path(os.path.abspath(lock_path.expanduser())),
+        root / ".gitignore",
+    }
+    managed_roots = tuple(
+        root / name for name in (".agents", ".claude", ".codex", ".cursor")
+    )
+    validated: list[tuple[dict[str, Any], Path, Path | None]] = []
+    seen: set[Path] = set()
+    for item in rollback_entries:
+        if not isinstance(item, dict):
+            raise LibraryError("Workspace use journal rollback entry is invalid")
+        target = Path(
+            os.path.abspath(Path(str(item.get("target") or "")).expanduser())
+        )
+        if target in seen:
+            raise LibraryError("Workspace use journal contains duplicate rollback targets")
+        seen.add(target)
+        target_parent = target.parent.resolve()
+        bounded = target in state_targets or any(
+            target == managed_root or target.is_relative_to(managed_root)
+            for managed_root in managed_roots
+        )
+        parent_bounded = target_parent == root or target_parent.is_relative_to(root)
+        if not bounded or not parent_bounded:
+            raise LibraryError(
+                f"Workspace use journal rollback target is outside Library-managed roots: {target}"
+            )
+        backup_value = item.get("backup")
+        backup = (
+            Path(os.path.abspath(Path(str(backup_value)).expanduser()))
+            if backup_value
+            else None
+        )
+        if backup is not None and (
+            backup.parent != rollback_root or not backup.name.isdecimal()
+        ):
+            raise LibraryError(
+                f"Workspace use journal backup is outside its transaction root: {backup}"
+            )
+        validated.append((item, target, backup))
+    if requires_rollback_root and not rollback_root.is_dir():
+        raise LibraryError(f"Workspace rollback root is missing: {rollback_root}")
+    return validated
+
+
+def checkpoint_workspace_use(lock_path: Path, repo_root: Path) -> None:
+    """Bind the journal to the exact target states after one mutation step."""
+    path = workspace_journal_path(lock_path)
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
+    if payload.get("operation") != "use" or payload.get("rollback") is None:
+        raise LibraryError("Workspace use checkpoint requires an active use journal")
+    for item, target, backup in _use_rollback_paths(lock_path, repo_root, payload):
+        if backup is not None:
+            expected_backup = item.get("backup_state")
+            actual_backup = workspace_path_state(backup)
+            if (
+                not isinstance(expected_backup, dict)
+                or expected_backup.get("kind") == "missing"
+                or actual_backup != expected_backup
+            ):
+                raise LibraryError(
+                    f"Workspace use journal backup integrity check failed: {backup}"
+                )
+        elif item.get("backup_state") is not None:
+            raise LibraryError("Workspace use journal has state for a missing backup")
+        item["target_state"] = workspace_path_state(target)
+    payload["phase"] = "ready"
+    write_workspace_journal(lock_path, payload)
+
+
+def begin_workspace_use_mutation(lock_path: Path) -> None:
+    """Durably mark the target set as in-flight before an installer can mutate it."""
+    path = workspace_journal_path(lock_path)
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
+    if payload.get("operation") != "use" or payload.get("phase") != "ready":
+        raise LibraryError("Workspace use mutation requires a captured rollback plan")
+    payload["phase"] = "mutating"
+    write_workspace_journal(lock_path, payload)
+
+
+def _validated_use_rollback(
+    lock_path: Path, repo_root: Path, payload: dict[str, Any]
+) -> list[tuple[Path, Path | None]]:
+    """Validate every path and captured state before returning a rollback plan."""
+    validated: list[tuple[Path, Path | None]] = []
+    for item, target, backup in _use_rollback_paths(lock_path, repo_root, payload):
+        expected_target = item.get("target_state")
+        if not isinstance(expected_target, dict):
+            raise LibraryError("Workspace use journal target state is missing")
+        if (
+            payload.get("phase") != "mutating"
+            and workspace_path_state(target) != expected_target
+        ):
+            raise LibraryError(
+                f"Workspace use journal target integrity check failed: {target}"
+            )
+        expected_backup = item.get("backup_state")
+        if backup is None:
+            if expected_backup is not None:
+                raise LibraryError("Workspace use journal has state for a missing backup")
+        elif (
+            not isinstance(expected_backup, dict)
+            or expected_backup.get("kind") == "missing"
+            or workspace_path_state(backup) != expected_backup
+        ):
+            raise LibraryError(
+                f"Workspace use journal backup integrity check failed: {backup}"
+            )
+        validated.append((target, backup))
+    return validated
+
+
+def _restore_workspace_use(
+    lock_path: Path, repo_root: Path, payload: dict[str, Any]
+) -> None:
+    """Restore the validated durable pre-state for an interrupted use."""
+    rollback = _validated_use_rollback(lock_path, repo_root, payload)
+    for target, backup in reversed(rollback):
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        elif target.is_dir():
+            shutil.rmtree(target)
+        if backup is None:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if backup.is_symlink():
+            target.symlink_to(backup.readlink())
+        elif backup.is_dir():
+            shutil.copytree(backup, target, symlinks=True)
+        else:
+            shutil.copy2(backup, target)
 
 
 def workspace_journal_digest(lock_path: Path) -> str | None:
@@ -2288,7 +2510,23 @@ def recover_workspace_journal(lock_path: Path, repo_root: Path) -> list[str]:
         payload = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise LibraryError(f"Workspace journal is unreadable: {path}") from exc
+    if payload.get("operation") == "use" and payload.get("phase") == "capturing":
+        if payload.get("rollback") != []:
+            raise LibraryError("Workspace capture journal contains an invalid rollback plan")
+        rollback_root = workspace_rollback_path(lock_path)
+        if rollback_root.is_symlink() or (
+            rollback_root.exists() and not rollback_root.is_dir()
+        ):
+            raise LibraryError(
+                f"Workspace rollback root is not a real directory: {rollback_root}"
+            )
+        clear_workspace_journal(lock_path)
+        return []
     if payload.get("operation") != "prune":
+        if payload.get("operation") == "use" and payload.get("rollback") is not None:
+            _restore_workspace_use(lock_path, repo_root, payload)
+            clear_workspace_journal(lock_path)
+            return []
         if payload.get("operation") in {"use", "adopt", "remove"}:
             clear_workspace_journal(lock_path)
             return []

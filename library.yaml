@@ -2,48 +2,27 @@ catalog_identity: https://github.com/cognovis/library
 default_dirs:
   skills:
     - default: .agents/skills/
-    - global: ~/.agents/skills/
     - claude_bridge: .claude/skills/
-    - global_claude_bridge: ~/.claude/skills/
-    - cursor_bridge: .cursor/skills/
-    - global_cursor_bridge: ~/.cursor/skills/
   agents:
     - default: .claude/agents/
-    - global: ~/.claude/agents/
     - default_codex: .codex/agents/
-    - global_codex: ~/.codex/agents/
-    - default_opencode: .opencode/agents/
-    - global_opencode: ~/.opencode/agents/
   prompts:
     - default: .claude/commands/
-    - global: ~/.claude/commands/
   scripts:
     - default: .agents/scripts/
-    - global: ~/.agents/scripts/
-  prompts:
-    - default: .claude/commands/
-    - global: ~/.claude/commands/
   standards:
     - default: .agents/standards/
-    - global: ~/.agents/standards/
   guardrails:
     - default: .claude/hooks/
-    - global: ~/.claude/hooks/
     - default_codex: .codex/hooks/
-    - global_codex: ~/.codex/hooks/
-    - default_opencode: .opencode/guardrails/
   model_standards:
     - default: .agents/model-standards/
-    - global: ~/.agents/model-standards/
   agent_bases:
     - default: .agents/agent-bases/
-    - global: ~/.agents/agent-bases/
   workflows:
     - default: .claude/workflows/
-    - global: ~/.claude/workflows/
   runtime_configs:
     - default: .agents/
-    - global: ~/.agents/
   pi_extensions:
     - default: .agents/pi/extensions/
   pi_profiles:
@@ -51,10 +30,6 @@ default_dirs:
   just_modules:
     - default: .agents/just/
 workspace_policy:
-  global:
-    max_roots: 5
-    max_receipts: 15
-    max_standing_context_fraction: 0.01
   project:
     max_receipts: 30
 tag_vocabulary:
@@ -477,6 +452,19 @@ library:
           source_catalog: cognovis-library-core
           inventory: manual
   skills:
+    - name: library
+      description: Inspect a repository's Library state and recommend explicit project-local Workspaces or primitives before installation.
+      source: https://github.com/cognovis/library/blob/main/SKILL.md
+      metadata:
+        library:
+          source_catalog: library-platform
+          inventory: convention-scan
+          plane: dev
+          skill_bundle: file
+      tags:
+        - origin:original
+        - tier:core
+        - category:skill
     - name: pvs-schema-analysis
       description: Analyze a PVS database schema and produce an annotated JSON inventory. Use for MSSQL or PostgreSQL PVS onboarding, schema archaeology, and adapter planning. Bundles references/sql-catalog.md (read-only SQL query catalog, classification/anonymization rules, FHIR mapping patterns) alongside SKILL.md.
       source: https://github.com/cognovis/polaris/blob/main/.claude/skills/pvs-schema-analysis/SKILL.md
@@ -1477,6 +1465,12 @@ library:
         - standard:english-only
         - standard:executive-pack
         - standard:no-emoji
+      scripts:
+        - path: skills/executive-pack/scripts/pack_review_contract.py
+          role: helper
+          entrypoint: false
+          language: python
+          output_contract: json-envelope
       tags:
         - origin:original
         - tier:domain
@@ -2099,7 +2093,6 @@ library:
           plane: dev
           harness_support:
             claude_code: supported
-            cursor: supported
             codex: supported
           runtime_requirements:
             binaries:
@@ -3587,15 +3580,10 @@ library:
           recommended_value: always
           note: No event-level veto in Codex cloud. Setting approval_policy=always requires human approval for every tool call — blunt but effective. Alternatively configure sandbox_mode restrictions.
           mismatch_warning: codex_cloud has no per-tool-call hook. Installing sets approval_policy=always in config.toml, which requires approval for ALL tool calls (not just destructive ones).
-        opencode:
-          mechanism: permission-rule
-          config_key: rules
-          note: OpenCode permission rules in opencode.json. The fragment adds a deny rule for shell commands matching destructive patterns. Pre-tool gates only.
       sources:
         claude_code: guardrails/block-destructive-bash/claude-code.sh
         codex_cli: guardrails/block-destructive-bash/codex-cli.mjs
         codex_cloud: guardrails/block-destructive-bash/codex-cloud-config-fragment.toml
-        opencode: guardrails/block-destructive-bash/opencode-fragment.json
       tags:
         - security
         - destructive-prevention
@@ -3653,11 +3641,6 @@ library:
           codex:
             config_path: ~/.codex/config.toml
             snippet:
-              url: https://open-brain.sussdorff.org/mcp
-          opencode:
-            config_path: ~/.config/opencode/opencode.json
-            snippet:
-              type: remote
               url: https://open-brain.sussdorff.org/mcp
           claude_ai:
             install_url: https://claude.ai/add-mcp/open-brain
@@ -3720,17 +3703,6 @@ library:
           codex:
             config_path: ~/.codex/config.toml
             snippet:
-              command: uvx
-              args:
-                - --python
-                - '3.12'
-                - --from
-                - markitdown-mcp==0.0.1a4
-                - markitdown-mcp
-          cursor:
-            config_path: ~/.cursor/mcp.json
-            snippet:
-              type: stdio
               command: uvx
               args:
                 - --python
@@ -4271,6 +4243,41 @@ library:
         - origin:original
         - tier:core
   workspaces:
+    - name: cognovis-base
+      description: Minimal project-local baseline for Cognovis repositories using Library and Beads.
+      source: https://github.com/cognovis/library/blob/main/workspaces/cognovis-base.yaml
+      schema_version: 2
+      version: 0.1.0
+      status: stable
+      catalogs:
+        - alias: platform
+          identity: https://github.com/cognovis/library
+          pin:
+            kind: commit
+            value: 00c43f828ca3cce7d29e949f44bced59c7e5e121
+        - alias: core
+          identity: https://github.com/cognovis/library-core
+          pin:
+            kind: commit
+            value: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
+      roots:
+        - type: skill
+          name: library
+          catalog: platform
+        - type: skill
+          name: cognovis-beads
+          catalog: core
+        - type: skill
+          name: inject-standards
+          catalog: core
+        - type: skill
+          name: ob-cli
+          catalog: core
+      metadata:
+        library:
+          source_catalog: library-platform
+          inventory: manual
+          source_commit: 123f450894be49563b59ce99f5e06410bdd63431
     - name: library-authoring
       description: Shared authoring baseline for Library primitive repositories.
       source: https://github.com/cognovis/library/blob/main/workspaces/library-authoring.yaml

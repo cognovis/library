@@ -124,10 +124,6 @@ def _write_fixture(project: Path) -> tuple[Path, Path]:
                     "claude_bridge": ".claude/skills/",
                     "global_claude_bridge": "~/.claude/skills/",
                 },
-                {
-                    "cursor_bridge": ".cursor/skills/",
-                    "global_cursor_bridge": "~/.cursor/skills/",
-                },
             ]
         },
         "sources": {
@@ -380,6 +376,59 @@ def test_workspace_use_blocks_foreign_target_before_any_install(tmp_path: Path) 
     assert foreign.read_text() == "project authored\n"
     assert not (project / ".agents" / "skills" / "python-test").exists()
     assert not (project / ".library.lock").exists()
+
+
+def test_workspace_use_refuses_a_symlinked_rollback_root_before_any_write(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    home.mkdir()
+    outside.mkdir()
+    _write_fixture(project)
+    sentinel = outside / "sentinel.txt"
+    sentinel.write_text("operator content\n")
+    rollback_root = project / ".library.lock.workspace-rollback"
+    rollback_root.symlink_to(outside, target_is_directory=True)
+    before_status = subprocess.run(
+        ["git", "-C", str(project), "status", "--short"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout
+
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+
+    assert used.returncode == 1
+    assert "rollback root already exists" in json.loads(used.stdout)["message"]
+    assert rollback_root.is_symlink()
+    assert sentinel.read_text() == "operator content\n"
+    assert sorted(path.name for path in outside.iterdir()) == ["sentinel.txt"]
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".library.lock.lock").exists()
+    assert not (project / ".library.lock.workspace-lock").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".agents").exists()
+    after_status = subprocess.run(
+        ["git", "-C", str(project), "status", "--short"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout
+    assert after_status == before_status
 
 
 def test_workspace_use_replaces_only_byte_exact_catalog_content(tmp_path: Path) -> None:
@@ -1625,14 +1674,13 @@ def test_addition_failure_stops_before_workspace_registration_or_prune(
     capsys.readouterr()
 
     assert rc == 1
-    lock = yaml.safe_load((project / ".library.lock").read_text())
-    assert {root["id"] for root in lock["requested_roots"]} == {"skill:python-dev"}
-    assert {receipt["id"] for receipt in lock["receipts"]} == {"skill:python-dev"}
-    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").exists()
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
     assert not (project / ".agents" / "skills" / "python-test").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
 
 
-def test_final_lock_write_failure_leaves_recoverable_addition_journal(
+def test_final_lock_write_failure_rolls_back_the_complete_workspace_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1664,9 +1712,526 @@ def test_final_lock_write_failure_leaves_recoverable_addition_journal(
     with pytest.raises(LockfileError, match="injected final lock write failure"):
         module._workspace_use(args, project, load_catalog(project))
 
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".agents" / "skills" / "python-test").exists()
+
+
+def test_interruption_after_final_lock_write_restores_the_complete_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    real_save = module.save_lockfile
+    interrupted = False
+
+    def interrupt_after_final_save(path: Path, lock: dict) -> None:
+        nonlocal interrupted
+        real_save(path, lock)
+        has_workspace = any(
+            root.get("type") == "workspace" for root in lock.get("requested_roots", [])
+        )
+        if has_workspace and not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("injected interruption after final lock write")
+
+    monkeypatch.setattr(module, "save_lockfile", interrupt_after_final_save)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="after final lock write"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+
+    monkeypatch.setattr(module, "save_lockfile", real_save)
+    assert module._workspace_use(args, project, load_catalog(project)) == 0
+
+
+def test_gitignore_reconciliation_failure_rolls_back_the_complete_workspace_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+
+    def fail_gitignore(_repo_root: Path) -> dict:
+        raise RuntimeError("injected Gitignore reconciliation failure")
+
+    monkeypatch.setattr(module, "_reconcile_project_gitignore", fail_gitignore)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(RuntimeError, match="injected Gitignore reconciliation failure"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".agents" / "skills" / "python-test").exists()
+
+
+def test_interruption_after_gitignore_write_restores_the_complete_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    real_reconcile = module._reconcile_project_gitignore
+    interrupted = False
+
+    def interrupt_after_gitignore_write(repo_root: Path) -> dict:
+        nonlocal interrupted
+        result = real_reconcile(repo_root)
+        if not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("injected interruption after Gitignore write")
+        return result
+
+    monkeypatch.setattr(
+        module, "_reconcile_project_gitignore", interrupt_after_gitignore_write
+    )
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="after Gitignore write"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+
+    monkeypatch.setattr(module, "_reconcile_project_gitignore", real_reconcile)
+    assert module._workspace_use(args, project, load_catalog(project)) == 0
+
+
+def test_next_use_recovers_an_interrupted_workspace_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.workspace import (
+        checkpoint_workspace_use,
+        recover_workspace_journal,
+        workspace_path_state,
+        workspace_rollback_path,
+        write_workspace_journal,
+    )
+
+    module = _library_module()
+    lock_path = project / ".library.lock"
+    target = project / ".agents" / "skills" / "python-dev"
+    rollback_root = workspace_rollback_path(lock_path)
+    captured = module._workspace_capture_rollback(
+        rollback_root, [str(target)], [lock_path, project / ".gitignore"]
+    )
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(path),
+                    "backup": str(backup) if backup is not None else None,
+                    "target_state": workspace_path_state(path),
+                    "backup_state": (
+                        workspace_path_state(backup) if backup is not None else None
+                    ),
+                }
+                for path, backup in captured
+            ],
+        },
+    )
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("partial\n")
+    lock_path.write_text("installed: []\n")
+    (project / ".gitignore").write_text("partial\n")
+    checkpoint_workspace_use(lock_path, project)
+
+    recover_workspace_journal(lock_path, project)
+
+    assert not target.exists()
+    assert not lock_path.exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not rollback_root.exists()
+
+
+def test_next_use_recovers_an_interruption_during_rollback_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    original_capture = module._workspace_capture_rollback
+
+    def interrupt_capture(rollback_root, paths, state_files):
+        rollback_root.mkdir()
+        raise KeyboardInterrupt("injected interruption during rollback capture")
+
+    monkeypatch.setattr(module, "_workspace_capture_rollback", interrupt_capture)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="rollback capture"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    monkeypatch.setattr(module, "_workspace_capture_rollback", original_capture)
+    assert module._workspace_use(args, project, load_catalog(project)) == 0
+    assert (project / ".agents" / "skills" / "python-dev" / "SKILL.md").is_file()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_workspace_use_restores_a_target_when_interrupted_before_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    target = project / ".agents" / "skills" / "python-dev"
+    original_dispatch = module._dispatch_use
+
+    def interrupt_install(*call_args, **call_kwargs):
+        if call_args[7]:
+            return original_dispatch(*call_args, **call_kwargs)
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text("partial\n", encoding="utf-8")
+        raise KeyboardInterrupt("injected interruption before checkpoint")
+
+    monkeypatch.setattr(module, "_dispatch_use", interrupt_install)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="before checkpoint"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not target.exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+
+
+def test_interrupted_use_refuses_a_tampered_outside_rollback_target(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("keep\n")
+    lock_path = project / ".library.lock"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [{"target": str(outside), "backup": None}],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="outside Library-managed roots"):
+        recover_workspace_journal(lock_path, project)
+
+    assert outside.read_text() == "keep\n"
     assert (project / ".library.lock.workspace-journal.json").exists()
-    lock = yaml.safe_load((project / ".library.lock").read_text())
-    assert {root["type"] for root in lock["requested_roots"]} == {"skill"}
+
+
+def test_interrupted_use_refuses_a_traversing_rollback_target(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    protected = project / "protected.txt"
+    protected.write_text("keep\n")
+    lock_path = project / ".library.lock"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(project / ".agents" / ".." / "protected.txt"),
+                    "backup": None,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="outside Library-managed roots"):
+        recover_workspace_journal(lock_path, project)
+
+    assert protected.read_text() == "keep\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_interrupted_use_refuses_a_tampered_outside_backup_path(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    target = project / ".agents" / "skills" / "owned"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("current\n")
+    outside_backup = tmp_path / "outside-backup"
+    outside_backup.mkdir()
+    (outside_backup / "SKILL.md").write_text("tampered\n")
+    lock_path = project / ".library.lock"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {"target": str(target), "backup": str(outside_backup)}
+            ],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="outside its transaction root"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "current\n"
+    assert (outside_backup / "SKILL.md").read_text() == "tampered\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_interrupted_use_refuses_a_symlinked_rollback_root_before_mutation(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    outside.mkdir()
+    target = project / ".agents" / "skills" / "owned"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("current\n")
+    outside_backup = outside / "0"
+    outside_backup.mkdir()
+    (outside_backup / "SKILL.md").write_text("outside\n")
+    lock_path = project / ".library.lock"
+    rollback_root = project / ".library.lock.workspace-rollback"
+    rollback_root.symlink_to(outside, target_is_directory=True)
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(target),
+                    "backup": str(rollback_root / "0"),
+                    "target_state": {"kind": "directory", "sha256": "unused"},
+                    "backup_state": {"kind": "directory", "sha256": "unused"},
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="not a real directory"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "current\n"
+    assert (outside_backup / "SKILL.md").read_text() == "outside\n"
+    assert rollback_root.is_symlink()
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_interrupted_use_refuses_target_drift_without_a_backup(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    lock_path = project / ".library.lock"
+    target = project / ".agents" / "skills" / "new-skill"
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import (
+        recover_workspace_journal,
+        workspace_path_state,
+        write_workspace_journal,
+    )
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(target),
+                    "backup": None,
+                    "target_state": workspace_path_state(target),
+                    "backup_state": None,
+                }
+            ],
+        },
+    )
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("operator content\n")
+
+    with pytest.raises(LibraryError, match="target integrity check failed"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "operator content\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+@pytest.mark.parametrize("backup_change", ["missing", "corrupted"])
+def test_interrupted_use_refuses_missing_or_corrupted_backup_before_mutation(
+    tmp_path: Path,
+    backup_change: str,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    lock_path = project / ".library.lock"
+    target = project / ".agents" / "skills" / "owned"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("original\n")
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import (
+        checkpoint_workspace_use,
+        recover_workspace_journal,
+        workspace_path_state,
+        workspace_rollback_path,
+        write_workspace_journal,
+    )
+
+    module = _library_module()
+    captured = module._workspace_capture_rollback(
+        workspace_rollback_path(lock_path), [str(target)], []
+    )
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(path),
+                    "backup": str(backup),
+                    "target_state": workspace_path_state(path),
+                    "backup_state": workspace_path_state(backup),
+                }
+                for path, backup in captured
+                if backup is not None
+            ],
+        },
+    )
+    (target / "SKILL.md").write_text("transaction content\n")
+    checkpoint_workspace_use(lock_path, project)
+    backup = captured[0][1]
+    assert backup is not None
+    if backup_change == "missing":
+        shutil.rmtree(backup)
+    else:
+        (backup / "SKILL.md").write_text("corrupted\n")
+
+    with pytest.raises(LibraryError, match="backup integrity check failed"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "transaction content\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
 
 
 def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(

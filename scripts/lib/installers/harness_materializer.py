@@ -6,11 +6,8 @@ writes the corresponding harness artifacts:
 
   Claude Code:  Append `@<path>` to CLAUDE.md (always_apply only)
   Codex:        Append `@<path>` to AGENTS.md (always_apply only)
-  Cursor:       Write .cursor/rules/<name>.mdc with YAML frontmatter
-                (both always_apply and globs)
-
-For globs-only (no always_apply): Cursor gets the .mdc; Claude Code and Codex
-emit a warning to stderr and are NOT modified.
+For globs-only (no always_apply), Claude Code and Codex emit a warning to stderr
+and are not modified because neither has a matching active projection contract.
 
 No-op rule: if neither always_apply nor globs is set, do nothing.
 Idempotent: if the @-import is already present, it is not duplicated.
@@ -61,17 +58,7 @@ def materialize_harness_fields(
         return {"operations": operations, "warnings": warnings}
 
     # ------------------------------------------------------------------
-    # 1. Cursor: .cursor/rules/<name>.mdc
-    # ------------------------------------------------------------------
-    mdc_path = repo_root / ".cursor" / "rules" / f"{name}.mdc"
-    if always_apply or globs:
-        ops, mdc_content = _cursor_mdc_op(name, mdc_path, always_apply, globs, import_ref)
-        operations.extend(ops)
-        if not dry_run:
-            _write_cursor_mdc(mdc_path, mdc_content)
-
-    # ------------------------------------------------------------------
-    # 2. Claude Code: CLAUDE.md
+    # 1. Claude Code: CLAUDE.md
     # ------------------------------------------------------------------
     claude_md = repo_root / "CLAUDE.md"
     if always_apply:
@@ -82,8 +69,7 @@ def materialize_harness_fields(
     elif globs:
         warn_msg = (
             f"{primitive_type.capitalize()} '{name}' has globs but no always_apply — "
-            "CLAUDE.md not modified (globs are not supported natively in Claude Code). "
-            "Use Cursor for glob-based rules."
+            "CLAUDE.md not modified (globs are not supported natively in Claude Code)."
         )
         warnings.append(warn_msg)
         operations.append(
@@ -95,7 +81,7 @@ def materialize_harness_fields(
         )
 
     # ------------------------------------------------------------------
-    # 3. Codex: AGENTS.md
+    # 2. Codex: AGENTS.md
     # ------------------------------------------------------------------
     agents_md = repo_root / "AGENTS.md"
     if always_apply:
@@ -106,8 +92,7 @@ def materialize_harness_fields(
     elif globs:
         warn_msg = (
             f"{primitive_type.capitalize()} '{name}' has globs but no always_apply — "
-            "AGENTS.md not modified (globs are not supported natively in Codex). "
-            "Use Cursor for glob-based rules."
+            "AGENTS.md not modified (globs are not supported natively in Codex)."
         )
         warnings.append(warn_msg)
         operations.append(
@@ -124,40 +109,6 @@ def materialize_harness_fields(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-
-def _cursor_mdc_op(
-    name: str,
-    mdc_path: Path,
-    always_apply: bool,
-    globs: list[str],
-    import_ref: str,
-) -> tuple[list[dict[str, Any]], str]:
-    """Build the Cursor .mdc op dict and file content."""
-    frontmatter_lines = ["---"]
-    if always_apply:
-        frontmatter_lines.append("alwaysApply: true")
-    if globs:
-        globs_yaml = ", ".join(f'"{g}"' for g in globs)
-        frontmatter_lines.append(f"globs: [{globs_yaml}]")
-    frontmatter_lines.append("---")
-    frontmatter_lines.append(import_ref)
-    content = "\n".join(frontmatter_lines) + "\n"
-
-    ops = [
-        {
-            "operation": "write_cursor_mdc",
-            "path": str(mdc_path),
-            "details": f"write Cursor rule .mdc for '{name}' at {mdc_path}",
-        }
-    ]
-    return ops, content
-
-
-def _write_cursor_mdc(mdc_path: Path, content: str) -> None:
-    """Create parent directories and write the .mdc file."""
-    mdc_path.parent.mkdir(parents=True, exist_ok=True)
-    mdc_path.write_text(content, encoding="utf-8")
 
 
 def _append_import_op(

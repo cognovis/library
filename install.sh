@@ -1,161 +1,143 @@
 #!/usr/bin/env bash
-# install.sh — Bootstrap installer for The Library.
-#
-# Purpose: Make The Library available as a `library` command across whichever
-# coding harnesses (Claude Code, Codex, OpenCode, Pi…) are present on this
-# machine. Per ADR-0004 Decision 8, the library is installable software that
-# the harnesses use — not a Claude-only skill.
-#
-# Usage:
-#     cd <library-meta-checkout>
-#     bash install.sh
-#
-# Safe to re-run. Idempotent.
-#
-# Post-install:
-#   - `library`, `cld`, and `cdx` work through ~/.local/bin.
-#   - `/library <verb>` works in every present harness.
-#   - Updates: pull the canonical checkout, then re-run this installer.
+# Bootstrap the Library control plane and its portable catalog source checkouts.
 
 set -euo pipefail
 
-# Resolve absolute path of this checkout
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-META_ROOT="$SCRIPT_DIR"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+fresh=false
+project=""
+platform_source="https://github.com/cognovis/library.git"
+core_source="https://github.com/cognovis/library-core.git"
+source_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/library/sources"
 
-# Portable realpath
-_realpath() {
-    uv run python -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"
+while test "$#" -gt 0; do
+  case "$1" in
+    --fresh)
+      fresh=true
+      shift
+      ;;
+    --project)
+      test "$#" -ge 2 || { echo "Error: --project requires a path" >&2; exit 2; }
+      project="$2"
+      shift 2
+      ;;
+    --platform-source)
+      test "$#" -ge 2 || { echo "Error: --platform-source requires a Git source" >&2; exit 2; }
+      platform_source="$2"
+      shift 2
+      ;;
+    --core-source)
+      test "$#" -ge 2 || { echo "Error: --core-source requires a Git source" >&2; exit 2; }
+      core_source="$2"
+      shift 2
+      ;;
+    --source-dir)
+      test "$#" -ge 2 || { echo "Error: --source-dir requires a path" >&2; exit 2; }
+      source_dir="$2"
+      shift 2
+      ;;
+    -h|--help)
+      echo "Usage: install.sh [--fresh] [--project PATH] [--source-dir PATH]"
+      echo "                  [--platform-source GIT_URL] [--core-source GIT_URL]"
+      exit 0
+      ;;
+    *)
+      echo "Error: unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+command -v uv >/dev/null 2>&1 || {
+  echo "Error: uv is required. Install uv from https://docs.astral.sh/uv/ first." >&2
+  exit 1
 }
 
-# Idempotent symlink helper: ln -sfn with backup of non-symlink targets
-_link() {
-    local src="$1" dest="$2"
-    local target
-    target="$(_realpath "$src")"
-
-    if test -L "$dest"; then
-        local current
-        current="$(readlink "$dest")"
-        if test "$current" = "$target"; then
-            echo "  ok    $dest"
-            return 0
-        fi
-    elif test -e "$dest"; then
-        local backup="${dest}.bak"
-        echo "  back  $dest -> $backup (was regular file)"
-        mv "$dest" "$backup"
+clone_or_update() {
+  source="$1"
+  checkout="$2"
+  if test -d "$checkout/.git"; then
+    current_origin="$(git -C "$checkout" remote get-url origin)"
+    if test "$current_origin" != "$source"; then
+      echo "Error: managed checkout has a different origin: $checkout" >&2
+      return 1
     fi
-
-    mkdir -p "$(dirname "$dest")"
-    ln -sfn "$target" "$dest"
-    echo "  link  $dest -> $target"
+    git -C "$checkout" pull --quiet --ff-only
+    return
+  fi
+  if test -e "$checkout"; then
+    echo "Error: managed checkout path already exists and is not a Git checkout: $checkout" >&2
+    return 1
+  fi
+  mkdir -p "$(dirname "$checkout")"
+  git clone --quiet "$source" "$checkout"
 }
 
-echo "Library bootstrap from: $META_ROOT"
+install_source="$script_dir"
+if test "$fresh" = true; then
+  platform_checkout="$source_dir/library-platform"
+  core_checkout="$source_dir/cognovis-library-core"
+  clone_or_update "$platform_source" "$platform_checkout"
+  clone_or_update "$core_source" "$core_checkout"
+  install_source="$platform_checkout"
 
-# --- Phase 1: deterministic library CLI -----------------------------------
+  config_home="${XDG_CONFIG_HOME:-${HOME}/.config}/library"
+  registry="$config_home/catalog-sources.json"
+  mkdir -p "$config_home"
+  temporary_registry="$registry.tmp-$$"
+  uv run python - "$temporary_registry" "$platform_checkout" "$core_checkout" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
 
-if ! test -f "$META_ROOT/bin/library"; then
-    echo "ERROR: required Library CLI is missing at $META_ROOT/bin/library" >&2
-    exit 1
+target = Path(sys.argv[1])
+payload = {
+    "schema_version": 1,
+    "catalogs": [
+        {
+            "identity": "https://github.com/cognovis/library",
+            "checkout": str(Path(sys.argv[2]).resolve()),
+        },
+        {
+            "identity": "https://github.com/cognovis/library-core",
+            "checkout": str(Path(sys.argv[3]).resolve()),
+        },
+    ],
+}
+target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+os.chmod(target, 0o600)
+PY
+  mv -f "$temporary_registry" "$registry"
+fi
+
+echo "Installing the Library control plane with uv"
+uv tool install --upgrade "$install_source"
+
+library_bin="${UV_TOOL_BIN_DIR:-${HOME}/.local/bin}/library"
+if ! test -x "$library_bin"; then
+  library_bin="$(command -v library || true)"
+fi
+if ! test -x "$library_bin"; then
+  echo "Error: uv installed Library but its executable is not available" >&2
+  exit 1
+fi
+
+if test "$fresh" = true; then
+  "$library_bin" bootstrap install
+fi
+
+if test -n "$project"; then
+  git -C "$project" rev-parse --show-toplevel >/dev/null
+  (cd "$project" && "$library_bin" init)
 fi
 
 echo ""
-echo "Installing CLI:"
-LOCAL_BIN="${HOME}/.local/bin"
-case "$META_ROOT/" in
-    */.worktrees/*)
-        echo "  warn  This checkout is a disposable worktree. Reinstall from the canonical checkout after delivery." ;;
-esac
-_link "$META_ROOT/bin/library" "$LOCAL_BIN/library"
-for launcher in cld cdx; do
-    if ! test -f "$META_ROOT/bin/$launcher"; then
-        echo "ERROR: required launcher is missing at $META_ROOT/bin/$launcher" >&2
-        exit 1
-    fi
-    _link "$META_ROOT/bin/$launcher" "$LOCAL_BIN/$launcher"
-done
-case ":${PATH}:" in
-    *":${LOCAL_BIN}:"*) ;;
-    *) echo "  warn  ${LOCAL_BIN} is not in \$PATH; add to ~/.zshrc:"
-       echo "        export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
-esac
-
-# --- Phase 2: harness skill/command entries --------------------------------
-# Detect each harness by the presence of its global dir. For every present
-# harness, create skill entries pointing back at this meta checkout.
-# Until the harness has its own protocol-specific surface file (e.g. SKILL.md
-# for Claude Code, .toml for Codex), we install SKILL.md directories as the
-# universal agentskills.io entry — Codex CLI accepts SKILL.md too.
-
-declare -a PLATFORM_SKILLS=(
-    "library:${META_ROOT}"
-)
-
-declare -a HARNESS_SKILL_ROOTS=(
-    "claude:${HOME}/.claude/skills"
-    "codex:${HOME}/.codex/skills"
-    "agents:${HOME}/.agents/skills"
-    "opencode:${HOME}/.opencode/skills"
-)
-
-echo ""
-echo "Installing harness skill entries:"
-
-installed_any=0
-for entry in "${HARNESS_SKILL_ROOTS[@]}"; do
-    harness="${entry%%:*}"
-    skill_root="${entry#*:}"
-    parent="$(dirname "$skill_root")"   # e.g. ~/.claude
-
-    if ! test -d "$parent"; then
-        echo "  skip  $harness (no $parent)"
-        continue
-    fi
-
-    for platform_skill in "${PLATFORM_SKILLS[@]}"; do
-        skill_name="${platform_skill%%:*}"
-        src_dir="${platform_skill#*:}"
-
-        if ! test -d "$src_dir"; then
-            echo "  warn  $skill_name source missing at $src_dir"
-            continue
-        fi
-
-        _link "$src_dir" "$skill_root/$skill_name"
-        (( installed_any++ )) || true
-    done
-done
-
-if test "$installed_any" -eq 0; then
-    echo "  warn  No harnesses detected. Library content installed at $META_ROOT"
-    echo "        but no slash-command entry points were created."
-fi
-
-# --- Phase 3: library home for cache + state -------------------------------
-# Per ADR-0003 Decision 3: the cache lives at ~/.local/share/library/.
-# Pre-create so that /library use does not have to bootstrap it lazily.
-
-LIBRARY_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/library"
-mkdir -p "$LIBRARY_HOME/skills" "$LIBRARY_HOME/agents" "$LIBRARY_HOME/prompts" "$LIBRARY_HOME/hooks"
-echo ""
-echo "Library cache home: $LIBRARY_HOME"
-
-# Record exact receipt-backed ownership for the bootstrap links. These receipts
-# are part of the removal and audit safety contract, not migration history.
-uv run --script "$META_ROOT/scripts/register-bootstrap-receipts.py" --meta-root "$META_ROOT"
-
-# --- Phase 4: summary ------------------------------------------------------
-
-echo ""
-echo "Done."
+echo "The global bootstrap contains only the Library executable and its product"
+echo "launchers/instruction/runtime prerequisites. It does not install a Library"
+echo "skill or any other Library primitive globally."
 echo ""
 echo "Next steps:"
-echo "  - In any shell: library --help"
-echo "  - Launch Claude Code or Codex: cld / cdx"
-echo "  - In any harness: /library"
-echo "  - Optional forge skills belong in a project Workspace, not the global bootstrap"
-echo "  - To inspect available Skills: library skill list"
-echo ""
-echo "If you wipe ~/.claude/ or ~/.codex/, re-run: cd $META_ROOT && bash install.sh"
+echo "  library --help"
+echo "  library bootstrap install"
+echo "  cd <git-repository> && library init"

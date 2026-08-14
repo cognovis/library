@@ -209,7 +209,6 @@ def test_guardrail_capability_harnesses():
                     "codex_cli": {"events": ["SessionStart"], "handler": "node-mjs"},
                     "codex_cloud": {"mechanism": "approval_policy"},
                     "pi": {"events": ["tool_call"], "handler": "typescript-extension"},
-                    "opencode": {"mechanism": "permission-rule"},
                 },
             }
         ]
@@ -250,7 +249,6 @@ def test_guardrail_sources_section():
                     "claude_code": "guardrails/my-guardrail/claude-code.sh",
                     "codex_cli": "guardrails/my-guardrail/codex-cli.mjs",
                     "codex_cloud": "guardrails/my-guardrail/codex-cloud-fragment.toml",
-                    "opencode": "guardrails/my-guardrail/opencode-fragment.json",
                 },
             }
         ]
@@ -309,16 +307,11 @@ def test_full_example_validates():
                         "value": "all",
                         "note": "No event-level veto; use blunt approval_policy=all or sandbox restrictions",
                     },
-                    "opencode": {
-                        "mechanism": "permission-rule",
-                        "config_key": "rules",
-                    },
                 },
                 "sources": {
                     "claude_code": "guardrails/block-destructive-bash/claude-code.sh",
                     "codex_cli": "guardrails/block-destructive-bash/codex-cli.mjs",
                     "codex_cloud": "guardrails/block-destructive-bash/codex-cloud-config-fragment.toml",
-                    "opencode": "guardrails/block-destructive-bash/opencode-fragment.json",
                 },
                 "tags": ["security", "destructive-prevention"],
             }

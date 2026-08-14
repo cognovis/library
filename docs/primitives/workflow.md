@@ -124,7 +124,6 @@ The runtime supports:
 | `claude-agent` | `blocked` | Leaf smoke returned unauthenticated; hook preservation unverified |
 | `codex-impl` | `blocked` | Hook chain suppressed: `--ignore-user-config` skips config.toml trust hashes (CL-pabj) |
 | `codex-exec` | `blocked` | Hook chain suppressed: `--ignore-user-config` skips config.toml trust hashes (CL-pabj) |
-| `cursor-composer` | `not-applicable` | IDE composer; not a Library runtime leaf executor |
 
 No adapter is currently `verified` for mutating execution. All workflow runs
 must use `readOnly=True` until adapter hook-preservation smoke tests pass.
@@ -195,7 +194,7 @@ the workflow as a regular JavaScript file copy:
 | Claude Code project-local install | `<repo>/.claude/workflows/<name>.js` |
 | Claude Code global install | `~/.claude/workflows/<name>.js` |
 | Package-shipped | a package's `workflowsPath` (the binary's `loadPluginWorkflows`) |
-| Codex / Cursor install target | `.claude/workflows/<name>.js` storage only; Codex and Cursor have no native workflow executor, so this does not claim runtime support |
+| Codex install target | `.claude/workflows/<name>.js` storage only; Codex has no native workflow executor, so this does not claim runtime support |
 
 **When to choose it.** Create a workflow when **all** hold:
 

@@ -43,19 +43,19 @@
           },
           "harness": {
             "type": "string",
-            "enum": ["claude-code", "codex", "opencode", "pi"]
+            "enum": ["claude-code", "codex", "pi"]
           },
           "family": {
             "type": "string",
-            "enum": ["claude", "openai", "cursor"]
+            "enum": ["claude", "openai"]
           },
           "provider": {
             "type": "string",
-            "enum": ["claude", "codex", "cursor"]
+            "enum": ["claude", "codex"]
           },
           "adapter": {
             "type": "string",
-            "enum": ["claude-agent", "claude-exec", "claude-impl", "codex-exec", "codex-impl", "cursor-composer", "cursor-impl"]
+            "enum": ["claude-agent", "claude-exec", "claude-impl", "codex-exec", "codex-impl"]
           },
           "runtime_model": {
             "type": "string",

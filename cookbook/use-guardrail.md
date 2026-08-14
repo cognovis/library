@@ -1,16 +1,17 @@
 # Install a Guardrail from the Library
 
 ## Context
-Install a guardrail from the catalog into the current project (or globally). A guardrail
+Install a guardrail from the catalog into the current project. A guardrail
 runs outside the LLM loop — once installed, the model cannot bypass it.
 
 Guardrails are per-harness: the same logical guardrail compiles to different native
-mechanisms per harness (Claude Code hooks, Codex CLI SessionStart hooks, OpenCode
-permission rules, etc.). This cookbook handles the capability check and per-harness
+mechanisms per harness (Claude Code hooks, Codex CLI SessionStart hooks, and Pi
+extensions). This cookbook handles the capability check and per-harness
 installation.
 
 ## Input
-The user provides: guardrail name, optional target harness(es), optional scope (local/global).
+The user provides: guardrail name and optional target harness(es). Library
+lifecycle scope is always project-local.
 
 ## Steps
 
@@ -34,16 +35,14 @@ git pull
 | "for claude" / "claude only" | Claude Code only |
 | "for codex" / "codex cli" | Codex CLI only |
 | "for codex cloud" | Codex Cloud only |
-| "for opencode" | OpenCode only |
 | "for pi" | Pi only |
 | "for all" / "everywhere" | All supported harnesses |
 
 **Priority 2 — Marker-file detection (check in cwd):**
 ```bash
-[ -d ".claude" ] && echo "found: .claude/ → claude_code"
-[ -f "hooks.json" ] && echo "found: hooks.json → codex_cli"
-[ -f "opencode.json" ] || [ -f ".config/opencode/opencode.json" ] && echo "found: opencode.json → opencode"
-[ -d ".pi" ] && echo "found: .pi/ → pi"
+test -d ".claude" && echo "found: .claude/ → claude_code"
+test -f "hooks.json" && echo "found: hooks.json → codex_cli"
+test -d ".pi" && echo "found: .pi/ → pi"
 ```
 
 **Priority 3 — Fall back:**
@@ -128,7 +127,7 @@ Warning: Capability mismatch for guardrail '<name>' on harness 'codex_cloud':
   Default: option 2 (skip).
 ```
 
-For `purpose: post-tool-reaction` on `codex_cli`, `codex_cloud`, `opencode`:
+For `purpose: post-tool-reaction` on `codex_cli` or `codex_cloud`:
 ```
 Warning: Capability mismatch for guardrail '<name>' on harness '<harness>':
   Requested purpose: post-tool-reaction
@@ -141,13 +140,10 @@ Warning: Capability mismatch for guardrail '<name>' on harness '<harness>':
 
 Read `default_dirs.guardrails` from `library.yaml`. Pick the path key:
 
-| Target harness | Scope | Key to use |
-|----------------|-------|------------|
-| `claude_code` | local | `default` |
-| `claude_code` | global | `global` |
-| `codex_cli` | local | `default_codex` |
-| `codex_cli` | global | `global_codex` |
-| `opencode` | local | `default_opencode` |
+| Target harness | Key to use |
+|----------------|------------|
+| `claude_code` | `default` |
+| `codex_cli` | `default_codex` |
 
 > **YAML list note:** `default_dirs.guardrails` is a list of single-key maps. Iterate the
 > list to find the entry whose key matches the desired name. For example, to find `default`:
@@ -161,7 +157,7 @@ For each harness the user confirmed (after capability check):
 ```bash
 # Source file from guardrail entry: guardrail['sources']['claude_code']
 SOURCE_FILE="<repo_root>/<sources.claude_code>"
-TARGET_DIR="<resolved_default_or_global_path>"
+TARGET_DIR="<resolved_project_path>"
 TARGET_FILE="$TARGET_DIR/<name>/<filename>"
 
 mkdir -p "$(dirname "$TARGET_FILE")"
@@ -223,20 +219,10 @@ TOML_FRAGMENT="<repo_root>/<sources.codex_cloud>"
 - Add: `approval_policy = "all"` (or the value from the fragment)
 - Do NOT modify other config settings
 
-#### OpenCode installation
-```bash
-SOURCE_FRAGMENT="<repo_root>/<sources.opencode>"
-# Read JSON fragment, merge rules array into opencode.json
-```
-- Read `opencode.json` (create if not exists with `{"rules": []}`)
-- Parse the fragment's `rules` array
-- Append rules to `opencode.json` `rules` array (check for duplicates by `pattern`)
-- Write back to `opencode.json`
-
 ### 7. Verify Installation
 For each harness installed:
 - Confirm the target file exists (Claude Code, Codex CLI)
-- Confirm settings.json / hooks.json / config.toml / opencode.json was updated
+- Confirm the supported harness configuration was updated
 - Print a summary of what was installed and where
 
 ### 8. Update .library.lock

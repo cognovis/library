@@ -208,6 +208,7 @@ def source_revision(
     *,
     catalog: Mapping[str, Any],
     http_transport: Any = None,
+    expected_revision: str | None = None,
 ) -> str:
     """What one registered source currently serves, as a commit.
 
@@ -243,6 +244,22 @@ def source_revision(
         if local_path:
             path = Path(str(local_path)).expanduser()
             if path.is_dir():
+                if expected_revision:
+                    import subprocess
+
+                    probe = subprocess.run(
+                        ["git", "cat-file", "-e", f"{expected_revision}^{{commit}}"],
+                        cwd=path,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                    if probe.returncode == 0:
+                        return expected_revision
+                    raise LookupError(
+                        f"{identity} does not contain declared commit "
+                        f"{expected_revision}"
+                    )
                 revision = head_commit(path)
                 if revision != "local":
                     return revision

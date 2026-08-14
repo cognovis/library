@@ -5,8 +5,7 @@ Bead: CL-l0c
 Tests:
   AK D1: install-mcp.py exists and accepts --dry-run + --harness
   AK D2: claude_code harness writes snippet to mcpServers map under _origin tag
-  AK D3: opencode harness writes snippet to mcp map under _origin tag
-  AK D4: codex harness writes snippet to mcp_servers TOML table under _origin tag
+  AK D3: codex harness writes snippet to mcp_servers TOML table under _origin tag
   AK D5: re-install is idempotent (action=no_change or refresh, no duplicate keys)
   AK D6: --remove drops library-managed entries; leaves manual entries alone
   AK D7: --harness=<unknown> for an entry that doesn't declare it emits WARN
@@ -59,15 +58,9 @@ class TestInstallMcp(unittest.TestCase):
         self.tmp = tempfile.mkdtemp(prefix="install-mcp-test-")
         self.claude_settings = Path(self.tmp) / "claude" / "settings.json"
         self.codex_config = Path(self.tmp) / "codex" / "config.toml"
-        self.opencode_config = Path(self.tmp) / "opencode" / "opencode.json"
-        self.gemini_settings = Path(self.tmp) / "gemini" / "settings.json"
-        self.cursor_config = Path(self.tmp) / "cursor" / "mcp.json"
         self.env = {
             "CLAUDE_SETTINGS_FILE": str(self.claude_settings),
             "CODEX_CONFIG_FILE": str(self.codex_config),
-            "OPENCODE_CONFIG_FILE": str(self.opencode_config),
-            "GEMINI_SETTINGS_FILE": str(self.gemini_settings),
-            "CURSOR_MCP_FILE": str(self.cursor_config),
             # MCP installs default to global scope, and the lockfile they write
             # is derived from HOME. Isolating only the harness config files let
             # these tests rewrite entries in the operator's real
@@ -124,25 +117,7 @@ class TestInstallMcp(unittest.TestCase):
         self.assertEqual(entry.get("url"), "https://open-brain.sussdorff.org/mcp")
         self.assertNotIn("token=", entry.get("url", ""))
 
-    # --- AK D3: opencode writes to mcp map ---
-
-    def test_d3_opencode_install_writes_mcp(self):
-        result = run_install_mcp(
-            "open-brain", "--harness", "opencode", env_overrides=self.env
-        )
-        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
-        self.assertTrue(self.opencode_config.is_file())
-        data = json.loads(self.opencode_config.read_text())
-        self.assertIn("mcp", data)
-        self.assertIn("open-brain", data["mcp"])
-        self.assertEqual(data["mcp"]["open-brain"]["_origin"], "library:mcp:open-brain")
-        self.assertEqual(data["mcp"]["open-brain"]["type"], "remote")
-        self.assertEqual(
-            data["mcp"]["open-brain"]["url"],
-            "https://open-brain.sussdorff.org/mcp",
-        )
-
-    # --- AK D4: codex writes TOML table with _origin tag ---
+    # --- AK D3: codex writes TOML table with _origin tag ---
 
     def test_d4_codex_install_writes_toml_table(self):
         result = run_install_mcp(
@@ -366,18 +341,15 @@ class TestInstallMcp(unittest.TestCase):
         from lib.installers.mcp_installer import _mcp_config_path
 
         # Clear any env overrides so we observe the real defaults.
-        saved = {k: os.environ.pop(k, None)
-                 for k in ("CLAUDE_SETTINGS_FILE", "CURSOR_MCP_FILE")}
+        saved = {k: os.environ.pop(k, None) for k in ("CLAUDE_SETTINGS_FILE", "CODEX_CONFIG_FILE")}
         try:
             self.assertEqual(_mcp_config_path("claude_code"), Path.home() / ".claude.json")
-            self.assertEqual(_mcp_config_path("cursor"), Path.home() / ".cursor" / "mcp.json")
             self.assertEqual(
                 _mcp_config_path("codex"), Path.home() / ".codex" / "config.toml"
             )
-            self.assertEqual(
-                _mcp_config_path("antigravity"),
-                Path.home() / ".gemini" / "config" / "mcp_config.json",
-            )
+            # Retired harnesses have no config writer and must fail explicitly.
+            with self.assertRaises(Exception):
+                _mcp_config_path("cursor")
         finally:
             for k, v in saved.items():
                 if v is not None:

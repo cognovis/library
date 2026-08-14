@@ -102,7 +102,6 @@ never overwritten — the composed prompt is written to the installed copy only.
    - Claude Code: .claude/agents/<name>.md body (keep frontmatter from source)
    - Codex: developer_instructions in .codex/agents/<name>.toml
      (add composition metadata as header comments)
-   - OpenCode: .opencode/agents/<name>.md body
    - Pi: export as TypeScript string from the extension module
 ```
 

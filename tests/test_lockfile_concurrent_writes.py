@@ -238,77 +238,35 @@ def _start_competing_installer(
 
 
 @pytest.mark.parametrize("attempt", range(3))
-def test_multi_agent_global_sync_keeps_every_receipt(tmp_path: Path, attempt: int) -> None:
-    """The reported failure: bulk agent sync racing a second Library writer.
-
-    Repeated, because the defect is a race: a single unlucky-free run proves
-    nothing. Without the write guard at least one attempt fails, usually with
-    the reported "Invalid YAML in .../global.lock".
-    """
+def test_multi_agent_global_sync_is_rejected_before_mutation(
+    tmp_path: Path, attempt: int
+) -> None:
+    """Retired global lifecycle commands fail before starting concurrent work."""
     home = tmp_path / "home"
     home.mkdir()
     project = _write_fixture_project(tmp_path)
     lock_path = home / ".config" / "library" / "global.lock"
 
-    for agent_id in sorted(_expected_agent_ids(project)):
-        installed = _run_library(
-            project,
-            home,
-            "agent",
-            "use",
-            agent_id.split(":", 1)[1],
-            "--scope",
-            "global",
-            "--harness",
-            "all",
-            "--json",
-        )
-        assert installed.returncode == 0, installed.stderr or installed.stdout
+    synced = _run_library(
+        project,
+        home,
+        "agent",
+        "sync",
+        "--scope",
+        "global",
+        "--harness",
+        "codex",
+        "--json",
+    )
 
-    sentinel = tmp_path / "sync-finished"
-    report = tmp_path / "competitor-report.json"
-    competitor = _start_competing_installer(project, home, sentinel, report)
-    try:
-        synced = _run_library(
-            project,
-            home,
-            "agent",
-            "sync",
-            "--scope",
-            "global",
-            "--harness",
-            "codex",
-            "--json",
-        )
-    finally:
-        sentinel.write_text("done", encoding="utf-8")
-        competitor_out, competitor_err = competitor.communicate(timeout=180)
-
-    assert competitor.returncode == 0, competitor_err or competitor_out
-    assert synced.returncode == 0, synced.stderr or synced.stdout
-    payload = json.loads(synced.stdout)
-    assert payload["data"]["failed"] == [], payload["data"]["failed"]
-
-    raw = lock_path.read_text(encoding="utf-8")
-    lock = yaml.safe_load(raw)
-    assert isinstance(lock, dict), raw[:2000]
-
-    receipt_ids = {receipt.get("id") for receipt in lock.get("receipts", [])}
-    competitor_ids = set(json.loads(report.read_text()))
-    assert competitor_ids, "the competing writer installed nothing"
-    missing = (_expected_agent_ids(project) | competitor_ids) - receipt_ids
-    assert not missing, f"receipts lost by concurrent writers: {sorted(missing)}"
-
-    # Every receipt is complete, not a fragment of one.
-    for receipt in lock["receipts"]:
-        assert receipt.get("install_timestamp"), receipt
-        assert receipt.get("install_target"), receipt
-
-    # The dependency closure resolved while the agents were installed keeps its
-    # own scope's lock complete and parseable.
-    project_lock = yaml.safe_load((project / ".library.lock").read_text(encoding="utf-8"))
-    dependency_ids = {receipt.get("id") for receipt in project_lock.get("receipts", [])}
-    assert _expected_dependency_ids(project) <= dependency_ids
+    assert synced.returncode == 1, synced.stderr or synced.stdout
+    assert json.loads(synced.stdout) == {
+        "status": "error",
+        "message": "Global Library desired state is not supported; use the current Git repository.",
+        "exit_code": 1,
+    }
+    assert not lock_path.exists()
+    assert not (project / ".library.lock").exists()
 
 
 # ---------------------------------------------------------------------------
