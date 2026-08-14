@@ -2259,8 +2259,27 @@ def write_workspace_journal(lock_path: Path, payload: dict[str, Any]) -> Path:
 
 def clear_workspace_journal(lock_path: Path) -> None:
     """Remove a completed transaction journal."""
+    rollback_root = workspace_rollback_path(lock_path)
+    if rollback_root.is_symlink() or (
+        rollback_root.exists() and not rollback_root.is_dir()
+    ):
+        raise LibraryError(
+            f"Workspace rollback root is not a real directory: {rollback_root}"
+        )
+    if rollback_root.exists():
+        shutil.rmtree(rollback_root)
     workspace_journal_path(lock_path).unlink(missing_ok=True)
-    shutil.rmtree(workspace_rollback_path(lock_path), ignore_errors=True)
+
+
+def prepare_workspace_rollback(lock_path: Path) -> Path:
+    """Refuse pre-existing rollback state before the first capture write."""
+    rollback_root = workspace_rollback_path(lock_path)
+    if rollback_root.is_symlink() or rollback_root.exists():
+        raise LibraryError(
+            "Workspace rollback root already exists; inspect or recover it before "
+            f"starting another mutation: {rollback_root}"
+        )
+    return rollback_root
 
 
 def workspace_path_state(path: Path) -> dict[str, str]:
@@ -2307,6 +2326,18 @@ def _use_rollback_paths(
     rollback_root = Path(
         os.path.abspath(workspace_rollback_path(lock_path).expanduser())
     )
+    rollback_entries = payload.get("rollback")
+    if not isinstance(rollback_entries, list):
+        raise LibraryError("Workspace use journal rollback plan is invalid")
+    requires_rollback_root = any(
+        isinstance(item, dict) and item.get("backup") for item in rollback_entries
+    )
+    if rollback_root.is_symlink() or (
+        rollback_root.exists() and not rollback_root.is_dir()
+    ):
+        raise LibraryError(
+            f"Workspace rollback root is not a real directory: {rollback_root}"
+        )
     state_targets = {
         Path(os.path.abspath(lock_path.expanduser())),
         root / ".gitignore",
@@ -2316,7 +2347,7 @@ def _use_rollback_paths(
     )
     validated: list[tuple[dict[str, Any], Path, Path | None]] = []
     seen: set[Path] = set()
-    for item in payload.get("rollback") or []:
+    for item in rollback_entries:
         if not isinstance(item, dict):
             raise LibraryError("Workspace use journal rollback entry is invalid")
         target = Path(
@@ -2348,6 +2379,8 @@ def _use_rollback_paths(
                 f"Workspace use journal backup is outside its transaction root: {backup}"
             )
         validated.append((item, target, backup))
+    if requires_rollback_root and not rollback_root.is_dir():
+        raise LibraryError(f"Workspace rollback root is missing: {rollback_root}")
     return validated
 
 

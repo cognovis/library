@@ -378,6 +378,59 @@ def test_workspace_use_blocks_foreign_target_before_any_install(tmp_path: Path) 
     assert not (project / ".library.lock").exists()
 
 
+def test_workspace_use_refuses_a_symlinked_rollback_root_before_any_write(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    home.mkdir()
+    outside.mkdir()
+    _write_fixture(project)
+    sentinel = outside / "sentinel.txt"
+    sentinel.write_text("operator content\n")
+    rollback_root = project / ".library.lock.workspace-rollback"
+    rollback_root.symlink_to(outside, target_is_directory=True)
+    before_status = subprocess.run(
+        ["git", "-C", str(project), "status", "--short"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout
+
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:python-cli",
+        "--scope",
+        "project",
+        "--harness",
+        "codex",
+        "--json",
+    )
+
+    assert used.returncode == 1
+    assert "rollback root already exists" in json.loads(used.stdout)["message"]
+    assert rollback_root.is_symlink()
+    assert sentinel.read_text() == "operator content\n"
+    assert sorted(path.name for path in outside.iterdir()) == ["sentinel.txt"]
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".library.lock.lock").exists()
+    assert not (project / ".library.lock.workspace-lock").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".agents").exists()
+    after_status = subprocess.run(
+        ["git", "-C", str(project), "status", "--short"],
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout
+    assert after_status == before_status
+
+
 def test_workspace_use_replaces_only_byte_exact_catalog_content(tmp_path: Path) -> None:
     project = tmp_path / "project"
     home = tmp_path / "home"
@@ -1852,6 +1905,50 @@ def test_interrupted_use_refuses_a_tampered_outside_backup_path(
 
     assert (target / "SKILL.md").read_text() == "current\n"
     assert (outside_backup / "SKILL.md").read_text() == "tampered\n"
+    assert (project / ".library.lock.workspace-journal.json").exists()
+
+
+def test_interrupted_use_refuses_a_symlinked_rollback_root_before_mutation(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    outside = tmp_path / "outside"
+    project.mkdir()
+    outside.mkdir()
+    target = project / ".agents" / "skills" / "owned"
+    target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("current\n")
+    outside_backup = outside / "0"
+    outside_backup.mkdir()
+    (outside_backup / "SKILL.md").write_text("outside\n")
+    lock_path = project / ".library.lock"
+    rollback_root = project / ".library.lock.workspace-rollback"
+    rollback_root.symlink_to(outside, target_is_directory=True)
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.errors import LibraryError
+    from lib.workspace import recover_workspace_journal, write_workspace_journal
+
+    write_workspace_journal(
+        lock_path,
+        {
+            "operation": "use",
+            "rollback": [
+                {
+                    "target": str(target),
+                    "backup": str(rollback_root / "0"),
+                    "target_state": {"kind": "directory", "sha256": "unused"},
+                    "backup_state": {"kind": "directory", "sha256": "unused"},
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(LibraryError, match="not a real directory"):
+        recover_workspace_journal(lock_path, project)
+
+    assert (target / "SKILL.md").read_text() == "current\n"
+    assert (outside_backup / "SKILL.md").read_text() == "outside\n"
+    assert rollback_root.is_symlink()
     assert (project / ".library.lock.workspace-journal.json").exists()
 
 

@@ -6615,6 +6615,10 @@ def _workspace_capture_rollback(
     rollback_root: Path, paths: list[str], state_files: list[Path]
 ) -> list[tuple[Path, Path | None]]:
     """Capture exact pre-mutation state for one Workspace transaction."""
+    if rollback_root.is_symlink() or rollback_root.exists():
+        raise LibraryError(
+            f"Workspace rollback capture requires an absent root: {rollback_root}"
+        )
     captured: list[tuple[Path, Path | None]] = []
     for index, target in enumerate([*(Path(path) for path in paths), *state_files]):
         backup = rollback_root / str(index)
@@ -6735,15 +6739,19 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
         checkpoint_workspace_use,
         clear_workspace_journal,
         gate_workspace_mutation,
+        prepare_workspace_rollback,
         publish_admitted_members,
         recover_workspace_journal,
+        workspace_journal_path,
         workspace_path_state,
-        workspace_rollback_path,
         workspace_write_lock,
         write_workspace_journal,
     )
 
     rollback = None
+    rollback_root = None
+    if not workspace_journal_path(lock_path).exists():
+        rollback_root = prepare_workspace_rollback(lock_path)
     with (
         workspace_write_lock(lock_path),
         _admitted_publication_root(repo_root) as admitted_root,
@@ -6793,8 +6801,8 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             if root.get("type") != "workspace"
         }
         member_failure: list[tuple[str, int, str]] = []
-        rollback_root = workspace_rollback_path(lock_path)
-        shutil.rmtree(rollback_root, ignore_errors=True)
+        if rollback_root is None:
+            rollback_root = prepare_workspace_rollback(lock_path)
         rollback = _workspace_capture_rollback(
             rollback_root,
             locked_collision["targets"],
