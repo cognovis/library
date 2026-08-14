@@ -8,6 +8,8 @@ import subprocess
 from hashlib import sha256
 from pathlib import Path
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LIBRARY = REPO_ROOT / "scripts" / "library.py"
@@ -77,6 +79,56 @@ installed: []
         "resolution_blockers": [],
         "pending_reconciliation": False,
     }
+
+
+def test_status_uses_trusted_catalog_for_canonical_workspace_roots(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    (tmp_path / "library.yaml").write_text(
+        "catalog_identity: https://github.com/cognovis/cognovis-pi\n"
+        "sources:\n"
+        "  catalogs: []\n"
+        "  marketplaces: []\n"
+        "library:\n"
+        "  workspaces: []\n",
+        encoding="utf-8",
+    )
+
+    initialized = _run(tmp_path, "init", "--json")
+    status = _run(tmp_path, "status", "--offline", "--json")
+
+    assert initialized.returncode == 0, initialized.stderr or initialized.stdout
+    payload = json.loads(status.stdout)
+    desired_state = payload["health"]["desired_state"]
+    assert desired_state["status"] == "healthy"
+    assert desired_state["freshness"] == "current"
+    assert desired_state["resolution_blockers"] == []
+
+    lock_path = tmp_path / ".library.lock"
+    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    lock["requested_roots"].append(
+        {
+            "id": "workspace:https://github.com/cognovis/library#retired-cursor",
+            "type": "workspace",
+            "name": "retired-cursor",
+            "scope": "project",
+            "catalog_identity": "https://github.com/cognovis/library",
+            "catalog_name": "library-platform",
+            "requested_ref": "library-platform:retired-cursor",
+        }
+    )
+    lock_path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
+
+    retired_status = _run(tmp_path, "status", "--offline", "--json")
+    retired_desired = json.loads(retired_status.stdout)["health"]["desired_state"]
+    assert retired_desired["status"] == "repair_available"
+    assert retired_desired["freshness"] == "stale"
+    assert any("retired-cursor" in blocker for blocker in retired_desired["resolution_blockers"])
+    assert all(
+        "Unknown source catalog 'library-platform'" not in blocker
+        for blocker in retired_desired["resolution_blockers"]
+    )
 
 
 def test_status_uses_exit_three_for_unmanaged_supported_harness_content(

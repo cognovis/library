@@ -3714,13 +3714,15 @@ def _repository_health(
 
 
 def _status_catalog(repo_root: Path) -> dict:
-    """Load the same repository-selected catalog that lifecycle status observes."""
-    # A consumer repository owns desired state but does not carry the Library
-    # catalog. Resolve its nearest catalog when present, otherwise use the
-    # catalog bundled with the installed control plane.
-    del repo_root
+    """Load the catalog that resolves this repository's recorded Workspaces."""
     catalog_root = _resolve_catalog_root()
-    return load_catalog(catalog_root)
+    catalog = load_catalog(catalog_root)
+    return _select_workspace_catalog(
+        argparse.Namespace(verb="status", scope="project", reference=None),
+        repo_root=repo_root,
+        catalog_root=catalog_root,
+        catalog=catalog,
+    )
 
 
 def _projection_health(repo_root: Path, receipts: list[dict]) -> tuple[list[str], list[str]]:
@@ -8604,6 +8606,11 @@ def _select_workspace_catalog(
     """
     references = _workspace_references_for_command(args, repo_root)
     verb = str(getattr(args, "verb", ""))
+    if _recorded_workspace_requires_trusted_platform_catalog(args, repo_root):
+        tool_catalog_root = _tool_catalog_root()
+        if tool_catalog_root.resolve() == catalog_root.resolve():
+            return catalog
+        return load_catalog(tool_catalog_root)
     if not references and verb == "list" and get_entries(catalog, "workspace"):
         return catalog
     if references and all(
@@ -8624,6 +8631,26 @@ def _select_workspace_catalog(
     ):
         return tool_catalog
     return catalog
+
+
+def _recorded_workspace_requires_trusted_platform_catalog(
+    args: argparse.Namespace, repo_root: Path
+) -> bool:
+    """Return whether recorded Workspace provenance binds status to the tool catalog."""
+    if str(getattr(args, "verb", "")) != "status":
+        return False
+    if getattr(args, "reference", None):
+        return False
+    scope = str(getattr(args, "scope", "project"))
+    lock = load_lockfile(
+        find_lockfile(repo_root, global_scope=(scope == "global"))
+    )
+    return any(
+        root.get("type") == "workspace"
+        and root.get("catalog_identity") == CANONICAL_PLATFORM_CATALOG_IDENTITY
+        for root in lock.get("requested_roots", [])
+        if isinstance(root, dict)
+    )
 
 
 def _workspace_reference_resolves(catalog: dict, reference: str) -> bool:
