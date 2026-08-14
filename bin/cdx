@@ -31,6 +31,13 @@ CDX_RESOURCE_DIR="${CDX_SCRIPT_DIR:h}/scripts"
 if [[ "${CDX_SCRIPT_DIR:h:t}" == "scripts" ]]; then
     CDX_RESOURCE_DIR="${CDX_SCRIPT_DIR:h}"
 fi
+BEAD_LOOP_AUTHORITY_HELPER="${CDX_BEAD_LOOP_AUTHORITY_HELPER:-${CDX_SCRIPT_DIR}/lib/bead-loop-authority.zsh}"
+if test -f "${BEAD_LOOP_AUTHORITY_HELPER}"; then
+    source "${BEAD_LOOP_AUTHORITY_HELPER}"
+else
+    echo "ERROR: bead-loop authority resolver not found: ${BEAD_LOOP_AUTHORITY_HELPER}" >&2
+    exit 2
+fi
 COMPACT_CONTEXT_SCRIPT="${CDX_COMPACT_CONTEXT_SCRIPT:-${CDX_RESOURCE_DIR}/compact-bead-context.py}"
 CODEX_JSONL_FILTER_SCRIPT="${CDX_JSONL_FILTER_SCRIPT:-${CDX_RESOURCE_DIR}/filter-codex-jsonl.py}"
 WORKTREE_OVERLAY_SCRIPT="${CDX_WORKTREE_OVERLAY_SCRIPT:-${CDX_RESOURCE_DIR}/worktree-overlays.py}"
@@ -520,6 +527,8 @@ launch_bead_implementation_loop() {
         return 1
     fi
 
+    _resolve_bead_loop_authority || return $?
+
     local bead_context
     bead_context=$(fetch_bead_context "${active_bead}") || {
         local fetch_status=$?
@@ -552,9 +561,9 @@ launch_bead_implementation_loop() {
     local worktree_dir
     worktree_dir="$(ensure_bead_worktree "$active_bead")" || return $?
 
-    local prompt="Execute Bead ${active_bead} in its assigned worktree using the installed bead-implementation-loop skill in this current Codex session with execution mode \`${execution_mode}\`. This current Codex session owns implementation, repairs, verification, and lifecycle completion. Do not delegate implementation or repairs to a subagent. This user-directed current-session ownership overrides any skill instruction that would dispatch a native implementation subagent.
+    local prompt="Execute Bead ${active_bead} in its assigned worktree with execution mode \`${execution_mode}\` and caller route \`codex-owned\`. This current Codex session owns implementation, repairs, verification, and lifecycle completion. Do not delegate implementation or repairs to a subagent.
 
-Use the installed acpx-dispatch skill to obtain review feedback from Opus. The current session owns review policy and prompt composition; acpx-dispatch is transport only. Review 1 is adversarial, review 2 is critical, and reviews 3 through 5 are normal. After each review, fix actionable findings above low severity or nits, verify the fixes, and request the next review only if such findings required a fix. Stop when only low-severity findings or nits remain, or after five Opus reviews total."
+$(_bead_loop_authority_prompt)"
 
     if [[ "$execution_mode" == "quick" ]]; then
         prompt+=" This is unconditional explicit Quick for every executable leaf and starts with the minimal capability set. Do not add optional ceremony unless new acceptance evidence requires a named capability."

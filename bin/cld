@@ -30,6 +30,13 @@ BD_BIN="${BD_BIN:-$(command -v bd 2>/dev/null)}"
 
 CLD_SCRIPT_DIR="${0:A:h}"
 WORKTREE_OVERLAY_SCRIPT="${CLD_WORKTREE_OVERLAY_SCRIPT:-${CLD_SCRIPT_DIR:h}/scripts/worktree-overlays.py}"
+BEAD_LOOP_AUTHORITY_HELPER="${CLD_BEAD_LOOP_AUTHORITY_HELPER:-${CLD_SCRIPT_DIR}/lib/bead-loop-authority.zsh}"
+if test -f "${BEAD_LOOP_AUTHORITY_HELPER}"; then
+    source "${BEAD_LOOP_AUTHORITY_HELPER}"
+else
+    echo "ERROR: bead-loop authority resolver not found: ${BEAD_LOOP_AUTHORITY_HELPER}" >&2
+    exit 2
+fi
 
 # Claude Code creates the bead worktree itself (native --worktree), so this
 # wrapper cannot symlink into it afterwards. Instead it resolves the overlay set
@@ -464,6 +471,7 @@ Report the typed gate; do not implement or repair anything."
 fi
 
 if [[ -n "$bead_id" ]]; then
+    _resolve_bead_loop_authority || exit $?
     bead_id=$(_expand_bead_id "$bead_id")
     local bead_short=$(_bead_short "$bead_id")
 
@@ -527,7 +535,9 @@ if [[ -n "$bead_id" ]]; then
         bead_ns="${bead_prefix}-${bead_num}"
     fi
 
-    local prompt="Bead ID: $bead_id. Invoke the installed bead-implementation-loop skill directly with execution_mode=auto. Keep this Claude session as the active harness, use its native Core subagent for implementation and repairs, and use the provider-neutral gateway only for opposite-family review. After CLEAN and applicable Means of Compliance evidence, invoke the canonical Session Close owner; do not reproduce delivery mechanics inline."
+    local prompt="Bead ID: $bead_id. Execute the revision-bound bead implementation loop with execution_mode=auto and caller route \`claude-manual\`.
+
+$(_bead_loop_authority_prompt)"
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
@@ -543,6 +553,7 @@ $(_coordinator_callback_contract impl)"
 fi
 
 if [[ -n "$bead_quick_id" ]]; then
+    _resolve_bead_loop_authority || exit $?
     bead_quick_id=$(_expand_bead_id "$bead_quick_id")
     local bead_quick_short=$(_bead_short "$bead_quick_id")
 
@@ -611,7 +622,9 @@ if [[ -n "$bead_quick_id" ]]; then
         bead_ns="${bead_prefix}-${bead_num}"
     fi
 
-    local prompt="Bead ID: $bead_quick_id. Invoke the installed bead-implementation-loop skill directly with execution_mode=quick and force_tier=${_bq_force_tier}. This is unconditional explicit Quick for every executable leaf; the size/effort eligibility gate is bypassed (force_tier=${_bq_force_tier}), so do not run any quick-fix eligibility check, preliminary review, or optional startup ceremony. Keep this Claude session as the active harness, use its native Core subagent for implementation and repairs, and use the provider-neutral gateway only for opposite-family review. After CLEAN and applicable Means of Compliance evidence, invoke the canonical Session Close owner; do not reproduce delivery mechanics inline."
+    local prompt="Bead ID: $bead_quick_id. Execute the revision-bound bead implementation loop with execution_mode=quick, caller route \`claude-manual\`, and force_tier=${_bq_force_tier}. This is unconditional explicit Quick for every executable leaf; the size/effort eligibility gate is bypassed (force_tier=${_bq_force_tier}), so do not run any quick-fix eligibility check, preliminary review, or optional startup ceremony.
+
+$(_bead_loop_authority_prompt)"
 
     if [[ -n "$bead_ns" ]]; then
         prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."

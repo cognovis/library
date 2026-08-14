@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -12,12 +13,44 @@ import pytest
 
 
 CLD_BIN = Path(__file__).resolve().parents[1] / "bin" / "cld"
+SYSTEM_GIT = shutil.which("git")
 
 
 def _write_executable(path: Path, content: str) -> Path:
     path.write_text(content, encoding="utf-8")
     path.chmod(0o755)
     return path
+
+
+def _write_core_authority(tmp_path: Path) -> Path:
+    assert SYSTEM_GIT is not None
+    root = tmp_path / "cognovis-core-authority"
+    for relative in (
+        "skills/bead-implementation-loop/SKILL.md",
+        "skills/bead-execution-loop/SKILL.md",
+        "agents/bead-loop-implementer.md",
+    ):
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"current authority: {relative}\n", encoding="utf-8")
+    subprocess.run([SYSTEM_GIT, "init", "-q", root], check=True)
+    subprocess.run([SYSTEM_GIT, "-C", root, "add", "."], check=True)
+    subprocess.run(
+        [
+            SYSTEM_GIT,
+            "-C",
+            root,
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
+            "test authority",
+        ],
+        check=True,
+    )
+    return root
 
 
 def _write_claude_capture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
@@ -133,6 +166,10 @@ def _run_cld(
     _write_cld_path_mocks(tmp_path)
     home = tmp_path / "home"
     home.mkdir()
+    stale_skill = home / ".agents" / "skills" / "bead-implementation-loop" / "SKILL.md"
+    stale_skill.parent.mkdir(parents=True)
+    stale_skill.write_text("stale home projection\n", encoding="utf-8")
+    authority_root = _write_core_authority(tmp_path)
 
     env = dict(os.environ)
     env["HOME"] = str(home)
@@ -144,6 +181,8 @@ def _run_cld(
     env["BD_BIN"] = str(bd_mock)
     env["BD_ARGV_LOG"] = str(bd_log)
     env["PATH"] = f"{tmp_path}{os.pathsep}{env['PATH']}"
+    env["COGNOVIS_CORE_AUTHORITY_ROOT"] = str(authority_root)
+    env["BEAD_LOOP_AUTHORITY_GIT_BIN"] = str(SYSTEM_GIT)
     if env_overrides:
         env.update(env_overrides)
 
@@ -220,7 +259,7 @@ def test_cld_bead_modes_without_callback_do_not_inject_callback_contract(
     ("flag", "execution_mode"),
     [("-b", "auto"), ("-bq", "quick")],
 )
-def test_cld_bead_modes_invoke_implementation_loop_directly(
+def test_regression_cld_bead_modes_use_current_core_authority(
     tmp_path: Path,
     flag: str,
     execution_mode: str,
@@ -234,10 +273,23 @@ def test_cld_bead_modes_invoke_implementation_loop_directly(
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     prompt = prompt_file.read_text(encoding="utf-8")
+    expected_revision = subprocess.run(
+        [SYSTEM_GIT, "-C", tmp_path / "cognovis-core-authority", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert f"Git revision {expected_revision}" in prompt
     assert _argv_flag_value(argv, "--agent") is None
     assert "bead-implementation-loop" in prompt
     assert f"execution_mode={execution_mode}" in prompt
-    assert "canonical Session Close" in prompt
+    assert "caller route `claude-manual`" in prompt
+    assert "cognovis-core-authority" in prompt
+    assert "skills/bead-execution-loop/SKILL.md" in prompt
+    assert "agents/bead-loop-implementer.md" in prompt
+    assert "revision-bound source files supersede same-named home-scoped projections" in prompt
+    assert "stale home projection" not in prompt
+    assert "installed bead-implementation-loop" not in prompt
     if execution_mode == "quick":
         assert "unconditional explicit Quick" in prompt
         # CL-3gdz: -bq forces the quick tier unconditionally, bypassing the
