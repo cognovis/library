@@ -355,7 +355,7 @@ def test_regression_workspace_cache_paths_follow_pins_not_consumer_revisions(
     home.mkdir()
     manifest_path = _write_v2_fixture(project)
     _pin_manifest_to_sources(project, manifest_path)
-    _commit_consumer_revision(
+    consumer_initial_revision = _commit_consumer_revision(
         project, "library.yaml", (project / "library.yaml").read_text()
     )
 
@@ -378,6 +378,19 @@ def test_regression_workspace_cache_paths_follow_pins_not_consumer_revisions(
         entry["cache_path"].rstrip("/").endswith(f"@{entry['source_commit'][:14]}")
         for entry in cache_entries
     )
+    expected_skill_bytes = {
+        "python-dev": (project / "team-core" / "skills" / "python-dev" / "SKILL.md").read_bytes(),
+        "helper": (project / "upstream-core" / "skills" / "helper" / "SKILL.md").read_bytes(),
+    }
+    for entry in cache_entries:
+        cache_path = Path(entry["cache_path"])
+        assert cache_path.is_dir()
+        assert (cache_path / "SKILL.md").read_bytes() == expected_skill_bytes[entry["name"]]
+        transient_path = cache_path.with_name(
+            f"{entry['name']}@{consumer_initial_revision[:14]}"
+        )
+        assert transient_path != cache_path
+        assert not transient_path.exists()
 
     _commit_consumer_revision(
         project, "consumer-revision.txt", "consumer advanced\n"

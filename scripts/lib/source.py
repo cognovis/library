@@ -17,6 +17,7 @@ genuinely this module's own.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -35,6 +36,11 @@ from .providers.git_url import (
     resolve_owner_repository_url,
     tree_url_for,
     url_belongs_to,
+)
+
+
+WORKSPACE_SOURCE_COMMIT = ContextVar[str | None](
+    "library_workspace_source_commit", default=None
 )
 
 
@@ -239,5 +245,14 @@ def clone_source_repo(clone_url: str, branch: Optional[str] = None) -> Path:
 
 
 def get_local_commit_sha(path: Path) -> str:
-    """Return the git HEAD commit SHA for a local path, or 'local'."""
+    """Return the git HEAD commit SHA for a local path, or 'local'.
+
+    A Workspace mutation temporarily reads an admitted snapshot underneath the
+    consumer repository. Its caller scopes the verified catalog pin through the
+    execution context so installers materialize the cache under that immutable
+    revision rather than the consumer's unrelated HEAD.
+    """
+    workspace_pin = WORKSPACE_SOURCE_COMMIT.get()
+    if workspace_pin:
+        return workspace_pin
     return head_commit(path)

@@ -110,7 +110,7 @@ from lib.output import (
 )
 from lib.primitives import PRIMITIVES, all_primitive_names, get_primitive
 from lib.status import cmd_status_impl
-from lib.source import ParsedSource, parse_source
+from lib.source import WORKSPACE_SOURCE_COMMIT, ParsedSource, parse_source
 from lib.sync_audit import (
     classify_catalog_provenance,
     cmd_audit_impl,
@@ -7030,6 +7030,19 @@ def _workspace_transaction_guard(
         raise
 
 
+@contextmanager
+def _workspace_source_commit_override(source_commit: str | None):
+    """Scope one admitted member's verified cache revision to its installer."""
+    if not source_commit:
+        yield
+        return
+    token = WORKSPACE_SOURCE_COMMIT.set(source_commit)
+    try:
+        yield
+    finally:
+        WORKSPACE_SOURCE_COMMIT.reset(token)
+
+
 def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     from lib.workspace import (
         apply_plan_ownership,
@@ -7050,6 +7063,11 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
     artifact_sources = {
         (primitive, name): source_catalog
         for primitive, name, source_catalog in closure.artifact_bindings
+    }
+    artifact_pins = {
+        (node.primitive, node.name): node.pin.value
+        for node in closure.nodes
+        if node.role == "artifact" and node.pin
     }
     definition_commit = _workspace_definition_commit(catalog, workspace)
     lock_path, lock = _workspace_lock(repo_root, args.scope)
@@ -7259,7 +7277,10 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             for primitive, name in closure.artifacts:
                 begin_workspace_use_mutation(lock_path)
                 output_buffer = io.StringIO()
-                with redirect_stdout(output_buffer):
+                with (
+                    _workspace_source_commit_override(artifact_pins.get((primitive, name))),
+                    redirect_stdout(output_buffer),
+                ):
                     rc = _dispatch_use(
                         args,
                         repo_root,
