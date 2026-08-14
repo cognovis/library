@@ -121,11 +121,14 @@ does not produce a closure at all, so nothing can report a live, moving member
 set as pinned. A source that answers with a different value, with nothing, or
 with an error is fail-closed drift naming both values.
 
-The honest residual: a verified pin proves the *source* has not moved. It does
-not prove that this repository's catalog document describes that revision,
-because members are still read locally until an adapter fetches at the pin. That
-is the second half of the same guarantee, it belongs to the provider slice, and
-it is why materialization is refused meanwhile.
+Pin verification proves that the declared commit is available from the selected
+catalog source. Before mutation, every resolved member is then read from that
+exact commit in the configured catalog checkout, normalized into an inventory
+item, admitted as immutable content, and rebound to the gate's published bytes.
+If the checkout is unavailable, the commit is absent, or one member cannot be
+read completely at the pin, the whole closure fails before mutation. The
+fresh-machine installer prepares these portable catalog checkouts and registers
+them by source identity.
 
 **Pin drift is never silent.** Registering a v2 Workspace also records the
 identity and pin of every catalog it declared. A later resolution that finds a
@@ -147,14 +150,13 @@ closure or none of it; a partial selection is the silent skip the
 executable-admission gate exists to refuse. The writer receives the exact
 immutable content the gate digested; it never sources its own bytes.
 
-**A v2 Workspace resolves, validates, and previews; it does not install yet.**
-`library workspace use` refuses to materialize a closure with declared catalogs.
-Installing it safely needs the declared pin verified against the source, its
-members normalized into inventory items, and the mutation gate in the write
-path, which is reference-adapter work. The current installer would instead fetch
-each member from the live catalog and ignore the pin entirely — shipping a
-`catalogs:` block that looks pinned and is not, which is worse than not
-installing.
+**A v2 Workspace installs only through pinned executable admission.**
+`library workspace use` verifies every declared commit, reads each member from
+that commit, requires normalized content for the complete cross-catalog closure,
+and passes the frozen bytes through `gate_workspace_mutation`. The installers
+receive only the gate's published content while receipts retain the original
+catalog identity and pin. No member is fetched from a moving branch during the
+mutation, and an incomplete or unverified closure is refused as a unit.
 
 > **This approval is FINAL as of 2026-08-09.** The ADR-0010 two-consumer evidence
 > gate was **amended, not satisfied** — a Human Decision by Malte Sussdorff
