@@ -7032,9 +7032,11 @@ def _workspace_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> 
             applied_plan,
             prerequisite_statuses=_workspace_prerequisite_statuses(applied_plan),
         )
+        begin_workspace_use_mutation(lock_path)
         save_lockfile(lock_path, lock)
         checkpoint_workspace_use(lock_path, repo_root)
         if getattr(args, "reconcile_gitignore", False):
+            begin_workspace_use_mutation(lock_path)
             result["gitignore"] = _reconcile_project_gitignore(repo_root)
             checkpoint_workspace_use(lock_path, repo_root)
         clear_workspace_journal(lock_path)

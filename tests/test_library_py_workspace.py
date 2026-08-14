@@ -1718,6 +1718,57 @@ def test_final_lock_write_failure_rolls_back_the_complete_workspace_transaction(
     assert not (project / ".agents" / "skills" / "python-test").exists()
 
 
+def test_interruption_after_final_lock_write_restores_the_complete_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    real_save = module.save_lockfile
+    interrupted = False
+
+    def interrupt_after_final_save(path: Path, lock: dict) -> None:
+        nonlocal interrupted
+        real_save(path, lock)
+        has_workspace = any(
+            root.get("type") == "workspace" for root in lock.get("requested_roots", [])
+        )
+        if has_workspace and not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("injected interruption after final lock write")
+
+    monkeypatch.setattr(module, "save_lockfile", interrupt_after_final_save)
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="after final lock write"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+
+    monkeypatch.setattr(module, "save_lockfile", real_save)
+    assert module._workspace_use(args, project, load_catalog(project)) == 0
+
+
 def test_gitignore_reconciliation_failure_rolls_back_the_complete_workspace_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1755,6 +1806,57 @@ def test_gitignore_reconciliation_failure_rolls_back_the_complete_workspace_tran
     assert not (project / ".gitignore").exists()
     assert not (project / ".agents" / "skills" / "python-dev").exists()
     assert not (project / ".agents" / "skills" / "python-test").exists()
+
+
+def test_interruption_after_gitignore_write_restores_the_complete_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    _write_fixture(project)
+    monkeypatch.setenv("HOME", str(home))
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    from lib.catalog import load_catalog
+
+    module = _library_module()
+    real_reconcile = module._reconcile_project_gitignore
+    interrupted = False
+
+    def interrupt_after_gitignore_write(repo_root: Path) -> dict:
+        nonlocal interrupted
+        result = real_reconcile(repo_root)
+        if not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("injected interruption after Gitignore write")
+        return result
+
+    monkeypatch.setattr(
+        module, "_reconcile_project_gitignore", interrupt_after_gitignore_write
+    )
+    args = argparse.Namespace(
+        reference="team-core:python-cli",
+        scope="project",
+        harness="codex",
+        dry_run=False,
+        replace_with_catalog_content=False,
+        reconcile_gitignore=True,
+        json=True,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="after Gitignore write"):
+        module._workspace_use(args, project, load_catalog(project))
+
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".gitignore").exists()
+    assert not (project / ".agents" / "skills" / "python-dev").exists()
+    assert not (project / ".library.lock.workspace-journal.json").exists()
+    assert not (project / ".library.lock.workspace-rollback").exists()
+
+    monkeypatch.setattr(module, "_reconcile_project_gitignore", real_reconcile)
+    assert module._workspace_use(args, project, load_catalog(project)) == 0
 
 
 def test_next_use_recovers_an_interrupted_workspace_transaction(
