@@ -6,12 +6,19 @@ import os
 import subprocess
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _write_executable(path: Path, content: str) -> Path:
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+    return path
 
 
 def _git_commit(repo: Path, message: str) -> str:
@@ -193,6 +200,85 @@ def test_uv_tool_install_exposes_the_bootstrap_console_scripts_without_source_li
         assert executable.is_file()
         assert not executable.resolve().is_relative_to(REPO_ROOT)
     assert not (tool_dir / "library" / ".agents" / "skills" / "library").exists()
+
+
+def test_regression_packaged_cdx_resolves_bundled_context_renderer(
+    tmp_path: Path,
+) -> None:
+    """Packaged cdx must resolve resources beside scripts/bin, not scripts/scripts."""
+    tool_dir = tmp_path / "tools"
+    bin_dir = tmp_path / "bin"
+    repo = tmp_path / "repo"
+    worktree_root = tmp_path / "worktrees"
+    worktree = worktree_root / "bead-CL-smoke"
+    called_file = tmp_path / "codex-called"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    worktree.mkdir(parents=True)
+
+    bd_mock = _write_executable(
+        tmp_path / "bd-mock",
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "args = sys.argv[1:]\n"
+        "bead_id = args[1]\n"
+        "if '--children' in args:\n"
+        "    print(json.dumps({bead_id: []}))\n"
+        "else:\n"
+        "    print(json.dumps([{'id': bead_id, 'title': 'Smoke bead', 'metadata': {}}]))\n",
+    )
+    git_mock = _write_executable(
+        tmp_path / "git-mock",
+        f"#!{sys.executable}\n"
+        "import os, sys\n"
+        "args = sys.argv[1:]\n"
+        "if args[:2] == ['rev-parse', '--show-toplevel']:\n"
+        "    print(os.environ['GIT_REPO_ROOT'])\n"
+        "elif args[:3] == ['worktree', 'list', '--porcelain']:\n"
+        "    print(f\"worktree {os.environ['GIT_WORKTREE']}\")\n",
+    )
+    codex_mock = _write_executable(
+        tmp_path / "codex-mock",
+        f"#!{sys.executable}\n"
+        "import os, pathlib\n"
+        "pathlib.Path(os.environ['CODEX_CALLED_FILE']).write_text('called', encoding='utf-8')\n",
+    )
+    env = os.environ.copy()
+    env.update(
+        {
+            "UV_TOOL_DIR": str(tool_dir),
+            "UV_TOOL_BIN_DIR": str(bin_dir),
+            "BD_BIN": str(bd_mock),
+            "GIT_BIN": str(git_mock),
+            "GIT_REPO_ROOT": str(repo),
+            "GIT_WORKTREE": str(worktree),
+            "CDX_WORKTREE_ROOT": str(worktree_root),
+            "CODEX_BIN": str(codex_mock),
+            "CODEX_CALLED_FILE": str(called_file),
+            "CLD_COMPACT_OUTPUT": "0",
+        }
+    )
+
+    install = subprocess.run(
+        ["uv", "tool", "install", str(REPO_ROOT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    launched = subprocess.run(
+        [str(bin_dir / "cdx"), "-bq", "CL-smoke"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert install.returncode == 0, install.stderr
+    assert launched.returncode == 0, launched.stderr
+    assert called_file.read_text(encoding="utf-8") == "called"
+    assert "bead context envelope renderer not found" not in launched.stderr
 
 
 def test_uv_tool_install_carries_the_catalog_for_commands_outside_a_checkout(
