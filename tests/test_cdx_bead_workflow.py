@@ -351,11 +351,11 @@ def _run_plain_cdx_launcher(
     return result, argv_file
 
 
-def test_cdx_defaults_to_mcodex_router(tmp_path: Path) -> None:
+def test_cdx_defaults_to_codex(tmp_path: Path) -> None:
     result, argv_file = _run_plain_cdx_launcher(
         tmp_path,
         ["--no-full-auto", "--model", "gpt-test"],
-        route_name="mcodex",
+        route_name="codex",
     )
 
     assert result.returncode == 0, result.stderr
@@ -374,12 +374,13 @@ def test_cdx_keeps_explicit_codex_bin_override(tmp_path: Path) -> None:
     assert json.loads(argv_file.read_text(encoding="utf-8")) == ["--model", "gpt-test"]
 
 
-def test_cdx_fails_closed_when_mcodex_is_missing(tmp_path: Path) -> None:
+def test_cdx_fails_closed_when_codex_is_missing(tmp_path: Path) -> None:
     result, _argv_file = _run_plain_cdx_launcher(tmp_path, [], route_name=None)
 
     assert result.returncode == 1
-    assert "mcodex not found in PATH" in result.stderr
-    assert "codex-multi-auth" in result.stderr
+    assert "codex not found in PATH" in result.stderr
+    assert "@openai/codex" in result.stderr
+    assert "codex-multi-auth" not in result.stderr
 
 
 def _assert_safe_bead_permissions(argv: list[str]) -> None:
