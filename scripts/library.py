@@ -69,6 +69,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 TOOL_ROOT = SCRIPT_DIR.parent
+CANONICAL_PLATFORM_CATALOG_IDENTITY = "https://github.com/cognovis/library"
+CANONICAL_BASE_WORKSPACE_REFERENCE = "library-platform:cognovis-base"
 
 from lib.catalog import (
     find_repo_root,
@@ -8249,32 +8251,32 @@ def main(argv: list[str] | None = None) -> int:
     if args.primitive == "init":
         use_json = getattr(args, "json", False)
         try:
-            catalog_root = _resolve_catalog_root()
             repo_root = _strict_project_git_root(args)
+            catalog_root = _resolve_catalog_root()
             catalog = load_catalog(catalog_root)
-            init_catalog_args = argparse.Namespace(
-                reference="cognovis-base",
-                verb="use",
-            )
-            catalog = _select_workspace_catalog(
-                init_catalog_args,
-                repo_root=repo_root,
-                catalog_root=catalog_root,
-                catalog=catalog,
-            )
             try:
                 from lib.workspace import resolve_workspace
 
-                resolve_workspace(catalog, "cognovis-base")
-            except LibraryError as exc:
-                if exc.exit_code == EXIT_NOT_FOUND:
-                    raise LibraryError(
-                        "Canonical Workspace 'cognovis-base' is unavailable in the selected catalog.",
-                        exit_code=EXIT_NOT_FOUND,
-                    ) from exc
-                raise
+                workspace = resolve_workspace(
+                    catalog, CANONICAL_BASE_WORKSPACE_REFERENCE
+                )
+            except LibraryError:
+                workspace = None
+            if (
+                workspace is None
+                or workspace.catalog_identity != CANONICAL_PLATFORM_CATALOG_IDENTITY
+            ):
+                catalog = load_catalog(_tool_catalog_root())
+                workspace = resolve_workspace(
+                    catalog, CANONICAL_BASE_WORKSPACE_REFERENCE
+                )
+            if workspace.catalog_identity != CANONICAL_PLATFORM_CATALOG_IDENTITY:
+                raise LibraryError(
+                    "Canonical Workspace 'cognovis-base' is unavailable in the selected catalog.",
+                    exit_code=EXIT_NOT_FOUND,
+                )
             init_args = argparse.Namespace(
-                reference="cognovis-base",
+                reference=CANONICAL_BASE_WORKSPACE_REFERENCE,
                 scope="project",
                 target_project=repo_root,
                 harness="all",
@@ -8581,11 +8583,9 @@ def _resolve_catalog_root() -> Path:
 
 def _tool_catalog_root() -> Path:
     """Return the tool's catalog without falling back to the caller's CWD."""
-    current = TOOL_ROOT.resolve()
-    while current != current.parent:
-        if (current / "library.yaml").is_file():
-            return current
-        current = current.parent
+    source_catalog = TOOL_ROOT.resolve()
+    if (source_catalog / "library.yaml").is_file():
+        return source_catalog
     packaged_catalog = Path(str(files("scripts").joinpath("library.yaml")))
     if packaged_catalog.is_file():
         return packaged_catalog.parent

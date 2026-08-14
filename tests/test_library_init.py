@@ -46,6 +46,7 @@ def _write_cognovis_base_fixture(project: Path) -> None:
     subprocess.run(["git", "-C", str(source), "add", "."], check=True)
     subprocess.run(["git", "-C", str(source), "commit", "-qm", "fixture"], check=True)
     catalog = {
+        "catalog_identity": "https://github.com/cognovis/library",
         "default_dirs": {
             "skills": [
                 {"default": ".agents/skills/"},
@@ -55,8 +56,8 @@ def _write_cognovis_base_fixture(project: Path) -> None:
         "sources": {
             "catalogs": [
                 {
-                    "name": "fixture-catalog",
-                    "source": "https://example.invalid/fixture-catalog",
+                    "name": "library-platform",
+                    "source": "https://github.com/cognovis/library",
                     "local_path": str(source),
                     "content_types": ["skills", "workspaces"],
                 }
@@ -70,7 +71,7 @@ def _write_cognovis_base_fixture(project: Path) -> None:
                     "description": "Fixture skill.",
                     "version": "1.0.0",
                     "source": str(source / "skills" / name / "SKILL.md"),
-                    "metadata": {"library": {"source_catalog": "fixture-catalog"}},
+                    "metadata": {"library": {"source_catalog": "library-platform"}},
                 }
                 for name in ("fixture-skill", "fixture-helper")
             ],
@@ -85,7 +86,7 @@ def _write_cognovis_base_fixture(project: Path) -> None:
                         {"type": "skill", "name": "fixture-skill"},
                         {"type": "skill", "name": "fixture-helper"},
                     ],
-                    "metadata": {"library": {"source_catalog": "fixture-catalog"}},
+                    "metadata": {"library": {"source_catalog": "library-platform"}},
                 }
             ],
         },

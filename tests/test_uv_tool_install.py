@@ -370,6 +370,143 @@ def test_uv_tool_install_carries_the_catalog_for_commands_outside_a_checkout(
     )
 
 
+def test_uv_tool_install_uses_packaged_catalog_when_tool_dir_is_nested_in_consumer(
+    tmp_path: Path,
+) -> None:
+    consumer = tmp_path / "catalog-consumer"
+    consumer.mkdir()
+    (consumer / "library.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "catalog_identity": "https://github.com/cognovis/cognovis-pi",
+                "sources": {"catalogs": [], "marketplaces": []},
+                "library": {"workspaces": []},
+            },
+            sort_keys=False,
+        )
+    )
+    subprocess.run(["git", "init", "--quiet", str(consumer)], check=True)
+    tool_dir = consumer / ".tools"
+    bin_dir = consumer / ".bin"
+    env = os.environ.copy()
+    env["UV_TOOL_DIR"] = str(tool_dir)
+    env["UV_TOOL_BIN_DIR"] = str(bin_dir)
+
+    install = subprocess.run(
+        ["uv", "tool", "install", str(REPO_ROOT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    initialized = subprocess.run(
+        [str(bin_dir / "library"), "init", "--json"],
+        cwd=consumer,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert install.returncode == 0, install.stderr
+    assert initialized.returncode == 0, initialized.stderr or initialized.stdout
+    assert json.loads(initialized.stdout)["reference"] == (
+        "library-platform:cognovis-base"
+    )
+
+
+def test_uv_tool_install_init_ignores_consumer_cognovis_base_shadow(
+    tmp_path: Path,
+) -> None:
+    tool_dir = tmp_path / "tools"
+    bin_dir = tmp_path / "bin"
+    consumer = tmp_path / "catalog-consumer"
+    consumer.mkdir()
+    for name in ("fixture-skill", "fixture-support"):
+        skill = consumer / "skills" / name
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(f"---\nname: {name}\n---\n")
+    (consumer / "library.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "catalog_identity": "https://github.com/example/consumer",
+                "sources": {
+                    "catalogs": [
+                        {
+                            "name": "fixture-catalog",
+                            "source": "https://github.com/example/fixture-catalog",
+                            "local_path": str(consumer),
+                            "content_types": ["skills", "workspaces"],
+                        }
+                    ],
+                    "marketplaces": [],
+                },
+                "library": {
+                    "skills": [
+                        {
+                            "name": name,
+                            "description": f"Fixture {name}.",
+                            "version": "1.0.0",
+                            "source": (
+                                "https://github.com/example/fixture-catalog/tree/main/"
+                                f"skills/{name}"
+                            ),
+                            "metadata": {
+                                "library": {"source_catalog": "fixture-catalog"}
+                            },
+                        }
+                        for name in ("fixture-skill", "fixture-support")
+                    ],
+                    "workspaces": [
+                        {
+                            "name": "cognovis-base",
+                            "description": "Shadow Workspace fixture.",
+                            "schema_version": 1,
+                            "version": "1.0.0",
+                            "status": "stable",
+                            "roots": [
+                                {"type": "skill", "name": "fixture-skill"},
+                                {"type": "skill", "name": "fixture-support"},
+                            ],
+                            "metadata": {
+                                "library": {"source_catalog": "fixture-catalog"}
+                            },
+                        }
+                    ],
+                },
+            },
+            sort_keys=False,
+        )
+    )
+    subprocess.run(["git", "init", "--quiet", str(consumer)], check=True)
+    _git_commit(consumer, "fixture consumer catalog")
+    env = os.environ.copy()
+    env["UV_TOOL_DIR"] = str(tool_dir)
+    env["UV_TOOL_BIN_DIR"] = str(bin_dir)
+
+    install = subprocess.run(
+        ["uv", "tool", "install", str(REPO_ROOT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    initialized = subprocess.run(
+        [str(bin_dir / "library"), "init", "--json"],
+        cwd=consumer,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert install.returncode == 0, install.stderr
+    assert initialized.returncode == 0, initialized.stderr or initialized.stdout
+    assert json.loads(initialized.stdout)["reference"] == (
+        "library-platform:cognovis-base"
+    )
+
+
 def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
     tmp_path: Path,
 ) -> None:
