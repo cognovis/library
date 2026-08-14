@@ -5,10 +5,161 @@ from __future__ import annotations
 import os
 import subprocess
 import json
+import shutil
 from pathlib import Path
+
+import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _git_commit(repo: Path, message: str) -> str:
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=Fixture", "-c",
+         "user.email=fixture@example.invalid", "commit", "-qm", message],
+        check=True,
+    )
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _copy_tracked_platform(source: Path, target: Path) -> None:
+    target.mkdir()
+    tracked = subprocess.run(
+        ["git", "-C", str(source), "ls-files", "-z"],
+        check=True,
+        capture_output=True,
+    ).stdout.split(b"\0")
+    for encoded in tracked:
+        if not encoded:
+            continue
+        relative = Path(os.fsdecode(encoded))
+        origin = source / relative
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if origin.is_symlink():
+            destination.symlink_to(origin.readlink())
+        else:
+            shutil.copy2(origin, destination)
+
+
+def _write_fresh_machine_sources(tmp_path: Path) -> tuple[Path, Path]:
+    platform = tmp_path / "platform-source"
+    core = tmp_path / "core-source"
+    _copy_tracked_platform(REPO_ROOT, platform)
+    core.mkdir()
+    for name in ("cognovis-beads", "inject-standards", "ob-cli"):
+        skill = core / "skills" / name
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            f"---\nname: {name}\n---\n\n# {name}\n", encoding="utf-8"
+        )
+    library_skill = platform / "skills" / "library"
+    library_skill.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(platform / "SKILL.md", library_skill / "SKILL.md")
+
+    subprocess.run(["git", "init", "--quiet", str(core)], check=True)
+    core_pin = _git_commit(core, "fixture core")
+
+    catalog = {
+        "catalog_identity": "https://github.com/cognovis/library",
+        "default_dirs": {
+            "skills": [
+                {"default": ".agents/skills/"},
+                {"claude_bridge": ".claude/skills/"},
+            ]
+        },
+        "sources": {
+            "catalogs": [
+                {
+                    "name": "library-platform",
+                    "source": "https://github.com/cognovis/library",
+                    "content_types": ["skills", "workspaces"],
+                },
+                {
+                    "name": "cognovis-library-core",
+                    "source": "https://github.com/cognovis/library-core",
+                    "local_path": "/missing/cognovis-library-core",
+                    "content_types": ["skills"],
+                },
+            ],
+            "marketplaces": [],
+        },
+        "library": {
+            "skills": [
+                {
+                    "name": "library",
+                    "description": "Fixture Library skill.",
+                    "version": "1.0.0",
+                    "source": "https://github.com/cognovis/library/tree/main/skills/library",
+                    "metadata": {"library": {"source_catalog": "library-platform"}},
+                },
+                *[
+                    {
+                        "name": name,
+                        "description": "Fixture core skill.",
+                        "version": "1.0.0",
+                        "source": f"https://github.com/cognovis/library-core/tree/main/skills/{name}",
+                        "metadata": {
+                            "library": {"source_catalog": "cognovis-library-core"}
+                        },
+                    }
+                    for name in ("cognovis-beads", "inject-standards", "ob-cli")
+                ],
+            ],
+            "workspaces": [],
+        },
+    }
+    (platform / "library.yaml").write_text(
+        yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8"
+    )
+    subprocess.run(["git", "init", "--quiet", str(platform)], check=True)
+    platform_pin = _git_commit(platform, "fixture platform content")
+    catalog["library"]["workspaces"] = [
+        {
+            "name": "cognovis-base",
+            "description": "Fresh-machine fixture Workspace.",
+            "schema_version": 2,
+            "version": "1.0.0",
+            "status": "stable",
+            "catalogs": [
+                {
+                    "alias": "platform",
+                    "identity": "https://github.com/cognovis/library",
+                    "pin": {"kind": "commit", "value": platform_pin},
+                },
+                {
+                    "alias": "core",
+                    "identity": "https://github.com/cognovis/library-core",
+                    "pin": {"kind": "commit", "value": core_pin},
+                },
+            ],
+            "roots": [
+                {"type": "skill", "name": "library", "catalog": "platform"},
+                *[
+                    {"type": "skill", "name": name, "catalog": "core"}
+                    for name in ("cognovis-beads", "inject-standards", "ob-cli")
+                ],
+            ],
+            "metadata": {
+                "library": {
+                    "source_catalog": "library-platform",
+                    "source_commit": platform_pin,
+                }
+            },
+        }
+    ]
+    (platform / "library.yaml").write_text(
+        yaml.safe_dump(catalog, sort_keys=False), encoding="utf-8"
+    )
+    _git_commit(platform, "fixture Workspace")
+    return platform, core
 
 
 def test_uv_tool_install_exposes_the_bootstrap_console_scripts_without_source_links(
@@ -99,6 +250,68 @@ def test_uv_tool_install_carries_the_catalog_for_commands_outside_a_checkout(
 
     assert workspaces.returncode == 0, workspaces.stderr
     assert json.loads(workspaces.stdout)["workspaces"]
+
+
+def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
+    tmp_path: Path,
+) -> None:
+    platform, core = _write_fresh_machine_sources(tmp_path)
+    home = tmp_path / "home"
+    tool_dir = tmp_path / "tools"
+    bin_dir = tmp_path / "bin"
+    source_dir = tmp_path / "managed-sources"
+    project = tmp_path / "project"
+    project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
+    env = os.environ.copy()
+    env.update(
+        {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(tmp_path / "config"),
+            "XDG_DATA_HOME": str(tmp_path / "data"),
+            "UV_TOOL_DIR": str(tool_dir),
+            "UV_TOOL_BIN_DIR": str(bin_dir),
+        }
+    )
+
+    installed = subprocess.run(
+        [
+            "bash",
+            str(platform / "install.sh"),
+            "--fresh",
+            "--platform-source",
+            str(platform),
+            "--core-source",
+            str(core),
+            "--source-dir",
+            str(source_dir),
+            "--project",
+            str(project),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    installed_again = subprocess.run(
+        installed.args,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    assert installed_again.returncode == 0, (
+        installed_again.stderr or installed_again.stdout
+    )
+    assert (bin_dir / "library").is_file()
+    assert (source_dir / "library-platform" / ".git").is_dir()
+    assert (source_dir / "cognovis-library-core" / ".git").is_dir()
+    assert (project / ".library.lock").is_file()
+    for name in ("library", "cognovis-beads", "inject-standards", "ob-cli"):
+        assert (project / ".agents" / "skills" / name / "SKILL.md").is_file()
+    assert not (home / ".agents" / "skills").exists()
 
 
 def test_bootstrap_install_writes_only_the_enumerated_global_contract(

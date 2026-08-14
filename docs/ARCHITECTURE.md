@@ -157,9 +157,13 @@ The packaged source for all CLI launchers is `cognovis-library/scripts/bin/`:
 | `scripts/bin/cld` | Claude Code launcher — full-featured zsh wrapper (~500 lines) |
 | `scripts/bin/cdx` | Codex CLI launcher — zsh wrapper, parallel to `cld` (bead `CL-tap`) |
 
-**Deployment:** `uv tool install` owns the packaged Library control plane. The
-transitional `install.sh` delegates to that installation route and no longer
-creates global Library skill links into a mutable checkout.
+**Deployment:** `uv tool install` owns the packaged Library control plane.
+`install.sh --fresh` is the machine bootstrap entrypoint: it prepares portable
+platform and core catalog checkouts in the XDG Library data directory, registers
+them for pinned Workspace resolution, delegates executable installation to
+`uv tool install`, and reconciles the enumerated bootstrap. It creates no global
+Library Skill projection. Plain `install.sh` remains the checkout-local upgrade
+route.
 
 **Bead modes:** Both launchers are single-bead launchers with three exclusive bead-dispatch flags:
 

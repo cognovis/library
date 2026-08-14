@@ -4,6 +4,8 @@ catalog.py — Load library.yaml, source registries, primitive mapping, entry lo
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,6 +61,55 @@ SOURCE_REGISTRIES: tuple[SourceRegistryInfo, ...] = (
 
 
 _RUNTIME_CATALOG_IDENTITY = "_library_catalog_identity"
+
+
+def _source_registry_path() -> Path:
+    config_home = Path(
+        os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+    ).expanduser()
+    return config_home / "library" / "catalog-sources.json"
+
+
+def _apply_configured_catalog_sources(data: dict[str, Any]) -> None:
+    """Overlay portable installer-managed checkouts onto catalog source entries."""
+    path = _source_registry_path()
+    if not path.is_file():
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CatalogError(f"Library catalog source registry is invalid: {path}") from exc
+    if payload.get("schema_version") != 1 or not isinstance(
+        payload.get("catalogs"), list
+    ):
+        raise CatalogError(f"Library catalog source registry has unsupported schema: {path}")
+    configured: dict[str, Path] = {}
+    for item in payload["catalogs"]:
+        if not isinstance(item, dict):
+            raise CatalogError(f"Library catalog source registry entry is invalid: {path}")
+        identity = item.get("identity")
+        raw_checkout = item.get("checkout")
+        if not isinstance(identity, str) or not isinstance(raw_checkout, str):
+            raise CatalogError(f"Library catalog source registry entry is invalid: {path}")
+        checkout = Path(raw_checkout).expanduser()
+        if not checkout.is_absolute() or not checkout.is_dir():
+            raise CatalogError(
+                f"Configured Library catalog checkout is unavailable: {checkout}"
+            )
+        configured[normalize_catalog_identity(identity)] = checkout.resolve()
+    sources = data.get("sources", {}) or {}
+    for registry in ("catalogs", "marketplaces"):
+        for source in sources.get(registry, []) or []:
+            if not isinstance(source, dict):
+                continue
+            identity = normalize_catalog_identity(str(source.get("source") or ""))
+            checkout = configured.get(identity)
+            raw_declared = source.get("local_path")
+            declared_available = bool(raw_declared) and Path(
+                str(raw_declared)
+            ).expanduser().is_dir()
+            if checkout is not None and not declared_available:
+                source["local_path"] = str(checkout)
 
 
 def normalize_catalog_identity(value: str) -> str:
@@ -161,6 +212,8 @@ def load_catalog(repo_root: Optional[Path] = None) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise CatalogError("library.yaml must be a YAML mapping at the top level.")
+
+    _apply_configured_catalog_sources(data)
 
     declared_identity = data.get("catalog_identity")
     if declared_identity is not None and (

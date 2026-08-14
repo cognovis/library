@@ -2,37 +2,45 @@
 
 ## Purpose
 
-Bootstrap the Library engine and conversational entrypoint from an existing
-platform checkout. This is not a catalog fork workflow and does not configure a
-consumer-project profile.
+Bootstrap the Library engine and its required catalog sources on either a fresh
+machine or an existing platform checkout. This is not a catalog fork workflow.
 
 ## Procedure
 
-1. Confirm that the platform checkout contains `SKILL.md`, `library.yaml`,
-   `install.sh`, `bin/library`, and `scripts/library.py`.
-2. Run the idempotent installer from the checkout:
+1. Install `uv` and ensure Git can read the published platform and core catalog
+   repositories.
+2. On a fresh machine, download the published `install.sh` and run:
 
    ```bash
-   bash install.sh
+   bash install.sh --fresh
    ```
 
-3. Verify the globally installed deterministic CLI:
+   Fresh mode creates managed source checkouts below
+   `${XDG_DATA_HOME:-~/.local/share}/library/sources`, records their portable
+   locations in `${XDG_CONFIG_HOME:-~/.config}/library/catalog-sources.json`,
+   installs the control plane, and reconciles the enumerated bootstrap.
+
+   To initialize one existing Git repository in the same transaction:
+
+   ```bash
+   bash install.sh --fresh --project /path/to/repository
+   ```
+
+3. From an existing platform checkout, `bash install.sh` remains the idempotent
+   control-plane-only upgrade route. Run `library bootstrap install` separately
+   when its receipts need reconciliation.
+4. Verify the globally installed deterministic CLI:
 
    ```bash
    library --help
    ```
 
-4. Run the explicit bootstrap provisioner:
-
-   ```bash
-   library bootstrap install
-   ```
-
 The installer delegates to `uv tool install` for the deterministic `library`,
-`cld`, and `cdx` executables. Bootstrap then records only its enumerated product
+`cld`, and `cdx` executables. Fresh bootstrap records only its enumerated product
 targets, adopts existing operator-owned instruction entrypoints without changing
-their content, and adds the OpenBrain singleton where compatible. It does not
-link the checkout into harness Skill roots.
+their content, and adds the OpenBrain singleton where compatible. Managed source
+checkouts are input catalogs, not global primitive projections, and no checkout
+is linked into harness Skill roots.
 
 ## Bootstrap boundary
 

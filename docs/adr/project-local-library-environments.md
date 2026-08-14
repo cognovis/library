@@ -104,9 +104,16 @@ members; only the MCP server remains global.
 The Library platform is packaged with a console entrypoint and installed or
 upgraded through `uv tool install`. The package carries the executable resources
 needed by the CLI and installs or exposes `cld` and `cdx` as its launcher
-entrypoints. The source checkout is no longer the deployed executable location,
-and `install.sh` becomes transitional migration machinery rather than the
-normative installer.
+entrypoints. The source checkout is no longer the deployed executable location.
+
+For a fresh machine, `install.sh --fresh` is the normative bootstrap wrapper. It
+materializes the platform and the source catalogs required by `cognovis-base`
+below the XDG Library data directory, records their identities and portable
+checkout paths in a machine-local source registry, delegates executable
+installation to `uv tool install`, and applies the enumerated bootstrap. These
+checkouts are provider inputs, not primitive projections: the installer creates
+no global Skill target and no global Workspace desired state. Plain `install.sh`
+from an existing checkout remains a control-plane-only upgrade route.
 
 This supersedes ADR-0002 Decision 4's deferral of `uv tool install`. It does not
 require `cld` and `cdx` to remain zsh files or to become Python modules; packaging

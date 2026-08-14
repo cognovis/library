@@ -95,15 +95,22 @@ not a Library primitive or requested-root type.
 
 ## Installation
 
-From a platform checkout:
+On a fresh machine, download `install.sh` from the published platform and run:
 
 ```bash
-bash install.sh
+bash install.sh --fresh
 ```
 
-The installer installs the deterministic CLI and launchers through `uv tool`.
-Then run `library bootstrap install` to create the small, separately receipted
-product bootstrap. It refuses to overwrite operator-owned instruction or
+Fresh mode clones the platform and `cognovis-base` catalog sources into the
+XDG Library data directory, registers those portable checkouts, installs the
+deterministic CLI and launchers through `uv tool`, and applies the small,
+separately receipted product bootstrap. To initialize a repository in the same
+run, pass `--project /path/to/git-repository`. The installer never projects a
+Skill globally.
+
+From an existing platform checkout, `bash install.sh` upgrades only the control
+plane; run `library bootstrap install` explicitly when the bootstrap also needs
+reconciliation. Bootstrap refuses to overwrite operator-owned instruction or
 runtime files. Optional forge Skills belong in a project Workspace. Ensure
 `~/.local/bin` is on `PATH`, then verify the command from any directory:
 
@@ -139,11 +146,10 @@ because they require user decisions; they are not deterministic CLI verbs.
 ## Desired-state migration
 
 Workspace reconciliation becomes the sole Library mechanism for reusable project
-or global baselines. Existing parallel mechanisms are transitional:
+baselines. Existing parallel mechanisms are transitional:
 
-- the ADR-0002 hand-maintained capability list becomes a deliberately small
-  global `engineering-lobby` Workspace; only the Library engine and its chat
-  entrypoint remain in the irreducible pre-Workspace bootstrap;
+- the historical global capability list is replaced repository by repository;
+  only the enumerated product bootstrap remains global;
 - legacy consumer manifests and updater scripts have retired in favor of
   direct or Workspace roots; and
 - `project_tooling` accepts no new capability-distribution responsibilities.
@@ -164,8 +170,7 @@ Packaged harness launchers live in `scripts/bin/`:
 Install them with:
 
 ```bash
-bash install.sh
-library bootstrap install
+bash install.sh --fresh
 ```
 
 Launcher architecture and Beads routing are documented in
