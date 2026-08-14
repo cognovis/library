@@ -9,10 +9,13 @@ Per ADR-0003, library items are deployed through three layers:
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 from pathlib import Path
 from typing import Optional
+
+from .errors import InstallError
 
 
 # XDG-compliant base for the Layer-B cache
@@ -48,13 +51,41 @@ def compute_cache_path(
     return _LIBRARY_HOME / f"{primitive_type}s" / marketplace / f"{name}@{commit_tag}"
 
 
+def _directory_content_digest(directory: Path) -> str:
+    """Return a deterministic digest of every materialized directory entry."""
+    digest = hashlib.sha256()
+    for path in sorted(directory.rglob("*")):
+        relative = path.relative_to(directory).as_posix().encode()
+        if path.is_symlink():
+            digest.update(b"symlink\0")
+            digest.update(relative)
+            digest.update(b"\0")
+            digest.update(str(path.readlink()).encode())
+        elif path.is_file():
+            digest.update(b"file\0")
+            digest.update(relative)
+            digest.update(b"\0")
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(65536), b""):
+                    digest.update(chunk)
+        elif path.is_dir():
+            digest.update(b"directory\0")
+            digest.update(relative)
+            digest.update(b"\0")
+        else:
+            digest.update(b"other\0")
+            digest.update(relative)
+            digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def materialize_cache(
     source_dir: Path,
     cache_path: Path,
     *,
     overwrite: bool = False,
 ) -> Path:
-    """Copy source_dir into cache_path (idempotent: skip if already present).
+    """Copy source_dir into cache_path after verifying any existing cache.
 
     Args:
         source_dir: Directory to copy from (resolved from source).
@@ -65,12 +96,25 @@ def materialize_cache(
         The cache_path.
     """
     if cache_path.exists() and not overwrite:
-        return cache_path
+        try:
+            if cache_path.is_dir() and _directory_content_digest(
+                source_dir
+            ) == _directory_content_digest(cache_path):
+                return cache_path
+        except OSError as exc:
+            raise InstallError(
+                f"Could not verify cache content at {cache_path}; refusing to "
+                "reuse an unverified cache object"
+            ) from exc
+        raise InstallError(
+            f"Cache content does not match source at {cache_path}; refusing to "
+            "reuse an unverified cache object"
+        )
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     if cache_path.exists():
         shutil.rmtree(str(cache_path))
-    shutil.copytree(str(source_dir), str(cache_path))
+    shutil.copytree(str(source_dir), str(cache_path), symlinks=True)
     return cache_path
 
 

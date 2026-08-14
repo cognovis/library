@@ -410,6 +410,52 @@ def test_regression_workspace_cache_paths_follow_pins_not_consumer_revisions(
     assert lock_path.read_bytes() == initial_lock
 
 
+def test_regression_workspace_refuses_tampered_pinned_cache(tmp_path: Path) -> None:
+    """A complete cached tree must match the admitted pinned source bytes."""
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    project.mkdir()
+    home.mkdir()
+    manifest_path = _write_v2_fixture(project)
+    source_dir = project / "team-core" / "skills" / "python-dev"
+    (source_dir / "EXTRA.md").write_text("admitted supplemental content\n")
+    heads = _pin_manifest_to_sources(project, manifest_path)
+    _commit_consumer_revision(
+        project, "library.yaml", (project / "library.yaml").read_text()
+    )
+
+    cache_data_home = Path(
+        os.environ.get("XDG_DATA_HOME", str(home / ".local" / "share"))
+    )
+    cache_path = (
+        cache_data_home
+        / "library"
+        / "skills"
+        / "local"
+        / f"python-dev@{heads['core'][:14]}"
+    )
+    cache_path.mkdir(parents=True)
+    (cache_path / "SKILL.md").write_bytes((source_dir / "SKILL.md").read_bytes())
+    (cache_path / "EXTRA.md").write_text("tampered supplemental content\n")
+
+    used = _run(
+        project,
+        home,
+        "workspace",
+        "use",
+        "team-core:engineering",
+        "--scope",
+        "project",
+        "--json",
+    )
+
+    assert used.returncode != 0
+    assert "Cache content does not match source" in used.stdout + used.stderr
+    assert (cache_path / "EXTRA.md").read_text() == "tampered supplemental content\n"
+    assert not (project / ".library.lock").exists()
+    assert not (project / ".agents" / "skills").exists()
+
+
 def test_an_unknown_declared_commit_is_refused_before_mutation(tmp_path: Path) -> None:
     project = tmp_path / "project"
     home = tmp_path / "home"
