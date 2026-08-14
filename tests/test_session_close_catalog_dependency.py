@@ -32,6 +32,21 @@ def test_session_close_resolves_ccore_before_install() -> None:
     assert order.index(("script", "ccore")) < order.index(("skill", "session-close"))
 
 
+def test_ccore_catalog_entry_uses_the_standalone_versioned_repository() -> None:
+    catalog = load_catalog(REPO_ROOT)
+    entry = next(
+        item for item in catalog["library"]["scripts"] if item["name"] == "ccore"
+    )
+
+    assert entry["source"] == "https://github.com/cognovis/ccore"
+    assert entry["version"] == "2026.8.0"
+    assert entry["distribution"] == {
+        "kind": "uv-tool",
+        "package_name": "cognovis-core-tools",
+        "executables": ["ccore"],
+    }
+
+
 def test_project_skill_installs_global_uv_tool_dependency_in_its_own_scope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -160,6 +160,32 @@ sources:
       tags:
         - first-party
         - team
+    - name: cognovis-ccore
+      source: https://github.com/cognovis/ccore
+      description: Standalone Cognovis developer-workflow CLI.
+      visibility: private
+      owner: cognovis
+      audience: team
+      local_path: /Users/malte/code/ccore
+      writable: true
+      content_types:
+        - scripts
+      scope:
+        topics:
+          - team
+          - python
+          - cli
+          - workflows
+        excludes:
+          - personal
+      skeleton:
+        platform:
+          - src/
+          - scripts/
+      notes: Canonical source for the independently versioned ccore uv-tool distribution.
+      tags:
+        - first-party
+        - team
     - name: cognovis-pi
       source: https://github.com/cognovis/cognovis-pi
       description: Cognovis Pi extensions, profiles, and repository-local Just modules.
@@ -378,7 +404,8 @@ library:
   scripts:
     - name: ccore
       description: Installable Cognovis developer-workflow CLI with shared deterministic capabilities.
-      source: https://github.com/cognovis/library-core/tree/main/scripts/ccore
+      source: https://github.com/cognovis/ccore
+      version: 2026.8.0
       language: python
       output_contract: json-envelope
       default_scope: global
@@ -395,7 +422,7 @@ library:
           - uv
       metadata:
         library:
-          source_catalog: cognovis-library-core
+          source_catalog: cognovis-ccore
           inventory: manual
           plane: dev
       tags:
