@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 import yaml
@@ -457,17 +457,16 @@ class TestStatusCLI:
                 "entries": [{"name": "fixture", "primitive": "skill", "behind": True}],
             },
         )
-        monkeypatch.setattr(
-            library_cli,
-            "_repository_health",
-            lambda _root: {
+        repository_health = Mock(
+            return_value={
                 "desired_state": {"status": "healthy"},
                 "projections": {"status": "clean"},
                 "git_hygiene": {"status": "clean"},
                 "bootstrap": {"status": "ready"},
                 "unmanaged_primitives": {"status": "clean"},
-            },
+            }
         )
+        monkeypatch.setattr(library_cli, "_repository_health", repository_health)
 
         result = library_cli.cmd_status(
             argparse.Namespace(json=True, scope="project", offline=True), tmp_path, {}
@@ -478,6 +477,7 @@ class TestStatusCLI:
         assert payload["status"] == "repair_available"
         assert payload["overall"] == "repair_available"
         assert payload["upstream_overall"] == "behind"
+        repository_health.assert_called_once_with(tmp_path, offline=True)
 
     def test_status_human_output_keeps_behind_entry_detail_when_repair_is_available(
         self, tmp_path, capsys, monkeypatch
@@ -505,7 +505,7 @@ class TestStatusCLI:
         monkeypatch.setattr(
             library_cli,
             "_repository_health",
-            lambda _root: {
+            lambda _root, **_kwargs: {
                 "desired_state": {"status": "healthy"},
                 "projections": {"status": "clean"},
                 "git_hygiene": {"status": "clean"},

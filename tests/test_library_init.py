@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -110,6 +112,42 @@ def test_init_installs_only_the_fixed_workspace_and_reconciles_gitignore(
     assert gitignore.count("# BEGIN Library-managed project installs") == 1
     assert "/.agents/skills/fixture-skill/SKILL.md" in gitignore
     assert json.loads(second.stdout)["status"] == "applied"
+
+
+def test_repeated_init_preserves_lock_and_gitignore_bytes_when_unchanged(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_cognovis_base_fixture(project)
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
+
+    first = _run(project, "init", "--json")
+    assert first.returncode == 0, first.stderr or first.stdout
+    lock_path = project / ".library.lock"
+    initial_lock = lock_path.read_bytes()
+    stable_lock = re.sub(
+        r"install_timestamp: '[^']+'",
+        "install_timestamp: '2000-01-01T00:00:00Z'",
+        initial_lock.decode(),
+    ).encode()
+    assert stable_lock != initial_lock
+    lock_path.write_bytes(stable_lock)
+    stable_gitignore = (project / ".gitignore").read_bytes()
+
+    second = _run(project, "init", "--json")
+
+    assert second.returncode == 0, second.stderr or second.stdout
+    actual_lock = lock_path.read_bytes()
+    assert actual_lock == stable_lock, second.stderr + "\n" + "\n".join(
+        difflib.unified_diff(
+            stable_lock.decode().splitlines(),
+            actual_lock.decode().splitlines(),
+            fromfile="stable-lock",
+            tofile="second-init-lock",
+        )
+    )
+    assert (project / ".gitignore").read_bytes() == stable_gitignore
 
 
 def test_init_has_no_workspace_selector_and_rejects_non_git_before_mutation(

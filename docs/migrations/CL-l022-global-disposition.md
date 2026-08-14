@@ -1,5 +1,10 @@
 # CL-l022 Global Receipt Disposition
 
+> Historical record: the 106-receipt inventory below was frozen on 2026-08-13.
+> It is not the current deletion candidate set. The refreshed 103-receipt
+> inventory and its guarded cutover boundary are maintained in
+> `CL-31po-recovery-status.md`.
+
 ## Decision
 
 This report freezes the disposition of the 106 receipts in the historical

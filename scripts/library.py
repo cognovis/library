@@ -368,6 +368,35 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         item = bootstrap_verb_sub.add_parser(verb, help=help_text)
         item.add_argument("--json", action="store_true", help="Output JSON")
+    cutover_parser = bootstrap_verb_sub.add_parser(
+        "cutover-skills",
+        help="Back up and remove verified legacy global Skill projections",
+    )
+    cutover_parser.add_argument(
+        "--repository",
+        action="append",
+        type=Path,
+        required=True,
+        help="Exact canonical Beads repository to verify (repeat for every repository)",
+    )
+    cutover_parser.add_argument(
+        "--fleet-manifest",
+        type=Path,
+        required=True,
+        help="Operator-approved exact fleet with branch and published commit proofs",
+    )
+    cutover_parser.add_argument(
+        "--backup",
+        type=Path,
+        required=True,
+        help="New directory that will receive the recoverable cutover backup",
+    )
+    cutover_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Create the backup and remove verified global Skill projections",
+    )
+    cutover_parser.add_argument("--json", action="store_true", help="Output JSON")
 
     search_parser = subparsers.add_parser(
         "search",
@@ -3489,7 +3518,7 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
     else:
         overall = "unknown"
 
-    health = _repository_health(repo_root)
+    health = _repository_health(repo_root, offline=offline)
     health_states = {item.get("status") for item in health.values()}
     if "decision_required" in health_states:
         health_status = "decision_required"
@@ -3556,7 +3585,9 @@ def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) 
     return EXIT_DRIFT if overall == "behind" else EXIT_SUCCESS
 
 
-def _repository_health(repo_root: Path | None) -> dict[str, dict]:
+def _repository_health(
+    repo_root: Path | None, *, offline: bool = False
+) -> dict[str, dict]:
     """Inspect one repository without installing, adopting, or deleting content."""
     if repo_root is None:
         missing = {"status": "missing", "reason": "current directory is not a Git worktree"}
@@ -3618,12 +3649,13 @@ def _repository_health(repo_root: Path | None) -> dict[str, dict]:
     try:
         from lib.workspace import build_workspace_plan
 
+        status_catalog = _status_catalog(repo_root)
         fresh_plan = build_workspace_plan(
-            catalog=_status_catalog(repo_root),
+            catalog=status_catalog,
             lock=lock,
             repo_root=repo_root,
             scope="project",
-            pin_verifier=None,
+            pin_verifier=_workspace_pin_verifier(status_catalog, offline=offline),
         )
         resolution_blockers = sorted(set(fresh_plan.get("blockers", [])))
     except (LibraryError, OSError) as exc:
@@ -4030,8 +4062,322 @@ def _write_bootstrap_manifest(home: Path, paths: dict[str, Path]) -> Path:
     return manifest_path
 
 
+def _cutover_prerequisites(
+    repository_paths: list[Path], fleet_manifest_path: Path
+) -> dict[str, object]:
+    """Inspect every machine and repository prerequisite without mutating state."""
+    from lib.global_skill_cutover import (
+        inspect_repositories,
+        inspect_source_registry,
+        load_approved_fleet,
+    )
+
+    bootstrap_health = _bootstrap_health(Path.home())
+    if bootstrap_health["status"] != "ready":
+        return {
+            "status": "blocked",
+            "stage": "bootstrap",
+            "bootstrap": bootstrap_health,
+            "repositories": [],
+        }
+
+    try:
+        fleet = load_approved_fleet(fleet_manifest_path)
+    except LibraryError as exc:
+        return {
+            "status": "blocked",
+            "stage": "fleet-approval",
+            "reason": str(exc),
+            "repositories": [],
+        }
+    supplied = [str(path.expanduser().resolve()) for path in repository_paths]
+    approved_entries = fleet["repositories"]
+    approved_paths = [str(item["path"]) for item in approved_entries]
+    missing_approved = sorted(set(approved_paths) - set(supplied))
+    unapproved = sorted(set(supplied) - set(approved_paths))
+    if (
+        missing_approved
+        or unapproved
+        or len(supplied) != len(set(supplied))
+        or len(supplied) != len(approved_paths)
+    ):
+        return {
+            "status": "blocked",
+            "stage": "fleet-approval",
+            "fleet_manifest": fleet,
+            "missing_approved_repositories": missing_approved,
+            "unapproved_repositories": unapproved,
+            "repositories": [],
+        }
+    approvals = {str(item["path"]): item for item in approved_entries}
+    repositories = inspect_repositories(repository_paths, approvals=approvals)
+    if any(item["status"] != "ready" for item in repositories):
+        return {
+            "status": "blocked",
+            "stage": "repository-health",
+            "repositories": repositories,
+        }
+
+    config_home = Path(
+        os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+    ).expanduser()
+    source_registry = inspect_source_registry(config_home)
+    if source_registry["status"] != "ready":
+        return {
+            "status": "blocked",
+            "stage": "catalog-sources",
+            "catalog_sources": source_registry,
+            "repositories": repositories,
+        }
+
+    catalog_root = _resolve_catalog_root()
+    catalog = load_catalog(catalog_root)
+    skill_entries = get_entries(catalog, "skill")
+    skill_names = [str(entry.get("name") or "") for entry in skill_entries]
+    catalog_skill_count = len(set(skill_names))
+    if (
+        len(skill_entries) != 110
+        or catalog_skill_count != 110
+        or any(not name for name in skill_names)
+    ):
+        return {
+            "status": "blocked",
+            "stage": "catalog",
+            "catalog_skill_count": catalog_skill_count,
+            "catalog_skill_entries": len(skill_entries),
+            "repositories": repositories,
+        }
+
+    for item in repositories:
+        repository = Path(item["path"])
+        lock = load_lockfile(repository / ".library.lock")
+        has_default_workspace = any(
+            root.get("type") == "workspace"
+            and root.get("name") == "cognovis-base"
+            and root.get("scope", "project") == "project"
+            for root in lock.get("requested_roots", [])
+            if isinstance(root, dict)
+        )
+        workspace_catalog = _select_workspace_catalog(
+            argparse.Namespace(reference="cognovis-base", verb="status"),
+            repo_root=repository,
+            catalog_root=catalog_root,
+            catalog=catalog,
+        )
+        workspace_output = io.StringIO()
+        with redirect_stdout(workspace_output):
+            workspace_exit = _workspace_status(
+                argparse.Namespace(
+                    reference="cognovis-base",
+                    scope="project",
+                    target_project=repository,
+                    harness="all",
+                    all_workspaces=False,
+                    json=True,
+                ),
+                repository,
+                workspace_catalog,
+            )
+        workspace_result = json.loads(workspace_output.getvalue())
+        health = _repository_health(repository)
+        health_problem = next(
+            (
+                (name, state)
+                for name, state in health.items()
+                if state.get("status")
+                not in {"healthy", "clean", "ready", "not_applicable"}
+            ),
+            None,
+        )
+        if not has_default_workspace:
+            item["status"] = "blocked"
+            item["reason"] = "cognovis-base is not registered"
+        elif workspace_exit != EXIT_SUCCESS:
+            item["status"] = "blocked"
+            item["reason"] = (
+                "cognovis-base Workspace status is "
+                f"{workspace_result.get('status', 'blocked')}"
+            )
+        elif health["git_hygiene"].get("tracked_managed_paths"):
+            item["status"] = "blocked"
+            item["reason"] = "Library-managed projection targets are tracked by Git"
+        elif health_problem is not None:
+            name, state = health_problem
+            item["status"] = "blocked"
+            item["reason"] = str(
+                state.get("reason") or f"repository {name} is {state.get('status')}"
+            )
+        else:
+            item["workspace_status"] = str(workspace_result["status"])
+            item["repository_status"] = "healthy"
+
+    if any(item["status"] != "ready" for item in repositories):
+        return {
+            "status": "blocked",
+            "stage": "repository-health",
+            "repositories": repositories,
+        }
+    return {
+        "status": "ready",
+        "stage": "ready",
+        "repositories": repositories,
+        "catalog_sources": source_registry,
+        "catalog_skill_count": catalog_skill_count,
+        "fleet_manifest": fleet,
+    }
+
+
+def _cutover_prerequisite_error(payload: dict[str, object]) -> str:
+    """Render one stable transaction-boundary prerequisite failure."""
+    stage = str(payload.get("stage") or "unknown")
+    details = [
+        f"{item.get('path')}: {item.get('reason')}"
+        for item in payload.get("repositories", [])
+        if isinstance(item, dict) and item.get("status") != "ready"
+    ]
+    if not details:
+        missing = payload.get("missing_approved_repositories") or []
+        unapproved = payload.get("unapproved_repositories") or []
+        if missing:
+            details.append("missing approved repositories: " + ", ".join(missing))
+        if unapproved:
+            details.append("unapproved repositories: " + ", ".join(unapproved))
+    if not details:
+        details.append(
+            str(
+                payload.get("reason")
+                or payload.get("catalog_sources")
+                or payload.get("bootstrap")
+                or stage
+            )
+        )
+    return f"Cutover prerequisites changed at {stage}: " + "; ".join(details)
+
+
 def cmd_bootstrap(args: argparse.Namespace) -> int:
     """Provision only the ADR-0012 bootstrap allowlist under the current HOME."""
+    if args.verb == "cutover-skills":
+        from lib.global_skill_cutover import (
+            execute_cutover,
+            inspect_skill_receipts,
+            load_cutover_lock,
+        )
+
+        prerequisites = _cutover_prerequisites(
+            list(args.repository), args.fleet_manifest
+        )
+        if prerequisites["status"] != "ready":
+            if getattr(args, "json", False):
+                print_json(prerequisites)
+            else:
+                print("Global Skill cutover: BLOCKED")
+                if prerequisites.get("reason"):
+                    print(f"  {prerequisites['reason']}")
+                for path in prerequisites.get("missing_approved_repositories", []):
+                    print(f"  missing approved repository: {path}")
+                for path in prerequisites.get("unapproved_repositories", []):
+                    print(f"  unapproved repository: {path}")
+                for item in prerequisites.get("repositories", []):
+                    if item.get("status") == "ready":
+                        continue
+                    print(f"  {item['path']}: {item['reason']}")
+            return EXIT_DRIFT
+
+        repositories = prerequisites["repositories"]
+        source_registry = prerequisites["catalog_sources"]
+        catalog_skill_count = prerequisites["catalog_skill_count"]
+        fleet_manifest = prerequisites["fleet_manifest"]
+        global_lock_path = find_lockfile(global_scope=True)
+        lock = load_cutover_lock(global_lock_path)
+        skills = inspect_skill_receipts(lock, Path.home())
+        blocked_skills = [item for item in skills if item["status"] != "ready"]
+        if blocked_skills:
+            payload = {
+                "status": "blocked",
+                "stage": "receipt-ownership",
+                "repositories": repositories,
+                "skills": skills,
+            }
+            if getattr(args, "json", False):
+                print_json(payload)
+            else:
+                print("Global Skill cutover: BLOCKED")
+                for item in blocked_skills:
+                    print(f"  {item['id']}: {item['reason']}")
+            return EXIT_DRIFT
+        if not getattr(args, "apply", False):
+            payload = {
+                "status": "dry-run",
+                "stage": "ready",
+                "repositories": repositories,
+                "skills": skills,
+                "catalog_skill_count": catalog_skill_count,
+                "catalog_sources": source_registry,
+                "fleet_manifest": fleet_manifest,
+                "backup": str(args.backup.expanduser().resolve()),
+            }
+            if getattr(args, "json", False):
+                print_json(payload)
+            else:
+                print("Global Skill cutover: READY")
+            return EXIT_SUCCESS
+
+        latest_prerequisites = prerequisites
+        approved_fleet_sha = str(fleet_manifest["sha256"])
+
+        def recheck_cutover_prerequisites() -> None:
+            nonlocal latest_prerequisites
+            latest_prerequisites = _cutover_prerequisites(
+                list(args.repository), args.fleet_manifest
+            )
+            if latest_prerequisites["status"] != "ready":
+                raise LibraryError(_cutover_prerequisite_error(latest_prerequisites))
+            latest_fleet = latest_prerequisites["fleet_manifest"]
+            if str(latest_fleet["sha256"]) != approved_fleet_sha:
+                raise LibraryError(
+                    "Approved fleet manifest changed after cutover preflight"
+                )
+
+        try:
+            cutover = execute_cutover(
+                lock_path=global_lock_path,
+                home=Path.home(),
+                backup=args.backup,
+                preflight=recheck_cutover_prerequisites,
+            )
+        except LibraryError as exc:
+            payload = {
+                "status": "blocked",
+                "stage": "transaction",
+                "message": str(exc),
+                "repositories": repositories,
+                "skills": skills,
+            }
+            if getattr(args, "json", False):
+                print_json(payload)
+            else:
+                print(f"Global Skill cutover: BLOCKED\n  {exc}")
+            return EXIT_DRIFT
+        repositories = latest_prerequisites["repositories"]
+        source_registry = latest_prerequisites["catalog_sources"]
+        catalog_skill_count = latest_prerequisites["catalog_skill_count"]
+        fleet_manifest = latest_prerequisites["fleet_manifest"]
+        payload = {
+            "status": "ok",
+            "stage": "complete",
+            "repositories": repositories,
+            "skills": skills,
+            "catalog_skill_count": catalog_skill_count,
+            "catalog_sources": source_registry,
+            "fleet_manifest": fleet_manifest,
+            **cutover,
+        }
+        if getattr(args, "json", False):
+            print_json(payload)
+        else:
+            print("Global Skill cutover: COMPLETE")
+        return EXIT_SUCCESS
+
     home = Path.home()
     paths = _bootstrap_paths(home)
     content = _bootstrap_content()
@@ -5977,7 +6323,7 @@ def _workspace_local_source(catalog: dict, entry: dict, primitive: str) -> Path 
     return source if source.exists() else None
 
 
-def _workspace_pin_verifier(catalog: dict):
+def _workspace_pin_verifier(catalog: dict, *, offline: bool = False):
     """Answer what each declared Workspace catalog currently serves.
 
     ADR-0011 slice 5 shipped cross-catalog resolution that refused to produce a
@@ -6003,6 +6349,7 @@ def _workspace_pin_verifier(catalog: dict):
             entry.identity,
             catalog=catalog,
             expected_revision=entry.pin.value,
+            allow_remote=not offline,
         )
 
     return verify
