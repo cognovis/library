@@ -108,10 +108,10 @@ def test_init_installs_only_the_fixed_workspace_and_reconciles_gitignore(
     assert first.returncode == second.returncode == 0, first.stderr or first.stdout
     lock = yaml.safe_load((project / ".library.lock").read_text())
     assert [root["name"] for root in lock["requested_roots"]] == ["cognovis-base"]
-    assert (project / ".agents" / "skills" / "fixture-skill" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "library" / "SKILL.md").is_file()
     gitignore = (project / ".gitignore").read_text()
     assert gitignore.count("# BEGIN Library-managed project installs") == 1
-    assert "/.agents/skills/fixture-skill/SKILL.md" in gitignore
+    assert "/.agents/skills/library/SKILL.md" in gitignore
     assert json.loads(second.stdout)["status"] == "applied"
 
 

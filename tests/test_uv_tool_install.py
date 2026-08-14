@@ -433,8 +433,8 @@ def test_uv_tool_install_init_ignores_consumer_cognovis_base_shadow(
                 "sources": {
                     "catalogs": [
                         {
-                            "name": "fixture-catalog",
-                            "source": "https://github.com/example/fixture-catalog",
+                            "name": "library-platform",
+                            "source": "https://github.com/cognovis/library",
                             "local_path": str(consumer),
                             "content_types": ["skills", "workspaces"],
                         }
@@ -447,12 +447,11 @@ def test_uv_tool_install_init_ignores_consumer_cognovis_base_shadow(
                             "name": name,
                             "description": f"Fixture {name}.",
                             "version": "1.0.0",
-                            "source": (
-                                "https://github.com/example/fixture-catalog/tree/main/"
-                                f"skills/{name}"
+                            "source": str(
+                                consumer / "skills" / name / "SKILL.md"
                             ),
                             "metadata": {
-                                "library": {"source_catalog": "fixture-catalog"}
+                                "library": {"source_catalog": "library-platform"}
                             },
                         }
                         for name in ("fixture-skill", "fixture-support")
@@ -469,7 +468,7 @@ def test_uv_tool_install_init_ignores_consumer_cognovis_base_shadow(
                                 {"type": "skill", "name": "fixture-support"},
                             ],
                             "metadata": {
-                                "library": {"source_catalog": "fixture-catalog"}
+                                "library": {"source_catalog": "library-platform"}
                             },
                         }
                     ],
@@ -502,9 +501,14 @@ def test_uv_tool_install_init_ignores_consumer_cognovis_base_shadow(
 
     assert install.returncode == 0, install.stderr
     assert initialized.returncode == 0, initialized.stderr or initialized.stdout
-    assert json.loads(initialized.stdout)["reference"] == (
-        "library-platform:cognovis-base"
-    )
+    payload = json.loads(initialized.stdout)
+    assert payload["reference"] == "library-platform:cognovis-base"
+    assert payload["artifacts"] == [
+        "skill:library",
+        "skill:cognovis-beads",
+        "skill:inject-standards",
+        "skill:ob-cli",
+    ]
 
 
 def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(

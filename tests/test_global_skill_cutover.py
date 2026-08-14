@@ -221,7 +221,7 @@ def _write_catalog_fixture(catalog_root: Path) -> None:
         check=True,
     )
     skill_names = ["baseline-skill", "baseline-helper"] + [
-        f"catalog-skill-{index:03d}" for index in range(2, 110)
+        f"catalog-skill-{index:03d}" for index in range(2, 106)
     ]
     skills = [
         {
@@ -235,6 +235,25 @@ def _write_catalog_fixture(catalog_root: Path) -> None:
         }
         for name in skill_names
     ]
+    canonical_catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
+    canonical_source_names = {"library-platform", "cognovis-library-core"}
+    canonical_sources = [
+        source
+        for source in canonical_catalog["sources"]["catalogs"]
+        if source["name"] in canonical_source_names
+    ]
+    canonical_skills = [
+        skill
+        for skill in canonical_catalog["library"]["skills"]
+        if skill.get("name") in {"library", "cognovis-beads", "inject-standards", "ob-cli"}
+    ]
+    canonical_workspace = next(
+        workspace
+        for workspace in canonical_catalog["library"]["workspaces"]
+        if workspace.get("name") == "cognovis-base"
+        and workspace.get("metadata", {}).get("library", {}).get("source_catalog")
+        == "library-platform"
+    )
     catalog = {
         "default_dirs": {
             "skills": [
@@ -249,12 +268,13 @@ def _write_catalog_fixture(catalog_root: Path) -> None:
                     "source": "https://example.invalid/fixture-catalog",
                     "local_path": str(source),
                     "content_types": ["skills", "workspaces"],
-                }
+                },
+                *canonical_sources,
             ],
             "marketplaces": [],
         },
         "library": {
-            "skills": skills,
+            "skills": [*skills, *canonical_skills],
             "workspaces": [
                 {
                     "schema_version": 1,
@@ -267,7 +287,8 @@ def _write_catalog_fixture(catalog_root: Path) -> None:
                         {"type": "skill", "name": "baseline-helper"},
                     ],
                     "metadata": {"library": {"source_catalog": "fixture-catalog"}},
-                }
+                },
+                canonical_workspace,
             ],
         },
     }

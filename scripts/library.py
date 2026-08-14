@@ -8252,24 +8252,20 @@ def main(argv: list[str] | None = None) -> int:
         use_json = getattr(args, "json", False)
         try:
             repo_root = _strict_project_git_root(args)
-            catalog_root = _resolve_catalog_root()
-            catalog = load_catalog(catalog_root)
+            catalog = load_catalog(_tool_catalog_root())
             try:
                 from lib.workspace import resolve_workspace
 
                 workspace = resolve_workspace(
                     catalog, CANONICAL_BASE_WORKSPACE_REFERENCE
                 )
-            except LibraryError:
-                workspace = None
-            if (
-                workspace is None
-                or workspace.catalog_identity != CANONICAL_PLATFORM_CATALOG_IDENTITY
-            ):
-                catalog = load_catalog(_tool_catalog_root())
-                workspace = resolve_workspace(
-                    catalog, CANONICAL_BASE_WORKSPACE_REFERENCE
-                )
+            except LibraryError as exc:
+                if exc.exit_code == EXIT_NOT_FOUND:
+                    raise LibraryError(
+                        "Canonical Workspace 'cognovis-base' is unavailable in the selected catalog.",
+                        exit_code=EXIT_NOT_FOUND,
+                    ) from exc
+                raise
             if workspace.catalog_identity != CANONICAL_PLATFORM_CATALOG_IDENTITY:
                 raise LibraryError(
                     "Canonical Workspace 'cognovis-base' is unavailable in the selected catalog.",
