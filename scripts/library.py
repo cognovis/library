@@ -8576,13 +8576,20 @@ def _resolve_catalog_root() -> Path:
     try:
         return find_repo_root()
     except LibraryError:
-        try:
-            return find_repo_root(TOOL_ROOT)
-        except LibraryError:
-            packaged_catalog = Path(str(files("scripts").joinpath("library.yaml")))
-            if packaged_catalog.is_file():
-                return packaged_catalog.parent
-            raise
+        return _tool_catalog_root()
+
+
+def _tool_catalog_root() -> Path:
+    """Return the tool's catalog without falling back to the caller's CWD."""
+    current = TOOL_ROOT.resolve()
+    while current != current.parent:
+        if (current / "library.yaml").is_file():
+            return current
+        current = current.parent
+    packaged_catalog = Path(str(files("scripts").joinpath("library.yaml")))
+    if packaged_catalog.is_file():
+        return packaged_catalog.parent
+    raise LibraryError("Library tool catalog is unavailable")
 
 
 def _select_workspace_catalog(
@@ -8609,7 +8616,7 @@ def _select_workspace_catalog(
     ):
         return catalog
 
-    tool_catalog_root = find_repo_root(TOOL_ROOT)
+    tool_catalog_root = _tool_catalog_root()
     if tool_catalog_root.resolve() == catalog_root.resolve():
         return catalog
     tool_catalog = load_catalog(tool_catalog_root)

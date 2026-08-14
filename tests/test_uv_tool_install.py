@@ -339,6 +339,36 @@ def test_uv_tool_install_carries_the_catalog_for_commands_outside_a_checkout(
     assert workspaces.returncode == 0, workspaces.stderr
     assert json.loads(workspaces.stdout)["workspaces"]
 
+    catalog_consumer = tmp_path / "catalog-consumer"
+    catalog_consumer.mkdir()
+    (catalog_consumer / "library.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "catalog_identity": "https://github.com/cognovis/cognovis-pi",
+                "sources": {"catalogs": [], "marketplaces": []},
+                "library": {"workspaces": []},
+            },
+            sort_keys=False,
+        )
+    )
+    subprocess.run(["git", "init", "--quiet", str(catalog_consumer)], check=True)
+
+    catalog_initialized = subprocess.run(
+        [str(bin_dir / "library"), "init", "--json"],
+        cwd=catalog_consumer,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert catalog_initialized.returncode == 0, (
+        catalog_initialized.stderr or catalog_initialized.stdout
+    )
+    assert json.loads(catalog_initialized.stdout)["reference"] == (
+        "library-platform:cognovis-base"
+    )
+
 
 def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
     tmp_path: Path,
