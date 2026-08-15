@@ -173,14 +173,15 @@ def test_review_propagates_session_failure_and_still_flashes(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize(
-    ("args", "execution_mode"),
+    ("args", "prompt_term"),
     [
-        (["-b", "CL-safe"], "auto"),
-        (["-bq", "CL-safe"], "quick"),
+        (["-sb", "CL-safe"], "Solo Bead delivery"),
+        (["-b", "CL-safe"], "Solo Bead delivery"),
+        (["-ep", "CL-safe,CL-next"], "Executive Pack delivery"),
     ],
 )
 def test_implementer_modes_bypass_permissions_and_keep_the_worktree(
-    tmp_path: Path, args: list[str], execution_mode: str
+    tmp_path: Path, args: list[str], prompt_term: str
 ) -> None:
     """CL-i4wm: implementer modes inherit the bypass default, not `auto`.
 
@@ -193,11 +194,13 @@ def test_implementer_modes_bypass_permissions_and_keep_the_worktree(
     argv = json.loads(claude_argv.read_text(encoding="utf-8"))
     assert "--dangerously-skip-permissions" in argv
     assert _flag_value(argv, "--permission-mode") is None
-    assert _flag_value(argv, "--worktree") == "bead-CL-safe"
+    expected_worktree = "bead-pack-CL-safe-CL-next" if args[0] == "-ep" else "bead-CL-safe"
+    assert _flag_value(argv, "--worktree") == expected_worktree
     assert _flag_value(argv, "--agent") is None
     prompt = argv[-1]
-    assert "bead-implementation-loop" in prompt
-    assert f"execution_mode={execution_mode}" in prompt
+    expected_skill = "executive-pack" if args[0] == "-ep" else "bead-implementation-loop"
+    assert expected_skill in prompt
+    assert prompt_term in prompt
     assert "canonical Session Close" in prompt
 
 

@@ -383,6 +383,141 @@ def test_cdx_fails_closed_when_codex_is_missing(tmp_path: Path) -> None:
     assert "codex-multi-auth" not in result.stderr
 
 
+def test_cdx_help_exposes_canonical_solo_and_executive_pack_modes(
+    tmp_path: Path,
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, ["--help"])
+    )
+
+    assert result.returncode == 0
+    assert called_file.exists()
+    assert "-sb, --solo-bead ID" in result.stdout
+    assert "canonical single-Bead mode" in result.stdout
+    assert "-ep, --executive-pack ID,ID" in result.stdout
+    assert "explicit ordered same-repository" in result.stdout
+    assert "-b,  --bead ID" in result.stdout
+    assert "compatibility alias for --solo-bead" in result.stdout
+    assert "-- [PROMPT]" in result.stdout
+    assert "Separate caller prose from harness flags" in result.stdout
+
+
+@pytest.mark.parametrize("flag", ["-sb", "--solo-bead", "-b", "--bead"])
+def test_cdx_solo_mode_emits_codex_family_role_contract_and_caller_override(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    caller_prompt = "Use DeepSeek for Reviewer 2 if Kimi is unavailable."
+    result, argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            [flag, "CL-smoke", "--exec", "--", caller_prompt],
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "Solo Bead delivery" in prompt
+    assert "execution_mode=auto" in prompt
+    assert "Bead: CL-smoke" in prompt
+    assert f"Repository: {tmp_path / 'repo'}" in prompt
+    assert "gpt-5.6-sol implementation sub-agent with medium reasoning" in prompt
+    assert "Reviewer 1 is a fresh Opus perspective" in prompt
+    assert "Reviewer 2 is a fresh Kimi perspective" in prompt
+    assert "fresh GPT-5.6 reviewer with high reasoning" in prompt
+    assert "installed bead-implementation-loop and cognovis-beads skills" in prompt
+    assert caller_prompt in prompt
+    assert "Explicit caller role instructions override these defaults" in prompt
+    assert "role separation" in prompt
+    assert "Reviewer 1 and Reviewer 2 family diversity" in prompt
+    assert "route_profile" not in prompt
+    assert "cdx-bead-workflow.py" not in prompt
+    assert argv.count(prompt) == 1
+    assert caller_prompt not in argv[:-1]
+
+
+@pytest.mark.parametrize("flag", ["-ep", "--executive-pack"])
+def test_cdx_executive_pack_preserves_order_and_uses_one_session(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    caller_prompt = "Reviewer 2 may use DeepSeek when Kimi is unavailable."
+    result, argv_file, prompt_file, called_file, _env_file, bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            [flag, "CL-first,CL-second", "--exec", "--", caller_prompt],
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "Executive Pack delivery" in prompt
+    assert "Ordered Beads: CL-first, CL-second" in prompt
+    assert "installed executive-pack and cognovis-beads skills" in prompt
+    assert caller_prompt in prompt
+    assert caller_prompt not in argv[:-1]
+    assert "bead-pack-CL-first-CL-second" in argv[argv.index("-C") + 1]
+    calls = [json.loads(line) for line in bd_log.read_text(encoding="utf-8").splitlines()]
+    assert ["show", "CL-first", "--json"] in calls
+    assert ["show", "CL-second", "--json"] in calls
+
+
+@pytest.mark.parametrize(
+    ("args", "message", "env_overrides", "bead_payload"),
+    [
+        (["-sb", "smoke", "--exec"], "not an exact Bead ID", {}, None),
+        (["-sb", "CL-one,CL-two", "--exec"], "accepts exactly one", {}, None),
+        (["-ep", "CL-one", "--exec"], "at least two", {}, None),
+        (["-ep", "CL-one,CL-one", "--exec"], "duplicate Bead ID", {}, None),
+        (["-sb", "CL-parent", "--exec"], "executable leaf", {"BD_CHILD_COUNT": "1"}, None),
+        (["-sb", "CL-closed", "--exec"], "open, unclaimed", {}, [{"id": "CL-closed", "status": "closed"}]),
+        (["-sb", "CL-missing", "--exec"], "not found in this repository", {}, [{"id": "OTHER-one", "status": "open"}]),
+    ],
+)
+def test_cdx_delivery_modes_reject_invalid_inputs_before_harness(
+    tmp_path: Path,
+    args: list[str],
+    message: str,
+    env_overrides: dict[str, str],
+    bead_payload: object | None,
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            args,
+            env_overrides=env_overrides,
+            bead_payload=bead_payload,
+        )
+    )
+
+    assert result.returncode == 2
+    assert message in result.stderr
+    assert not called_file.exists()
+
+
+@pytest.mark.parametrize(
+    "flag",
+    ["-bw", "--bead-wave", "-bl", "--bead-label", "-bi", "--bead-ids"],
+)
+def test_cdx_rejects_retired_implicit_multi_bead_modes(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, [flag, "CL-parent"])
+    )
+
+    assert result.returncode == 2
+    assert "retired implicit multi-Bead mode" in result.stderr
+    assert "--executive-pack" in result.stderr
+    assert "explicit ordered same-repository Pack" in result.stderr
+    assert not called_file.exists()
+
+
 def _assert_safe_bead_permissions(argv: list[str]) -> None:
     assert _DANGEROUS_CODEX_ARG not in argv
     sandbox_index = argv.index("--sandbox")
@@ -392,6 +527,15 @@ def _assert_safe_bead_permissions(argv: list[str]) -> None:
     ]
     assert 'approval_policy="never"' in config_values
     assert "mcp_servers.beads.required=true" in config_values
+
+
+def _launcher_flag_value(argv: list[str], flag: str) -> str | None:
+    for index, value in enumerate(argv):
+        if value == flag and index + 1 < len(argv):
+            return argv[index + 1]
+        if value.startswith(f"{flag}="):
+            return value.split("=", 1)[1]
+    return None
 
 
 def _assert_readonly_bead_permissions(argv: list[str]) -> None:
@@ -1052,18 +1196,11 @@ def test_cdx_bead_modes_without_callback_do_not_inject_callback_contract(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
-    expected_revision = subprocess.run(
-        [_SYSTEM_GIT, "-C", tmp_path / "cognovis-core-authority", "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    assert f"Git revision {expected_revision}" in prompt
     assert "Coordinator callback" not in prompt
     assert "trigger-flash" not in prompt
 
 
-def test_regression_cdx_bead_uses_current_core_authority_with_current_session_ownership(
+def test_regression_cdx_bead_compatibility_alias_uses_installed_solo_contract(
     tmp_path: Path,
 ) -> None:
     result, _argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = (
@@ -1076,40 +1213,20 @@ def test_regression_cdx_bead_uses_current_core_authority_with_current_session_ow
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     prompt = prompt_file.read_text(encoding="utf-8")
-    expected_revision = subprocess.run(
-        [_SYSTEM_GIT, "-C", tmp_path / "cognovis-core-authority", "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    assert f"Git revision {expected_revision}" in prompt
     for required_contract_term in (
-        "execution mode `auto`",
-        "caller route `codex-owned`",
-        "cognovis-core-authority",
-        "skills/bead-implementation-loop/SKILL.md",
-        "skills/bead-execution-loop/SKILL.md",
-        "agents/bead-loop-implementer.md",
-        "revision-bound source files supersede same-named home-scoped projections",
-        "This current Codex session owns implementation",
-        "Do not delegate implementation or repairs to a subagent",
-        "persist the concise evidence-based capability plan",
+        "Solo Bead delivery",
+        "installed bead-implementation-loop and cognovis-beads skills",
+        "gpt-5.6-sol implementation sub-agent with medium reasoning",
+        "Reviewer 1 is a fresh Opus perspective",
+        "Reviewer 2 is a fresh Kimi perspective",
+        "fresh GPT-5.6 reviewer with high reasoning",
+        "exactly one canonical Session Close",
     ):
         assert required_contract_term in prompt
     for forbidden_contract_term in (
-        "using the installed bead-implementation-loop skill",
-        "Review 1 is adversarial, review 2 is critical",
-        "reviews 3 through 5 are normal",
-        "after five Opus reviews total",
-        "stale home projection",
-        "sole implementation and delivery owner",
-        "Do not invoke bead-implementation-loop",
-        "seven sequential Opus review rounds",
-        "Reviews 3 through 7",
-        "agent_session_start",
-        "agent_session_continue",
-        "mcp__beads__",
-        "--bead-backend mcp",
+        "Git revision",
+        "route_profile",
+        "cdx-bead-workflow.py",
     ):
         assert forbidden_contract_term not in prompt
 
@@ -1144,6 +1261,138 @@ def test_cdx_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
     ):
         assert banned not in source
 
+    delivery_source = source.split("launch_repository_delivery()", 1)[1].split(
+        "launch_bead_implementation_loop()", 1
+    )[0]
+    for banned in (
+        "_resolve_bead_loop_authority",
+        "cdx-bead-workflow.py",
+        "--implementer",
+        "--reviewer-1",
+        "--reviewer-2",
+        "json.dumps",
+    ):
+        assert banned not in delivery_source
+    assert 'bead_id=""' not in source.splitlines()
+    assert 'if [[ -n "$bead_id" ]]' not in source
+    parser_source = source.split("while (( $# > 0 )); do", 1)[1].split(
+        "# ── Help", 1
+    )[0]
+    assert "-m|--model)" not in parser_source
+
+
+def test_cdx_delivery_mode_preserves_harness_flags_after_mode_and_uses_prompt_boundary(
+    tmp_path: Path,
+) -> None:
+    caller_prompt = "Use DeepSeek for Reviewer 2 -- exactly as written."
+    result, argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            [
+                "-sb",
+                "CL-smoke",
+                "--model",
+                "gpt-test",
+                "--search",
+                "-c",
+                'feature="enabled"',
+                "--exec",
+                "--",
+                caller_prompt,
+            ],
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert _launcher_flag_value(argv, "--model") == "gpt-test"
+    assert "--search" in argv
+    config_values = [
+        argv[index + 1] for index, value in enumerate(argv[:-1]) if value == "-c"
+    ]
+    assert 'feature="enabled"' in config_values
+    assert argv[-2:] == ["--", prompt]
+    assert caller_prompt not in argv
+    assert prompt.count(caller_prompt) == 1
+
+
+def test_cdx_delivery_preserves_unlisted_harness_flag_value_before_prompt(
+    tmp_path: Path,
+) -> None:
+    caller_prompt = "Keep this caller prose unchanged."
+    result, argv_file, prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            [
+                "-sb",
+                "CL-smoke",
+                "--output-last-message",
+                "/tmp/last.txt",
+                "--exec",
+                "--",
+                caller_prompt,
+            ],
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert _launcher_flag_value(argv, "--output-last-message") == "/tmp/last.txt"
+    assert argv[-2:] == ["--", prompt]
+    assert prompt.count(caller_prompt) == 1
+
+
+def test_cdx_plain_mode_forwards_double_dash_and_following_tokens(tmp_path: Path) -> None:
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        ["--no-full-auto", "--", "hello", "world"],
+        route_name="codex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(argv_file.read_text(encoding="utf-8")) == [
+        "--",
+        "hello",
+        "world",
+    ]
+
+
+def test_cdx_delivery_reports_missing_bd_before_validation(tmp_path: Path) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-sb", "CL-smoke", "--exec"],
+            env_overrides={
+                "BD_BIN": "",
+                "PATH": f"{tmp_path}{os.pathsep}/usr/bin:/bin",
+            },
+        )
+    )
+
+    assert result.returncode == 1
+    assert "bd not found in PATH" in result.stderr
+    assert "not found in this repository" not in result.stderr
+    assert not called_file.exists()
+
+
+def test_cdx_delivery_reports_missing_uv_before_bead_diagnostic(tmp_path: Path) -> None:
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-sb", "CL-smoke", "--exec"],
+            with_uv=False,
+        )
+    )
+
+    assert result.returncode == 1
+    assert "uv not found in PATH" in result.stderr
+    assert "not found in this repository" not in result.stderr
+    assert not called_file.exists()
+
 
 @pytest.mark.parametrize(
     "args",
@@ -1173,7 +1422,6 @@ def test_cdx_bead_modes_reject_parent_before_git_or_harness(
 @pytest.mark.parametrize(
     "args",
     [
-        ["-b", "CL-smoke", "--exec"],
         ["-bq", "CL-smoke"],
     ],
 )
@@ -1487,8 +1735,26 @@ def test_cdx_non_envelope_renderer_output_fails_closed(tmp_path: Path) -> None:
     "args",
     [
         [
+            "-sb",
+            "CL-smoke",
+            "--exec",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        [
             "-b",
             "CL-smoke",
+            "--exec",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+        [
+            "-ep",
+            "CL-first,CL-second",
             "--exec",
             "--coordinator-workspace",
             "workspace:15",

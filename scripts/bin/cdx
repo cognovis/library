@@ -8,7 +8,10 @@
 #   --no-full-auto  → Launch codex without the default --full-auto wrapper
 #   --tui           → For cdx -b, force interactive Codex TUI mode (default)
 #   --exec          → For cdx -b, force non-interactive codex exec mode
-#   -b, --bead ID   → launch the implementation loop for the given bead ID
+#   -sb, --solo-bead ID → canonical Solo Bead delivery mode
+#   -b, --bead ID   → compatibility alias for --solo-bead
+#   -ep, --executive-pack ID,ID → ordered same-repository Executive Pack
+#   -- [PROMPT]     → separate caller prose from harness flags in delivery modes
 #   -bq, --bead-quick ID → launch the implementation loop in explicit Quick mode
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
 #   --bead-dangerous-full-auto → Deprecated compatibility no-op for implementation modes
@@ -210,7 +213,8 @@ resolve_bead_reviewer_skill_path() {
 
 use_full_auto=true
 show_help=false
-bead_id=""
+solo_bead_id=""
+executive_pack_ids=""
 bead_quick_id=""
 bead_review_id=""
 coordinator_workspace=""
@@ -219,6 +223,7 @@ codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"
 bead_dangerous_full_auto=false
 bead_codex_permission_args=()
 codex_args=()
+caller_prompt_parts=()
 compact_output_contract="Default output mode is compact. Emit stable lifecycle markers and concise summaries only.
 - Do not paste full diffs, full file bodies, full search hits, or long command output unless needed to diagnose a blocking failure.
 - Use targeted searches with bounded output and summarize results; write large evidence to files and report the path plus a short tail.
@@ -227,11 +232,17 @@ compact_output_contract="Default output mode is compact. Emit stable lifecycle m
 run_codex_exec() {
     local prompt="$1"
     local worktree_dir="${2:-$PWD}"
+    local prompt_boundary="${3:-false}"
     select_bead_codex_permission_args
+
+    local -a prompt_args=("${prompt}")
+    if [[ "$prompt_boundary" == "true" ]]; then
+        prompt_args=("--" "${prompt}")
+    fi
 
     if [[ "${CLD_COMPACT_OUTPUT:-1}" == "1" && -f "$CODEX_JSONL_FILTER_SCRIPT" ]] && command -v uv >/dev/null 2>&1; then
         set +e
-        "${CODEX_BIN}" exec --json "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}" \
+        "${CODEX_BIN}" exec --json "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt_args[@]}" \
             | uv run python "$CODEX_JSONL_FILTER_SCRIPT"
         local -a pipe_status=("${pipestatus[@]}")
         set -e
@@ -241,14 +252,18 @@ run_codex_exec() {
         return "${pipe_status[2]}"
     fi
 
-    exec "${CODEX_BIN}" exec "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
+    exec "${CODEX_BIN}" exec "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt_args[@]}"
 }
 
 run_codex_tui() {
     local prompt="$1"
     local worktree_dir="$2"
+    local prompt_boundary="${3:-false}"
     select_bead_codex_permission_args
 
+    if [[ "$prompt_boundary" == "true" ]]; then
+        exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" -- "${prompt}"
+    fi
     exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
 }
 
@@ -417,8 +432,20 @@ while (( $# > 0 )); do
             bead_dangerous_full_auto=true
             shift
             ;;
-        -b|--bead)
-            bead_id="$2"
+        -sb|--solo-bead|-b|--bead)
+            solo_bead_id="${2:-}"
+            if [[ -z "$solo_bead_id" ]]; then
+                echo "ERROR: $1 requires exactly one Bead ID" >&2
+                exit 2
+            fi
+            shift 2
+            ;;
+        -ep|--executive-pack)
+            executive_pack_ids="${2:-}"
+            if [[ -z "$executive_pack_ids" ]]; then
+                echo "ERROR: $1 requires an ordered comma-separated Bead list" >&2
+                exit 2
+            fi
             shift 2
             ;;
         -bq|--bead-quick)
@@ -449,6 +476,20 @@ while (( $# > 0 )); do
             fi
             shift 2
             ;;
+        -bw|--bead-wave|-bl|--bead-label|-bi|--bead-ids)
+            echo "ERROR: $1 is a retired implicit multi-Bead mode." >&2
+            echo "Use --executive-pack only with an explicit ordered same-repository Pack." >&2
+            exit 2
+            ;;
+        --)
+            shift
+            if [[ -n "$solo_bead_id$executive_pack_ids" ]]; then
+                caller_prompt_parts+=("$@")
+            else
+                codex_args+=("--" "$@")
+            fi
+            break
+            ;;
         *)
             codex_args+=("$1")
             shift
@@ -467,7 +508,10 @@ Usage: cdx [wrapper-flags] [codex-args...]
 Wrapper flags (consumed by cdx, not passed to codex):
 
   Bead workflows:
-    -b,  --bead ID              Launch the implementation loop for one bead
+    -sb, --solo-bead ID         Launch the canonical single-Bead mode
+    -b,  --bead ID              compatibility alias for --solo-bead
+    -ep, --executive-pack ID,ID Launch an explicit ordered same-repository Pack
+         -- [PROMPT]            Separate caller prose from harness flags
     -bq, --bead-quick ID        Launch unconditional explicit Quick mode
     -br, --bead-review ID       Fresh-context critical bead-spec/readiness review
          --coordinator-workspace workspace:<n>
@@ -496,8 +540,13 @@ HELP
     exec "${CODEX_BIN}" --help
 fi
 
-if [[ -n "$bead_review_id" && ( -n "$bead_id" || -n "$bead_quick_id" ) ]]; then
-    echo "ERROR: -br/--bead-review is mutually exclusive with -b/--bead and -bq/--bead-quick" >&2
+if [[ -n "$bead_review_id" && ( -n "$solo_bead_id" || -n "$executive_pack_ids" || -n "$bead_quick_id" ) ]]; then
+    echo "ERROR: -br/--bead-review is mutually exclusive with delivery and Quick modes" >&2
+    exit 2
+fi
+
+if [[ -n "$solo_bead_id" && -n "$executive_pack_ids" ]] || [[ -n "$bead_quick_id" && -n "$solo_bead_id$executive_pack_ids" ]]; then
+    echo "ERROR: Solo Bead, Executive Pack, and Quick modes are mutually exclusive" >&2
     exit 2
 fi
 
@@ -517,6 +566,122 @@ if [[ -n "$coordinator_surface" && ! "$coordinator_surface" =~ ^surface:[0-9]+$ 
 fi
 
 # ── Shared bead implementation loop ─────────────────────────────
+
+validate_delivery_bead() {
+    local active_bead="$1"
+    local bead_json
+
+    if [[ -z "${BD_BIN}" ]]; then
+        echo "ERROR: bd not found in PATH. Install the beads CLI first." >&2
+        return 1
+    fi
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "ERROR: uv not found in PATH. Cannot validate delivery Beads." >&2
+        return 1
+    fi
+    if [[ ! "$active_bead" =~ ^[A-Za-z][A-Za-z0-9]*-[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
+        echo "ERROR: '$active_bead' is not an exact Bead ID" >&2
+        return 2
+    fi
+    bead_json=$("${BD_BIN}" show "$active_bead" --json 2>/dev/null) || {
+        echo "ERROR: $active_bead was not found in this repository" >&2
+        return 2
+    }
+    local bead_status_value
+    bead_status_value=$(printf '%s' "$bead_json" | BEAD_ID="$active_bead" uv run python -c '
+import json
+import os
+import sys
+
+payload = json.load(sys.stdin)
+items = payload if isinstance(payload, list) else [payload]
+matches = [item for item in items if isinstance(item, dict) and item.get("id") == os.environ["BEAD_ID"]]
+if len(matches) != 1:
+    raise SystemExit(3)
+print(matches[0].get("status", ""))
+') || {
+        local parse_status=$?
+        if (( parse_status == 3 )); then
+            echo "ERROR: $active_bead was not found in this repository" >&2
+        else
+            echo "ERROR: failed to inspect $active_bead with uv/Python after bd returned data" >&2
+        fi
+        return 2
+    }
+    local child_count
+    child_count=$(fetch_bead_child_count "$active_bead") || {
+        echo "ERROR: failed to inspect children for $active_bead" >&2
+        return 2
+    }
+    if (( child_count > 0 )); then
+        echo "ERROR: $active_bead has $child_count children; delivery modes require executable leaf Beads" >&2
+        return 2
+    fi
+    if [[ "$bead_status_value" != "open" ]]; then
+        echo "ERROR: $active_bead is $bead_status_value; delivery modes require open, unclaimed Beads" >&2
+        return 2
+    fi
+}
+
+delivery_role_paragraph() {
+    cat <<'EOF'
+Role paragraph: the invoking Codex session is the repository delivery owner. A distinct gpt-5.6-sol implementation sub-agent with medium reasoning owns all implementation and repairs. Reviewer 1 is a fresh Opus perspective. Reviewer 2 is a fresh Kimi perspective where the applicable high-assurance or final contract calls for it. Use a fresh GPT-5.6 reviewer with high reasoning as fallback without waiving actor separation or required family diversity. Explicit caller role instructions override these defaults, while role separation and Reviewer 1 and Reviewer 2 family diversity remain mandatory. Keep role selection in natural-language prompt policy; do not introduce JSON routing, profiles, registries, structured role flags, or a routing state machine.
+EOF
+}
+
+launch_repository_delivery() {
+    local delivery_mode="$1"
+    local ids_text="$2"
+    local worktree_label="$3"
+    local skill_instruction="$4"
+
+    if [[ -z "${BD_BIN}" ]]; then
+        echo "ERROR: bd not found in PATH. Install the beads CLI first." >&2
+        return 1
+    fi
+    local repo_root
+    repo_root=$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null) || {
+        echo "ERROR: cdx delivery modes must run inside a git repository." >&2
+        return 1
+    }
+    local worktree_dir
+    worktree_dir=$(ensure_bead_worktree "$worktree_label") || return $?
+    local caller_prompt="${(j: :)caller_prompt_parts}"
+    local execution_mode_contract=""
+    if [[ "$delivery_mode" == "Solo Bead" ]]; then
+        execution_mode_contract=$'\nExecution mode: execution_mode=auto'
+    fi
+    local prompt="Own and complete the approved ${delivery_mode} delivery in one ordinary Codex session.
+
+Repository: ${repo_root}
+${ids_text}
+Worktree: ${worktree_dir}${execution_mode_contract}
+
+$(delivery_role_paragraph)
+
+Load and follow the installed ${skill_instruction} and cognovis-beads skills. The launcher is only a prompt adapter; the installed canonical delivery skill owns implementation, reviews, verification, exactly one canonical Session Close, integration, push, and cleanup."
+
+    if [[ -n "$caller_prompt" ]]; then
+        prompt+="
+
+Caller prompt (preserved unchanged):
+${caller_prompt}"
+    fi
+    if has_coordinator_callback; then
+        prompt+="
+
+$(coordinator_callback_contract impl)"
+    fi
+
+    export CLD_BEAD_LINE=cdx
+    local resolved_mode
+    resolved_mode=$(resolve_codex_bead_mode "$codex_bead_mode") || return $?
+    if [[ "$resolved_mode" == "exec" ]]; then
+        run_codex_exec "$prompt" "$worktree_dir" true
+    else
+        run_codex_tui "$prompt" "$worktree_dir" true
+    fi
+}
 
 launch_bead_implementation_loop() {
     local active_bead="$1"
@@ -606,8 +771,42 @@ $(coordinator_callback_contract impl)"
     esac
 }
 
-if [[ -n "$bead_id" ]]; then
-    launch_bead_implementation_loop "$bead_id" auto
+if [[ -n "$solo_bead_id" ]]; then
+    if [[ "$solo_bead_id" == *,* ]]; then
+        echo "ERROR: --solo-bead accepts exactly one Bead ID" >&2
+        exit 2
+    fi
+    validate_delivery_bead "$solo_bead_id" || exit $?
+    launch_repository_delivery \
+        "Solo Bead" \
+        "Bead: ${solo_bead_id}" \
+        "$solo_bead_id" \
+        "bead-implementation-loop"
+    exit $?
+fi
+
+if [[ -n "$executive_pack_ids" ]]; then
+    local -a pack_ids
+    pack_ids=("${(@s:,:)executive_pack_ids}")
+    if (( ${#pack_ids} < 2 )); then
+        echo "ERROR: --executive-pack requires at least two exact Bead IDs" >&2
+        exit 2
+    fi
+    local -A seen_pack_ids
+    local pack_id
+    for pack_id in "${pack_ids[@]}"; do
+        if [[ -n "${seen_pack_ids[$pack_id]:-}" ]]; then
+            echo "ERROR: duplicate Bead ID '$pack_id' in Executive Pack" >&2
+            exit 2
+        fi
+        seen_pack_ids[$pack_id]=1
+        validate_delivery_bead "$pack_id" || exit $?
+    done
+    launch_repository_delivery \
+        "Executive Pack" \
+        "Ordered Beads: ${(j:, :)pack_ids}" \
+        "pack-${(j:-:)pack_ids}" \
+        "executive-pack"
     exit $?
 fi
 

@@ -2,6 +2,17 @@
 
 ### Changed
 
+- *(CL-zw39, cld/cdx)* Launchers now expose canonical `-sb`/`--solo-bead`
+  and `-ep`/`--executive-pack` delivery modes, with `-b` compatibility alias
+  entering the same Solo path. Both validate exact executable Beads before
+  launch and emit harness-family natural-language role policy for the installed
+  canonical delivery skills; ordered Packs stay in one repository, session,
+  and worktree, and coordinator callbacks remain active through Session Close.
+  Harness tokens remain ordinary argv after the delivery selector without an
+  option allowlist, while `--` provides the explicit boundary for caller prose
+  appended to the prompt. Solo prompts declare `execution_mode=auto`, and cld
+  keeps its managed worktree and setting-source values authoritative.
+
 - *(clc-6kuz, cdx)* `-b` and `-bq` require the configured `beads` MCP server and instruct the lifecycle owner to use its typed context, read, claim, update, and close operations after the launcher's read-only bootstrap. The canonical Session Close is resumed through its containment-bound MCP finalization receipt instead of invoking sandboxed local `bd` or Dolt networking.
 
 - *(CL-5i65, Pi extensions)* Bundled Pi extensions can now opt into native
