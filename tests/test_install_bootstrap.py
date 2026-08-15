@@ -131,5 +131,15 @@ def test_packaged_launcher_copies_remain_identical_to_compatibility_copies() -> 
         ).read_bytes()
 
 
+def test_changelog_documents_solo_and_executive_pack_launcher_contract() -> None:
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "CL-zw39" in changelog
+    assert "-sb`/`--solo-bead" in changelog
+    assert "-ep`/`--executive-pack" in changelog
+    assert "natural-language role" in changelog
+    assert "-b` compatibility alias" in changelog
+
+
 def test_install_script_is_executable() -> None:
     assert os.access(REPO_ROOT / "install.sh", os.X_OK)

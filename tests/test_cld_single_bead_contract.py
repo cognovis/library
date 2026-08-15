@@ -62,6 +62,10 @@ def _write_claude_capture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
         claude_mock,
         f"#!{sys.executable}\n"
         "import json, os, pathlib, sys\n"
+        "sync_log = os.environ.get('SYNC_LOG', '')\n"
+        "if sync_log:\n"
+        "    with pathlib.Path(sync_log).open('a', encoding='utf-8') as f:\n"
+        "        f.write('claude launch\\n')\n"
         "pathlib.Path(os.environ['CLAUDE_CALLED_FILE']).write_text('called', encoding='utf-8')\n"
         "pathlib.Path(os.environ['CLAUDE_ARGV_FILE']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')\n"
         "if len(sys.argv) > 1:\n"
@@ -91,6 +95,10 @@ def _write_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
         f"#!{sys.executable}\n"
         "import json, os, pathlib, sys\n"
         "args = sys.argv[1:]\n"
+        "sync_log = os.environ.get('SYNC_LOG', '')\n"
+        "if sync_log:\n"
+        "    with pathlib.Path(sync_log).open('a', encoding='utf-8') as f:\n"
+        "        f.write('bd ' + ' '.join(args) + '\\n')\n"
         "log = pathlib.Path(os.environ['BD_ARGV_LOG'])\n"
         "with log.open('a', encoding='utf-8') as f:\n"
         "    f.write(json.dumps(args) + '\\n')\n"
@@ -99,6 +107,8 @@ def _write_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
         "    raise SystemExit(0)\n"
         "if len(args) >= 2 and args[0] == 'show':\n"
         "    bead_id = args[1]\n"
+        "    if bead_id in os.environ.get('BD_MISSING_IDS', '').split(','):\n"
+        "        raise SystemExit(1)\n"
         "    if '--children' in args:\n"
         "        count = int(os.environ.get('BD_CHILD_COUNT', '0'))\n"
         "        print(json.dumps({bead_id: [{'id': f'{bead_id}.{index + 1}'} for index in range(count)]}))\n"
@@ -118,6 +128,7 @@ def _write_cld_path_mocks(tmp_path: Path) -> None:
         # GIT_REPO_ROOT and GIT_TRACKED stay unset for the default mock, so cld
         # behaves exactly as it did before worktree-overlay resolution existed.
         "#!/bin/sh\n"
+        "if test -n \"${SYNC_LOG:-}\"; then printf 'git %s\\n' \"$*\" >> \"$SYNC_LOG\"; fi\n"
         "if [ \"$1\" = \"rev-parse\" ] && [ \"$2\" = \"--show-toplevel\" ]; then\n"
         "  [ -n \"${GIT_REPO_ROOT:-}\" ] && printf '%s\\n' \"$GIT_REPO_ROOT\"\n"
         "  exit 0\n"
@@ -225,9 +236,9 @@ def test_cld_rejects_multi_bead_dispatch_flags(tmp_path: Path, flag: str) -> Non
 
     assert result.returncode == 2
     assert not called.exists()
-    assert "cld does not dispatch multi-bead waves" in result.stderr
-    assert "wave skills with cmux panes" in result.stderr
-    assert "cld -b <bead-id>" in result.stderr
+    assert "retired implicit multi-Bead mode" in result.stderr
+    assert "--executive-pack" in result.stderr
+    assert "explicit ordered same-repository Pack" in result.stderr
 
 
 def test_cld_contains_no_wave_dispatch_prompt_or_help_entry() -> None:
@@ -236,7 +247,119 @@ def test_cld_contains_no_wave_dispatch_prompt_or_help_entry() -> None:
     assert "Wave orchestration request" not in source
     assert "Dispatch wave-orchestrator" not in source
     assert "cld -bw ${bead_id}" not in source
-    assert "Waves must be started manually using the wave skills with cmux panes" in source
+    assert "retired implicit multi-Bead mode" in source
+    assert "explicit ordered same-repository Pack" in source
+
+
+def test_cld_help_exposes_canonical_solo_and_executive_pack_modes(
+    tmp_path: Path,
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["--help"],
+    )
+
+    assert result.returncode == 0
+    assert called_file.exists()
+    assert "-sb, --solo-bead ID" in result.stdout
+    assert "canonical single-Bead mode" in result.stdout
+    assert "-ep, --executive-pack ID,ID" in result.stdout
+    assert "explicit ordered same-repository" in result.stdout
+    assert "-b,  --bead ID" in result.stdout
+    assert "compatibility alias for --solo-bead" in result.stdout
+    assert "-- [PROMPT]" in result.stdout
+    assert "Separate caller prose from harness flags" in result.stdout
+
+
+@pytest.mark.parametrize("flag", ["-sb", "--solo-bead", "-b", "--bead"])
+def test_cld_solo_mode_emits_claude_family_role_contract_and_caller_override(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    caller_prompt = "Use Sonnet for implementation if Opus is unavailable."
+    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-smoke", "--", caller_prompt],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "Solo Bead delivery" in prompt
+    assert "execution_mode=auto" in prompt
+    assert "Bead: CL-smoke" in prompt
+    assert f"Repository: {tmp_path}" in prompt
+    assert "distinct Opus implementation sub-agent" in prompt
+    assert "Reviewer 1 is a fresh GPT-5.6-sol perspective with high reasoning" in prompt
+    assert "Reviewer 2 is a fresh Kimi perspective" in prompt
+    assert "fresh Opus fallback" in prompt
+    assert "installed bead-implementation-loop and cognovis-beads skills" in prompt
+    assert caller_prompt in prompt
+    assert "Explicit caller role instructions override these defaults" in prompt
+    assert "role separation" in prompt
+    assert "Reviewer 1 and Reviewer 2 family diversity" in prompt
+    assert "route_profile" not in prompt
+    assert "cdx-bead-workflow.py" not in prompt
+    assert argv.count(prompt) == 1
+    assert caller_prompt not in argv[:-1]
+    assert "Managed worktree label: bead-CL-smoke" in prompt
+
+
+@pytest.mark.parametrize("flag", ["-ep", "--executive-pack"])
+def test_cld_executive_pack_preserves_order_and_uses_one_session(
+    tmp_path: Path,
+    flag: str,
+) -> None:
+    caller_prompt = "Reviewer 2 may use DeepSeek when Kimi is unavailable."
+    result, argv_file, prompt_file, called_file, bd_log = _run_cld(
+        tmp_path,
+        [flag, "CL-first,CL-second", "--", caller_prompt],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "Executive Pack delivery" in prompt
+    assert "Ordered Beads: CL-first, CL-second" in prompt
+    assert "installed executive-pack and cognovis-beads skills" in prompt
+    assert caller_prompt in prompt
+    assert caller_prompt not in argv[:-1]
+    assert _argv_flag_value(argv, "--worktree") == "bead-pack-CL-first-CL-second"
+    assert "Managed worktree label: bead-pack-CL-first-CL-second" in prompt
+    calls = [json.loads(line) for line in bd_log.read_text(encoding="utf-8").splitlines()]
+    assert ["show", "CL-first", "--json"] in calls
+    assert ["show", "CL-second", "--json"] in calls
+
+
+@pytest.mark.parametrize(
+    ("args", "message", "env_overrides"),
+    [
+        (["-sb", "smoke"], "not an exact Bead ID", {}),
+        (["-sb", "CL-one,CL-two"], "accepts exactly one", {}),
+        (["-ep", "CL-one"], "at least two", {}),
+        (["-ep", "CL-one,CL-one"], "duplicate Bead ID", {}),
+        (["-sb", "CL-parent"], "executable leaf", {"BD_CHILD_COUNT": "1"}),
+        (["-sb", "CL-closed"], "open, unclaimed", {"BD_STATUS": "closed"}),
+        (["-sb", "CL-missing"], "not found in this repository", {"BD_MISSING_IDS": "CL-missing"}),
+    ],
+)
+def test_cld_delivery_modes_reject_invalid_inputs_before_harness(
+    tmp_path: Path,
+    args: list[str],
+    message: str,
+    env_overrides: dict[str, str],
+) -> None:
+    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        args,
+        env_overrides=env_overrides,
+    )
+
+    assert result.returncode == 2
+    assert message in result.stderr
+    assert not called_file.exists()
 
 
 @pytest.mark.parametrize("flag", ["-b", "-bq"])
@@ -257,7 +380,7 @@ def test_cld_bead_modes_without_callback_do_not_inject_callback_contract(
 
 @pytest.mark.parametrize(
     ("flag", "execution_mode"),
-    [("-b", "auto"), ("-bq", "quick")],
+    [("-bq", "quick")],
 )
 def test_regression_cld_bead_modes_use_current_core_authority(
     tmp_path: Path,
@@ -314,6 +437,152 @@ def test_cld_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
     ):
         assert banned not in source
 
+    delivery_source = source.split("_launch_repository_delivery()", 1)[1].split(
+        "_claude_args_have_model()", 1
+    )[0]
+    for banned in (
+        "_resolve_bead_loop_authority",
+        "cdx-bead-workflow.py",
+        "--implementer",
+        "--reviewer-1",
+        "--reviewer-2",
+        "json.dumps",
+    ):
+        assert banned not in delivery_source
+    assert 'bead_id=""' not in source.splitlines()
+    assert 'if [[ -n "$bead_id" ]]' not in source
+
+
+def test_cld_delivery_mode_preserves_harness_flags_after_mode_and_uses_prompt_boundary(
+    tmp_path: Path,
+) -> None:
+    caller_prompt = "Use Sonnet for implementation -- exactly as written."
+    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-sb",
+            "CL-smoke",
+            "--model",
+            "opus",
+            "--",
+            caller_prompt,
+        ],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert _argv_flag_value(argv, "--model") == "opus"
+    assert caller_prompt not in argv
+    assert prompt.count(caller_prompt) == 1
+
+
+def test_cld_delivery_preserves_unlisted_harness_flag_values_before_prompt(
+    tmp_path: Path,
+) -> None:
+    caller_prompt = "Keep this caller prose unchanged."
+    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-sb",
+            "CL-smoke",
+            "--agent",
+            "my-agent",
+            "--append-system-prompt",
+            "extra rules",
+            "--",
+            caller_prompt,
+        ],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert _argv_flag_value(argv, "--agent") == "my-agent"
+    assert _argv_flag_value(argv, "--append-system-prompt") == "extra rules"
+    assert argv[-2:] == ["--", prompt]
+    assert prompt.count(caller_prompt) == 1
+
+
+def test_cld_delivery_keeps_launcher_owned_flags_effectively_last(
+    tmp_path: Path,
+) -> None:
+    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-sb",
+            "CL-smoke",
+            "--worktree",
+            "caller-label",
+            "--agent",
+            "my-agent",
+            "--setting-sources",
+            "user",
+        ],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    worktree_values = [
+        argv[index + 1] for index, value in enumerate(argv[:-1]) if value == "--worktree"
+    ]
+    setting_source_values = [
+        argv[index + 1]
+        for index, value in enumerate(argv[:-1])
+        if value == "--setting-sources"
+    ]
+    assert worktree_values[-1] == "bead-CL-smoke"
+    assert setting_source_values[-1] == "user,project,local"
+    assert _argv_flag_value(argv, "--agent") == "my-agent"
+    assert argv[-2:] == ["--", prompt]
+
+
+def test_cld_plain_mode_forwards_double_dash_and_following_tokens(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        ["--", "hello", "world"],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    assert json.loads(argv_file.read_text(encoding="utf-8"))[-3:] == [
+        "--",
+        "hello",
+        "world",
+    ]
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-sb", "CL-smoke"],
+        ["-ep", "CL-first,CL-second"],
+    ],
+)
+def test_cld_delivery_syncs_before_native_worktree_launch(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    sync_log = tmp_path / "sync.log"
+    result, _argv_file, _prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        args,
+        env_overrides={"SYNC_LOG": str(sync_log)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    events = sync_log.read_text(encoding="utf-8").splitlines()
+    fetch_index = events.index("git fetch origin")
+    pull_index = events.index("git pull --no-rebase")
+    dolt_index = events.index("bd dolt pull")
+    launch_index = events.index("claude launch")
+    assert fetch_index < pull_index < dolt_index < launch_index
+
 
 @pytest.mark.parametrize("flag", ["-b", "-bq"])
 def test_cld_bead_modes_reject_parent_before_git_or_harness(
@@ -343,7 +612,7 @@ def test_cld_bead_modes_reject_parent_before_git_or_harness(
     assert not called_file.exists()
 
 
-@pytest.mark.parametrize("flag", ["-b", "-bq"])
+@pytest.mark.parametrize("flag", ["-sb", "-b", "-bq"])
 def test_cld_bead_modes_with_callback_inject_contract_and_consume_flags(
     tmp_path: Path,
     flag: str,
@@ -374,6 +643,32 @@ def test_cld_bead_modes_with_callback_inject_contract_and_consume_flags(
     assert "Session Close" in prompt
     assert "Normal progress updates are NOT intervention events and must NOT trigger the callback." in prompt
     assert "If cmux is unavailable, skip the flash (best-effort)" in prompt
+
+
+def test_cld_executive_pack_with_callback_preserves_session_close_contract(
+    tmp_path: Path,
+) -> None:
+    result, argv_file, prompt_file, called_file, _bd_log = _run_cld(
+        tmp_path,
+        [
+            "-ep",
+            "CL-first,CL-second",
+            "--coordinator-workspace",
+            "workspace:15",
+            "--coordinator-surface",
+            "surface:33",
+        ],
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert "--coordinator-workspace" not in argv
+    assert "--coordinator-surface" not in argv
+    assert "workspace:15 / surface:33" in prompt
+    assert "cmux trigger-flash --surface surface:33" in prompt
+    assert "Session Close" in prompt
 
 
 @pytest.mark.parametrize(

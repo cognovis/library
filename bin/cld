@@ -9,8 +9,10 @@
 #   --safe          → opt back into interactive permission prompts (--permission-mode auto)
 #   -v, --verbose   → enable verbose mode (reasoning traces + token counts)
 #   -c, --caveman   → enable caveman mode for this session (exports CAVEMAN_MODE=1)
-#   -b, --bead ID   → launch the implementation loop for the given bead ID
-#                     (refuses if ID has children)
+#   -sb, --solo-bead ID → canonical Solo Bead delivery mode
+#   -b, --bead ID   → compatibility alias for --solo-bead
+#   -ep, --executive-pack ID,ID → ordered same-repository Executive Pack
+#   -- [PROMPT]     → separate caller prose from harness flags in delivery modes
 #   -bq, --bead-quick ID → launch the implementation loop in explicit Quick mode
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
@@ -97,7 +99,8 @@ caveman=false
 skip_perms=false
 safe_perms=false
 verbose=false
-bead_id=""
+solo_bead_id=""
+executive_pack_ids=""
 bead_quick_id=""
 bead_review_id=""
 force_tier=""
@@ -106,6 +109,7 @@ coordinator_surface=""
 plan_label=""
 show_help=false
 claude_args=()
+caller_prompt_parts=()
 
 while (( $# > 0 )); do
     case "$1" in
@@ -129,8 +133,20 @@ while (( $# > 0 )); do
             verbose=true
             shift
             ;;
-        -b|--bead)
-            bead_id="$2"
+        -sb|--solo-bead|-b|--bead)
+            solo_bead_id="${2:-}"
+            if [[ -z "$solo_bead_id" ]]; then
+                echo "ERROR: $1 requires exactly one Bead ID" >&2
+                exit 2
+            fi
+            shift 2
+            ;;
+        -ep|--executive-pack)
+            executive_pack_ids="${2:-}"
+            if [[ -z "$executive_pack_ids" ]]; then
+                echo "ERROR: $1 requires an ordered comma-separated Bead list" >&2
+                exit 2
+            fi
             shift 2
             ;;
         -bq|--bead-quick)
@@ -174,10 +190,18 @@ while (( $# > 0 )); do
             shift 2
             ;;
         -bw|--bead-wave|-bl|--bead-label|-bi|--bead-ids)
-            echo "ERROR: cld does not dispatch multi-bead waves." >&2
-            echo "Start wave orchestration manually, then use the wave skills with cmux panes." >&2
-            echo "Use cld -b <bead-id> to implement exactly one bead." >&2
+            echo "ERROR: $1 is a retired implicit multi-Bead mode." >&2
+            echo "Use --executive-pack only with an explicit ordered same-repository Pack." >&2
             exit 2
+            ;;
+        --)
+            shift
+            if [[ -n "$solo_bead_id$executive_pack_ids" ]]; then
+                caller_prompt_parts+=("$@")
+            else
+                claude_args+=("--" "$@")
+            fi
+            break
             ;;
         *)
             claude_args+=("$1")
@@ -196,8 +220,10 @@ Usage: cld [wrapper-flags] [claude-args...]
 Wrapper flags (consumed by cld, not passed to claude):
 
   Bead workflows:
-    -b,  --bead ID              Launch the implementation loop for one bead
-                                (refuses if ID has children)
+    -sb, --solo-bead ID         Launch the canonical single-Bead mode
+    -b,  --bead ID              compatibility alias for --solo-bead
+    -ep, --executive-pack ID,ID Launch an explicit ordered same-repository Pack
+         -- [PROMPT]            Separate caller prose from harness flags
     -bq, --bead-quick ID        Launch unconditional explicit Quick mode.
                                 Forces the quick tier (force_tier=quick) so the
                                 size/effort eligibility gate is bypassed and any
@@ -225,8 +251,13 @@ EOF
     exec "${CLAUDE_BIN}" --help
 fi
 
-if [[ -n "$bead_review_id" && ( -n "$bead_id" || -n "$bead_quick_id" ) ]]; then
-    echo "ERROR: -br/--bead-review is mutually exclusive with -b/--bead and -bq/--bead-quick" >&2
+if [[ -n "$bead_review_id" && ( -n "$solo_bead_id" || -n "$executive_pack_ids" || -n "$bead_quick_id" ) ]]; then
+    echo "ERROR: -br/--bead-review is mutually exclusive with delivery and Quick modes" >&2
+    exit 2
+fi
+
+if [[ -n "$solo_bead_id" && -n "$executive_pack_ids" ]] || [[ -n "$bead_quick_id" && -n "$solo_bead_id$executive_pack_ids" ]]; then
+    echo "ERROR: Solo Bead, Executive Pack, and Quick modes are mutually exclusive" >&2
     exit 2
 fi
 
@@ -270,7 +301,7 @@ fi
 
 # ── Auto-expand short bead IDs ──────────────────────────────────
 # e.g. "oms3" → "mira-oms3" when issue_prefix is "mira"
-if [[ -n "$bead_id$bead_quick_id$bead_review_id" && -z "${BD_BIN}" ]]; then
+if [[ -n "$solo_bead_id$executive_pack_ids$bead_quick_id$bead_review_id" && -z "${BD_BIN}" ]]; then
     echo "ERROR: bd not found in PATH. Install the beads CLI first."
     exit 1
 fi
@@ -369,6 +400,118 @@ _abort_missing_bead() {
     exit 2
 }
 
+_validate_delivery_bead() {
+    local id="$1"
+
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "ERROR: jq is required to validate delivery Beads" >&2
+        return 2
+    fi
+    if [[ ! "$id" =~ ^[A-Za-z][A-Za-z0-9]*-[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
+        echo "ERROR: '$id' is not an exact Bead ID" >&2
+        return 2
+    fi
+    if ! _bead_exists "$id"; then
+        echo "ERROR: $id was not found in this repository" >&2
+        return 2
+    fi
+    local child_count
+    child_count=$(_bead_child_count "$id")
+    if [[ "$child_count" -gt 0 ]]; then
+        echo "ERROR: $id has $child_count children; delivery modes require executable leaf Beads" >&2
+        return 2
+    fi
+    local bead_status_value
+    bead_status_value=$(_bead_status "$id" || echo "")
+    if [[ "$bead_status_value" != "open" ]]; then
+        echo "ERROR: $id is $bead_status_value; delivery modes require open, unclaimed Beads" >&2
+        return 2
+    fi
+}
+
+_delivery_role_paragraph() {
+    cat <<'EOF'
+Role paragraph: the invoking Claude session is the repository delivery owner. A distinct Opus implementation sub-agent owns all implementation and repairs. Reviewer 1 is a fresh GPT-5.6-sol perspective with high reasoning. Reviewer 2 is a fresh Kimi perspective where the applicable high-assurance or final contract calls for it. Use a fresh Opus fallback without waiving actor separation or required family diversity. Explicit caller role instructions override these defaults, while role separation and Reviewer 1 and Reviewer 2 family diversity remain mandatory. Keep role selection in natural-language prompt policy; do not introduce JSON routing, profiles, registries, structured role flags, or a routing state machine.
+EOF
+}
+
+_launch_repository_delivery() {
+    local delivery_mode="$1"
+    local ids_text="$2"
+    local worktree_label="$3"
+    local skill_instruction="$4"
+    local caller_prompt="${(j: :)caller_prompt_parts}"
+    local execution_mode_contract=""
+    if [[ "$delivery_mode" == "Solo Bead" ]]; then
+        execution_mode_contract=$'\nExecution mode: execution_mode=auto'
+    fi
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    if [[ -z "$repo_root" ]]; then
+        repo_root="$PWD"
+    fi
+    echo "Syncing git and Dolt before worktree creation..."
+    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null \
+        || echo "WARNING: git pull failed (non-fatal, continuing)" >&2
+    "${BD_BIN}" dolt pull 2>/dev/null \
+        || echo "WARNING: bd dolt pull failed (non-fatal, continuing)" >&2
+    local prompt="Own and complete the approved ${delivery_mode} delivery in one ordinary Claude session.
+
+Repository: ${repo_root}
+${ids_text}
+Managed worktree label: ${worktree_label}${execution_mode_contract}
+
+$(_delivery_role_paragraph)
+
+Load and follow the installed ${skill_instruction} and cognovis-beads skills. The launcher is only a prompt adapter; the installed canonical delivery skill owns implementation, reviews, verification, exactly one canonical Session Close, integration, push, and cleanup."
+
+    if [[ -n "$caller_prompt" ]]; then
+        prompt+="
+
+Caller prompt (preserved unchanged):
+${caller_prompt}"
+    fi
+    if _has_coordinator_callback; then
+        prompt+="
+
+$(_coordinator_callback_contract impl)"
+    fi
+
+    local -a forwarded_claude_args=()
+    local index=1
+    while (( index <= ${#claude_args[@]} )); do
+        case "${claude_args[index]}" in
+            --worktree|--setting-sources)
+                if (( index < ${#claude_args[@]} )) && [[ "${claude_args[index + 1]}" != -* ]]; then
+                    (( index += 2 ))
+                else
+                    (( index++ ))
+                fi
+                ;;
+            --worktree=*|--setting-sources=*)
+                (( index++ ))
+                ;;
+            *)
+                forwarded_claude_args+=("${claude_args[index]}")
+                (( index++ ))
+                ;;
+        esac
+    done
+
+    local -a delivery_args=("--worktree" "$worktree_label")
+    local overlay_settings
+    overlay_settings=$(worktree_overlay_settings)
+    if [[ -n "$overlay_settings" ]]; then
+        delivery_args+=("--settings" "$overlay_settings")
+    fi
+    delivery_args+=(
+        "--setting-sources" "user,project,local"
+        "${forwarded_claude_args[@]}"
+        "--" "$prompt"
+    )
+    claude_args=("${delivery_args[@]}")
+}
+
 _has_coordinator_callback() {
     [[ -n "$coordinator_workspace" && -n "$coordinator_surface" ]]
 }
@@ -428,6 +571,48 @@ _cmux_rename() {
     fi
 }
 
+if [[ -n "$solo_bead_id" ]]; then
+    if [[ "$solo_bead_id" == *,* ]]; then
+        echo "ERROR: --solo-bead accepts exactly one Bead ID" >&2
+        exit 2
+    fi
+    _validate_delivery_bead "$solo_bead_id" || exit $?
+    export CLD_BEAD_LINE=cld
+    _cmux_rename "${solo_bead_id}-solo"
+    _launch_repository_delivery \
+        "Solo Bead" \
+        "Bead: ${solo_bead_id}" \
+        "bead-${solo_bead_id}" \
+        "bead-implementation-loop"
+fi
+
+if [[ -n "$executive_pack_ids" ]]; then
+    local -a pack_ids
+    pack_ids=("${(@s:,:)executive_pack_ids}")
+    if (( ${#pack_ids} < 2 )); then
+        echo "ERROR: --executive-pack requires at least two exact Bead IDs" >&2
+        exit 2
+    fi
+    local -A seen_pack_ids
+    local pack_id
+    for pack_id in "${pack_ids[@]}"; do
+        if [[ -n "${seen_pack_ids[$pack_id]:-}" ]]; then
+            echo "ERROR: duplicate Bead ID '$pack_id' in Executive Pack" >&2
+            exit 2
+        fi
+        seen_pack_ids[$pack_id]=1
+        _validate_delivery_bead "$pack_id" || exit $?
+    done
+    export CLD_BEAD_LINE=cld
+    local pack_label="bead-pack-${(j:-:)pack_ids}"
+    _cmux_rename "${pack_ids[1]}-pack"
+    _launch_repository_delivery \
+        "Executive Pack" \
+        "Ordered Beads: ${(j:, :)pack_ids}" \
+        "$pack_label" \
+        "executive-pack"
+fi
+
 if [[ -n "$bead_review_id" ]]; then
     if ${skip_perms}; then
         echo "ERROR: --skip-perms is incompatible with the isolated -br workflow" >&2
@@ -468,88 +653,6 @@ Report the typed gate; do not implement or repair anything."
         cmux trigger-flash --surface "$coordinator_surface" 2>/dev/null || true
     fi
     exit "$review_exit"
-fi
-
-if [[ -n "$bead_id" ]]; then
-    _resolve_bead_loop_authority || exit $?
-    bead_id=$(_expand_bead_id "$bead_id")
-    local bead_short=$(_bead_short "$bead_id")
-
-    # Identify the active harness for the shared implementation-loop contract.
-    export CLD_BEAD_LINE=cld
-
-    if ! _bead_exists "$bead_id"; then
-        _abort_missing_bead "$bead_id" "Claude"
-    fi
-
-    # ── Epic guard: refuse parent beads (has children) ────────────
-    local _child_count
-    _child_count=$(_bead_child_count "$bead_id")
-    if [[ "$_child_count" -gt 0 ]]; then
-        echo -e "\033[0;31m✗ ${bead_id} has ${_child_count} children.\033[0m" >&2
-        echo "  Waves must be started manually using the wave skills with cmux panes." >&2
-        echo "  To work on a single child, use its own ID with cld -b." >&2
-        exit 2
-    fi
-
-    # ── Claim gate: refuse if bead is already in_progress or closed ──
-    local _STATUS
-    _STATUS=$(_bead_status "$bead_id" || echo "")
-    if [[ "$_STATUS" == "in_progress" || "$_STATUS" == "closed" ]]; then
-        echo -e "\033[0;31m✗ ${bead_id} is ${_STATUS}.\033[0m" >&2
-        echo "  Cannot launch: bead is already ${_STATUS}." >&2
-        if [[ "$_STATUS" == "in_progress" ]]; then
-            echo "  To take over: bd update ${bead_id} --status=open" >&2
-        fi
-        exit 2
-    fi
-
-    # ── Sync: pull latest git + dolt state before worktree creation ──
-    echo -e "\033[0;36m⟳ Syncing git and dolt before worktree creation...\033[0m"
-    git fetch origin 2>/dev/null && git pull --no-rebase 2>/dev/null || echo -e "\033[0;33m⚠ git pull failed (non-fatal, continuing)\033[0m"
-    "${BD_BIN}" dolt pull 2>/dev/null || echo -e "\033[0;33m⚠ bd dolt pull failed (non-fatal, continuing)\033[0m"
-
-    # ── Worktree isolation via Claude Code native --worktree ──────
-    local worktree_name="bead-${bead_id}"
-    claude_args+=("--worktree" "$worktree_name")
-    # ── Overlay symlinks from the main checkout into the worktree ──
-    local overlay_settings
-    overlay_settings=$(worktree_overlay_settings)
-    if [[ -n "$overlay_settings" ]]; then
-        claude_args+=("--settings" "$overlay_settings")
-    fi
-    # ── Force full plugin registry in the worktree session ────────
-    # Guarantee the canonical Session Close owner is available at handoff,
-    # even if a project-level .claude/settings overrides setting-sources.
-    claude_args+=("--setting-sources" "user,project,local")
-
-    # ── Set terminal tab title + cmux pane name ──────────────────
-    printf '\033]1;%s\033\\' "$bead_id"
-    printf '\033]2;%s\033\\' "cld: $bead_id"
-    _cmux_rename "${bead_short}-impl"
-
-    # ── Derive portless namespace from bead prefix + number ───────
-    local bead_ns=""
-    if [[ -n "$bead_prefix" ]]; then
-        local bead_num="${bead_id##*-}"
-        bead_ns="${bead_prefix}-${bead_num}"
-    fi
-
-    local prompt="Bead ID: $bead_id. Execute the revision-bound bead implementation loop with execution_mode=auto and caller route \`claude-manual\`.
-
-$(_bead_loop_authority_prompt)"
-
-    if [[ -n "$bead_ns" ]]; then
-        prompt+=" Portless namespace: $bead_ns (use as namespace when starting dev servers, e.g. for portless-based setups)."
-    fi
-
-    if _has_coordinator_callback; then
-        prompt+="
-
-$(_coordinator_callback_contract impl)"
-    fi
-
-    claude_args+=("$prompt")
 fi
 
 if [[ -n "$bead_quick_id" ]]; then
