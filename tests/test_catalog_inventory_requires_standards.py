@@ -61,8 +61,8 @@ def test_skill_with_multiple_requires_standards_entries(tmp_path: Path) -> None:
 
 
 def test_skill_requires_and_requires_standards_are_merged(tmp_path: Path) -> None:
-    """Control: a skill declaring both requires: and requires_standards: (like
-    bead-implementation-loop) must merge both into the typed requires list."""
+    """Control: a skill declaring both requires: and requires_standards: must
+    merge both into the typed requires list."""
     skill_dir = _write_skill(
         tmp_path,
         "merged-skill",

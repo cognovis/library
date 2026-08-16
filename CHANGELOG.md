@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Removed
+
+- *(clc-d8ol, catalog/cld/cdx)* Retire the parallel single-bead catalog path.
+  `cld -b`/`cdx -b` and `cognovis-base` now enter Repository Delivery through
+  `executive-pack` in solo mode over `bead-execution-loop`. The deleted
+  marketplace sources are no longer catalogued. Project `workspace_policy.max_receipts`
+  may be 50, matching the runtime `PROJECT_RECEIPT_LIMIT`.
+
 ### Changed
 
 - *(CL-zw39, cld/cdx)* Launchers now expose canonical `-sb`/`--solo-bead`

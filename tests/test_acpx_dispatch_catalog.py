@@ -34,18 +34,20 @@ def _entry(catalog: dict, kind: str, name: str) -> dict:
     return next(entry for entry in catalog["library"][kind] if entry["name"] == name)
 
 
-def test_catalog_resolves_legacy_loop_through_the_owned_worker_bundle(
+def test_catalog_resolves_repository_delivery_through_the_owned_transport(
     tmp_path: Path,
 ) -> None:
     catalog = _catalog()
     dispatch = _entry(catalog, "skills", "acpx-dispatch")
-    loop = _entry(catalog, "skills", "bead-implementation-loop")
+    pack = _entry(catalog, "skills", "executive-pack")
+    loop = _entry(catalog, "skills", "bead-execution-loop")
 
     assert dispatch["source"] == (
         "https://github.com/cognovis/library-core/blob/main/"
         "skills/acpx-dispatch/SKILL.md"
     )
-    assert loop["requires"][0] == "agent:bead-loop-implementer"
+    assert "skill:bead-execution-loop" in pack["requires"]
+    assert "agent:bead-implementer" in loop["requires"]
     assert dispatch["requires"] == [
         "agent:judge-default",
         "standard:english-only",
@@ -53,20 +55,13 @@ def test_catalog_resolves_legacy_loop_through_the_owned_worker_bundle(
         "standard:model-routing",
         "standard:no-emoji",
     ]
-    # ADR-0009 withdrew the durable-state module and moved the review contract to
-    # bead-implementation-loop, which ships its scripts by convention scan. The
-    # dispatcher declares exactly one script; declaring the other two would make a
-    # fresh install fetch files that no longer exist.
-    assert [script["path"] for script in dispatch["scripts"]] == [
-        "skills/acpx-dispatch/scripts/acpx-dispatch.py",
-    ]
     install_order = resolve_requires(
         catalog,
         "skill",
-        "bead-implementation-loop",
+        "executive-pack",
         tmp_path,
     )
-    assert ("agent", "bead-loop-implementer") in install_order
+    assert ("skill", "bead-execution-loop") in install_order
     assert ("skill", "acpx-dispatch") in install_order
 
 

@@ -31,9 +31,6 @@ roots:
     catalog: core
   # Delivery entry points
   - type: skill
-    name: bead-implementation-loop
-    catalog: core
-  - type: skill
     name: executive-pack
     catalog: core
   - type: skill

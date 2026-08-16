@@ -34,7 +34,6 @@ PREEXISTING_SKILL_NAMES = frozenset(
     audit-citations
     bd-release-notes
     bead-execution-loop
-    bead-implementation-loop
     bead-metrics
     bead-reviewer
     billing-reviewer
@@ -145,8 +144,10 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "cognovis-beads", "core"),
         ("skill", "inject-standards", "core"),
         ("skill", "ob-cli", "core"),
-        ("skill", "bead-implementation-loop", "core"),
         ("skill", "executive-pack", "core"),
+        ("skill", "session-close", "core"),
+        ("standard", "english-only", "platform"),
+        ("standard", "no-emoji", "platform"),
     }
 
     closure = resolve_workspace_closure(
@@ -162,10 +163,9 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "cognovis-beads"),
         ("skill", "inject-standards"),
         ("skill", "ob-cli"),
-        ("skill", "bead-implementation-loop"),
         ("skill", "executive-pack"),
     } <= set(closure.artifacts)
-    assert ("script", "ccore") in set(closure.prerequisites)
+    assert set(closure.prerequisites) == set()
 
     schema = json.loads(
         (REPO_ROOT / "docs" / "schema" / "library.schema.json").read_text()
@@ -178,7 +178,7 @@ def test_cognovis_base_publication_preserves_preexisting_catalog_skills() -> Non
 
     names = {entry["name"] for entry in catalog["library"]["skills"]}
     assert PREEXISTING_SKILL_NAMES <= names
-    assert len(names) == 110
+    assert len(names) == 109
     assert "library" in names
 
 

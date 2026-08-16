@@ -1057,25 +1057,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: bead-implementation-loop
-      description: Compatibility entry that routes one executable Bead to the Bead Loop Implementer without duplicating TDD, review, Means of Compliance, commit, worktree, or Session Close ownership.
-      source: https://github.com/cognovis/library-core/blob/main/skills/bead-implementation-loop/SKILL.md
-      requires:
-        - agent:bead-loop-implementer
-        - skill:bead-execution-loop
-        - skill:cognovis-beads
-        - skill:session-close
-        - standard:executive-pack
-        - standard:english-only
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: bead-execution-loop
       description: Execute one admitted bead through RED/GREEN implementation, opposite-family repair review, focused Means of Compliance, and one bead commit without owning a worktree or Session Close.
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-execution-loop/SKILL.md
@@ -1292,7 +1273,7 @@ library:
           plane: dev
       version: 0.1.0
     - name: context-discovery
-      description: 'use when: a reviewer, planner, or ad-hoc session needs the bounded repository/ADR context bead-implementation-loop uses for gate admission, without opening a Bead. NOT for: loop admission, ADR selectors, or writing loop state. boundary: read-only, on-demand route to the shared context provider.'
+      description: 'use when: a reviewer, planner, or ad-hoc session needs the bounded repository/ADR context Repository Delivery uses for gate admission, without opening a Bead. NOT for: loop admission, ADR selectors, or writing loop state. boundary: read-only, on-demand route to the shared context provider.'
       source: https://github.com/cognovis/library-core/blob/main/skills/context-discovery/SKILL.md
       tags:
         - beads
@@ -1603,10 +1584,10 @@ library:
           inventory: convention-scan
           plane: dev
     - name: intake
-      description: Route raw transcripts, lists, bug reports, or goal-scale requests into reviewed beads, ask only for decision-bearing boundary choices, and hand ready execution requests to the single-bead implementation entry path. Use when turning notes into beads, filing work, or starting intake.
+      description: Route raw transcripts, lists, bug reports, or goal-scale requests into reviewed beads, ask only for decision-bearing boundary choices, and hand ready execution requests to the Repository Delivery entry path. Use when turning notes into beads, filing work, or starting intake.
       source: https://github.com/cognovis/library-core/blob/main/skills/intake/SKILL.md
       requires:
-        - skill:bead-implementation-loop
+        - skill:executive-pack
         - skill:bug-triage
         - standard:english-only
       tags:
@@ -2249,63 +2230,11 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: bead-loop-implementer
-      description: Deliver exactly one Bead in exactly one worktree through the shared Bead Execution Loop and exactly one Session Close.
-      source: https://github.com/cognovis/library-core/blob/main/agents/bead-loop-implementer.md
-      requires:
-        - agent:plan-reviewer
-        - agent:doc-changelog-updater
-        - agent:bead-depth-reviewer
-        - agent:bead-boundary-reviewer
-        - agent:bead-review-adjudicator
-        - skill:bead-execution-loop
-        - skill:cognovis-beads
-        - skill:session-close
-        - standard:executive-pack
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: bead-lead
-      description: Cheap dependency-only coordinator over explicit Beads, launching one Bead Loop Implementer per ready Bead without source or pack analysis.
-      source: https://github.com/cognovis/library-core/blob/main/agents/bead-lead.md
-      requires:
-        - agent:bead-loop-implementer
-        - skill:cognovis-beads
-        - skill:cmux-bead-dispatch
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
-    - name: bead-fleet-lead
-      description: Deprecated compatibility redirect to the cheap dependency-only Bead Lead.
-      source: https://github.com/cognovis/library-core/blob/main/agents/bead-fleet-lead.md
-      requires:
-        - agent:bead-lead
-      tags:
-        - origin:original
-        - tier:core
-        - workflow:beads
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: bead-orchestrator
-      description: 'Deprecated compatibility redirect to the installed bead implementation loop'
+      description: Deprecated compatibility redirect to Repository Delivery in solo mode
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-orchestrator.md
       requires:
-        - skill:bead-implementation-loop
+        - skill:executive-pack
         - agent:bead-spec-reviewer
       tags:
         - origin:original
@@ -2526,10 +2455,10 @@ library:
           inventory: convention-scan
           plane: dev
     - name: quick-fix
-      description: Deprecated compatibility redirect to the installed bead implementation loop in quick mode
+      description: Deprecated compatibility redirect to Repository Delivery Simple Solo
       source: https://github.com/cognovis/library-core/blob/main/agents/quick-fix.md
       requires:
-        - skill:bead-implementation-loop
+        - skill:executive-pack
       tags:
         - origin:original
         - tier:core
@@ -4285,9 +4214,6 @@ library:
           catalog: core
         - type: skill
           name: ob-cli
-          catalog: core
-        - type: skill
-          name: bead-implementation-loop
           catalog: core
         - type: skill
           name: executive-pack

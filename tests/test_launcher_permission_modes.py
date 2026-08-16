@@ -198,7 +198,7 @@ def test_implementer_modes_bypass_permissions_and_keep_the_worktree(
     assert _flag_value(argv, "--worktree") == expected_worktree
     assert _flag_value(argv, "--agent") is None
     prompt = argv[-1]
-    expected_skill = "executive-pack" if args[0] == "-ep" else "bead-implementation-loop"
+    expected_skill = "executive-pack"
     assert expected_skill in prompt
     assert prompt_term in prompt
     assert "canonical Session Close" in prompt
