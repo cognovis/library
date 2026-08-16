@@ -4694,6 +4694,82 @@ def _marketplace_entry(catalog: dict, name: str) -> dict:
     raise LibraryError(f"No registered marketplace named '{name}'.")
 
 
+def _marketplace_transport(entry: dict) -> dict:
+    """Transport keyword arguments for one marketplace entry.
+
+    The CLI owns the connection and therefore the credential: for a token-scoped
+    content provider the endpoint URL *is* the subscriber credential, and it is
+    resolved here from the MCP registration the operator already maintains for
+    their harnesses. `wiring.build_provider` deliberately does **not** do this.
+    A library call or a unit test that constructed a provider would otherwise
+    pick up the operator's live configuration by default, which is exactly how a
+    credential ends up somewhere nobody meant to put it.
+
+    Returns:
+        `{"mcp_transport": ...}` when an endpoint is registered, and `{}`
+        otherwise. An absent registration is not an error here: the provider
+        answers it with a typed `unavailable` availability naming the credential
+        reference, which is the refusal the operator needs to see.
+    """
+    if str(entry.get("provider_kind") or "").strip() != "mcp-content":
+        return {}
+    from lib.providers.mcp_http import StreamableHttpMcpTransport, registered_endpoint
+    from lib.providers.wiring import mcp_server_name
+
+    # One derivation, shared with `build_provider`. Deriving it twice let the
+    # transport be resolved under a different key than the identity it was
+    # attached to.
+    server_name = mcp_server_name(entry)
+    if not server_name:
+        return {}
+    endpoint = registered_endpoint(server_name)
+    if not endpoint:
+        return {}
+    source = str(entry.get("source") or "").strip()
+    return {
+        "mcp_transport": StreamableHttpMcpTransport(
+            endpoint, identity=source or f"mcp:{server_name}"
+        )
+    }
+
+
+#: The harness MCP registrations `registered_endpoint` consults, as display
+#: paths for a diagnostic. Paths only: the value at each one is a credential.
+_MCP_REGISTRATION_PATHS = (
+    "~/.codex/config.toml",
+    "~/.cursor/mcp.json",
+    "~/.claude.json",
+)
+
+
+def _mcp_registration_hint(entry: dict) -> str:
+    """What to check when a token-scoped provider has no configured transport.
+
+    The remedy, not the architecture. An earlier version of this hint explained
+    that resolving a credential reference was "deliberately not implemented
+    here" -- true when it was written, false since `CL-r8rr` implemented it, and
+    a hint that describes the code's previous state sends an operator to look
+    for a missing feature instead of at their own registration.
+
+    The likeliest real cause is the mundane one: the server is registered under a
+    different key than the marketplace entry names. So the hint names the key
+    that was looked for and the files that were consulted, and never a value
+    from any of them.
+    """
+    from lib.providers.wiring import mcp_server_name
+
+    server_name = mcp_server_name(entry) or str(entry.get("name") or "")
+    locations = "\n".join(f"    {path}" for path in _MCP_REGISTRATION_PATHS)
+    return (
+        f"No endpoint is registered for MCP server '{server_name}'. The CLI "
+        "resolves a token-scoped content provider's endpoint from the harness "
+        "MCP registrations you already maintain, and consulted:\n"
+        f"{locations}\n"
+        f"Check that one of them registers a server keyed exactly '{server_name}' "
+        "with a `url`. No other source is substituted for this provider."
+    )
+
+
 def cmd_marketplace_list(args: argparse.Namespace, catalog: dict) -> int:
     from lib.catalog import get_marketplaces
 
@@ -4722,12 +4798,77 @@ def cmd_marketplace_list(args: argparse.Namespace, catalog: dict) -> int:
     return EXIT_SUCCESS
 
 
+def _report_unavailable_provider(
+    args: argparse.Namespace,
+    entry: dict,
+    exc: Exception,
+    transport: dict,
+) -> int:
+    """Render a provider's own availability observation instead of a stack trace.
+
+    `normalize_inventory` asks `availability()` and then calls `enumerate`, and
+    that second call is not protected: an unreachable endpoint therefore aborted
+    the whole command with a transport error line, even though the provider had
+    just produced the typed `unavailable` observation the ADR promises an
+    operator will see. This asks the provider for that observation and prints it.
+
+    What it deliberately does not do is make `enumerate` return an empty listing.
+    An empty inventory is indistinguishable from a provider that genuinely serves
+    nothing, and one reconciliation later every installed item from this source
+    would look upstream-vanished.
+
+    Returns:
+        A non-zero exit code. The observation is a refusal, not a result: an
+        operator scripting against this command must not read "the provider is
+        unreachable" as "the provider has no items".
+    """
+    from lib.providers.mcp_http import redact_endpoints
+    from lib.providers.wiring import build_provider
+
+    reason = redact_endpoints(str(exc))
+    state = "unavailable"
+    try:
+        provider = build_provider(entry, **transport)
+        identity = provider.identity()
+        observed = provider.availability()
+        state = observed.state
+        reason = redact_endpoints(observed.reason or reason)
+    except Exception:  # noqa: BLE001 - the refusal is already the report
+        # The provider could not even be built, so the exception that brought us
+        # here is the whole of what is known. Naming the entry keeps the message
+        # actionable without inventing an identity.
+        identity = str(entry.get("source") or entry.get("name") or "the provider")
+
+    payload = {
+        "provider_identity": identity,
+        "availability": {"state": state, "reason": reason},
+        "items": [],
+    }
+    if args.json:
+        print_json(error_result(json.dumps(payload), 3))
+    else:
+        print(f"{identity} ({state})", file=sys.stderr)
+        print(f"  {reason}", file=sys.stderr)
+        print(
+            "  No inventory was produced. This is a refusal, not an empty "
+            "listing, and no other source is substituted.",
+            file=sys.stderr,
+        )
+    return 3
+
+
 def cmd_marketplace_inventory(args: argparse.Namespace, catalog: dict) -> int:
     from lib.providers.admission import AdmissionContext, evaluate_inventory
+    from lib.providers.mcp_content import ProviderUnauthenticated
+    from lib.providers.mcp_http import McpTransportError
     from lib.providers.wiring import marketplace_inventory
 
     entry = _marketplace_entry(catalog, args.name)
-    _, result = marketplace_inventory(entry, selector=args.selector)
+    transport = _marketplace_transport(entry)
+    try:
+        _, result = marketplace_inventory(entry, selector=args.selector, **transport)
+    except (ProviderUnauthenticated, McpTransportError) as exc:
+        return _report_unavailable_provider(args, entry, exc, transport)
     context = AdmissionContext(
         admitted_maturities=tuple(args.admitted_maturities)
         if args.admitted_maturities
@@ -4744,6 +4885,10 @@ def cmd_marketplace_inventory(args: argparse.Namespace, catalog: dict) -> int:
             "collection": list(item.collection_membership),
             "revision": item.upstream_revision,
             "maturity": item.classification.get("maturity"),
+            # Recorded by providers that publish an audience axis. `null` means
+            # the provider has no such axis at all, which is a different fact
+            # from an item whose collection has one and did not publish it.
+            "audience_access": item.classification.get("audience_access"),
             "admission_state": item.admission_state,
             "block_reasons": [reason.describe() for reason in item.block_reasons],
             "rights": item.rights.to_dict(),
@@ -4761,11 +4906,20 @@ def cmd_marketplace_inventory(args: argparse.Namespace, catalog: dict) -> int:
         print_json(success(payload))
         return EXIT_SUCCESS
     print(f"{result.provider_identity} ({result.provider_availability.state})")
+    if result.provider_availability.reason:
+        # A `degraded` provider serves a listing that may be truncated. Printing
+        # the items without the reason would show a partial inventory in exactly
+        # the shape of a complete one.
+        print(f"  {result.provider_availability.reason}")
     for row in rows:
         marker = {"installable": "+", "discoverable": "-", "blocked": "x"}[
             row["admission_state"]
         ]
-        print(f"  {marker} {row['library_type']}:{row['library_name']} [{row['maturity']}]")
+        audience = f" <{row['audience_access']}>" if row["audience_access"] else ""
+        print(
+            f"  {marker} {row['library_type']}:{row['library_name']} "
+            f"[{row['maturity']}]{audience}"
+        )
         for reason in row["block_reasons"]:
             print(f"      {reason}")
     return EXIT_SUCCESS
@@ -4780,7 +4934,7 @@ def cmd_marketplace_install(
     from lib.providers.wiring import install_marketplace_item, marketplace_inventory
 
     entry = _marketplace_entry(catalog, args.name)
-    provider, result = marketplace_inventory(entry)
+    provider, result = marketplace_inventory(entry, **_marketplace_transport(entry))
     identity = f"{provider.identity()}#{args.upstream_id}"
     try:
         item = result.inventory.resolve(identity)
@@ -5115,7 +5269,9 @@ def cmd_marketplace_update(
     from lib.providers.wiring import marketplace_inventory
 
     entry = _marketplace_entry(catalog, args.name)
-    provider, result = marketplace_inventory(entry, selector=args.selector)
+    provider, result = marketplace_inventory(
+        entry, selector=args.selector, **_marketplace_transport(entry)
+    )
     setattr(args, "_repo_root", repo_root)
     items = _update_candidates(provider, result, args)
 
@@ -5219,7 +5375,7 @@ def cmd_marketplace_update_approve(
             "an update needs its provider, because raising a pin requires a current "
             "observation of the source that stands behind the bytes."
         )
-    provider, result = marketplace_inventory(entry)
+    provider, result = marketplace_inventory(entry, **_marketplace_transport(entry))
     items = {item.qualified_identity(): item for item in result.inventory}
 
     shown: list[str] = []
@@ -8420,20 +8576,19 @@ def main(argv: list[str] | None = None) -> int:
             # them names what was refused and why, so the message is the report.
             message = f"{type(exc).__name__}: {exc}"
             if type(exc).__name__ == "ProviderUnauthenticated":
-                # Stated rather than left as a puzzle: this CLI has no way to
-                # supply a token-scoped provider's client, because resolving a
-                # credential reference into a session is credential handling and
-                # is held for a human security review. The provider is reachable
-                # only through a caller that owns the connection.
-                message = (
-                    f"{message}\n"
-                    "This command cannot supply a client for a token-scoped "
-                    "provider: resolving a credential reference into a session is "
-                    "credential handling, which is deliberately not implemented "
-                    "here. Registration, inventory schema, rights, and receipts "
-                    "for this provider all work; only the transport is missing, "
-                    "and no other source is substituted for it."
-                )
+                # The remedy, derived from the entry this verb was operating on.
+                # A hint that cannot find its own entry says nothing rather than
+                # guessing, because a wrong registration key is exactly the thing
+                # this hint exists to help the operator spot.
+                name = getattr(args, "name", None)
+                if name:
+                    try:
+                        message = (
+                            f"{message}\n"
+                            f"{_mcp_registration_hint(_marketplace_entry(catalog, name))}"
+                        )
+                    except LibraryError:
+                        pass
             if use_json:
                 print_json(error_result(message, EXIT_FAILURE))
             else:

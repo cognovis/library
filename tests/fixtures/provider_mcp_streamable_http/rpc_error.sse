@@ -1,0 +1,3 @@
+event: message
+data: {"error":{"code":-32602,"message":"Unknown tool: list_everything"},"jsonrpc":"2.0","id":7}
+
