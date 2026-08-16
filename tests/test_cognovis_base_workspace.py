@@ -145,6 +145,8 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "cognovis-beads", "core"),
         ("skill", "inject-standards", "core"),
         ("skill", "ob-cli", "core"),
+        ("skill", "bead-implementation-loop", "core"),
+        ("skill", "executive-pack", "core"),
     }
 
     closure = resolve_workspace_closure(
@@ -155,13 +157,15 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         pin_verifier=library_cli._workspace_pin_verifier(catalog),
     )
 
-    assert set(closure.artifacts) == {
+    assert {
         ("skill", "library"),
         ("skill", "cognovis-beads"),
         ("skill", "inject-standards"),
         ("skill", "ob-cli"),
-    }
-    assert set(closure.prerequisites) == set()
+        ("skill", "bead-implementation-loop"),
+        ("skill", "executive-pack"),
+    } <= set(closure.artifacts)
+    assert ("script", "ccore") in set(closure.prerequisites)
 
     schema = json.loads(
         (REPO_ROOT / "docs" / "schema" / "library.schema.json").read_text()

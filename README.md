@@ -173,6 +173,44 @@ Install them with:
 bash install.sh --fresh
 ```
 
+`bash install.sh` upgrades the global control plane: the `library` CLI and the
+`cld` and `cdx` launchers. It does not install global desired-state Skills and
+must not overwrite `~/.agents/skills`. After that control-plane upgrade,
+`library init` or Workspace sync installs project-local Skills. For an existing
+project using the default Workspace, reconcile them with:
+
+```bash
+library workspace sync --all --scope project
+```
+
+The default `cognovis-base` Workspace supplies two repository-delivery modes:
+
+```bash
+cld -sb CL-123 -- "Focus on the API boundary."
+cdx --solo-bead CL-123 -- "Focus on the API boundary."
+cld -b CL-123
+cdx -b CL-123
+cld -ep CL-101,CL-102
+cdx --executive-pack CL-101,CL-102
+```
+
+`-sb` and `--solo-bead` select canonical Solo Bead delivery. The legacy `-b`
+form remains a compatibility alias. `-ep` and `--executive-pack` select one
+ordered, same-repository Executive Pack. In either mode, `--` separates launcher
+options from an optional command prompt appended for the delivery session.
+
+The default roles preserve implementation and review family separation:
+
+| Launcher | Implementation | Reviewer 1 | Reviewer 2 |
+|----------|----------------|------------|------------|
+| `cdx` | GPT-5.6-sol with medium reasoning | Opus reviewer | Kimi; a fresh GPT-5.6 reviewer with high reasoning is the fallback |
+| `cld` | Opus implementation | GPT-5.6-sol reviewer with high reasoning | Kimi; a fresh Opus reviewer is the fallback |
+
+Explicit caller role instructions may override these defaults while preserving
+the launcher's required role separation. Topic coordination is optional and sits
+above repository-scoped Executive Packs for human-approved cross-repository work;
+it is not part of the default Workspace roots.
+
 Launcher architecture and Beads routing are documented in
 [Architecture](docs/ARCHITECTURE.md).
 

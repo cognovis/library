@@ -8,12 +8,17 @@ catalogs:
     identity: https://github.com/cognovis/library
     pin:
       kind: commit
-      value: 00c43f828ca3cce7d29e949f44bced59c7e5e121
+      value: 5797bbc3a256c517931ca6a77b93741654a1637d
   - alias: core
     identity: https://github.com/cognovis/library-core
     pin:
       kind: commit
-      value: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
+      value: 4141cedda55e0776c899ec5f140b4ac71a10b100
+  - alias: ccore
+    identity: https://github.com/cognovis/ccore
+    pin:
+      kind: commit
+      value: ee0c185ce6dd9ddafbb23e72f858fe6eea3a37b1
 roots:
   - type: skill
     name: library
@@ -26,4 +31,10 @@ roots:
     catalog: core
   - type: skill
     name: ob-cli
+    catalog: core
+  - type: skill
+    name: bead-implementation-loop
+    catalog: core
+  - type: skill
+    name: executive-pack
     catalog: core
