@@ -1097,12 +1097,6 @@ library:
         - standard:model-routing
         - standard:english-only
         - standard:no-emoji
-      scripts:
-        - path: skills/bead-execution-loop/scripts/execution_contract.py
-          role: entrypoint
-          entrypoint: true
-          language: python
-          output_contract: json-envelope
       tags:
         - origin:original
         - tier:core
@@ -4286,7 +4280,7 @@ library:
           identity: https://github.com/cognovis/library-core
           pin:
             kind: commit
-            value: 4141cedda55e0776c899ec5f140b4ac71a10b100
+            value: b7a54ca0da8bc0bc7acc5bacadd225ca1f1402bb
         - alias: ccore
           identity: https://github.com/cognovis/ccore
           pin:

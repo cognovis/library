@@ -65,7 +65,7 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
             "identity": "https://github.com/cognovis/library-core",
             "pin": {
                 "kind": "commit",
-                "value": "4141cedda55e0776c899ec5f140b4ac71a10b100",
+                "value": "b7a54ca0da8bc0bc7acc5bacadd225ca1f1402bb",
             },
         },
         {
