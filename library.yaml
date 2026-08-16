@@ -988,7 +988,7 @@ library:
         - tier:project
         - domain:fhir
     - name: acpx-dispatch
-      description: 'use when: resolving or invoking ACPX for cross-model implementation, review, or consultation. NOT for: provider/model preference decisions, review policy, or raw provider CLI execution. boundary: owns the ACPX transport and final-answer extraction; model-routing owns route selection and the calling skill owns review policy.'
+      description: Use for agent-shell ACPX execution and session-status inspection through the installed `ccore acpx` command. Run mode owns session preparation, output extraction, telemetry, and approve-all worktree confinement; status mode is read-only. Never use this skill for model/provider routing, prompt composition, review policy, verdict validation, or adapter updates.
       source: https://github.com/cognovis/library-core/blob/main/skills/acpx-dispatch/SKILL.md
       requires:
         - agent:judge-default
@@ -996,12 +996,6 @@ library:
         - standard:judge-layer
         - standard:model-routing
         - standard:no-emoji
-      scripts:
-        - path: skills/acpx-dispatch/scripts/acpx-dispatch.py
-          role: entrypoint
-          entrypoint: true
-          language: python
-          output_contract: json-envelope
       tags:
         - origin:original
         - tier:core
