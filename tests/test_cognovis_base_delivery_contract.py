@@ -42,12 +42,10 @@ EXPECTED_ARTIFACTS = {
     ("standard", "workflow"),
 }
 
-# ccore is a uv-tool binary on PATH and stays the only intrinsically global
-# prerequisite; every former default_scope:global entry is a normal
-# project-local closure member since the CL-9yok recut.
-EXPECTED_GLOBAL_PREREQUISITES = {
-    ("script", "ccore"),
-}
+# ccore is a PATH binary declared through runtime_requirements, exactly like
+# bd and git; since the CL-9yok recut the delivery closure carries no global
+# prerequisite at all.
+EXPECTED_GLOBAL_PREREQUISITES = set()
 
 
 def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -> None:
@@ -69,14 +67,6 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
             "pin": {
                 "kind": "commit",
                 "value": "922d83965d92836b4eae4ef6aea0ffe7c08f4b79",
-            },
-        },
-        {
-            "alias": "ccore",
-            "identity": "https://github.com/cognovis/ccore",
-            "pin": {
-                "kind": "commit",
-                "value": "ee0c185ce6dd9ddafbb23e72f858fe6eea3a37b1",
             },
         },
     ]
