@@ -11,6 +11,14 @@
 #   dangerous opt-in → --dangerous-full-access (plain),
 #                      --bead-dangerous-full-auto (bead modes)
 #
+# Bead modes extend workspace-write with writable_roots and network access
+# because the sandbox root is the worktree, while an autonomous session must
+# still write outside it: the uv cache (every helper runs through `uv run`),
+# the worktree's real gitdir under the canonical repository, and the resolved
+# Beads workspace. Network access is what lets bd reach the local Dolt server.
+# approval_policy="never" forbids escalation, so a missing grant is a hard
+# failure instead of a prompt.
+#
 # Wrapper flags (not passed to codex):
 #   --dangerous-full-access → Plain mode only: full bypass of approvals and sandbox
 #   --no-full-auto  → Deprecated no-op; the default plain launch already sandboxes
@@ -241,7 +249,7 @@ run_codex_exec() {
     local prompt="$1"
     local worktree_dir="${2:-$PWD}"
     local prompt_boundary="${3:-false}"
-    select_bead_codex_permission_args
+    select_bead_codex_permission_args "$worktree_dir"
 
     local -a prompt_args=("${prompt}")
     if [[ "$prompt_boundary" == "true" ]]; then
@@ -267,7 +275,7 @@ run_codex_tui() {
     local prompt="$1"
     local worktree_dir="$2"
     local prompt_boundary="${3:-false}"
-    select_bead_codex_permission_args
+    select_bead_codex_permission_args "$worktree_dir"
 
     if [[ "$prompt_boundary" == "true" ]]; then
         exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" -- "${prompt}"
@@ -275,7 +283,75 @@ run_codex_tui() {
     exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
 }
 
+# Roots a bead session must write to even though they sit outside the Codex
+# workspace root: the uv cache (every helper runs through `uv run`), the
+# worktree's real gitdir under the canonical repository (index lock, refs,
+# commits), and the resolved Beads workspace (export state, run receipts).
+# `approval_policy="never"` forbids escalation, so a missing root is a hard
+# failure rather than a prompt.
+bead_workspace_writable_roots_arg() {
+    local worktree_dir="$1"
+    local -a roots=()
+    local cache_home="${XDG_CACHE_HOME:-}"
+
+    if [[ -z "$cache_home" && -n "${HOME:-}" ]]; then
+        cache_home="${HOME}/.cache"
+    fi
+    if [[ -n "$cache_home" ]]; then
+        roots+=("${cache_home}/uv")
+    fi
+
+    if [[ -n "$worktree_dir" ]]; then
+        local common_dir
+        if common_dir=$(resolve_worktree_git_common_dir "$worktree_dir"); then
+            roots+=("$common_dir")
+        fi
+        # Resolved from the worktree, so this is the workspace the session's own
+        # bd will use, redirect included.
+        local beads_workspace
+        if beads_workspace=$(resolve_canonical_beads_workspace "$worktree_dir"); then
+            roots+=("$beads_workspace")
+        fi
+    fi
+
+    local json="["
+    local first=true
+    local root existing seen
+    local -a unique_roots=()
+    if (( ${#roots} > 0 )); then
+        for root in "${roots[@]}"; do
+            seen=false
+            if (( ${#unique_roots} > 0 )); then
+                for existing in "${unique_roots[@]}"; do
+                    if [[ "$existing" == "$root" ]]; then
+                        seen=true
+                        break
+                    fi
+                done
+            fi
+            if ! ${seen}; then
+                unique_roots+=("$root")
+            fi
+        done
+    fi
+    if (( ${#unique_roots} > 0 )); then
+        for root in "${unique_roots[@]}"; do
+            if ${first}; then
+                first=false
+            else
+                json+=","
+            fi
+            json+="\"${root}\""
+        done
+    fi
+    json+="]"
+
+    printf '%s\n' "sandbox_workspace_write.writable_roots=${json}"
+}
+
 select_bead_codex_permission_args() {
+    local worktree_dir="${1:-}"
+
     if [[ -n "$bead_review_id" ]]; then
         bead_codex_permission_args=("--sandbox" "read-only")
         return
@@ -294,6 +370,8 @@ select_bead_codex_permission_args() {
     bead_codex_permission_args=(
         "--sandbox" "workspace-write"
         "-c" "approval_policy=\"never\""
+        "-c" "$(bead_workspace_writable_roots_arg "$worktree_dir")"
+        "-c" "sandbox_workspace_write.network_access=true"
         "-c" "mcp_servers.beads.required=true"
     )
 }
@@ -358,6 +436,57 @@ bootstrap_worktree_overlays() {
         "${overlay_args[@]}" >&2 || true
 }
 
+# Resolve the git directory the worktree actually writes to. An external
+# worktree keeps its gitdir under the canonical repository, outside the Codex
+# workspace root, so the caller needs the real path to grant write access.
+resolve_worktree_git_common_dir() {
+    local worktree_dir="$1"
+    local common_dir=""
+
+    test -n "${GIT_BIN}" || return 1
+    common_dir=$("${GIT_BIN}" -C "$worktree_dir" rev-parse --git-common-dir 2>/dev/null) || common_dir=""
+    if [[ -z "$common_dir" ]] && test -f "${worktree_dir}/.git"; then
+        common_dir=$(sed -n 's/^gitdir: *//p' "${worktree_dir}/.git" 2>/dev/null | head -1)
+    fi
+    [[ -n "$common_dir" ]] || return 1
+    if [[ "$common_dir" != /* ]]; then
+        common_dir="${worktree_dir}/${common_dir}"
+    fi
+    printf '%s\n' "${common_dir:A}"
+}
+
+# Ask bd itself which workspace the checkout belongs to. Deriving
+# "$repo_root/.beads" instead is wrong whenever that directory carries no
+# database and no metadata.json (a worktree holding only `.beads/runs`, for
+# example): bd ignores such a redirect and falls back to ~/.beads, which is the
+# very failure this redirect exists to prevent.
+resolve_canonical_beads_workspace() {
+    local repo_root="$1"
+    local where_json=""
+
+    test -n "${BD_BIN}" || return 1
+    command -v uv >/dev/null 2>&1 || return 1
+    where_json=$("${BD_BIN}" -C "$repo_root" where --json 2>/dev/null) || return 1
+
+    printf '%s' "$where_json" | uv run python -c '
+import json
+import os
+import sys
+
+payload = json.load(sys.stdin)
+path = payload.get("path") or ""
+database = payload.get("database_path") or ""
+if not path:
+    raise SystemExit(1)
+if not os.path.isdir(path):
+    raise SystemExit(1)
+metadata = os.path.join(path, "metadata.json")
+if not (os.path.isfile(metadata) or (database and os.path.exists(database))):
+    raise SystemExit(1)
+print(path)
+' 2>/dev/null
+}
+
 # Keep the launcher-written redirect out of `git status`. The canonical checkout
 # may already ignore `.beads/`, and upstream beads (GH#814) requires the redirect
 # to stay untracked, so append the pattern to the shared exclude file only when
@@ -371,42 +500,62 @@ ensure_beads_redirect_excluded() {
     fi
 
     local common_dir
-    common_dir=$("${GIT_BIN}" -C "$worktree_dir" rev-parse --git-common-dir 2>/dev/null) || return 0
-    [[ -n "$common_dir" ]] || return 0
-    if [[ "$common_dir" != /* ]]; then
-        common_dir="${worktree_dir}/${common_dir}"
-    fi
+    common_dir=$(resolve_worktree_git_common_dir "$worktree_dir") || return 0
     test -d "$common_dir" || return 0
 
     local exclude_file="${common_dir}/info/exclude"
     mkdir -p "${common_dir}/info" || return 0
-    if [[ ! -f "$exclude_file" ]] || ! grep -qxF "$redirect_path" "$exclude_file"; then
+    if ! test -f "$exclude_file" || ! grep -qxF "$redirect_path" "$exclude_file"; then
         printf "\n# cdx bead worktree beads redirect\n%s\n" "$redirect_path" >> "$exclude_file"
     fi
 }
 
 # An external worktree lies outside the canonical checkout, so bd's
-# parent-directory discovery walks past the repository and falls back to
-# ~/.beads. bd's native redirect file points it back at the canonical workspace.
-# Worktrees below the repo root inherit discovery and are left untouched.
+# parent-directory walk reaches the ~/.beads fallback before it ever consults
+# the repository. bd's native redirect file points it back at the canonical
+# workspace. Worktrees below the repo root inherit discovery and are left
+# untouched, and a symlinked or tracked redirect is never rewritten: following
+# one would mutate a different repository's database.
 # Never fatal, and never on stdout: the caller's stdout is the worktree path.
 ensure_worktree_beads_identity() {
     local repo_root="${1:A}"
     local worktree_dir="${2:A}"
 
-    local canonical_beads="${repo_root}/.beads"
-    test -d "$canonical_beads" || return 0
+    test -d "${repo_root}/.beads" || return 0
     test -d "$worktree_dir" || return 0
+
+    local canonical_beads
+    canonical_beads=$(resolve_canonical_beads_workspace "$repo_root") || {
+        echo "WARNING: no usable Beads workspace resolved for ${repo_root}; skipping the worktree redirect." >&2
+        return 0
+    }
     if [[ "$worktree_dir" == "$repo_root" || "$worktree_dir" == "$repo_root"/* ]]; then
+        return 0
+    fi
+    if [[ "$canonical_beads" == "${HOME:-}/.beads" ]]; then
         return 0
     fi
 
     local worktree_beads="${worktree_dir}/.beads"
     local redirect_file="${worktree_beads}/redirect"
+
+    if test -L "$worktree_beads"; then
+        echo "WARNING: ${worktree_beads} is a symlink; refusing to write a Beads redirect through it." >&2
+        return 0
+    fi
+    if test -L "$redirect_file"; then
+        echo "WARNING: ${redirect_file} is a symlink; refusing to overwrite another repository's redirect." >&2
+        return 0
+    fi
+    if "${GIT_BIN}" -C "$worktree_dir" ls-files --error-unmatch ".beads/redirect" >/dev/null 2>&1; then
+        echo "WARNING: .beads/redirect is tracked in ${worktree_dir}; leaving it unchanged." >&2
+        return 0
+    fi
+
     mkdir -p "$worktree_beads" || return 0
     chmod 700 "$worktree_beads" 2>/dev/null || true
 
-    if [[ ! -f "$redirect_file" ]] || [[ "$(<"$redirect_file")" != "$canonical_beads" ]]; then
+    if ! test -f "$redirect_file" || [[ "$(<"$redirect_file")" != "$canonical_beads" ]]; then
         printf '%s\n' "$canonical_beads" > "$redirect_file" || return 0
     fi
 
@@ -654,6 +803,39 @@ fi
 if [[ -n "$coordinator_surface" && ! "$coordinator_surface" =~ ^surface:[0-9]+$ ]]; then
     echo "ERROR: invalid coordinator surface '$coordinator_surface' (expected surface:<n>)" >&2
     exit 2
+fi
+
+# Bead modes place their permission args before the caller's, so a native
+# escalation passed through here would be the later argument and win.
+reject_native_permission_bypass() {
+    local index=1
+    local arg next_arg
+    while (( index <= ${#codex_args[@]} )); do
+        arg="${codex_args[index]}"
+        next_arg=""
+        if (( index < ${#codex_args[@]} )); then
+            next_arg="${codex_args[index + 1]}"
+        fi
+        case "$arg" in
+            --dangerously-bypass-approvals-and-sandbox|--yolo|--sandbox=danger-full-access|-s=danger-full-access)
+                echo "ERROR: $arg is not accepted in Bead modes; it would override the launcher's scoped permissions." >&2
+                echo "Use --bead-dangerous-full-auto to select a full bypass explicitly." >&2
+                exit 2
+                ;;
+            --sandbox|-s)
+                if [[ "$next_arg" == "danger-full-access" ]]; then
+                    echo "ERROR: $arg $next_arg is not accepted in Bead modes; it would override the launcher's scoped permissions." >&2
+                    echo "Use --bead-dangerous-full-auto to select a full bypass explicitly." >&2
+                    exit 2
+                fi
+                ;;
+        esac
+        (( index++ ))
+    done
+}
+
+if [[ -n "$solo_bead_id$executive_pack_ids$bead_quick_id$bead_review_id" ]]; then
+    reject_native_permission_bypass
 fi
 
 # ── Shared bead implementation loop ─────────────────────────────

@@ -60,7 +60,18 @@
   `--sandbox read-only`, and plain `cdx` keeps Codex's own approvals and sandbox.
   Full bypass now requires `--bead-dangerous-full-auto` (bead modes) or the new
   `--dangerous-full-access` (plain mode), both of which print a stderr warning;
-  `--no-full-auto` remains accepted as a deprecated no-op.
+  `--no-full-auto` remains accepted as a deprecated no-op. Bead modes stay
+  autonomous inside that sandbox through `sandbox_workspace_write.writable_roots`
+  for the uv cache, the worktree's real gitdir, and the resolved Beads workspace,
+  plus `sandbox_workspace_write.network_access=true` for the local Dolt server.
+  The redirect target is the workspace `bd where` resolves rather than a guessed
+  `<repo>/.beads`, and the launcher refuses to write through a symlinked
+  `.beads` or `redirect`, over a tracked redirect, or toward a target with no
+  database and no `metadata.json`. Bead, delivery, quick, and review modes now
+  reject a native `--dangerously-bypass-approvals-and-sandbox`, `--yolo`, or
+  `--sandbox danger-full-access` in the forwarded Codex arguments, which would
+  otherwise override the wrapper's scoped permissions; plain mode still forwards
+  them.
 
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent

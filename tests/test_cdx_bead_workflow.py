@@ -22,7 +22,9 @@ _SAFE_BEAD_CODEX_ARGS = [
     "--sandbox",
     "workspace-write",
     'approval_policy="never"',
+    "sandbox_workspace_write.network_access=true",
 ]
+_WRITABLE_ROOTS_PREFIX = "sandbox_workspace_write.writable_roots="
 _READONLY_BEAD_CODEX_ARGS = ["--sandbox", "read-only"]
 _SYSTEM_GIT = shutil.which("git")
 _SYSTEM_BD = shutil.which("bd")
@@ -109,6 +111,20 @@ def _write_launcher_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
         "args = sys.argv[1:]\n"
         "with pathlib.Path(os.environ['BD_ARGV_LOG']).open('a', encoding='utf-8') as f:\n"
         "    f.write(json.dumps(args) + '\\n')\n"
+        "if args[:1] == ['-C'] and len(args) > 1:\n"
+        "    args = args[2:]\n"
+        "if args[:1] == ['where']:\n"
+        "    if os.environ.get('BD_WHERE_FAIL'):\n"
+        "        raise SystemExit(1)\n"
+        "    workspace = os.environ.get(\n"
+        "        'BD_WHERE_PATH', os.environ['GIT_REPO_ROOT'] + '/.beads'\n"
+        "    )\n"
+        "    print(json.dumps({\n"
+        "        'path': workspace,\n"
+        "        'database_path': workspace + '/dolt',\n"
+        "        'schema_version': 1,\n"
+        "    }))\n"
+        "    raise SystemExit(0)\n"
         "if len(args) >= 2 and args[0] == 'show':\n"
         "    bead_id = args[1]\n"
         "    if '--children' in args:\n"
@@ -237,6 +253,8 @@ def _write_launcher_git_mock(tmp_path: Path) -> tuple[Path, Path, Path]:
         "    raise SystemExit(0)\n"
         "if args[:1] == ['check-ignore']:\n"
         "    raise SystemExit(int(os.environ.get('GIT_CHECK_IGNORE_EXIT', '1')))\n"
+        "if args[:2] == ['ls-files', '--error-unmatch']:\n"
+        "    raise SystemExit(int(os.environ.get('GIT_LS_FILES_EXIT', '1')))\n"
         "if args[:3] == ['worktree', 'list', '--porcelain']:\n"
         "    for entry in os.environ.get('GIT_REGISTERED_WORKTREES', '').split(os.pathsep):\n"
         "        if entry:\n"
@@ -287,9 +305,9 @@ def _run_cdx_launcher(
     if with_uv:
         _write_launcher_uv_mock(tmp_path)
     home = tmp_path / "home"
-    home.mkdir()
+    home.mkdir(exist_ok=True)
     stale_skill = home / ".agents" / "skills" / "bead-implementation-loop" / "SKILL.md"
-    stale_skill.parent.mkdir(parents=True)
+    stale_skill.parent.mkdir(parents=True, exist_ok=True)
     stale_skill.write_text("stale home projection\n", encoding="utf-8")
     authority_root = _write_core_authority(tmp_path)
     if with_bead_reviewer_skill:
@@ -312,6 +330,7 @@ def _run_cdx_launcher(
     env["GIT_REPO_ROOT"] = str(repo_root)
     env["BEADS_RUNTIME_DIR"] = str(runtime)
     env["CDX_WORKTREE_ROOT"] = str(tmp_path / "worktrees")
+    env["XDG_CACHE_HOME"] = str(tmp_path / "cache")
     env["CDX_COMPACT_CONTEXT_SCRIPT"] = str(compact_context_script)
     env["CLD_COMPACT_OUTPUT"] = "0"
     env["COGNOVIS_CORE_AUTHORITY_ROOT"] = str(authority_root)
@@ -597,15 +616,34 @@ def test_cdx_rejects_retired_implicit_multi_bead_modes(
     assert not called_file.exists()
 
 
-def _assert_safe_bead_permissions(argv: list[str]) -> None:
+def _config_values(argv: list[str]) -> list[str]:
+    return [argv[index + 1] for index, value in enumerate(argv[:-1]) if value == "-c"]
+
+
+def _writable_roots(argv: list[str]) -> list[str]:
+    entries = [
+        value
+        for value in _config_values(argv)
+        if value.startswith(_WRITABLE_ROOTS_PREFIX)
+    ]
+    assert len(entries) == 1, entries
+    return json.loads(entries[0][len(_WRITABLE_ROOTS_PREFIX) :])
+
+
+def _assert_safe_bead_permissions(
+    argv: list[str], *, expected_roots: list[str] | None = None
+) -> None:
     assert _DANGEROUS_CODEX_ARG not in argv
     sandbox_index = argv.index("--sandbox")
     assert argv[sandbox_index + 1] == "workspace-write"
-    config_values = [
-        argv[index + 1] for index, value in enumerate(argv[:-1]) if value == "-c"
-    ]
+    config_values = _config_values(argv)
     assert 'approval_policy="never"' in config_values
     assert "mcp_servers.beads.required=true" in config_values
+    assert "sandbox_workspace_write.network_access=true" in config_values
+    roots = _writable_roots(argv)
+    assert roots
+    for expected in expected_roots or []:
+        assert expected in roots, roots
 
 
 def _launcher_flag_value(argv: list[str], flag: str) -> str | None:
@@ -630,10 +668,11 @@ def _assert_dangerous_bead_permissions(argv: list[str]) -> None:
         assert safe_arg not in argv
     for readonly_arg in _READONLY_BEAD_CODEX_ARGS:
         assert readonly_arg not in argv
-    config_values = [
-        argv[index + 1] for index, value in enumerate(argv[:-1]) if value == "-c"
-    ]
+    config_values = _config_values(argv)
     assert "mcp_servers.beads.required=true" in config_values
+    assert not [
+        value for value in config_values if value.startswith(_WRITABLE_ROOTS_PREFIX)
+    ]
 
 
 def _write_runtime(
@@ -1581,6 +1620,56 @@ def test_cdx_delivery_modes_default_to_scoped_permissions(
     assert "WARNING" not in result.stderr
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-b", "CL-smoke"],
+        ["-b", "CL-smoke", "--exec"],
+        ["-bq", "CL-smoke"],
+        ["-sb", "CL-smoke", "--exec"],
+    ],
+)
+def test_cdx_bead_modes_grant_the_autonomy_writable_roots(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    """workspace-write must still reach the uv cache, the gitdir, and Beads.
+
+    The worktree's gitdir lives under the canonical repository, outside the
+    Codex workspace root, and `approval_policy="never"` forbids escalation, so
+    without these roots the session cannot run uv, commit, or use bd.
+    """
+    canonical_beads = _seed_canonical_beads_workspace(tmp_path)
+
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, args)
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    _assert_safe_bead_permissions(
+        argv,
+        expected_roots=[
+            str(tmp_path / "cache" / "uv"),
+            str(tmp_path / "repo" / ".git"),
+            str(canonical_beads),
+        ],
+    )
+
+
+def test_cdx_bead_modes_omit_an_unresolved_beads_writable_root(
+    tmp_path: Path,
+) -> None:
+    result, argv_file, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    roots = _writable_roots(argv)
+    assert str(tmp_path / "cache" / "uv") in roots
+    assert str(tmp_path / "repo" / ".beads") not in roots
+
+
 def test_cdx_bead_review_launches_read_only(tmp_path: Path) -> None:
     result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
         _run_cdx_launcher(tmp_path, ["-br", "CL-smoke"])
@@ -1690,6 +1779,57 @@ def test_cdx_bead_dangerous_flag_opts_into_full_bypass_with_warning(
     assert "--bead-dangerous-full-auto" not in argv
     assert "WARNING: --bead-dangerous-full-auto" in result.stderr
     assert "approvals and sandbox" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "mode_args",
+    [
+        ["-br", "CL-smoke"],
+        ["-b", "CL-smoke"],
+        ["-bq", "CL-smoke"],
+        ["-sb", "CL-smoke"],
+        ["-ep", "CL-first,CL-second"],
+    ],
+)
+@pytest.mark.parametrize(
+    "bypass_args",
+    [
+        [_DANGEROUS_CODEX_ARG],
+        ["--yolo"],
+        ["--sandbox", "danger-full-access"],
+        ["--sandbox=danger-full-access"],
+        ["-s", "danger-full-access"],
+    ],
+)
+def test_cdx_bead_modes_reject_native_permission_bypass_flags(
+    tmp_path: Path,
+    mode_args: list[str],
+    bypass_args: list[str],
+) -> None:
+    """A native bypass forwarded after the wrapper args would win and defeat it."""
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, [*mode_args, *bypass_args])
+    )
+
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "not accepted in Bead modes" in result.stderr
+    assert "--bead-dangerous-full-auto" in result.stderr
+
+
+def test_cdx_plain_mode_still_forwards_the_native_bypass_flag(tmp_path: Path) -> None:
+    """Plain mode is the caller invoking codex's own flag; leave it alone."""
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        [_DANGEROUS_CODEX_ARG, "hello"],
+        route_name="codex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(argv_file.read_text(encoding="utf-8")) == [
+        _DANGEROUS_CODEX_ARG,
+        "hello",
+    ]
 
 
 def test_cdx_review_rejects_dangerous_bypass(tmp_path: Path) -> None:
@@ -2108,8 +2248,7 @@ def test_cdx_bead_worktree_overlay_bootstrap_can_be_disabled(tmp_path: Path) -> 
 def _seed_canonical_beads_workspace(tmp_path: Path) -> Path:
     """Create the canonical checkout's Beads workspace directory."""
     canonical_beads = tmp_path / "repo" / ".beads"
-    canonical_beads.mkdir(parents=True, exist_ok=True)
-    return canonical_beads
+    return _write_beads_workspace(canonical_beads, "beads_fixture_repo")
 
 
 def test_cdx_bead_worktree_redirects_beads_to_the_canonical_workspace(
@@ -2181,6 +2320,162 @@ def test_cdx_bead_worktree_skips_the_exclude_when_the_redirect_is_ignored(
     exclude_file = tmp_path / "repo" / ".git" / "info" / "exclude"
     exclude_text = exclude_file.read_text(encoding="utf-8") if exclude_file.exists() else ""
     assert ".beads/redirect" not in exclude_text
+
+
+def test_cdx_bead_worktree_redirects_to_the_workspace_bd_resolves(
+    tmp_path: Path,
+) -> None:
+    """The redirect target is bd's resolved workspace, not a guessed repo path.
+
+    A checkout whose own `.beads` holds no database and no metadata.json would
+    otherwise receive a redirect bd ignores, silently falling back to ~/.beads.
+    """
+    _seed_canonical_beads_workspace(tmp_path)
+    resolved = _write_beads_workspace(
+        tmp_path / "canonical-checkout" / ".beads", "beads_fixture_resolved"
+    )
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"BD_WHERE_PATH": str(resolved)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    redirect = tmp_path / "worktrees" / "bead-CL-smoke" / ".beads" / "redirect"
+    assert redirect.read_text(encoding="utf-8").strip() == str(resolved)
+
+
+def test_cdx_bead_worktree_skips_an_unresolvable_beads_workspace(
+    tmp_path: Path,
+) -> None:
+    _seed_canonical_beads_workspace(tmp_path)
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"BD_WHERE_FAIL": "1"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not os.path.lexists(
+        tmp_path / "worktrees" / "bead-CL-smoke" / ".beads" / "redirect"
+    )
+    assert "WARNING" in result.stderr
+    assert "Beads workspace" in result.stderr
+
+
+def test_cdx_bead_worktree_skips_a_dead_redirect_target(tmp_path: Path) -> None:
+    """bd ignores a redirect whose target carries no database or metadata."""
+    _seed_canonical_beads_workspace(tmp_path)
+    dead_target = tmp_path / "dead" / ".beads"
+    dead_target.mkdir(parents=True)
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"BD_WHERE_PATH": str(dead_target)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not os.path.lexists(
+        tmp_path / "worktrees" / "bead-CL-smoke" / ".beads" / "redirect"
+    )
+    assert "WARNING" in result.stderr
+
+
+def test_cdx_bead_worktree_refuses_to_write_through_a_symlinked_beads_dir(
+    tmp_path: Path,
+) -> None:
+    """AMBER Pre-Mortem: a redirect must never mutate another repository."""
+    _seed_canonical_beads_workspace(tmp_path)
+    foreign_beads = _write_beads_workspace(
+        tmp_path / "foreign-repo" / ".beads", "beads_fixture_foreign"
+    )
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    worktree.mkdir(parents=True)
+    (worktree / ".beads").symlink_to(foreign_beads, target_is_directory=True)
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"GIT_REGISTERED_WORKTREES": str(worktree)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not os.path.lexists(foreign_beads / "redirect")
+    assert "WARNING" in result.stderr
+    assert "symlink" in result.stderr
+
+
+def test_cdx_bead_worktree_refuses_to_overwrite_a_symlinked_redirect(
+    tmp_path: Path,
+) -> None:
+    _seed_canonical_beads_workspace(tmp_path)
+    foreign_beads = _write_beads_workspace(
+        tmp_path / "foreign-repo" / ".beads", "beads_fixture_foreign"
+    )
+    foreign_redirect = foreign_beads / "redirect"
+    foreign_redirect.write_text("/foreign/target/.beads\n", encoding="utf-8")
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    (worktree / ".beads").mkdir(parents=True)
+    (worktree / ".beads" / "redirect").symlink_to(foreign_redirect)
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"GIT_REGISTERED_WORKTREES": str(worktree)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert foreign_redirect.read_text(encoding="utf-8") == "/foreign/target/.beads\n"
+    assert "WARNING" in result.stderr
+    assert "symlink" in result.stderr
+
+
+def test_cdx_bead_worktree_skips_a_tracked_redirect(tmp_path: Path) -> None:
+    """A tracked redirect cannot be hidden by info/exclude, so leave it alone."""
+    _seed_canonical_beads_workspace(tmp_path)
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    (worktree / ".beads").mkdir(parents=True)
+    (worktree / ".beads" / "redirect").write_text(
+        "/tracked/target/.beads\n", encoding="utf-8"
+    )
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={
+            "GIT_REGISTERED_WORKTREES": str(worktree),
+            "GIT_LS_FILES_EXIT": "0",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (worktree / ".beads" / "redirect").read_text(
+        encoding="utf-8"
+    ) == "/tracked/target/.beads\n"
+    assert "WARNING" in result.stderr
+    assert "tracked" in result.stderr
+
+
+def test_cdx_bead_worktree_skips_the_home_fallback_workspace(tmp_path: Path) -> None:
+    """The home fallback needs no redirect: the worktree's own walk reaches it."""
+    _seed_canonical_beads_workspace(tmp_path)
+    home_beads = _write_beads_workspace(
+        tmp_path / "home" / ".beads", "beads_fixture_home"
+    )
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"BD_WHERE_PATH": str(home_beads)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not os.path.lexists(
+        tmp_path / "worktrees" / "bead-CL-smoke" / ".beads" / "redirect"
+    )
 
 
 def test_cdx_nested_worktree_inherits_parent_beads_discovery(tmp_path: Path) -> None:
@@ -2301,30 +2596,73 @@ def test_cdx_external_worktree_resolves_the_canonical_beads_workspace(
     assert status.stdout.strip() == ""
 
 
-@pytest.mark.skipif(_SYSTEM_BD is None, reason="bd is not installed")
-@pytest.mark.skipif(
-    _WORKSPACE_BEADS is None, reason="no canonical Beads workspace in this checkout"
-)
-def test_cdx_worktree_redirect_reads_the_selected_full_bead_id(tmp_path: Path) -> None:
-    """AC1: the redirect an external worktree carries reads real full Bead IDs."""
-    assert _WORKSPACE_BEADS is not None
-    worktree_beads = tmp_path / "external-worktree" / ".beads"
-    worktree_beads.mkdir(parents=True)
-    (worktree_beads / "redirect").write_text(
-        f"{_WORKSPACE_BEADS}\n", encoding="utf-8"
-    )
-    worktree_beads.chmod(0o700)
-
-    result = subprocess.run(
-        [str(_SYSTEM_BD), "-C", str(worktree_beads.parent), "show", "CL-14ob", "--json"],
+def _workspace_bead_readable() -> bool:
+    """Is the live Beads workspace reachable for a read-only probe?"""
+    if _SYSTEM_BD is None or _WORKSPACE_BEADS is None:
+        return False
+    probe = subprocess.run(
+        [str(_SYSTEM_BD), "-C", str(_WORKSPACE_BEADS.parent), "show", "CL-14ob", "--json"],
         capture_output=True,
         text=True,
         check=False,
         timeout=120,
     )
+    return probe.returncode == 0
+
+
+@pytest.mark.skipif(_SYSTEM_BD is None, reason="bd is not installed")
+@pytest.mark.skipif(_SYSTEM_GIT is None, reason="git is not installed")
+@pytest.mark.skipif(
+    _WORKSPACE_BEADS is None, reason="no canonical Beads workspace in this checkout"
+)
+def test_cdx_launcher_worktree_reads_the_selected_full_bead_id(tmp_path: Path) -> None:
+    """AC1 MoC: the launcher-created worktree reads the selected full Bead ID.
+
+    Real git, real bd, and a fixture canonical workspace that carries the real
+    repository's metadata, so the redirect the launcher writes has to resolve to
+    a workspace the session can actually read Beads from.
+    """
+    assert _WORKSPACE_BEADS is not None
+    if not _workspace_bead_readable():
+        pytest.skip("live Beads workspace is unreachable")
+
+    canonical_beads = _init_fixture_repository(tmp_path / "repo")
+    shutil.copyfile(
+        _WORKSPACE_BEADS / "metadata.json", canonical_beads / "metadata.json"
+    )
+    launch_home = tmp_path / "agent-home"
+    _write_beads_workspace(launch_home / ".beads", "beads_fixture_home")
+    worktree_root = launch_home / "code" / ".worktrees"
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-bq", "CL-14ob"],
+        env_overrides={
+            "GIT_BIN": str(_SYSTEM_GIT),
+            "BD_BIN": str(_SYSTEM_BD),
+            "HOME": str(launch_home),
+            "CDX_WORKTREE_ROOT": str(worktree_root),
+        },
+    )
 
     assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
+    worktree = worktree_root / "bead-CL-14ob"
+    redirect = worktree / ".beads" / "redirect"
+    assert redirect.read_text(encoding="utf-8").strip() == str(canonical_beads)
+
+    bd_env = dict(os.environ)
+    bd_env["HOME"] = str(launch_home)
+    show = subprocess.run(
+        [str(_SYSTEM_BD), "-C", str(worktree), "show", "CL-14ob", "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env=bd_env,
+    )
+
+    assert show.returncode == 0, show.stderr
+    payload = json.loads(show.stdout)
     items = payload if isinstance(payload, list) else [payload]
     assert any(item.get("id") == "CL-14ob" for item in items)
 
