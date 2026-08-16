@@ -8,6 +8,35 @@ schemas, launchers, primitive authoring tools, tests, and architecture documents
 It also acts as the aggregate catalog index. Reusable Skills, Agents, Standards,
 and other catalog content normally live in separate marketplace repositories.
 
+## North star
+
+This repository publishes exactly three things:
+
+1. **The `library` command** — install skills and other primitives into a
+   repository from central catalog management, repository-locally, with
+   receipts. This is the product.
+2. **`cld` and `cdx`** — deliberately lightweight launchers. They resolve a
+   worktree, compose an initial prompt, and start a harness session. Delivery
+   logic, review policy, and orchestration live in catalog skills
+   (cognovis-core), never in the launchers.
+3. **The docs and tests** that keep 1 and 2 trustworthy.
+
+Every piece of work here must answer one question: *does it make installing
+capabilities from central management into a repository better, or keep the
+launchers thin?* If the answer is no, it does not belong in this repository's
+backlog. In particular, these are **not** this repository's job:
+
+- orchestration features, review workflows, or delivery lifecycles (catalog
+  skills own those);
+- harness tuning and coordinator wiring beyond starting a session;
+- catalog *content* (skills, agents, standards live in marketplace repos);
+- global installation of primitives — the enumerated Bootstrap (the `library`
+  executable, the launchers, the harness entrypoints, launcher runtime
+  configuration, the OpenBrain MCP server) is the only global surface.
+
+One request is one bead. Side observations go into the conversation, not the
+tracker.
+
 ## What it solves
 
 Agentic capabilities tend to become duplicated, globally over-installed, and tied
