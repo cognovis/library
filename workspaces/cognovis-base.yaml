@@ -1,6 +1,6 @@
 schema_version: 2
 name: cognovis-base
-version: 0.1.0
+version: 0.2.0
 description: Minimal project-local baseline for Cognovis repositories using Library and Beads.
 status: stable
 catalogs:
@@ -8,21 +8,23 @@ catalogs:
     identity: https://github.com/cognovis/library
     pin:
       kind: commit
-      value: 5797bbc3a256c517931ca6a77b93741654a1637d
+      value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
   - alias: core
     identity: https://github.com/cognovis/library-core
     pin:
       kind: commit
-      value: b7a54ca0da8bc0bc7acc5bacadd225ca1f1402bb
+      value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
   - alias: ccore
     identity: https://github.com/cognovis/ccore
     pin:
       kind: commit
       value: ee0c185ce6dd9ddafbb23e72f858fe6eea3a37b1
 roots:
+  # Library control plane
   - type: skill
     name: library
     catalog: platform
+  # Beads workflow
   - type: skill
     name: cognovis-beads
     catalog: core
@@ -32,9 +34,23 @@ roots:
   - type: skill
     name: ob-cli
     catalog: core
+  # Delivery entry points
   - type: skill
     name: bead-implementation-loop
     catalog: core
   - type: skill
     name: executive-pack
     catalog: core
+  - type: skill
+    name: session-close
+    catalog: core
+  - type: script
+    name: ccore
+    catalog: ccore
+  # Behavioral standards
+  - type: standard
+    name: english-only
+    catalog: platform
+  - type: standard
+    name: no-emoji
+    catalog: platform
