@@ -2082,8 +2082,10 @@ what follows is what the code does about it.
   (absolute `https` only, since any other scheme would transmit the token in
   cleartext), strips its own endpoint, host, and long path segments from every
   message it interpolates, suppresses exception chaining, prints only the
-  provider identity `mcp:<server>` from `__repr__`, and refuses to be pickled or
-  copied.
+  provider identity `mcp:<server>` from `__repr__`, refuses to be pickled or
+  copied, and holds the endpoint and its derived redaction strings outside its
+  declared dataclass fields, so `dataclasses.asdict` — the one generic walk with
+  no hook to refuse — has nothing to reproduce.
 
 The visible consequence of no registration is unchanged: a typed `unavailable`
 availability naming the credential reference, which `library marketplace

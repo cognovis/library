@@ -56,6 +56,15 @@
 
 ### Fixed
 
+- *(providers)* The streamable-HTTP MCP transport no longer reproduces its
+  endpoint through `dataclasses.asdict`, which was the one serialization gap the
+  module documented rather than closed. `asdict` walks `dataclasses.fields`, so
+  the endpoint is now an `InitVar` validated into a plain instance attribute, and
+  the derived `_secrets` tuple — which held the whole endpoint and its host, and
+  so leaked exactly as much — is assigned the same way. Construction, every
+  reader of `transport.endpoint`, and the existing `repr`, `pickle`, and `copy`
+  refusals are unchanged.
+
 - *(CL-9mfy, marketplace)* `library marketplace install` now judges the
   projection target the operator actually requested. Admission aggregated block
   reasons across every target and deduplicated them by reason string, so an item
@@ -157,8 +166,9 @@
   credential, so the transport requires an absolute `https` endpoint (any other
   scheme would put the token on the wire in cleartext), strips its own endpoint,
   host, and long path segments from every message it interpolates, suppresses
-  exception chaining, prints only its identity from `__repr__`, and refuses to be
-  pickled or copied. `library marketplace inventory` resolves that endpoint from
+  exception chaining, prints only its identity from `__repr__`, refuses to be
+  pickled or copied, and holds the endpoint outside its declared fields so
+  `dataclasses.asdict` reproduces nothing either. `library marketplace inventory` resolves that endpoint from
   the MCP registration the operator already maintains (`~/.codex/config.toml`,
   `~/.cursor/mcp.json`, `~/.claude.json`), reading all three so that two files
   registering the same server with **different** URLs is a refusal naming the

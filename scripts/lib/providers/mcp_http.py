@@ -42,16 +42,24 @@ Three defenses, each closing a hole review found in the previous one:
    removed.
 3. **Close the generic serialization path.** `__repr__` prints the identity, and
    pickling and copying raise `CredentialSerializationRefused`.
+4. **Do not declare the secret as a field.** `dataclasses.asdict` walks declared
+   fields through `getattr` and has no hook to refuse -- but it walks
+   `dataclasses.fields`, which skips `InitVar` pseudo-fields and never sees an
+   attribute that was only assigned. The endpoint is therefore an `InitVar`
+   validated into a plain attribute in `__post_init__`, and `_secrets` -- which
+   holds the whole endpoint and its host, and so leaked exactly as much -- is
+   assigned the same way. `asdict` reproduces neither.
 
 The precise, checkable claim -- rather than the "stored in exactly one field"
 guarantee an earlier revision asserted and review falsified -- is this: the
 endpoint reaches the network and nothing else. It is interpolated into no message
 here, written to no file here, returned by no method here, and reproduced by no
-`repr`, `pickle`, or `copy`. One documented gap remains: `dataclasses.asdict`
-walks declared fields through `getattr` and has no hook to refuse, so a caller
-that deliberately runs it on this object gets the endpoint back. That is stated
-rather than papered over, and it is a caller reaching for the value on purpose,
-not a value escaping on its own.
+`repr`, `pickle`, `copy`, or `asdict`. What is deliberately *not* claimed is
+inaccessibility: `getattr(client, "endpoint")` still answers, because the
+transport has to use the value it holds. A caller naming the attribute is
+reaching for the credential on purpose, which was never what these defenses are
+about; what they close is the value escaping on its own through a generic path
+nobody wrote a line of code to invoke.
 
 A note on what is *not* true, because a load-bearing comment that is false is
 worse than no comment: `str(HTTPError(...))` is `HTTP Error 402: Payment
@@ -70,7 +78,7 @@ import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -327,7 +335,13 @@ class StreamableHttpMcpTransport:
         McpEndpointInvalid: when the endpoint is not an absolute `https://` URL.
     """
 
-    endpoint: str
+    #: An `InitVar`, not a field, and that is the whole of the fourth defense.
+    #: `dataclasses.fields` -- and therefore `asdict` -- skips `InitVar`
+    #: pseudo-fields, so the validated value is assigned to a plain instance
+    #: attribute below and every reader of `self.endpoint` is unaffected. It is
+    #: declared first because an `InitVar` still takes a positional slot in the
+    #: generated `__init__`, so every existing construction site keeps working.
+    endpoint: InitVar[str]
     identity: str = "mcp endpoint"
     client_name: str = CLIENT_NAME
     client_version: str = "2.0.0"
@@ -337,12 +351,14 @@ class StreamableHttpMcpTransport:
     _next_id: int = field(default=0, init=False, repr=False)
     _initialized: bool = field(default=False, init=False, repr=False)
     _negotiated_version: str = field(default="", init=False, repr=False)
-    _secrets: tuple[str, ...] = field(default=(), init=False, repr=False)
 
-    def __post_init__(self) -> None:
-        self.endpoint = self._validated_endpoint(self.endpoint)
+    def __post_init__(self, endpoint: str) -> None:
+        self.endpoint = self._validated_endpoint(endpoint)
         self.identity = redact_endpoints(str(self.identity or "mcp endpoint")).strip()
-        self._secrets = self._own_secrets()
+        # Undeclared for the same reason as `endpoint`: `_own_secrets` puts the
+        # whole endpoint and its netloc in here, so a declared field would have
+        # reproduced through `asdict` everything the `InitVar` just kept out.
+        self._secrets: tuple[str, ...] = self._own_secrets()
 
     @staticmethod
     def _validated_endpoint(value: Any) -> str:
