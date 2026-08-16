@@ -570,7 +570,10 @@ def test_one_grant_governing_two_targets_records_both_of_its_states() -> None:
     assert "machine_local: operator-opt-in-required" in described[1]
 
     # A denial resolves both targets to the same state, so it still records one
-    # reason: the key reports the facts, it does not multiply them.
+    # reason: the key reports the facts, it does not multiply them. That record
+    # names *both* targets it covers -- naming only the first one described a
+    # target the caller may not have asked about while staying silent about the
+    # one they did, and `describe` renders the detail to every surface.
     denied = evaluate_item(
         _item(
             rights=Rights(
@@ -581,7 +584,58 @@ def test_one_grant_governing_two_targets_records_both_of_its_states() -> None:
         ),
         AdmissionContext(),
     )
-    assert [entry.reason for entry in denied.block_reasons] == ["license-denied"]
+    assert [
+        (entry.reason, entry.detail) for entry in denied.block_reasons
+    ] == [("license-denied", "project_committed, machine_local: blocked")]
+    rendered = denied.block_reasons[0].describe()
+    assert "project_committed" in rendered and "machine_local" in rendered
+
+
+def test_only_a_denial_collapses_two_targets_into_one_record() -> None:
+    """Which grant states can collapse at all, checked rather than assumed.
+
+    `evaluate_projection` resolves `license-unknown` and `redistribution-blocked`
+    as `blocked` for `project_committed` and `operator-opt-in-required` for every
+    other target, so the state is a function of the target and those two reasons
+    can never share a `(reason, state)` key in any grant combination. Only a
+    denial resolves both targets alike. This pins that reading, so a later change
+    to the composition that made another reason collapse arrives with the
+    all-targets detail already required.
+    """
+    collapsing = {
+        "install denied": Rights(
+            fetch_authorization="granted",
+            install_rights="denied",
+            evidence_source="upstream terms forbid installation",
+        ),
+    }
+    separate = {
+        "install unknown": UNRESOLVED,
+        "redistribution unknown": Rights(
+            fetch_authorization="granted",
+            install_rights="granted",
+            evidence_source=MIT,
+            grant_evidence={"redistribution_rights": "no grant located 2026-08-08"},
+        ),
+        "redistribution denied": Rights(
+            fetch_authorization="granted",
+            install_rights="granted",
+            redistribution_rights="denied",
+            evidence_source=MIT,
+        ),
+    }
+
+    for name, rights in collapsing.items():
+        reasons = evaluate_item(_item(rights=rights), AdmissionContext()).block_reasons
+        assert len(reasons) == 1, name
+        assert reasons[0].detail == "project_committed, machine_local: blocked", name
+
+    for name, rights in separate.items():
+        reasons = evaluate_item(_item(rights=rights), AdmissionContext()).block_reasons
+        assert [entry.detail for entry in reasons] == [
+            "project_committed: blocked",
+            "machine_local: operator-opt-in-required",
+        ], name
 
 
 def test_a_named_target_is_judged_about_that_target() -> None:

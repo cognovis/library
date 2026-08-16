@@ -364,7 +364,12 @@ all still outrank this: naming a target relaxes the rights axis and nothing else
 A block reason is recorded per governing grant *and per resolved state*, because
 one grant resolves the two targets differently — `install_rights: unknown`
 blocks a committed projection while leaving a machine-local opt-in open, and
-recording only the first of those hid the open path from every caller.
+recording only the first of those hid the open path from every caller. Where
+several targets do resolve alike and collapse into one record — `install_rights:
+denied` is the only such case under this composition — that record names every
+target it covers. The record has to be complete rather than correct-for-one-
+caller: the inventory listing renders the same record the install refusal does,
+and neither knows which target the other asked about.
 
 `block_reasons` entries are stored as typed records carrying `reason`, an
 `evidence` observation, its named `source`, and an optional `detail`, per this

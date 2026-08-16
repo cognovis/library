@@ -77,7 +77,7 @@ from .inventory import (
     PROJECTION_TARGETS,
     TRUST_STATES,
 )
-from .rights import evaluate_projection, projection_eligibility
+from .rights import RightsDecision, evaluate_projection, projection_eligibility
 
 #: Trust ordering. `unreviewed` is the floor, so a scope that requires nothing
 #: blocks nothing on trust.
@@ -201,18 +201,24 @@ def _rights_reasons(item: NormalizedItem) -> list[BlockReason]:
     problem underneath an installation denial would suggest that resolving the
     redistribution question changes anything, and it does not.
 
-    The deduplication key is `(reason, state)`, not the reason alone: one grant
-    governs every target and therefore produces one reason string, but it does
-    not resolve every target to the same state. `install_rights: unknown` is
+    One record per `(reason, state)`, not per reason and not per target. One
+    grant governs every target and therefore produces one reason string, but it
+    does not resolve every target to the same state: `install_rights: unknown` is
     `license-unknown` on both targets while blocking the committed one and
-    leaving the machine-local one at `operator-opt-in-required` -- two facts, and
-    a key on the string alone kept whichever came first and silently discarded
-    the opt-in path a caller could still take. `install_rights: denied` still
-    produces exactly one reason, because there both targets really do resolve to
-    the same state; nothing here is noisier than the facts are.
+    leaving the machine-local one at `operator-opt-in-required`. Those are two
+    facts, and keying on the string alone kept whichever target was walked first
+    and silently discarded the opt-in path a caller could still take.
+
+    Where several targets *do* collapse into one record -- `install_rights:
+    denied`, where both really are blocked -- the record names **every** target
+    it covers. A detail that named only the first one described a target the
+    caller may not have asked about while staying silent about the one they did,
+    and `describe` renders that detail. The record is the thing that has to be
+    complete, because every surface reads it: the inventory listing renders the
+    same line the install refusal does, and neither knows what the other asked.
     """
-    reasons: list[BlockReason] = []
-    seen: set[tuple[str, str]] = set()
+    targets_for: dict[tuple[str, str], list[str]] = {}
+    governing: dict[tuple[str, str], RightsDecision] = {}
     for target in PROJECTION_TARGETS:
         decision = evaluate_projection(
             item.rights, target, subject=item.qualified_identity()
@@ -220,12 +226,16 @@ def _rights_reasons(item: NormalizedItem) -> list[BlockReason]:
         if decision.block_reason is None:
             continue
         key = (decision.block_reason, decision.state)
-        if key in seen:
-            continue
-        seen.add(key)
+        targets_for.setdefault(key, []).append(target)
+        governing.setdefault(key, decision)
+
+    reasons: list[BlockReason] = []
+    for key, targets in targets_for.items():
+        reason, state = key
+        decision = governing[key]
         reasons.append(
             BlockReason(
-                reason=decision.block_reason,
+                reason=reason,
                 evidence=(
                     f"{decision.governing_grant} resolves to "
                     f"{decision.governing_state} for this item"
@@ -234,7 +244,7 @@ def _rights_reasons(item: NormalizedItem) -> list[BlockReason]:
                     decision.evidence_source
                     or "no evidence source is recorded for this grant"
                 ),
-                detail=f"{target}: {decision.state}",
+                detail=f"{', '.join(targets)}: {state}",
             )
         )
     return reasons

@@ -81,7 +81,9 @@
   and a non-rights block — unavailable provider, unadmitted content, unpromoted
   maturity, unclassified member — still refuses every target. A caller that names
   no target keeps the previous summary reading, so the inventory listing is
-  unchanged apart from now reporting both target states of one governing grant.
+  unchanged apart from now reporting both target states of one governing grant —
+  and where two targets resolve alike (`install_rights: denied`), the single
+  record names both of them rather than only the first.
 
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent

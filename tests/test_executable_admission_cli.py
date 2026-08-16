@@ -1220,10 +1220,25 @@ def test_an_unknown_rights_item_installs_machine_local_after_the_opt_in(
     )
 
     assert code == 0, err or out
-    # The presenter writes its statement to stdout ahead of the result payload,
-    # so the rendered statement is read here rather than assumed: this is the
-    # operator seeing the rights state before anything is written.
-    assert "operator-opt-in-required" in out
+    # AC1 says the presenter *shows the rights state*, so the rendered statement
+    # is read here rather than approximated by its decision word. It is written
+    # to stdout ahead of the result payload, and it has to name the item, the act
+    # it authorizes, the governing grant, and that grant's state -- an operator
+    # accepting an unresolved state is accepting exactly those.
+    shown = [
+        f"subject: {block}" for block in out[: out.index("{")].split("subject: ")[1:]
+    ]
+    # Two acts are presented under unknown rights -- durable cache retention and
+    # the machine-local projection -- and the projection statement is the one
+    # this AC is about, so it is picked out rather than matched anywhere.
+    projection = [block for block in shown if "act: machine_local" in block]
+    assert len(projection) == 1, shown
+    assert UNKNOWN_IDENTITY in projection[0]
+    assert "decision: operator-opt-in-required" in projection[0]
+    assert "governing grant: install_rights=unknown" in projection[0]
+    assert "block reason: license-unknown" in projection[0]
+    assert any("act: durable_cache_retention" in block for block in shown)
+
     payload = json.loads(out[out.index("{") :])["data"]
     assert payload["status"] == "installed"
     assert payload["qualified_identity"] == UNKNOWN_IDENTITY
@@ -1233,9 +1248,19 @@ def test_an_unknown_rights_item_installs_machine_local_after_the_opt_in(
     assert payload["targets"]
     for path in payload["targets"]:
         assert Path(path).is_file()
-    # The durable cache transaction completed, not only the projection.
+    # The durable cache transaction completed, not only the projection: the MoC
+    # asks for the receipt *and* the pin, because a projection over a missing or
+    # misrouted pin is an install with no trust-on-first-use decision behind it.
+    state = _state_for_home(tmp_path)
     assert payload["receipt_id"]
     assert Path(payload["cache_object"]).exists()
+    receipt = state.receipt_store("project").get(payload["receipt_id"])
+    assert receipt.provider_identity == PROVIDER
+
+    pin = state.pin_store().pin_for(UNKNOWN_IDENTITY)
+    assert pin is not None, "the install projected without recording a TOFU pin"
+    assert pin.normalized_content_digest == receipt.normalized_content_digest
+    assert pin.proves_upstream_authenticity is False
 
 
 def test_the_same_install_without_the_opt_in_is_refused_by_the_presenter(
