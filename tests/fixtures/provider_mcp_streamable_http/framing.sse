@@ -1,0 +1,12 @@
+: keep-alive comment
+
+event: message
+data: {"jsonrpc":"2.0","method":"notifications/message","params":{"level":"info"}}
+
+event: message
+data: {"result":{"content":[{"type":"text","text":"[]"}]},
+data: "jsonrpc":"2.0","id":9}
+
+event: message
+data: {"jsonrpc":"2.0","method":"notifications/message","params":{"level":"info"}}
+

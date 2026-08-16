@@ -1,0 +1,3 @@
+event: message
+data: {"result":{"content":[{"type":"text","text":"Prompt kit not found: 20260805_948_promptkit_1"}],"isError":true},"jsonrpc":"2.0","id":6}
+
