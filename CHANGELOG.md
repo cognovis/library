@@ -67,11 +67,18 @@
   The redirect target is the workspace `bd where` resolves rather than a guessed
   `<repo>/.beads`, and the launcher refuses to write through a symlinked
   `.beads` or `redirect`, over a tracked redirect, or toward a target with no
-  database and no `metadata.json`. Bead, delivery, quick, and review modes now
-  reject a native `--dangerously-bypass-approvals-and-sandbox`, `--yolo`, or
-  `--sandbox danger-full-access` in the forwarded Codex arguments, which would
-  otherwise override the wrapper's scoped permissions; plain mode still forwards
-  them.
+  database and no `metadata.json`. Because those refusals are legitimate, the
+  guarantee is a gate rather than the preparation: after the worktree exists and
+  before Codex starts, a bead or delivery launch verifies that the worktree and
+  the invoking checkout resolve the same workspace and aborts with exit 2 naming
+  both paths otherwise, so a session can no longer run against another
+  repository's database, and only the verified workspace becomes a writable
+  root. Bead, delivery, quick, and review modes now reject caller-supplied
+  permission arguments in the forwarded Codex arguments — `--sandbox`/`-s`,
+  `--ask-for-approval`/`-a`, `--full-auto`, `--yolo`,
+  `--dangerously-bypass-approvals-and-sandbox`, and any `-c` override keyed
+  `approval_policy*` or `sandbox_*` — which would otherwise override the
+  wrapper's scoped permissions; plain mode still forwards all of them.
 
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent

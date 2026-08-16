@@ -17,7 +17,9 @@
 # the worktree's real gitdir under the canonical repository, and the resolved
 # Beads workspace. Network access is what lets bd reach the local Dolt server.
 # approval_policy="never" forbids escalation, so a missing grant is a hard
-# failure instead of a prompt.
+# failure instead of a prompt. Bead modes therefore own their permission
+# contract end to end and reject caller permission flags; use plain cdx to pass
+# Codex permission flags yourself.
 #
 # Wrapper flags (not passed to codex):
 #   --dangerous-full-access → Plain mode only: full bypass of approvals and sandbox
@@ -237,6 +239,7 @@ coordinator_workspace=""
 coordinator_surface=""
 codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"
 bead_dangerous_full_auto=false
+verified_beads_workspace=""
 bead_codex_permission_args=()
 codex_args=()
 caller_prompt_parts=()
@@ -283,6 +286,16 @@ run_codex_tui() {
     exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
 }
 
+# Codex parses a -c value as TOML, so an unescaped quote or backslash in a path
+# turns the writable_roots array into a string Codex then refuses to load.
+toml_escape_basic_string() {
+    local value="$1"
+
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    printf '%s' "$value"
+}
+
 # Roots a bead session must write to even though they sit outside the Codex
 # workspace root: the uv cache (every helper runs through `uv run`), the
 # worktree's real gitdir under the canonical repository (index lock, refs,
@@ -306,12 +319,11 @@ bead_workspace_writable_roots_arg() {
         if common_dir=$(resolve_worktree_git_common_dir "$worktree_dir"); then
             roots+=("$common_dir")
         fi
-        # Resolved from the worktree, so this is the workspace the session's own
-        # bd will use, redirect included.
-        local beads_workspace
-        if beads_workspace=$(resolve_canonical_beads_workspace "$worktree_dir"); then
-            roots+=("$beads_workspace")
-        fi
+    fi
+    # Only the workspace the identity gate proved the worktree resolves. An
+    # unverified path could belong to another repository's database.
+    if [[ -n "$verified_beads_workspace" ]]; then
+        roots+=("$verified_beads_workspace")
     fi
 
     local json="["
@@ -341,7 +353,7 @@ bead_workspace_writable_roots_arg() {
             else
                 json+=","
             fi
-            json+="\"${root}\""
+            json+="\"$(toml_escape_basic_string "$root")\""
         done
     fi
     json+="]"
@@ -614,6 +626,42 @@ ensure_bead_worktree() {
     printf '%s\n' "$worktree_dir"
 }
 
+# The launcher prepares identity best-effort, but preparation can be skipped for
+# good reasons (symlinked, tracked, or unwritable redirect). Preparation is
+# therefore not the guarantee — this gate is. It runs after the worktree exists
+# and before Codex starts, and refuses to launch a Bead session into a database
+# other than the one the invoking checkout uses.
+verify_worktree_beads_identity() {
+    local repo_root="$1"
+    local worktree_dir="$2"
+    local canonical worktree_workspace
+
+    verified_beads_workspace=""
+
+    if ! canonical=$(resolve_canonical_beads_workspace "$repo_root"); then
+        if test -d "${repo_root}/.beads"; then
+            echo "WARNING: no usable Beads workspace resolved for ${repo_root}." >&2
+            echo "WARNING: launching without a Beads writable root; the session may not reach its issue tracker." >&2
+        fi
+        return 0
+    fi
+
+    worktree_workspace=$(resolve_canonical_beads_workspace "$worktree_dir") || worktree_workspace=""
+
+    if [[ "$worktree_workspace" == "$canonical" ]]; then
+        verified_beads_workspace="$canonical"
+        return 0
+    fi
+
+    echo "ERROR: Beads workspace identity mismatch; refusing to launch." >&2
+    echo "  worktree:            ${worktree_dir}" >&2
+    echo "  worktree resolves:   ${worktree_workspace:-<unresolved>}" >&2
+    echo "  repository resolves: ${canonical}" >&2
+    echo "Remove or repair ${worktree_dir}/.beads so it resolves ${canonical}." >&2
+    echo "A symlinked or tracked .beads/redirect blocks the launcher from repairing it." >&2
+    return 2
+}
+
 resolve_codex_bead_mode() {
     local mode="$1"
 
@@ -805,9 +853,18 @@ if [[ -n "$coordinator_surface" && ! "$coordinator_surface" =~ ^surface:[0-9]+$ 
     exit 2
 fi
 
-# Bead modes place their permission args before the caller's, so a native
-# escalation passed through here would be the later argument and win.
-reject_native_permission_bypass() {
+reject_managed_permission_argument() {
+    local shown="$1"
+
+    echo "ERROR: ${shown} is not accepted in Bead modes; the launcher owns the permission contract for this mode." >&2
+    echo "Use --bead-dangerous-full-auto for an explicit full bypass, or plain cdx to pass Codex permission flags yourself." >&2
+    exit 2
+}
+
+# Bead modes place their permission args before the caller's, so any permission
+# argument forwarded here is the later one and wins. Config keys are checked by
+# key prefix because a single -c can rewrite the whole sandbox policy.
+reject_managed_permission_overrides() {
     local index=1
     local arg next_arg
     while (( index <= ${#codex_args[@]} )); do
@@ -817,17 +874,28 @@ reject_native_permission_bypass() {
             next_arg="${codex_args[index + 1]}"
         fi
         case "$arg" in
-            --dangerously-bypass-approvals-and-sandbox|--yolo|--sandbox=danger-full-access|-s=danger-full-access)
-                echo "ERROR: $arg is not accepted in Bead modes; it would override the launcher's scoped permissions." >&2
-                echo "Use --bead-dangerous-full-auto to select a full bypass explicitly." >&2
-                exit 2
+            --dangerously-bypass-approvals-and-sandbox|--yolo|--full-auto)
+                reject_managed_permission_argument "$arg"
                 ;;
-            --sandbox|-s)
-                if [[ "$next_arg" == "danger-full-access" ]]; then
-                    echo "ERROR: $arg $next_arg is not accepted in Bead modes; it would override the launcher's scoped permissions." >&2
-                    echo "Use --bead-dangerous-full-auto to select a full bypass explicitly." >&2
-                    exit 2
-                fi
+            --sandbox|-s|--ask-for-approval|-a)
+                reject_managed_permission_argument "$arg ${next_arg}"
+                ;;
+            --sandbox=*|-s=*|--ask-for-approval=*|-a=*)
+                reject_managed_permission_argument "$arg"
+                ;;
+            -c|--config)
+                case "$next_arg" in
+                    approval_policy*|sandbox_*)
+                        reject_managed_permission_argument "$arg $next_arg"
+                        ;;
+                esac
+                ;;
+            -c=*|--config=*)
+                case "${arg#*=}" in
+                    approval_policy*|sandbox_*)
+                        reject_managed_permission_argument "$arg"
+                        ;;
+                esac
                 ;;
         esac
         (( index++ ))
@@ -835,7 +903,7 @@ reject_native_permission_bypass() {
 }
 
 if [[ -n "$solo_bead_id$executive_pack_ids$bead_quick_id$bead_review_id" ]]; then
-    reject_native_permission_bypass
+    reject_managed_permission_overrides
 fi
 
 # ── Shared bead implementation loop ─────────────────────────────
@@ -919,6 +987,7 @@ launch_repository_delivery() {
     }
     local worktree_dir
     worktree_dir=$(ensure_bead_worktree "$worktree_label") || return $?
+    verify_worktree_beads_identity "$repo_root" "$worktree_dir" || return $?
     local caller_prompt="${(j: :)caller_prompt_parts}"
     local execution_mode_contract=""
     if [[ "$delivery_mode" == "Solo Bead" ]]; then
@@ -991,13 +1060,15 @@ launch_bead_implementation_loop() {
     export CLD_BEAD_LINE=cdx
     export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
-    "${GIT_BIN}" rev-parse --show-toplevel >/dev/null 2>&1 || {
+    local repo_root
+    repo_root=$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null) || {
         echo "ERROR: cdx bead mode must run inside a git repository." >&2
         return 1
     }
 
     local worktree_dir
     worktree_dir="$(ensure_bead_worktree "$active_bead")" || return $?
+    verify_worktree_beads_identity "$repo_root" "$worktree_dir" || return $?
 
     local prompt="Execute Bead ${active_bead} in its assigned worktree with execution mode \`${execution_mode}\` and caller route \`codex-owned\`. This current Codex session owns implementation, repairs, verification, and lifecycle completion. Do not delegate implementation or repairs to a subagent.
 

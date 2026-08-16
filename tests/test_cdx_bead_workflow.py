@@ -111,14 +111,21 @@ def _write_launcher_bd_mock(tmp_path: Path) -> tuple[Path, Path]:
         "args = sys.argv[1:]\n"
         "with pathlib.Path(os.environ['BD_ARGV_LOG']).open('a', encoding='utf-8') as f:\n"
         "    f.write(json.dumps(args) + '\\n')\n"
+        "cwd = ''\n"
         "if args[:1] == ['-C'] and len(args) > 1:\n"
+        "    cwd = args[1]\n"
         "    args = args[2:]\n"
         "if args[:1] == ['where']:\n"
+        "    from_repo = cwd == os.environ['GIT_REPO_ROOT']\n"
         "    if os.environ.get('BD_WHERE_FAIL'):\n"
+        "        raise SystemExit(1)\n"
+        "    if not from_repo and os.environ.get('BD_WHERE_WORKTREE_FAIL'):\n"
         "        raise SystemExit(1)\n"
         "    workspace = os.environ.get(\n"
         "        'BD_WHERE_PATH', os.environ['GIT_REPO_ROOT'] + '/.beads'\n"
         "    )\n"
+        "    if not from_repo:\n"
+        "        workspace = os.environ.get('BD_WHERE_WORKTREE_PATH', workspace)\n"
         "    print(json.dumps({\n"
         "        'path': workspace,\n"
         "        'database_path': workspace + '/dolt',\n"
@@ -1658,6 +1665,62 @@ def test_cdx_bead_modes_grant_the_autonomy_writable_roots(
     )
 
 
+def test_cdx_writable_roots_escape_quotes_for_toml(tmp_path: Path) -> None:
+    """A quote in a root path must not break the emitted TOML config value."""
+    cache_home = tmp_path / 'cache"dir\\back'
+
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-b", "CL-smoke"],
+            env_overrides={"XDG_CACHE_HOME": str(cache_home)},
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    raw_entry = next(
+        value for value in _config_values(argv) if value.startswith(_WRITABLE_ROOTS_PREFIX)
+    )
+    expected = f"{cache_home}/uv".replace("\\", "\\\\").replace('"', '\\"')
+    assert expected in raw_entry
+    assert f"{cache_home}/uv" in _writable_roots(argv)
+
+
+@pytest.mark.skipif(shutil.which("codex") is None, reason="codex is not installed")
+def test_cdx_escaped_writable_roots_stay_loadable_by_codex(tmp_path: Path) -> None:
+    cache_home = tmp_path / 'cache"dir\\back'
+
+    result, argv_file, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"XDG_CACHE_HOME": str(cache_home)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    raw_entry = next(
+        value for value in _config_values(argv) if value.startswith(_WRITABLE_ROOTS_PREFIX)
+    )
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    (codex_home / "config.toml").write_text("", encoding="utf-8")
+    env = dict(os.environ)
+    env["CODEX_HOME"] = str(codex_home)
+
+    probe = subprocess.run(
+        [str(shutil.which("codex")), "debug", "models", "-c", raw_entry],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+        env=env,
+    )
+
+    assert probe.returncode == 0, probe.stderr
+
+
 def test_cdx_bead_modes_omit_an_unresolved_beads_writable_root(
     tmp_path: Path,
 ) -> None:
@@ -1815,6 +1878,84 @@ def test_cdx_bead_modes_reject_native_permission_bypass_flags(
     assert not called_file.exists()
     assert "not accepted in Bead modes" in result.stderr
     assert "--bead-dangerous-full-auto" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "mode_args",
+    [
+        ["-br", "CL-smoke"],
+        ["-b", "CL-smoke"],
+        ["-bq", "CL-smoke"],
+        ["-sb", "CL-smoke"],
+        ["-ep", "CL-first,CL-second"],
+    ],
+)
+@pytest.mark.parametrize(
+    "override_args",
+    [
+        ["--sandbox", "workspace-write"],
+        ["--sandbox=read-only"],
+        ["-s", "read-only"],
+        ["-s=workspace-write"],
+        ["--ask-for-approval", "never"],
+        ["-a", "on-request"],
+        ["--ask-for-approval=never"],
+        ["--full-auto"],
+        ["-c", 'approval_policy="on-request"'],
+        ["-c", "sandbox_workspace_write.network_access=false"],
+        ["-c", 'sandbox_mode="danger-full-access"'],
+    ],
+)
+def test_cdx_bead_modes_reject_caller_permission_overrides(
+    tmp_path: Path,
+    mode_args: list[str],
+    override_args: list[str],
+) -> None:
+    """The launcher owns the permission contract for every managed mode."""
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, [*mode_args, *override_args])
+    )
+
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "not accepted in Bead modes" in result.stderr
+
+
+def test_cdx_bead_modes_keep_unrelated_config_overrides(tmp_path: Path) -> None:
+    """Only permission keys are managed; other -c overrides stay the caller's."""
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-b", "CL-smoke", "--exec", "-c", 'feature="enabled"'],
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert 'feature="enabled"' in argv
+
+
+@pytest.mark.parametrize(
+    "override_args",
+    [
+        ["--sandbox", "workspace-write"],
+        ["--ask-for-approval", "never"],
+        ["-c", 'approval_policy="never"'],
+    ],
+)
+def test_cdx_plain_mode_still_forwards_permission_arguments(
+    tmp_path: Path,
+    override_args: list[str],
+) -> None:
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        [*override_args, "hello"],
+        route_name="codex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(argv_file.read_text(encoding="utf-8")) == [*override_args, "hello"]
 
 
 def test_cdx_plain_mode_still_forwards_the_native_bypass_flag(tmp_path: Path) -> None:
@@ -2476,6 +2617,103 @@ def test_cdx_bead_worktree_skips_the_home_fallback_workspace(tmp_path: Path) -> 
     assert not os.path.lexists(
         tmp_path / "worktrees" / "bead-CL-smoke" / ".beads" / "redirect"
     )
+
+
+def test_cdx_aborts_when_a_symlinked_worktree_resolves_a_foreign_workspace(
+    tmp_path: Path,
+) -> None:
+    """AC1 as a gate: never launch a Bead session into another database."""
+    _seed_canonical_beads_workspace(tmp_path)
+    foreign_beads = _write_beads_workspace(
+        tmp_path / "foreign-repo" / ".beads", "beads_fixture_foreign"
+    )
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    worktree.mkdir(parents=True)
+    (worktree / ".beads").symlink_to(foreign_beads, target_is_directory=True)
+
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-b", "CL-smoke"],
+            env_overrides={
+                "GIT_REGISTERED_WORKTREES": str(worktree),
+                "BD_WHERE_WORKTREE_PATH": str(foreign_beads),
+            },
+        )
+    )
+
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert not argv_file.exists()
+    assert not os.path.lexists(foreign_beads / "redirect")
+    assert str(worktree) in result.stderr
+    assert str(foreign_beads) in result.stderr
+    assert str(tmp_path / "repo" / ".beads") in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("args", "env_overrides"),
+    [
+        (["-b", "CL-smoke"], {}),
+        (["-bq", "CL-smoke"], {}),
+        (["-sb", "CL-smoke", "--exec"], {}),
+        (["-b", "CL-smoke"], {"BD_WHERE_WORKTREE_FAIL": "1"}),
+    ],
+)
+def test_cdx_aborts_on_a_beads_workspace_identity_mismatch(
+    tmp_path: Path,
+    args: list[str],
+    env_overrides: dict[str, str],
+) -> None:
+    _seed_canonical_beads_workspace(tmp_path)
+    other_beads = _write_beads_workspace(
+        tmp_path / "other-repo" / ".beads", "beads_fixture_other"
+    )
+    overrides = {"BD_WHERE_WORKTREE_PATH": str(other_beads), **env_overrides}
+
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, args, env_overrides=overrides)
+    )
+
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "Beads workspace" in result.stderr
+
+
+def test_cdx_launches_without_a_beads_root_when_no_workspace_resolves(
+    tmp_path: Path,
+) -> None:
+    """A repository genuinely without Beads still launches, just without a root."""
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    roots = _writable_roots(json.loads(argv_file.read_text(encoding="utf-8")))
+    assert str(tmp_path / "cache" / "uv") in roots
+    assert not [root for root in roots if root.endswith(".beads")]
+
+
+def test_cdx_warns_when_a_present_beads_workspace_cannot_be_resolved(
+    tmp_path: Path,
+) -> None:
+    _seed_canonical_beads_workspace(tmp_path)
+
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-b", "CL-smoke"],
+            env_overrides={"BD_WHERE_FAIL": "1"},
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    assert "WARNING" in result.stderr
+    assert "Beads writable root" in result.stderr
+    roots = _writable_roots(json.loads(argv_file.read_text(encoding="utf-8")))
+    assert not [root for root in roots if root.endswith(".beads")]
 
 
 def test_cdx_nested_worktree_inherits_parent_beads_discovery(tmp_path: Path) -> None:
