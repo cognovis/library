@@ -44,9 +44,6 @@ roots:
   - type: skill
     name: session-close
     catalog: core
-  - type: script
-    name: ccore
-    catalog: ccore
   # Behavioral standards
   - type: standard
     name: english-only

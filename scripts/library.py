@@ -6255,6 +6255,12 @@ def _workspace_prerequisite_blockers(plan: dict) -> list[str]:
         )
         expected_version = str(item.get("resolved_version") or "")
         actual_version = str(receipt.get("resolved_version") or "")
+        # A receipt recorded before catalog identities existed carries the
+        # catalog that used to serve the content and `resolved_version: legacy`.
+        # The artifact itself is installed and verified; the identity mismatch
+        # only records history, so it must not block registration (CL-9yok).
+        if actual_version == "legacy" and receipt.get("verified") is True:
+            continue
         if expected_identity and actual_identity != expected_identity:
             blockers.append(
                 f"{item['id']} global prerequisite has incompatible catalog provenance"

@@ -33,17 +33,20 @@ EXPECTED_ARTIFACTS = {
     ("skill", "inject-standards"),
     ("skill", "library"),
     ("skill", "ob-cli"),
+    ("skill", "session-close"),
+    ("standard", "english-only"),
     ("standard", "executive-pack"),
     ("standard", "judge-layer"),
     ("standard", "model-routing"),
+    ("standard", "no-emoji"),
     ("standard", "workflow"),
 }
 
+# ccore is a uv-tool binary on PATH and stays the only intrinsically global
+# prerequisite; every former default_scope:global entry is a normal
+# project-local closure member since the CL-9yok recut.
 EXPECTED_GLOBAL_PREREQUISITES = {
     ("script", "ccore"),
-    ("skill", "session-close"),
-    ("standard", "english-only"),
-    ("standard", "no-emoji"),
 }
 
 
@@ -57,7 +60,7 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
             "identity": "https://github.com/cognovis/library",
             "pin": {
                 "kind": "commit",
-                "value": "5797bbc3a256c517931ca6a77b93741654a1637d",
+                "value": "aaca41ffea3e1db9937054f6a8f7f597f729cfb6",
             },
         },
         {
@@ -65,7 +68,7 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
             "identity": "https://github.com/cognovis/library-core",
             "pin": {
                 "kind": "commit",
-                "value": "b7a54ca0da8bc0bc7acc5bacadd225ca1f1402bb",
+                "value": "922d83965d92836b4eae4ef6aea0ffe7c08f4b79",
             },
         },
         {
@@ -87,6 +90,9 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
         ("skill", "ob-cli", "core"),
         ("skill", "bead-implementation-loop", "core"),
         ("skill", "executive-pack", "core"),
+        ("skill", "session-close", "core"),
+        ("standard", "english-only", "platform"),
+        ("standard", "no-emoji", "platform"),
     }
 
     closure = resolve_workspace_closure(

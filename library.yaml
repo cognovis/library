@@ -31,7 +31,7 @@ default_dirs:
     - default: .agents/just/
 workspace_policy:
   project:
-    max_receipts: 30
+    max_receipts: 50
 tag_vocabulary:
   - tag: judge-layer
     description: Artifacts that ship as part of the judge-layer family.
@@ -408,6 +408,7 @@ library:
       version: 2026.8.0
       language: python
       output_contract: json-envelope
+      default_scope: global
       distribution:
         kind: uv-tool
         package_name: cognovis-core-tools
@@ -4303,9 +4304,6 @@ library:
         - type: skill
           name: session-close
           catalog: core
-        - type: script
-          name: ccore
-          catalog: ccore
         - type: standard
           name: english-only
           catalog: platform
@@ -4324,11 +4322,21 @@ library:
       version: 0.1.0
       status: stable
       catalogs:
+        - alias: platform
+          identity: https://github.com/cognovis/library
+          pin:
+            kind: commit
+            value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
         - alias: core
           identity: https://github.com/cognovis/library-core
           pin:
             kind: commit
             value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
+        - alias: ccore
+          identity: https://github.com/cognovis/ccore
+          pin:
+            kind: commit
+            value: ee0c185ce6dd9ddafbb23e72f858fe6eea3a37b1
       roots:
         - type: skill
           name: intake
