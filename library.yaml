@@ -408,7 +408,6 @@ library:
       version: 2026.8.0
       language: python
       output_contract: json-envelope
-      default_scope: global
       distribution:
         kind: uv-tool
         package_name: cognovis-core-tools
@@ -1892,7 +1891,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: session-close
-      default_scope: global
       description: 'use when: ending a coding session by integrating or proving containment of the caller''s code, finalizing explicit Beads, persisting learnings, and cleaning caller-owned worktrees; NOT for Pack Review, release, or unrelated repository cleanup.'
       source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
       requires:
@@ -2692,7 +2690,6 @@ library:
       description: All source code MUST be in English — including comments, identifiers, log messages, and string literals. This standard applies even when the user prompt is in German.
       source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
       tier: global
-      default_scope: global
       metadata:
         library:
           plane: dev
@@ -2738,7 +2735,6 @@ library:
       description: Universal bead spec quality baseline for Pass 3 review. Defines required MoC table format and two library-default anti-patterns ("Tests folgen später", "IG-Version pinnen"). Auto-loaded by bead-reviewer as Source A. Projects extend via per-repo overlay at $REPO_ROOT/.agents/standards/bead-hygiene.md.
       source: https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md
       tier: core
-      default_scope: global
       tags:
         - origin:original
         - tier:core
@@ -2797,7 +2793,6 @@ library:
       description: Do not add emojis to source code files, configuration files, or technical documentation. Emojis degrade diff readability and cause encoding issues in some terminals.
       source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
       tier: global
-      default_scope: global
       metadata:
         library:
           plane: dev
