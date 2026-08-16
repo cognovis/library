@@ -35,6 +35,15 @@ opt-in path in `projection_eligibility` — those are two different facts about
 two different axes, and the ADR keeps them in two different fields for exactly
 this case.
 
+That rule answers "is any target eligible?", which is the question a listing
+asks. A caller that names `requested_target` asks a different one — "is *this*
+target eligible?" — and gets it answered by the same evaluator: a rights reason
+governing only some other target is still reported, but no longer decides, and a
+requested target at `operator-opt-in-required` resolves `installable`. That is
+the weaker check by design; the projection presenter is what enforces the opt-in.
+Both readings live in one function so that a listing and an install can never
+become two independent judgements about the same item.
+
 **Two vocabulary readings recorded rather than assumed**, because the closed
 list admits no additions without an ADR:
 
@@ -191,16 +200,29 @@ def _rights_reasons(item: NormalizedItem) -> list[BlockReason]:
     Only the governing grant produces a reason. Reporting a redistribution
     problem underneath an installation denial would suggest that resolving the
     redistribution question changes anything, and it does not.
+
+    The deduplication key is `(reason, state)`, not the reason alone: one grant
+    governs every target and therefore produces one reason string, but it does
+    not resolve every target to the same state. `install_rights: unknown` is
+    `license-unknown` on both targets while blocking the committed one and
+    leaving the machine-local one at `operator-opt-in-required` -- two facts, and
+    a key on the string alone kept whichever came first and silently discarded
+    the opt-in path a caller could still take. `install_rights: denied` still
+    produces exactly one reason, because there both targets really do resolve to
+    the same state; nothing here is noisier than the facts are.
     """
     reasons: list[BlockReason] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for target in PROJECTION_TARGETS:
         decision = evaluate_projection(
             item.rights, target, subject=item.qualified_identity()
         )
-        if decision.block_reason is None or decision.block_reason in seen:
+        if decision.block_reason is None:
             continue
-        seen.add(decision.block_reason)
+        key = (decision.block_reason, decision.state)
+        if key in seen:
+            continue
+        seen.add(key)
         reasons.append(
             BlockReason(
                 reason=decision.block_reason,
@@ -267,6 +289,7 @@ def evaluate_item(
     ledger: ExecutableAdmissionLedger | None = None,
     contents: Mapping[str, Mapping[str, bytes]] | None = None,
     admission_pending_is_blocking: bool = True,
+    requested_target: str | None = None,
 ) -> AdmissionDecision:
     """Evaluate one normalized item against one scope policy.
 
@@ -277,9 +300,16 @@ def evaluate_item(
             is an empty one, never a permissive one.
         contents: Qualified identity to the item's complete content, from which
             the admission-binding digest is computed.
+        requested_target: The projection target the caller is actually asking
+            about. Omitted, this answers "is any target eligible?", which is the
+            question an inventory listing asks. Named, it answers "is *this*
+            target eligible?", which is the question an install asks.
 
     Returns:
         The decision. The item itself is never modified.
+
+    Raises:
+        ValueError: when `requested_target` is not a recorded projection target.
 
     An executable item's own `executable_admission` field is **not** consulted.
     Review demonstrated the reason: a normalized item carrying
@@ -288,7 +318,28 @@ def evaluate_item(
     permission surface behind it. Authority for an executable decision lives in
     the operator's ledger, so the absence of a ledger entry for the current
     content is `pending`, which is what the field would have had to prove.
+
+    **Both questions are answered here, by one evaluator.** A target-aware
+    install used to be unreachable: every rights reason decided the summary,
+    including one that governs only the target the operator did not ask for, so
+    an item whose committed projection is blocked and whose machine-local
+    projection is merely opt-in-required was `blocked` for both. Answering that
+    at the CLI instead would have made the listing and the install two
+    independent judgements about the same item, which is how they drift.
+
+    A named target that is `operator-opt-in-required` resolves `installable`, and
+    that is deliberately the **weaker** check: it says the operator may ask,
+    not that the act is authorized. `install_marketplace_item` renders the rights
+    statement through its presenter and refuses with `ProjectionRefused` without
+    an acknowledgement of that exact statement, and it remains the gate that
+    enforces the opt-in.
     """
+    if requested_target is not None and requested_target not in PROJECTION_TARGETS:
+        raise ValueError(
+            f"unknown projection target {requested_target!r}; "
+            f"ADR-0011 records {list(PROJECTION_TARGETS)}"
+        )
+
     executable_admission = executable_admission_for_item(
         item, ledger or ExecutableAdmissionLedger(), contents or {}
     )
@@ -377,6 +428,21 @@ def evaluate_item(
         else tuple(entry for entry in ordered if entry.reason != "executable-admission-pending")
     )
 
+    # The same precedent, applied to the target axis. A caller that named the
+    # target it is asking about is judged on that target: when the requested one
+    # is not blocked by rights, a rights reason that governs only the other
+    # target is reported but does not decide. When the requested target *is*
+    # rights-blocked, every rights reason keeps deciding and the refusal is
+    # exactly the one it was before.
+    if requested_target is not None:
+        requested = evaluate_projection(
+            item.rights, requested_target, subject=item.qualified_identity()
+        )
+        if requested.state != "blocked":
+            deciding = tuple(
+                entry for entry in deciding if entry.reason not in _RIGHTS_REASONS
+            )
+
     eligibility = projection_eligibility(item.rights, subject=item.qualified_identity())
     if any(reason.reason not in _RIGHTS_REASONS for reason in deciding):
         eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
@@ -402,6 +468,13 @@ def evaluate_item(
         # not promoted by default.
         eligibility = {target: "blocked" for target in PROJECTION_TARGETS}
         admission_state = "discoverable"
+    elif requested_target is not None:
+        # The named target answers for itself. `operator-opt-in-required` counts
+        # as installable here because the operator may ask for it; the presenter
+        # and `ProjectionRefused` decide whether they get it.
+        admission_state = (
+            "discoverable" if eligibility[requested_target] == "blocked" else "installable"
+        )
     elif any(state == "allowed" for state in eligibility.values()):
         admission_state = "installable"
     else:

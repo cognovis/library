@@ -363,8 +363,16 @@ class BlockReason:
             raise ValueError("block reason detail must be text or None")
 
     def describe(self) -> str:
-        """The reason as one line: what was observed, and where it came from."""
-        return f"{self.reason}: {self.evidence} (source: {self.source})"
+        """The reason as one line: what was observed, where from, and about what.
+
+        The detail is displayed because since `CL-9mfy` one governing grant
+        records one reason **per target state** -- `install_rights: unknown`
+        blocks a committed projection and leaves a machine-local opt-in open --
+        and the detail is the only half that tells those two lines apart. A
+        reason with no detail renders exactly as before.
+        """
+        described = f"{self.reason}: {self.evidence} (source: {self.source})"
+        return f"{described} [{self.detail}]" if self.detail else described
 
     def to_dict(self) -> dict[str, Any]:
         return {

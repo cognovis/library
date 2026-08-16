@@ -56,6 +56,24 @@
 
 ### Fixed
 
+- *(CL-9mfy, marketplace)* `library marketplace install` now judges the
+  projection target the operator actually requested. Admission aggregated block
+  reasons across every target and deduplicated them by reason string, so an item
+  whose recorded `install_rights` are `unknown` — blocked for a committed
+  projection, opt-in-required for a machine-local one — was `blocked` for both,
+  and the operator opt-in presenter the command carries was unreachable for
+  exactly the items it was written for. `admission.evaluate_item` takes the
+  requested target as an explicit argument: a rights reason governing only some
+  other target is still reported but no longer decides, and a requested target at
+  `operator-opt-in-required` resolves `installable`, which means the operator may
+  ask for it. The presenter and `ProjectionRefused` remain the authoritative
+  gate, so a machine-local install still prints the rights state and still needs
+  `--accept-rights`, the committed projection of the same item is still refused,
+  and a non-rights block — unavailable provider, unadmitted content, unpromoted
+  maturity, unclassified member — still refuses every target. A caller that names
+  no target keeps the previous summary reading, so the inventory listing is
+  unchanged apart from now reporting both target states of one governing grant.
+
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent
   directly from that source. The canonical developer checkout wins over an older
@@ -159,12 +177,12 @@
   which would be indistinguishable from a provider that serves nothing — and
   substitutes no other source.
 
-  **What this does not yet make possible:** inventory and the durable cache
-  transaction (TOFU pin, foreign receipt, fail-closed drift) work end to end, but
-  `library marketplace install` still refuses every item from this provider,
-  because its recorded `install_rights` is `unknown` and admission blocks on that
-  before the operator opt-in presenter is ever reached. Unblocking that is
-  deliberately out of this bead's scope and is tracked as **`CL-9mfy`**.
+  **What this does and does not grant:** inventory and the durable cache
+  transaction (TOFU pin, foreign receipt, fail-closed drift) work end to end, and
+  since `CL-9mfy` a machine-local install of one of this provider's items reaches
+  the operator opt-in presenter and proceeds under `--accept-rights`. Its
+  recorded `install_rights` is still `unknown`, which is what makes the opt-in
+  required and what keeps the committed projection refused.
 
 - *(CL-2wqz, admission)* `library admission` records the executable-admission
   decision ADR-0011 requires, closing the residual the ADR itself recorded: slice

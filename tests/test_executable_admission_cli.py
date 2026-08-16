@@ -1068,3 +1068,268 @@ def test_a_foreign_skill_can_be_decided_about_at_the_cli(tmp_path: Path) -> None
     payload = json.loads(granted.stdout)["data"]["decision"]
     assert payload["state"] == "admitted"
     assert payload["content_digest"] == content_digest(ORIGINAL)
+
+
+# -- CL-9mfy: the install gate judges the target the operator requested --------
+#
+# These drive `library marketplace install` in process rather than as a
+# subprocess, because what is under test is the pre-transaction gate's decision
+# and every durable store the command writes to is reachable from
+# `_foreign_state`. Substituting that one seam isolates the run exactly as the
+# subprocess `XDG_DATA_HOME` does above, while keeping the shipped parser, exit
+# codes, and JSON payload.
+
+MARKETPLACE = "provider-under-test"
+UNKNOWN_ID = "skills/unlicensed"
+UNKNOWN_IDENTITY = f"{PROVIDER}#{UNKNOWN_ID}"
+UNKNOWN_FILES = {"SKILL.md": b"---\nname: unlicensed\n---\nan upstream skill\n"}
+
+#: What a subscriber endpoint records: the token proves the fetch and says
+#: nothing about installing or redistributing what it served.
+UNKNOWN_RIGHTS = Rights(
+    fetch_authorization="granted",
+    evidence_source="subscriber endpoint token, 2026-08-09",
+    grant_evidence={"install_rights": "no published installation grant"},
+)
+
+
+def _catalog() -> dict:
+    return {
+        "sources": {
+            "catalogs": [],
+            "marketplaces": [
+                {
+                    "name": MARKETPLACE,
+                    "source": "https://example.invalid/provider-under-test",
+                    "provider_kind": "git-repo",
+                }
+            ],
+        }
+    }
+
+
+def _unknown_item(**overrides: object) -> NormalizedItem:
+    """A foreign Skill whose recorded `install_rights` are unknown."""
+    base = dict(
+        provider_identity=PROVIDER,
+        upstream_id=UNKNOWN_ID,
+        upstream_name="unlicensed",
+        collection_membership=("skills",),
+        upstream_revision=None,
+        library_type="skill",
+        library_name="unlicensed",
+        classification={"type_basis": "marker-file"},
+        runtime_compatibility=("unknown",),
+        rights=UNKNOWN_RIGHTS,
+        provider_availability=AVAILABLE,
+    )
+    base.update(overrides)
+    return NormalizedItem(**base)  # type: ignore[arg-type]
+
+
+def _marketplace_install(
+    tmp_path: Path,
+    monkeypatch: "pytest.MonkeyPatch",
+    item: NormalizedItem,
+    files: Mapping[str, bytes],
+    *,
+    target: str,
+    accept_rights: bool,
+    admit: bool = True,
+) -> tuple[int, str, str]:
+    """Run one `library marketplace install` against a stubbed provider."""
+    import contextlib
+    import io
+
+    import library as library_cli
+    from lib.providers import wiring
+    from lib.providers.inventory import NormalizedInventory
+    from lib.providers.normalize import NormalizationResult
+
+    state = _state_for_home(tmp_path)
+    if admit:
+        # The admission axis is not what these tests are about, so the decision
+        # the transaction requires is recorded for these exact bytes -- and for
+        # nothing else, so a regression in that gate still fails here.
+        state.admission_ledger_store().decide(
+            "admitted",
+            item.qualified_identity(),
+            content_digest(files),
+            library_type=item.library_type,
+            reviewer=OPERATOR,
+            permission_surface=(),
+            decided_at=NOW,
+            evidence=REASON,
+        )
+
+    provider = _Provider(files)
+    result = NormalizationResult(
+        inventory=NormalizedInventory([item]),
+        costs=(),
+        absent_capabilities=(),
+        provider_identity=PROVIDER,
+        provider_availability=AVAILABLE,
+    )
+    project_root = tmp_path.resolve() / "project"
+    project_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(
+        wiring, "marketplace_inventory", lambda entry, **kwargs: (provider, result)
+    )
+    monkeypatch.setattr(library_cli, "load_catalog", lambda root: _catalog())
+    monkeypatch.setattr(library_cli, "_resolve_catalog_root", lambda: project_root)
+    monkeypatch.setattr(library_cli, "_foreign_state", lambda repo_root: state)
+
+    argv = [
+        "marketplace",
+        "install",
+        MARKETPLACE,
+        item.upstream_id,
+        "--target",
+        target,
+        "--target-root",
+        str(project_root / "projection"),
+        "--json",
+    ]
+    if accept_rights:
+        argv.append("--accept-rights")
+
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = library_cli.main(argv)
+    return code, out.getvalue(), err.getvalue()
+
+
+def test_an_unknown_rights_item_installs_machine_local_after_the_opt_in(
+    tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+) -> None:
+    """AC1. The requested target decides, so the presenter is reachable.
+
+    Before `CL-9mfy` this refused with `Not installable (blocked)`: the rights
+    reason that blocks the *committed* projection decided the summary state for a
+    machine-local install too, so the operator opt-in presenter this command
+    carries could never run for the one class of item it was written for.
+    """
+    code, out, err = _marketplace_install(
+        tmp_path,
+        monkeypatch,
+        _unknown_item(),
+        UNKNOWN_FILES,
+        target="machine_local",
+        accept_rights=True,
+    )
+
+    assert code == 0, err or out
+    # The presenter writes its statement to stdout ahead of the result payload,
+    # so the rendered statement is read here rather than assumed: this is the
+    # operator seeing the rights state before anything is written.
+    assert "operator-opt-in-required" in out
+    payload = json.loads(out[out.index("{") :])["data"]
+    assert payload["status"] == "installed"
+    assert payload["qualified_identity"] == UNKNOWN_IDENTITY
+    # And the acknowledgement carries that statement's own token, which is why
+    # the command can record that it was shown at all.
+    assert payload["rights_statement_shown"] is True
+    assert payload["targets"]
+    for path in payload["targets"]:
+        assert Path(path).is_file()
+    # The durable cache transaction completed, not only the projection.
+    assert payload["receipt_id"]
+    assert Path(payload["cache_object"]).exists()
+
+
+def test_the_same_install_without_the_opt_in_is_refused_by_the_presenter(
+    tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+) -> None:
+    """AC1, the other half. Reaching the presenter is not passing it.
+
+    The refusal is the presenter's own and names the flag that accepts the rights
+    statement it just printed -- a different outcome from the pre-`CL-9mfy`
+    `Not installable` refusal, which printed no statement at all.
+    """
+    code, out, err = _marketplace_install(
+        tmp_path,
+        monkeypatch,
+        _unknown_item(),
+        UNKNOWN_FILES,
+        target="machine_local",
+        accept_rights=False,
+    )
+
+    assert code == 3
+    assert "--accept-rights" in (out + err)
+    assert "Not installable" not in (out + err)
+    assert not (tmp_path.resolve() / "project" / "projection").exists()
+
+
+def test_the_committed_projection_of_the_same_item_is_still_refused(
+    tmp_path: Path, monkeypatch: "pytest.MonkeyPatch"
+) -> None:
+    """AC2. The target-aware gate still refuses the target that has no grant."""
+    code, out, err = _marketplace_install(
+        tmp_path,
+        monkeypatch,
+        _unknown_item(),
+        UNKNOWN_FILES,
+        target="project_committed",
+        accept_rights=True,
+    )
+
+    assert code == 3
+    message = out + err
+    assert "install_rights" in message
+    assert "unknown" in message
+    assert not (tmp_path.resolve() / "project" / "projection").exists()
+
+
+@pytest.mark.parametrize(
+    "overrides, expected",
+    [
+        (
+            {
+                "provider_availability": ProviderAvailability(
+                    state="unavailable",
+                    observed_at=NOW,
+                    reason="endpoint returned 503",
+                )
+            },
+            "content-unavailable",
+        ),
+        (
+            {
+                "classification": {
+                    "type_basis": "marker-file",
+                    "maturity": "in-progress",
+                    "maturity_basis": "collection:in-progress",
+                }
+            },
+            "maturity",
+        ),
+    ],
+)
+@pytest.mark.parametrize("target", ["machine_local", "project_committed"])
+def test_a_non_rights_block_is_refused_for_every_target(
+    tmp_path: Path,
+    monkeypatch: "pytest.MonkeyPatch",
+    overrides: Mapping[str, object],
+    expected: str,
+    target: str,
+) -> None:
+    """AC3. Naming a target relaxes the rights axis and nothing else.
+
+    Both items also carry unknown rights, so an item the operator could opt into
+    machine-locally is still refused while something other than rights is wrong
+    with it.
+    """
+    code, out, err = _marketplace_install(
+        tmp_path,
+        monkeypatch,
+        _unknown_item(**overrides),
+        UNKNOWN_FILES,
+        target=target,
+        accept_rights=True,
+    )
+
+    assert code == 3
+    assert expected in (out + err)
+    assert not (tmp_path.resolve() / "project" / "projection").exists()
