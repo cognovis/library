@@ -2,6 +2,10 @@
 .env
 *.tmp
 
+# setuptools output from building this package (uv run, install.sh)
+/build/
+/library.egg-info/
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
