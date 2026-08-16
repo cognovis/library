@@ -31,7 +31,7 @@ default_dirs:
     - default: .agents/just/
 workspace_policy:
   project:
-    max_receipts: 30
+    max_receipts: 50
 tag_vocabulary:
   - tag: judge-layer
     description: Artifacts that ship as part of the judge-layer family.
@@ -1892,7 +1892,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: session-close
-      default_scope: global
       description: 'use when: ending a coding session by integrating or proving containment of the caller''s code, finalizing explicit Beads, persisting learnings, and cleaning caller-owned worktrees; NOT for Pack Review, release, or unrelated repository cleanup.'
       source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
       requires:
@@ -2692,7 +2691,6 @@ library:
       description: All source code MUST be in English — including comments, identifiers, log messages, and string literals. This standard applies even when the user prompt is in German.
       source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
       tier: global
-      default_scope: global
       metadata:
         library:
           plane: dev
@@ -2738,7 +2736,6 @@ library:
       description: Universal bead spec quality baseline for Pass 3 review. Defines required MoC table format and two library-default anti-patterns ("Tests folgen später", "IG-Version pinnen"). Auto-loaded by bead-reviewer as Source A. Projects extend via per-repo overlay at $REPO_ROOT/.agents/standards/bead-hygiene.md.
       source: https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md
       tier: core
-      default_scope: global
       tags:
         - origin:original
         - tier:core
@@ -2797,7 +2794,6 @@ library:
       description: Do not add emojis to source code files, configuration files, or technical documentation. Emojis degrade diff readability and cause encoding issues in some terminals.
       source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
       tier: global
-      default_scope: global
       metadata:
         library:
           plane: dev
@@ -4268,19 +4264,19 @@ library:
       description: Minimal project-local baseline for Cognovis repositories using Library and Beads.
       source: https://github.com/cognovis/library/blob/main/workspaces/cognovis-base.yaml
       schema_version: 2
-      version: 0.1.0
+      version: 0.2.0
       status: stable
       catalogs:
         - alias: platform
           identity: https://github.com/cognovis/library
           pin:
             kind: commit
-            value: 5797bbc3a256c517931ca6a77b93741654a1637d
+            value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
         - alias: core
           identity: https://github.com/cognovis/library-core
           pin:
             kind: commit
-            value: b7a54ca0da8bc0bc7acc5bacadd225ca1f1402bb
+            value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
         - alias: ccore
           identity: https://github.com/cognovis/ccore
           pin:
@@ -4305,11 +4301,78 @@ library:
         - type: skill
           name: executive-pack
           catalog: core
+        - type: skill
+          name: session-close
+          catalog: core
+        - type: standard
+          name: english-only
+          catalog: platform
+        - type: standard
+          name: no-emoji
+          catalog: platform
       metadata:
         library:
           source_catalog: library-platform
           inventory: manual
-          source_commit: 123f450894be49563b59ce99f5e06410bdd63431
+          source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
+    - name: cognovis-daily
+      description: Daily operator tooling and working standards for Cognovis repositories.
+      source: https://github.com/cognovis/library/blob/main/workspaces/cognovis-daily.yaml
+      schema_version: 2
+      version: 0.1.0
+      status: stable
+      catalogs:
+        - alias: platform
+          identity: https://github.com/cognovis/library
+          pin:
+            kind: commit
+            value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
+        - alias: core
+          identity: https://github.com/cognovis/library-core
+          pin:
+            kind: commit
+            value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
+        - alias: ccore
+          identity: https://github.com/cognovis/ccore
+          pin:
+            kind: commit
+            value: ee0c185ce6dd9ddafbb23e72f858fe6eea3a37b1
+      roots:
+        - type: skill
+          name: intake
+          catalog: core
+        - type: skill
+          name: workplan
+          catalog: core
+        - type: skill
+          name: dolt
+          catalog: core
+        - type: skill
+          name: summarize
+          catalog: core
+        - type: skill
+          name: playwright-cli
+          catalog: core
+        - type: skill
+          name: worktree-cleanup
+          catalog: core
+        - type: skill
+          name: context-handoff
+          catalog: core
+        - type: standard
+          name: bead-hygiene
+          catalog: core
+        - type: standard
+          name: git
+          catalog: core
+        - type: standard
+          name: worktree-subagent-discipline
+          catalog: core
+      metadata:
+        library:
+          source_catalog: library-platform
+          inventory: manual
+          source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
     - name: library-authoring
       description: Shared authoring baseline for Library primitive repositories.
       source: https://github.com/cognovis/library/blob/main/workspaces/library-authoring.yaml
