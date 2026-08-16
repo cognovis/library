@@ -332,6 +332,13 @@ bead_workspace_writable_roots_arg() {
     local -a unique_roots=()
     if (( ${#roots} > 0 )); then
         for root in "${roots[@]}"; do
+            # A TOML basic string cannot carry a raw control character, and a
+            # path holding one is pathological; drop the root instead of
+            # emitting config Codex refuses to load.
+            if [[ "$root" == *[[:cntrl:]]* ]]; then
+                echo "WARNING: skipping writable root with a control character in its path: ${root}" >&2
+                continue
+            fi
             seen=false
             if (( ${#unique_roots} > 0 )); then
                 for existing in "${unique_roots[@]}"; do
@@ -861,9 +868,28 @@ reject_managed_permission_argument() {
     exit 2
 }
 
+# A config key is matched with its whitespace removed: Codex parses the value as
+# TOML, where a padded key is the same key, but a raw prefix test is not.
+is_managed_permission_config() {
+    local entry="$1"
+    local key="${entry%%=*}"
+
+    key="${key//[[:space:]]/}"
+    case "$key" in
+        approval_policy*|sandbox_*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 # Bead modes place their permission args before the caller's, so any permission
-# argument forwarded here is the later one and wins. Config keys are checked by
-# key prefix because a single -c can rewrite the whole sandbox policy.
+# argument forwarded here is the later one and wins. The rejected set is every
+# Codex argument that selects an approval, sandbox, or workspace posture --
+# including the ones that do it indirectly, by layering a config profile,
+# widening the writable set, moving the working root, or dropping the execpolicy
+# rules that govern what may run outside the sandbox. Short options also accept
+# their value attached (-sworkspace-write), so those forms are matched too.
 reject_managed_permission_overrides() {
     local index=1
     local arg next_arg
@@ -877,25 +903,39 @@ reject_managed_permission_overrides() {
             --dangerously-bypass-approvals-and-sandbox|--yolo|--full-auto)
                 reject_managed_permission_argument "$arg"
                 ;;
-            --sandbox|-s|--ask-for-approval|-a)
+            --approve-for-me|--dangerously-bypass-hook-trust)
+                reject_managed_permission_argument "$arg"
+                ;;
+            --ignore-rules|--ignore-user-config)
+                reject_managed_permission_argument "$arg"
+                ;;
+            --sandbox|--ask-for-approval|--profile|--permission-profile|--add-dir|--cd)
                 reject_managed_permission_argument "$arg ${next_arg}"
                 ;;
-            --sandbox=*|-s=*|--ask-for-approval=*|-a=*)
+            --sandbox=*|--ask-for-approval=*|--profile=*|--permission-profile=*|--add-dir=*|--cd=*)
+                reject_managed_permission_argument "$arg"
+                ;;
+            -s|-a|-p|-P|-C)
+                reject_managed_permission_argument "$arg ${next_arg}"
+                ;;
+            -s*|-a*|-p*|-P*|-C*)
                 reject_managed_permission_argument "$arg"
                 ;;
             -c|--config)
-                case "$next_arg" in
-                    approval_policy*|sandbox_*)
-                        reject_managed_permission_argument "$arg $next_arg"
-                        ;;
-                esac
+                if is_managed_permission_config "$next_arg"; then
+                    reject_managed_permission_argument "$arg $next_arg"
+                fi
                 ;;
-            -c=*|--config=*)
-                case "${arg#*=}" in
-                    approval_policy*|sandbox_*)
-                        reject_managed_permission_argument "$arg"
-                        ;;
-                esac
+            --config=*)
+                if is_managed_permission_config "${arg#--config=}"; then
+                    reject_managed_permission_argument "$arg"
+                fi
+                ;;
+            -c*)
+                local attached_config="${arg#-c}"
+                if is_managed_permission_config "${attached_config#=}"; then
+                    reject_managed_permission_argument "$arg"
+                fi
                 ;;
         esac
         (( index++ ))

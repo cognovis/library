@@ -1921,6 +1921,111 @@ def test_cdx_bead_modes_reject_caller_permission_overrides(
     assert "not accepted in Bead modes" in result.stderr
 
 
+@pytest.mark.parametrize("mode_args", [["-br", "CL-smoke"], ["-b", "CL-smoke"]])
+@pytest.mark.parametrize(
+    "posture_args",
+    [
+        ["--approve-for-me"],
+        ["--dangerously-bypass-hook-trust"],
+        ["--ignore-rules"],
+        ["--ignore-user-config"],
+        ["--profile", "custom"],
+        ["--profile=custom"],
+        ["-p", "custom"],
+        ["-pcustom"],
+        ["--permission-profile", "custom"],
+        ["-P", "custom"],
+        ["--add-dir", "/tmp"],
+        ["--add-dir=/tmp"],
+        ["--cd", "/tmp"],
+        ["-C", "/tmp"],
+        ["-sworkspace-write"],
+        ["-anever"],
+    ],
+)
+def test_cdx_managed_modes_reject_permission_posture_flags(
+    tmp_path: Path,
+    mode_args: list[str],
+    posture_args: list[str],
+) -> None:
+    """Anything that selects an approval, sandbox, or workspace posture is ours."""
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, [*mode_args, *posture_args])
+    )
+
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "not accepted in Bead modes" in result.stderr
+
+
+@pytest.mark.parametrize("mode_args", [["-br", "CL-smoke"], ["-b", "CL-smoke"]])
+@pytest.mark.parametrize(
+    "config_args",
+    [
+        ["-c", ' approval_policy="on-request"'],
+        ["-c", "\tsandbox_mode=\"danger-full-access\""],
+        ["-c", " sandbox_workspace_write.network_access = false"],
+        ["--config", "  approval_policy=\"never\""],
+        ["--config= approval_policy=\"never\""],
+        ["-c approval_policy=\"never\""],
+        ["-c sandbox_mode=\"danger-full-access\""],
+    ],
+)
+def test_cdx_managed_modes_reject_padded_permission_config_keys(
+    tmp_path: Path,
+    mode_args: list[str],
+    config_args: list[str],
+) -> None:
+    """Leading whitespace must not smuggle a permission key past the check."""
+    result, _argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, [*mode_args, *config_args])
+    )
+
+    assert result.returncode == 2
+    assert not called_file.exists()
+    assert "not accepted in Bead modes" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "posture_args",
+    [["--approve-for-me"], ["--add-dir", "/tmp"], ["-p", "custom"]],
+)
+def test_cdx_plain_mode_still_forwards_posture_flags(
+    tmp_path: Path,
+    posture_args: list[str],
+) -> None:
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        [*posture_args, "hello"],
+        route_name="codex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(argv_file.read_text(encoding="utf-8")) == [*posture_args, "hello"]
+
+
+def test_cdx_skips_a_writable_root_holding_control_characters(tmp_path: Path) -> None:
+    """A control character cannot be expressed in a TOML basic string."""
+    cache_home = tmp_path / "cache\nbreak"
+
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-b", "CL-smoke"],
+            env_overrides={"XDG_CACHE_HOME": str(cache_home)},
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    roots = _writable_roots(argv)
+    assert f"{cache_home}/uv" not in roots
+    assert roots == [str(tmp_path / "repo" / ".git")]
+    assert "WARNING" in result.stderr
+    assert "control character" in result.stderr
+
+
 def test_cdx_bead_modes_keep_unrelated_config_overrides(tmp_path: Path) -> None:
     """Only permission keys are managed; other -c overrides stay the caller's."""
     result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (

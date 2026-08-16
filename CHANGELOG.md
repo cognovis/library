@@ -74,11 +74,17 @@
   both paths otherwise, so a session can no longer run against another
   repository's database, and only the verified workspace becomes a writable
   root. Bead, delivery, quick, and review modes now reject caller-supplied
-  permission arguments in the forwarded Codex arguments — `--sandbox`/`-s`,
-  `--ask-for-approval`/`-a`, `--full-auto`, `--yolo`,
-  `--dangerously-bypass-approvals-and-sandbox`, and any `-c` override keyed
-  `approval_policy*` or `sandbox_*` — which would otherwise override the
-  wrapper's scoped permissions; plain mode still forwards all of them.
+  arguments that select an approval, sandbox, or workspace posture in the
+  forwarded Codex arguments — `--sandbox`/`-s`, `--ask-for-approval`/`-a`,
+  `--approve-for-me`, `--full-auto`, `--yolo`,
+  `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`,
+  `--ignore-rules`, `--ignore-user-config`, `--profile`/`-p`,
+  `--permission-profile`/`-P`, `--add-dir`, `--cd`/`-C`, and any `-c` override
+  keyed `approval_policy*` or `sandbox_*` — in pair, joined, and attached short
+  forms, with the config key matched after its whitespace is removed. Writable
+  roots are emitted as escaped TOML basic strings, and a root whose path holds a
+  control character is skipped with a warning instead of producing config Codex
+  refuses to load. Plain mode still forwards all of these arguments unchanged.
 
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent
