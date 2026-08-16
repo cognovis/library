@@ -48,6 +48,20 @@
 
 ### Fixed
 
+- *(CL-14ob, cdx)* External bead worktrees keep the originating repository's Beads
+  identity and every launch mode keeps a scoped permission boundary. A worktree
+  outside the canonical checkout now carries a `.beads/redirect` file pointing at
+  the canonical `.beads` directory, so bd no longer resolves the `~/.beads`
+  fallback that its parent-directory walk reaches first for worktrees below
+  `$HOME`; reused worktrees repair a missing or stale redirect, nested worktrees
+  keep inheriting discovery, and the redirect is excluded so launcher preparation
+  never dirties the worktree. Implementation, delivery, and quick modes default to
+  `--sandbox workspace-write -c approval_policy="never"` again, review stays
+  `--sandbox read-only`, and plain `cdx` keeps Codex's own approvals and sandbox.
+  Full bypass now requires `--bead-dangerous-full-auto` (bead modes) or the new
+  `--dangerous-full-access` (plain mode), both of which print a stderr warning;
+  `--no-full-auto` remains accepted as a deprecated no-op.
+
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent
   directly from that source. The canonical developer checkout wins over an older

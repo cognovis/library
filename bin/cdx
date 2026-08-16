@@ -4,8 +4,16 @@
 # Usage: cdx [wrapper-flags] [codex-args...]
 #        cdx -h | --help        Show wrapper flag help, then fall through to codex --help
 #
+# Permission matrix (see --help):
+#   plain            → codex defaults (approvals + sandbox)
+#   -b/-sb/-ep/-bq   → --sandbox workspace-write, approval_policy="never"
+#   -br              → --sandbox read-only
+#   dangerous opt-in → --dangerous-full-access (plain),
+#                      --bead-dangerous-full-auto (bead modes)
+#
 # Wrapper flags (not passed to codex):
-#   --no-full-auto  → Launch codex without the default --full-auto wrapper
+#   --dangerous-full-access → Plain mode only: full bypass of approvals and sandbox
+#   --no-full-auto  → Deprecated no-op; the default plain launch already sandboxes
 #   --tui           → For cdx -b, force interactive Codex TUI mode (default)
 #   --exec          → For cdx -b, force non-interactive codex exec mode
 #   -sb, --solo-bead ID → canonical Solo Bead delivery mode
@@ -14,7 +22,7 @@
 #   -- [PROMPT]     → separate caller prose from harness flags in delivery modes
 #   -bq, --bead-quick ID → launch the implementation loop in explicit Quick mode
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
-#   --bead-dangerous-full-auto → Deprecated compatibility no-op for implementation modes
+#   --bead-dangerous-full-auto → Bead implementation modes: full bypass of approvals and sandbox
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #
@@ -211,7 +219,7 @@ resolve_bead_reviewer_skill_path() {
 
 # ── Parse wrapper flags ──────────────────────────────────────────
 
-use_full_auto=true
+plain_dangerous_full_access=false
 show_help=false
 solo_bead_id=""
 executive_pack_ids=""
@@ -273,8 +281,19 @@ select_bead_codex_permission_args() {
         return
     fi
 
+    if ${bead_dangerous_full_auto}; then
+        echo "WARNING: --bead-dangerous-full-auto runs this Bead session with a full bypass of approvals and sandbox." >&2
+        echo "WARNING: Codex gets unrestricted host access outside the worktree; only dcg PreToolUse guards remain." >&2
+        bead_codex_permission_args=(
+            "--dangerously-bypass-approvals-and-sandbox"
+            "-c" "mcp_servers.beads.required=true"
+        )
+        return
+    fi
+
     bead_codex_permission_args=(
-        "--dangerously-bypass-approvals-and-sandbox"
+        "--sandbox" "workspace-write"
+        "-c" "approval_policy=\"never\""
         "-c" "mcp_servers.beads.required=true"
     )
 }
@@ -339,6 +358,61 @@ bootstrap_worktree_overlays() {
         "${overlay_args[@]}" >&2 || true
 }
 
+# Keep the launcher-written redirect out of `git status`. The canonical checkout
+# may already ignore `.beads/`, and upstream beads (GH#814) requires the redirect
+# to stay untracked, so append the pattern to the shared exclude file only when
+# git reports it as not ignored.
+ensure_beads_redirect_excluded() {
+    local worktree_dir="$1"
+    local redirect_path=".beads/redirect"
+
+    if "${GIT_BIN}" -C "$worktree_dir" check-ignore -q "$redirect_path" 2>/dev/null; then
+        return 0
+    fi
+
+    local common_dir
+    common_dir=$("${GIT_BIN}" -C "$worktree_dir" rev-parse --git-common-dir 2>/dev/null) || return 0
+    [[ -n "$common_dir" ]] || return 0
+    if [[ "$common_dir" != /* ]]; then
+        common_dir="${worktree_dir}/${common_dir}"
+    fi
+    test -d "$common_dir" || return 0
+
+    local exclude_file="${common_dir}/info/exclude"
+    mkdir -p "${common_dir}/info" || return 0
+    if [[ ! -f "$exclude_file" ]] || ! grep -qxF "$redirect_path" "$exclude_file"; then
+        printf "\n# cdx bead worktree beads redirect\n%s\n" "$redirect_path" >> "$exclude_file"
+    fi
+}
+
+# An external worktree lies outside the canonical checkout, so bd's
+# parent-directory discovery walks past the repository and falls back to
+# ~/.beads. bd's native redirect file points it back at the canonical workspace.
+# Worktrees below the repo root inherit discovery and are left untouched.
+# Never fatal, and never on stdout: the caller's stdout is the worktree path.
+ensure_worktree_beads_identity() {
+    local repo_root="${1:A}"
+    local worktree_dir="${2:A}"
+
+    local canonical_beads="${repo_root}/.beads"
+    test -d "$canonical_beads" || return 0
+    test -d "$worktree_dir" || return 0
+    if [[ "$worktree_dir" == "$repo_root" || "$worktree_dir" == "$repo_root"/* ]]; then
+        return 0
+    fi
+
+    local worktree_beads="${worktree_dir}/.beads"
+    local redirect_file="${worktree_beads}/redirect"
+    mkdir -p "$worktree_beads" || return 0
+    chmod 700 "$worktree_beads" 2>/dev/null || true
+
+    if [[ ! -f "$redirect_file" ]] || [[ "$(<"$redirect_file")" != "$canonical_beads" ]]; then
+        printf '%s\n' "$canonical_beads" > "$redirect_file" || return 0
+    fi
+
+    ensure_beads_redirect_excluded "$worktree_dir"
+}
+
 default_codex_worktree_root() {
     local repo_root="$1"
     local worktree_home="${CDX_WORKTREE_HOME:-${HOME:-$repo_root}/code/.worktrees}"
@@ -368,6 +442,7 @@ ensure_bead_worktree() {
     local branch_name="${CDX_WORKTREE_BRANCH_PREFIX:-worktree-bead-}${safe_bead}"
 
     if "${GIT_BIN}" worktree list --porcelain 2>/dev/null | grep -Fxq "worktree ${worktree_dir}"; then
+        ensure_worktree_beads_identity "$repo_root" "$worktree_dir"
         printf '%s\n' "$worktree_dir"
         return 0
     fi
@@ -386,6 +461,7 @@ ensure_bead_worktree() {
         "${GIT_BIN}" worktree add -b "$branch_name" "$worktree_dir" HEAD >/dev/null
     fi
     bootstrap_worktree_overlays "$repo_root" "$worktree_dir"
+    ensure_worktree_beads_identity "$repo_root" "$worktree_dir"
     printf '%s\n' "$worktree_dir"
 }
 
@@ -417,7 +493,11 @@ while (( $# > 0 )); do
             shift
             ;;
         --no-full-auto)
-            use_full_auto=false
+            echo "NOTE: --no-full-auto is deprecated and now describes the default plain launch." >&2
+            shift
+            ;;
+        --dangerous-full-access)
+            plain_dangerous_full_access=true
             shift
             ;;
         --tui)
@@ -519,16 +599,27 @@ Wrapper flags (consumed by cdx, not passed to codex):
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
          --bead-dangerous-full-auto
-                                Deprecated compatibility no-op for Bead
-                                implementation modes, which already use cdx's bypass
+                                DANGEROUS: run Bead implementation modes with a
+                                full bypass of approvals and sandbox
 
   Session:
-         --no-full-auto          Launch codex without the default --full-auto wrapper
+         --dangerous-full-access DANGEROUS: plain mode only. Full bypass of
+                                 approvals and sandbox for this session
+         --no-full-auto          Deprecated no-op; plain launches already keep
+                                 codex approvals and sandboxing
          --tui                   For cdx -b, force interactive Codex TUI mode
                                  (default for cdx -b)
          --exec                  For cdx -b, force non-interactive codex exec mode
     -h,  --help                  Show this help, then codex --help
 
+────────────────────────────────────────────────────────────
+Permission matrix:
+  plain cdx                      codex default approvals and sandbox
+  -sb / -b / -ep / -bq           --sandbox workspace-write with
+                                 approval_policy="never"
+  -br                            --sandbox read-only
+  --dangerous-full-access        plain mode full bypass (warned)
+  --bead-dangerous-full-auto     Bead mode full bypass (warned)
 ────────────────────────────────────────────────────────────
 Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
 context and pass it to Codex. Full cdx -b defaults to TUI mode so you can ask
@@ -839,10 +930,11 @@ if [[ -n "$bead_review_id" ]]; then
     done
 
     export CLD_BEAD_LINE=cdx
+    select_bead_codex_permission_args
     # ADR-0009: no dispatch client of our own. A normal Codex session runs the
     # review skill and dispatches the foreign reviewer through acpx-runner,
     # which owns the opposite-family invariant.
-    if "${CODEX_BIN}" "${codex_args[@]}" \
+    if "${CODEX_BIN}" "${bead_codex_permission_args[@]}" "${codex_args[@]}" \
         "Bead ID: $bead_review_id. Invoke the installed bead-review skill for this bead in $PWD. \
 Dispatch the reviewer through the acpx-runner agent with ROLE=review, LEAD_FAMILY=openai, \
 CONTRACT=review_gate_v1, and the agent/model/reasoning preferred by the model-routing standard. \
@@ -859,14 +951,13 @@ fi
 
 # ── Default: plain Codex launch ─────────────────────────────────
 
-if ${use_full_auto}; then
+if ${plain_dangerous_full_access}; then
     # Full equivalent of "cld --dangerously-skip-permissions": no approval prompts AND
-    # no sandbox. The previous workspace-write sandbox blocked paths outside the workdir
-    # (e.g. ~/.cache/uv) and caused recurring "permission denied" / "operation not
-    # permitted" failures. Safeguarding is delegated to dcg via ~/.codex/hooks.json
-    # (PreToolUse Bash hook). Use --no-full-auto to opt back into Codex's default sandbox.
+    # no sandbox. Safeguarding is delegated to dcg via ~/.codex/hooks.json
+    # (PreToolUse Bash hook).
     # See: https://developers.openai.com/codex/agent-approvals-security
+    echo "WARNING: --dangerous-full-access launches Codex with a full bypass of approvals and sandbox." >&2
+    echo "WARNING: the session gets unrestricted host access; only dcg PreToolUse guards remain." >&2
     exec "${CODEX_BIN}" --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}"
-else
-    exec "${CODEX_BIN}" "${codex_args[@]}"
 fi
+exec "${CODEX_BIN}" "${codex_args[@]}"

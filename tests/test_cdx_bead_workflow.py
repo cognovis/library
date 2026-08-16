@@ -25,6 +25,20 @@ _SAFE_BEAD_CODEX_ARGS = [
 ]
 _READONLY_BEAD_CODEX_ARGS = ["--sandbox", "read-only"]
 _SYSTEM_GIT = shutil.which("git")
+_SYSTEM_BD = shutil.which("bd")
+_PACKAGED_CDX_BIN = Path(__file__).resolve().parents[1] / "scripts" / "bin" / "cdx"
+
+
+def _workspace_beads_dir() -> Path | None:
+    """Locate the canonical Beads workspace this checkout belongs to."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / ".beads" / "metadata.json"
+        if candidate.is_file():
+            return candidate.parent
+    return None
+
+
+_WORKSPACE_BEADS = _workspace_beads_dir()
 
 
 def _write_launcher_executable(path: Path, content: str) -> Path:
@@ -213,10 +227,20 @@ def _write_launcher_git_mock(tmp_path: Path) -> tuple[Path, Path, Path]:
         "args = sys.argv[1:]\n"
         "with pathlib.Path(os.environ['GIT_ARGV_LOG']).open('a', encoding='utf-8') as f:\n"
         "    f.write(json.dumps(args) + '\\n')\n"
+        "if args[:1] == ['-C'] and len(args) > 1:\n"
+        "    args = args[2:]\n"
         "if args[:2] == ['rev-parse', '--show-toplevel']:\n"
         "    print(os.environ['GIT_REPO_ROOT'])\n"
         "    raise SystemExit(0)\n"
+        "if args[:2] == ['rev-parse', '--git-common-dir']:\n"
+        "    print(os.environ['GIT_REPO_ROOT'] + '/.git')\n"
+        "    raise SystemExit(0)\n"
+        "if args[:1] == ['check-ignore']:\n"
+        "    raise SystemExit(int(os.environ.get('GIT_CHECK_IGNORE_EXIT', '1')))\n"
         "if args[:3] == ['worktree', 'list', '--porcelain']:\n"
+        "    for entry in os.environ.get('GIT_REGISTERED_WORKTREES', '').split(os.pathsep):\n"
+        "        if entry:\n"
+        "            print('worktree ' + entry)\n"
         "    raise SystemExit(0)\n"
         "if args[:2] == ['show-ref', '--verify']:\n"
         "    raise SystemExit(1)\n"
@@ -381,6 +405,61 @@ def test_cdx_fails_closed_when_codex_is_missing(tmp_path: Path) -> None:
     assert "codex not found in PATH" in result.stderr
     assert "@openai/codex" in result.stderr
     assert "codex-multi-auth" not in result.stderr
+
+
+def test_cdx_plain_mode_defaults_to_normal_codex_permissions(tmp_path: Path) -> None:
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        ["hello"],
+        route_name="codex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert argv == ["hello"]
+    assert _DANGEROUS_CODEX_ARG not in argv
+    assert "--full-auto" not in argv
+    assert "WARNING" not in result.stderr
+
+
+def test_cdx_plain_dangerous_full_access_is_explicit_and_warned(tmp_path: Path) -> None:
+    result, argv_file = _run_plain_cdx_launcher(
+        tmp_path,
+        ["--dangerous-full-access", "hello"],
+        route_name="codex",
+    )
+
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    assert argv == [_DANGEROUS_CODEX_ARG, "hello"]
+    assert "--dangerous-full-access" not in argv
+    assert "WARNING: --dangerous-full-access" in result.stderr
+    assert "approvals and sandbox" in result.stderr
+
+
+def test_cdx_plain_no_full_auto_is_a_deprecated_no_op(tmp_path: Path) -> None:
+    plain_dir = tmp_path / "plain"
+    plain_dir.mkdir()
+    plain_result, plain_argv = _run_plain_cdx_launcher(
+        plain_dir,
+        ["hello"],
+        route_name="codex",
+    )
+
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    legacy_result, legacy_argv = _run_plain_cdx_launcher(
+        legacy_dir,
+        ["--no-full-auto", "hello"],
+        route_name="codex",
+    )
+
+    assert plain_result.returncode == 0, plain_result.stderr
+    assert legacy_result.returncode == 0, legacy_result.stderr
+    assert json.loads(legacy_argv.read_text(encoding="utf-8")) == json.loads(
+        plain_argv.read_text(encoding="utf-8")
+    )
+    assert "--no-full-auto is deprecated" in legacy_result.stderr
 
 
 def test_cdx_help_exposes_canonical_solo_and_executive_pack_modes(
@@ -1258,6 +1337,7 @@ def test_cdx_active_bead_entrypoint_has_no_legacy_policy_authority() -> None:
         "codex-impl.py",
         "codex-exec.py",
         "claude-impl.py",
+        "cursor-impl.py",
     ):
         assert banned not in source
 
@@ -1456,7 +1536,7 @@ def test_cdx_bead_modes_wrap_context_as_untrusted_data(
         ["-bq", "CL-smoke"],
     ],
 )
-def test_cdx_bead_modes_default_to_dangerous_bypass(
+def test_cdx_bead_modes_default_to_scoped_permissions(
     tmp_path: Path,
     args: list[str],
 ) -> None:
@@ -1470,9 +1550,46 @@ def test_cdx_bead_modes_default_to_dangerous_bypass(
     assert result.returncode == 0, result.stderr
     assert called_file.exists()
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
-    _assert_dangerous_bead_permissions(argv)
+    _assert_safe_bead_permissions(argv)
     assert "--bead-dangerous-full-auto" not in argv
-    assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
+    assert "WARNING" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["-sb", "CL-smoke", "--exec"],
+        ["-b", "CL-smoke", "--exec"],
+        ["-ep", "CL-first,CL-second", "--exec"],
+    ],
+)
+def test_cdx_delivery_modes_default_to_scoped_permissions(
+    tmp_path: Path,
+    args: list[str],
+) -> None:
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            args,
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    _assert_safe_bead_permissions(argv)
+    assert "WARNING" not in result.stderr
+
+
+def test_cdx_bead_review_launches_read_only(tmp_path: Path) -> None:
+    result, argv_file, _prompt_file, called_file, _env_file, _bd_log, _git_log = (
+        _run_cdx_launcher(tmp_path, ["-br", "CL-smoke"])
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    _assert_readonly_bead_permissions(argv)
 
 
 def test_cdx_bead_review_dispatches_through_acpx_runner(tmp_path: Path) -> None:
@@ -1555,7 +1672,7 @@ def test_cdx_implementer_modes_run_from_bead_worktree(
         ["-bq", "CL-smoke", "--bead-dangerous-full-auto"],
     ],
 )
-def test_cdx_bead_dangerous_flag_remains_a_compatibility_noop(
+def test_cdx_bead_dangerous_flag_opts_into_full_bypass_with_warning(
     tmp_path: Path,
     args: list[str],
 ) -> None:
@@ -1571,7 +1688,8 @@ def test_cdx_bead_dangerous_flag_remains_a_compatibility_noop(
     argv = json.loads(argv_file.read_text(encoding="utf-8"))
     _assert_dangerous_bead_permissions(argv)
     assert "--bead-dangerous-full-auto" not in argv
-    assert "WARNING: --bead-dangerous-full-auto" not in result.stderr
+    assert "WARNING: --bead-dangerous-full-auto" in result.stderr
+    assert "approvals and sandbox" in result.stderr
 
 
 def test_cdx_review_rejects_dangerous_bypass(tmp_path: Path) -> None:
@@ -1987,9 +2105,238 @@ def test_cdx_bead_worktree_overlay_bootstrap_can_be_disabled(tmp_path: Path) -> 
     assert not os.path.lexists(worktree / ".env")
 
 
+def _seed_canonical_beads_workspace(tmp_path: Path) -> Path:
+    """Create the canonical checkout's Beads workspace directory."""
+    canonical_beads = tmp_path / "repo" / ".beads"
+    canonical_beads.mkdir(parents=True, exist_ok=True)
+    return canonical_beads
+
+
+def test_cdx_bead_worktree_redirects_beads_to_the_canonical_workspace(
+    tmp_path: Path,
+) -> None:
+    canonical_beads = _seed_canonical_beads_workspace(tmp_path)
+
+    result, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+
+    assert result.returncode == 0, result.stderr
+    redirect = tmp_path / "worktrees" / "bead-CL-smoke" / ".beads" / "redirect"
+    assert redirect.is_file()
+    assert redirect.read_text(encoding="utf-8").strip() == str(canonical_beads.resolve())
+    assert redirect.parent.stat().st_mode & 0o777 == 0o700
+
+
+@pytest.mark.parametrize("stale_redirect", [None, "/nonexistent/other/.beads\n"])
+def test_cdx_bead_worktree_repairs_the_beads_redirect_on_reuse(
+    tmp_path: Path,
+    stale_redirect: str | None,
+) -> None:
+    canonical_beads = _seed_canonical_beads_workspace(tmp_path)
+    worktree = tmp_path / "worktrees" / "bead-CL-smoke"
+    (worktree / ".beads").mkdir(parents=True)
+    if stale_redirect is not None:
+        (worktree / ".beads" / "redirect").write_text(stale_redirect, encoding="utf-8")
+
+    result, _argv_file, _prompt_file, _called_file, _env_file, _bd_log, git_log = (
+        _run_cdx_launcher(
+            tmp_path,
+            ["-b", "CL-smoke"],
+            env_overrides={"GIT_REGISTERED_WORKTREES": str(worktree)},
+        )
+    )
+
+    assert result.returncode == 0, result.stderr
+    redirect = worktree / ".beads" / "redirect"
+    assert redirect.read_text(encoding="utf-8").strip() == str(canonical_beads.resolve())
+    git_calls = [
+        json.loads(line) for line in git_log.read_text(encoding="utf-8").splitlines()
+    ]
+    assert not any(call[:2] == ["worktree", "add"] for call in git_calls)
+
+
+def test_cdx_bead_worktree_keeps_the_redirect_out_of_the_worktree_status(
+    tmp_path: Path,
+) -> None:
+    _seed_canonical_beads_workspace(tmp_path)
+
+    result, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+
+    assert result.returncode == 0, result.stderr
+    exclude_file = tmp_path / "repo" / ".git" / "info" / "exclude"
+    assert ".beads/redirect" in exclude_file.read_text(encoding="utf-8")
+
+
+def test_cdx_bead_worktree_skips_the_exclude_when_the_redirect_is_ignored(
+    tmp_path: Path,
+) -> None:
+    _seed_canonical_beads_workspace(tmp_path)
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"GIT_CHECK_IGNORE_EXIT": "0"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    exclude_file = tmp_path / "repo" / ".git" / "info" / "exclude"
+    exclude_text = exclude_file.read_text(encoding="utf-8") if exclude_file.exists() else ""
+    assert ".beads/redirect" not in exclude_text
+
+
+def test_cdx_nested_worktree_inherits_parent_beads_discovery(tmp_path: Path) -> None:
+    """A worktree below the repo root already resolves the canonical workspace."""
+    _seed_canonical_beads_workspace(tmp_path)
+    nested_root = tmp_path / "repo" / ".worktrees"
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={"CDX_WORKTREE_ROOT": str(nested_root)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not os.path.lexists(nested_root / "bead-CL-smoke" / ".beads")
+
+
+def test_cdx_bead_worktree_writes_no_redirect_without_a_canonical_workspace(
+    tmp_path: Path,
+) -> None:
+    result, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
+
+    assert result.returncode == 0, result.stderr
+    assert not os.path.lexists(tmp_path / "worktrees" / "bead-CL-smoke" / ".beads")
+
+
+def _write_beads_workspace(beads_dir: Path, database: str) -> Path:
+    """Create a Beads workspace directory bd accepts as a redirect target."""
+    beads_dir.mkdir(parents=True, exist_ok=True)
+    (beads_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "dolt_mode": "server",
+                "dolt_database": database,
+                "project_id": "11111111-2222-3333-4444-555555555555",
+            }
+        ),
+        encoding="utf-8",
+    )
+    beads_dir.chmod(0o700)
+    return beads_dir
+
+
+def _init_fixture_repository(repo_root: Path) -> Path:
+    """Build a real git repository with a canonical Beads workspace."""
+    assert _SYSTEM_GIT is not None
+    repo_root.mkdir(parents=True, exist_ok=True)
+    (repo_root / "README.md").write_text("fixture\n", encoding="utf-8")
+    subprocess.run([_SYSTEM_GIT, "init", "-q", str(repo_root)], check=True)
+    subprocess.run([_SYSTEM_GIT, "-C", str(repo_root), "add", "."], check=True)
+    subprocess.run(
+        [
+            _SYSTEM_GIT,
+            "-C",
+            str(repo_root),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        check=True,
+    )
+    return _write_beads_workspace(repo_root / ".beads", "beads_fixture_repo")
+
+
+@pytest.mark.skipif(_SYSTEM_BD is None, reason="bd is not installed")
+@pytest.mark.skipif(_SYSTEM_GIT is None, reason="git is not installed")
+def test_cdx_external_worktree_resolves_the_canonical_beads_workspace(
+    tmp_path: Path,
+) -> None:
+    """AC1: a real external worktree resolves the canonical checkout's workspace.
+
+    The launcher places worktrees below ``$HOME``, where bd's parent-directory
+    walk reaches the ``~/.beads`` fallback workspace before it ever consults the
+    repository. The fixture reproduces exactly that shadowing.
+    """
+    canonical_beads = _init_fixture_repository(tmp_path / "repo")
+    launch_home = tmp_path / "agent-home"
+    shadow_beads = _write_beads_workspace(launch_home / ".beads", "beads_fixture_home")
+    worktree_root = launch_home / "code" / ".worktrees"
+
+    result, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={
+            "GIT_BIN": str(_SYSTEM_GIT),
+            "HOME": str(launch_home),
+            "CDX_WORKTREE_ROOT": str(worktree_root),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    worktree = worktree_root / "bead-CL-smoke"
+    bd_env = dict(os.environ)
+    bd_env["HOME"] = str(launch_home)
+    where = subprocess.run(
+        [str(_SYSTEM_BD), "-C", str(worktree), "where", "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env=bd_env,
+    )
+    assert where.returncode == 0, where.stderr
+    assert json.loads(where.stdout)["path"] == str(canonical_beads)
+    assert json.loads(where.stdout)["path"] != str(shadow_beads)
+
+    status = subprocess.run(
+        [str(_SYSTEM_GIT), "-C", str(worktree), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert status.returncode == 0, status.stderr
+    assert status.stdout.strip() == ""
+
+
+@pytest.mark.skipif(_SYSTEM_BD is None, reason="bd is not installed")
+@pytest.mark.skipif(
+    _WORKSPACE_BEADS is None, reason="no canonical Beads workspace in this checkout"
+)
+def test_cdx_worktree_redirect_reads_the_selected_full_bead_id(tmp_path: Path) -> None:
+    """AC1: the redirect an external worktree carries reads real full Bead IDs."""
+    assert _WORKSPACE_BEADS is not None
+    worktree_beads = tmp_path / "external-worktree" / ".beads"
+    worktree_beads.mkdir(parents=True)
+    (worktree_beads / "redirect").write_text(
+        f"{_WORKSPACE_BEADS}\n", encoding="utf-8"
+    )
+    worktree_beads.chmod(0o700)
+
+    result = subprocess.run(
+        [str(_SYSTEM_BD), "-C", str(worktree_beads.parent), "show", "CL-14ob", "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    items = payload if isinstance(payload, list) else [payload]
+    assert any(item.get("id") == "CL-14ob" for item in items)
+
+
+def test_packaged_and_compatibility_cdx_launchers_are_identical() -> None:
+    assert _CDX_BIN.read_bytes() == _PACKAGED_CDX_BIN.read_bytes()
+
+
 def test_cdx_bead_worktree_path_stays_clean_on_stdout(tmp_path: Path) -> None:
     """The bootstrap must not pollute the captured worktree path."""
     _seed_main_checkout_overlays(tmp_path)
+    _seed_canonical_beads_workspace(tmp_path)
 
     result, argv_file, *_rest = _run_cdx_launcher(tmp_path, ["-b", "CL-smoke"])
 
