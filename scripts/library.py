@@ -6534,6 +6534,7 @@ _INERT_ENTRY_KEYS = frozenset(
         "status",
         "summary",
         "tags",
+        "tier",
         "title",
         "type",
         "version",
