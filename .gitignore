@@ -243,3 +243,6 @@ tests/__pycache__/
 /.agents/skills/ob-cli/SKILL.md
 /.claude/skills/ob-cli
 # END Library-managed project installs
+
+# machine-local quarantine for retired unreceipted projections (CL-9yok)
+.retired-projections-*/
