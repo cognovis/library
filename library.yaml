@@ -1895,8 +1895,10 @@ library:
       description: 'use when: ending a coding session by integrating or proving containment of the caller''s code, finalizing explicit Beads, persisting learnings, and cleaning caller-owned worktrees; NOT for Pack Review, release, or unrelated repository cleanup.'
       source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
       requires:
-        - script:ccore
         - skill:cognovis-beads
+      runtime_requirements:
+        binaries:
+          - ccore
       tags:
         - origin:original
         - tier:core
@@ -4277,11 +4279,6 @@ library:
           pin:
             kind: commit
             value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-        - alias: ccore
-          identity: https://github.com/cognovis/ccore
-          pin:
-            kind: commit
-            value: ee0c185ce6dd9ddafbb23e72f858fe6eea3a37b1
       roots:
         - type: skill
           name: library
@@ -4332,11 +4329,6 @@ library:
           pin:
             kind: commit
             value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-        - alias: ccore
-          identity: https://github.com/cognovis/ccore
-          pin:
-            kind: commit
-            value: ee0c185ce6dd9ddafbb23e72f858fe6eea3a37b1
       roots:
         - type: skill
           name: intake
