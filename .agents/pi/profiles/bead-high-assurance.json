@@ -5,7 +5,7 @@
   "mode": "high-assurance",
   "coreContract": "cognovis.bead-harness-run.v2",
   "implementer": {
-    "role": "bead-loop-implementer",
+    "role": "bead-implementer",
     "harness": "codex",
     "family": "openai",
     "model": "gpt-5.6-sol",

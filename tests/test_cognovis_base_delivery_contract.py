@@ -20,14 +20,10 @@ EXPECTED_ARTIFACTS = {
     ("agent", "bead-change-reviewer"),
     ("agent", "bead-depth-reviewer"),
     ("agent", "bead-implementer"),
-    ("agent", "bead-loop-implementer"),
     ("agent", "bead-review-adjudicator"),
-    ("agent", "doc-changelog-updater"),
     ("agent", "judge-default"),
-    ("agent", "plan-reviewer"),
     ("skill", "acpx-dispatch"),
     ("skill", "bead-execution-loop"),
-    ("skill", "bead-implementation-loop"),
     ("skill", "cognovis-beads"),
     ("skill", "executive-pack"),
     ("skill", "inject-standards"),
@@ -78,7 +74,6 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
         ("skill", "cognovis-beads", "core"),
         ("skill", "inject-standards", "core"),
         ("skill", "ob-cli", "core"),
-        ("skill", "bead-implementation-loop", "core"),
         ("skill", "executive-pack", "core"),
         ("skill", "session-close", "core"),
         ("standard", "english-only", "platform"),
@@ -128,6 +123,5 @@ def test_readme_documents_the_launcher_and_propagation_contract() -> None:
         (REPO_ROOT / "workspaces" / "cognovis-base.yaml").read_text(encoding="utf-8")
     )
     assert {root["name"] for root in manifest["roots"]} >= {
-        "bead-implementation-loop",
         "executive-pack",
     }

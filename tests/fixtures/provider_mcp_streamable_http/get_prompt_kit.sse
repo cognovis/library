@@ -1,0 +1,3 @@
+event: message
+data: {"result":{"content":[{"type":"text","text":"{\"id\":\"3f6c1c9e-0b5a-4c21-9d7e-1a2b3c4d5e6f\",\"asset_id\":\"20260805_948_promptkit_1\",\"asset_type\":\"promptkit\",\"name\":\"Decision Brief\",\"audience_access\":\"standard\",\"status\":\"published\",\"published_at\":\"2026-08-05T10:00:00Z\",\"updated_at\":\"2026-08-05T10:00:00Z\",\"metadata\":{},\"platform\":null,\"project_id\":\"p-1\",\"content\":\"---\\ntitle: Decision Brief\\n---\\n\\nFrame the decision in one page: three options, one recommendation.\\n\"}"}]},"jsonrpc":"2.0","id":4}
+

@@ -92,6 +92,28 @@ class ProviderBuildError(ValueError):
     """A marketplace entry could not be turned into a provider adapter."""
 
 
+def mcp_server_name(entry: Mapping[str, Any]) -> str:
+    """The MCP server key one `mcp-content` marketplace entry names.
+
+    One derivation, because two of them diverged. `build_provider` turns this
+    name into the provider **identity** (`mcp:<name>`) that is recorded in pins
+    and receipts, while the CLI turns the same name into the endpoint lookup key.
+    When the two disagreed -- one falling back to the entry's `source`, the other
+    to its `name` -- an entry whose source carried no scheme separator resolved a
+    transport under one key and attached it to an identity built from another,
+    so a connection could be opened against a server the receipt did not name.
+
+    The canonical identity is a URN, so the server key is what follows the
+    scheme. A source with no separator is used whole, which is what preserves
+    every identity already written to a lockfile or a receipt.
+    """
+    source = str(entry.get("source") or "").strip()
+    _, separator, remainder = source.partition(":")
+    if separator and remainder.strip():
+        return remainder.strip()
+    return source
+
+
 def _now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -184,12 +206,9 @@ def build_provider(
             McpContentProvider,
         )
 
-        # The canonical identity is a URN, so the entry's source carries the
-        # scheme and the server name is what follows it.
-        _, _, server_name = source.partition(":")
         try:
             return McpContentProvider(
-                server_name=server_name or source,
+                server_name=mcp_server_name(entry),
                 auth_ref=str(auth_ref or ""),
                 auth_scope=str(entry.get("auth_scope") or "content:read"),
                 transport=mcp_transport,

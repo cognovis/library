@@ -583,7 +583,7 @@ if [[ -n "$solo_bead_id" ]]; then
         "Solo Bead" \
         "Bead: ${solo_bead_id}" \
         "bead-${solo_bead_id}" \
-        "bead-implementation-loop"
+        "executive-pack"
 fi
 
 if [[ -n "$executive_pack_ids" ]]; then
@@ -725,7 +725,7 @@ if [[ -n "$bead_quick_id" ]]; then
         bead_ns="${bead_prefix}-${bead_num}"
     fi
 
-    local prompt="Bead ID: $bead_quick_id. Execute the revision-bound bead implementation loop with execution_mode=quick, caller route \`claude-manual\`, and force_tier=${_bq_force_tier}. This is unconditional explicit Quick for every executable leaf; the size/effort eligibility gate is bypassed (force_tier=${_bq_force_tier}), so do not run any quick-fix eligibility check, preliminary review, or optional startup ceremony.
+    local prompt="Bead ID: $bead_quick_id. Load and follow the installed executive-pack skill in solo mode with the Simple Solo review preset, execution_mode=quick, caller route \`claude-manual\`, and force_tier=${_bq_force_tier}. This is unconditional explicit Quick for every executable leaf; the size/effort eligibility gate is bypassed (force_tier=${_bq_force_tier}), so do not run any quick-fix eligibility check, preliminary review, or optional startup ceremony.
 
 $(_bead_loop_authority_prompt)"
 

@@ -24,8 +24,6 @@ def test_executive_pack_primitives_are_registered() -> None:
     for agent in (
         "bead-implementer",
         "bead-change-reviewer",
-        "bead-loop-implementer",
-        "bead-lead",
         "topic-agent",
     ):
         assert _entry(catalog, "agents", agent)
@@ -45,19 +43,12 @@ def test_executive_pack_primitives_are_registered() -> None:
 
 def test_delivery_dependencies_preserve_ownership_boundaries() -> None:
     catalog = _catalog()
-    single = set(_entry(catalog, "agents", "bead-loop-implementer")["requires"])
     pack = set(_entry(catalog, "skills", "executive-pack")["requires"])
-    lead = set(_entry(catalog, "agents", "bead-lead")["requires"])
+    loop = set(_entry(catalog, "skills", "bead-execution-loop")["requires"])
 
-    assert {"skill:bead-execution-loop", "skill:session-close"} <= single
-    assert {"agent:plan-reviewer", "agent:doc-changelog-updater"} <= single
     assert {"skill:bead-execution-loop", "skill:session-close"} <= pack
-    assert lead == {
-        "agent:bead-loop-implementer",
-        "skill:cognovis-beads",
-        "skill:cmux-bead-dispatch",
-    }
-    assert "agent:executive-pack-agent" not in lead
+    assert {"agent:bead-implementer", "agent:bead-change-reviewer"} <= loop
+    assert "agent:executive-pack-agent" not in pack
     assert {"skill:cmux", "skill:cmux-workspace"} <= set(
         _entry(catalog, "agents", "topic-agent")["requires"]
     )
@@ -80,14 +71,10 @@ def test_all_new_dependencies_resolve() -> None:
         for entry in catalog[section]:
             if entry["name"] not in {
                 "bead-execution-loop",
-                "bead-implementation-loop",
                 "parallelize",
                 "cohesive-bead-chain",
                 "bead-implementer",
                 "bead-change-reviewer",
-                "bead-loop-implementer",
-                "bead-lead",
-                "bead-fleet-lead",
                 "executive-pack",
                 "topic-agent",
                 "topic",

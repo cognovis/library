@@ -6,9 +6,9 @@ _bead_loop_authority_has_required_files() {
     local relative
 
     for relative in \
-        "skills/bead-implementation-loop/SKILL.md" \
+        "skills/executive-pack/SKILL.md" \
         "skills/bead-execution-loop/SKILL.md" \
-        "agents/bead-loop-implementer.md"; do
+        "agents/bead-implementer.md"; do
         test -f "${root}/${relative}" || return 1
     done
 }
@@ -17,9 +17,9 @@ _bead_loop_authority_is_clean() {
     local root="$1"
     local git_bin="$2"
     local -a paths=(
-        "skills/bead-implementation-loop/SKILL.md"
+        "skills/executive-pack/SKILL.md"
         "skills/bead-execution-loop/SKILL.md"
-        "agents/bead-loop-implementer.md"
+        "agents/bead-implementer.md"
     )
 
     "${git_bin}" -C "${root}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
@@ -78,9 +78,9 @@ _resolve_bead_loop_authority() {
 _bead_loop_authority_prompt() {
     cat <<EOF
 Cognovis Core bead-loop authority: ${BEAD_LOOP_AUTHORITY_ROOT} (Git revision ${BEAD_LOOP_AUTHORITY_REVISION}, ${BEAD_LOOP_AUTHORITY_SOURCE}). Before acting, read these source files directly:
-- ${BEAD_LOOP_AUTHORITY_ROOT}/skills/bead-implementation-loop/SKILL.md
+- ${BEAD_LOOP_AUTHORITY_ROOT}/skills/executive-pack/SKILL.md
 - ${BEAD_LOOP_AUTHORITY_ROOT}/skills/bead-execution-loop/SKILL.md
-- ${BEAD_LOOP_AUTHORITY_ROOT}/agents/bead-loop-implementer.md
+- ${BEAD_LOOP_AUTHORITY_ROOT}/agents/bead-implementer.md
 
 These revision-bound source files supersede same-named home-scoped projections. Follow implementation and review policy only from these files; the launcher does not define reviewer ordering, models, rounds, receipts, or verdict format.
 EOF

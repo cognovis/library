@@ -13,9 +13,9 @@ HELPER = REPO_ROOT / "bin" / "lib" / "bead-loop-authority.zsh"
 PACKAGED_HELPER = REPO_ROOT / "scripts" / "bin" / "lib" / "bead-loop-authority.zsh"
 SYSTEM_GIT = shutil.which("git")
 REQUIRED_FILES = (
-    "skills/bead-implementation-loop/SKILL.md",
+    "skills/executive-pack/SKILL.md",
     "skills/bead-execution-loop/SKILL.md",
-    "agents/bead-loop-implementer.md",
+    "agents/bead-implementer.md",
 )
 
 

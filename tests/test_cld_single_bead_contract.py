@@ -26,9 +26,9 @@ def _write_core_authority(tmp_path: Path) -> Path:
     assert SYSTEM_GIT is not None
     root = tmp_path / "cognovis-core-authority"
     for relative in (
-        "skills/bead-implementation-loop/SKILL.md",
+        "skills/executive-pack/SKILL.md",
         "skills/bead-execution-loop/SKILL.md",
-        "agents/bead-loop-implementer.md",
+        "agents/bead-implementer.md",
     ):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,7 +177,7 @@ def _run_cld(
     _write_cld_path_mocks(tmp_path)
     home = tmp_path / "home"
     home.mkdir()
-    stale_skill = home / ".agents" / "skills" / "bead-implementation-loop" / "SKILL.md"
+    stale_skill = home / ".agents" / "skills" / "executive-pack" / "SKILL.md"
     stale_skill.parent.mkdir(parents=True)
     stale_skill.write_text("stale home projection\n", encoding="utf-8")
     authority_root = _write_core_authority(tmp_path)
@@ -294,7 +294,7 @@ def test_cld_solo_mode_emits_claude_family_role_contract_and_caller_override(
     assert "Reviewer 1 is a fresh GPT-5.6-sol perspective with high reasoning" in prompt
     assert "Reviewer 2 is a fresh Kimi perspective" in prompt
     assert "fresh Opus fallback" in prompt
-    assert "installed bead-implementation-loop and cognovis-beads skills" in prompt
+    assert "installed executive-pack and cognovis-beads skills" in prompt
     assert caller_prompt in prompt
     assert "Explicit caller role instructions override these defaults" in prompt
     assert "role separation" in prompt
@@ -404,12 +404,12 @@ def test_regression_cld_bead_modes_use_current_core_authority(
     ).stdout.strip()
     assert f"Git revision {expected_revision}" in prompt
     assert _argv_flag_value(argv, "--agent") is None
-    assert "bead-implementation-loop" in prompt
+    assert "executive-pack" in prompt
     assert f"execution_mode={execution_mode}" in prompt
     assert "caller route `claude-manual`" in prompt
     assert "cognovis-core-authority" in prompt
     assert "skills/bead-execution-loop/SKILL.md" in prompt
-    assert "agents/bead-loop-implementer.md" in prompt
+    assert "agents/bead-implementer.md" in prompt
     assert "revision-bound source files supersede same-named home-scoped projections" in prompt
     assert "stale home projection" not in prompt
     assert "installed bead-implementation-loop" not in prompt

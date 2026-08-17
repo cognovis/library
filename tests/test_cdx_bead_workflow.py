@@ -53,9 +53,9 @@ def _write_core_authority(tmp_path: Path) -> Path:
     assert _SYSTEM_GIT is not None
     root = tmp_path / "cognovis-core-authority"
     required = (
-        "skills/bead-implementation-loop/SKILL.md",
+        "skills/executive-pack/SKILL.md",
         "skills/bead-execution-loop/SKILL.md",
-        "agents/bead-loop-implementer.md",
+        "agents/bead-implementer.md",
     )
     for relative in required:
         path = root / relative
@@ -313,7 +313,7 @@ def _run_cdx_launcher(
         _write_launcher_uv_mock(tmp_path)
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
-    stale_skill = home / ".agents" / "skills" / "bead-implementation-loop" / "SKILL.md"
+    stale_skill = home / ".agents" / "skills" / "executive-pack" / "SKILL.md"
     stale_skill.parent.mkdir(parents=True, exist_ok=True)
     stale_skill.write_text("stale home projection\n", encoding="utf-8")
     authority_root = _write_core_authority(tmp_path)
@@ -532,7 +532,7 @@ def test_cdx_solo_mode_emits_codex_family_role_contract_and_caller_override(
     assert "Reviewer 1 is a fresh Opus perspective" in prompt
     assert "Reviewer 2 is a fresh Kimi perspective" in prompt
     assert "fresh GPT-5.6 reviewer with high reasoning" in prompt
-    assert "installed bead-implementation-loop and cognovis-beads skills" in prompt
+    assert "installed executive-pack and cognovis-beads skills" in prompt
     assert caller_prompt in prompt
     assert "Explicit caller role instructions override these defaults" in prompt
     assert "role separation" in prompt
@@ -1340,7 +1340,7 @@ def test_regression_cdx_bead_compatibility_alias_uses_installed_solo_contract(
     prompt = prompt_file.read_text(encoding="utf-8")
     for required_contract_term in (
         "Solo Bead delivery",
-        "installed bead-implementation-loop and cognovis-beads skills",
+        "installed executive-pack and cognovis-beads skills",
         "gpt-5.6-sol implementation sub-agent with medium reasoning",
         "Reviewer 1 is a fresh Opus perspective",
         "Reviewer 2 is a fresh Kimi perspective",

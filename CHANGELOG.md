@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Removed
+
+- *(clc-d8ol, catalog/cld/cdx)* Retire the parallel single-bead catalog path.
+  `cld -b`/`cdx -b` and `cognovis-base` now enter Repository Delivery through
+  `executive-pack` in solo mode over `bead-execution-loop`. The deleted
+  marketplace sources are no longer catalogued. Project `workspace_policy.max_receipts`
+  may be 50, matching the runtime `PROJECT_RECEIPT_LIMIT`.
+
 ### Changed
 
 - *(CL-zw39, cld/cdx)* Launchers now expose canonical `-sb`/`--solo-bead`
@@ -151,6 +159,50 @@
 - *(clc-m4rc, audit)* Top-level Library audits now compare each bootstrap-installed `/library` skill surface and Python control plane with the running platform source, report legacy lock entries without `checksum_type` as actionable local drift, and retain agent capability frontmatter inside the checksum boundary. The recurring drift-summary path receives the same deterministic findings.
 
 ### Added
+
+- *(CL-r8rr, marketplace)* The `mcp-content` provider has a transport:
+  `scripts/lib/providers/mcp_http.py` speaks the streamable-HTTP MCP profile over
+  the standard library alone. The full initialization lifecycle is performed —
+  `initialize`, validation of the negotiated revision against what this client
+  actually implements, then the `notifications/initialized` notification, with
+  `MCP-Protocol-Version` echoed on every later request — and responses are
+  correlated by `jsonrpc` and exact request id, so "terminal response wins" is a
+  tie-breaker among matching responses rather than the whole correctness
+  argument. SSE `data:` framing and `application/json` are both accepted; per the
+  SSE specification one event's `data:` lines concatenate into exactly one
+  payload. The asynchronous `mcp` SDK was rejected for a stateless endpoint a
+  synchronous CLI talks to. Failures are distinct typed facts — invalid endpoint,
+  unreachable, HTTP status, protocol, JSON-RPC error, tool failure — and none of
+  them can carry the endpoint: for a subscriber-scoped server the URL **is** the
+  credential, so the transport requires an absolute `https` endpoint (any other
+  scheme would put the token on the wire in cleartext), strips its own endpoint,
+  host, and long path segments from every message it interpolates, suppresses
+  exception chaining, prints only its identity from `__repr__`, and refuses to be
+  pickled or copied. `library marketplace inventory` resolves that endpoint from
+  the MCP registration the operator already maintains (`~/.codex/config.toml`,
+  `~/.cursor/mcp.json`, `~/.claude.json`), reading all three so that two files
+  registering the same server with **different** URLs is a refusal naming the
+  paths rather than a silent choice between a live and a stale credential;
+  resolution lives in the CLI, never in `wiring.build_provider`. The adapter
+  gained declared collection profiles: a server publishing several typed
+  collections enumerates each one, records the readable asset id as the Library
+  identity while fetching by the server's own key, and carries `audience_access`
+  into the normalized item — with an item whose collection publishes the axis but
+  which does not carry a value recorded as `not-published` rather than as the
+  permissive `standard`. A listing that returns at or above the server's maximum
+  reports `degraded`, naming the collection, the count actually observed, and the
+  declared cap, so a truncated inventory is never read as a complete one. An
+  unregistered or unreachable endpoint reports the provider's own typed
+  `unavailable` observation and a non-zero exit code — never an empty listing,
+  which would be indistinguishable from a provider that serves nothing — and
+  substitutes no other source.
+
+  **What this does not yet make possible:** inventory and the durable cache
+  transaction (TOFU pin, foreign receipt, fail-closed drift) work end to end, but
+  `library marketplace install` still refuses every item from this provider,
+  because its recorded `install_rights` is `unknown` and admission blocks on that
+  before the operator opt-in presenter is ever reached. Unblocking that is
+  deliberately out of this bead's scope and is tracked as **`CL-9mfy`**.
 
 - *(CL-2wqz, admission)* `library admission` records the executable-admission
   decision ADR-0011 requires, closing the residual the ADR itself recorded: slice

@@ -2031,13 +2031,52 @@ token exchange, no transmission. It holds a credential *reference* and its scope
 returns them through `auth_requirements()`, and takes a caller-owned transport.
 That separation is what makes `Credential isolation` structural instead of a
 promise — a module that never receives a secret cannot write one into a cache
-object, a receipt, or a projection. Resolving a reference into a token is
-credential handling and requires a human security review before any such code is
-written; it is deliberately out of this slice. The visible consequence is that an
-operator with no configured transport gets a typed `unavailable` availability
-naming the credential reference. That is a refusal, and in particular it is never
-a reason to read the distinct public repository this ADR records as *not* this
-provider.
+object, a receipt, or a projection.
+
+Resolving a reference into a connection was deferred here pending a human
+security review. `CL-r8rr` records the finding that review reached for the one
+registered provider of this kind, from a live probe of the endpoint on
+**2026-08-16**: the subscriber credential *is* the endpoint URL, recorded as a
+path segment in the harness MCP registration the operator already maintains.
+There is no token exchange, no header secret, no session state, and no new secret
+storage — nothing to acquire, and nothing this platform would be the custodian
+of. The claim is auditable rather than asserted: the bead carries the probe, and
+what follows is what the code does about it.
+
+- Endpoint resolution lives in the CLI (`_marketplace_transport` in
+  `scripts/library.py`), which is the layer that owns the operator's
+  configuration. `wiring.build_provider` deliberately does **not** resolve one,
+  so a library caller reaches the live registration only by asking for it. The
+  resolver's path arguments default to the operator's real files, which is what
+  makes the CLI's job possible; every other caller passes its own paths, and the
+  tests in this repository do.
+- The adapter is unchanged in posture: it still receives a caller-owned transport
+  and still has no field a credential value belongs in.
+- Because the URL is the secret, the transport
+  (`scripts/lib/providers/mcp_http.py`) refuses an endpoint it cannot use safely
+  (absolute `https` only, since any other scheme would transmit the token in
+  cleartext), strips its own endpoint, host, and long path segments from every
+  message it interpolates, suppresses exception chaining, prints only the
+  provider identity `mcp:<server>` from `__repr__`, and refuses to be pickled or
+  copied.
+
+The visible consequence of no registration is unchanged: a typed `unavailable`
+availability naming the credential reference, which `library marketplace
+inventory` now renders as the provider's own observation with a non-zero exit
+code instead of failing the command. That is a refusal, and in particular it is
+never a reason to read the distinct public repository this ADR records as *not*
+this provider, and never an empty listing.
+
+Nothing above changes the recorded rights, the admission requirement, the
+operator opt-in presenter, or projection eligibility for this provider; a
+subscriber endpoint that serves bytes still says nothing about redistributing
+them. That has a consequence worth stating plainly rather than leaving a reader
+to infer that the pipeline now runs end to end: because this provider's recorded
+`install_rights` is `unknown`, admission blocks every one of its items before the
+opt-in presenter is reached, so `library marketplace install` refuses them all
+today. Inventory and the durable cache transaction work; the CLI install path
+does not. Reconciling that is tracked as **`CL-9mfy`** and is deliberately not
+this bead's work.
 
 **Maturity is classification, not a filter.** Items under an `in-progress` or
 `deprecated` collection carry `classification.maturity` with the collection that

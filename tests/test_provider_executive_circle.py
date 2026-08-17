@@ -50,11 +50,16 @@ CREDENTIAL_REFERENCE = "executive-circle-subscriber"
 #: never a fallback when the endpoint is unreachable.
 NOT_THIS_PROVIDER = "https://github.com/NateBJones-Projects/OB1"
 
-KIT_ID = "kits/decision-brief"
-KIT_FILES = {
-    "PROMPT.md": "---\ntitle: Decision Brief\n---\n\nFrame the decision.\n",
-    "examples/board.md": "One page, three options, one recommendation.\n",
-}
+#: The provider's own vocabulary, as `CL-r8rr` recorded it: two typed
+#: collections, a readable `asset_id` for the Library identity, and an opaque
+#: UUID as the only key the fetch tools accept. This suite is about credential
+#: isolation and rights rather than about the transport, but its fixture speaks
+#: the tools the server actually serves -- a fixture that answered a vocabulary
+#: no server has would prove those properties about nothing.
+KIT_ASSET_ID = "decision-brief"
+KIT_UUID = "b4e2f6a0-1c3d-4e5f-8a9b-0c1d2e3f4a5b"
+KIT_ID = f"prompt-kits/{KIT_ASSET_ID}"
+KIT_CONTENT = "---\ntitle: Decision Brief\n---\n\nFrame the decision.\n"
 
 
 class SubscriberTransport:
@@ -65,27 +70,35 @@ class SubscriberTransport:
     it is why this slice needs no credential-handling code to satisfy AC6.
     """
 
-    def __init__(self, token: str, files: Mapping[str, str] | None = None) -> None:
+    def __init__(self, token: str, content: str | None = None) -> None:
         self._token = token
-        self._files = dict(files if files is not None else KIT_FILES)
+        self._content = KIT_CONTENT if content is None else content
         self.calls: list[tuple[str, Mapping[str, Any]]] = []
 
     def call(self, tool: str, arguments: Mapping[str, Any]) -> Any:
         self.calls.append((tool, dict(arguments)))
         assert self._token, "a real client authenticates; this one records that it did"
-        if tool == "list_content":
+        if tool == "list_prompt_kits":
             return [
                 {
-                    "id": KIT_ID,
+                    "id": KIT_UUID,
+                    "asset_id": KIT_ASSET_ID,
                     "name": "decision-brief",
-                    "collection": ["kits"],
-                    "primary_path": "PROMPT.md",
+                    "status": "published",
+                    "audience_access": "standard",
                 }
             ]
-        if tool == "get_content":
-            if arguments.get("id") != KIT_ID:
+        if tool == "list_guides":
+            return []
+        if tool == "get_prompt_kit":
+            if arguments.get("id") != KIT_UUID:
                 raise KeyError(arguments.get("id"))
-            return {"files": dict(self._files), "primary_path": "PROMPT.md"}
+            return {
+                "id": KIT_UUID,
+                "asset_id": KIT_ASSET_ID,
+                "asset_type": "promptkit",
+                "content": self._content,
+            }
         raise AssertionError(f"unexpected tool call: {tool}")
 
 
@@ -225,11 +238,11 @@ def test_prompt_receipt_without_mcp_edge(tmp_path: Path) -> None:
         for path in (tmp_path / "global").rglob("*.foreign-receipts.json")
     ), "a project-scope install creates no global ownership edge"
 
-    assert [tool for tool, _ in transport.calls] == [
-        "list_content",
-        "list_content",
-        "get_content",
-    ] or [tool for tool, _ in transport.calls].count("get_content") == 1
+    tools = [tool for tool, _ in transport.calls]
+    assert tools.count("get_prompt_kit") == 1, (
+        "the install fetches the item it is installing, once"
+    )
+    assert set(tools) <= {"list_prompt_kits", "list_guides", "get_prompt_kit"}
 
 
 def test_the_provider_is_not_substituted_when_unreachable() -> None:
@@ -353,9 +366,7 @@ def test_tofu_pin_and_blocked_projection(tmp_path: Path) -> None:
 
     # 4. A re-fetch that disagrees with the pin is fail-closed drift naming both
     #    digests. It never re-pins and never overwrites.
-    moved = SubscriberTransport(
-        SUBSCRIBER_TOKEN, files={**KIT_FILES, "PROMPT.md": "different bytes\n"}
-    )
+    moved = SubscriberTransport(SUBSCRIBER_TOKEN, content="different bytes\n")
     drifted_provider, drifted = marketplace_inventory(_entry(), mcp_transport=moved)
     drifted_item = drifted.inventory.resolve(f"{EXECUTIVE_CIRCLE_IDENTITY}#{KIT_ID}")
     with pytest.raises(TofuDrift) as drift:
