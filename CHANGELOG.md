@@ -97,6 +97,35 @@
 
 ### Fixed
 
+- *(providers)* The streamable-HTTP MCP transport no longer reproduces its
+  endpoint through `dataclasses.asdict`, which was the one serialization gap the
+  module documented rather than closed. `asdict` walks `dataclasses.fields`, so
+  the endpoint is now an `InitVar` validated into a plain instance attribute, and
+  the derived `_secrets` tuple — which held the whole endpoint and its host, and
+  so leaked exactly as much — is assigned the same way. Construction, every
+  reader of `transport.endpoint`, and the existing `repr`, `pickle`, and `copy`
+  refusals are unchanged.
+
+- *(CL-9mfy, marketplace)* `library marketplace install` now judges the
+  projection target the operator actually requested. Admission aggregated block
+  reasons across every target and deduplicated them by reason string, so an item
+  whose recorded `install_rights` are `unknown` — blocked for a committed
+  projection, opt-in-required for a machine-local one — was `blocked` for both,
+  and the operator opt-in presenter the command carries was unreachable for
+  exactly the items it was written for. `admission.evaluate_item` takes the
+  requested target as an explicit argument: a rights reason governing only some
+  other target is still reported but no longer decides, and a requested target at
+  `operator-opt-in-required` resolves `installable`, which means the operator may
+  ask for it. The presenter and `ProjectionRefused` remain the authoritative
+  gate, so a machine-local install still prints the rights state and still needs
+  `--accept-rights`, the committed projection of the same item is still refused,
+  and a non-rights block — unavailable provider, unadmitted content, unpromoted
+  maturity, unclassified member — still refuses every target. A caller that names
+  no target keeps the previous summary reading, so the inventory listing is
+  unchanged apart from now reporting both target states of one governing grant —
+  and where several targets resolve alike and collapse into one record, that
+  record names every target it covers rather than only the first.
+
 - *(CL-14ob, cdx)* External bead worktrees keep the originating repository's Beads
   identity and every launch mode keeps a scoped permission boundary. A worktree
   outside the canonical checkout now carries a `.beads/redirect` file pointing at
@@ -218,8 +247,9 @@
   credential, so the transport requires an absolute `https` endpoint (any other
   scheme would put the token on the wire in cleartext), strips its own endpoint,
   host, and long path segments from every message it interpolates, suppresses
-  exception chaining, prints only its identity from `__repr__`, and refuses to be
-  pickled or copied. `library marketplace inventory` resolves that endpoint from
+  exception chaining, prints only its identity from `__repr__`, refuses to be
+  pickled or copied, and holds the endpoint outside its declared fields so
+  `dataclasses.asdict` reproduces nothing either. `library marketplace inventory` resolves that endpoint from
   the MCP registration the operator already maintains (`~/.codex/config.toml`,
   `~/.cursor/mcp.json`, `~/.claude.json`), reading all three so that two files
   registering the same server with **different** URLs is a refusal naming the
@@ -238,12 +268,12 @@
   which would be indistinguishable from a provider that serves nothing — and
   substitutes no other source.
 
-  **What this does not yet make possible:** inventory and the durable cache
-  transaction (TOFU pin, foreign receipt, fail-closed drift) work end to end, but
-  `library marketplace install` still refuses every item from this provider,
-  because its recorded `install_rights` is `unknown` and admission blocks on that
-  before the operator opt-in presenter is ever reached. Unblocking that is
-  deliberately out of this bead's scope and is tracked as **`CL-9mfy`**.
+  **What this does and does not grant:** inventory and the durable cache
+  transaction (TOFU pin, foreign receipt, fail-closed drift) work end to end, and
+  since `CL-9mfy` a machine-local install of one of this provider's items reaches
+  the operator opt-in presenter and proceeds under `--accept-rights`. Its
+  recorded `install_rights` is still `unknown`, which is what makes the opt-in
+  required and what keeps the committed projection refused.
 
 - *(CL-2wqz, admission)* `library admission` records the executable-admission
   decision ADR-0011 requires, closing the residual the ADR itself recorded: slice

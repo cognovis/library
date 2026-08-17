@@ -4888,7 +4888,18 @@ def cmd_marketplace_install(
     # The admission axis is deferred to the cache transaction, which digests the
     # bytes it will write, consults the operator's durable ledger, and refuses
     # with the exact remedy command. Every other axis is judged here, as before.
-    decision = evaluate_item(item, context, admission_pending_is_blocking=False)
+    #
+    # The requested target is named, so the rights axis is judged about the
+    # projection the operator asked for rather than about every projection there
+    # is. Without it a rights state that blocks only the committed projection
+    # refused the machine-local install too, which made the opt-in presenter
+    # below unreachable for exactly the items it was written for.
+    decision = evaluate_item(
+        item,
+        context,
+        admission_pending_is_blocking=False,
+        requested_target=args.target,
+    )
     if decision.admission_state != "installable":
         # Every applicable explanation, not the first one. These used to be a
         # fallback for "no block reason was recorded", which was correct while
@@ -4911,7 +4922,8 @@ def cmd_marketplace_install(
             )
         elif not reasons:
             reasons = [
-                "no projection target is eligible under the recorded rights"
+                f"projection target {args.target!r} is not eligible under the "
+                "recorded rights"
             ]
         payload = {
             "status": decision.admission_state,

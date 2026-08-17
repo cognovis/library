@@ -334,13 +334,49 @@ call site:
   already been through, and what a refusal needs is the explicit review that
   clears `untrusted-source`. Recording a decided refusal as "pending" would also
   make a deliberate decision read as unfinished work.
-- `admission_state` is derived by one rule: `installable` when there is no block
-  reason and at least one projection target is `allowed`; `blocked` when there
-  is any block reason; `discoverable` otherwise. `blocked` is therefore reached
-  by an item that still has a machine-local opt-in path — which is the intended
-  reading of orthogonal axes, not a contradiction: the item was not installed,
-  the reason is recorded, and `projection_eligibility` separately names the path
-  that remains open.
+- `admission_state` is derived by one rule *for a caller that names no target*:
+  `installable` when there is no block reason and at least one projection target
+  is `allowed`; `blocked` when there is any block reason; `discoverable`
+  otherwise. `blocked` is therefore reached by an item that still has a
+  machine-local opt-in path — which is the intended reading of orthogonal axes,
+  not a contradiction: the item was not installed, the reason is recorded, and
+  `projection_eligibility` separately names the path that remains open.
+
+**Implementation record (`CL-9mfy`): the same evaluator answers two questions.**
+The rule above answers "is any target eligible?", which is the question a
+listing asks. An install asks a different one — "is *this* target eligible?" —
+and answering it anywhere other than in the same evaluator would make the
+listing and the install two independent judgements about the same item. So the
+evaluator takes the requested projection target as an explicit argument, and
+when it is named:
+
+- a rights reason that governs only some *other* target is still reported in
+  `block_reasons` and no longer decides the summary state, exactly as the
+  deferred admission reason already was;
+- a requested target whose eligibility is `operator-opt-in-required` resolves
+  `installable`, meaning "the operator may ask for this", not "this is
+  authorized". The rights presenter and its `ProjectionRefused` remain the
+  authoritative gate, so this check is deliberately the weaker one;
+- a requested target that is `blocked` by rights keeps every rights reason
+  deciding, so its refusal is unchanged.
+
+The non-rights floor, the maturity non-promotion rule, and the unclassified rule
+all still outrank this: naming a target relaxes the rights axis and nothing else.
+A block reason is recorded per governing grant *and per resolved state*, because
+one grant resolves the two targets differently — `install_rights: unknown`
+blocks a committed projection while leaving a machine-local opt-in open, and
+recording only the first of those hid the open path from every caller. Where
+several targets do resolve alike they collapse into one record, and the
+guarantee is that **every record names every target it covers**, whatever the
+target vocabulary is. The record has to be complete rather than
+correct-for-one-caller: the inventory listing renders the same record the
+install refusal does, and neither knows which target the other asked about.
+Under the two targets recorded here `install_rights: denied` is an example of
+such a collapse, but not the only possible one — `license-unknown` and
+`redistribution-blocked` resolve to `operator-opt-in-required` for every target
+that is not `project_committed`, so adding a second non-committed target
+collapses those two as well. The completeness of the record is what holds
+across any target vocabulary; no exclusivity is claimed for one reason.
 
 `block_reasons` entries are stored as typed records carrying `reason`, an
 `evidence` observation, its named `source`, and an optional `detail`, per this
@@ -2058,8 +2094,10 @@ what follows is what the code does about it.
   (absolute `https` only, since any other scheme would transmit the token in
   cleartext), strips its own endpoint, host, and long path segments from every
   message it interpolates, suppresses exception chaining, prints only the
-  provider identity `mcp:<server>` from `__repr__`, and refuses to be pickled or
-  copied.
+  provider identity `mcp:<server>` from `__repr__`, refuses to be pickled or
+  copied, and holds the endpoint and its derived redaction strings outside its
+  declared dataclass fields, so `dataclasses.asdict` — the one generic walk with
+  no hook to refuse — has nothing to reproduce.
 
 The visible consequence of no registration is unchanged: a typed `unavailable`
 availability naming the credential reference, which `library marketplace
@@ -2072,12 +2110,12 @@ Nothing above changes the recorded rights, the admission requirement, the
 operator opt-in presenter, or projection eligibility for this provider; a
 subscriber endpoint that serves bytes still says nothing about redistributing
 them. That has a consequence worth stating plainly rather than leaving a reader
-to infer that the pipeline now runs end to end: because this provider's recorded
-`install_rights` is `unknown`, admission blocks every one of its items before the
-opt-in presenter is reached, so `library marketplace install` refuses them all
-today. Inventory and the durable cache transaction work; the CLI install path
-does not. Reconciling that is tracked as **`CL-9mfy`** and is deliberately not
-this bead's work.
+to infer more than is granted: because this provider's recorded `install_rights`
+is `unknown`, a machine-local install of one of its items reaches the rights
+presenter, prints the rights state, and proceeds only under `--accept-rights`,
+while the committed projection of the same item stays refused. The unknown grant
+is what makes the opt-in required; it is not, and never was, a reason to install
+without one.
 
 **Maturity is classification, not a filter.** Items under an `in-progress` or
 `deprecated` collection carry `classification.maturity` with the collection that

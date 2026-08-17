@@ -468,16 +468,21 @@ def test_pickling_or_copying_the_transport_is_refused() -> None:
         copy.copy(client)
 
 
-def test_asdict_remains_the_one_documented_way_out() -> None:
-    """Stated rather than papered over: `asdict` walks fields and has no hook.
+def test_asdict_reproduces_no_endpoint() -> None:
+    """The generic serialization path that used to be the documented gap.
 
-    This test exists so the gap is a recorded fact with a name, not a surprise.
-    If a later change closes it, this test fails and the docstring gets fixed.
+    `asdict` has no hook to refuse, but it walks `dataclasses.fields`, so a value
+    that is an `InitVar` or a plain assigned attribute is not there to be walked.
+    This guards both halves of that: the endpoint itself, and `_secrets`, which
+    holds the whole endpoint and its host and so reproduced it just as fully.
     """
     client, _ = transport()
-    assert SENTINEL_TOKEN in json.dumps(dataclasses.asdict(client), default=str), (
-        "asdict still reproduces the endpoint; the module docstring says so"
-    )
+    serialized = json.dumps(dataclasses.asdict(client), default=str)
+    assert SENTINEL_TOKEN not in serialized
+    assert SENTINEL_ENDPOINT not in serialized
+    # The transport still holds and uses the endpoint; what changed is that no
+    # generic walk over its declared fields reaches it.
+    assert client.endpoint == SENTINEL_ENDPOINT
 
 
 # ---------------------------------------------------------------------------
