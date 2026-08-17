@@ -23,20 +23,20 @@ is never copied into a harness directory.
 automation manages it through:
 
 ```text
-library workspace list [--scope project] [--json]
-library workspace show <catalog>:<name> [--scope project] [--json]
+library workspace list [--json]
+library workspace show <catalog>:<name> [--json]
 library workspace validate <manifest-or-catalog-reference> [--json]
-library workspace use <catalog>:<name> --scope project [--dry-run] [--replace-with-catalog-content] [--json]
-library workspace status [<catalog>:<name>|--all] --scope project [--json]
-library workspace explain <type>:<name> --scope project [--json]
-library workspace sync [<catalog>:<name>|--all] --scope project [--verify-receipts] [--json]
-library workspace sync [<catalog>:<name>|--all] --prune [--apply] --scope project [--json]
-library workspace sync [<catalog>:<name>|--all] --prune --apply --acknowledge-plan <digest> --scope project [--json]
-library workspace recover --scope project [--json]
-library workspace recover --scope project --discard --acknowledge-plan <journal-digest> [--json]
-library workspace adopt <catalog>:<workspace> <type>:<name> --definition-commit <pin> --scope project [--json]
-library workspace adopt <catalog>:<workspace> --from-direct [<type>:<name>|--all-reachable] --scope project [--apply --acknowledge-plan <digest>] [--json]
-library workspace remove <catalog>:<name> --scope project [--json]
+library workspace use <catalog>:<name> [--dry-run] [--replace-with-catalog-content] [--json]
+library workspace status [<catalog>:<name>|--all] [--json]
+library workspace explain <type>:<name> [--json]
+library workspace sync [<catalog>:<name>|--all] [--verify-receipts] [--json]
+library workspace sync [<catalog>:<name>|--all] --prune [--apply] [--json]
+library workspace sync [<catalog>:<name>|--all] --prune --apply --acknowledge-plan <digest> [--json]
+library workspace recover [--json]
+library workspace recover --discard --acknowledge-plan <journal-digest> [--json]
+library workspace adopt <catalog>:<workspace> <type>:<name> --definition-commit <pin> [--json]
+library workspace adopt <catalog>:<workspace> --from-direct [<type>:<name>|--all-reachable] [--apply --acknowledge-plan <digest>] [--json]
+library workspace remove <catalog>:<name> [--json]
 ```
 
 Every operational command supports `--json`. `list`, `show`, `validate`, and

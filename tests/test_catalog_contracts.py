@@ -159,3 +159,23 @@ def test_workspace_roots_and_dependency_closures_resolve() -> None:
             visit(workspace["name"], (root["type"], root["name"]), seen)
 
     assert not unresolved, "\n".join(unresolved)
+
+
+def test_only_the_intrinsically_machine_wide_script_declares_a_global_default_scope() -> None:
+    """ADR-0012: catalog metadata cannot nominate a second desired state.
+
+    `script:ccore` is a uv tool on PATH, so its marker states an intrinsic
+    property of the artifact rather than a Library scope selection. Every other
+    entry carrying one was claiming a desired state the platform does not have.
+    """
+    catalog = load_catalog()
+    entries = catalog_entries(catalog)
+
+    marked = sorted(
+        f"{key[0]}:{key[1]}"
+        for key, candidates in entries.items()
+        for entry in candidates
+        if entry.get("default_scope") == "global"
+    )
+
+    assert marked == ["script:ccore"]

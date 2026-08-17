@@ -22,10 +22,12 @@ definition is tracked by `clc-tzn5`. Legacy v1 lockfiles remain readable as
 conservative migration input, while all new writes use the v2 ownership model.
 
 Amended by ADR-0012. Ownership-aware reconciliation and the Workspace primitive
-remain accepted, but normal desired state now has exactly one scope: a Git
-repository. The global lobby, its budgets, global requested roots, global
-receipts, and global Workspace command forms are superseded. The historical
-global lock is read-only migration input until dispositioned.
+remain accepted, but desired state has exactly one home: a Git repository. The
+machine-wide lobby, its budgets, its requested roots, its receipts, and the
+Workspace command forms that selected it are superseded, as is the scope
+selector itself. Any surviving `~/.config/library/global.lock` is read-only
+historical inventory. Passages below that describe two scopes are the original
+v1 record and are read as history.
 
 ## Context
 
@@ -41,7 +43,7 @@ This matters at two distinct scopes:
   Skills, Standards, Agents, Workflows, and operating rules without copying a
   large `AGENTS.md` into every repository.
 - A repository baseline should remain deliberate and reviewable. ADR-0012
-  establishes that the historical user-global baseline grew too large to serve
+  establishes that the historical machine-wide baseline grew too large to serve
   that purpose and moves all artifact desired state to Git repositories.
 
 Dependency closures do not fill this gap. `requires:` correctly says what one
@@ -194,16 +196,22 @@ project lock cannot claim ownership of a global artifact, and a global lock
 cannot claim ownership of a project artifact. Cross-scope artifact dependency
 declarations fail before mutation.
 
-Typed dependencies whose primitive contract or catalog entry is explicitly
-global, including `mcp:` and entries with `default_scope: global`, are global
-prerequisite assertions when reached from a project root.
+Typed dependencies whose primitive contract is intrinsically machine-wide,
+including `mcp:`, are prerequisite assertions when reached from a project root.
 They never create a project ownership edge or an artifact receipt. The project
 lock records them as non-owning prerequisite assertions with the requesting root,
-identity, and constraint so status and CI can reproduce the requirement. The
-resolver checks the global lock for the required identity and compatible version
-before any project mutation; absence or incompatibility is a fail-closed status
-finding with the exact global install command. The same dependency reached from
-a global root is a normal owned global receipt.
+identity, and constraint so status and CI can reproduce the requirement.
+
+> **ADR-0012 amendment — the next two paragraphs, up to the "No Workspace
+> defines a global lobby" paragraph, are the superseded v1 lock-to-lock
+> formulation.** Under ADR-0012 a surviving machine-wide prerequisite is
+> checked against the enumerated Bootstrap manifest, and there is no second
+> lock to consult or own a receipt in.
+
+The resolver checks the global lock for the required identity and compatible
+version before any project mutation; absence or incompatibility is a
+fail-closed status finding with the exact global install command. The same
+dependency reached from a global root is a normal owned global receipt.
 
 This makes global reconciliation safe without a cross-project registry: every
 Library-owned global direct root and global Workspace root lives in the single
@@ -300,8 +308,8 @@ Workspace, the user can transfer intent without deleting files through a
 plan-and-apply direct-root demotion:
 
 ```text
-library workspace adopt <catalog>:<workspace> --from-direct <type>:<name> --scope <scope>
-library workspace adopt <catalog>:<workspace> --from-direct --all-reachable --scope <scope>
+library workspace adopt <catalog>:<workspace> --from-direct <type>:<name>
+library workspace adopt <catalog>:<workspace> --from-direct --all-reachable
 ```
 
 The first form demotes one reachable direct root; the second demotes every direct
@@ -322,7 +330,7 @@ a candidate deletion. A missing or stale digest fails closed.
 
 ### Decision 7: The Workspace command surface is explicit about deletion
 
-The original v1 CLI surface was:
+The original v1 CLI surface, superseded by ADR-0012, was:
 
 ```text
 library workspace list [--scope project|global] [--json]
@@ -338,6 +346,10 @@ library workspace adopt <catalog>:<workspace> <type>:<name> --definition-commit 
 library workspace adopt <catalog>:<workspace> --from-direct [<type>:<name>|--all-reachable] --scope project|global [--apply --acknowledge-plan <digest>] [--json]
 library workspace remove <catalog>:<name> --scope project|global [--json]
 ```
+
+The surface in force is the same verb list without the selector: every form
+reconciles the current Git repository, and a literally passed `--scope` is
+rejected before mutation.
 
 Semantics:
 
@@ -395,15 +407,15 @@ conservative and non-pruning. The shared word "sync" means "reconcile toward the
 selected source" in both cases; only the Workspace subcommand accepts the
 explicit `--prune --apply` capability.
 
-Every command supports stable JSON output. Scope may be inferred only when
-exactly one target lock is possible; when both a project and global lock are
-plausible, omission fails and asks for `--scope`.
+Every command supports stable JSON output. The v1 surface above inferred a
+target lock and asked the caller to disambiguate when two were plausible.
 
-> **ADR-0012 amendment:** Current Workspace lifecycle commands are project-only.
-> `--scope project` is redundant compatibility syntax; `--scope global` fails
-> before mutation. `library init` is a separate fixed shortcut for registering
-> `cognovis-base`, materializing its closure, and reconciling CL-1les's managed
-> Gitignore block. It takes no Workspace selector.
+> **ADR-0012 amendment:** Workspace lifecycle commands are flagless. They
+> reconcile the current Git repository, declare no scope option, and reject a
+> literally passed one before mutation. `library init` is a separate fixed
+> shortcut for registering `cognovis-base`, materializing its closure, and
+> reconciling CL-1les's managed Gitignore block. It takes no Workspace
+> selector.
 
 ### Decision 8: Pruning is provenance-bound and fail-closed
 

@@ -196,7 +196,9 @@ def test_both_launchers_bootstrap_through_the_shared_resolver() -> None:
     cdx_source = _CDX_BIN.read_text(encoding="utf-8")
     cld_source = _CLD_BIN.read_text(encoding="utf-8")
 
-    assert "scripts/worktree-overlays.py" in cdx_source
+    # cdx resolves its packaged resource dir first, so it references the shared
+    # resolver by name rather than by a hard-coded "scripts/" prefix.
+    assert "worktree-overlays.py" in cdx_source
     assert "scripts/worktree-overlays.py" in cld_source
     for source in (cdx_source, cld_source):
         assert ".agents .claude/skills" not in source

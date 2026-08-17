@@ -31,9 +31,9 @@ def test_library_skill_defines_project_local_inspection_and_recommendation() -> 
 
     assert "## Inspect and recommend" in text
     assert "library status --offline --json" in text
-    assert "library workspace list --scope project --json" in text
+    assert "library workspace list --json" in text
     assert "ask the user to confirm it" in text
-    assert "retired global lock" in text.lower()
+    assert "historical machine-wide lock" in text.lower()
     assert "never install before confirmation" in text.lower()
 
 
@@ -41,7 +41,7 @@ def test_library_skill_defines_confirmed_project_local_installation() -> None:
     text = read_skill()
 
     assert "library init" in text
-    assert "library workspace use cognovis-library-core:python-cli --scope project" in text
-    assert "library skill use <name> --scope project" in text
+    assert "library workspace use cognovis-library-core:python-cli" in text
+    assert "library skill use <name>" in text
     assert "`library init` takes no Workspace selector." in text
-    assert "`--scope global` is rejected deterministically" in text
+    assert "No\ncommand takes a scope selector" in text

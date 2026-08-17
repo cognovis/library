@@ -332,9 +332,10 @@ removal, and digest-bound pruning.
 
 ### Install path precedence (within a harness)
 
-For every harness, **project-local always overrides global** for the same skill name.
+For every harness, **project-local always overrides the home-scoped path** for
+the same skill name.
 
-| Harness | Wins (project-local) | Loses (user-global) |
+| Harness | Wins (project-local) | Loses (home-scoped) |
 |---------|----------------------|---------------------|
 | Claude Code | `.claude/skills/<name>` (bridge -> `.agents/skills/<name>`) | `~/.claude/skills/<name>` |
 | Codex CLI | `.agents/skills/<name>` (canonical, read natively) | `~/.agents/skills/<name>` |

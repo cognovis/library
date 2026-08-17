@@ -78,7 +78,7 @@ def test_regression_canonical_checkout_wins_over_catalog_and_home_projection(
     catalog = home / ".local" / "share" / "library" / "cognovis-library-core"
     canonical_revision = _write_core_repo(canonical, "current canonical")
     _write_core_repo(catalog, "older catalog")
-    stale = home / ".agents" / "skills" / "bead-implementation-loop" / "SKILL.md"
+    stale = home / ".agents" / "skills" / "bead-execution-loop" / "SKILL.md"
     stale.parent.mkdir(parents=True)
     stale.write_text("stale home projection\n", encoding="utf-8")
 

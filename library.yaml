@@ -162,7 +162,7 @@ sources:
         - team
     - name: cognovis-ccore
       source: https://github.com/cognovis/ccore
-      description: Standalone Cognovis developer-workflow CLI.
+      description: Standalone Cognovis developer-workflow CLI and the skills that document its commands.
       visibility: private
       owner: cognovis
       audience: team
@@ -170,19 +170,24 @@ sources:
       writable: true
       content_types:
         - scripts
+        - skills
       scope:
         topics:
           - team
           - python
           - cli
           - workflows
+          - ccore
+          - acpx
+          - dispatch
         excludes:
           - personal
       skeleton:
         platform:
           - src/
           - scripts/
-      notes: Canonical source for the independently versioned ccore uv-tool distribution.
+          - skills/
+      notes: Canonical source for the independently versioned ccore uv-tool distribution and for skills whose contract is a ccore command, so command and prose ship from one repository.
       tags:
         - first-party
         - team
@@ -989,20 +994,16 @@ library:
         - domain:fhir
     - name: acpx-dispatch
       description: Use for agent-shell ACPX execution and session-status inspection through the installed `ccore acpx` command. Run mode owns session preparation, output extraction, telemetry, and approve-all worktree confinement; status mode is read-only. Never use this skill for model/provider routing, prompt composition, review policy, verdict validation, or adapter updates.
-      source: https://github.com/cognovis/library-core/blob/main/skills/acpx-dispatch/SKILL.md
+      source: https://github.com/cognovis/ccore/blob/main/skills/acpx-dispatch/SKILL.md
       requires:
-        - agent:judge-default
-        - standard:english-only
-        - standard:judge-layer
-        - standard:model-routing
-        - standard:no-emoji
+        - standard:mcp-client-timeout
       tags:
         - origin:original
         - tier:core
         - workflow:dispatch
       metadata:
         library:
-          source_catalog: cognovis-library-core
+          source_catalog: cognovis-ccore
           inventory: convention-scan
           plane: dev
     - name: adr-gap
@@ -1412,19 +1413,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: dolt
-      description: 'Troubleshoot beads Dolt failures: `bd dolt` push/pull errors, merge conflicts, embedded/shared-server mode problems, remote auth issues, local DB recovery, re-clone, reflog restore, broken `.beads` Dolt config, and brew-services Dolt lifecycle. Use whenever beads sync or Dolt infrastructure is failing — symptoms like "beads do not sync", "cannot push issues", "no common ancestor", "not supported in embedded mode", "Dolt server unreachable", or "lost local database". Read the beads changelog first. Do not use for normal beads tracking (`bd create/ready/close`), standalone Dolt databases, or regular git push/pull.'
-      source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
-      requires:
-        - standard:english-only
-      tags:
-        - origin:original
-        - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: entropy-scan
       description: 'Scan the agent harness (skills, hooks, agents, standards) for invariant violations and entropy. Produces a violation report with actionable fix instructions. Triggers on: entropy scan, harness check, harness validate, invariants check.'
       source: https://github.com/cognovis/library-core/blob/main/skills/entropy-scan/SKILL.md
@@ -1457,6 +1445,8 @@ library:
       requires:
         - skill:bead-execution-loop
         - skill:session-close
+        - agent:plan-reviewer
+        - agent:doc-changelog-updater
         - standard:model-routing
         - standard:english-only
         - standard:executive-pack
@@ -1501,7 +1491,33 @@ library:
         - standard:fhir-ig-authoring
         - standard:judge-layer
         - skill:fhir-emission
-        - skill:aidbox-ig-development
+      tags:
+        - origin:original
+        - tier:domain
+        - fhir
+        - implementation-guide
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+          steward: cognovis-core
+    - name: fhir-registry-research
+      description: >-
+        use when: checking whether a FHIR Implementation Guide or package already exists for a requirement before authoring new profiles, extensions, or terminology — searching the HL7 IG registry (registry.fhir.org) and the FHIR package registries (packages.fhir.org, packages2.fhir.org, packages.simplifier.net), evaluating candidates by canonical, FHIR version, maturity, and publisher, or answering "is there an IG for X" / "package vs IG". NOT for: authoring IG artifacts (use fhir-ig-development), installing packages into a server (use aidbox-ig-development), or mapping application data into installed profiles (use fhir-emission). boundary: this skill owns read-only pre-authoring discovery and returns a structured reuse verdict; fhir-ig-development starts only after this skill's verdict is author-new or derive.
+      source: https://github.com/cognovis/library-core/blob/main/skills/fhir-registry-research/SKILL.md
+      requires:
+        - standard:english-only
+        - standard:no-emoji
+      runtime_requirements:
+        binaries:
+          - uv
+      scripts:
+        - path: scripts/registry_search.py
+          role: helper
+          entrypoint: true
+          language: python
+          output_contract: json-envelope
       tags:
         - origin:original
         - tier:domain
@@ -2258,7 +2274,6 @@ library:
       requires:
         - standard:english-only
     - name: ci-monitor
-      default_scope: global
       handlers:
         - agents/ci-monitor-handlers
       description: Watches GitHub Actions CI for a specific pushed commit on behalf of the originating delivery flow. Blocks silently until completion, filters parallel flows by commit SHA, and returns one structured verdict line.
@@ -2397,7 +2412,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: learning-extractor
-      default_scope: global
       handlers:
         - agents/learning-extractor-handlers
       description: Extracts durable learnings from Claude Code conversation histories and saves structured observations to open-brain memory. Use when session feedback or repeated user corrections should improve skills, standards, or agents.
@@ -2468,7 +2482,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: release
-      default_scope: global
       handlers:
         - agents/release-handlers
       description: 'Cuts a deliberate versioned release independently of Session Close: git-cliff once, VERSION bump, chore(release) commit, tag, and push. Use when you decide to ship a release. Triggers on: release, rc, cut a release, version bump, tag a release.'
@@ -2562,7 +2575,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: topic-agent
-      default_scope: global
       handlers:
         - agents/topic-agent-handlers
       description: Use when a human-approved complex topic needs a persistent coordinator in one cmux workspace with one Executive Pack pane per repository pack and one finalization.
@@ -4156,10 +4168,31 @@ library:
         - origin:original
         - tier:core
     - name: agents-md
-      description: 'Global cross-harness AGENTS.md — always-on provider-neutral agent rules (worktree discipline, english-only, 1Password ban, uv tooling, confirmation gates, beads). Deployed verbatim to ~/.agents/AGENTS.md by library sync (also chains to ~/.codex/AGENTS.md via symlink); drift-audited by library audit. Machine/repo-specific content lives in each repo''s own AGENTS/CLAUDE files.'
+      description: 'Cross-harness AGENTS.md — always-on provider-neutral agent rules (worktree discipline, english-only, secret-store ban, uv tooling, confirmation gates, beads). Installed as a harness instruction file by `library harness sync`: verbatim to ~/.agents/AGENTS.md, symlinked for the harnesses that read AGENTS.md natively, projected for the ones that do not; drift-audited by `library harness audit`. Machine/repo-specific content lives in each repo''s own AGENTS/CLAUDE files.'
       base: https://github.com/cognovis/library-core/blob/main/runtime-configs/AGENTS.md
       format: markdown
       deploy_filename: AGENTS.md
+      harness_instruction:
+        targets:
+          - harness: agents
+            path: ~/.agents/AGENTS.md
+            shape: file
+          - harness: codex
+            path: ~/.codex/AGENTS.md
+            shape: symlink
+            link_to: ~/.agents/AGENTS.md
+          - harness: kimi
+            path: ~/.kimi-code/AGENTS.md
+            shape: symlink
+            link_to: ~/.agents/AGENTS.md
+          - harness: gemini
+            path: ~/.gemini/GEMINI.md
+            shape: projection
+          - harness: cursor
+            path: ~/.cursor/rules/agents-md.mdc
+            shape: projection
+            frontmatter:
+              alwaysApply: true
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -4169,13 +4202,17 @@ library:
         - origin:original
         - tier:core
     - name: claude-md-global
-      description: 'Global Claude Code CLAUDE.md — fleet-wide Claude-Code-specific configuration (safety checks, session close, web/doc/SSH routing, rules.d reference; imports AGENTS.md). Deployed verbatim to ~/.claude/CLAUDE.md by library sync via a deploy_dir override; drift-audited by library audit. Library-owned — not tracked in the sussdorff/claude repo.'
+      description: 'Claude Code CLAUDE.md — fleet-wide Claude-Code-specific configuration (safety checks, session close, web/doc/SSH routing; imports AGENTS.md). Installed as a harness instruction file by `library harness sync` to ~/.claude/CLAUDE.md; drift-audited by `library harness audit`. Library-owned — not tracked in the sussdorff/claude repo.'
       base: https://github.com/cognovis/library-core/blob/main/runtime-configs/CLAUDE.md
       format: markdown
       deploy_filename: CLAUDE.md
       deploy_dir:
         - default: .claude/
-        - global: ~/.claude/
+      harness_instruction:
+        targets:
+          - harness: claude_code
+            path: ~/.claude/CLAUDE.md
+            shape: file
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -4201,7 +4238,12 @@ library:
           identity: https://github.com/cognovis/library-core
           pin:
             kind: commit
-            value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
+            value: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
+        - alias: ccore
+          identity: https://github.com/cognovis/ccore
+          pin:
+            kind: commit
+            value: fc6162a9a1734c77e7cb2733c3160665f71d5220
       roots:
         - type: skill
           name: library
@@ -4257,9 +4299,6 @@ library:
           name: workplan
           catalog: core
         - type: skill
-          name: dolt
-          catalog: core
-        - type: skill
           name: summarize
           catalog: core
         - type: skill
@@ -4307,6 +4346,26 @@ library:
           source_catalog: library-platform
           inventory: manual
           source_commit: c169a8e5cde0dcd1668967593a902f1cc1bd3259
+    - name: fhir-ig
+      description: Shared FHIR IG authoring baseline - registry discovery, IG source development, and emission conformance - for FHIR repositories.
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/fhir-ig.yaml
+      schema_version: 1
+      version: 0.1.0
+      status: stable
+      roots:
+        - type: skill
+          name: fhir-registry-research
+        - type: skill
+          name: fhir-ig-development
+        - type: skill
+          name: fhir-emission
+        - type: standard
+          name: fhir-ig-authoring
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          source_commit: 2f76a185
     - name: python-cli
       description: Shared development and testing baseline for Python CLI repositories.
       source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml
@@ -4353,8 +4412,8 @@ library:
       metadata:
         library: {source_catalog: cognovis-library-core, inventory: convention-scan, plane: dev}
 project_tooling:
-  - name: beads-server-mode
-    description: Ensures .beads/metadata.json has dolt_mode=server and removes stale embedded-mode fields (database, backend, dolt_server_port, dolt_server_user). Prevents journal corruption from accidental embedded-mode starts.
+  - name: beads-embedded-mode
+    description: Ensures .beads/metadata.json has dolt_mode=embedded and removes stale shared-server fields (dolt_server_host, dolt_server_port, dolt_server_user). The repo-local embedded engine is bd's default; the shared Dolt daemon is retired.
     target_kind: json_field_enforce
     target_path: .beads/metadata.json
     conditions:
@@ -4363,10 +4422,9 @@ project_tooling:
     conflict_policy: canonical_wins
     fields:
       ensure:
-        dolt_mode: server
+        dolt_mode: embedded
       remove:
-        - database
-        - backend
+        - dolt_server_host
         - dolt_server_port
         - dolt_server_user
     tags:

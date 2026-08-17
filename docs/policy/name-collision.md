@@ -60,7 +60,7 @@ Claude Code loads skills from `CLAUDE.md`-registered paths and the following loc
 | Priority | Path | Scope |
 |----------|------|-------|
 | 1 (wins) | `.claude/skills/<name>/SKILL.md` | Project-local |
-| 2 | `~/.claude/skills/<name>/SKILL.md` | User-global |
+| 2 | `~/.claude/skills/<name>/SKILL.md` | Home-scoped |
 
 **Rule**: Project-local **always** overrides global for the same skill name.
 
@@ -88,7 +88,7 @@ Codex 0.130.0 loads skills from multiple roots. The skill roots observed via
 
 | Root | Path | Notes |
 |------|------|-------|
-| r0 (primary) | `~/.codex/skills/` | Always present; user-global primary |
+| r0 (primary) | `~/.codex/skills/` | Always present; home-scoped primary |
 | r1 (secondary) | `~/.agents/skills/` | Included dynamically when directory exists and has content |
 | r2 | `~/.codex/skills/.system` | System/bundled skills |
 | r3+ | `~/.codex/plugins/cache/...` | Plugin caches |
@@ -110,8 +110,8 @@ Precedence for same-named skills within Codex (post-CL-83q install policy):
 | Priority | Path | Scope | Library install? |
 |----------|------|-------|------------------|
 | 1 (wins) | `.agents/skills/<name>/SKILL.md` | Project-local (unverified by CL-603) | Yes (canonical) |
-| 2 | `~/.agents/skills/<name>/SKILL.md` | User-global secondary (r1, confirmed CL-603) | Yes (canonical) |
-| 3 | `~/.codex/skills/<name>/SKILL.md` | User-global primary (r0, confirmed CL-603) | **No** — legacy only |
+| 2 | `~/.agents/skills/<name>/SKILL.md` | Home-scoped secondary (r1, confirmed CL-603) | Yes (canonical) |
+| 3 | `~/.codex/skills/<name>/SKILL.md` | Home-scoped primary (r0, confirmed CL-603) | **No** — legacy only |
 
 **Rule**: Project-local **always** overrides global for the same skill name.
 `/library skill use` writes to priority-1 or priority-2 paths depending on scope; it
@@ -434,7 +434,7 @@ a migrated receipt is unverified. It must warn about unverified or drifted state
 and use the journaled safe lock-before-delete path. Verification remains
 mandatory for ownership-derived Workspace pruning, where no artifact was named
 for deletion. Newly ownerless transitive receipts are not silently removed; the
-command prints `library workspace sync --all --prune --apply --scope <scope>`.
+command prints `library workspace sync --all --prune --apply`.
 The shell sequence below documents the legacy v1 implementation and must not be
 copied into the v2 reconciler.
 

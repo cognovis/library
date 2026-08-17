@@ -2090,6 +2090,56 @@
             "additionalProperties": false
           }
         },
+        "harness_instruction": {
+          "description": "Marks this entry as a harness instruction file and declares where each harness reads it. Installed by `library harness sync` and drift-audited by `library harness audit` — a named operation rather than a scope of the desired state, because ADR-0012 leaves Library one desired state (the current Git repository) while these files live wherever each harness looks for them. Every installed file must state the fallback rule pointing at the shared base, or a harness that finds no harness-specific file never learns where the base lives.",
+          "type": "object",
+          "required": [
+            "targets"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "targets": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": [
+                  "harness",
+                  "path"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "harness": {
+                    "description": "Harness that reads this path.",
+                    "type": "string"
+                  },
+                  "path": {
+                    "description": "Target path; `~/` resolves against HOME.",
+                    "type": "string"
+                  },
+                  "shape": {
+                    "description": "file: write the composed source verbatim. symlink: point at an already-declared file, for harnesses that read AGENTS.md natively. projection: write an envelope plus the body, for harnesses that need their own filename or frontmatter.",
+                    "type": "string",
+                    "enum": [
+                      "file",
+                      "symlink",
+                      "projection"
+                    ],
+                    "default": "file"
+                  },
+                  "link_to": {
+                    "description": "Required for shape 'symlink': the declared file to point at.",
+                    "type": "string"
+                  },
+                  "frontmatter": {
+                    "description": "Optional key/value block prepended to a projection (e.g. alwaysApply: true, which is what makes a Cursor rule always-on).",
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
         "runtime_requirements": {
           "$ref": "#/$defs/runtime_requirements"
         },

@@ -2,6 +2,28 @@
 
 ### Removed
 
+- *(CL-hf2g, cdx)* Retire the two server-mode knobs from bead-launch permission
+  arguments. `cdx` bead, delivery, quick, and dangerous-full-auto launches no
+  longer pass `-c mcp_servers.beads.required=true` (superseding the clc-6kuz
+  MCP-first binding) or `-c sandbox_workspace_write.network_access=true`
+  (superseding that clause of CL-14ob). Bead workspaces run embedded repo-local
+  Dolt after CL-z8yz, so lifecycle writes are local file writes and remote sync
+  runs through execpolicy-allowed commands (direct `bd` and `git push`) or after
+  the session rather than through the sandbox. The identity gate, redirect
+  handling, writable roots, read-only review mode, and the rejection of
+  caller-supplied permission overrides — including a caller-supplied
+  `sandbox_workspace_write.network_access` — are unchanged.
+
+- *(CL-ldnu, CLI/catalog/docs)* Remove the last scope selection from the
+  platform. No `library` subcommand declares `--scope`; a literally passed one
+  fails with a typed rejection before catalog, repository, lockfile, and
+  installer resolution. Workspace verbs are flagless. The four agent
+  `default_scope: global` catalog markers are gone — `script:ccore` keeps the
+  only remaining one, where it states an intrinsic property of a PATH tool.
+  `docs/migrations/` transition reports are retired from the published tree,
+  and ADR-0012 now reads as present-tense target state with the enumerated
+  Bootstrap as its one documented exception. The internal lockfile scope
+  parameter stays; it is engine state, not a caller choice.
 - *(clc-d8ol, catalog/cld/cdx)* Retire the parallel single-bead catalog path.
   `cld -b`/`cdx -b` and `cognovis-base` now enter Repository Delivery through
   `executive-pack` in solo mode over `bead-execution-loop`. The deleted
@@ -9,6 +31,25 @@
   may be 50, matching the runtime `PROJECT_RECEIPT_LIMIT`.
 
 ### Changed
+
+- *(clc-i19u, catalog)* The `cognovis-ccore` source now carries `skills` as well as
+  `scripts`, and the `acpx-dispatch` skill entry is served from it. The skill is
+  policy-only prose about the `ccore acpx` command, so it ships from the same
+  repository as that command instead of from `cognovis-library-core`, where the
+  superseded copy has been deleted. The `cognovis-base` Workspace declares the
+  matching `ccore` catalog pin, because its delivery closure reaches the skill.
+
+  The entry's `requires` now match the contract the skill actually declares —
+  `standard:mcp-client-timeout`, as derived by
+  `library catalog sync --source=cognovis-ccore`. It previously claimed
+  `agent:judge-default`, `standard:judge-layer`, `standard:model-routing`,
+  `standard:english-only`, and `standard:no-emoji`, none of which the skill
+  declares. That inflation was not cosmetic: a fresh consumer running
+  `library skill use acpx-dispatch` exited non-zero while building an unrelated
+  judge agent and never installed the skill. Aligning the edges also removes
+  `agent:judge-default` and `standard:judge-layer` from the `cognovis-base`
+  delivery closure, which no other member of that Workspace requires, and adds
+  `standard:mcp-client-timeout`.
 
 - *(CL-zw39, cld/cdx)* Launchers now expose canonical `-sb`/`--solo-bead`
   and `-ep`/`--executive-pack` delivery modes, with `-b` compatibility alias
@@ -84,6 +125,44 @@
   unchanged apart from now reporting both target states of one governing grant —
   and where several targets resolve alike and collapse into one record, that
   record names every target it covers rather than only the first.
+
+- *(CL-14ob, cdx)* External bead worktrees keep the originating repository's Beads
+  identity and every launch mode keeps a scoped permission boundary. A worktree
+  outside the canonical checkout now carries a `.beads/redirect` file pointing at
+  the canonical `.beads` directory, so bd no longer resolves the `~/.beads`
+  fallback that its parent-directory walk reaches first for worktrees below
+  `$HOME`; reused worktrees repair a missing or stale redirect, nested worktrees
+  keep inheriting discovery, and the redirect is excluded so launcher preparation
+  never dirties the worktree. Implementation, delivery, and quick modes default to
+  `--sandbox workspace-write -c approval_policy="never"` again, review stays
+  `--sandbox read-only`, and plain `cdx` keeps Codex's own approvals and sandbox.
+  Full bypass now requires `--bead-dangerous-full-auto` (bead modes) or the new
+  `--dangerous-full-access` (plain mode), both of which print a stderr warning;
+  `--no-full-auto` remains accepted as a deprecated no-op. Bead modes stay
+  autonomous inside that sandbox through `sandbox_workspace_write.writable_roots`
+  for the uv cache, the worktree's real gitdir, and the resolved Beads workspace,
+  plus `sandbox_workspace_write.network_access=true` for the local Dolt server.
+  The redirect target is the workspace `bd where` resolves rather than a guessed
+  `<repo>/.beads`, and the launcher refuses to write through a symlinked
+  `.beads` or `redirect`, over a tracked redirect, or toward a target with no
+  database and no `metadata.json`. Because those refusals are legitimate, the
+  guarantee is a gate rather than the preparation: after the worktree exists and
+  before Codex starts, a bead or delivery launch verifies that the worktree and
+  the invoking checkout resolve the same workspace and aborts with exit 2 naming
+  both paths otherwise, so a session can no longer run against another
+  repository's database, and only the verified workspace becomes a writable
+  root. Bead, delivery, quick, and review modes now reject caller-supplied
+  arguments that select an approval, sandbox, or workspace posture in the
+  forwarded Codex arguments — `--sandbox`/`-s`, `--ask-for-approval`/`-a`,
+  `--approve-for-me`, `--full-auto`, `--yolo`,
+  `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`,
+  `--ignore-rules`, `--ignore-user-config`, `--profile`/`-p`,
+  `--permission-profile`/`-P`, `--add-dir`, `--cd`/`-C`, and any `-c` override
+  keyed `approval_policy*` or `sandbox_*` — in pair, joined, and attached short
+  forms, with the config key matched after its whitespace is removed. Writable
+  roots are emitted as escaped TOML basic strings, and a root whose path holds a
+  control character is skipped with a warning instead of producing config Codex
+  refuses to load. Plain mode still forwards all of these arguments unchanged.
 
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent

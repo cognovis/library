@@ -121,6 +121,9 @@ ALLOWED_SOURCE_REPOS = (
     "sussdorff/open-brain",
     "cognovis/samurai-skills",
     "cognovis/polaris",
+    # clc-i19u: `ccore` serves the skills whose contract is a `ccore` command, so
+    # command and prose ship from one repository.
+    "cognovis/ccore",
 )
 
 ALLOWED_DEPENDENCY_PREFIXES = (

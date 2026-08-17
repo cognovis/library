@@ -22,9 +22,6 @@ roots:
   - type: skill
     name: workplan
     catalog: core
-  - type: skill
-    name: dolt
-    catalog: core
   # Content and browser tooling
   - type: skill
     name: summarize

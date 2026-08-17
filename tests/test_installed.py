@@ -222,7 +222,6 @@ def test_installed_scope_and_primitive_filters(tmp_path: Path):
 
     result = run_library(
         "installed",
-        "--scope=project",
         "--primitive=skill",
         "--json",
         cwd=project,
@@ -314,7 +313,7 @@ def test_project_scope_ignores_stray_lockfile_outside_git(tmp_path: Path):
     home.mkdir()
     write_lockfile(home / ".library.lock", [entry("stray-project")])
 
-    result = run_library("installed", "--scope=project", "--json", cwd=home, home=home)
+    result = run_library("installed", "--json", cwd=home, home=home)
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
 
@@ -336,7 +335,6 @@ def test_installed_diff_catalog_uses_all_scopes_for_classification(tmp_path: Pat
 
     result = run_library(
         "installed",
-        "--scope=project",
         "--diff-catalog",
         "--json",
         cwd=project,

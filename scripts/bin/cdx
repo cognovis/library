@@ -4,8 +4,26 @@
 # Usage: cdx [wrapper-flags] [codex-args...]
 #        cdx -h | --help        Show wrapper flag help, then fall through to codex --help
 #
+# Permission matrix (see --help):
+#   plain            → codex defaults (approvals + sandbox)
+#   -b/-sb/-ep/-bq   → --sandbox workspace-write, approval_policy="never"
+#   -br              → --sandbox read-only
+#   dangerous opt-in → --dangerous-full-access (plain),
+#                      --bead-dangerous-full-auto (bead modes)
+#
+# Bead modes extend workspace-write with writable_roots and network access
+# because the sandbox root is the worktree, while an autonomous session must
+# still write outside it: the uv cache (every helper runs through `uv run`),
+# the worktree's real gitdir under the canonical repository, and the resolved
+# Beads workspace. Network access is what lets bd reach the local Dolt server.
+# approval_policy="never" forbids escalation, so a missing grant is a hard
+# failure instead of a prompt. Bead modes therefore own their permission
+# contract end to end and reject caller permission flags; use plain cdx to pass
+# Codex permission flags yourself.
+#
 # Wrapper flags (not passed to codex):
-#   --no-full-auto  → Launch codex without the default --full-auto wrapper
+#   --dangerous-full-access → Plain mode only: full bypass of approvals and sandbox
+#   --no-full-auto  → Deprecated no-op; the default plain launch already sandboxes
 #   --tui           → For cdx -b, force interactive Codex TUI mode (default)
 #   --exec          → For cdx -b, force non-interactive codex exec mode
 #   -sb, --solo-bead ID → canonical Solo Bead delivery mode
@@ -14,7 +32,7 @@
 #   -- [PROMPT]     → separate caller prose from harness flags in delivery modes
 #   -bq, --bead-quick ID → launch the implementation loop in explicit Quick mode
 #   -br, --bead-review ID → launch critical bead-spec/readiness review
-#   --bead-dangerous-full-auto → Deprecated compatibility no-op for implementation modes
+#   --bead-dangerous-full-auto → Bead implementation modes: full bypass of approvals and sandbox
 #   --coordinator-workspace workspace:<n> → coordinator callback workspace ref
 #   --coordinator-surface surface:<n> → coordinator callback surface ref
 #
@@ -211,7 +229,7 @@ resolve_bead_reviewer_skill_path() {
 
 # ── Parse wrapper flags ──────────────────────────────────────────
 
-use_full_auto=true
+plain_dangerous_full_access=false
 show_help=false
 solo_bead_id=""
 executive_pack_ids=""
@@ -221,6 +239,7 @@ coordinator_workspace=""
 coordinator_surface=""
 codex_bead_mode="${CDX_BEAD_CODEX_MODE:-tui}"
 bead_dangerous_full_auto=false
+verified_beads_workspace=""
 bead_codex_permission_args=()
 codex_args=()
 caller_prompt_parts=()
@@ -233,7 +252,7 @@ run_codex_exec() {
     local prompt="$1"
     local worktree_dir="${2:-$PWD}"
     local prompt_boundary="${3:-false}"
-    select_bead_codex_permission_args
+    select_bead_codex_permission_args "$worktree_dir"
 
     local -a prompt_args=("${prompt}")
     if [[ "$prompt_boundary" == "true" ]]; then
@@ -259,7 +278,7 @@ run_codex_tui() {
     local prompt="$1"
     local worktree_dir="$2"
     local prompt_boundary="${3:-false}"
-    select_bead_codex_permission_args
+    select_bead_codex_permission_args "$worktree_dir"
 
     if [[ "$prompt_boundary" == "true" ]]; then
         exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" -- "${prompt}"
@@ -267,15 +286,113 @@ run_codex_tui() {
     exec "${CODEX_BIN}" "${bead_codex_permission_args[@]}" -C "$worktree_dir" "${codex_args[@]}" "${prompt}"
 }
 
+# Codex parses a -c value as TOML, so an unescaped quote or backslash in a path
+# turns the writable_roots array into a string Codex then refuses to load.
+toml_escape_basic_string() {
+    local value="$1"
+
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    printf '%s' "$value"
+}
+
+# Roots a bead session must write to even though they sit outside the Codex
+# workspace root: the uv cache (every helper runs through `uv run`), the
+# worktree's real gitdir under the canonical repository (index lock, refs,
+# commits), and the resolved Beads workspace (export state, run receipts).
+# `approval_policy="never"` forbids escalation, so a missing root is a hard
+# failure rather than a prompt.
+bead_workspace_writable_roots_arg() {
+    local worktree_dir="$1"
+    local -a roots=()
+    local cache_home="${XDG_CACHE_HOME:-}"
+
+    if [[ -z "$cache_home" && -n "${HOME:-}" ]]; then
+        cache_home="${HOME}/.cache"
+    fi
+    if [[ -n "$cache_home" ]]; then
+        roots+=("${cache_home}/uv")
+    fi
+
+    if [[ -n "$worktree_dir" ]]; then
+        local common_dir
+        if common_dir=$(resolve_worktree_git_common_dir "$worktree_dir"); then
+            roots+=("$common_dir")
+        fi
+    fi
+    # Only the workspace the identity gate proved the worktree resolves. An
+    # unverified path could belong to another repository's database.
+    if [[ -n "$verified_beads_workspace" ]]; then
+        roots+=("$verified_beads_workspace")
+    fi
+
+    local json="["
+    local first=true
+    local root existing seen
+    local -a unique_roots=()
+    if (( ${#roots} > 0 )); then
+        for root in "${roots[@]}"; do
+            # A TOML basic string cannot carry a raw control character, and a
+            # path holding one is pathological; drop the root instead of
+            # emitting config Codex refuses to load.
+            if [[ "$root" == *[[:cntrl:]]* ]]; then
+                echo "WARNING: skipping writable root with a control character in its path: ${root}" >&2
+                continue
+            fi
+            seen=false
+            if (( ${#unique_roots} > 0 )); then
+                for existing in "${unique_roots[@]}"; do
+                    if [[ "$existing" == "$root" ]]; then
+                        seen=true
+                        break
+                    fi
+                done
+            fi
+            if ! ${seen}; then
+                unique_roots+=("$root")
+            fi
+        done
+    fi
+    if (( ${#unique_roots} > 0 )); then
+        for root in "${unique_roots[@]}"; do
+            if ${first}; then
+                first=false
+            else
+                json+=","
+            fi
+            json+="\"$(toml_escape_basic_string "$root")\""
+        done
+    fi
+    json+="]"
+
+    printf '%s\n' "sandbox_workspace_write.writable_roots=${json}"
+}
+
 select_bead_codex_permission_args() {
+    local worktree_dir="${1:-}"
+
     if [[ -n "$bead_review_id" ]]; then
         bead_codex_permission_args=("--sandbox" "read-only")
         return
     fi
 
+    if ${bead_dangerous_full_auto}; then
+        echo "WARNING: --bead-dangerous-full-auto runs this Bead session with a full bypass of approvals and sandbox." >&2
+        echo "WARNING: Codex gets unrestricted host access outside the worktree; only dcg PreToolUse guards remain." >&2
+        bead_codex_permission_args=(
+            "--dangerously-bypass-approvals-and-sandbox"
+        )
+        return
+    fi
+
+    # No beads MCP requirement and no sandbox network grant: bead workspaces run
+    # embedded repo-local Dolt, so every lifecycle write is a local file write.
+    # Remote sync reaches the network through execpolicy-allowed commands (direct
+    # `bd`, `git push`) or after the session, not through this sandbox.
     bead_codex_permission_args=(
-        "--dangerously-bypass-approvals-and-sandbox"
-        "-c" "mcp_servers.beads.required=true"
+        "--sandbox" "workspace-write"
+        "-c" "approval_policy=\"never\""
+        "-c" "$(bead_workspace_writable_roots_arg "$worktree_dir")"
     )
 }
 
@@ -339,6 +456,132 @@ bootstrap_worktree_overlays() {
         "${overlay_args[@]}" >&2 || true
 }
 
+# Resolve the git directory the worktree actually writes to. An external
+# worktree keeps its gitdir under the canonical repository, outside the Codex
+# workspace root, so the caller needs the real path to grant write access.
+resolve_worktree_git_common_dir() {
+    local worktree_dir="$1"
+    local common_dir=""
+
+    test -n "${GIT_BIN}" || return 1
+    common_dir=$("${GIT_BIN}" -C "$worktree_dir" rev-parse --git-common-dir 2>/dev/null) || common_dir=""
+    if [[ -z "$common_dir" ]] && test -f "${worktree_dir}/.git"; then
+        common_dir=$(sed -n 's/^gitdir: *//p' "${worktree_dir}/.git" 2>/dev/null | head -1)
+    fi
+    [[ -n "$common_dir" ]] || return 1
+    if [[ "$common_dir" != /* ]]; then
+        common_dir="${worktree_dir}/${common_dir}"
+    fi
+    printf '%s\n' "${common_dir:A}"
+}
+
+# Ask bd itself which workspace the checkout belongs to. Deriving
+# "$repo_root/.beads" instead is wrong whenever that directory carries no
+# database and no metadata.json (a worktree holding only `.beads/runs`, for
+# example): bd ignores such a redirect and falls back to ~/.beads, which is the
+# very failure this redirect exists to prevent.
+resolve_canonical_beads_workspace() {
+    local repo_root="$1"
+    local where_json=""
+
+    test -n "${BD_BIN}" || return 1
+    command -v uv >/dev/null 2>&1 || return 1
+    where_json=$("${BD_BIN}" -C "$repo_root" where --json 2>/dev/null) || return 1
+
+    printf '%s' "$where_json" | uv run python -c '
+import json
+import os
+import sys
+
+payload = json.load(sys.stdin)
+path = payload.get("path") or ""
+database = payload.get("database_path") or ""
+if not path:
+    raise SystemExit(1)
+if not os.path.isdir(path):
+    raise SystemExit(1)
+metadata = os.path.join(path, "metadata.json")
+if not (os.path.isfile(metadata) or (database and os.path.exists(database))):
+    raise SystemExit(1)
+print(path)
+' 2>/dev/null
+}
+
+# Keep the launcher-written redirect out of `git status`. The canonical checkout
+# may already ignore `.beads/`, and upstream beads (GH#814) requires the redirect
+# to stay untracked, so append the pattern to the shared exclude file only when
+# git reports it as not ignored.
+ensure_beads_redirect_excluded() {
+    local worktree_dir="$1"
+    local redirect_path=".beads/redirect"
+
+    if "${GIT_BIN}" -C "$worktree_dir" check-ignore -q "$redirect_path" 2>/dev/null; then
+        return 0
+    fi
+
+    local common_dir
+    common_dir=$(resolve_worktree_git_common_dir "$worktree_dir") || return 0
+    test -d "$common_dir" || return 0
+
+    local exclude_file="${common_dir}/info/exclude"
+    mkdir -p "${common_dir}/info" || return 0
+    if ! test -f "$exclude_file" || ! grep -qxF "$redirect_path" "$exclude_file"; then
+        printf "\n# cdx bead worktree beads redirect\n%s\n" "$redirect_path" >> "$exclude_file"
+    fi
+}
+
+# An external worktree lies outside the canonical checkout, so bd's
+# parent-directory walk reaches the ~/.beads fallback before it ever consults
+# the repository. bd's native redirect file points it back at the canonical
+# workspace. Worktrees below the repo root inherit discovery and are left
+# untouched, and a symlinked or tracked redirect is never rewritten: following
+# one would mutate a different repository's database.
+# Never fatal, and never on stdout: the caller's stdout is the worktree path.
+ensure_worktree_beads_identity() {
+    local repo_root="${1:A}"
+    local worktree_dir="${2:A}"
+
+    test -d "${repo_root}/.beads" || return 0
+    test -d "$worktree_dir" || return 0
+
+    local canonical_beads
+    canonical_beads=$(resolve_canonical_beads_workspace "$repo_root") || {
+        echo "WARNING: no usable Beads workspace resolved for ${repo_root}; skipping the worktree redirect." >&2
+        return 0
+    }
+    if [[ "$worktree_dir" == "$repo_root" || "$worktree_dir" == "$repo_root"/* ]]; then
+        return 0
+    fi
+    if [[ "$canonical_beads" == "${HOME:-}/.beads" ]]; then
+        return 0
+    fi
+
+    local worktree_beads="${worktree_dir}/.beads"
+    local redirect_file="${worktree_beads}/redirect"
+
+    if test -L "$worktree_beads"; then
+        echo "WARNING: ${worktree_beads} is a symlink; refusing to write a Beads redirect through it." >&2
+        return 0
+    fi
+    if test -L "$redirect_file"; then
+        echo "WARNING: ${redirect_file} is a symlink; refusing to overwrite another repository's redirect." >&2
+        return 0
+    fi
+    if "${GIT_BIN}" -C "$worktree_dir" ls-files --error-unmatch ".beads/redirect" >/dev/null 2>&1; then
+        echo "WARNING: .beads/redirect is tracked in ${worktree_dir}; leaving it unchanged." >&2
+        return 0
+    fi
+
+    mkdir -p "$worktree_beads" || return 0
+    chmod 700 "$worktree_beads" 2>/dev/null || true
+
+    if ! test -f "$redirect_file" || [[ "$(<"$redirect_file")" != "$canonical_beads" ]]; then
+        printf '%s\n' "$canonical_beads" > "$redirect_file" || return 0
+    fi
+
+    ensure_beads_redirect_excluded "$worktree_dir"
+}
+
 default_codex_worktree_root() {
     local repo_root="$1"
     local worktree_home="${CDX_WORKTREE_HOME:-${HOME:-$repo_root}/code/.worktrees}"
@@ -368,6 +611,7 @@ ensure_bead_worktree() {
     local branch_name="${CDX_WORKTREE_BRANCH_PREFIX:-worktree-bead-}${safe_bead}"
 
     if "${GIT_BIN}" worktree list --porcelain 2>/dev/null | grep -Fxq "worktree ${worktree_dir}"; then
+        ensure_worktree_beads_identity "$repo_root" "$worktree_dir"
         printf '%s\n' "$worktree_dir"
         return 0
     fi
@@ -386,7 +630,44 @@ ensure_bead_worktree() {
         "${GIT_BIN}" worktree add -b "$branch_name" "$worktree_dir" HEAD >/dev/null
     fi
     bootstrap_worktree_overlays "$repo_root" "$worktree_dir"
+    ensure_worktree_beads_identity "$repo_root" "$worktree_dir"
     printf '%s\n' "$worktree_dir"
+}
+
+# The launcher prepares identity best-effort, but preparation can be skipped for
+# good reasons (symlinked, tracked, or unwritable redirect). Preparation is
+# therefore not the guarantee — this gate is. It runs after the worktree exists
+# and before Codex starts, and refuses to launch a Bead session into a database
+# other than the one the invoking checkout uses.
+verify_worktree_beads_identity() {
+    local repo_root="$1"
+    local worktree_dir="$2"
+    local canonical worktree_workspace
+
+    verified_beads_workspace=""
+
+    if ! canonical=$(resolve_canonical_beads_workspace "$repo_root"); then
+        if test -d "${repo_root}/.beads"; then
+            echo "WARNING: no usable Beads workspace resolved for ${repo_root}." >&2
+            echo "WARNING: launching without a Beads writable root; the session may not reach its issue tracker." >&2
+        fi
+        return 0
+    fi
+
+    worktree_workspace=$(resolve_canonical_beads_workspace "$worktree_dir") || worktree_workspace=""
+
+    if [[ "$worktree_workspace" == "$canonical" ]]; then
+        verified_beads_workspace="$canonical"
+        return 0
+    fi
+
+    echo "ERROR: Beads workspace identity mismatch; refusing to launch." >&2
+    echo "  worktree:            ${worktree_dir}" >&2
+    echo "  worktree resolves:   ${worktree_workspace:-<unresolved>}" >&2
+    echo "  repository resolves: ${canonical}" >&2
+    echo "Remove or repair ${worktree_dir}/.beads so it resolves ${canonical}." >&2
+    echo "A symlinked or tracked .beads/redirect blocks the launcher from repairing it." >&2
+    return 2
 }
 
 resolve_codex_bead_mode() {
@@ -417,7 +698,11 @@ while (( $# > 0 )); do
             shift
             ;;
         --no-full-auto)
-            use_full_auto=false
+            echo "NOTE: --no-full-auto is deprecated and now describes the default plain launch." >&2
+            shift
+            ;;
+        --dangerous-full-access)
+            plain_dangerous_full_access=true
             shift
             ;;
         --tui)
@@ -519,16 +804,27 @@ Wrapper flags (consumed by cdx, not passed to codex):
          --coordinator-surface surface:<n>
                                 Coordinator callback surface ref (requires workspace)
          --bead-dangerous-full-auto
-                                Deprecated compatibility no-op for Bead
-                                implementation modes, which already use cdx's bypass
+                                DANGEROUS: run Bead implementation modes with a
+                                full bypass of approvals and sandbox
 
   Session:
-         --no-full-auto          Launch codex without the default --full-auto wrapper
+         --dangerous-full-access DANGEROUS: plain mode only. Full bypass of
+                                 approvals and sandbox for this session
+         --no-full-auto          Deprecated no-op; plain launches already keep
+                                 codex approvals and sandboxing
          --tui                   For cdx -b, force interactive Codex TUI mode
                                  (default for cdx -b)
          --exec                  For cdx -b, force non-interactive codex exec mode
     -h,  --help                  Show this help, then codex --help
 
+────────────────────────────────────────────────────────────
+Permission matrix:
+  plain cdx                      codex default approvals and sandbox
+  -sb / -b / -ep / -bq           --sandbox workspace-write with
+                                 approval_policy="never"
+  -br                            --sandbox read-only
+  --dangerous-full-access        plain mode full bypass (warned)
+  --bead-dangerous-full-auto     Bead mode full bypass (warned)
 ────────────────────────────────────────────────────────────
 Note: Codex has no --bead flag equivalent. cdx bead modes synthesize bead
 context and pass it to Codex. Full cdx -b defaults to TUI mode so you can ask
@@ -563,6 +859,92 @@ fi
 if [[ -n "$coordinator_surface" && ! "$coordinator_surface" =~ ^surface:[0-9]+$ ]]; then
     echo "ERROR: invalid coordinator surface '$coordinator_surface' (expected surface:<n>)" >&2
     exit 2
+fi
+
+reject_managed_permission_argument() {
+    local shown="$1"
+
+    echo "ERROR: ${shown} is not accepted in Bead modes; the launcher owns the permission contract for this mode." >&2
+    echo "Use --bead-dangerous-full-auto for an explicit full bypass, or plain cdx to pass Codex permission flags yourself." >&2
+    exit 2
+}
+
+# A config key is matched with its whitespace removed: Codex parses the value as
+# TOML, where a padded key is the same key, but a raw prefix test is not.
+is_managed_permission_config() {
+    local entry="$1"
+    local key="${entry%%=*}"
+
+    key="${key//[[:space:]]/}"
+    case "$key" in
+        approval_policy*|sandbox_*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+# Bead modes place their permission args before the caller's, so any permission
+# argument forwarded here is the later one and wins. The rejected set is every
+# Codex argument that selects an approval, sandbox, or workspace posture --
+# including the ones that do it indirectly, by layering a config profile,
+# widening the writable set, moving the working root, or dropping the execpolicy
+# rules that govern what may run outside the sandbox. Short options also accept
+# their value attached (-sworkspace-write), so those forms are matched too.
+reject_managed_permission_overrides() {
+    local index=1
+    local arg next_arg
+    while (( index <= ${#codex_args[@]} )); do
+        arg="${codex_args[index]}"
+        next_arg=""
+        if (( index < ${#codex_args[@]} )); then
+            next_arg="${codex_args[index + 1]}"
+        fi
+        case "$arg" in
+            --dangerously-bypass-approvals-and-sandbox|--yolo|--full-auto)
+                reject_managed_permission_argument "$arg"
+                ;;
+            --approve-for-me|--dangerously-bypass-hook-trust)
+                reject_managed_permission_argument "$arg"
+                ;;
+            --ignore-rules|--ignore-user-config)
+                reject_managed_permission_argument "$arg"
+                ;;
+            --sandbox|--ask-for-approval|--profile|--permission-profile|--add-dir|--cd)
+                reject_managed_permission_argument "$arg ${next_arg}"
+                ;;
+            --sandbox=*|--ask-for-approval=*|--profile=*|--permission-profile=*|--add-dir=*|--cd=*)
+                reject_managed_permission_argument "$arg"
+                ;;
+            -s|-a|-p|-P|-C)
+                reject_managed_permission_argument "$arg ${next_arg}"
+                ;;
+            -s*|-a*|-p*|-P*|-C*)
+                reject_managed_permission_argument "$arg"
+                ;;
+            -c|--config)
+                if is_managed_permission_config "$next_arg"; then
+                    reject_managed_permission_argument "$arg $next_arg"
+                fi
+                ;;
+            --config=*)
+                if is_managed_permission_config "${arg#--config=}"; then
+                    reject_managed_permission_argument "$arg"
+                fi
+                ;;
+            -c*)
+                local attached_config="${arg#-c}"
+                if is_managed_permission_config "${attached_config#=}"; then
+                    reject_managed_permission_argument "$arg"
+                fi
+                ;;
+        esac
+        (( index++ ))
+    done
+}
+
+if [[ -n "$solo_bead_id$executive_pack_ids$bead_quick_id$bead_review_id" ]]; then
+    reject_managed_permission_overrides
 fi
 
 # ── Shared bead implementation loop ─────────────────────────────
@@ -646,6 +1028,7 @@ launch_repository_delivery() {
     }
     local worktree_dir
     worktree_dir=$(ensure_bead_worktree "$worktree_label") || return $?
+    verify_worktree_beads_identity "$repo_root" "$worktree_dir" || return $?
     local caller_prompt="${(j: :)caller_prompt_parts}"
     local execution_mode_contract=""
     if [[ "$delivery_mode" == "Solo Bead" ]]; then
@@ -718,13 +1101,15 @@ launch_bead_implementation_loop() {
     export CLD_BEAD_LINE=cdx
     export CLD_COMPACT_OUTPUT="${CLD_COMPACT_OUTPUT:-1}"
 
-    "${GIT_BIN}" rev-parse --show-toplevel >/dev/null 2>&1 || {
+    local repo_root
+    repo_root=$("${GIT_BIN}" rev-parse --show-toplevel 2>/dev/null) || {
         echo "ERROR: cdx bead mode must run inside a git repository." >&2
         return 1
     }
 
     local worktree_dir
     worktree_dir="$(ensure_bead_worktree "$active_bead")" || return $?
+    verify_worktree_beads_identity "$repo_root" "$worktree_dir" || return $?
 
     local prompt="Execute Bead ${active_bead} in its assigned worktree with execution mode \`${execution_mode}\` and caller route \`codex-owned\`. This current Codex session owns implementation, repairs, verification, and lifecycle completion. Do not delegate implementation or repairs to a subagent.
 
@@ -839,10 +1224,11 @@ if [[ -n "$bead_review_id" ]]; then
     done
 
     export CLD_BEAD_LINE=cdx
+    select_bead_codex_permission_args
     # ADR-0009: no dispatch client of our own. A normal Codex session runs the
     # review skill and dispatches the foreign reviewer through acpx-runner,
     # which owns the opposite-family invariant.
-    if "${CODEX_BIN}" "${codex_args[@]}" \
+    if "${CODEX_BIN}" "${bead_codex_permission_args[@]}" "${codex_args[@]}" \
         "Bead ID: $bead_review_id. Invoke the installed bead-review skill for this bead in $PWD. \
 Dispatch the reviewer through the acpx-runner agent with ROLE=review, LEAD_FAMILY=openai, \
 CONTRACT=review_gate_v1, and the agent/model/reasoning preferred by the model-routing standard. \
@@ -859,14 +1245,13 @@ fi
 
 # ── Default: plain Codex launch ─────────────────────────────────
 
-if ${use_full_auto}; then
+if ${plain_dangerous_full_access}; then
     # Full equivalent of "cld --dangerously-skip-permissions": no approval prompts AND
-    # no sandbox. The previous workspace-write sandbox blocked paths outside the workdir
-    # (e.g. ~/.cache/uv) and caused recurring "permission denied" / "operation not
-    # permitted" failures. Safeguarding is delegated to dcg via ~/.codex/hooks.json
-    # (PreToolUse Bash hook). Use --no-full-auto to opt back into Codex's default sandbox.
+    # no sandbox. Safeguarding is delegated to dcg via ~/.codex/hooks.json
+    # (PreToolUse Bash hook).
     # See: https://developers.openai.com/codex/agent-approvals-security
+    echo "WARNING: --dangerous-full-access launches Codex with a full bypass of approvals and sandbox." >&2
+    echo "WARNING: the session gets unrestricted host access; only dcg PreToolUse guards remain." >&2
     exec "${CODEX_BIN}" --dangerously-bypass-approvals-and-sandbox "${codex_args[@]}"
-else
-    exec "${CODEX_BIN}" "${codex_args[@]}"
 fi
+exec "${CODEX_BIN}" "${codex_args[@]}"

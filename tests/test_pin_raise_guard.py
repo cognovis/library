@@ -59,7 +59,7 @@ ALLOWED = (
     "library admission list --json",
     "library admission show --identity a",
     "library marketplace inventory disler",
-    "library marketplace status --scope global",
+    "library marketplace status",
     "library marketplace install steward skills/x",
 )
 

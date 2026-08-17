@@ -128,7 +128,7 @@ their resolved single target file in `target_paths`.
 
 Guardrail installers use their harness configuration files as targets. Public MCP
 registration lifecycle is retired: `library bootstrap install` owns only the
-OpenBrain singleton through its product manifest, while `mcp remove --scope project`
+OpenBrain singleton through its product manifest, while `mcp remove <name>`
 performs legacy project-lock cleanup without a harness or service mutation. Every
 other MCP lifecycle invocation returns a typed retirement error before a dry-run
 envelope or mutation is produced. Guardrail scope behavior remains unchanged.

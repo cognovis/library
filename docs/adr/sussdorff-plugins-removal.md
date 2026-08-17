@@ -44,7 +44,7 @@ now coexist:
    registered entries: 57 skills, 38 agents, 12 prompts (as of CL-yko).
 
 The name-collision policy (CL-b4o, `docs/policy/name-collision.md`) ensures that
-project-local artifacts always win over user-global ones, so the two mechanisms can coexist
+project-local artifacts always win over home-scoped ones, so the two mechanisms can coexist
 without runtime breakage. However, long-term architectural clarity requires a decision on
 which mechanism is authoritative.
 

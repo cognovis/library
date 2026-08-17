@@ -1560,7 +1560,7 @@ def build_workspace_plan(
     catalog_observations: CatalogObservations | None = None,
     pin_verifier: PinVerifier | None = None,
 ) -> dict[str, Any]:
-    """Recompute reachability and return an ownership-aware selected-scope plan.
+    """Recompute reachability and return an ownership-aware repository plan.
 
     Args:
         catalog_observations: Source-scoped inventory observations, with the
@@ -2622,7 +2622,7 @@ def workspace_write_lock(lock_path: Path):
             fcntl.flock(guard.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise LibraryError(
-                f"Another Workspace mutation holds the selected-scope lock: {guard_path}"
+                f"Another Workspace mutation holds this repository's lock: {guard_path}"
             ) from exc
         try:
             with lockfile_transaction(lock_path):

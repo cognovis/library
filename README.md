@@ -30,9 +30,9 @@ backlog. In particular, these are **not** this repository's job:
   skills own those);
 - harness tuning and coordinator wiring beyond starting a session;
 - catalog *content* (skills, agents, standards live in marketplace repos);
-- global installation of primitives — the enumerated Bootstrap (the `library`
-  executable, the launchers, the harness entrypoints, launcher runtime
-  configuration, the OpenBrain MCP server) is the only global surface.
+- installing primitives outside a repository — the enumerated Bootstrap (the
+  `library` executable, the launchers, the harness entrypoints, launcher runtime
+  configuration, the OpenBrain MCP server) is the only machine-wide surface.
 
 One request is one bead. Side observations go into the conversation, not the
 tracker.
@@ -43,8 +43,8 @@ Agentic capabilities tend to become duplicated, globally over-installed, and tie
 to one harness. The Library separates four concerns:
 
 1. **Catalog** — which reviewed primitives and Workspace definitions are available.
-2. **Selection** — which direct primitives and Workspaces a project or the global
-   lobby intentionally requests.
+2. **Selection** — which direct primitives and Workspaces a repository
+   intentionally requests.
 3. **Materialization** — which files and harness bridges the Library installs.
 4. **Loading** — when a Skill, Standard, Agent, Hook, or other primitive actually
    enters a model or runtime context.
@@ -62,9 +62,9 @@ engine; it is not the runtime itself.
 
 [ADR-0010](docs/adr/workspace-desired-state-reconciliation.md) defines the accepted
 next state: a **Workspace** is a metadata-only desired-state root that selects a
-reviewed closure of ordinary Library primitives. A scope can register zero or more
-Workspaces, and Workspaces can compose other Workspaces in the same scope. Strict
-functional coupling remains in primitive `requires:` metadata.
+reviewed closure of ordinary Library primitives. A repository can register zero or
+more Workspaces, and Workspaces can compose other Workspaces. Strict functional
+coupling remains in primitive `requires:` metadata.
 
 ```text
 direct primitive roots + Workspace roots
@@ -157,11 +157,11 @@ benefit from advice or user decisions.
 Primitive commands use singular primitive names:
 
 ```bash
-library workspace status --all --scope project
-library workspace sync --all --scope project
+library workspace status --all
+library workspace sync --all
 library skill list
 library skill use python-dev --dry-run --json
-library standard use english-only --scope project
+library standard use english-only
 library installed --diff-catalog
 library status --offline --json
 library audit
@@ -177,8 +177,8 @@ because they require user decisions; they are not deterministic CLI verbs.
 Workspace reconciliation becomes the sole Library mechanism for reusable project
 baselines. Existing parallel mechanisms are transitional:
 
-- the historical global capability list is replaced repository by repository;
-  only the enumerated product bootstrap remains global;
+- the historical machine-wide capability list was replaced repository by
+  repository; only the enumerated product Bootstrap remains machine-wide;
 - legacy consumer manifests and updater scripts have retired in favor of
   direct or Workspace roots; and
 - `project_tooling` accepts no new capability-distribution responsibilities.
@@ -209,7 +209,7 @@ must not overwrite `~/.agents/skills`. After that control-plane upgrade,
 project using the default Workspace, reconcile them with:
 
 ```bash
-library workspace sync --all --scope project
+library workspace sync --all
 ```
 
 The default `cognovis-base` Workspace supplies two repository-delivery modes:
@@ -223,8 +223,8 @@ cld -ep CL-101,CL-102
 cdx --executive-pack CL-101,CL-102
 ```
 
-`-sb` and `--solo-bead` select canonical Solo Bead delivery. The legacy `-b`
-form remains a compatibility alias. `-ep` and `--executive-pack` select one
+`-sb` and `--solo-bead` select canonical Solo Bead delivery; `-b` is an alias of
+the same solo Repository Delivery entry. `-ep` and `--executive-pack` select one
 ordered, same-repository Executive Pack. In either mode, `--` separates launcher
 options from an optional command prompt appended for the delivery session.
 

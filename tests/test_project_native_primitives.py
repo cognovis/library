@@ -311,7 +311,7 @@ def test_sync_reconciles_missing_project_native_dependencies(tmp_path: Path) -> 
     lock_path.write_text(yaml.safe_dump(lock, sort_keys=False))
     (project / ".agents/pi/extensions/workbench.ts").unlink()
 
-    planned = _run(project, "sync", "--scope", "project", "--dry-run")
+    planned = _run(project, "sync", "--dry-run")
     assert planned.returncode == 0, planned.stderr or planned.stdout
     assert json.loads(planned.stdout)["reconciled_dependencies"] == [
         "pi-extension:workbench"
@@ -322,7 +322,7 @@ def test_sync_reconciles_missing_project_native_dependencies(tmp_path: Path) -> 
         for entry in yaml.safe_load(lock_path.read_text())["installed"]
     )
 
-    synced = _run(project, "sync", "--scope", "project")
+    synced = _run(project, "sync")
     assert synced.returncode == 0, synced.stderr or synced.stdout
     payload = json.loads(synced.stdout)
     assert payload["reconciled_dependencies"] == ["pi-extension:workbench"]
@@ -574,12 +574,13 @@ def test_pi_extension_bundle_requires_safe_entrypoint(tmp_path: Path) -> None:
     assert not (project / ".agents").exists()
 
 
-def test_project_native_rejects_global_scope_before_mutation(tmp_path: Path) -> None:
+def test_project_native_rejects_a_scope_flag_before_mutation(tmp_path: Path) -> None:
     project = _project(tmp_path)
     result = _run(project, "pi-extension", "use", "workbench", "--scope", "global")
     assert result.returncode != 0
     assert json.loads(result.stdout)["message"] == (
-        "Global Library desired state is not supported; use the current Git repository."
+        "`--scope` is not a Library option: Library manages the current Git "
+        "repository only. Re-run the command without `--scope`."
     )
     assert not (project / ".agents").exists()
     assert not (project / ".library.lock").exists()

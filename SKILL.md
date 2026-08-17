@@ -10,10 +10,11 @@ disable-model-invocation: true
 Use this skill only when the user explicitly invokes Library distribution or
 asks what Library capabilities a repository should use.
 
-The Library has one normal desired-state scope: the current Git repository.
-The global bootstrap is deliberately limited to the `library`, `cld`, and `cdx`
-executables, global instruction entrypoints, launcher runtime configuration, and
-the OpenBrain MCP singleton. It is not a primitive-installation scope.
+The Library has one desired state: the current Git repository. The enumerated
+Bootstrap is the deliberate exception, limited to the `library`, `cld`, and `cdx`
+executables, the `$HOME` instruction entrypoints, launcher runtime
+configuration, and the OpenBrain MCP singleton. It is not a
+primitive-installation scope.
 
 ## Inspect and recommend
 
@@ -21,14 +22,14 @@ Before recommending an addition, inspect the repository without mutation:
 
 ```bash
 library status --offline --json
-library workspace list --scope project --json
+library workspace list --json
 ```
 
 Use observable repository facts such as language, package manager, CI files,
 tracked harness configuration, and existing `.library.lock` roots. Clearly
 separate those facts from recommendations. For each recommendation, state why a
 Workspace or direct primitive fits and ask the user to confirm it. Never infer
-selection from the retired global lock and never install before confirmation.
+selection from a historical machine-wide lock, and never install before confirmation.
 
 ## Representative flow
 
@@ -45,7 +46,7 @@ yes.
 After that confirmation, use the deterministic public command:
 
 ```bash
-library workspace use cognovis-library-core:python-cli --scope project
+library workspace use cognovis-library-core:python-cli
 ```
 
 ## Deterministic commands
@@ -55,13 +56,13 @@ library workspace use cognovis-library-core:python-cli --scope project
 library init
 
 # Explore before selecting additional desired state.
-library workspace list --scope project
-library workspace show <catalog>:<workspace> --scope project
-library workspace use <catalog>:<workspace> --scope project --dry-run --json
+library workspace list
+library workspace show <catalog>:<workspace>
+library workspace use <catalog>:<workspace> --dry-run --json
 
 # Install a user-confirmed direct primitive.
-library skill use <name> --scope project --dry-run --json
-library skill use <name> --scope project
+library skill use <name> --dry-run --json
+library skill use <name>
 
 # Inspect repository health without mutation.
 library status --offline --json
@@ -77,6 +78,7 @@ and unmanaged supported-harness content. Exit 0 is healthy, exit 2 signals a
 deterministic repair, exit 3 asks for a human decision, and exit 1 indicates a
 check failure.
 
-Only Claude Code, Codex, and Pi are supported Library projection targets.
-`--scope global` is rejected deterministically in human and JSON output before
-catalog, lockfile, filesystem, or installer mutation.
+Only Claude Code, Codex, and Pi are supported Library projection targets. No
+command takes a scope selector; a literally passed one is rejected
+deterministically in human and JSON output before catalog, lockfile,
+filesystem, or installer mutation.

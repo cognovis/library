@@ -167,11 +167,11 @@ repos.
   script, run a consumer updater dry-run:
 
 ```bash
-library workspace status --all --scope project
+library workspace status --all
 ```
 
 - If the dry-run reports planned changes, either run
-  `library workspace sync --all --scope project --apply` and
+  `library workspace sync --all --apply` and
   finish the target repo commit, or file/follow a consumer propagation bead.
 
 Do not leave ad hoc copy steps in prompts or forge output. Consumer propagation

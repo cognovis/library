@@ -235,9 +235,10 @@ prompt kit, not an MCP receipt.
 
 It never creates an `mcp:` dependency edge, a global ownership edge, or a harness
 MCP registration. If the fetched artifact genuinely requires a running MCP server
-at use time, that server is a **separate global prerequisite assertion** under
-ADR-0010 Decision 4, declared by the artifact, resolved against the global lock,
-and never implied by the fact that its bytes arrived over MCP.
+at use time, that server is a **separate machine-wide prerequisite assertion**
+under ADR-0010 Decision 4, declared by the artifact, resolved against the
+enumerated ADR-0012 Bootstrap, and never implied by the fact that its bytes
+arrived over MCP.
 
 This is the single most confusable point in the architecture, so it is stated as
 an invariant: **the transport that delivered an artifact contributes nothing to
@@ -1917,8 +1918,8 @@ Five readings were open, and the implemented contract states them:
    is constructed over named scopes and refuses unless every required scope —
    `project` and `global` — is present. A caller holding one store gets a typed
    refusal instead of a confident wrong answer, because a project-scoped
-   maintenance run that cannot see the global lock reports "unreferenced" for
-   objects that lock is holding.
+   maintenance run that cannot see every store reports "unreferenced" for
+   objects another store is holding.
 2. **An unreadable scope is never an empty one.** A corrupt receipt file, or a
    scope whose declared location does not exist, raises rather than contributing
    zero references. The two states are the same silence and opposite facts.
