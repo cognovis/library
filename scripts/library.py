@@ -376,6 +376,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cutover_parser.add_argument("--json", action="store_true", help="Output JSON")
 
+    # Installing the harness instruction files is its own operation, not a
+    # scope of the desired state: ADR-0012 leaves Library one desired state
+    # (the current Git repository), and these files live under HOME because
+    # that is where each harness reads them. The command is named so its blast
+    # radius is visible — it touches the instruction files and nothing else.
+    harness_parser = subparsers.add_parser(
+        "harness",
+        help="Install the per-harness instruction files (AGENTS.md and friends)",
+    )
+    harness_verb_sub = harness_parser.add_subparsers(dest="verb", metavar="verb")
+    harness_sync_parser = harness_verb_sub.add_parser(
+        "sync", help="Install or update every declared harness instruction file"
+    )
+    harness_sync_parser.add_argument("--json", action="store_true", help="Output JSON")
+    harness_sync_parser.add_argument(
+        "--dry-run", action="store_true", help="Show planned writes, no mutation"
+    )
+    harness_sync_parser.add_argument(
+        "--adopt",
+        action="store_true",
+        help=(
+            "Take ownership of an instruction file this operation did not write. "
+            "Without it, an unrecognized non-empty file is refused."
+        ),
+    )
+    harness_audit_parser = harness_verb_sub.add_parser(
+        "audit", help="Detect drift in the installed harness instruction files"
+    )
+    harness_audit_parser.add_argument("--json", action="store_true", help="Output JSON")
+
     search_parser = subparsers.add_parser(
         "search",
         help="Search across all primitives",
@@ -4113,6 +4143,58 @@ def _cutover_prerequisite_error(payload: dict[str, object]) -> str:
             )
         )
     return f"Cutover prerequisites changed at {stage}: " + "; ".join(details)
+
+
+def cmd_harness(args: argparse.Namespace) -> int:
+    """Install or audit the per-harness instruction files under HOME."""
+    from lib.harness_instructions import (
+        audit_harness_instructions,
+        sync_harness_instructions,
+    )
+
+    use_json = getattr(args, "json", False)
+    try:
+        catalog_root = _resolve_catalog_root()
+        catalog = load_catalog(catalog_root)
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    try:
+        if args.verb == "audit":
+            result = audit_harness_instructions(catalog)
+        else:
+            result = sync_harness_instructions(
+                catalog,
+                dry_run=getattr(args, "dry_run", False),
+                adopt=getattr(args, "adopt", False),
+            )
+    except LibraryError as exc:
+        if use_json:
+            print_json(error_result(str(exc), exc.exit_code))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    if use_json:
+        print_json(result)
+    elif args.verb == "audit":
+        for item in result["targets"]:
+            print(f"  {item['status']:<8} {item['harness']:<12} {item['path']}")
+        print("Harness instructions: DRIFT" if result["drift"] else "Harness instructions: clean")
+    else:
+        verb = "Would install" if result["status"] == "dry_run" else "Installed"
+        for item in result["targets"]:
+            suffix = "" if result["status"] == "dry_run" else ("" if item["changed"] else " (unchanged)")
+            print(f"  {item['harness']:<12} {item['shape']:<10} {item['path']}{suffix}")
+        print(f"{verb} {len(result['targets'])} harness instruction files")
+
+    if args.verb == "audit" and result["drift"]:
+        return EXIT_DRIFT
+    return EXIT_SUCCESS
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
@@ -8319,6 +8401,12 @@ def main(argv: list[str] | None = None) -> int:
             parser.parse_args(["bootstrap", "--help"])
             return EXIT_FAILURE
         return cmd_bootstrap(args)
+
+    if args.primitive == "harness":
+        if not getattr(args, "verb", None):
+            parser.parse_args(["harness", "--help"])
+            return EXIT_FAILURE
+        return cmd_harness(args)
 
     # Top-level search
     if args.primitive == "search":
