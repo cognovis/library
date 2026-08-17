@@ -56,6 +56,44 @@
 
 ### Fixed
 
+- *(CL-14ob, cdx)* External bead worktrees keep the originating repository's Beads
+  identity and every launch mode keeps a scoped permission boundary. A worktree
+  outside the canonical checkout now carries a `.beads/redirect` file pointing at
+  the canonical `.beads` directory, so bd no longer resolves the `~/.beads`
+  fallback that its parent-directory walk reaches first for worktrees below
+  `$HOME`; reused worktrees repair a missing or stale redirect, nested worktrees
+  keep inheriting discovery, and the redirect is excluded so launcher preparation
+  never dirties the worktree. Implementation, delivery, and quick modes default to
+  `--sandbox workspace-write -c approval_policy="never"` again, review stays
+  `--sandbox read-only`, and plain `cdx` keeps Codex's own approvals and sandbox.
+  Full bypass now requires `--bead-dangerous-full-auto` (bead modes) or the new
+  `--dangerous-full-access` (plain mode), both of which print a stderr warning;
+  `--no-full-auto` remains accepted as a deprecated no-op. Bead modes stay
+  autonomous inside that sandbox through `sandbox_workspace_write.writable_roots`
+  for the uv cache, the worktree's real gitdir, and the resolved Beads workspace,
+  plus `sandbox_workspace_write.network_access=true` for the local Dolt server.
+  The redirect target is the workspace `bd where` resolves rather than a guessed
+  `<repo>/.beads`, and the launcher refuses to write through a symlinked
+  `.beads` or `redirect`, over a tracked redirect, or toward a target with no
+  database and no `metadata.json`. Because those refusals are legitimate, the
+  guarantee is a gate rather than the preparation: after the worktree exists and
+  before Codex starts, a bead or delivery launch verifies that the worktree and
+  the invoking checkout resolve the same workspace and aborts with exit 2 naming
+  both paths otherwise, so a session can no longer run against another
+  repository's database, and only the verified workspace becomes a writable
+  root. Bead, delivery, quick, and review modes now reject caller-supplied
+  arguments that select an approval, sandbox, or workspace posture in the
+  forwarded Codex arguments — `--sandbox`/`-s`, `--ask-for-approval`/`-a`,
+  `--approve-for-me`, `--full-auto`, `--yolo`,
+  `--dangerously-bypass-approvals-and-sandbox`, `--dangerously-bypass-hook-trust`,
+  `--ignore-rules`, `--ignore-user-config`, `--profile`/`-p`,
+  `--permission-profile`/`-P`, `--add-dir`, `--cd`/`-C`, and any `-c` override
+  keyed `approval_policy*` or `sandbox_*` — in pair, joined, and attached short
+  forms, with the config key matched after its whitespace is removed. Writable
+  roots are emitted as escaped TOML basic strings, and a root whose path holds a
+  control character is skipped with a warning instead of producing config Codex
+  refuses to load. Plain mode still forwards all of these arguments unchanged.
+
 - *(CL-tbfi, cld/cdx)* Single-bead launches now bind a clean Cognovis Core source
   revision and read the implementation loop, execution loop, and loop-owner agent
   directly from that source. The canonical developer checkout wins over an older
