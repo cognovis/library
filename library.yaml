@@ -4169,10 +4169,31 @@ library:
         - origin:original
         - tier:core
     - name: agents-md
-      description: 'Global cross-harness AGENTS.md — always-on provider-neutral agent rules (worktree discipline, english-only, 1Password ban, uv tooling, confirmation gates, beads). Deployed verbatim to ~/.agents/AGENTS.md by library sync (also chains to ~/.codex/AGENTS.md via symlink); drift-audited by library audit. Machine/repo-specific content lives in each repo''s own AGENTS/CLAUDE files.'
+      description: 'Cross-harness AGENTS.md — always-on provider-neutral agent rules (worktree discipline, english-only, secret-store ban, uv tooling, confirmation gates, beads). Installed as a harness instruction file by `library harness sync`: verbatim to ~/.agents/AGENTS.md, symlinked for the harnesses that read AGENTS.md natively, projected for the ones that do not; drift-audited by `library harness audit`. Machine/repo-specific content lives in each repo''s own AGENTS/CLAUDE files.'
       base: https://github.com/cognovis/library-core/blob/main/runtime-configs/AGENTS.md
       format: markdown
       deploy_filename: AGENTS.md
+      harness_instruction:
+        targets:
+          - harness: agents
+            path: ~/.agents/AGENTS.md
+            shape: file
+          - harness: codex
+            path: ~/.codex/AGENTS.md
+            shape: symlink
+            link_to: ~/.agents/AGENTS.md
+          - harness: kimi
+            path: ~/.kimi-code/AGENTS.md
+            shape: symlink
+            link_to: ~/.agents/AGENTS.md
+          - harness: gemini
+            path: ~/.gemini/GEMINI.md
+            shape: projection
+          - harness: cursor
+            path: ~/.cursor/rules/agents-md.mdc
+            shape: projection
+            frontmatter:
+              alwaysApply: true
       metadata:
         library:
           source_catalog: cognovis-library-core
@@ -4182,13 +4203,17 @@ library:
         - origin:original
         - tier:core
     - name: claude-md-global
-      description: 'Global Claude Code CLAUDE.md — fleet-wide Claude-Code-specific configuration (safety checks, session close, web/doc/SSH routing, rules.d reference; imports AGENTS.md). Deployed verbatim to ~/.claude/CLAUDE.md by library sync via a deploy_dir override; drift-audited by library audit. Library-owned — not tracked in the sussdorff/claude repo.'
+      description: 'Claude Code CLAUDE.md — fleet-wide Claude-Code-specific configuration (safety checks, session close, web/doc/SSH routing; imports AGENTS.md). Installed as a harness instruction file by `library harness sync` to ~/.claude/CLAUDE.md; drift-audited by `library harness audit`. Library-owned — not tracked in the sussdorff/claude repo.'
       base: https://github.com/cognovis/library-core/blob/main/runtime-configs/CLAUDE.md
       format: markdown
       deploy_filename: CLAUDE.md
       deploy_dir:
         - default: .claude/
-        - global: ~/.claude/
+      harness_instruction:
+        targets:
+          - harness: claude_code
+            path: ~/.claude/CLAUDE.md
+            shape: file
       metadata:
         library:
           source_catalog: cognovis-library-core
