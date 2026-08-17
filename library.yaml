@@ -162,7 +162,7 @@ sources:
         - team
     - name: cognovis-ccore
       source: https://github.com/cognovis/ccore
-      description: Standalone Cognovis developer-workflow CLI.
+      description: Standalone Cognovis developer-workflow CLI and the skills that document its commands.
       visibility: private
       owner: cognovis
       audience: team
@@ -170,19 +170,24 @@ sources:
       writable: true
       content_types:
         - scripts
+        - skills
       scope:
         topics:
           - team
           - python
           - cli
           - workflows
+          - ccore
+          - acpx
+          - dispatch
         excludes:
           - personal
       skeleton:
         platform:
           - src/
           - scripts/
-      notes: Canonical source for the independently versioned ccore uv-tool distribution.
+          - skills/
+      notes: Canonical source for the independently versioned ccore uv-tool distribution and for skills whose contract is a ccore command, so command and prose ship from one repository.
       tags:
         - first-party
         - team
@@ -989,20 +994,16 @@ library:
         - domain:fhir
     - name: acpx-dispatch
       description: Use for agent-shell ACPX execution and session-status inspection through the installed `ccore acpx` command. Run mode owns session preparation, output extraction, telemetry, and approve-all worktree confinement; status mode is read-only. Never use this skill for model/provider routing, prompt composition, review policy, verdict validation, or adapter updates.
-      source: https://github.com/cognovis/library-core/blob/main/skills/acpx-dispatch/SKILL.md
+      source: https://github.com/cognovis/ccore/blob/main/skills/acpx-dispatch/SKILL.md
       requires:
-        - agent:judge-default
-        - standard:english-only
-        - standard:judge-layer
-        - standard:model-routing
-        - standard:no-emoji
+        - standard:mcp-client-timeout
       tags:
         - origin:original
         - tier:core
         - workflow:dispatch
       metadata:
         library:
-          source_catalog: cognovis-library-core
+          source_catalog: cognovis-ccore
           inventory: convention-scan
           plane: dev
     - name: adr-gap
@@ -4227,6 +4228,11 @@ library:
           pin:
             kind: commit
             value: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
+        - alias: ccore
+          identity: https://github.com/cognovis/ccore
+          pin:
+            kind: commit
+            value: fc6162a9a1734c77e7cb2733c3160665f71d5220
       roots:
         - type: skill
           name: library

@@ -26,7 +26,6 @@ EXPECTED_ARTIFACTS = {
     # carry the same edges or a consumer repository installs a delivery skill
     # whose own closure cannot satisfy what it declares.
     ("agent", "doc-changelog-updater"),
-    ("agent", "judge-default"),
     ("agent", "plan-reviewer"),
     ("skill", "acpx-dispatch"),
     ("skill", "bead-execution-loop"),
@@ -38,7 +37,13 @@ EXPECTED_ARTIFACTS = {
     ("skill", "session-close"),
     ("standard", "english-only"),
     ("standard", "executive-pack"),
-    ("standard", "judge-layer"),
+    # clc-i19u: the transport skill declares `requires_standards:
+    # [mcp-client-timeout]` and nothing else, so aligning its catalog entry with
+    # that contract is what pulls this standard into the closure -- and what drops
+    # agent:judge-default and standard:judge-layer out of it. Those two were here
+    # only because the retired cognovis-core copy's entry claimed edges the skill
+    # never declared; no other member of this Workspace requires them.
+    ("standard", "mcp-client-timeout"),
     ("standard", "model-routing"),
     ("standard", "no-emoji"),
     ("standard", "workflow"),
@@ -69,6 +74,16 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
             "pin": {
                 "kind": "commit",
                 "value": "a4e69a2b0d971ff4023103aaf2457bf04859bc5f",
+            },
+        },
+        # clc-i19u: the closure reaches skill:acpx-dispatch, which ccore serves
+        # beside the `ccore acpx` command the skill documents.
+        {
+            "alias": "ccore",
+            "identity": "https://github.com/cognovis/ccore",
+            "pin": {
+                "kind": "commit",
+                "value": "fc6162a9a1734c77e7cb2733c3160665f71d5220",
             },
         },
     ]
