@@ -381,17 +381,18 @@ select_bead_codex_permission_args() {
         echo "WARNING: Codex gets unrestricted host access outside the worktree; only dcg PreToolUse guards remain." >&2
         bead_codex_permission_args=(
             "--dangerously-bypass-approvals-and-sandbox"
-            "-c" "mcp_servers.beads.required=true"
         )
         return
     fi
 
+    # No beads MCP requirement and no sandbox network grant: bead workspaces run
+    # embedded repo-local Dolt, so every lifecycle write is a local file write.
+    # Remote sync reaches the network through execpolicy-allowed commands (direct
+    # `bd`, `git push`) or after the session, not through this sandbox.
     bead_codex_permission_args=(
         "--sandbox" "workspace-write"
         "-c" "approval_policy=\"never\""
         "-c" "$(bead_workspace_writable_roots_arg "$worktree_dir")"
-        "-c" "sandbox_workspace_write.network_access=true"
-        "-c" "mcp_servers.beads.required=true"
     )
 }
 
