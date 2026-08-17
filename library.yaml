@@ -4347,6 +4347,32 @@ library:
           source_catalog: library-platform
           inventory: manual
           source_commit: c169a8e5cde0dcd1668967593a902f1cc1bd3259
+    - name: fhir-ig
+      description: Shared FHIR IG authoring baseline - registry discovery, IG source development, and emission conformance - for FHIR repositories.
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/fhir-ig.yaml
+      schema_version: 1
+      version: 0.1.0
+      status: stable
+      roots:
+        - type: skill
+          name: fhir-registry-research
+        - type: skill
+          name: fhir-ig-development
+        - type: skill
+          name: fhir-emission
+        - type: standard
+          name: fhir-ig-authoring
+        - type: standard
+          name: english-only
+        - type: standard
+          name: no-emoji
+        - type: agent
+          name: fhir-publication-reviewer
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          source_commit: 1cd7d1f6
     - name: python-cli
       description: Shared development and testing baseline for Python CLI repositories.
       source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml
