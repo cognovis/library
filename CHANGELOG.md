@@ -32,6 +32,25 @@
 
 ### Changed
 
+- *(clc-i19u, catalog)* The `cognovis-ccore` source now carries `skills` as well as
+  `scripts`, and the `acpx-dispatch` skill entry is served from it. The skill is
+  policy-only prose about the `ccore acpx` command, so it ships from the same
+  repository as that command instead of from `cognovis-library-core`, where the
+  superseded copy has been deleted. The `cognovis-base` Workspace declares the
+  matching `ccore` catalog pin, because its delivery closure reaches the skill.
+
+  The entry's `requires` now match the contract the skill actually declares —
+  `standard:mcp-client-timeout`, as derived by
+  `library catalog sync --source=cognovis-ccore`. It previously claimed
+  `agent:judge-default`, `standard:judge-layer`, `standard:model-routing`,
+  `standard:english-only`, and `standard:no-emoji`, none of which the skill
+  declares. That inflation was not cosmetic: a fresh consumer running
+  `library skill use acpx-dispatch` exited non-zero while building an unrelated
+  judge agent and never installed the skill. Aligning the edges also removes
+  `agent:judge-default` and `standard:judge-layer` from the `cognovis-base`
+  delivery closure, which no other member of that Workspace requires, and adds
+  `standard:mcp-client-timeout`.
+
 - *(CL-zw39, cld/cdx)* Launchers now expose canonical `-sb`/`--solo-bead`
   and `-ep`/`--executive-pack` delivery modes, with `-b` compatibility alias
   entering the same Solo path. Both validate exact executable Beads before
