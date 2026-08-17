@@ -2,6 +2,18 @@
 
 ### Removed
 
+- *(CL-hf2g, cdx)* Retire the two server-mode knobs from bead-launch permission
+  arguments. `cdx` bead, delivery, quick, and dangerous-full-auto launches no
+  longer pass `-c mcp_servers.beads.required=true` (superseding the clc-6kuz
+  MCP-first binding) or `-c sandbox_workspace_write.network_access=true`
+  (superseding that clause of CL-14ob). Bead workspaces run embedded repo-local
+  Dolt after CL-z8yz, so lifecycle writes are local file writes and remote sync
+  runs through execpolicy-allowed commands (direct `bd` and `git push`) or after
+  the session rather than through the sandbox. The identity gate, redirect
+  handling, writable roots, read-only review mode, and the rejection of
+  caller-supplied permission overrides — including a caller-supplied
+  `sandbox_workspace_write.network_access` — are unchanged.
+
 - *(CL-ldnu, CLI/catalog/docs)* Remove the last scope selection from the
   platform. No `library` subcommand declares `--scope`; a literally passed one
   fails with a typed rejection before catalog, repository, lockfile, and
