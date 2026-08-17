@@ -88,10 +88,10 @@ receipts:
   type: standard
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/agentic-primitives.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/standards/unknown/agentic-primitives@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/agentic-primitives@3c3bedbd3dd901/
   install_target: .agents/standards/agentic-primitives/agentic-primitives.md
-  install_timestamp: '2026-08-13T17:06:49Z'
+  install_timestamp: '2026-08-17T08:34:42Z'
   checksum_sha256: bcb60b0d1b84e39d116de086d63185c4b292f587d7e36f5652be073c381eb1c2
   checksum_type: file
   content_sha256: bcb60b0d1b84e39d116de086d63185c4b292f587d7e36f5652be073c381eb1c2
@@ -115,10 +115,10 @@ receipts:
   type: standard
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/primitive-placement.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/standards/unknown/primitive-placement@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/primitive-placement@3c3bedbd3dd901/
   install_target: .agents/standards/agentic-primitives/primitive-placement.md
-  install_timestamp: '2026-08-13T17:06:50Z'
+  install_timestamp: '2026-08-17T08:34:44Z'
   checksum_sha256: a4c959159f61e194da66552bc307ee7ec84bf7c19e8fd07cd43e2de90b6dfdf9
   checksum_type: file
   content_sha256: a4c959159f61e194da66552bc307ee7ec84bf7c19e8fd07cd43e2de90b6dfdf9
@@ -142,10 +142,10 @@ receipts:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/agent-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/agent-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/agent-forge@3c3bedbd3dd901/
   install_target: .agents/skills/agent-forge/
-  install_timestamp: '2026-08-13T17:06:53Z'
+  install_timestamp: '2026-08-17T08:34:45Z'
   checksum_sha256: e5f10b4fda80f905607e99aef1f2b04a3a62cca0b1a51ce146995d2d66087412
   checksum_type: directory
   content_sha256: e5f10b4fda80f905607e99aef1f2b04a3a62cca0b1a51ce146995d2d66087412
@@ -217,10 +217,10 @@ receipts:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/skill-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/skill-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/skill-forge@3c3bedbd3dd901/
   install_target: .agents/skills/skill-forge/
-  install_timestamp: '2026-08-13T17:06:54Z'
+  install_timestamp: '2026-08-17T08:34:47Z'
   checksum_sha256: 32fdedcf8bb9f88440a3b058475e9eb9234662398acf6328e3d3e356c6147911
   checksum_type: directory
   content_sha256: 32fdedcf8bb9f88440a3b058475e9eb9234662398acf6328e3d3e356c6147911
@@ -279,13 +279,13 @@ receipts:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/standard-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/standard-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/standard-forge@3c3bedbd3dd901/
   install_target: .agents/skills/standard-forge/
-  install_timestamp: '2026-08-13T17:06:55Z'
-  checksum_sha256: bb0991fd30f70c2bfa97f2a451d4920fe0357e50db4da7c5dc30c73914c743d0
+  install_timestamp: '2026-08-17T08:34:49Z'
+  checksum_sha256: 03b1bf86c93594d5695a6f1f57f1189f64348444e1cc86829476d280a6c8ecc0
   checksum_type: directory
-  content_sha256: bb0991fd30f70c2bfa97f2a451d4920fe0357e50db4da7c5dc30c73914c743d0
+  content_sha256: 03b1bf86c93594d5695a6f1f57f1189f64348444e1cc86829476d280a6c8ecc0
   install_mode: vendor
   license: unknown
   bridge_symlinks:
@@ -302,7 +302,7 @@ receipts:
     kind: directory
   - path: .agents/skills/standard-forge/SKILL.md
     kind: file
-    content_sha256: e2dde0092dcfbf9b4debc7fb6f3d7527104034a0bd512af156ca4e2576992623
+    content_sha256: 6b71bc2c43ee520a8c597b26ad8ab266c03994ae4595a19bd46a742684f87d60
   - path: .agents/skills/standard-forge/assets
     kind: directory
   - path: .agents/skills/standard-forge/assets/action-proposal-template.md
@@ -320,13 +320,13 @@ receipts:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/script-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/script-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/script-forge@3c3bedbd3dd901/
   install_target: .agents/skills/script-forge/
-  install_timestamp: '2026-08-13T17:06:57Z'
-  checksum_sha256: 4c562200def386de620990c5ccf818bfe86348f362ea201eb5dce4e3eabf7015
+  install_timestamp: '2026-08-17T08:34:50Z'
+  checksum_sha256: f2e3729fbce286cc321ce960ec9b12ee9cfac80d811f53e76630466558211b6e
   checksum_type: directory
-  content_sha256: 4c562200def386de620990c5ccf818bfe86348f362ea201eb5dce4e3eabf7015
+  content_sha256: f2e3729fbce286cc321ce960ec9b12ee9cfac80d811f53e76630466558211b6e
   install_mode: vendor
   license: unknown
   bridge_symlinks:
@@ -343,7 +343,7 @@ receipts:
     kind: directory
   - path: .agents/skills/script-forge/SKILL.md
     kind: file
-    content_sha256: c2149a1df434e642c2019527575c75656fcca1d6f5f9a1f406311ed96775151f
+    content_sha256: 164245f78a01a53f65d9be0129e3abc023c04bbc9c4bdd855eaae10a5b82e8e8
   - path: .agents/skills/script-forge/scripts
     kind: directory
   - path: .agents/skills/script-forge/scripts/init-script.py
@@ -358,10 +358,10 @@ receipts:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/hook-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/hook-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/hook-forge@3c3bedbd3dd901/
   install_target: .agents/skills/hook-forge/
-  install_timestamp: '2026-08-13T17:06:58Z'
+  install_timestamp: '2026-08-17T08:34:52Z'
   checksum_sha256: 2e41eeb7015f305b75023c2f758a6e28bf2becfa5d83aa785a091b6b02dcbb8c
   checksum_type: directory
   content_sha256: 2e41eeb7015f305b75023c2f758a6e28bf2becfa5d83aa785a091b6b02dcbb8c
@@ -440,10 +440,10 @@ receipts:
   type: standard
   marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/python-cli-patterns/
-  source_commit: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
-  cache_path: /Users/malte/.local/share/library/standards/unknown/python-cli-patterns@5aa05ca2f5a45d/
+  source_commit: 67fcb6233e6745475211d25a15714f19ebb4a561
+  cache_path: /Users/malte/.local/share/library/standards/unknown/python-cli-patterns@67fcb6233e6745/
   install_target: .agents/standards/python-cli-patterns/
-  install_timestamp: '2026-08-13T17:07:16Z'
+  install_timestamp: '2026-08-17T08:34:54Z'
   checksum_sha256: 06abca3e8453a68114f73dd6fa927705dc1d76d2544eac5d527c9d245332ebc8
   checksum_type: directory
   content_sha256: 06abca3e8453a68114f73dd6fa927705dc1d76d2544eac5d527c9d245332ebc8
@@ -451,7 +451,7 @@ receipts:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:python-cli-patterns
   resolved_version: legacy
   verified: true
@@ -484,10 +484,10 @@ receipts:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/python-dev/SKILL.md
-  source_commit: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
-  cache_path: /Users/malte/.local/share/library/skills/unknown/python-dev@5aa05ca2f5a45d/
+  source_commit: 67fcb6233e6745475211d25a15714f19ebb4a561
+  cache_path: /Users/malte/.local/share/library/skills/unknown/python-dev@67fcb6233e6745/
   install_target: .agents/skills/python-dev/
-  install_timestamp: '2026-08-13T17:07:17Z'
+  install_timestamp: '2026-08-17T08:34:56Z'
   checksum_sha256: ddb9eb4ed4d0e0af182e8d4799b404c272e8d75c8df8350e5eba961956974f15
   checksum_type: directory
   content_sha256: ddb9eb4ed4d0e0af182e8d4799b404c272e8d75c8df8350e5eba961956974f15
@@ -497,7 +497,7 @@ receipts:
   - .claude/skills/python-dev -> ../../.agents/skills/python-dev
   scope: project
   version: 1.0.0
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:python-dev
   resolved_version: 1.0.0
   verified: true
@@ -518,10 +518,10 @@ receipts:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/python-test/SKILL.md
-  source_commit: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
-  cache_path: /Users/malte/.local/share/library/skills/unknown/python-test@5aa05ca2f5a45d/
+  source_commit: 67fcb6233e6745475211d25a15714f19ebb4a561
+  cache_path: /Users/malte/.local/share/library/skills/unknown/python-test@67fcb6233e6745/
   install_target: .agents/skills/python-test/
-  install_timestamp: '2026-08-13T17:07:19Z'
+  install_timestamp: '2026-08-17T08:34:58Z'
   checksum_sha256: 9e76a354484dd24dbd6dcf8586ded2afc125ded34eedbb3dac51c0dd6f0d02bf
   checksum_type: directory
   content_sha256: 9e76a354484dd24dbd6dcf8586ded2afc125ded34eedbb3dac51c0dd6f0d02bf
@@ -531,7 +531,7 @@ receipts:
   - .claude/skills/python-test -> ../../.agents/skills/python-test
   scope: project
   version: 1.0.0
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:python-test
   resolved_version: 1.0.0
   verified: true
@@ -555,12 +555,12 @@ receipts:
   - workspace:https://github.com/cognovis/library-core#python-cli
 - name: judge-layer
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/judge-layer/
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/judge-layer@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/judge-layer@bc456d345086ff/
   install_target: .agents/standards/judge-layer/
-  install_timestamp: '2026-08-16T15:41:51Z'
+  install_timestamp: '2026-08-17T08:35:00Z'
   checksum_sha256: a13112fa481b87cad3171a445e956f18f2581185f536971521d836092362028f
   checksum_type: directory
   content_sha256: a13112fa481b87cad3171a445e956f18f2581185f536971521d836092362028f
@@ -568,7 +568,7 @@ receipts:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:judge-layer
   resolved_version: legacy
   verified: true
@@ -630,18 +630,17 @@ receipts:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
   - workspace:https://github.com/cognovis/library#library-authoring
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: library
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/SKILL.md
-  source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
-  cache_path: /Users/malte/.local/share/library/skills/local/library@aaca41ffea3e1d/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/library@3c3bedbd3dd901/
   install_target: .agents/skills/library/
-  install_timestamp: '2026-08-16T13:15:35Z'
-  checksum_sha256: b1b706e801350b8c1b10fe10aeab0e2ebf328fc70a5ebb499db173fd22ee7f12
+  install_timestamp: '2026-08-17T08:35:02Z'
+  checksum_sha256: 6f30e7c0975b1af854f068452e5bae5e515fe9a814dcb46a7dc3285f6bdd0bc4
   checksum_type: directory
-  content_sha256: b1b706e801350b8c1b10fe10aeab0e2ebf328fc70a5ebb499db173fd22ee7f12
+  content_sha256: 6f30e7c0975b1af854f068452e5bae5e515fe9a814dcb46a7dc3285f6bdd0bc4
   install_mode: vendor
   license: unknown
   bridge_symlinks:
@@ -658,21 +657,20 @@ receipts:
     kind: directory
   - path: .agents/skills/library/SKILL.md
     kind: file
-    content_sha256: 90c35d0beb7fe0d909bc0c7b1d4712a86decfdfb864a00f38416a42c3652fc9e
+    content_sha256: 14573c25d4f92313c0991acf7b16e3a3f50c513807a8c6e56a05df82e7c695bd
   - path: .claude/skills/library
     kind: symlink
     link_target: ../../.agents/skills/library
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
-  definition_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
 - name: cognovis-beads
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/cognovis-beads/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/cognovis-beads@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/cognovis-beads@bc456d345086ff/
   install_target: .agents/skills/cognovis-beads/
-  install_timestamp: '2026-08-16T15:41:47Z'
+  install_timestamp: '2026-08-17T08:35:04Z'
   checksum_sha256: 78f9a2b215487757992255e4fbec987a83fba674e1ba0c91d2640a0903dbdded
   checksum_type: directory
   content_sha256: 78f9a2b215487757992255e4fbec987a83fba674e1ba0c91d2640a0903dbdded
@@ -681,7 +679,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/cognovis-beads -> ../../.agents/skills/cognovis-beads
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:cognovis-beads
   resolved_version: legacy
   verified: true
@@ -904,15 +902,14 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: inject-standards
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/inject-standards/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/inject-standards@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/inject-standards@bc456d345086ff/
   install_target: .agents/skills/inject-standards/
-  install_timestamp: '2026-08-16T15:41:47Z'
+  install_timestamp: '2026-08-17T08:35:06Z'
   checksum_sha256: 6176cbbd9c763205d606eb2517936565b7c417273f98351e86354201d75a6901
   checksum_type: directory
   content_sha256: 6176cbbd9c763205d606eb2517936565b7c417273f98351e86354201d75a6901
@@ -921,7 +918,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/inject-standards -> ../../.agents/skills/inject-standards
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:inject-standards
   resolved_version: legacy
   verified: true
@@ -942,15 +939,14 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: ob-cli
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/ob-cli/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/ob-cli@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/ob-cli@bc456d345086ff/
   install_target: .agents/skills/ob-cli/
-  install_timestamp: '2026-08-16T15:41:47Z'
+  install_timestamp: '2026-08-17T08:35:08Z'
   checksum_sha256: c8b6c4735cf2479c7619ba7299a6e8c15fc9e87d057cf12190a3a8b9f93e945a
   checksum_type: directory
   content_sha256: c8b6c4735cf2479c7619ba7299a6e8c15fc9e87d057cf12190a3a8b9f93e945a
@@ -959,7 +955,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/ob-cli -> ../../.agents/skills/ob-cli
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:ob-cli
   resolved_version: legacy
   verified: true
@@ -976,15 +972,14 @@ receipts:
     link_target: ../../.agents/skills/ob-cli
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: executive-pack
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/executive-pack/
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/executive-pack@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/executive-pack@bc456d345086ff/
   install_target: .agents/standards/executive-pack/
-  install_timestamp: '2026-08-16T15:41:48Z'
+  install_timestamp: '2026-08-17T08:35:10Z'
   checksum_sha256: f82a5e00cc74b760146bc76d42fc334b33d0bfc2213598c0a826e733936f8790
   checksum_type: directory
   content_sha256: f82a5e00cc74b760146bc76d42fc334b33d0bfc2213598c0a826e733936f8790
@@ -992,7 +987,7 @@ receipts:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:executive-pack
   resolved_version: legacy
   verified: true
@@ -1007,18 +1002,17 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: english-only
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
-  source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
-  cache_path: /Users/malte/.local/share/library/standards/local/english-only@aaca41ffea3e1d/
-  install_target: .agents/standards/english-only/
-  install_timestamp: '2026-08-16T13:15:36Z'
-  checksum_sha256: 03342e96d9ccbd4fd007cb4954223fcd0c0c556d854b15c0d148a239a6d56c3d
-  checksum_type: directory
-  content_sha256: 03342e96d9ccbd4fd007cb4954223fcd0c0c556d854b15c0d148a239a6d56c3d
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/english-only@3c3bedbd3dd901/
+  install_target: .agents/standards/workflow/english-only.md
+  install_timestamp: '2026-08-17T08:35:11Z'
+  checksum_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
+  checksum_type: file
+  content_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
@@ -1030,9 +1024,7 @@ receipts:
   adopted: false
   prune_blocked_reason: null
   targets:
-  - path: .agents/standards/english-only
-    kind: directory
-  - path: .agents/standards/english-only/english-only.md
+  - path: .agents/standards/workflow/english-only.md
     kind: file
     content_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
   owners_cache:
@@ -1040,18 +1032,17 @@ receipts:
   - workspace:https://github.com/cognovis/library#cognovis-daily
   - workspace:https://github.com/cognovis/library#library-authoring
   - workspace:https://github.com/cognovis/library-core#python-cli
-  definition_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
 - name: no-emoji
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
-  source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
-  cache_path: /Users/malte/.local/share/library/standards/local/no-emoji@aaca41ffea3e1d/
-  install_target: .agents/standards/no-emoji/
-  install_timestamp: '2026-08-16T13:15:36Z'
-  checksum_sha256: d24eb436babd2c2c11b0aa0cd8ab5df841c73cfd7ba50f4fe2ef3e9247b87375
-  checksum_type: directory
-  content_sha256: d24eb436babd2c2c11b0aa0cd8ab5df841c73cfd7ba50f4fe2ef3e9247b87375
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/no-emoji@3c3bedbd3dd901/
+  install_target: .agents/standards/workflow/no-emoji.md
+  install_timestamp: '2026-08-17T08:35:13Z'
+  checksum_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
+  checksum_type: file
+  content_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
@@ -1063,9 +1054,7 @@ receipts:
   adopted: false
   prune_blocked_reason: null
   targets:
-  - path: .agents/standards/no-emoji
-    kind: directory
-  - path: .agents/standards/no-emoji/no-emoji.md
+  - path: .agents/standards/workflow/no-emoji.md
     kind: file
     content_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
   owners_cache:
@@ -1073,7 +1062,6 @@ receipts:
   - workspace:https://github.com/cognovis/library#cognovis-daily
   - workspace:https://github.com/cognovis/library#library-authoring
   - workspace:https://github.com/cognovis/library-core#python-cli
-  definition_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
 - name: bead-depth-reviewer
   type: agent
   marketplace: local
@@ -1175,12 +1163,12 @@ receipts:
   definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: workflow
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/workflow/
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/workflow@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/workflow@bc456d345086ff/
   install_target: .agents/standards/workflow/
-  install_timestamp: '2026-08-16T15:41:48Z'
+  install_timestamp: '2026-08-17T08:35:19Z'
   checksum_sha256: b982952c8dd21565deb733f149590cf9f2508024904c1e8405278c4287b06e0a
   checksum_type: directory
   content_sha256: b982952c8dd21565deb733f149590cf9f2508024904c1e8405278c4287b06e0a
@@ -1188,7 +1176,7 @@ receipts:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:workflow
   resolved_version: legacy
   verified: true
@@ -1278,7 +1266,6 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: bead-implementer
   type: agent
   marketplace: local
@@ -1314,35 +1301,32 @@ receipts:
   definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: model-routing
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/standards/dispatch/model-routing.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/model-routing@a4e69a2b0d971f/
-  install_target: .agents/standards/model-routing/
-  install_timestamp: '2026-08-16T15:41:49Z'
-  checksum_sha256: 613cd546e801234eb4c0277df044def22f299b1025b2f663f1e18f334159abe9
-  checksum_type: directory
-  content_sha256: 613cd546e801234eb4c0277df044def22f299b1025b2f663f1e18f334159abe9
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/model-routing@bc456d345086ff/
+  install_target: .agents/standards/dispatch/model-routing.md
+  install_timestamp: '2026-08-17T08:35:23Z'
+  checksum_sha256: 569641e5b8575184ac751aa7f2046c020eb37eec9651dabdf6f3c69dccdeda84
+  checksum_type: file
+  content_sha256: 569641e5b8575184ac751aa7f2046c020eb37eec9651dabdf6f3c69dccdeda84
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:model-routing
   resolved_version: legacy
   verified: true
   adopted: false
   prune_blocked_reason: null
   targets:
-  - path: .agents/standards/model-routing
-    kind: directory
-  - path: .agents/standards/model-routing/model-routing.md
+  - path: .agents/standards/dispatch/model-routing.md
     kind: file
     content_sha256: 569641e5b8575184ac751aa7f2046c020eb37eec9651dabdf6f3c69dccdeda84
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: bead-change-reviewer
   type: agent
   marketplace: local
@@ -1411,12 +1395,12 @@ receipts:
   definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: acpx-dispatch
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/acpx-dispatch/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/acpx-dispatch@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/acpx-dispatch@bc456d345086ff/
   install_target: .agents/skills/acpx-dispatch/
-  install_timestamp: '2026-08-16T15:41:51Z'
+  install_timestamp: '2026-08-17T08:35:28Z'
   checksum_sha256: e9c8b771f98cb80788843515380353e26f5c007623fcde89c716e9189a9f5ff2
   checksum_type: directory
   content_sha256: e9c8b771f98cb80788843515380353e26f5c007623fcde89c716e9189a9f5ff2
@@ -1425,7 +1409,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/acpx-dispatch -> ../../.agents/skills/acpx-dispatch
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:acpx-dispatch
   resolved_version: legacy
   verified: true
@@ -1448,15 +1432,14 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: bead-execution-loop
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/bead-execution-loop/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/bead-execution-loop@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/bead-execution-loop@bc456d345086ff/
   install_target: .agents/skills/bead-execution-loop/
-  install_timestamp: '2026-08-16T15:41:51Z'
+  install_timestamp: '2026-08-17T08:35:30Z'
   checksum_sha256: 6a2c68da339f806360a27976b834c57003093f817bc3076e18ffbbf209f61dc2
   checksum_type: directory
   content_sha256: 6a2c68da339f806360a27976b834c57003093f817bc3076e18ffbbf209f61dc2
@@ -1465,7 +1448,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/bead-execution-loop -> ../../.agents/skills/bead-execution-loop
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:bead-execution-loop
   resolved_version: legacy
   verified: true
@@ -1483,15 +1466,14 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: session-close
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/session-close@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/session-close@bc456d345086ff/
   install_target: .agents/skills/session-close/
-  install_timestamp: '2026-08-16T15:41:52Z'
+  install_timestamp: '2026-08-17T08:35:32Z'
   checksum_sha256: 5f018578c72d2b668640d96616db72155f79e10210d7d32f8ed1efeae633d144
   checksum_type: directory
   content_sha256: 5f018578c72d2b668640d96616db72155f79e10210d7d32f8ed1efeae633d144
@@ -1500,7 +1482,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/session-close -> ../../.agents/skills/session-close
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:session-close
   resolved_version: legacy
   verified: true
@@ -1518,15 +1500,14 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: executive-pack
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/executive-pack/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/executive-pack@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/executive-pack@bc456d345086ff/
   install_target: .agents/skills/executive-pack/
-  install_timestamp: '2026-08-16T15:41:52Z'
+  install_timestamp: '2026-08-17T08:35:34Z'
   checksum_sha256: 4bf63c3869e6190dc63e8471b1aceecfb864694b60d53c6308c540eae1b78fdf
   checksum_type: directory
   content_sha256: 4bf63c3869e6190dc63e8471b1aceecfb864694b60d53c6308c540eae1b78fdf
@@ -1535,7 +1516,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/executive-pack -> ../../.agents/skills/executive-pack
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:executive-pack
   resolved_version: legacy
   verified: true
@@ -1575,45 +1556,41 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 - name: tool-standards
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/standards/dev-tools/tool-standards.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/tool-standards@922d83965d9283/
-  install_target: .agents/standards/tool-standards/
-  install_timestamp: '2026-08-16T13:15:51Z'
-  checksum_sha256: 6d3ed3a9347e6a17f0d9dbf0ad3e4eae27eaad7b8c2fa6d437670a1aeddd1763
-  checksum_type: directory
-  content_sha256: 6d3ed3a9347e6a17f0d9dbf0ad3e4eae27eaad7b8c2fa6d437670a1aeddd1763
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/tool-standards@bc456d345086ff/
+  install_target: .agents/standards/dev-tools/tool-standards.md
+  install_timestamp: '2026-08-17T08:35:36Z'
+  checksum_sha256: 44266a8f719e99e63882b72370ee574d299e1d3ff9be1a25508ff126ec77548d
+  checksum_type: file
+  content_sha256: 44266a8f719e99e63882b72370ee574d299e1d3ff9be1a25508ff126ec77548d
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:tool-standards
   resolved_version: legacy
   verified: true
   adopted: false
   prune_blocked_reason: null
   targets:
-  - path: .agents/standards/tool-standards
-    kind: directory
-  - path: .agents/standards/tool-standards/tool-standards.md
+  - path: .agents/standards/dev-tools/tool-standards.md
     kind: file
     content_sha256: 44266a8f719e99e63882b72370ee574d299e1d3ff9be1a25508ff126ec77548d
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: bug-triage
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/bug-triage/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/bug-triage@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/bug-triage@bc456d345086ff/
   install_target: .agents/skills/bug-triage/
-  install_timestamp: '2026-08-16T13:15:51Z'
+  install_timestamp: '2026-08-17T08:35:38Z'
   checksum_sha256: 1286244cb1b43c6fc4cc2ec827c00b33aa41078485a9dd467c5fb90609b0a2ed
   checksum_type: directory
   content_sha256: 1286244cb1b43c6fc4cc2ec827c00b33aa41078485a9dd467c5fb90609b0a2ed
@@ -1622,7 +1599,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/bug-triage -> ../../.agents/skills/bug-triage
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:bug-triage
   resolved_version: legacy
   verified: true
@@ -1657,24 +1634,23 @@ receipts:
     link_target: ../../.agents/skills/bug-triage
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: intake
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/intake/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/intake@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/intake@bc456d345086ff/
   install_target: .agents/skills/intake/
-  install_timestamp: '2026-08-16T13:15:51Z'
-  checksum_sha256: 2f3792d70ded903e3bf068009d5af60399728ac1ba71edeb02860b4a475a9b72
+  install_timestamp: '2026-08-17T08:35:40Z'
+  checksum_sha256: 50dd5eb0fa2d244c99419f83d8c9393cca497f40c6b9b34b7d1f07f401491d43
   checksum_type: directory
-  content_sha256: 2f3792d70ded903e3bf068009d5af60399728ac1ba71edeb02860b4a475a9b72
+  content_sha256: 50dd5eb0fa2d244c99419f83d8c9393cca497f40c6b9b34b7d1f07f401491d43
   install_mode: vendor
   license: unknown
   bridge_symlinks:
   - .claude/skills/intake -> ../../.agents/skills/intake
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:intake
   resolved_version: legacy
   verified: true
@@ -1685,30 +1661,29 @@ receipts:
     kind: directory
   - path: .agents/skills/intake/SKILL.md
     kind: file
-    content_sha256: 60d49d91a93f107e4fa35a7622f8b36bfe3a7f108b760582ee0d5cb39f21af75
+    content_sha256: b8065d8020d7b85f2671f9cdf8c6a5f38729e7624d58f2e1a586a1a8d472373a
   - path: .claude/skills/intake
     kind: symlink
     link_target: ../../.agents/skills/intake
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: bead-reviewer
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/bead-reviewer/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/bead-reviewer@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/bead-reviewer@bc456d345086ff/
   install_target: .agents/skills/bead-reviewer/
-  install_timestamp: '2026-08-16T13:15:52Z'
-  checksum_sha256: 7da7c347dca7dba94ec89c900f8904f72a23d2fb625301db606eb442b0a99319
+  install_timestamp: '2026-08-17T08:35:42Z'
+  checksum_sha256: 8842a828ce73426c46cc8ae592dd7e1ae31b89215a799892499ea6023414658b
   checksum_type: directory
-  content_sha256: 7da7c347dca7dba94ec89c900f8904f72a23d2fb625301db606eb442b0a99319
+  content_sha256: 8842a828ce73426c46cc8ae592dd7e1ae31b89215a799892499ea6023414658b
   install_mode: vendor
   license: unknown
   bridge_symlinks:
   - .claude/skills/bead-reviewer -> ../../.agents/skills/bead-reviewer
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:bead-reviewer
   resolved_version: legacy
   verified: true
@@ -1719,7 +1694,7 @@ receipts:
     kind: directory
   - path: .agents/skills/bead-reviewer/SKILL.md
     kind: file
-    content_sha256: 5c046ca162bf5b898601e84d6c12f3b979479f000aa530ac61c664cf0779571a
+    content_sha256: 1431a80c7e5d57f16075f39f46e9a493640c307dc7f7614be106240cb907442a
   - path: .agents/skills/bead-reviewer/references
     kind: directory
   - path: .agents/skills/bead-reviewer/references/finding-rule-registry.json
@@ -1963,13 +1938,13 @@ receipts:
     content_sha256: 82d3eecbf0b67b49a2c95386c4a1f69a0ed3373d5d9b586434b96b380d0a9825
   - path: .agents/skills/bead-reviewer/tests/test_context_pointers.py
     kind: file
-    content_sha256: 1ff802018841a28ffe8c8412456f06f9e1cbef9280a6fb3784e95a3d2aa95848
+    content_sha256: 743dccddf070c23e38b6a8e259ebbdec086b2604edac6071c9d8fc833f94adab
   - path: .agents/skills/bead-reviewer/tests/test_contract_loader.py
     kind: file
     content_sha256: cd70f462ca31739f07bf285b060b6aad755f5cc252eaaffa075cb7927708b985
   - path: .agents/skills/bead-reviewer/tests/test_direct_review_contract.py
     kind: file
-    content_sha256: 38d226ebdf0e7d4af15e6ee818c74c044038772e3ffaa7a9d90fa6b68ae70e12
+    content_sha256: 0f6bc785678e6447f6787e2a3524f7b182fb1adc68c3b05b9fc97644c17b7520
   - path: .agents/skills/bead-reviewer/tests/test_effort_classifier.py
     kind: file
     content_sha256: 3d0e4a4551b86146955948496e94658129e8afcbf48d61acb9c9c507495dc813
@@ -1981,7 +1956,7 @@ receipts:
     content_sha256: 80cfe9f4c6f6ac1dec61b7effe439a08687fadce9046250d3cf9a9c5c4eed98d
   - path: .agents/skills/bead-reviewer/tests/test_id_only_consumers.py
     kind: file
-    content_sha256: 3845c1476a53be66913c10bbec990071befcfec54372d60482c034acd918d354
+    content_sha256: c19f03ad2bb45fdbba0e7e50d74835dc91adc2202e8b307b8d7e5e371f356ad4
   - path: .agents/skills/bead-reviewer/tests/test_pass3_effort_filter.py
     kind: file
     content_sha256: f60e9aab537471d1d7ca607145b78a24d5554626c53005cd5065f5f93da48140
@@ -2008,15 +1983,14 @@ receipts:
     link_target: ../../.agents/skills/bead-reviewer
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: workplan
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/workplan/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/workplan@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/workplan@bc456d345086ff/
   install_target: .agents/skills/workplan/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:43Z'
   checksum_sha256: 954d866b99e2bd27cfb581f5e581a405a4aca50e4bfdf0f9eb9ae6659831a37b
   checksum_type: directory
   content_sha256: 954d866b99e2bd27cfb581f5e581a405a4aca50e4bfdf0f9eb9ae6659831a37b
@@ -2025,7 +1999,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/workplan -> ../../.agents/skills/workplan
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:workplan
   resolved_version: legacy
   verified: true
@@ -2047,15 +2021,14 @@ receipts:
     link_target: ../../.agents/skills/workplan
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: dolt
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/dolt@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/dolt@bc456d345086ff/
   install_target: .agents/skills/dolt/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:45Z'
   checksum_sha256: a20808264afa1312c38cc74c14887d11aeda3250d667d9d6ce5c0c63165cad94
   checksum_type: directory
   content_sha256: a20808264afa1312c38cc74c14887d11aeda3250d667d9d6ce5c0c63165cad94
@@ -2064,7 +2037,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/dolt -> ../../.agents/skills/dolt
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:dolt
   resolved_version: legacy
   verified: true
@@ -2129,15 +2102,14 @@ receipts:
     link_target: ../../.agents/skills/dolt
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: summarize
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/summarize/skill.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/summarize@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/summarize@bc456d345086ff/
   install_target: .agents/skills/summarize/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:47Z'
   checksum_sha256: e0e133e4b77f3f27aca9fff1df9048229697a5dfd96b565b7c2471b83d9a7704
   checksum_type: directory
   content_sha256: e0e133e4b77f3f27aca9fff1df9048229697a5dfd96b565b7c2471b83d9a7704
@@ -2146,7 +2118,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/summarize -> ../../.agents/skills/summarize
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:summarize
   resolved_version: legacy
   verified: true
@@ -2163,15 +2135,14 @@ receipts:
     link_target: ../../.agents/skills/summarize
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: playwright-cli
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/playwright-cli/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/playwright-cli@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/playwright-cli@bc456d345086ff/
   install_target: .agents/skills/playwright-cli/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:48Z'
   checksum_sha256: a235fc4eb0c11c3243c7ada5ceb6e15b3ce95e80f634c1cce95ae5c4523fbd6b
   checksum_type: directory
   content_sha256: a235fc4eb0c11c3243c7ada5ceb6e15b3ce95e80f634c1cce95ae5c4523fbd6b
@@ -2180,7 +2151,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/playwright-cli -> ../../.agents/skills/playwright-cli
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:playwright-cli
   resolved_version: legacy
   verified: true
@@ -2229,15 +2200,14 @@ receipts:
     link_target: ../../.agents/skills/playwright-cli
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: worktree-cleanup
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/worktree-cleanup/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/worktree-cleanup@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/worktree-cleanup@bc456d345086ff/
   install_target: .agents/skills/worktree-cleanup/
-  install_timestamp: '2026-08-16T13:15:53Z'
+  install_timestamp: '2026-08-17T08:35:50Z'
   checksum_sha256: 538cd20e94116c0289a5f5e13fe7b95605bc3cc0f6baad5821abe2a7ad2a49bb
   checksum_type: directory
   content_sha256: 538cd20e94116c0289a5f5e13fe7b95605bc3cc0f6baad5821abe2a7ad2a49bb
@@ -2246,7 +2216,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/worktree-cleanup -> ../../.agents/skills/worktree-cleanup
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:worktree-cleanup
   resolved_version: legacy
   verified: true
@@ -2263,15 +2233,14 @@ receipts:
     link_target: ../../.agents/skills/worktree-cleanup
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: context-handoff
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/context-handoff/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/context-handoff@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/context-handoff@bc456d345086ff/
   install_target: .agents/skills/context-handoff/
-  install_timestamp: '2026-08-16T13:15:53Z'
+  install_timestamp: '2026-08-17T08:35:52Z'
   checksum_sha256: c933af5e6fa289ffba26551da70074ea8c60e919a159e83fc37a31568673adb3
   checksum_type: directory
   content_sha256: c933af5e6fa289ffba26551da70074ea8c60e919a159e83fc37a31568673adb3
@@ -2280,7 +2249,7 @@ receipts:
   bridge_symlinks:
   - .claude/skills/context-handoff -> ../../.agents/skills/context-handoff
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: skill:context-handoff
   resolved_version: legacy
   verified: true
@@ -2318,45 +2287,41 @@ receipts:
     link_target: ../../.agents/skills/context-handoff
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: bead-hygiene
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/bead-hygiene@922d83965d9283/
-  install_target: .agents/standards/bead-hygiene/
-  install_timestamp: '2026-08-16T13:15:53Z'
-  checksum_sha256: 926dce1bd2d3415d8233f8372c543e96f2e30b61cd0549089a1e05d81e241838
-  checksum_type: directory
-  content_sha256: 926dce1bd2d3415d8233f8372c543e96f2e30b61cd0549089a1e05d81e241838
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/bead-hygiene@bc456d345086ff/
+  install_target: .agents/standards/workflow/bead-hygiene.md
+  install_timestamp: '2026-08-17T08:35:54Z'
+  checksum_sha256: d5cb1b313361bb4ae57057707fc2724f6349814dc49c6dce42711600158cbabd
+  checksum_type: file
+  content_sha256: d5cb1b313361bb4ae57057707fc2724f6349814dc49c6dce42711600158cbabd
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:bead-hygiene
   resolved_version: legacy
   verified: true
   adopted: false
   prune_blocked_reason: null
   targets:
-  - path: .agents/standards/bead-hygiene
-    kind: directory
-  - path: .agents/standards/bead-hygiene/bead-hygiene.md
+  - path: .agents/standards/workflow/bead-hygiene.md
     kind: file
     content_sha256: d5cb1b313361bb4ae57057707fc2724f6349814dc49c6dce42711600158cbabd
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: git
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/git/
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/git@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/git@bc456d345086ff/
   install_target: .agents/standards/git/
-  install_timestamp: '2026-08-16T13:15:53Z'
+  install_timestamp: '2026-08-17T08:35:56Z'
   checksum_sha256: f86199e16cb5baa912bb27a26d7e96699fa6dc0a135d41a45c6565c8f92bdbd5
   checksum_type: directory
   content_sha256: f86199e16cb5baa912bb27a26d7e96699fa6dc0a135d41a45c6565c8f92bdbd5
@@ -2364,7 +2329,7 @@ receipts:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:git
   resolved_version: legacy
   verified: true
@@ -2384,15 +2349,14 @@ receipts:
     content_sha256: 6a07f4607598ab4d922c43c3555335b4096f8f96447e7ec5ba73fe3952bab460
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: worktree-subagent-discipline
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/worktree-subagent-discipline/
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/worktree-subagent-discipline@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/worktree-subagent-discipline@bc456d345086ff/
   install_target: .agents/standards/worktree-subagent-discipline/
-  install_timestamp: '2026-08-16T13:15:54Z'
+  install_timestamp: '2026-08-17T08:35:58Z'
   checksum_sha256: d13d6f5b2ab314fcb49b3af52dbf487e6d813b6235d6c43e5b49f6d25fcd8bf6
   checksum_type: directory
   content_sha256: d13d6f5b2ab314fcb49b3af52dbf487e6d813b6235d6c43e5b49f6d25fcd8bf6
@@ -2400,7 +2364,7 @@ receipts:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
   id: standard:worktree-subagent-discipline
   resolved_version: legacy
   verified: true
@@ -2429,7 +2393,6 @@ receipts:
     content_sha256: 64ce1b79b5e85441c2254e98f7a47e2b2bcf24b98a76570c40313fa43108676c
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-daily
-  definition_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
 - name: plan-reviewer
   type: agent
   marketplace: local
@@ -2502,10 +2465,10 @@ installed:
   type: standard
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/agentic-primitives.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/standards/unknown/agentic-primitives@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/agentic-primitives@3c3bedbd3dd901/
   install_target: .agents/standards/agentic-primitives/agentic-primitives.md
-  install_timestamp: '2026-08-13T17:06:49Z'
+  install_timestamp: '2026-08-17T08:34:42Z'
   checksum_sha256: bcb60b0d1b84e39d116de086d63185c4b292f587d7e36f5652be073c381eb1c2
   checksum_type: file
   content_sha256: bcb60b0d1b84e39d116de086d63185c4b292f587d7e36f5652be073c381eb1c2
@@ -2518,10 +2481,10 @@ installed:
   type: standard
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/primitive-placement.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/standards/unknown/primitive-placement@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/primitive-placement@3c3bedbd3dd901/
   install_target: .agents/standards/agentic-primitives/primitive-placement.md
-  install_timestamp: '2026-08-13T17:06:50Z'
+  install_timestamp: '2026-08-17T08:34:44Z'
   checksum_sha256: a4c959159f61e194da66552bc307ee7ec84bf7c19e8fd07cd43e2de90b6dfdf9
   checksum_type: file
   content_sha256: a4c959159f61e194da66552bc307ee7ec84bf7c19e8fd07cd43e2de90b6dfdf9
@@ -2534,10 +2497,10 @@ installed:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/agent-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/agent-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/agent-forge@3c3bedbd3dd901/
   install_target: .agents/skills/agent-forge/
-  install_timestamp: '2026-08-13T17:06:53Z'
+  install_timestamp: '2026-08-17T08:34:45Z'
   checksum_sha256: e5f10b4fda80f905607e99aef1f2b04a3a62cca0b1a51ce146995d2d66087412
   checksum_type: directory
   content_sha256: e5f10b4fda80f905607e99aef1f2b04a3a62cca0b1a51ce146995d2d66087412
@@ -2551,10 +2514,10 @@ installed:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/skill-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/skill-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/skill-forge@3c3bedbd3dd901/
   install_target: .agents/skills/skill-forge/
-  install_timestamp: '2026-08-13T17:06:54Z'
+  install_timestamp: '2026-08-17T08:34:47Z'
   checksum_sha256: 32fdedcf8bb9f88440a3b058475e9eb9234662398acf6328e3d3e356c6147911
   checksum_type: directory
   content_sha256: 32fdedcf8bb9f88440a3b058475e9eb9234662398acf6328e3d3e356c6147911
@@ -2568,13 +2531,13 @@ installed:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/standard-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/standard-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/standard-forge@3c3bedbd3dd901/
   install_target: .agents/skills/standard-forge/
-  install_timestamp: '2026-08-13T17:06:55Z'
-  checksum_sha256: bb0991fd30f70c2bfa97f2a451d4920fe0357e50db4da7c5dc30c73914c743d0
+  install_timestamp: '2026-08-17T08:34:49Z'
+  checksum_sha256: 03b1bf86c93594d5695a6f1f57f1189f64348444e1cc86829476d280a6c8ecc0
   checksum_type: directory
-  content_sha256: bb0991fd30f70c2bfa97f2a451d4920fe0357e50db4da7c5dc30c73914c743d0
+  content_sha256: 03b1bf86c93594d5695a6f1f57f1189f64348444e1cc86829476d280a6c8ecc0
   install_mode: vendor
   license: unknown
   bridge_symlinks:
@@ -2585,13 +2548,13 @@ installed:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/script-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/script-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/script-forge@3c3bedbd3dd901/
   install_target: .agents/skills/script-forge/
-  install_timestamp: '2026-08-13T17:06:57Z'
-  checksum_sha256: 4c562200def386de620990c5ccf818bfe86348f362ea201eb5dce4e3eabf7015
+  install_timestamp: '2026-08-17T08:34:50Z'
+  checksum_sha256: f2e3729fbce286cc321ce960ec9b12ee9cfac80d811f53e76630466558211b6e
   checksum_type: directory
-  content_sha256: 4c562200def386de620990c5ccf818bfe86348f362ea201eb5dce4e3eabf7015
+  content_sha256: f2e3729fbce286cc321ce960ec9b12ee9cfac80d811f53e76630466558211b6e
   install_mode: vendor
   license: unknown
   bridge_symlinks:
@@ -2602,10 +2565,10 @@ installed:
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/skills/hook-forge/SKILL.md
-  source_commit: c2f597410c4969c5fb9c77f34f7cc93168bb1202
-  cache_path: /Users/malte/.local/share/library/skills/unknown/hook-forge@c2f597410c4969/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/hook-forge@3c3bedbd3dd901/
   install_target: .agents/skills/hook-forge/
-  install_timestamp: '2026-08-13T17:06:58Z'
+  install_timestamp: '2026-08-17T08:34:52Z'
   checksum_sha256: 2e41eeb7015f305b75023c2f758a6e28bf2becfa5d83aa785a091b6b02dcbb8c
   checksum_type: directory
   content_sha256: 2e41eeb7015f305b75023c2f758a6e28bf2becfa5d83aa785a091b6b02dcbb8c
@@ -2619,10 +2582,10 @@ installed:
   type: standard
   marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/python-cli-patterns/
-  source_commit: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
-  cache_path: /Users/malte/.local/share/library/standards/unknown/python-cli-patterns@5aa05ca2f5a45d/
+  source_commit: 67fcb6233e6745475211d25a15714f19ebb4a561
+  cache_path: /Users/malte/.local/share/library/standards/unknown/python-cli-patterns@67fcb6233e6745/
   install_target: .agents/standards/python-cli-patterns/
-  install_timestamp: '2026-08-13T17:07:16Z'
+  install_timestamp: '2026-08-17T08:34:54Z'
   checksum_sha256: 06abca3e8453a68114f73dd6fa927705dc1d76d2544eac5d527c9d245332ebc8
   checksum_type: directory
   content_sha256: 06abca3e8453a68114f73dd6fa927705dc1d76d2544eac5d527c9d245332ebc8
@@ -2630,15 +2593,15 @@ installed:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: python-dev
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/python-dev/SKILL.md
-  source_commit: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
-  cache_path: /Users/malte/.local/share/library/skills/unknown/python-dev@5aa05ca2f5a45d/
+  source_commit: 67fcb6233e6745475211d25a15714f19ebb4a561
+  cache_path: /Users/malte/.local/share/library/skills/unknown/python-dev@67fcb6233e6745/
   install_target: .agents/skills/python-dev/
-  install_timestamp: '2026-08-13T17:07:17Z'
+  install_timestamp: '2026-08-17T08:34:56Z'
   checksum_sha256: ddb9eb4ed4d0e0af182e8d4799b404c272e8d75c8df8350e5eba961956974f15
   checksum_type: directory
   content_sha256: ddb9eb4ed4d0e0af182e8d4799b404c272e8d75c8df8350e5eba961956974f15
@@ -2648,15 +2611,15 @@ installed:
   - .claude/skills/python-dev -> ../../.agents/skills/python-dev
   scope: project
   version: 1.0.0
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: python-test
   type: skill
   marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/python-test/SKILL.md
-  source_commit: 5aa05ca2f5a45d09c15fddb73c69201a477579ee
-  cache_path: /Users/malte/.local/share/library/skills/unknown/python-test@5aa05ca2f5a45d/
+  source_commit: 67fcb6233e6745475211d25a15714f19ebb4a561
+  cache_path: /Users/malte/.local/share/library/skills/unknown/python-test@67fcb6233e6745/
   install_target: .agents/skills/python-test/
-  install_timestamp: '2026-08-13T17:07:19Z'
+  install_timestamp: '2026-08-17T08:34:58Z'
   checksum_sha256: 9e76a354484dd24dbd6dcf8586ded2afc125ded34eedbb3dac51c0dd6f0d02bf
   checksum_type: directory
   content_sha256: 9e76a354484dd24dbd6dcf8586ded2afc125ded34eedbb3dac51c0dd6f0d02bf
@@ -2666,15 +2629,15 @@ installed:
   - .claude/skills/python-test -> ../../.agents/skills/python-test
   scope: project
   version: 1.0.0
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: judge-layer
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/judge-layer/
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/judge-layer@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/judge-layer@bc456d345086ff/
   install_target: .agents/standards/judge-layer/
-  install_timestamp: '2026-08-16T15:41:51Z'
+  install_timestamp: '2026-08-17T08:35:00Z'
   checksum_sha256: a13112fa481b87cad3171a445e956f18f2581185f536971521d836092362028f
   checksum_type: directory
   content_sha256: a13112fa481b87cad3171a445e956f18f2581185f536971521d836092362028f
@@ -2682,18 +2645,18 @@ installed:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: library
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/SKILL.md
-  source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
-  cache_path: /Users/malte/.local/share/library/skills/local/library@aaca41ffea3e1d/
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/skills/unknown/library@3c3bedbd3dd901/
   install_target: .agents/skills/library/
-  install_timestamp: '2026-08-16T13:15:35Z'
-  checksum_sha256: b1b706e801350b8c1b10fe10aeab0e2ebf328fc70a5ebb499db173fd22ee7f12
+  install_timestamp: '2026-08-17T08:35:02Z'
+  checksum_sha256: 6f30e7c0975b1af854f068452e5bae5e515fe9a814dcb46a7dc3285f6bdd0bc4
   checksum_type: directory
-  content_sha256: b1b706e801350b8c1b10fe10aeab0e2ebf328fc70a5ebb499db173fd22ee7f12
+  content_sha256: 6f30e7c0975b1af854f068452e5bae5e515fe9a814dcb46a7dc3285f6bdd0bc4
   install_mode: vendor
   license: unknown
   bridge_symlinks:
@@ -2702,12 +2665,12 @@ installed:
   catalog_identity: https://github.com/cognovis/library
 - name: cognovis-beads
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/cognovis-beads/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/cognovis-beads@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/cognovis-beads@bc456d345086ff/
   install_target: .agents/skills/cognovis-beads/
-  install_timestamp: '2026-08-16T15:41:47Z'
+  install_timestamp: '2026-08-17T08:35:04Z'
   checksum_sha256: 78f9a2b215487757992255e4fbec987a83fba674e1ba0c91d2640a0903dbdded
   checksum_type: directory
   content_sha256: 78f9a2b215487757992255e4fbec987a83fba674e1ba0c91d2640a0903dbdded
@@ -2716,15 +2679,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/cognovis-beads -> ../../.agents/skills/cognovis-beads
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: inject-standards
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/inject-standards/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/inject-standards@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/inject-standards@bc456d345086ff/
   install_target: .agents/skills/inject-standards/
-  install_timestamp: '2026-08-16T15:41:47Z'
+  install_timestamp: '2026-08-17T08:35:06Z'
   checksum_sha256: 6176cbbd9c763205d606eb2517936565b7c417273f98351e86354201d75a6901
   checksum_type: directory
   content_sha256: 6176cbbd9c763205d606eb2517936565b7c417273f98351e86354201d75a6901
@@ -2733,15 +2696,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/inject-standards -> ../../.agents/skills/inject-standards
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: ob-cli
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/ob-cli/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/ob-cli@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/ob-cli@bc456d345086ff/
   install_target: .agents/skills/ob-cli/
-  install_timestamp: '2026-08-16T15:41:47Z'
+  install_timestamp: '2026-08-17T08:35:08Z'
   checksum_sha256: c8b6c4735cf2479c7619ba7299a6e8c15fc9e87d057cf12190a3a8b9f93e945a
   checksum_type: directory
   content_sha256: c8b6c4735cf2479c7619ba7299a6e8c15fc9e87d057cf12190a3a8b9f93e945a
@@ -2750,15 +2713,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/ob-cli -> ../../.agents/skills/ob-cli
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: executive-pack
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/executive-pack/
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/executive-pack@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/executive-pack@bc456d345086ff/
   install_target: .agents/standards/executive-pack/
-  install_timestamp: '2026-08-16T15:41:48Z'
+  install_timestamp: '2026-08-17T08:35:10Z'
   checksum_sha256: f82a5e00cc74b760146bc76d42fc334b33d0bfc2213598c0a826e733936f8790
   checksum_type: directory
   content_sha256: f82a5e00cc74b760146bc76d42fc334b33d0bfc2213598c0a826e733936f8790
@@ -2766,18 +2729,18 @@ installed:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: english-only
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
-  source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
-  cache_path: /Users/malte/.local/share/library/standards/local/english-only@aaca41ffea3e1d/
-  install_target: .agents/standards/english-only/
-  install_timestamp: '2026-08-16T13:15:36Z'
-  checksum_sha256: 03342e96d9ccbd4fd007cb4954223fcd0c0c556d854b15c0d148a239a6d56c3d
-  checksum_type: directory
-  content_sha256: 03342e96d9ccbd4fd007cb4954223fcd0c0c556d854b15c0d148a239a6d56c3d
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/english-only@3c3bedbd3dd901/
+  install_target: .agents/standards/workflow/english-only.md
+  install_timestamp: '2026-08-17T08:35:11Z'
+  checksum_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
+  checksum_type: file
+  content_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
@@ -2785,15 +2748,15 @@ installed:
   catalog_identity: https://github.com/cognovis/library
 - name: no-emoji
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
-  source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
-  cache_path: /Users/malte/.local/share/library/standards/local/no-emoji@aaca41ffea3e1d/
-  install_target: .agents/standards/no-emoji/
-  install_timestamp: '2026-08-16T13:15:36Z'
-  checksum_sha256: d24eb436babd2c2c11b0aa0cd8ab5df841c73cfd7ba50f4fe2ef3e9247b87375
-  checksum_type: directory
-  content_sha256: d24eb436babd2c2c11b0aa0cd8ab5df841c73cfd7ba50f4fe2ef3e9247b87375
+  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
+  cache_path: /Users/malte/.local/share/library/standards/unknown/no-emoji@3c3bedbd3dd901/
+  install_target: .agents/standards/workflow/no-emoji.md
+  install_timestamp: '2026-08-17T08:35:13Z'
+  checksum_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
+  checksum_type: file
+  content_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
@@ -2852,12 +2815,12 @@ installed:
   catalog_identity: https://github.com/cognovis/library-core
 - name: workflow
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/workflow/
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/workflow@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/workflow@bc456d345086ff/
   install_target: .agents/standards/workflow/
-  install_timestamp: '2026-08-16T15:41:48Z'
+  install_timestamp: '2026-08-17T08:35:19Z'
   checksum_sha256: b982952c8dd21565deb733f149590cf9f2508024904c1e8405278c4287b06e0a
   checksum_type: directory
   content_sha256: b982952c8dd21565deb733f149590cf9f2508024904c1e8405278c4287b06e0a
@@ -2865,7 +2828,7 @@ installed:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: bead-implementer
   type: agent
   marketplace: local
@@ -2885,20 +2848,20 @@ installed:
   catalog_identity: https://github.com/cognovis/library-core
 - name: model-routing
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/standards/dispatch/model-routing.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/standards/local/model-routing@a4e69a2b0d971f/
-  install_target: .agents/standards/model-routing/
-  install_timestamp: '2026-08-16T15:41:49Z'
-  checksum_sha256: 613cd546e801234eb4c0277df044def22f299b1025b2f663f1e18f334159abe9
-  checksum_type: directory
-  content_sha256: 613cd546e801234eb4c0277df044def22f299b1025b2f663f1e18f334159abe9
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/model-routing@bc456d345086ff/
+  install_target: .agents/standards/dispatch/model-routing.md
+  install_timestamp: '2026-08-17T08:35:23Z'
+  checksum_sha256: 569641e5b8575184ac751aa7f2046c020eb37eec9651dabdf6f3c69dccdeda84
+  checksum_type: file
+  content_sha256: 569641e5b8575184ac751aa7f2046c020eb37eec9651dabdf6f3c69dccdeda84
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: bead-change-reviewer
   type: agent
   marketplace: local
@@ -2935,12 +2898,12 @@ installed:
   catalog_identity: https://github.com/cognovis/library-core
 - name: acpx-dispatch
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/acpx-dispatch/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/acpx-dispatch@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/acpx-dispatch@bc456d345086ff/
   install_target: .agents/skills/acpx-dispatch/
-  install_timestamp: '2026-08-16T15:41:51Z'
+  install_timestamp: '2026-08-17T08:35:28Z'
   checksum_sha256: e9c8b771f98cb80788843515380353e26f5c007623fcde89c716e9189a9f5ff2
   checksum_type: directory
   content_sha256: e9c8b771f98cb80788843515380353e26f5c007623fcde89c716e9189a9f5ff2
@@ -2949,15 +2912,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/acpx-dispatch -> ../../.agents/skills/acpx-dispatch
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: bead-execution-loop
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/bead-execution-loop/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/bead-execution-loop@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/bead-execution-loop@bc456d345086ff/
   install_target: .agents/skills/bead-execution-loop/
-  install_timestamp: '2026-08-16T15:41:51Z'
+  install_timestamp: '2026-08-17T08:35:30Z'
   checksum_sha256: 6a2c68da339f806360a27976b834c57003093f817bc3076e18ffbbf209f61dc2
   checksum_type: directory
   content_sha256: 6a2c68da339f806360a27976b834c57003093f817bc3076e18ffbbf209f61dc2
@@ -2966,15 +2929,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/bead-execution-loop -> ../../.agents/skills/bead-execution-loop
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: session-close
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/session-close/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/session-close@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/session-close@bc456d345086ff/
   install_target: .agents/skills/session-close/
-  install_timestamp: '2026-08-16T15:41:52Z'
+  install_timestamp: '2026-08-17T08:35:32Z'
   checksum_sha256: 5f018578c72d2b668640d96616db72155f79e10210d7d32f8ed1efeae633d144
   checksum_type: directory
   content_sha256: 5f018578c72d2b668640d96616db72155f79e10210d7d32f8ed1efeae633d144
@@ -2983,15 +2946,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/session-close -> ../../.agents/skills/session-close
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: executive-pack
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/executive-pack/SKILL.md
-  source_commit: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
-  cache_path: /Users/malte/.local/share/library/skills/local/executive-pack@a4e69a2b0d971f/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/executive-pack@bc456d345086ff/
   install_target: .agents/skills/executive-pack/
-  install_timestamp: '2026-08-16T15:41:52Z'
+  install_timestamp: '2026-08-17T08:35:34Z'
   checksum_sha256: 4bf63c3869e6190dc63e8471b1aceecfb864694b60d53c6308c540eae1b78fdf
   checksum_type: directory
   content_sha256: 4bf63c3869e6190dc63e8471b1aceecfb864694b60d53c6308c540eae1b78fdf
@@ -3000,31 +2963,31 @@ installed:
   bridge_symlinks:
   - .claude/skills/executive-pack -> ../../.agents/skills/executive-pack
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: tool-standards
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/standards/dev-tools/tool-standards.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/tool-standards@922d83965d9283/
-  install_target: .agents/standards/tool-standards/
-  install_timestamp: '2026-08-16T13:15:51Z'
-  checksum_sha256: 6d3ed3a9347e6a17f0d9dbf0ad3e4eae27eaad7b8c2fa6d437670a1aeddd1763
-  checksum_type: directory
-  content_sha256: 6d3ed3a9347e6a17f0d9dbf0ad3e4eae27eaad7b8c2fa6d437670a1aeddd1763
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/tool-standards@bc456d345086ff/
+  install_target: .agents/standards/dev-tools/tool-standards.md
+  install_timestamp: '2026-08-17T08:35:36Z'
+  checksum_sha256: 44266a8f719e99e63882b72370ee574d299e1d3ff9be1a25508ff126ec77548d
+  checksum_type: file
+  content_sha256: 44266a8f719e99e63882b72370ee574d299e1d3ff9be1a25508ff126ec77548d
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: bug-triage
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/bug-triage/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/bug-triage@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/bug-triage@bc456d345086ff/
   install_target: .agents/skills/bug-triage/
-  install_timestamp: '2026-08-16T13:15:51Z'
+  install_timestamp: '2026-08-17T08:35:38Z'
   checksum_sha256: 1286244cb1b43c6fc4cc2ec827c00b33aa41078485a9dd467c5fb90609b0a2ed
   checksum_type: directory
   content_sha256: 1286244cb1b43c6fc4cc2ec827c00b33aa41078485a9dd467c5fb90609b0a2ed
@@ -3033,49 +2996,49 @@ installed:
   bridge_symlinks:
   - .claude/skills/bug-triage -> ../../.agents/skills/bug-triage
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: intake
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/intake/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/intake@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/intake@bc456d345086ff/
   install_target: .agents/skills/intake/
-  install_timestamp: '2026-08-16T13:15:51Z'
-  checksum_sha256: 2f3792d70ded903e3bf068009d5af60399728ac1ba71edeb02860b4a475a9b72
+  install_timestamp: '2026-08-17T08:35:40Z'
+  checksum_sha256: 50dd5eb0fa2d244c99419f83d8c9393cca497f40c6b9b34b7d1f07f401491d43
   checksum_type: directory
-  content_sha256: 2f3792d70ded903e3bf068009d5af60399728ac1ba71edeb02860b4a475a9b72
+  content_sha256: 50dd5eb0fa2d244c99419f83d8c9393cca497f40c6b9b34b7d1f07f401491d43
   install_mode: vendor
   license: unknown
   bridge_symlinks:
   - .claude/skills/intake -> ../../.agents/skills/intake
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: bead-reviewer
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/bead-reviewer/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/bead-reviewer@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/bead-reviewer@bc456d345086ff/
   install_target: .agents/skills/bead-reviewer/
-  install_timestamp: '2026-08-16T13:15:52Z'
-  checksum_sha256: 7da7c347dca7dba94ec89c900f8904f72a23d2fb625301db606eb442b0a99319
+  install_timestamp: '2026-08-17T08:35:42Z'
+  checksum_sha256: 8842a828ce73426c46cc8ae592dd7e1ae31b89215a799892499ea6023414658b
   checksum_type: directory
-  content_sha256: 7da7c347dca7dba94ec89c900f8904f72a23d2fb625301db606eb442b0a99319
+  content_sha256: 8842a828ce73426c46cc8ae592dd7e1ae31b89215a799892499ea6023414658b
   install_mode: vendor
   license: unknown
   bridge_symlinks:
   - .claude/skills/bead-reviewer -> ../../.agents/skills/bead-reviewer
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: workplan
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/workplan/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/workplan@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/workplan@bc456d345086ff/
   install_target: .agents/skills/workplan/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:43Z'
   checksum_sha256: 954d866b99e2bd27cfb581f5e581a405a4aca50e4bfdf0f9eb9ae6659831a37b
   checksum_type: directory
   content_sha256: 954d866b99e2bd27cfb581f5e581a405a4aca50e4bfdf0f9eb9ae6659831a37b
@@ -3084,15 +3047,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/workplan -> ../../.agents/skills/workplan
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: dolt
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/dolt@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/dolt@bc456d345086ff/
   install_target: .agents/skills/dolt/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:45Z'
   checksum_sha256: a20808264afa1312c38cc74c14887d11aeda3250d667d9d6ce5c0c63165cad94
   checksum_type: directory
   content_sha256: a20808264afa1312c38cc74c14887d11aeda3250d667d9d6ce5c0c63165cad94
@@ -3101,15 +3064,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/dolt -> ../../.agents/skills/dolt
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: summarize
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/summarize/skill.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/summarize@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/summarize@bc456d345086ff/
   install_target: .agents/skills/summarize/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:47Z'
   checksum_sha256: e0e133e4b77f3f27aca9fff1df9048229697a5dfd96b565b7c2471b83d9a7704
   checksum_type: directory
   content_sha256: e0e133e4b77f3f27aca9fff1df9048229697a5dfd96b565b7c2471b83d9a7704
@@ -3118,15 +3081,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/summarize -> ../../.agents/skills/summarize
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: playwright-cli
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/playwright-cli/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/playwright-cli@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/playwright-cli@bc456d345086ff/
   install_target: .agents/skills/playwright-cli/
-  install_timestamp: '2026-08-16T13:15:52Z'
+  install_timestamp: '2026-08-17T08:35:48Z'
   checksum_sha256: a235fc4eb0c11c3243c7ada5ceb6e15b3ce95e80f634c1cce95ae5c4523fbd6b
   checksum_type: directory
   content_sha256: a235fc4eb0c11c3243c7ada5ceb6e15b3ce95e80f634c1cce95ae5c4523fbd6b
@@ -3135,15 +3098,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/playwright-cli -> ../../.agents/skills/playwright-cli
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: worktree-cleanup
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/worktree-cleanup/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/worktree-cleanup@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/worktree-cleanup@bc456d345086ff/
   install_target: .agents/skills/worktree-cleanup/
-  install_timestamp: '2026-08-16T13:15:53Z'
+  install_timestamp: '2026-08-17T08:35:50Z'
   checksum_sha256: 538cd20e94116c0289a5f5e13fe7b95605bc3cc0f6baad5821abe2a7ad2a49bb
   checksum_type: directory
   content_sha256: 538cd20e94116c0289a5f5e13fe7b95605bc3cc0f6baad5821abe2a7ad2a49bb
@@ -3152,15 +3115,15 @@ installed:
   bridge_symlinks:
   - .claude/skills/worktree-cleanup -> ../../.agents/skills/worktree-cleanup
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: context-handoff
   type: skill
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/skills/context-handoff/SKILL.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/skills/local/context-handoff@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/skills/unknown/context-handoff@bc456d345086ff/
   install_target: .agents/skills/context-handoff/
-  install_timestamp: '2026-08-16T13:15:53Z'
+  install_timestamp: '2026-08-17T08:35:52Z'
   checksum_sha256: c933af5e6fa289ffba26551da70074ea8c60e919a159e83fc37a31568673adb3
   checksum_type: directory
   content_sha256: c933af5e6fa289ffba26551da70074ea8c60e919a159e83fc37a31568673adb3
@@ -3169,31 +3132,31 @@ installed:
   bridge_symlinks:
   - .claude/skills/context-handoff -> ../../.agents/skills/context-handoff
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: bead-hygiene
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/blob/main/standards/workflow/bead-hygiene.md
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/bead-hygiene@922d83965d9283/
-  install_target: .agents/standards/bead-hygiene/
-  install_timestamp: '2026-08-16T13:15:53Z'
-  checksum_sha256: 926dce1bd2d3415d8233f8372c543e96f2e30b61cd0549089a1e05d81e241838
-  checksum_type: directory
-  content_sha256: 926dce1bd2d3415d8233f8372c543e96f2e30b61cd0549089a1e05d81e241838
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/bead-hygiene@bc456d345086ff/
+  install_target: .agents/standards/workflow/bead-hygiene.md
+  install_timestamp: '2026-08-17T08:35:54Z'
+  checksum_sha256: d5cb1b313361bb4ae57057707fc2724f6349814dc49c6dce42711600158cbabd
+  checksum_type: file
+  content_sha256: d5cb1b313361bb4ae57057707fc2724f6349814dc49c6dce42711600158cbabd
   install_mode: vendor
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: git
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/git/
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/git@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/git@bc456d345086ff/
   install_target: .agents/standards/git/
-  install_timestamp: '2026-08-16T13:15:53Z'
+  install_timestamp: '2026-08-17T08:35:56Z'
   checksum_sha256: f86199e16cb5baa912bb27a26d7e96699fa6dc0a135d41a45c6565c8f92bdbd5
   checksum_type: directory
   content_sha256: f86199e16cb5baa912bb27a26d7e96699fa6dc0a135d41a45c6565c8f92bdbd5
@@ -3201,15 +3164,15 @@ installed:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: worktree-subagent-discipline
   type: standard
-  marketplace: local
+  marketplace: unknown
   source: https://github.com/cognovis/library-core/tree/main/standards/worktree-subagent-discipline/
-  source_commit: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
-  cache_path: /Users/malte/.local/share/library/standards/local/worktree-subagent-discipline@922d83965d9283/
+  source_commit: bc456d345086fff66bb69e1e944dd4e65c89de6a
+  cache_path: /Users/malte/.local/share/library/standards/unknown/worktree-subagent-discipline@bc456d345086ff/
   install_target: .agents/standards/worktree-subagent-discipline/
-  install_timestamp: '2026-08-16T13:15:54Z'
+  install_timestamp: '2026-08-17T08:35:58Z'
   checksum_sha256: d13d6f5b2ab314fcb49b3af52dbf487e6d813b6235d6c43e5b49f6d25fcd8bf6
   checksum_type: directory
   content_sha256: d13d6f5b2ab314fcb49b3af52dbf487e6d813b6235d6c43e5b49f6d25fcd8bf6
@@ -3217,7 +3180,7 @@ installed:
   license: unknown
   bridge_symlinks: []
   scope: project
-  catalog_identity: https://github.com/cognovis/library-core
+  catalog_identity: https://github.com/cognovis/library
 - name: plan-reviewer
   type: agent
   marketplace: local
