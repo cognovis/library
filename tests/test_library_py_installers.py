@@ -544,8 +544,6 @@ class TestDryRunContractUniformity:
                 "skill",
                 "use",
                 "contract-skill",
-                "--scope",
-                "project",
                 "--target-project",
                 str(target_project),
                 "--dry-run",

@@ -2,6 +2,16 @@
 
 ### Removed
 
+- *(CL-ldnu, CLI/catalog/docs)* Remove the last scope selection from the
+  platform. No `library` subcommand declares `--scope`; a literally passed one
+  fails with a typed rejection before catalog, repository, lockfile, and
+  installer resolution. Workspace verbs are flagless. The four agent
+  `default_scope: global` catalog markers are gone — `script:ccore` keeps the
+  only remaining one, where it states an intrinsic property of a PATH tool.
+  `docs/migrations/` transition reports are retired from the published tree,
+  and ADR-0012 now reads as present-tense target state with the enumerated
+  Bootstrap as its one documented exception. The internal lockfile scope
+  parameter stays; it is engine state, not a caller choice.
 - *(clc-d8ol, catalog/cld/cdx)* Retire the parallel single-bead catalog path.
   `cld -b`/`cdx -b` and `cognovis-base` now enter Repository Delivery through
   `executive-pack` in solo mode over `bead-execution-loop`. The deleted

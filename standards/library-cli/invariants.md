@@ -17,8 +17,7 @@ when a command is run from a non-project cwd.
 - Return the git worktree root when one is found, OR
 - Return the explicit `--project <path>` argument when passed, OR
 - Skip the project lockfile entirely and emit a warning that names the missing
-  precondition (the working scope filter, "not in a git worktree", and how to
-  pass `--project`).
+  precondition ("not in a git worktree", and how to pass `--project`).
 
 Never read `cwd / ".library.lock"` as a fallback. Empty project results +
 warning is the correct behaviour for non-project cwd; silent stray-lockfile
@@ -27,21 +26,19 @@ inclusion is the bug.
 Touchpoint: `scripts/library.py::_resolve_target_root`,
 `scripts/lib/installed.py::_load_scope_entries`.
 
-## 2. Catalog-diff math runs against the union of installed entries
+## 2. Catalog-diff math runs against every installed entry
 
 When a command produces a "catalog vs installed" diff (e.g.
-`installed --diff-catalog`), the comparison set is the **union** of project
-and global installed entries — regardless of any `--scope` filter on the
-visible table.
+`installed --diff-catalog`), the comparison set is every installed entry the
+lockfile records, regardless of what the visible table filters down to.
 
-Scope filters apply to *display*, never to set arithmetic. Computing the diff
-against the visible (scope-filtered) set causes globally-installed entries to
-be misclassified as "available but not installed" when the user filtered to
-project. On the library/meta machine at CL-uyp time this footgun produced 173
-false positives; the fix dropped that to 45.
+Filters apply to *display*, never to set arithmetic. Computing the diff against
+the visible set causes installed entries to be misclassified as "available but
+not installed". On the library/meta machine at CL-uyp time this footgun produced
+173 false positives; the fix dropped that to 45.
 
-**Rule:** compute the diff set once from the full installed union; filter
-display afterward.
+**Rule:** compute the diff set once from the full installed set; filter display
+afterward.
 
 Touchpoint: `scripts/lib/installed.py::build_catalog_diff`.
 
@@ -62,17 +59,19 @@ mandatory.
 Touchpoint: `scripts/lib/status.py::get_remote_sha`,
 `scripts/library.py::cmd_installed`.
 
-## 4. Lifecycle commands share a default scope
+## 4. Lifecycle commands answer for the same repository
 
-`status`, `audit`, `sync`, and `installed` all default to **`both`** (project
-and global). They are part of the same lifecycle question — "what is
-installed and is it current?" — and a mismatch between their defaults produces
+`status`, `audit`, `sync`, and `installed` all read the current Git repository.
+They are part of the same lifecycle question — "what is installed and is it
+current?" — and a mismatch between what they consider in scope produces
 contradictory counts (the CL-uyp regression: status=5 behind, sync=124 refresh).
+ADR-0012 removed the selector that made the mismatch possible; the invariant
+remains that no lifecycle verb may narrow the entry set on its own.
 
-**Rule:** any new lifecycle verb added to `scripts/library.py` defaults to
-`--scope=both`. Add a regression test that invokes the new verb together with
-`status --dry-run` and asserts they agree on the entry set when both are run
-with **no arguments**.
+**Rule:** a new lifecycle verb added to `scripts/library.py` reads the same
+repository entry set as the others. Add a regression test that invokes the new
+verb together with `status --dry-run` and asserts they agree on the entry set
+when both are run with **no arguments**.
 
 Touchpoint: `scripts/library.py` argparse defaults for any
 cross-primitive verb.

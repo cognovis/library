@@ -7,8 +7,8 @@ source had been deleted:
    removal only deleted the conventionally-computed Claude target. Because the
    lockfile entry disappears with the removal, the orphan became invisible to
    `audit` and to a second `remove` while Codex still offered the agent.
-2. `agent remove <name>` without `--scope` runs against project scope and printed
-   `OK: Agent '<name>' removed.` even though nothing matched and nothing changed.
+2. `agent remove <name>` printed `OK: Agent '<name>' removed.` even though
+   nothing matched and nothing changed.
 """
 
 from __future__ import annotations

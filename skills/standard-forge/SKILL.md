@@ -151,7 +151,7 @@ alongside the entry.
 |---------|------|-------------|
 | **Marketplace source** | `standards/<id>/<id>.md` | You are authoring inside a marketplace source repo. This is the published source. |
 | **Project-local install** | `.agents/standards/<id>/<id>.md` | A downstream project pulled the standard via `/library standard use <id>`. Resolver checks this path first. |
-| **User-global install** | `~/.agents/standards/<id>/<id>.md` | Installed for all projects of one user. Resolver fallback. |
+| **Resolver fallback** | `~/.agents/standards/<id>/<id>.md` | Home-scoped copy the runtime loader falls back to. Library does not install here. |
 
 When `standard-forge` runs inside this marketplace repo, default to
 `standards/<id>/<id>.md` (no `.agents/` prefix). The `.agents/` prefix is for
@@ -282,7 +282,6 @@ has sibling files:
     <one-line description matching the file's frontmatter description>
   source: https://github.com/cognovis/library-core/blob/main/standards/<id>/<id>.md
   tier: domain          # core | domain | global
-  default_scope: ask    # ask | global
   tags:
     - origin:original
     - tier:domain
@@ -298,7 +297,6 @@ whole folder, not just the entry file:
     <one-line description matching the file's frontmatter description>
   source: https://github.com/cognovis/library-core/tree/main/standards/<id>/
   tier: domain
-  default_scope: ask
   tags:
     - origin:original
     - tier:domain
@@ -319,7 +317,7 @@ Field guidance:
 |-------|--------|-------|
 | `name` | matches the file's `domain:`/`rule:` identifier | Catalog-internal identifier, kebab-case |
 | `tier` | `core` (forge-loaded core context), `domain` (topic-specific), `global` (always-applicable rule like `english-only`) | Use `global` only for cross-cutting rules; `domain` is the default |
-| `default_scope` | `ask` (prompt the user on `/library standard use`), `global` (install user-globally without prompting) | `global` is reserved for tier `global` |
+| `default_scope` | omit it | Library installs into the current Git repository, so there is nothing to select. The one legitimate `default_scope: global` in the catalog is `script:ccore`, where it marks an intrinsically machine-wide PATH tool; a standard is never that. |
 | `source` | `blob` URL to entry file for **single-entry** standards; `tree` URL to the folder for **folder-form-with-siblings** | Mismatch causes the installer to drop sibling files |
 
 If the standard supports paired product documentation, add a pointer without
@@ -370,11 +368,11 @@ standard that may be installed in downstream project repos.
 - If the standard is listed, run a consumer updater dry-run:
 
 ```bash
-library workspace status --all --scope project
+library workspace status --all
 ```
 
 - If the dry-run reports planned changes, either run
-  `library workspace sync --all --scope project --apply` and
+  `library workspace sync --all --apply` and
   finish the target repo commit, or file/follow a consumer propagation bead.
 - If the standard is not present in a registered Workspace, state that no
   managed consumer update is required.
@@ -403,7 +401,7 @@ remove `requires_standards:` declarations.
 ## Runtime Loader Snippet
 
 When a skill's script needs to read the standard at runtime, resolve
-project-local first, then user-global:
+project-local first, then the home-scoped resolver fallback:
 
 ```bash
 STD_PATH=".agents/standards/<id>/<id>.md"
@@ -437,7 +435,7 @@ Read the standard file and evaluate each rule:
 | **Catalog entry** | `library.yaml` has `library.standards[].name=<id>` with matching `source:` URL | Missing entry or mismatched name |
 | **`source:` shape** | `blob/.../<id>.md` for single-entry; `tree/.../<id>/` for folder-form-with-siblings | Blob URL on a standard with siblings (installer drops siblings); tree URL on a single-entry standard (over-broad source) |
 | **Catalog `tier`** | One of `core`, `domain`, or `global` | Missing or unrecognized value |
-| **Catalog `default_scope`** | One of `ask` or `global` | Missing or unrecognized value |
+| **Catalog `default_scope`** | Absent | Present at all — Library installs into the current Git repository, so a standard has no scope to declare |
 | **Dependency reachability** | Consumers use `requires_standards: [<id>]`; no `_triggers.yml` needed | Standard relies on keyword auto-injection |
 | **Scripts (optional)** | Any scripts are Python `.py` files and declared in catalog `scripts:` when bundled | Shell scripts or undeclared reusable helpers |
 
@@ -461,7 +459,7 @@ Status: PASS | WARN | FAIL
 | No imperative verbs | PASS | — |
 | Catalog entry | PASS | `library.yaml` has `library.standards[].name=<id>` |
 | Catalog tier | PASS | `tier: domain` |
-| Catalog default_scope | PASS | `default_scope: ask` |
+| Catalog default_scope | PASS | absent, as required |
 | Dependency reachability | PASS | Load via `requires_standards: [<id>]` |
 
 Recommendations:

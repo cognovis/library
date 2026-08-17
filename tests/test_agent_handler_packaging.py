@@ -92,7 +92,7 @@ def test_missing_handler_directory_is_reported(tmp_path: Path):
     assert issue is not None
     assert str(agents / "needs-handler-handlers") in issue["missing"][0]
     assert "resolves that path at runtime" in issue["repair_hint"]
-    assert "library agent use needs-handler --scope global" in issue["repair_hint"]
+    assert "library agent use needs-handler" in issue["repair_hint"]
 
 
 def test_empty_handler_directory_counts_as_missing(tmp_path: Path):
@@ -199,13 +199,15 @@ def test_a_vanished_cache_is_not_treated_as_rot(tmp_path: Path):
     assert _check_missing_agent_handlers(entry, CATALOG, tmp_path, "global") is None
 
 
-# -- CL-8a7z: the default scope must match where agents look -----------------
+# -- CL-8a7z / CL-ldnu: handler agents carry handlers, not a scope ------------
 
 
 @pytest.mark.parametrize("name", ["ci-monitor", "release", "learning-extractor"])
-def test_handler_agents_default_to_global_scope(name: str):
-    """Project scope installs into <project>/.claude/agents, which these agents
-    do not probe; without a declared default they landed there.
+def test_handler_agents_carry_handlers_without_nominating_a_scope(name: str):
+    """CL-8a7z made these agents declare `default_scope: global` so their handler
+    directory landed where the agent probed for it. ADR-0012 leaves one place
+    to install into, so the marker said nothing and CL-ldnu removed it; what
+    still has to hold is that the handler directory is declared at all.
 
     `acpx-runner` was dropped from this list when the agent was removed from the
     catalog (clc-ex88 in library-core): a relay subagent can fabricate the
@@ -220,4 +222,4 @@ def test_handler_agents_default_to_global_scope(name: str):
         item for item in catalog["library"]["agents"] if item.get("name") == name
     )
     assert entry.get("handlers"), f"{name} is expected to carry handlers"
-    assert entry.get("default_scope") == "global"
+    assert "default_scope" not in entry

@@ -780,7 +780,7 @@ class TestMcpUse:
     def test_mcp_use_rejects_project_scope_before_mutation(self, project_dir, tmp_path):
         claude_settings = tmp_path / "settings.json"
         result = run_library(
-            "mcp", "use", "test-mcp-server", "--scope", "project", "--json",
+            "mcp", "use", "test-mcp-server", "--json",
             cwd=project_dir,
             env={
                 "HOME": str(tmp_path / "home"),
@@ -892,7 +892,7 @@ class TestMcpRemove:
         )
         claude_settings = tmp_path / "settings.json"
         result = run_library(
-            "mcp", "remove", "test-mcp-server", "--scope", "project", "--dry-run", "--json",
+            "mcp", "remove", "test-mcp-server", "--dry-run", "--json",
             cwd=project_dir,
             env={
                 "HOME": str(tmp_path / "home"),
@@ -913,7 +913,7 @@ class TestMcpRemove:
         assert not claude_settings.exists()
 
         cleanup = run_library(
-            "mcp", "remove", "test-mcp-server", "--scope", "project", "--json",
+            "mcp", "remove", "test-mcp-server", "--json",
             cwd=project_dir,
             env={
                 "HOME": str(tmp_path / "home"),
@@ -943,7 +943,7 @@ class TestMcpRemove:
         )
 
         result = run_library(
-            "mcp", "sync", "test-mcp-server", "--scope", "project", "--dry-run", "--json",
+            "mcp", "sync", "test-mcp-server", "--dry-run", "--json",
             cwd=project_dir,
         )
 
@@ -1479,7 +1479,7 @@ class TestCmuxBeadDispatchE2E:
         assert "judge-default" in names
         assert names[-1] == "cmux-bead-dispatch"
 
-    def test_dry_run_install_rejects_retired_global_scope(self):
+    def test_dry_run_install_rejects_a_scope_flag(self):
         result = run_library(
             "skill", "use", "cmux-bead-dispatch", "--dry-run", "--json",
             "--scope", "global",
@@ -1488,7 +1488,10 @@ class TestCmuxBeadDispatchE2E:
         assert result.returncode == 1, f"stdout={result.stdout}\nstderr={result.stderr}"
         assert json.loads(result.stdout) == {
             "status": "error",
-            "message": "Global Library desired state is not supported; use the current Git repository.",
+            "message": (
+                "`--scope` is not a Library option: Library manages the current "
+                "Git repository only. Re-run the command without `--scope`."
+            ),
             "exit_code": 1,
         }
 
@@ -1624,7 +1627,7 @@ class TestDefaultScopeFromCatalog:
         )
 
     def test_project_default_scope_uses_project_lockfile(self, project_dir_with_default_scope):
-        """Entry with default_scope: project installs to project lockfile without --scope."""
+        """Entry with default_scope: project installs to the project lockfile."""
         result = run_library(
             "standard", "use", "project-standard", "--dry-run", "--json",
             cwd=project_dir_with_default_scope,
@@ -1659,26 +1662,6 @@ class TestDefaultScopeFromCatalog:
         lockfile_path = lockfile_ops[0]["path"]
         assert lockfile_path == str(project_dir_with_default_scope / ".library.lock"), (
             f"Expected project lockfile for no-scope entry, got: {lockfile_path}"
-        )
-
-    def test_explicit_scope_overrides_default_scope(self, project_dir_with_default_scope):
-        """Explicit --scope project overrides a catalog entry's default_scope: global."""
-        result = run_library(
-            "standard", "use", "global-standard", "--dry-run", "--json",
-            "--scope", "project",
-            cwd=project_dir_with_default_scope,
-        )
-        assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
-        data = json.loads(result.stdout)
-        assert data["status"] == "dry-run"
-        lockfile_ops = [
-            op for op in data.get("operations", [])
-            if op.get("operation") == "write_lockfile"
-        ]
-        assert len(lockfile_ops) == 1, f"Expected one lockfile op, got: {lockfile_ops}"
-        lockfile_path = lockfile_ops[0]["path"]
-        assert lockfile_path == str(project_dir_with_default_scope / ".library.lock"), (
-            f"--scope project should override default_scope global, got: {lockfile_path}"
         )
 
     def test_regression_non_mcp_remove_defaults_to_project(

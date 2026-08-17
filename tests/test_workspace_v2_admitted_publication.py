@@ -324,7 +324,7 @@ def test_the_lock_records_the_catalog_source_and_the_verified_pin(
     environment["HOME"] = str(home)
     installed = subprocess.run(
         [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:engineering",
-         "--scope", "project", "--json"],
+         "--json"],
         cwd=project,
         env=environment,
         capture_output=True,
@@ -366,7 +366,7 @@ def test_the_installed_projection_is_the_admitted_bytes(tmp_path: Path) -> None:
     environment["HOME"] = str(home)
     installed = subprocess.run(
         [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:engineering",
-         "--scope", "project", "--json"],
+         "--json"],
         cwd=project,
         env=environment,
         capture_output=True,
@@ -528,7 +528,7 @@ def test_f1_a_harness_specific_source_cannot_bypass_the_admitted_publication(
     environment["HOME"] = str(home)
     result = subprocess.run(
         [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:agents",
-         "--scope", "project", "--json"],
+         "--json"],
         cwd=project,
         env=environment,
         capture_output=True,
@@ -622,7 +622,7 @@ def test_w2f1_a_runtime_config_member_cannot_install_unadmitted_bytes(
     environment["HOME"] = str(home)
     result = subprocess.run(
         [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:runtime",
-         "--scope", "project", "--json"],
+         "--json"],
         cwd=project,
         env=environment,
         capture_output=True,

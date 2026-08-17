@@ -33,7 +33,7 @@ Use a dry run before registration:
 
 ```text
 library workspace use library-platform:library-authoring \
-  --scope project --harness codex --dry-run --json
+  --harness codex --dry-run --json
 ```
 
 Then apply the same command without `--dry-run`. Existing direct roots are not

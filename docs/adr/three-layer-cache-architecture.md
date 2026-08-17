@@ -50,9 +50,9 @@ ADR-0011 additionally adds distribution-rights state, executable admission,
 fail-closed retention, and an operator-explicit purge on top of this ADR's
 retention policy. Migration grants no deletion authority.
 
-ADR-0012 removes the user-global artifact scope. The global lockfile and global
-skill/agent/standard projection examples below are retained as historical design
-and migration evidence only. Layer B may remain a user cache, but all normal
+ADR-0012 removed the machine-wide artifact scope. The machine-wide lockfile and
+the skill/agent/standard projection examples below are retained as historical
+design and migration evidence only. Layer B may remain a user cache, but all normal
 Layer-C ownership and requested roots are project-local. The only global targets
 are the enumerated bootstrap product contract, which is not represented as a
 primitive scope.
@@ -301,7 +301,8 @@ Equivalent precedent: nix-store, brew Cellar, pnpm content-addressed
 store.
 
 **GC policy**: a cache entry not referenced by any active symlink
-(global lockfile + any registered project lockfile) is a candidate
+(historically the machine-wide lockfile plus any registered project lockfile;
+under ADR-0012 the registered project lockfiles alone) is a candidate
 for collection. `library gc` removes them; default policy is keep
 the last N=3 unreferenced versions per (marketplace, name) for fast
 rollback.
@@ -614,7 +615,7 @@ updates for the same reasons.
 The fleet has both global needs (which skills are universally
 available on this machine) and per-project needs (`mira` and
 `polaris` and `cognovis-charly` pull in different subsets). A
-single global lockfile cannot express both. Per-project lockfiles
+single machine-wide lockfile cannot express both. Per-project lockfiles
 also enable repo-level reproducibility: clone a project, run
 `library sync`, get exactly the skills the project expects, at
 the versions the project expects.
@@ -751,7 +752,8 @@ Cache + symlink replaces `cp`. Lockfile schema (`docs/lockfile-format.md`,
 3. Implement symlink fan-out to all configured harness paths from
    `library.yaml.default_dirs.skills.*`.
 4. Extend `.library.lock` schema (`marketplace`, `cache_path`) and
-   add global lockfile (`~/.config/library/global.lock`, same schema).
+   add the machine-wide lockfile (`~/.config/library/global.lock`, same schema;
+   removed again by ADR-0012).
 5. Implement `library upgrade`, `library pin`, `library edit`,
    `library sync`, `library gc`, `library push` (First-Party only).
 6. Update cookbooks (`cookbook/use.md`, `remove.md`, `sync.md`,
@@ -990,7 +992,7 @@ After Phase 0-3 complete:
    Phase 0 keeps it as a fan-out target).
 5. `find ~/.claude/skills -maxdepth 1 -type l | wc -l` equals
    `find ~/.agents/skills -maxdepth 1 -type l | wc -l` equals the
-   library-managed entry count from the global lockfile.
+   library-managed entry count from the machine-wide lockfile.
 6. `stat -f%i ~/.claude/skills/<any>/SKILL.md` equals
    `stat -f%i ~/.agents/skills/<same>/SKILL.md` (same Inode →
    parity by construction).

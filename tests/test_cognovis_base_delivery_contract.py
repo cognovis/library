@@ -21,7 +21,13 @@ EXPECTED_ARTIFACTS = {
     ("agent", "bead-depth-reviewer"),
     ("agent", "bead-implementer"),
     ("agent", "bead-review-adjudicator"),
+    # The two advisors Repository Delivery invokes on demand. clc-d8ol moved
+    # them into the source SKILL.md's `requires:`; the catalog entry has to
+    # carry the same edges or a consumer repository installs a delivery skill
+    # whose own closure cannot satisfy what it declares.
+    ("agent", "doc-changelog-updater"),
     ("agent", "judge-default"),
+    ("agent", "plan-reviewer"),
     ("skill", "acpx-dispatch"),
     ("skill", "bead-execution-loop"),
     ("skill", "cognovis-beads"),
@@ -62,7 +68,7 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
             "identity": "https://github.com/cognovis/library-core",
             "pin": {
                 "kind": "commit",
-                "value": "922d83965d92836b4eae4ef6aea0ffe7c08f4b79",
+                "value": "a4e69a2b0d971ff4023103aaf2457bf04859bc5f",
             },
         },
     ]

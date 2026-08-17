@@ -1457,6 +1457,8 @@ library:
       requires:
         - skill:bead-execution-loop
         - skill:session-close
+        - agent:plan-reviewer
+        - agent:doc-changelog-updater
         - standard:model-routing
         - standard:english-only
         - standard:executive-pack
@@ -2258,7 +2260,6 @@ library:
       requires:
         - standard:english-only
     - name: ci-monitor
-      default_scope: global
       handlers:
         - agents/ci-monitor-handlers
       description: Watches GitHub Actions CI for a specific pushed commit on behalf of the originating delivery flow. Blocks silently until completion, filters parallel flows by commit SHA, and returns one structured verdict line.
@@ -2397,7 +2398,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: learning-extractor
-      default_scope: global
       handlers:
         - agents/learning-extractor-handlers
       description: Extracts durable learnings from Claude Code conversation histories and saves structured observations to open-brain memory. Use when session feedback or repeated user corrections should improve skills, standards, or agents.
@@ -2468,7 +2468,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: release
-      default_scope: global
       handlers:
         - agents/release-handlers
       description: 'Cuts a deliberate versioned release independently of Session Close: git-cliff once, VERSION bump, chore(release) commit, tag, and push. Use when you decide to ship a release. Triggers on: release, rc, cut a release, version bump, tag a release.'
@@ -2562,7 +2561,6 @@ library:
           inventory: convention-scan
           plane: dev
     - name: topic-agent
-      default_scope: global
       handlers:
         - agents/topic-agent-handlers
       description: Use when a human-approved complex topic needs a persistent coordinator in one cmux workspace with one Executive Pack pane per repository pack and one finalization.
@@ -4201,7 +4199,7 @@ library:
           identity: https://github.com/cognovis/library-core
           pin:
             kind: commit
-            value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
+            value: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
       roots:
         - type: skill
           name: library

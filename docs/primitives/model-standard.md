@@ -12,10 +12,10 @@ standards (which apply to any model), a model-standard is keyed to a specific mo
 ID and adjusts the agent's behavior for that model's strengths and limitations.
 
 **Storage.** `.agents/model-standards/<model-name>.md` (project-local) or
-`~/.agents/model-standards/<model-name>.md` (user-global).
+`~/.agents/model-standards/<model-name>.md` (home-scoped).
 Example: `.agents/model-standards/claude-sonnet-4-6.md`
 
-**Loading.** Model-standards use project-local > user-global precedence and are
+**Loading.** Model-standards use project-local > home-scoped precedence and are
 inlined by the Library composer into the composed **agent system prompt** —
 that is, the prompt the harness sees when the agent runs, distinct from the
 [orchestrator system prompt](system-prompt.md) of the top-level `cld` / `cdx`
@@ -26,7 +26,7 @@ session.
 | Priority | Path | Scope |
 |----------|------|-------|
 | 1 (wins) | `.agents/model-standards/<name>.md` | Project-local |
-| 2 | `~/.agents/model-standards/<name>.md` | User-global |
+| 2 | `~/.agents/model-standards/<name>.md` | Home-scoped |
 
 **Trigger semantics.** Injected at agent install/sync time when the agent's
 frontmatter specifies a `model` field matching this model-standard's filename.
@@ -91,7 +91,7 @@ never overwritten — the composed prompt is written to the installed copy only.
 
 3. Load Layer 3:
    a) If model_standards is non-empty: resolve each name directly from the
-      project-local or user-global model-standards directory.
+      project-local or home-scoped model-standards directory.
       Concatenate results in declaration order.
    b) If model_standards is empty AND model is set: attempt the same resolver by
       model alias (silent skip on miss).

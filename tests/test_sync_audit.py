@@ -603,7 +603,7 @@ class TestAuditClaudeAgentFrontmatter:
         assert issue["code"] == "missing_frontmatter"
         assert issue["path"] == str(agent_path)
         assert issue["repair_hint"] == (
-            "library agent sync broken-agent --scope project --harness claude_code"
+            "library agent sync broken-agent --harness claude_code"
         )
 
     def test_audit_detects_claude_agent_missing_description(self, project_dir):
@@ -688,7 +688,7 @@ class TestAuditClaudeAgentFrontmatter:
         entry = data["entries"][0]
         assert entry["agent_frontmatter_issue"]["path"].endswith("cli-broken-agent.md")
         assert entry["repair_hint"] == (
-            "library agent sync cli-broken-agent --scope project --harness claude_code"
+            "library agent sync cli-broken-agent --harness claude_code"
         )
 
 
@@ -1091,7 +1091,7 @@ class TestTopLevelSync:
         assert data["failed"] == []
         assert data["warnings"] == [
             "skipped orphaned entry script:removed-script; remove it with "
-            "`library script remove removed-script --scope project`"
+            "`library script remove removed-script`"
         ]
 
     def test_regression_sync_refreshes_stale_supervised_runtime(

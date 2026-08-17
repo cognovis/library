@@ -113,7 +113,7 @@ def test_audit_reports_same_catalog_orphan_with_removal_command(tmp_path: Path) 
     assert audited["catalog_status"] == "orphaned"
     assert audited["catalog_identity"] == CATALOG_IDENTITY
     assert audited["removal_command"] == (
-        "library prompt remove fixture --scope project"
+        "library prompt remove fixture"
     )
 
 
@@ -218,8 +218,6 @@ def test_human_and_json_audit_name_orphan_catalog_and_removal_command(
         sys.executable,
         str(LIBRARY_PY),
         "audit",
-        "--scope",
-        "project",
         "--project",
         str(project),
         "--no-upstream",
@@ -242,10 +240,10 @@ def test_human_and_json_audit_name_orphan_catalog_and_removal_command(
 
     assert human.returncode == 2, human.stderr
     assert "ORPHANED from https://github.com/example/catalog-a" in human.stdout
-    assert "library prompt remove fixture --scope project" in human.stdout
+    assert "library prompt remove fixture" in human.stdout
     assert structured.returncode == 2, structured.stderr
     audited = json.loads(structured.stdout)["entries"][0]
     assert audited["catalog_status"] == "orphaned"
     assert audited["removal_command"] == (
-        "library prompt remove fixture --scope project"
+        "library prompt remove fixture"
     )

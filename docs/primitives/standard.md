@@ -29,7 +29,7 @@ files and lockfile entry only.
 | Priority | Path | Scope |
 |----------|------|-------|
 | 1 (wins) | `.agents/standards/<name>/<name>.md` | Project-local, folder-form |
-| 2 | `~/.agents/standards/<name>/<name>.md` | User-global, folder-form |
+| 2 | `~/.agents/standards/<name>/<name>.md` | Home-scoped, folder-form |
 
 **Standard file layout (single-file vs folder-form).**
 
@@ -177,7 +177,7 @@ requires_standards: [dolt-server, branch-naming]
 
 **Runtime loading (skill-script-side):** Individual skill scripts read the cached file
 directly from its resolved path (project-local `.agents/standards/<name>/` wins over
-user-global `~/.agents/standards/<name>/`):
+home-scoped `~/.agents/standards/<name>/`):
 
 ```bash
 STD_PATH=".agents/standards/<name>/<name>.md"

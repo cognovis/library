@@ -26,7 +26,7 @@ def test_library_skill_shows_evidence_recommendation_confirmation_then_cli_fixtu
     assert "Evidence:" in skill
     assert "Recommendation:" in skill
     assert "Confirmation:" in skill
-    assert "library workspace use cognovis-library-core:python-cli --scope project" in skill
+    assert "library workspace use cognovis-library-core:python-cli" in skill
 
 
 def test_mcp_projection_selection_excludes_retired_harnesses() -> None:

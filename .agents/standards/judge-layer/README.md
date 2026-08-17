@@ -93,9 +93,10 @@ Three steps:
    precedence (`BLOCK > ESCALATE > REVISE > ALLOW`). For REVISE, apply the
    `revised_proposal` and submit once more.
 
-The bead-orchestrator handles steps 2 and 3 automatically in Phase 4.5 for any
-skill declaring `action_boundary` with `risk_class: external-side-effect` or
-`high-risk`. See `cognovis-core/agents/bead-orchestrator.md` §Phase 4.5.
+The repository delivery owner handles steps 2 and 3 for any skill declaring
+`action_boundary` with `risk_class: external-side-effect` or `high-risk`. See
+the `action_boundary` block in `cognovis-core/skills/bead-execution-loop/SKILL.md`
+for a declaring skill.
 
 ## How a Judge Agent Wires Into the Judge Layer
 
@@ -136,7 +137,7 @@ precedence.
 | Consumer | Repo path | What it judges |
 |----------|-----------|----------------|
 | Memory-Write Judge | `open-brain/python/src/open_brain/memory_write_judge.py` | OpenBrain `save_memory` calls with structured 7-field proposals |
-| Phase 4.5 pre-action gate | `cognovis-core/agents/bead-orchestrator.md` §Phase 4.5 | Any side-effecting skill invoked by the bead-orchestrator |
+| Pre-action gate | `cognovis-core/skills/bead-execution-loop/SKILL.md` §`action_boundary` | Any side-effecting skill invoked during a repository delivery |
 | (Future) Action-Proposal CLI | `cognovis-core/standards/judge-layer/scripts/validate_action_proposal.py` is the deterministic validator; downstream consumers wire it into their orchestrator path |
 
 ## What This Layer Is Not

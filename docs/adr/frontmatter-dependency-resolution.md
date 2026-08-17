@@ -99,9 +99,10 @@ ownership-aware reconciliation:
   catalog-pinned definitions before a receipt can become pruneable;
 - persisted edge or owner snapshots are audit-only and never authoritative; and
 - incompatible constraints for one materialization fail before mutation.
-- an intrinsically global dependency such as `mcp:` reached from a project root
-  is a prerequisite assertion against the global lock, not a project ownership
-  edge; a missing or incompatible prerequisite fails before project mutation.
+- an intrinsically machine-wide dependency such as `mcp:` reached from a project
+  root is a prerequisite assertion, not a project ownership edge; a missing or
+  incompatible prerequisite fails before project mutation. Under ADR-0012 that
+  assertion resolves against the enumerated Bootstrap manifest.
 
 This amendment does not change where a primitive declares `requires:`. It changes
 how the resolved graph is retained and reconciled after roots or dependencies

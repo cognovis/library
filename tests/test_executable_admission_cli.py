@@ -482,8 +482,6 @@ def test_a_name_reference_resolves_and_displays_the_digest_it_records(
         GRANT_VERB,
         "--receipt",
         receipt.id,
-        "--scope",
-        "project",
         "--project",
         str(tmp_path.resolve() / "project"),
         "--operator",

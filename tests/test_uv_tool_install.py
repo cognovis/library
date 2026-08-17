@@ -573,8 +573,6 @@ def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
             "workspace",
             "status",
             "--all",
-            "--scope",
-            "project",
             "--target-project",
             str(project),
             "--harness",
