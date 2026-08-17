@@ -188,23 +188,27 @@ uv run python /path/to/library/scripts/sync_project_tooling.py \
 The Library deliberately does not project `.beads/PRIME.md`; the upstream
 Beads CLI owns `bd prime` and its workflow context.
 
-### 1. beads-server-mode — Enforce dolt_mode=server
+### 1. beads-embedded-mode — Enforce dolt_mode=embedded
 
 ```yaml
-- name: beads-server-mode
+- name: beads-embedded-mode
   target_kind: json_field_enforce
   target_path: .beads/metadata.json
   conditions:
     - file_exists: .beads/metadata.json
   sync_strategy: repair_fields
   fields:
-    ensure: {dolt_mode: server}
-    remove: [database, backend, dolt_server_port, dolt_server_user]
+    ensure: {dolt_mode: embedded}
+    remove: [dolt_server_host, dolt_server_port, dolt_server_user]
 ```
 
-Ensures `.beads/metadata.json` is in server mode and removes stale embedded-mode fields
-that can trigger journal corruption. This replaces the `enforce_server_mode()` function
-in the SessionStart hook (which is kept for now as a safety net during migration).
+Ensures `.beads/metadata.json` selects bd's default repo-local embedded engine and removes
+the shared-server connection fields. `database` and `backend` are normal under the embedded
+engine and are deliberately not removed.
+
+This entry previously enforced `dolt_mode: server` for the shared Dolt daemon. That daemon
+is retired: every workspace runs the embedded engine, and applying the old policy to a
+migrated repository would point it back at a server that no longer listens.
 
 ### 2. beads-post-commit-hook — bd export on commit
 
