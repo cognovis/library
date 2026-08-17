@@ -1412,19 +1412,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-    - name: dolt
-      description: 'Troubleshoot beads Dolt failures: `bd dolt` push/pull errors, merge conflicts, embedded/shared-server mode problems, remote auth issues, local DB recovery, re-clone, reflog restore, broken `.beads` Dolt config, and brew-services Dolt lifecycle. Use whenever beads sync or Dolt infrastructure is failing — symptoms like "beads do not sync", "cannot push issues", "no common ancestor", "not supported in embedded mode", "Dolt server unreachable", or "lost local database". Read the beads changelog first. Do not use for normal beads tracking (`bd create/ready/close`), standalone Dolt databases, or regular git push/pull.'
-      source: https://github.com/cognovis/library-core/blob/main/skills/dolt/SKILL.md
-      requires:
-        - standard:english-only
-      tags:
-        - origin:original
-        - tier:domain
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
-          plane: dev
     - name: entropy-scan
       description: 'Scan the agent harness (skills, hooks, agents, standards) for invariant violations and entropy. Produces a violation report with actionable fix instructions. Triggers on: entropy scan, harness check, harness validate, invariants check.'
       source: https://github.com/cognovis/library-core/blob/main/skills/entropy-scan/SKILL.md
@@ -4282,9 +4269,6 @@ library:
           name: workplan
           catalog: core
         - type: skill
-          name: dolt
-          catalog: core
-        - type: skill
           name: summarize
           catalog: core
         - type: skill
@@ -4378,8 +4362,8 @@ library:
       metadata:
         library: {source_catalog: cognovis-library-core, inventory: convention-scan, plane: dev}
 project_tooling:
-  - name: beads-server-mode
-    description: Ensures .beads/metadata.json has dolt_mode=server and removes stale embedded-mode fields (database, backend, dolt_server_port, dolt_server_user). Prevents journal corruption from accidental embedded-mode starts.
+  - name: beads-embedded-mode
+    description: Ensures .beads/metadata.json has dolt_mode=embedded and removes stale shared-server fields (dolt_server_host, dolt_server_port, dolt_server_user). The repo-local embedded engine is bd's default; the shared Dolt daemon is retired.
     target_kind: json_field_enforce
     target_path: .beads/metadata.json
     conditions:
@@ -4388,10 +4372,9 @@ project_tooling:
     conflict_policy: canonical_wins
     fields:
       ensure:
-        dolt_mode: server
+        dolt_mode: embedded
       remove:
-        - database
-        - backend
+        - dolt_server_host
         - dolt_server_port
         - dolt_server_user
     tags:

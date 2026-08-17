@@ -59,7 +59,6 @@ PREEXISTING_SKILL_NAMES = frozenset(
     council
     customer-invoice
     daily-brief
-    dolt
     entropy-scan
     event-log
     executive-pack

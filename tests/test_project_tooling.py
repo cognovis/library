@@ -314,7 +314,7 @@ def test_json_field_enforce_fields():
                 minimal_tooling_entry(
                     target_kind="json_field_enforce",
                     fields={
-                        "ensure": {"dolt_mode": "server"},
+                        "ensure": {"dolt_mode": "embedded"},
                         "remove": ["database", "backend"],
                     },
                 )
@@ -332,7 +332,7 @@ def test_json_field_enforce_fields():
                 minimal_tooling_entry(
                     target_kind="json_field_enforce",
                     fields={
-                        "ensure": {"dolt_mode": "server"},
+                        "ensure": {"dolt_mode": "embedded"},
                         "unknown_prop": "bad",
                     },
                 )
@@ -547,30 +547,28 @@ def test_sync_runtime_json_field_enforce():
         beads_dir = project_root / ".beads"
         beads_dir.mkdir()
         metadata = {
-            "dolt_mode": "embedded",
-            "database": "mydb",
-            "backend": "embedded",
+            "dolt_mode": "server",
+            "dolt_server_host": "127.0.0.1",
             "dolt_server_port": 3306,
             "dolt_server_user": "root",
-            "server_host": "localhost",
+            "database": "mydb",
         }
         meta_file = beads_dir / "metadata.json"
         meta_file.write_text(json.dumps(metadata, indent=2))
 
         entries = [
             {
-                "name": "beads-server-mode",
-                "description": "Enforce server mode",
+                "name": "beads-embedded-mode",
+                "description": "Enforce embedded mode",
                 "target_kind": "json_field_enforce",
                 "target_path": ".beads/metadata.json",
                 "conditions": [{"file_exists": ".beads/metadata.json"}],
                 "sync_strategy": "repair_fields",
                 "conflict_policy": "canonical_wins",
                 "fields": {
-                    "ensure": {"dolt_mode": "server"},
+                    "ensure": {"dolt_mode": "embedded"},
                     "remove": [
-                        "database",
-                        "backend",
+                        "dolt_server_host",
                         "dolt_server_port",
                         "dolt_server_user",
                     ],
@@ -584,9 +582,10 @@ def test_sync_runtime_json_field_enforce():
         assert result["synced"] >= 1, f"Expected at least 1 synced entry, got: {result}"
 
         updated = json.loads(meta_file.read_text())
-        assert updated["dolt_mode"] == "server", "dolt_mode was not set to server"
-        assert "database" not in updated, "stale field 'database' was not removed"
-        assert "backend" not in updated, "stale field 'backend' was not removed"
+        assert updated["dolt_mode"] == "embedded", "dolt_mode was not set to embedded"
+        assert "dolt_server_host" not in updated, (
+            "stale field 'dolt_server_host' was not removed"
+        )
         assert "dolt_server_port" not in updated, (
             "stale field 'dolt_server_port' was not removed"
         )
@@ -594,7 +593,7 @@ def test_sync_runtime_json_field_enforce():
             "stale field 'dolt_server_user' was not removed"
         )
         # Non-stale fields preserved
-        assert updated.get("server_host") == "localhost", (
+        assert updated.get("database") == "mydb", (
             "non-stale field was incorrectly removed"
         )
 
