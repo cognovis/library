@@ -22,6 +22,13 @@ _SAFE_BEAD_CODEX_ARGS = [
     "--sandbox",
     "workspace-write",
     'approval_policy="never"',
+]
+# Both knobs existed only for the retired shared Dolt server mode: the beads MCP
+# requirement (clc-6kuz) and the sandbox network grant the bd CLI needed to reach
+# 127.0.0.1:3306. Embedded repo-local Dolt needs neither, and no bead launch may
+# reintroduce them (CL-hf2g).
+_RETIRED_BEAD_CODEX_CONFIG_VALUES = [
+    "mcp_servers.beads.required=true",
     "sandbox_workspace_write.network_access=true",
 ]
 _WRITABLE_ROOTS_PREFIX = "sandbox_workspace_write.writable_roots="
@@ -637,6 +644,13 @@ def _writable_roots(argv: list[str]) -> list[str]:
     return json.loads(entries[0][len(_WRITABLE_ROOTS_PREFIX) :])
 
 
+def _assert_no_retired_bead_config(argv: list[str]) -> None:
+    """Neither server-mode knob may reach a bead launch (CL-hf2g)."""
+    config_values = _config_values(argv)
+    for retired in _RETIRED_BEAD_CODEX_CONFIG_VALUES:
+        assert retired not in config_values, config_values
+
+
 def _assert_safe_bead_permissions(
     argv: list[str], *, expected_roots: list[str] | None = None
 ) -> None:
@@ -645,8 +659,7 @@ def _assert_safe_bead_permissions(
     assert argv[sandbox_index + 1] == "workspace-write"
     config_values = _config_values(argv)
     assert 'approval_policy="never"' in config_values
-    assert "mcp_servers.beads.required=true" in config_values
-    assert "sandbox_workspace_write.network_access=true" in config_values
+    _assert_no_retired_bead_config(argv)
     roots = _writable_roots(argv)
     assert roots
     for expected in expected_roots or []:
@@ -676,7 +689,7 @@ def _assert_dangerous_bead_permissions(argv: list[str]) -> None:
     for readonly_arg in _READONLY_BEAD_CODEX_ARGS:
         assert readonly_arg not in argv
     config_values = _config_values(argv)
-    assert "mcp_servers.beads.required=true" in config_values
+    _assert_no_retired_bead_config(argv)
     assert not [
         value for value in config_values if value.startswith(_WRITABLE_ROOTS_PREFIX)
     ]
@@ -2845,13 +2858,15 @@ def test_cdx_bead_worktree_writes_no_redirect_without_a_canonical_workspace(
     assert not os.path.lexists(tmp_path / "worktrees" / "bead-CL-smoke" / ".beads")
 
 
-def _write_beads_workspace(beads_dir: Path, database: str) -> Path:
+def _write_beads_workspace(
+    beads_dir: Path, database: str, *, dolt_mode: str = "server"
+) -> Path:
     """Create a Beads workspace directory bd accepts as a redirect target."""
     beads_dir.mkdir(parents=True, exist_ok=True)
     (beads_dir / "metadata.json").write_text(
         json.dumps(
             {
-                "dolt_mode": "server",
+                "dolt_mode": dolt_mode,
                 "dolt_database": database,
                 "project_id": "11111111-2222-3333-4444-555555555555",
             }
@@ -2862,7 +2877,7 @@ def _write_beads_workspace(beads_dir: Path, database: str) -> Path:
     return beads_dir
 
 
-def _init_fixture_repository(repo_root: Path) -> Path:
+def _init_fixture_repository(repo_root: Path, *, dolt_mode: str = "server") -> Path:
     """Build a real git repository with a canonical Beads workspace."""
     assert _SYSTEM_GIT is not None
     repo_root.mkdir(parents=True, exist_ok=True)
@@ -2884,7 +2899,9 @@ def _init_fixture_repository(repo_root: Path) -> Path:
         ],
         check=True,
     )
-    return _write_beads_workspace(repo_root / ".beads", "beads_fixture_repo")
+    return _write_beads_workspace(
+        repo_root / ".beads", "beads_fixture_repo", dolt_mode=dolt_mode
+    )
 
 
 @pytest.mark.skipif(_SYSTEM_BD is None, reason="bd is not installed")
@@ -2937,6 +2954,61 @@ def test_cdx_external_worktree_resolves_the_canonical_beads_workspace(
     )
     assert status.returncode == 0, status.stderr
     assert status.stdout.strip() == ""
+
+
+@pytest.mark.skipif(_SYSTEM_BD is None, reason="bd is not installed")
+@pytest.mark.skipif(_SYSTEM_GIT is None, reason="git is not installed")
+def test_cdx_embedded_workspace_launch_drops_the_retired_server_mode_knobs(
+    tmp_path: Path,
+) -> None:
+    """AC1: an embedded workspace launches without the server-mode knobs.
+
+    Real git plus a real ``bd where`` probe over an embedded repo-local
+    workspace. The launcher-written redirect must resolve the canonical
+    workspace, which is exactly what the CL-14ob identity gate compares, and the
+    implementation-mode argv must carry neither ``mcp_servers.beads.required``
+    nor ``sandbox_workspace_write.network_access``.
+    """
+    canonical_beads = _init_fixture_repository(tmp_path / "repo", dolt_mode="embedded")
+    metadata = json.loads(
+        (canonical_beads / "metadata.json").read_text(encoding="utf-8")
+    )
+    assert metadata["dolt_mode"] == "embedded"
+    launch_home = tmp_path / "agent-home"
+    _write_beads_workspace(
+        launch_home / ".beads", "beads_fixture_home", dolt_mode="embedded"
+    )
+    worktree_root = launch_home / "code" / ".worktrees"
+
+    result, argv_file, _prompt_file, called_file, *_rest = _run_cdx_launcher(
+        tmp_path,
+        ["-b", "CL-smoke"],
+        env_overrides={
+            "GIT_BIN": str(_SYSTEM_GIT),
+            "HOME": str(launch_home),
+            "CDX_WORKTREE_ROOT": str(worktree_root),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert called_file.exists()
+
+    worktree = worktree_root / "bead-CL-smoke"
+    bd_env = dict(os.environ)
+    bd_env["HOME"] = str(launch_home)
+    where = subprocess.run(
+        [str(_SYSTEM_BD), "-C", str(worktree), "where", "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+        env=bd_env,
+    )
+    assert where.returncode == 0, where.stderr
+    assert json.loads(where.stdout)["path"] == str(canonical_beads)
+
+    argv = json.loads(argv_file.read_text(encoding="utf-8"))
+    _assert_safe_bead_permissions(argv, expected_roots=[str(canonical_beads)])
 
 
 def _workspace_bead_readable() -> bool:
