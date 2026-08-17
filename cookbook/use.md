@@ -60,6 +60,24 @@ Global Library desired state is retired; every public primitive lifecycle is
 repository-local. Each primitive retains its own harness projection and
 context-loading behavior.
 
+The harness instruction files are the one thing outside that lifecycle. They
+live where each harness looks for them — `~/.agents/AGENTS.md` and its
+per-harness counterparts — so they are installed by their own operation rather
+than by a scope of the desired state:
+
+```bash
+library harness sync [--dry-run] [--adopt]
+library harness audit
+```
+
+`sync` installs every target a `runtime-config` declares under
+`harness_instruction:`, preflighting all of them before writing any, and refuses
+an instruction file it did not write unless `--adopt` says otherwise. Every
+installed file must state the fallback rule pointing at the shared base; a
+source that drops it fails the sync instead of shipping a fleet whose members do
+not reference each other. `audit` reports drift per harness and exits 2 when it
+finds any.
+
 Strict dependencies come from typed `requires:` metadata and resolve
 transitively. Committed catalog entries use published HTTPS Git sources; a
 historical local-source lock entry is migration state and must not be treated as
