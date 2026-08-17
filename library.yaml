@@ -4361,13 +4361,11 @@ library:
           name: fhir-emission
         - type: standard
           name: fhir-ig-authoring
-        - type: agent
-          name: fhir-publication-reviewer
       metadata:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-          source_commit: 39dfddda
+          source_commit: 2f76a185
     - name: python-cli
       description: Shared development and testing baseline for Python CLI repositories.
       source: https://github.com/cognovis/library-core/blob/main/workspaces/python-cli.yaml
