@@ -1515,6 +1515,33 @@ library:
           inventory: convention-scan
           plane: dev
           steward: cognovis-core
+    - name: fhir-registry-research
+      description: >-
+        use when: checking whether a FHIR Implementation Guide or package already exists for a requirement before authoring new profiles, extensions, or terminology — searching the HL7 IG registry (registry.fhir.org) and the FHIR package registries (packages.fhir.org, packages2.fhir.org, packages.simplifier.net), evaluating candidates by canonical, FHIR version, maturity, and publisher, or answering "is there an IG for X" / "package vs IG". NOT for: authoring IG artifacts (use fhir-ig-development), installing packages into a server (use aidbox-ig-development), or mapping application data into installed profiles (use fhir-emission). boundary: this skill owns read-only pre-authoring discovery and returns a structured reuse verdict; fhir-ig-development starts only after this skill's verdict is author-new or derive.
+      source: https://github.com/cognovis/library-core/blob/main/skills/fhir-registry-research/SKILL.md
+      requires:
+        - standard:english-only
+        - standard:no-emoji
+      runtime_requirements:
+        binaries:
+          - uv
+      scripts:
+        - path: scripts/registry_search.py
+          role: helper
+          entrypoint: true
+          language: python
+          output_contract: json-envelope
+      tags:
+        - origin:original
+        - tier:domain
+        - fhir
+        - implementation-guide
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
+          steward: cognovis-core
     - name: file-inspect
       description: Analyze changed files in a git branch — list modified/added/deleted files, categorize by type (scripts/manifests/docs/other), detect embedded version numbers (SCRIPT_VERSION, $script:ModuleVersion, markdown Version:), and emit structured JSON for downstream tooling (changelog, release-prep, version-bumpers). Triggers on "what changed in this branch", "find files with versions", "categorize changes".
       source: https://github.com/cognovis/library-core/blob/main/skills/file-inspect/SKILL.md
