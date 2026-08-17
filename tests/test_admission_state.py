@@ -36,6 +36,9 @@ from lib.providers.inventory import (  # noqa: E402
     ProviderAvailability,
     Rights,
 )
+from lib.providers import admission as admission_module  # noqa: E402
+from lib.providers import rights as rights_module  # noqa: E402
+from lib.providers.rights import evaluate_projection  # noqa: E402
 
 PROVIDER = "provider-under-test"
 MIT = "upstream LICENSE (MIT), verified 2026-08-08"
@@ -591,51 +594,118 @@ def test_one_grant_governing_two_targets_records_both_of_its_states() -> None:
     assert "project_committed" in rendered and "machine_local" in rendered
 
 
-def test_only_a_denial_collapses_two_targets_into_one_record() -> None:
-    """Which grant states can collapse at all, checked rather than assumed.
+#: Every grant combination that produces a rights reason, so the sweep below is
+#: over the composition rather than over one interesting case.
+REASON_PRODUCING_GRANTS = {
+    "install denied": Rights(
+        fetch_authorization="granted",
+        install_rights="denied",
+        evidence_source="upstream terms forbid installation",
+    ),
+    "install unknown": UNRESOLVED,
+    "redistribution unknown": Rights(
+        fetch_authorization="granted",
+        install_rights="granted",
+        evidence_source=MIT,
+        grant_evidence={"redistribution_rights": "no grant located 2026-08-08"},
+    ),
+    "redistribution denied": Rights(
+        fetch_authorization="granted",
+        install_rights="granted",
+        redistribution_rights="denied",
+        evidence_source=MIT,
+    ),
+}
 
-    `evaluate_projection` resolves `license-unknown` and `redistribution-blocked`
-    as `blocked` for `project_committed` and `operator-opt-in-required` for every
-    other target, so the state is a function of the target and those two reasons
-    can never share a `(reason, state)` key in any grant combination. Only a
-    denial resolves both targets alike. This pins that reading, so a later change
-    to the composition that made another reason collapse arrives with the
-    all-targets detail already required.
+
+def _details_naming_every_covered_target(
+    rights: Rights, targets: tuple[str, ...]
+) -> list[str]:
+    """Assert the invariant on one grant combination and return its details.
+
+    The invariant is completeness, and it is checked against a grouping derived
+    here rather than against a hand-written expectation: every `(reason, state)`
+    some target resolves to produces exactly one record, and that record's detail
+    names exactly the targets that resolved to it, in target order.
     """
-    collapsing = {
-        "install denied": Rights(
-            fetch_authorization="granted",
-            install_rights="denied",
-            evidence_source="upstream terms forbid installation",
-        ),
-    }
-    separate = {
-        "install unknown": UNRESOLVED,
-        "redistribution unknown": Rights(
-            fetch_authorization="granted",
-            install_rights="granted",
-            evidence_source=MIT,
-            grant_evidence={"redistribution_rights": "no grant located 2026-08-08"},
-        ),
-        "redistribution denied": Rights(
-            fetch_authorization="granted",
-            install_rights="granted",
-            redistribution_rights="denied",
-            evidence_source=MIT,
-        ),
-    }
+    item = _item(rights=rights)
+    covered: dict[tuple[str, str], list[str]] = {}
+    for target in targets:
+        decision = evaluate_projection(
+            rights, target, subject=item.qualified_identity()
+        )
+        if decision.block_reason is None:
+            continue
+        covered.setdefault((decision.block_reason, decision.state), []).append(target)
 
-    for name, rights in collapsing.items():
-        reasons = evaluate_item(_item(rights=rights), AdmissionContext()).block_reasons
-        assert len(reasons) == 1, name
-        assert reasons[0].detail == "project_committed, machine_local: blocked", name
+    reasons = evaluate_item(item, AdmissionContext()).block_reasons
+    assert len(reasons) == len(covered)
+    for entry in reasons:
+        named, _, state = entry.detail.rpartition(": ")
+        assert (entry.reason, state) in covered, entry.detail
+        assert named.split(", ") == covered[(entry.reason, state)], entry.detail
+        # `describe` is what every surface prints, so the completeness has to
+        # survive rendering rather than living only in the record.
+        rendered = entry.describe()
+        for target in covered[(entry.reason, state)]:
+            assert target in rendered
+    return [entry.detail for entry in reasons]
 
-    for name, rights in separate.items():
-        reasons = evaluate_item(_item(rights=rights), AdmissionContext()).block_reasons
-        assert [entry.detail for entry in reasons] == [
+
+def test_every_record_names_all_the_targets_it_covers() -> None:
+    """Completeness of the record, over every grant that produces a reason.
+
+    The property is not which reason happens to collapse -- that is a fact about
+    the current target vocabulary and about nothing else. It is that a record
+    covering several targets names all of them, because `describe` renders the
+    detail to callers that each asked about a different target, and a detail
+    naming one target describes a caller other than the one reading it.
+    """
+    for name, rights in REASON_PRODUCING_GRANTS.items():
+        details = _details_naming_every_covered_target(
+            rights, ("project_committed", "machine_local")
+        )
+        assert details, name
+
+
+def test_a_second_non_committed_target_collapses_the_opt_in_reasons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The exclusivity this test used to claim, disproved by execution.
+
+    It read as "only `license-denied` can collapse", on the argument that
+    `evaluate_projection` resolves `license-unknown` and `redistribution-blocked`
+    to `blocked` for `project_committed` and `operator-opt-in-required` otherwise,
+    so their state is a function of the target. That argument silently assumed
+    there are exactly two targets: the composition maps *every* non-committed
+    target to `operator-opt-in-required`, so a second one collapses those two
+    reasons as well. The grouping already handled it; only the claim was wrong.
+    """
+    three_targets = ("project_committed", "machine_local", "sandbox_local")
+    # `admission` and `rights` each do `from .inventory import PROJECTION_TARGETS`,
+    # so the name each reads is its own module attribute. Patching
+    # `inventory.PROJECTION_TARGETS` alone would leave both of them iterating the
+    # two-target tuple and this test would pass without ever exercising a third
+    # target -- a silent no-op. Both readers are patched, and both are needed:
+    # `admission` walks the targets, `rights` validates each one it is handed and
+    # would raise on `sandbox_local` otherwise.
+    monkeypatch.setattr(admission_module, "PROJECTION_TARGETS", three_targets)
+    monkeypatch.setattr(rights_module, "PROJECTION_TARGETS", three_targets)
+
+    for name in ("install unknown", "redistribution unknown", "redistribution denied"):
+        details = _details_naming_every_covered_target(
+            REASON_PRODUCING_GRANTS[name], three_targets
+        )
+        assert details == [
             "project_committed: blocked",
-            "machine_local: operator-opt-in-required",
+            "machine_local, sandbox_local: operator-opt-in-required",
         ], name
+
+    # A denial still collapses every target into one record: it is one case of
+    # the invariant, not the boundary of it.
+    assert _details_naming_every_covered_target(
+        REASON_PRODUCING_GRANTS["install denied"], three_targets
+    ) == ["project_committed, machine_local, sandbox_local: blocked"]
 
 
 def test_a_named_target_is_judged_about_that_target() -> None:

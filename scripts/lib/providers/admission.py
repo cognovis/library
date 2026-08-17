@@ -209,13 +209,22 @@ def _rights_reasons(item: NormalizedItem) -> list[BlockReason]:
     facts, and keying on the string alone kept whichever target was walked first
     and silently discarded the opt-in path a caller could still take.
 
-    Where several targets *do* collapse into one record -- `install_rights:
-    denied`, where both really are blocked -- the record names **every** target
-    it covers. A detail that named only the first one described a target the
-    caller may not have asked about while staying silent about the one they did,
-    and `describe` renders that detail. The record is the thing that has to be
-    complete, because every surface reads it: the inventory listing renders the
-    same line the install refusal does, and neither knows what the other asked.
+    Where several targets *do* resolve alike they collapse into one record, and
+    the invariant that holds is: **every record names every target it covers**,
+    whatever the target vocabulary is. A detail that named only the first target
+    described one the caller may not have asked about while staying silent about
+    the one they did, and `describe` renders that detail. The record is the thing
+    that has to be complete, because every surface reads it: the inventory
+    listing renders the same line the install refusal does, and neither knows
+    what the other asked.
+
+    Under today's two targets `install_rights: denied` is an example of such a
+    collapse -- both are `blocked` -- but it is an example, not the only case.
+    `evaluate_projection` resolves `license-unknown` and `redistribution-blocked`
+    to `operator-opt-in-required` for *every* target that is not
+    `project_committed`, so a third such target collapses those two reasons as
+    well. Nothing here constrains `PROJECTION_TARGETS`, and the completeness of
+    the record is exactly the property that does not depend on it.
     """
     targets_for: dict[tuple[str, str], list[str]] = {}
     governing: dict[tuple[str, str], RightsDecision] = {}

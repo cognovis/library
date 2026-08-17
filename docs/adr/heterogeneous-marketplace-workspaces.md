@@ -365,11 +365,17 @@ A block reason is recorded per governing grant *and per resolved state*, because
 one grant resolves the two targets differently — `install_rights: unknown`
 blocks a committed projection while leaving a machine-local opt-in open, and
 recording only the first of those hid the open path from every caller. Where
-several targets do resolve alike and collapse into one record — `install_rights:
-denied` is the only such case under this composition — that record names every
-target it covers. The record has to be complete rather than correct-for-one-
-caller: the inventory listing renders the same record the install refusal does,
-and neither knows which target the other asked about.
+several targets do resolve alike they collapse into one record, and the
+guarantee is that **every record names every target it covers**, whatever the
+target vocabulary is. The record has to be complete rather than
+correct-for-one-caller: the inventory listing renders the same record the
+install refusal does, and neither knows which target the other asked about.
+Under the two targets recorded here `install_rights: denied` is an example of
+such a collapse, but not the only possible one — `license-unknown` and
+`redistribution-blocked` resolve to `operator-opt-in-required` for every target
+that is not `project_committed`, so adding a second non-committed target
+collapses those two as well. The completeness of the record is what holds
+across any target vocabulary; no exclusivity is claimed for one reason.
 
 `block_reasons` entries are stored as typed records carrying `reason`, an
 `evidence` observation, its named `source`, and an optional `detail`, per this
