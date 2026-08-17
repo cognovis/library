@@ -412,7 +412,6 @@ def test_regression_cld_bead_modes_use_current_core_authority(
     assert "agents/bead-implementer.md" in prompt
     assert "revision-bound source files supersede same-named home-scoped projections" in prompt
     assert "stale home projection" not in prompt
-    assert "installed bead-implementation-loop" not in prompt
     if execution_mode == "quick":
         assert "unconditional explicit Quick" in prompt
         # CL-3gdz: -bq forces the quick tier unconditionally, bypassing the

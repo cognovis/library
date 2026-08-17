@@ -207,7 +207,7 @@ The following are NOT part of this bead or cookbook:
   for presenting them to users is a follow-up bead.
 - **Removing or updating a server registration** — out of scope for the
   project-local lifecycle. `library bootstrap install` owns only OpenBrain;
-  `library mcp remove <name> --scope project` is legacy lock cleanup only.
+  `library mcp remove <name>` is legacy lock cleanup only.
 
 ## Reference
 

@@ -82,8 +82,8 @@ def test_bootstrap_documents_the_installed_cli_contract() -> None:
     normalized_readme = " ".join(readme.split())
     bootstrap_docs = "\n".join((readme, skill, *cookbooks.values()))
 
-    assert "library workspace status --all --scope project" in readme
-    assert "library workspace sync --all --scope project" in readme
+    assert "library workspace status --all" in readme
+    assert "library workspace sync --all" in readme
     assert "library skill list" in readme
     assert "library audit" in readme
     assert "target interface until" not in readme

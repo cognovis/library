@@ -32,7 +32,7 @@ agent file. The corresponding rules for the **orchestrator** session live in
 the [system-prompt](system-prompt.md) override mechanism instead.
 
 **Storage.** `.agents/agent-bases/<name>.md` (project-local) or
-`~/.agents/agent-bases/<name>.md` (user-global).
+`~/.agents/agent-bases/<name>.md` (home-scoped).
 
 **Loading.** Agent-bases are not runtime tools and are not auto-selected by the
 model. The Library composer reads them during agent install/sync and writes the

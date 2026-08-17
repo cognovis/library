@@ -54,10 +54,6 @@ export function resolveRoleSystemPrompt(worktree: string, role: string): string 
   return fs.readFileSync(resolved, "utf8");
 }
 
-export function resolveOwnerSystemPrompt(worktree: string): string {
-  return resolveRoleSystemPrompt(worktree, "bead-loop-implementer");
-}
-
 export function preflightRoleSystemPrompts(
   worktree: string,
   profile: ReturnType<typeof loadBeadHarnessProfile>,

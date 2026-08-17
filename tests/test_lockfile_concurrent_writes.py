@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CL-1f36 — the global lock must survive concurrent Library writers.
 
-During the clc-w520 deploy a `library agent sync --scope global --harness codex`
+During the clc-w520 deploy a scope-selecting `library agent sync --harness codex`
 ran while a second Library process installed into the same
 `~/.config/library/global.lock`. Every writer performed an unguarded
 load-modify-save and rewrote the file through a truncating `open(path, "w")`,
@@ -238,10 +238,10 @@ def _start_competing_installer(
 
 
 @pytest.mark.parametrize("attempt", range(3))
-def test_multi_agent_global_sync_is_rejected_before_mutation(
+def test_multi_agent_scoped_sync_is_rejected_before_mutation(
     tmp_path: Path, attempt: int
 ) -> None:
-    """Retired global lifecycle commands fail before starting concurrent work."""
+    """A scope-selecting lifecycle command fails before starting concurrent work."""
     home = tmp_path / "home"
     home.mkdir()
     project = _write_fixture_project(tmp_path)
@@ -262,7 +262,10 @@ def test_multi_agent_global_sync_is_rejected_before_mutation(
     assert synced.returncode == 1, synced.stderr or synced.stdout
     assert json.loads(synced.stdout) == {
         "status": "error",
-        "message": "Global Library desired state is not supported; use the current Git repository.",
+        "message": (
+            "`--scope` is not a Library option: Library manages the current Git "
+            "repository only. Re-run the command without `--scope`."
+        ),
         "exit_code": 1,
     }
     assert not lock_path.exists()

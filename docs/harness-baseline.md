@@ -36,8 +36,7 @@ restricted to repository-local desired state by ADR-0012.
 
 Workspace manifests themselves remain versioned catalog content and are not
 copied into the consumer repository. A clone restores the selected roots through
-`library workspace sync --all --scope project` or conservative `library sync`;
-`--scope project` is compatibility syntax under ADR-0012.
+`library workspace sync --all` or conservative `library sync`.
 The project may add direct primitive roots that intentionally survive Workspace
 changes.
 
@@ -112,11 +111,11 @@ managed ignore block.
 
 **MUST NOT be committed:**
 
-Codex stores credentials user-global in `~/.codex/auth.json`. There is no documented
+Codex stores credentials in the machine-wide `~/.codex/auth.json`. There is no documented
 project-local secret file for Codex today — no gitignore entries required for credentials.
 
 
-## Project-Local vs User-Global Separation
+## Project-Local vs Home-Scoped Separation
 
 **Project-local** (`.claude/`, `.agents/`, `.codex/`, and Pi project paths) is anything
 the whole team needs to collaborate effectively.
@@ -127,8 +126,9 @@ the whole team needs to collaborate effectively.
   their exact receipt paths; parent harness directories are not ignored wholesale.
 - Ephemeral state and secret-bearing overrides are gitignored.
 
-**User-global** (`~/.claude/`, `~/.agents/`, `~/.codex/`) is personal,
-machine-specific, and never shared.
+**Home-scoped** (`~/.claude/`, `~/.agents/`, `~/.codex/`) is personal,
+machine-specific, and never shared. Library does not write desired state there;
+only the enumerated Bootstrap touches it.
 
 - OAuth tokens, API keys, and other credentials
 - Personal MCP server configuration

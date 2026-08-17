@@ -15,7 +15,7 @@
 ## Overview
 
 Library lockfiles record repository-local Library intent and materialized state.
-The historical global lock is migration inventory only; no current lifecycle
+The historical machine-wide lock is migration inventory only; no lifecycle
 command creates or reconciles it. They provide:
 
 - **Reproducibility**: any clone of the project can restore the locked roots and
@@ -71,7 +71,7 @@ project-owned `receipts[].targets[].path`. Its Git top-level, project root,
 lockfile root, and `.gitignore` root are identical. This restriction does not
 remove legacy lock support from unrelated Library commands.
 
-### Historical global lockfile
+### Historical machine-wide lockfile
 
 `~/.config/library/global.lock` is read-only migration inventory. It grants no
 desired-state authority and is never created, written, or reconciled by current
@@ -81,8 +81,8 @@ in `~/.config/library/bootstrap.json`.
 ### Concurrent writers
 
 The project lockfile and the separate bootstrap manifest are shared mutable
-state. Historical global lockfiles remain read-only migration inventory; no
-public lifecycle command writes them. CL-1f36 recorded the cost of concurrent
+state. Historical machine-wide lockfiles are read-only migration inventory; no public
+lifecycle command writes them. CL-1f36 recorded the cost of concurrent
 writers before the project-only contract — interleaved YAML, a half-written
 `install_timestamp` inside another entry's target list, and 24 of 27 sync
 entries failing with "Invalid YAML".
@@ -114,11 +114,12 @@ The public MCP registration lifecycle is retired. `library mcp use <name>`
 returns a typed error before it reads or writes desired state, including during a
 dry run. `library bootstrap install` is the sole supported registration owner:
 it manages the enumerated OpenBrain singleton in its product manifest and never
-creates a global lockfile.
+creates a lockfile outside the repository.
 
-`library mcp remove <name> --scope project` remains a migration-only exception.
-It removes only a matching legacy project-lock record and never unregisters a
-harness, stops a service, or changes global state. All other MCP removal forms,
+`library mcp remove <name>` is a migration-only exception. It removes only a
+matching legacy project-lock record and never unregisters a harness, stops a
+service, or changes machine-wide state; with no such record it reports the
+retired lifecycle instead. All other MCP removal forms,
 including an explicit global scope, return the same typed retirement error.
 
 ---
@@ -126,8 +127,8 @@ including an explicit global scope, return the same typed retirement error.
 ## Schema v2 Target Format
 
 The current write format remains YAML at the repository-local `.library.lock`.
-Historical global lockfiles are migration inventory only and are not a Schema v2
-write location. Schema v2 separates user intent from materialized state:
+Historical machine-wide lockfiles are migration inventory only and are not a
+Schema v2 write location. Schema v2 separates user intent from materialized state:
 
 ```yaml
 schema_version: 2
@@ -419,7 +420,7 @@ trusted from the plan that produced it. A prune plan that records no resolved
 catalog closure is refused outright, because a plan carrying no ownership
 evidence must not be read as one whose owners are all registered.
 
-If journal replay encounters drift, `library workspace recover --scope <scope>`
+If journal replay encounters drift, `library workspace recover`
 reports the journal digest and makes no further changes. An operator may repair
 the drift and retry, or explicitly discard only that journal with
 `--discard --acknowledge-plan <journal-digest>`. Discarding never deletes the
@@ -696,7 +697,7 @@ For each entry in `installed`:
 5. Compare against `checksum_sha256`. Report `clean`, `drift`, or `unknown` per entry.
 6. Compare `catalog_identity` with the audited catalog. A matching identity whose
    catalog no longer lists the entry is `orphaned` and includes the exact
-   `library {primitive} remove {name} --scope {scope}` command. A different
+   `library {primitive} remove {name}` command. A different
    identity is `foreign` and is not reported as orphaned. A legacy entry without
    identity is informationally `undetermined` and is never accused of being orphaned.
 

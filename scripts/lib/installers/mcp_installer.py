@@ -22,6 +22,7 @@ from ..catalog import get_catalog_identity, lookup_entry
 from ..errors import InstallError
 from ..lockfile import (
     find_lockfile,
+    get_entry,
     load_lockfile,
     lockfile_transaction,
     make_entry,
@@ -64,8 +65,8 @@ def require_global_mcp_scope(scope: str, operation: str) -> None:
     if scope != "global":
         raise InstallError(
             f"Cannot {operation} a project-scoped MCP registration because harness "
-            "configuration is user-global. Use `library mcp remove <name> --scope "
-            "project` only to clean a legacy project lock record."
+            "MCP configuration is a machine-wide file Library does not own. Use "
+            "`library mcp remove <name>` only to clean a legacy project lock record."
         )
 
 
@@ -857,12 +858,26 @@ def remove_mcp(
                 os.environ[k] = v
 
 
+def has_project_mcp_lock_record(name: str, repo_root: Path) -> bool:
+    """Report whether the repository lockfile still carries a legacy MCP record.
+
+    `library mcp remove` is the one MCP verb that still does something: it
+    cleans up a lock record left behind by the retired registration lifecycle.
+    Without such a record there is nothing to remove, and the verb reports the
+    retirement instead.
+    """
+    lockfile_path = find_lockfile(repo_root, global_scope=False)
+    if not lockfile_path.exists():
+        return False
+    return get_entry(load_lockfile(lockfile_path), name, primitive_type="mcp") is not None
+
+
 def remove_project_mcp_lock_record(
     name: str,
     repo_root: Path,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Remove one legacy project MCP lock record without touching global state."""
+    """Remove one legacy project MCP lock record."""
     lockfile_path = find_lockfile(repo_root, global_scope=False)
     operation = {
         "operation": "remove_lockfile_entry",

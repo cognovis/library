@@ -36,7 +36,7 @@ separate from the target catalog or project where content is installed.
 | Which design decisions were made and why? | `docs/adr/` | matching ADR filename |
 | How do external marketplaces, rights, foreign caching, and cross-catalog Workspaces work? | `docs/adr/heterogeneous-marketplace-workspaces.md` | ADR-0011 |
 | Is Runbook a primitive? Is the Workflow executor moving to Pi? | `docs/adr/heterogeneous-marketplace-workspaces.md` | **Primitive and Projection Boundaries** — both answered NO, on recorded evidence |
-| Name collisions, project-local vs. global precedence | `docs/policy/name-collision.md` | — |
+| Name collisions, project-local vs. home-scoped precedence | `docs/policy/name-collision.md` | — |
 | How does `library.yaml` / lockfile work? | `docs/lockfile-format.md` | — |
 | Tooling and install scripts | `docs/project-tooling.md` | — |
 | How standards dependencies work | `docs/PRIMITIVES.md` | `### 7. Standard` |

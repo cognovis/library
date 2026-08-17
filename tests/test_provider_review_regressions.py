@@ -741,7 +741,7 @@ def test_f2_the_workspace_write_path_refuses_bytes_the_gate_did_not_admit(
     environment["HOME"] = str(home)
     baseline = subprocess.run(
         [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:engineering",
-         "--scope", "project", "--json"],
+         "--json"],
         cwd=project,
         env=environment,
         capture_output=True,
@@ -803,7 +803,7 @@ def test_f2_the_recorded_residual_is_closed_by_publication(tmp_path: Path) -> No
 
     installed = subprocess.run(
         [sys.executable, str(LIBRARY_PY), "workspace", "use", "team-core:engineering",
-         "--scope", "project", "--json"],
+         "--json"],
         cwd=project,
         env=environment,
         capture_output=True,

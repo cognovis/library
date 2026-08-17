@@ -222,8 +222,7 @@ def test_a_v2_manifest_whose_source_cannot_answer_refuses_and_writes_nothing(
     assert validated.returncode == 0, validated.stderr or validated.stdout
 
     used = _run(
-        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
-        "--json",
+        project, home, "workspace", "use", "team-core:engineering", "--json",
     )
 
     assert used.returncode != 0
@@ -248,8 +247,7 @@ def test_a_verified_pin_installs_a_v2_workspace(tmp_path: Path) -> None:
     _pin_manifest_to_sources(project, manifest_path)
 
     used = _run(
-        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
-        "--json",
+        project, home, "workspace", "use", "team-core:engineering", "--json",
     )
 
     assert used.returncode == 0, used.stdout + used.stderr
@@ -279,8 +277,7 @@ def test_a_source_moving_after_the_pin_still_installs_the_pinned_bytes(
     )
 
     used = _run(
-        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
-        "--json",
+        project, home, "workspace", "use", "team-core:engineering", "--json",
     )
 
     assert used.returncode == 0, used.stdout + used.stderr
@@ -316,8 +313,6 @@ def test_regression_repeated_use_preserves_lock_when_checkout_is_ahead_of_pin(
         "workspace",
         "use",
         "team-core:engineering",
-        "--scope",
-        "project",
         "--json",
     )
     assert first.returncode == 0, first.stdout + first.stderr
@@ -336,8 +331,6 @@ def test_regression_repeated_use_preserves_lock_when_checkout_is_ahead_of_pin(
         "workspace",
         "use",
         "team-core:engineering",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -365,8 +358,6 @@ def test_regression_workspace_cache_paths_follow_pins_not_consumer_revisions(
         "workspace",
         "use",
         "team-core:engineering",
-        "--scope",
-        "project",
         "--json",
     )
     assert first.returncode == 0, first.stdout + first.stderr
@@ -401,8 +392,6 @@ def test_regression_workspace_cache_paths_follow_pins_not_consumer_revisions(
         "workspace",
         "use",
         "team-core:engineering",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -444,8 +433,6 @@ def test_regression_workspace_refuses_tampered_pinned_cache(tmp_path: Path) -> N
         "workspace",
         "use",
         "team-core:engineering",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -468,8 +455,7 @@ def test_an_unknown_declared_commit_is_refused_before_mutation(tmp_path: Path) -
     (project / "library.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
 
     used = _run(
-        project, home, "workspace", "use", "team-core:engineering", "--scope", "project",
-        "--json",
+        project, home, "workspace", "use", "team-core:engineering", "--json",
     )
 
     assert used.returncode != 0

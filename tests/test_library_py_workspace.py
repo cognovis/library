@@ -35,15 +35,17 @@ def test_platform_catalog_publishes_operational_python_cli_workspace() -> None:
     closure = resolve_workspace_closure(catalog, workspace, REPO_ROOT, "project")
 
     assert workspace.version == "0.1.0"
+    # english-only and no-emoji are owned members, not prerequisites: since the
+    # CL-9yok recut nothing in this closure is satisfied from outside the
+    # repository, so it carries no prerequisite at all.
     assert set(closure.artifacts) == {
         ("skill", "python-dev"),
         ("skill", "python-test"),
-        ("standard", "python-cli-patterns"),
-    }
-    assert set(closure.prerequisites) == {
         ("standard", "english-only"),
         ("standard", "no-emoji"),
+        ("standard", "python-cli-patterns"),
     }
+    assert set(closure.prerequisites) == set()
 
 
 def test_source_bound_lookup_normalizes_missing_metadata_to_unbound() -> None:
@@ -187,8 +189,6 @@ def test_workspace_discovery_validation_and_dry_run_are_read_only(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--dry-run",
         "--json",
     )
@@ -229,8 +229,6 @@ def test_workspace_use_registers_one_root_and_materializes_members(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "all",
         "--json",
@@ -256,8 +254,6 @@ def test_workspace_use_registers_one_root_and_materializes_members(
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--json",
     )
     assert status.returncode == 0, status.stderr or status.stdout
@@ -276,8 +272,6 @@ def test_regression_workspace_status_lists_registered_roots(tmp_path: Path) -> N
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "all",
         "--json",
@@ -290,8 +284,6 @@ def test_regression_workspace_status_lists_registered_roots(tmp_path: Path) -> N
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--json",
     )
     status_human = _run(
@@ -300,8 +292,6 @@ def test_regression_workspace_status_lists_registered_roots(tmp_path: Path) -> N
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
     )
 
     assert status_json.returncode == status_human.returncode == 0
@@ -364,8 +354,6 @@ def test_workspace_use_blocks_foreign_target_before_any_install(tmp_path: Path) 
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -405,8 +393,6 @@ def test_workspace_use_refuses_a_symlinked_rollback_root_before_any_write(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -449,8 +435,6 @@ def test_workspace_use_replaces_only_byte_exact_catalog_content(tmp_path: Path) 
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--replace-with-catalog-content",
@@ -484,8 +468,6 @@ def test_workspace_use_replace_flag_still_blocks_different_content(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--replace-with-catalog-content",
@@ -536,8 +518,6 @@ def test_workspace_install_remains_bound_to_its_catalog_when_names_collide(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -568,8 +548,6 @@ def test_named_remove_preserves_workspace_reachable_receipt(tmp_path: Path) -> N
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -582,8 +560,6 @@ def test_named_remove_preserves_workspace_reachable_receipt(tmp_path: Path) -> N
         "skill",
         "remove",
         "python-dev",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -610,8 +586,6 @@ def test_named_remove_preserves_targetless_workspace_reachable_receipt(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -631,8 +605,6 @@ def test_named_remove_preserves_targetless_workspace_reachable_receipt(
         "skill",
         "remove",
         "python-dev",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -658,8 +630,6 @@ def test_unrelated_catalog_orphan_does_not_block_named_remove(tmp_path: Path) ->
             "skill",
             "use",
             name,
-            "--scope",
-            "project",
             "--harness",
             "codex",
             "--json",
@@ -678,8 +648,6 @@ def test_unrelated_catalog_orphan_does_not_block_named_remove(tmp_path: Path) ->
         "skill",
         "remove",
         "python-test",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -705,8 +673,6 @@ def test_unverified_catalog_orphan_remove_retains_filesystem_content(
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -728,8 +694,6 @@ def test_unverified_catalog_orphan_remove_retains_filesystem_content(
         "skill",
         "remove",
         "python-dev",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -758,8 +722,6 @@ def test_targetless_catalog_orphan_remove_retains_filesystem_content(
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -783,8 +745,6 @@ def test_targetless_catalog_orphan_remove_retains_filesystem_content(
         "skill",
         "remove",
         "python-dev",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -809,8 +769,6 @@ def test_named_remove_blocks_drift_without_mutating_lock_or_files(
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -826,8 +784,6 @@ def test_named_remove_blocks_drift_without_mutating_lock_or_files(
         "skill",
         "remove",
         "python-dev",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -852,8 +808,6 @@ def test_preexisting_project_direct_root_survives_workspace_reconciliation(
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -865,8 +819,6 @@ def test_preexisting_project_direct_root_survives_workspace_reconciliation(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -903,8 +855,6 @@ def test_workspace_status_survives_project_relocation(tmp_path: Path) -> None:
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "all",
         "--json",
@@ -918,8 +868,6 @@ def test_workspace_status_survives_project_relocation(tmp_path: Path) -> None:
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -950,8 +898,6 @@ def test_workspace_status_uses_tool_catalog_when_consumer_is_also_a_catalog(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--target-project",
         str(consumer),
         "--harness",
@@ -978,8 +924,6 @@ def test_workspace_status_uses_tool_catalog_when_consumer_is_also_a_catalog(
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -995,8 +939,6 @@ def test_workspace_status_uses_tool_catalog_when_consumer_is_also_a_catalog(
         "workspace",
         "sync",
         "--all",
-        "--scope",
-        "project",
         "--json",
     )
     assert synced.returncode == 0, synced.stderr or synced.stdout
@@ -1009,8 +951,6 @@ def test_workspace_status_uses_tool_catalog_when_consumer_is_also_a_catalog(
         "workspace",
         "remove",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--json",
     )
     assert removed.returncode == 0, removed.stderr or removed.stdout
@@ -1036,8 +976,6 @@ def test_top_level_force_sync_preserves_workspace_requested_intent(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "all",
         "--json",
@@ -1049,8 +987,6 @@ def test_top_level_force_sync_preserves_workspace_requested_intent(
         home,
         "sync",
         "--force",
-        "--scope",
-        "project",
         "--project",
         str(project),
         "--harness",
@@ -1081,8 +1017,6 @@ def test_verify_receipts_reinstalls_migrated_direct_roots_without_a_workspace(
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1099,8 +1033,6 @@ def test_verify_receipts_reinstalls_migrated_direct_roots_without_a_workspace(
         "workspace",
         "sync",
         "--all",
-        "--scope",
-        "project",
         "--verify-receipts",
         "--harness",
         "codex",
@@ -1130,8 +1062,6 @@ def test_workspace_status_reports_filesystem_drift_and_catalog_updates(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1146,8 +1076,6 @@ def test_workspace_status_reports_filesystem_drift_and_catalog_updates(
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--json",
     )
     assert drifted.returncode == 3
@@ -1163,8 +1091,6 @@ def test_workspace_status_reports_filesystem_drift_and_catalog_updates(
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--json",
     )
     assert update.returncode == 2, update.stderr or update.stdout
@@ -1185,8 +1111,6 @@ def test_workspace_status_human_output_explains_protected_migration(
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1203,14 +1127,12 @@ def test_workspace_status_human_output_explains_protected_migration(
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
     )
 
     assert status.returncode == 3
     assert "protected:" in status.stdout
     assert "skill:python-dev" in status.stdout
-    assert "workspace sync --all --scope project --verify-receipts" in status.stdout
+    assert "workspace sync --all --verify-receipts" in status.stdout
 
 
 def test_workspace_status_preflights_collision_for_missing_receipt(
@@ -1227,8 +1149,6 @@ def test_workspace_status_preflights_collision_for_missing_receipt(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1252,8 +1172,6 @@ def test_workspace_status_preflights_collision_for_missing_receipt(
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1279,8 +1197,6 @@ def test_workspace_status_surfaces_direct_root_adoption_candidate(
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1292,8 +1208,6 @@ def test_workspace_status_surfaces_direct_root_adoption_candidate(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1306,8 +1220,6 @@ def test_workspace_status_surfaces_direct_root_adoption_candidate(
         "workspace",
         "status",
         "--all",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1330,8 +1242,6 @@ def test_verify_receipts_obeys_workspace_write_lock(tmp_path: Path) -> None:
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1352,8 +1262,6 @@ def test_verify_receipts_obeys_workspace_write_lock(tmp_path: Path) -> None:
             "workspace",
             "sync",
             "--all",
-            "--scope",
-            "project",
             "--verify-receipts",
             "--harness",
             "codex",
@@ -1389,8 +1297,6 @@ def test_workspace_use_fails_before_mutation_when_global_prerequisite_is_missing
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1452,8 +1358,6 @@ def test_workspace_use_rejects_incompatible_global_prerequisite_version(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1527,8 +1431,6 @@ def test_filesystem_adoption_verifies_exact_receipt_and_definition_pin(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1545,8 +1447,6 @@ def test_filesystem_adoption_verifies_exact_receipt_and_definition_pin(
         "skill:python-dev",
         "--definition-commit",
         definition_commit,
-        "--scope",
-        "project",
         "--json",
     )
 
@@ -1571,8 +1471,6 @@ def test_actual_prune_preserves_receipt_owned_by_a_direct_root(tmp_path: Path) -
         "skill",
         "use",
         "python-dev",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1584,8 +1482,6 @@ def test_actual_prune_preserves_receipt_owned_by_a_direct_root(tmp_path: Path) -
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -1597,8 +1493,6 @@ def test_actual_prune_preserves_receipt_owned_by_a_direct_root(tmp_path: Path) -
         "workspace",
         "remove",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--json",
     )
     assert removed.returncode == 0, removed.stderr or removed.stdout
@@ -1608,8 +1502,6 @@ def test_actual_prune_preserves_receipt_owned_by_a_direct_root(tmp_path: Path) -
         "workspace",
         "sync",
         "--all",
-        "--scope",
-        "project",
         "--prune",
         "--json",
     )
@@ -1621,8 +1513,6 @@ def test_actual_prune_preserves_receipt_owned_by_a_direct_root(tmp_path: Path) -
         "workspace",
         "sync",
         "--all",
-        "--scope",
-        "project",
         "--prune",
         "--apply",
         "--acknowledge-plan",
@@ -2246,8 +2136,6 @@ def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(
         "workspace",
         "use",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--harness",
         "codex",
         "--json",
@@ -2262,8 +2150,6 @@ def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(
         "workspace",
         "remove",
         "team-core:python-cli",
-        "--scope",
-        "project",
         "--json",
     )
     preview = _run(
@@ -2272,8 +2158,6 @@ def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(
         "workspace",
         "sync",
         "--all",
-        "--scope",
-        "project",
         "--prune",
         "--json",
     )
@@ -2286,8 +2170,6 @@ def test_workspace_remove_then_prune_blocks_unrecorded_nested_content(
         "workspace",
         "sync",
         "--all",
-        "--scope",
-        "project",
         "--prune",
         "--apply",
         "--acknowledge-plan",

@@ -456,7 +456,7 @@ def test_sync_rejects_invalid_authoritative_inventory_before_mutation(
     _git(repo, "add", "tracked.txt")
     index_before = _git(repo, "ls-files", "--stage").stdout
 
-    result = _run_library(repo, "sync", "--scope", "project", "--untrack", "--json")
+    result = _run_library(repo, "sync", "--untrack", "--json")
 
     assert result.returncode != 0
     assert message in json.loads(result.stdout)["message"]
@@ -562,7 +562,7 @@ def test_sync_writes_lock_artifacts_and_current_project_targets(tmp_path: Path) 
         ],
     )
 
-    result = _run_library(repo, "sync", "--scope", "project", "--json")
+    result = _run_library(repo, "sync", "--json")
 
     assert result.returncode == 0
     payload = json.loads(result.stdout)
@@ -673,12 +673,12 @@ def test_tracked_paths_warn_without_untracking_and_dry_run_is_immutable(
     _git(repo, "add", ".agents/skills/tracked/SKILL.md")
     before_index = _git(repo, "ls-files").stdout
 
-    result = _run_library(repo, "sync", "--scope", "project", "--json")
+    result = _run_library(repo, "sync", "--json")
     payload = json.loads(result.stdout)
     after_normal = _git(repo, "ls-files").stdout
-    human = _run_library(repo, "sync", "--scope", "project")
+    human = _run_library(repo, "sync")
     gitignore_before_dry_run = (repo / ".gitignore").read_text(encoding="utf-8")
-    dry_run = _run_library(repo, "sync", "--scope", "project", "--dry-run", "--json")
+    dry_run = _run_library(repo, "sync", "--dry-run", "--json")
 
     assert result.returncode == 0
     assert payload["gitignore"]["tracked_paths"] == [".agents/skills/tracked/SKILL.md"]
@@ -714,7 +714,7 @@ def test_untrack_removes_managed_paths_from_index_but_keeps_files(
     )
     _git(repo, "add", ".agents/skills/tracked/SKILL.md", "README.md")
 
-    result = _run_library(repo, "sync", "--scope", "project", "--untrack", "--json")
+    result = _run_library(repo, "sync", "--untrack", "--json")
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
@@ -764,7 +764,7 @@ def test_mira_shaped_migration_preserves_repository_owned_skill(
     ]
     _git(repo, "add", "-f", "--", *tracked_before)
 
-    normal = _run_library(repo, "sync", "--scope", "project", "--json")
+    normal = _run_library(repo, "sync", "--json")
 
     assert normal.returncode == 0, normal.stderr
     normal_payload = json.loads(normal.stdout)
@@ -777,7 +777,7 @@ def test_mira_shaped_migration_preserves_repository_owned_skill(
     assert _git(repo, "ls-files").stdout.splitlines() == tracked_before
 
     migrated = _run_library(
-        repo, "sync", "--scope", "project", "--untrack", "--json"
+        repo, "sync", "--untrack", "--json"
     )
 
     assert migrated.returncode == 0, migrated.stderr
@@ -988,7 +988,7 @@ def test_sync_uses_receipt_targets_when_installed_projection_is_empty(
     ]
     _git(repo, "add", "-f", "--", *tracked_files)
 
-    warning_result = _run_library(repo, "sync", "--scope", "project", "--json")
+    warning_result = _run_library(repo, "sync", "--json")
 
     assert warning_result.returncode == 0, warning_result.stderr
     warning_payload = json.loads(warning_result.stdout)
@@ -1001,7 +1001,7 @@ def test_sync_uses_receipt_targets_when_installed_projection_is_empty(
     assert any("--untrack" in warning for warning in warning_payload["warnings"])
 
     untrack_result = _run_library(
-        repo, "sync", "--scope", "project", "--untrack", "--json"
+        repo, "sync", "--untrack", "--json"
     )
 
     assert untrack_result.returncode == 0, untrack_result.stderr
@@ -1185,7 +1185,7 @@ def test_unsafe_line_break_paths_fail_before_gitignore_or_index_mutation(
         ],
     )
 
-    result = _run_library(repo, "sync", "--scope", "project", "--untrack", "--json")
+    result = _run_library(repo, "sync", "--untrack", "--json")
 
     assert result.returncode != 0
     payload = json.loads(result.stdout)
@@ -1196,7 +1196,7 @@ def test_unsafe_line_break_paths_fail_before_gitignore_or_index_mutation(
     assert _git(repo, "ls-files", "--stage").stdout == index_before
     assert tracked.exists()
 
-    human = _run_library(repo, "sync", "--scope", "project", "--untrack")
+    human = _run_library(repo, "sync", "--untrack")
 
     assert human.returncode != 0
     assert reason in human.stderr
@@ -1294,8 +1294,8 @@ def test_sync_manages_literal_tilde_username_receipt_targets(
     )
     _git(repo, "add", "-f", "--", f":(top,literal){literal_file}", "README.md")
 
-    warning = _run_library(repo, "sync", "--scope", "project", "--json")
-    human = _run_library(repo, "sync", "--scope", "project")
+    warning = _run_library(repo, "sync", "--json")
+    human = _run_library(repo, "sync")
 
     assert warning.returncode == 0, warning.stderr
     warning_payload = json.loads(warning.stdout)
@@ -1307,7 +1307,7 @@ def test_sync_manages_literal_tilde_username_receipt_targets(
     assert "--untrack" in human.stdout
 
     untrack = _run_library(
-        repo, "sync", "--scope", "project", "--untrack", "--json"
+        repo, "sync", "--untrack", "--json"
     )
 
     assert untrack.returncode == 0, untrack.stderr

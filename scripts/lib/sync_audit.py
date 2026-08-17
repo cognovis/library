@@ -807,7 +807,7 @@ def classify_catalog_provenance(
         "catalog_identity": recorded_identity,
         "catalog_status": "orphaned",
         "catalog_reason": "catalog_entry_missing",
-        "removal_command": f"library {primitive} remove {name} --scope {scope}",
+        "removal_command": f"library {primitive} remove {name}",
     })
     return result
 
@@ -849,7 +849,7 @@ def _check_missing_agent_handlers(
             "repair_hint": (
                 f"Agent '{name}' declares handler assets but {handler_root} is missing or "
                 f"empty; the agent resolves that path at runtime. Reinstall with "
-                f"`library agent use {name} --scope {scope}`."
+                f"`library agent use {name}`."
             ),
         }
 
@@ -861,7 +861,7 @@ def _check_missing_agent_handlers(
         "repair_hint": (
             f"Agent '{name}' is missing handler files that were installed with it: "
             f"{', '.join(missing_files)}. Reinstall with "
-            f"`library agent use {name} --scope {scope}`."
+            f"`library agent use {name}`."
         ),
     }
 
@@ -1030,7 +1030,7 @@ def _agent_frontmatter_issue(
         "message": message,
         "path": str(path),
         "repair_hint": (
-            f"library agent sync {name} --scope {scope} --harness claude_code"
+            f"library agent sync {name} --harness claude_code"
         ),
     }
 

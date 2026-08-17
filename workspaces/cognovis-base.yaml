@@ -13,7 +13,7 @@ catalogs:
     identity: https://github.com/cognovis/library-core
     pin:
       kind: commit
-      value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
+      value: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
 roots:
   # Library control plane
   - type: skill

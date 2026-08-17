@@ -58,9 +58,9 @@ catalog provenance.
 Workspace sync provides contribution and ownership-aware planning:
 
 ```text
-library workspace status --all --scope project
-library workspace sync --all --scope project
-library workspace sync --all --prune --apply --scope project
+library workspace status --all
+library workspace sync --all
+library workspace sync --all --prune --apply
 ```
 
 The first two forms remain non-pruning. Physical deletion requires the explicit

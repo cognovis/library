@@ -23,9 +23,8 @@ Supported verbs: list, use, remove, sync, search, audit
 Options:
   --json        Machine-readable JSON output
   --dry-run     Show planned operations without mutating files
-  --scope       project only (global desired state is retired)
   --target-project
-                Project root for project-scoped writes
+                Project root to write into (default: current Git root or cwd)
   --harness     claude_code, codex, pi, or all (where applicable)
 
 Exit codes:
@@ -39,7 +38,7 @@ Exit codes:
 Usage examples:
   library skill list
   library skill list --json
-  library standard use english-only --scope project
+  library standard use english-only
   library skill use dolt --dry-run --json
   library skill use dolt --symlink --json
   library search firecrawl
@@ -124,8 +123,9 @@ from lib.sync_audit import (
 VALID_PRIMITIVES = all_primitive_names()
 VALID_VERBS = ["list", "use", "remove", "sync", "search", "audit"]
 DEFAULT_LIFECYCLE_SCOPE = "project"
-PROJECT_ONLY_SCOPE_ERROR = (
-    "Global Library desired state is not supported; use the current Git repository."
+SCOPE_FLAG_REJECTED_ERROR = (
+    "`--scope` is not a Library option: Library manages the current Git "
+    "repository only. Re-run the command without `--scope`."
 )
 
 
@@ -146,6 +146,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="version",
         version="library 2.0.0 (CL-8ph)",
     )
+    # Not a flag: the engine still threads a scope value through lockfile and
+    # receipt bookkeeping, and there is exactly one value it can ever take.
+    # Pinning it here keeps that internal parameter fed without offering the
+    # caller a selection the platform does not have.
+    parser.set_defaults(scope=DEFAULT_LIFECYCLE_SCOPE)
 
     subparsers = parser.add_subparsers(
         dest="primitive",
@@ -176,12 +181,6 @@ def build_parser() -> argparse.ArgumentParser:
         # list
         list_p = verb_sub.add_parser("list", help="List catalog entries")
         list_p.add_argument("--json", action="store_true", help="Output JSON")
-        list_p.add_argument(
-            "--scope",
-            choices=["project", "global"],
-            default="project",
-            help="Scope (default: project)",
-        )
 
         # use
         use_p = verb_sub.add_parser("use", help="Install a catalog entry")
@@ -206,17 +205,11 @@ def build_parser() -> argparse.ArgumentParser:
             help="Install Layer C as a symlink into the cache instead of a vendored copy",
         )
         use_p.add_argument(
-            "--scope",
-            choices=["project", "global"],
-            default="project",
-            help="Scope (project only)",
-        )
-        use_p.add_argument(
             "--target-project", "--project",
             type=Path,
             default=None,
             help=(
-                "Project root for project-scoped writes "
+                "Repository root Library writes into "
                 "(default: current git root or cwd)"
             ),
         )
@@ -249,20 +242,11 @@ def build_parser() -> argparse.ArgumentParser:
             "--dry-run", action="store_true", help="Show planned removals"
         )
         remove_p.add_argument(
-            "--scope",
-            choices=["project", "global"],
-            default=None,
-            help=(
-                "Scope (MCP defaults to global; MCP project scope removes only a "
-                "legacy lock record; other primitives default to project)"
-            ),
-        )
-        remove_p.add_argument(
             "--target-project",
             type=Path,
             default=None,
             help=(
-                "Project root for project-scoped writes "
+                "Repository root Library writes into "
                 "(default: current git root or cwd)"
             ),
         )
@@ -293,16 +277,11 @@ def build_parser() -> argparse.ArgumentParser:
         sync_p.add_argument("--json", action="store_true", help="Output JSON")
         sync_p.add_argument("--dry-run", action="store_true", help="Show planned syncs")
         sync_p.add_argument(
-            "--scope",
-            choices=["project", "global"],
-            default="project",
-        )
-        sync_p.add_argument(
             "--target-project",
             type=Path,
             default=None,
             help=(
-                "Project root for project-scoped writes "
+                "Repository root Library writes into "
                 "(default: current git root or cwd)"
             ),
         )
@@ -321,11 +300,6 @@ def build_parser() -> argparse.ArgumentParser:
         audit_p = verb_sub.add_parser("audit", help="Detect drift in installed entries")
         audit_p.add_argument("--json", action="store_true", help="Output JSON")
         audit_p.add_argument(
-            "--scope",
-            choices=["project", "global"],
-            default="project",
-        )
-        audit_p.add_argument(
             "--drift-only",
             action="store_true",
             help="Only show drifted entries; exit 2 if any drift, 0 if clean",
@@ -343,7 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
             type=Path,
             default=None,
             help=(
-                "Project root for project-scoped writes "
+                "Repository root Library writes into "
                 "(default: current git root or cwd)"
             ),
         )
@@ -416,12 +390,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     top_audit_parser.add_argument("--json", action="store_true", help="Output JSON")
     top_audit_parser.add_argument(
-        "--scope",
-        choices=["project", "global"],
-        default=DEFAULT_LIFECYCLE_SCOPE,
-        help=f"Scope to audit (default: {DEFAULT_LIFECYCLE_SCOPE})",
-    )
-    top_audit_parser.add_argument(
         "--drift-only",
         action="store_true",
         help="Only show drifted entries; exit 2 if any drift, 0 if clean",
@@ -438,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--project",
         type=Path,
         default=None,
-        help="Explicit project root for project-scope reads",
+        help="Explicit repository root to read (default: current git root)",
     )
 
     # Top-level status (cross-primitive, checks upstream SHAs without cloning)
@@ -448,16 +416,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--json", action="store_true", help="Output JSON")
     status_parser.add_argument(
-        "--scope",
-        choices=["project", "global"],
-        default=DEFAULT_LIFECYCLE_SCOPE,
-        help=f"Scope to check (default: {DEFAULT_LIFECYCLE_SCOPE})",
-    )
-    status_parser.add_argument(
         "--project",
         type=Path,
         default=None,
-        help="Explicit project root for project-scope reads",
+        help="Explicit repository root to read (default: current git root)",
     )
     status_parser.add_argument(
         "--offline",
@@ -465,18 +427,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not query upstream remotes; report upstream as unknown",
     )
 
-    # Top-level installed (cross-primitive, cross-scope installed view)
+    # Top-level installed (cross-primitive view of this repository)
     installed_parser = subparsers.add_parser(
         "installed",
-        help="Show installed entries across project and global scopes",
+        help="Show this repository's installed entries",
     )
     installed_parser.add_argument("--json", action="store_true", help="Output JSON")
-    installed_parser.add_argument(
-        "--scope",
-        choices=["project", "global"],
-        default="project",
-        help="Scope to show (default: project)",
-    )
     installed_parser.add_argument(
         "--primitive",
         dest="primitive_filter",
@@ -493,7 +449,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--project",
         type=Path,
         default=None,
-        help="Explicit project root for project-scope reads",
+        help="Explicit repository root to read (default: current git root)",
     )
     installed_parser.add_argument(
         "--offline",
@@ -522,16 +478,10 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     top_sync_parser.add_argument(
-        "--scope",
-        choices=["project", "global"],
-        default=DEFAULT_LIFECYCLE_SCOPE,
-        help=f"Scope to sync (default: {DEFAULT_LIFECYCLE_SCOPE})",
-    )
-    top_sync_parser.add_argument(
         "--project",
         type=Path,
         default=None,
-        help="Explicit project root for project-scope reads and writes",
+        help="Explicit repository root to read and write (default: current git root)",
     )
     top_sync_parser.add_argument(
         "--harness",
@@ -707,12 +657,6 @@ def _add_admission_verbs(subparsers: argparse._SubParsersAction) -> None:
             ),
         )
         decide_parser.add_argument(
-            "--scope",
-            choices=["project", "global"],
-            default="project",
-            help="Receipt scope searched by --receipt",
-        )
-        decide_parser.add_argument(
             "--project",
             type=Path,
             default=None,
@@ -776,9 +720,6 @@ def _add_marketplace_verbs(subparsers: argparse._SubParsersAction) -> None:
     install_parser.add_argument("name", help="Registered marketplace name")
     install_parser.add_argument("upstream_id", help="Upstream item id to install")
     install_parser.add_argument(
-        "--scope", choices=["project", "global"], default="project"
-    )
-    install_parser.add_argument(
         "--target",
         choices=["project_committed", "machine_local"],
         default="machine_local",
@@ -802,9 +743,6 @@ def _add_marketplace_verbs(subparsers: argparse._SubParsersAction) -> None:
 
     status_parser = verb_sub.add_parser(
         "status", help="Report foreign receipts and their cache state"
-    )
-    status_parser.add_argument(
-        "--scope", choices=["project", "global"], default="project"
     )
     status_parser.add_argument("--json", action="store_true", help="Output JSON")
 
@@ -885,9 +823,6 @@ def _add_marketplace_update_verbs(verb_sub: argparse._SubParsersAction) -> None:
             "reviewer. The verdict must name this change set or it is refused"
         ),
     )
-    update_parser.add_argument(
-        "--scope", choices=["project", "global"], default="project"
-    )
     update_parser.add_argument("--json", action="store_true", help="Output JSON")
 
     show_parser = verb_sub.add_parser(
@@ -944,9 +879,6 @@ def _add_marketplace_update_verbs(verb_sub: argparse._SubParsersAction) -> None:
         ),
     )
     approve_parser.add_argument(
-        "--scope", choices=["project", "global"], default="project"
-    )
-    approve_parser.add_argument(
         "--target",
         choices=["project_committed", "machine_local"],
         default="machine_local",
@@ -975,16 +907,10 @@ def _add_marketplace_update_verbs(verb_sub: argparse._SubParsersAction) -> None:
 def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     """Add the explicit metadata-only Workspace command surface."""
     list_parser = verb_sub.add_parser("list", help="List Workspace definitions")
-    list_parser.add_argument(
-        "--scope", choices=["project", "global"], default="project"
-    )
     list_parser.add_argument("--json", action="store_true")
 
     show_parser = verb_sub.add_parser("show", help="Show one Workspace and its closure")
     show_parser.add_argument("reference")
-    show_parser.add_argument(
-        "--scope", choices=["project", "global"], default="project"
-    )
     show_parser.add_argument("--json", action="store_true")
 
     validate_parser = verb_sub.add_parser(
@@ -995,7 +921,6 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
 
     use_parser = verb_sub.add_parser("use", help="Register and materialize a Workspace")
     use_parser.add_argument("reference")
-    use_parser.add_argument("--scope", choices=["project", "global"], required=True)
     use_parser.add_argument("--target-project", type=Path, default=None)
     use_parser.add_argument(
         "--harness",
@@ -1007,11 +932,10 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     use_parser.add_argument("--json", action="store_true")
 
     status_parser = verb_sub.add_parser(
-        "status", help="Plan selected-scope Workspace reconciliation"
+        "status", help="Plan Workspace reconciliation for this repository"
     )
     status_parser.add_argument("reference", nargs="?")
     status_parser.add_argument("--all", action="store_true", dest="all_workspaces")
-    status_parser.add_argument("--scope", choices=["project", "global"], required=True)
     status_parser.add_argument("--target-project", type=Path, default=None)
     status_parser.add_argument(
         "--harness",
@@ -1024,14 +948,12 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
         "explain", help="Explain ownership of one receipt"
     )
     explain_parser.add_argument("member")
-    explain_parser.add_argument("--scope", choices=["project", "global"], required=True)
     explain_parser.add_argument("--target-project", type=Path, default=None)
     explain_parser.add_argument("--json", action="store_true")
 
     sync_parser = verb_sub.add_parser("sync", help="Reconcile registered Workspaces")
     sync_parser.add_argument("reference", nargs="?")
     sync_parser.add_argument("--all", action="store_true", dest="all_workspaces")
-    sync_parser.add_argument("--scope", choices=["project", "global"], required=True)
     sync_parser.add_argument("--target-project", type=Path, default=None)
     sync_parser.add_argument(
         "--harness",
@@ -1047,7 +969,6 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     recover_parser = verb_sub.add_parser(
         "recover", help="Inspect or recover an incomplete Workspace transaction"
     )
-    recover_parser.add_argument("--scope", choices=["project", "global"], required=True)
     recover_parser.add_argument("--target-project", type=Path, default=None)
     recover_parser.add_argument("--discard", action="store_true")
     recover_parser.add_argument("--acknowledge-plan")
@@ -1061,7 +982,6 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
     adopt_parser.add_argument("--definition-commit")
     adopt_parser.add_argument("--from-direct", action="store_true")
     adopt_parser.add_argument("--all-reachable", action="store_true")
-    adopt_parser.add_argument("--scope", choices=["project", "global"], required=True)
     adopt_parser.add_argument("--target-project", type=Path, default=None)
     adopt_parser.add_argument("--apply", action="store_true")
     adopt_parser.add_argument("--acknowledge-plan")
@@ -1069,7 +989,6 @@ def _add_workspace_verbs(verb_sub: argparse._SubParsersAction) -> None:
 
     remove_parser = verb_sub.add_parser("remove", help="Unregister a Workspace root")
     remove_parser.add_argument("reference")
-    remove_parser.add_argument("--scope", choices=["project", "global"], required=True)
     remove_parser.add_argument("--target-project", type=Path, default=None)
     remove_parser.add_argument("--json", action="store_true")
 
@@ -1088,10 +1007,10 @@ def cmd_list(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 
 
 def _resolve_default_scope(catalog: dict, primitive: str, name: str) -> str:
-    """Return the sole supported desired-state scope.
+    """Return the sole desired state Library writes.
 
     Catalog metadata may retain historical ``default_scope`` values as migration
-    evidence, but it cannot create a second, user-global desired state.
+    evidence, but it cannot create a second desired state outside the repository.
     """
     return "project"
 
@@ -1100,31 +1019,20 @@ def _resolve_command_scope(
     catalog: dict,
     primitive: str,
     name: str,
-    explicit_scope: str | None,
 ) -> str:
-    """Resolve public CLI scope while enforcing primitive filesystem invariants."""
-    if primitive == "mcp":
-        return "project"
-    if primitive in {"pi-extension", "pi-profile", "just-module"}:
-        if explicit_scope == "global":
-            raise LibraryError(
-                f"{primitive} is project-only and cannot use global scope."
-            )
-        return "project"
-    if explicit_scope is not None:
-        return explicit_scope
+    """Return the repository desired state every public verb writes."""
     return "project"
 
 
 MCP_LIFECYCLE_RETIRED_ERROR = (
     "MCP registration lifecycle is retired. The supported OpenBrain singleton is "
-    "managed by `library bootstrap install`; `library mcp remove <name> --scope "
-    "project` only removes a legacy project lock record."
+    "managed by `library bootstrap install`; `library mcp remove <name>` only "
+    "removes a legacy project lock record."
 )
 
 
 def _retired_mcp_lifecycle_result(*, json_mode: bool) -> int:
-    """Report that public MCP registration cannot recreate global desired state."""
+    """Report that public MCP registration is retired."""
     if json_mode:
         print_json(error_result(MCP_LIFECYCLE_RETIRED_ERROR, EXIT_FAILURE))
     else:
@@ -1179,7 +1087,6 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     use_json = getattr(args, "json", False)
     dry_run = getattr(args, "dry_run", False)
     name = getattr(args, "name", None)
-    explicit_scope = args.scope  # None if --scope not passed (default=None now)
     harness = getattr(args, "harness", "all")
     install_mode = "symlink" if getattr(args, "symlink", False) else "vendor"
     primitive = args.primitive
@@ -1195,17 +1102,8 @@ def cmd_use(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     if primitive == "mcp":
         return _retired_mcp_lifecycle_result(json_mode=use_json)
 
-    try:
-        scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
-    except LibraryError as exc:
-        if use_json:
-            print_json(error_result(str(exc), exc.exit_code))
-        else:
-            print(f"Error: {exc}", file=sys.stderr)
-        return exc.exit_code
-
-    if scope == "project":
-        _preflight_managed_project(args, repo_root, allow_missing_lock=True)
+    scope = _resolve_command_scope(catalog, primitive, name)
+    _preflight_managed_project(args, repo_root, allow_missing_lock=True)
 
     # Guard: check harness_support on the main entry BEFORE installing any dependencies.
     # This prevents partial mutations (dep installs) when the requested entry itself
@@ -1367,9 +1265,7 @@ def _install_with_deps(
     def dependency_scope(dep_primitive: str, dep_name: str) -> str:
         if (dep_primitive, dep_name) == root_key:
             return scope
-        return _resolve_command_scope(
-            catalog, dep_primitive, dep_name, explicit_scope=None
-        )
+        return _resolve_command_scope(catalog, dep_primitive, dep_name)
 
     try:
         install_order = resolve_requires(
@@ -3007,7 +2903,6 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
     use_json = getattr(args, "json", False)
     dry_run = getattr(args, "dry_run", False)
     name = getattr(args, "name", None)
-    explicit_scope = getattr(args, "scope", None)
     harness = getattr(args, "harness", "claude_code")
     primitive = args.primitive
 
@@ -3020,34 +2915,15 @@ def cmd_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
         return EXIT_FAILURE
 
     if primitive == "mcp":
-        # The project form remains a narrow migration-only lock-record cleanup.
-        if explicit_scope != "project":
-            return _retired_mcp_lifecycle_result(json_mode=use_json)
-        scope = "project"
-    elif primitive in {"pi-extension", "pi-profile", "just-module"}:
-        try:
-            scope = _resolve_command_scope(catalog, primitive, name, explicit_scope)
-        except LibraryError as exc:
-            if use_json:
-                print_json(error_result(str(exc), exc.exit_code))
-            else:
-                print(f"Error: {exc}", file=sys.stderr)
-            return exc.exit_code
-    elif primitive == "script":
-        try:
-            script_entry = lookup_entry(catalog, primitive, name, fuzzy=True)
-        except LibraryError:
-            script_entry = {}
-        from lib.installers.uv_tool import is_uv_tool_entry
+        # The retired registration lifecycle left project lock records behind.
+        # Removing one is all this verb still does; with nothing left to clean
+        # up it reports the retirement instead of pretending to deregister.
+        from lib.installers.mcp_installer import has_project_mcp_lock_record
 
-        scope = (
-            _resolve_command_scope(catalog, primitive, name, explicit_scope)
-            if is_uv_tool_entry(script_entry)
-            else explicit_scope or "project"
-        )
-    else:
-        # Preserve historical remove semantics regardless of catalog default_scope.
-        scope = explicit_scope or "project"
+        if not has_project_mcp_lock_record(name, repo_root):
+            return _retired_mcp_lifecycle_result(json_mode=use_json)
+
+    scope = _resolve_command_scope(catalog, primitive, name)
 
     try:
         result = _safe_receipted_remove(
@@ -3195,33 +3071,12 @@ def _dispatch_remove(
             dry_run=dry_run,
         )
     elif primitive == "mcp":
-        from lib.installers.mcp_installer import (
-            remove_mcp,
-            remove_project_mcp_lock_record,
-        )
+        from lib.installers.mcp_installer import remove_project_mcp_lock_record
 
-        if scope == "project":
-            return remove_project_mcp_lock_record(
-                name=name,
-                repo_root=repo_root,
-                dry_run=dry_run,
-            )
-        import os
-
-        env_overrides: dict = {}
-        for key in [
-            "CLAUDE_SETTINGS_FILE",
-            "CODEX_CONFIG_FILE",
-        ]:
-            if key in os.environ:
-                env_overrides[key] = os.environ[key]
-        return remove_mcp(
-            catalog=catalog,
+        return remove_project_mcp_lock_record(
             name=name,
             repo_root=repo_root,
-            scope=scope,
             dry_run=dry_run,
-            env_overrides=env_overrides if env_overrides else None,
         )
     elif primitive == "guardrail":
         from lib.installers.guardrail_installer import remove_guardrail
@@ -3373,7 +3228,7 @@ def cmd_audit(args: argparse.Namespace, repo_root: Path, catalog: dict) -> int:
 def cmd_audit_all(
     args: argparse.Namespace, repo_root: Path | None, catalog: dict
 ) -> int:
-    """Handle: audit [--scope=...] [--drift-only] [--json]
+    """Handle: audit [--drift-only] [--json]
 
     Top-level audit command that checks all primitives across the given scope(s).
     """
@@ -3470,7 +3325,7 @@ def _print_agent_frontmatter_issue(entry: dict) -> None:
 
 
 def cmd_status(args: argparse.Namespace, repo_root: Path | None, catalog: dict) -> int:
-    """Handle: status [--scope=...] [--json]
+    """Handle: status [--json]
 
     Top-level status command that checks upstream SHAs for all installed entries
     without cloning.
@@ -4551,7 +4406,7 @@ def _unmanaged_primitive_health(repo_root: Path, receipt_paths: list[str]) -> di
 
 
 def cmd_installed(args: argparse.Namespace) -> int:
-    """Handle: installed [--scope=...] [--primitive=...] [--diff-catalog] [--json]."""
+    """Handle: installed [--primitive=...] [--diff-catalog] [--json]."""
     use_json = getattr(args, "json", False)
     scope = getattr(args, "scope", "both")
     primitive_filter = getattr(args, "primitive_filter", None)
@@ -5773,7 +5628,7 @@ def _missing_sync_dependencies(
 def cmd_sync_all(
     args: argparse.Namespace, repo_root: Path | None, catalog: dict
 ) -> int:
-    """Handle: sync [--force] [--dry-run] [--scope=...] [--json]
+    """Handle: sync [--force] [--dry-run] [--json]
 
     Top-level sync that iterates ALL primitives across all scopes.
     By default refreshes entries whose upstream source is behind or whose
@@ -5973,7 +5828,7 @@ def cmd_sync_all(
         warnings.append(
             f"unresolvable entry {label}: neither its source ({source}) nor its "
             f"install target ({target}) exists. Remove it with "
-            f"`library {primitive} remove {entry_name} --scope global`."
+            f"`library {primitive} remove {entry_name}`."
         )
     unknown_skipped = len(still_unknown)
     orphaned_skipped = len(skipped_by_status["orphaned"])
@@ -6400,7 +6255,7 @@ def _workspace_prerequisite_blockers(plan: dict) -> list[str]:
             blockers.append(
                 f"{item['id']} is required globally; run "
                 f"library {item['id'].split(':', 1)[0]} use "
-                f"{item['id'].split(':', 1)[1]} --scope global"
+                f"{item['id'].split(':', 1)[1]}"
             )
             continue
         expected_identity = normalize_catalog_identity(
@@ -7705,7 +7560,7 @@ def _workspace_status(args: argparse.Namespace, repo_root: Path, catalog: dict) 
             "id": item["id"],
             "reason": item.get("prune_blocked_reason") or "receipt is unverified",
             "action": (
-                f"library workspace sync --all --scope {args.scope} --verify-receipts"
+                "library workspace sync --all --verify-receipts"
             ),
         }
         for item in plan["receipts"]
@@ -8187,9 +8042,9 @@ def _workspace_remove(args: argparse.Namespace, repo_root: Path, catalog: dict) 
             "status": "unregistered",
             "reference": args.reference,
             "follow_up": [
-                f"library workspace sync --all --scope {args.scope} --prune",
+                "library workspace sync --all --prune",
                 (
-                    f"library workspace sync --all --scope {args.scope} --prune "
+                    "library workspace sync --all --prune "
                     f"--apply --acknowledge-plan {plan['digest']}"
                 ),
             ],
@@ -8253,7 +8108,7 @@ def _workspace_recover(args: argparse.Namespace, repo_root: Path) -> int:
                 "blockers": [str(exc)],
                 "discard_command": (
                     "library workspace recover "
-                    f"--scope {args.scope} --discard --acknowledge-plan {digest}"
+                    f"--discard --acknowledge-plan {digest}"
                 ),
             },
             json_mode=args.json,
@@ -8396,19 +8251,22 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code.
     """
+    # ADR-0012 leaves Library one desired state: the current Git repository.
+    # `--scope` is therefore not an option any subcommand declares, and a
+    # literally passed one is answered by a single typed rejection here —
+    # before argparse, catalog, repository, lockfile, and installer
+    # resolution, so JSON and human callers receive the same deterministic
+    # result without any observable mutation.
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if any(token == "--scope" or token.startswith("--scope=") for token in raw_argv):
+        if "--json" in raw_argv:
+            print_json(error_result(SCOPE_FLAG_REJECTED_ERROR, EXIT_FAILURE))
+        else:
+            print(f"Error: {SCOPE_FLAG_REJECTED_ERROR}", file=sys.stderr)
+        return EXIT_FAILURE
+
     parser = build_parser()
     args = parser.parse_args(argv)
-
-    # ADR-0012 has one mutation boundary: no public command may route desired
-    # state through the retired user-global lock. Keep this before catalog,
-    # repository, lockfile, and installer resolution so JSON and human callers
-    # receive the same deterministic result without any observable mutation.
-    if getattr(args, "scope", None) in {"global", "both"}:
-        if getattr(args, "json", False):
-            print_json(error_result(PROJECT_ONLY_SCOPE_ERROR, EXIT_FAILURE))
-        else:
-            print(f"Error: {PROJECT_ONLY_SCOPE_ERROR}", file=sys.stderr)
-        return EXIT_FAILURE
 
     # No subcommand given
     if not args.primitive:
@@ -8920,7 +8778,7 @@ def _missing_project_warning() -> str:
 
 
 def _resolve_target_root(args: argparse.Namespace, catalog_root: Path) -> Path:
-    """Return the project root used for project-scoped writes."""
+    """Return the repository root Library writes into."""
     scope = getattr(args, "scope", "project")
     if scope == "global":
         return catalog_root
