@@ -7,7 +7,7 @@ description: >-
   check skill, audit skills, skill health check, fleet quality, skill creation,
   action_boundary declarations, script declarations,
   provider-neutral skill design.
-requires_standards: [agentic-primitives, primitive-placement, judge-layer, english-only, no-emoji]
+requires_standards: [agentic-primitives, primitive-placement, judge-layer]
 ---
 
 # Skill Forge
@@ -210,7 +210,6 @@ description: >-
   use when: <concrete trigger pattern this routes for — not adjectives>
   NOT for: <adjacent concerns this is wrong for — at least one hard exclusion>
   boundary: <how this differs from <neighboring-skill> in the catalog>
-requires_standards: [english-only, no-emoji]
 compatibility: {}
 metadata: {}
 # Include only when Action Boundary Gate classifies the skill as side-effecting:
@@ -322,8 +321,6 @@ After scaffolding, print the library entry for copy-paste:
       description: >-
         <description>
       source: https://github.com/cognovis/library-core/blob/main/skills/<name>/SKILL.md
-      requires:
-        - "standard:english-only"
       scripts:
         - path: scripts/<helper>.py
           role: helper

@@ -54,8 +54,6 @@ requested_roots:
   - skill:ob-cli
   - skill:executive-pack
   - skill:session-close
-  - standard:english-only
-  - standard:no-emoji
 - id: workspace:https://github.com/cognovis/library#cognovis-daily
   type: workspace
   name: cognovis-daily
@@ -1002,66 +1000,6 @@ receipts:
   owners_cache:
   - workspace:https://github.com/cognovis/library#cognovis-base
   - workspace:https://github.com/cognovis/library#cognovis-daily
-- name: english-only
-  type: standard
-  marketplace: unknown
-  source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
-  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
-  cache_path: /Users/malte/.local/share/library/standards/unknown/english-only@3c3bedbd3dd901/
-  install_target: .agents/standards/workflow/english-only.md
-  install_timestamp: '2026-08-17T08:35:11Z'
-  checksum_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
-  checksum_type: file
-  content_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
-  install_mode: vendor
-  license: unknown
-  bridge_symlinks: []
-  scope: project
-  catalog_identity: https://github.com/cognovis/library
-  id: standard:english-only
-  resolved_version: legacy
-  verified: true
-  adopted: false
-  prune_blocked_reason: null
-  targets:
-  - path: .agents/standards/workflow/english-only.md
-    kind: file
-    content_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
-  owners_cache:
-  - workspace:https://github.com/cognovis/library#cognovis-base
-  - workspace:https://github.com/cognovis/library#cognovis-daily
-  - workspace:https://github.com/cognovis/library#library-authoring
-  - workspace:https://github.com/cognovis/library-core#python-cli
-- name: no-emoji
-  type: standard
-  marketplace: unknown
-  source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
-  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
-  cache_path: /Users/malte/.local/share/library/standards/unknown/no-emoji@3c3bedbd3dd901/
-  install_target: .agents/standards/workflow/no-emoji.md
-  install_timestamp: '2026-08-17T08:35:13Z'
-  checksum_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
-  checksum_type: file
-  content_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
-  install_mode: vendor
-  license: unknown
-  bridge_symlinks: []
-  scope: project
-  catalog_identity: https://github.com/cognovis/library
-  id: standard:no-emoji
-  resolved_version: legacy
-  verified: true
-  adopted: false
-  prune_blocked_reason: null
-  targets:
-  - path: .agents/standards/workflow/no-emoji.md
-    kind: file
-    content_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
-  owners_cache:
-  - workspace:https://github.com/cognovis/library#cognovis-base
-  - workspace:https://github.com/cognovis/library#cognovis-daily
-  - workspace:https://github.com/cognovis/library#library-authoring
-  - workspace:https://github.com/cognovis/library-core#python-cli
 - name: bead-depth-reviewer
   type: agent
   marketplace: local
@@ -1209,9 +1147,6 @@ receipts:
   - path: .agents/standards/workflow/cross-bead-review.md
     kind: file
     content_sha256: fc31e169e4d4ec43ff5af103ec61515ee864c1554b5a8f6d89e5e217c864997d
-  - path: .agents/standards/workflow/english-only.md
-    kind: file
-    content_sha256: 1d10ea4811949bc38bd70f8dc3fbea8a12608fe8701a33cb5d92d9c7db327ad4
   - path: .agents/standards/workflow/etl-development.md
     kind: file
     content_sha256: ea3b37116d373a54c326fe78100199b6a76d61d0238247d079ad3cdf32905fbb
@@ -1221,9 +1156,6 @@ receipts:
   - path: .agents/standards/workflow/git-best-practices.md
     kind: file
     content_sha256: 1a8d3971a1de0360c75fa9548919293a71140e703958bbd179362fe2e7513839
-  - path: .agents/standards/workflow/no-emoji.md
-    kind: file
-    content_sha256: c2492196344f17c699354918794b3348de46ac78a7b107c959a86240ecc3b5ba
   - path: .agents/standards/workflow/parameters.md
     kind: file
     content_sha256: cac1604d6566c582455bcf9b9d67b847a7451cf56bd9063ee962fa224248575f
@@ -2644,38 +2576,6 @@ installed:
   checksum_sha256: f82a5e00cc74b760146bc76d42fc334b33d0bfc2213598c0a826e733936f8790
   checksum_type: directory
   content_sha256: f82a5e00cc74b760146bc76d42fc334b33d0bfc2213598c0a826e733936f8790
-  install_mode: vendor
-  license: unknown
-  bridge_symlinks: []
-  scope: project
-  catalog_identity: https://github.com/cognovis/library
-- name: english-only
-  type: standard
-  marketplace: unknown
-  source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
-  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
-  cache_path: /Users/malte/.local/share/library/standards/unknown/english-only@3c3bedbd3dd901/
-  install_target: .agents/standards/workflow/english-only.md
-  install_timestamp: '2026-08-17T08:35:11Z'
-  checksum_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
-  checksum_type: file
-  content_sha256: e84aa8052bb2ee3e9f4a1f1635d3f68c8f088c7e5e1a209e6c75e7715e4c5bcc
-  install_mode: vendor
-  license: unknown
-  bridge_symlinks: []
-  scope: project
-  catalog_identity: https://github.com/cognovis/library
-- name: no-emoji
-  type: standard
-  marketplace: unknown
-  source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
-  source_commit: 3c3bedbd3dd901e0933b519f0a01e8b708a2403b
-  cache_path: /Users/malte/.local/share/library/standards/unknown/no-emoji@3c3bedbd3dd901/
-  install_target: .agents/standards/workflow/no-emoji.md
-  install_timestamp: '2026-08-17T08:35:13Z'
-  checksum_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
-  checksum_type: file
-  content_sha256: 7429e491b1373470f8ffae35a39d54c6302dff6e69370c197fbb40c4fe53dd25
   install_mode: vendor
   license: unknown
   bridge_symlinks: []

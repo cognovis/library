@@ -145,8 +145,6 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "ob-cli", "core"),
         ("skill", "executive-pack", "core"),
         ("skill", "session-close", "core"),
-        ("standard", "english-only", "platform"),
-        ("standard", "no-emoji", "platform"),
     }
 
     closure = resolve_workspace_closure(

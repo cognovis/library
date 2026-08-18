@@ -38,7 +38,7 @@ Exit codes:
 Usage examples:
   library skill list
   library skill list --json
-  library standard use english-only
+  library standard use adr-location
   library skill use dolt --dry-run --json
   library skill use dolt --symlink --json
   library search firecrawl

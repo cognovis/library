@@ -35,14 +35,11 @@ def test_platform_catalog_publishes_operational_python_cli_workspace() -> None:
     closure = resolve_workspace_closure(catalog, workspace, REPO_ROOT, "project")
 
     assert workspace.version == "0.1.0"
-    # english-only and no-emoji are owned members, not prerequisites: since the
-    # CL-9yok recut nothing in this closure is satisfied from outside the
-    # repository, so it carries no prerequisite at all.
+    # Since the CL-9yok recut nothing in this closure is satisfied from outside
+    # the repository, so it carries no prerequisite at all.
     assert set(closure.artifacts) == {
         ("skill", "python-dev"),
         ("skill", "python-test"),
-        ("standard", "english-only"),
-        ("standard", "no-emoji"),
         ("standard", "python-cli-patterns"),
     }
     assert set(closure.prerequisites) == set()
@@ -319,7 +316,7 @@ def test_workspace_renderer_accepts_string_workspace_identities(capsys) -> None:
             "workspaces": ["library-platform:library-authoring"],
             "prerequisites": [
                 {
-                    "id": "standard:english-only",
+                    "id": "standard:python-cli-patterns",
                     "requested_by": [
                         "workspace:https://github.com/cognovis/library#library-authoring"
                     ],
@@ -333,7 +330,7 @@ def test_workspace_renderer_accepts_string_workspace_identities(capsys) -> None:
 
     output = capsys.readouterr().out
     assert "library-platform:library-authoring" in output
-    assert "standard:english-only" in output
+    assert "standard:python-cli-patterns" in output
     assert "requested by: workspace:https://github.com/cognovis/library#library-authoring" in output
     assert "{'id':" not in output
 

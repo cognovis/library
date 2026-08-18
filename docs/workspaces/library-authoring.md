@@ -12,8 +12,7 @@ platform-owned Forge Skills:
 
 The Skills keep their factual operating Standards as ordinary `requires:`
 dependencies. That closure currently includes `agentic-primitives`,
-`primitive-placement`, and the `judge-layer` bundle; `english-only` and
-`no-emoji` remain global prerequisites. The Workspace does not contain
+`primitive-placement`, and the `judge-layer` bundle. The Workspace does not contain
 `python-cli`, Pi extensions, Pi profiles, Just modules, repository instructions,
 or customer-specific content. A repository selects those capabilities
 independently when it needs them.

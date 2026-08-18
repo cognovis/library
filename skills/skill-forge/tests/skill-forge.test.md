@@ -9,7 +9,7 @@
 - Name passes validation (lowercase, no hyphens at boundaries, ≤64 chars)
 - Description is within 1024-char limit
 - Scaffolds `skills/hello-world/SKILL.md` with correct frontmatter
-  (`requires_standards: [english-only, no-emoji]`, `compatibility: {}`, `metadata: {}`)
+  (`compatibility: {}`, `metadata: {}`)
 - No scripts/ stub (logic < 50 lines)
 - Creates `skills/hello-world/tests/hello-world.test.md`
 - Prints library.yaml snippet

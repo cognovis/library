@@ -468,7 +468,7 @@
         "skill:firecrawl",
         "agent:video-processor",
         "prompt:caption-style",
-        "standard:english-only",
+        "standard:adr-location",
         "hook:block-destructive-bash",
         "mcp:open-brain",
         "script:validate-spec",

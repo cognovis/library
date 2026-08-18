@@ -35,7 +35,6 @@ EXPECTED_ARTIFACTS = {
     ("skill", "library"),
     ("skill", "ob-cli"),
     ("skill", "session-close"),
-    ("standard", "english-only"),
     ("standard", "executive-pack"),
     # clc-i19u: the transport skill declares `requires_standards:
     # [mcp-client-timeout]` and nothing else, so aligning its catalog entry with
@@ -45,7 +44,6 @@ EXPECTED_ARTIFACTS = {
     # never declared; no other member of this Workspace requires them.
     ("standard", "mcp-client-timeout"),
     ("standard", "model-routing"),
-    ("standard", "no-emoji"),
     ("standard", "workflow"),
 }
 
@@ -97,8 +95,6 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
         ("skill", "ob-cli", "core"),
         ("skill", "executive-pack", "core"),
         ("skill", "session-close", "core"),
-        ("standard", "english-only", "platform"),
-        ("standard", "no-emoji", "platform"),
     }
 
     closure = resolve_workspace_closure(

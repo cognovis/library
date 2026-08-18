@@ -20,8 +20,6 @@ FORGE_NAMES = (
 PLATFORM_STANDARD_PATHS = {
     "agentic-primitives": "standards/agentic-primitives/agentic-primitives.md",
     "primitive-placement": "standards/agentic-primitives/primitive-placement.md",
-    "english-only": "standards/workflow/english-only.md",
-    "no-emoji": "standards/workflow/no-emoji.md",
 }
 PLATFORM_STANDARD_REQUIRES = {
     f"standard:{name}" for name in PLATFORM_STANDARD_PATHS

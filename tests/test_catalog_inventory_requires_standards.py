@@ -35,12 +35,12 @@ def test_skill_with_only_requires_standards_gets_typed_requires(tmp_path: Path) 
     skill_dir = _write_skill(
         tmp_path,
         "adr-gap-like",
-        "name: adr-gap-like\ndescription: audit adrs\nrequires_standards: [english-only]",
+        "name: adr-gap-like\ndescription: audit adrs\nrequires_standards: [adr-location]",
     )
 
     entry = artifact_entry(tmp_path, SOURCE_ENTRY, "skill", skill_dir / "SKILL.md")
 
-    assert entry.get("requires") == ["standard:english-only"]
+    assert entry.get("requires") == ["standard:adr-location"]
 
 
 def test_skill_with_multiple_requires_standards_entries(tmp_path: Path) -> None:
@@ -48,14 +48,14 @@ def test_skill_with_multiple_requires_standards_entries(tmp_path: Path) -> None:
         tmp_path,
         "multi-standards",
         "name: multi-standards\ndescription: does things\n"
-        "requires_standards: [tool-standards, english-only, no-emoji]",
+        "requires_standards: [tool-standards, adr-location, sql-safety]",
     )
 
     entry = artifact_entry(tmp_path, SOURCE_ENTRY, "skill", skill_dir / "SKILL.md")
 
     assert entry.get("requires") == [
-        "standard:english-only",
-        "standard:no-emoji",
+        "standard:adr-location",
+        "standard:sql-safety",
         "standard:tool-standards",
     ]
 
@@ -67,7 +67,7 @@ def test_skill_requires_and_requires_standards_are_merged(tmp_path: Path) -> Non
         tmp_path,
         "merged-skill",
         "name: merged-skill\ndescription: merges both fields\n"
-        "requires:\n  - skill:cognovis-beads\n  - standard:english-only\n"
+        "requires:\n  - skill:cognovis-beads\n  - standard:adr-location\n"
         "requires_standards:\n  - dispatch/model-routing",
     )
 
@@ -75,8 +75,8 @@ def test_skill_requires_and_requires_standards_are_merged(tmp_path: Path) -> Non
 
     assert entry.get("requires") == [
         "skill:cognovis-beads",
+        "standard:adr-location",
         "standard:dispatch/model-routing",
-        "standard:english-only",
     ]
 
 
@@ -100,9 +100,9 @@ def test_agent_requires_standards_still_works(tmp_path: Path) -> None:
     agent_file = agent_dir / "example-agent.md"
     agent_file.write_text(
         "---\nname: example-agent\ndescription: an agent\n"
-        "requires_standards: [english-only]\n---\n\n# example-agent\n"
+        "requires_standards: [adr-location]\n---\n\n# example-agent\n"
     )
 
     entry = artifact_entry(tmp_path, SOURCE_ENTRY, "agent", agent_file)
 
-    assert entry.get("requires") == ["standard:english-only"]
+    assert entry.get("requires") == ["standard:adr-location"]

@@ -4,7 +4,6 @@ description: >-
   use when: <concrete trigger pattern this routes for>
   NOT for: <adjacent concern this is wrong for>
   boundary: <how this differs from neighboring skills>
-requires_standards: [english-only, no-emoji]
 compatibility: {}
 metadata: {}
 # Include only when Action Boundary Gate classifies the skill as side-effecting:

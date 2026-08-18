@@ -43,10 +43,3 @@ roots:
   - type: skill
     name: session-close
     catalog: core
-  # Behavioral standards
-  - type: standard
-    name: english-only
-    catalog: platform
-  - type: standard
-    name: no-emoji
-    catalog: platform
