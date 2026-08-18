@@ -6,7 +6,7 @@ description: >-
   create hook, hook-forge, hook-creator, hooks. Enforces 0=info/pass,
   1=hook-error, 2=block.
 disableModelInvocation: true
-requires_standards: [agentic-primitives, primitive-placement, english-only, no-emoji]
+requires_standards: [agentic-primitives, primitive-placement]
 ---
 
 # Hook Forge

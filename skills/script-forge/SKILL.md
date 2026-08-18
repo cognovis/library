@@ -5,7 +5,7 @@ description: >-
   Use when deterministic helper logic should be reusable across skills, agents, hooks,
   standards, or commands. Triggers on create script, script-forge,
   first-class script, Python helper, reusable validation script, doctor script, or formula script.
-requires_standards: [agentic-primitives, primitive-placement, english-only, no-emoji]
+requires_standards: [agentic-primitives, primitive-placement]
 ---
 
 # Script Forge

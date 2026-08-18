@@ -5,7 +5,7 @@ description: >-
   stateless 2026-07-28 protocol with the official Python SDK v2. NOT for:
   non-Python servers. boundary: this skill owns generic Python MCP server
   architecture, implementation, migration, and conformance.
-requires_standards: [python, judge-layer, english-only, no-emoji]
+requires_standards: [python, judge-layer]
 compatibility: {}
 metadata: {}
 action_boundary:

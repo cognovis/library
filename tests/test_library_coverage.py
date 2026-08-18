@@ -109,8 +109,8 @@ EXPECTED_PROMPTS = {
 
 # Expected standards
 EXPECTED_STANDARDS = {
-    "adr-location", "english-only", "execution-result-envelope",
-    "healthcare-control-areas", "no-emoji", "open-brain-http-client",
+    "adr-location", "execution-result-envelope",
+    "healthcare-control-areas", "open-brain-http-client",
     "python-default-bash-exception", "script-first-rule", "tool-standards",
 }
 

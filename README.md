@@ -161,7 +161,7 @@ library workspace status --all
 library workspace sync --all
 library skill list
 library skill use python-dev --dry-run --json
-library standard use english-only
+library standard use adr-location
 library installed --diff-catalog
 library status --offline --json
 library audit

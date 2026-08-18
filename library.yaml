@@ -527,8 +527,6 @@ library:
         - standard:agentic-primitives
         - standard:primitive-placement
         - standard:judge-layer
-        - standard:english-only
-        - standard:no-emoji
       metadata:
         library:
           source_catalog: library-platform
@@ -543,8 +541,6 @@ library:
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
-        - standard:english-only
-        - standard:no-emoji
       metadata:
         library:
           source_catalog: library-platform
@@ -559,8 +555,6 @@ library:
       requires:
         - standard:python
         - standard:judge-layer
-        - standard:english-only
-        - standard:no-emoji
       runtime_requirements:
         binaries:
           - uv
@@ -585,8 +579,6 @@ library:
         - standard:agentic-primitives
         - standard:primitive-placement
         - standard:judge-layer
-        - standard:english-only
-        - standard:no-emoji
       metadata:
         library:
           source_catalog: library-platform
@@ -601,8 +593,6 @@ library:
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
-        - standard:english-only
-        - standard:no-emoji
       scripts:
         - path: scripts/init-script.py
           role: entrypoint
@@ -624,8 +614,6 @@ library:
         - standard:agentic-primitives
         - standard:primitive-placement
         - standard:judge-layer
-        - standard:english-only
-        - standard:no-emoji
       metadata:
         library:
           source_catalog: library-platform
@@ -637,8 +625,6 @@ library:
     - name: ai-readiness
       description: Structured AI-Readiness Self-Assessment across 6 dimensions. Use for career planning or evaluating AI capability readiness. Triggers on AI readiness, self assessment, AI capability check, career readiness.
       source: https://github.com/sussdorff/library-core/blob/main/skills/ai-readiness/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -649,8 +635,6 @@ library:
     - name: amazon
       description: Amazon.de automation via playwright-cli with local purchases database. Use for downloading invoices, searching order history, or querying past purchases. Triggers on amazon rechnung, amazon bestellung, amazon order, was habe ich gekauft.
       source: https://github.com/sussdorff/library-core/blob/main/skills/amazon/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -661,8 +645,6 @@ library:
     - name: career-check
       description: Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment. Use when evaluating career positioning or assessing AI impact. Triggers on career check, career analysis, career collapse, AI career, role assessment.
       source: https://github.com/sussdorff/library-core/blob/main/skills/career-check/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -673,8 +655,6 @@ library:
     - name: google-invoice
       description: Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML, and send to accounting. Triggers on google rechnung, google invoice, google one beleg.
       source: https://github.com/sussdorff/library-core/blob/main/skills/google-invoice/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -685,8 +665,6 @@ library:
     - name: customer-invoice
       description: Create outgoing Cognovis customer invoices with collmex-cli, Timing.app, MoneyMoney travel costs, ZUGFeRD/PDF output, Collmex booking, and visible Apple Mail drafts. Triggers on Ausgangsrechnung, customer invoice, Kundenrechnung, cognovis billing.
       source: https://github.com/sussdorff/library-core/blob/main/skills/customer-invoice/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -697,8 +675,6 @@ library:
     - name: mm-cli
       description: CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts, balances, transactions, cashflow, or spending. Triggers on MoneyMoney, bank accounts, transactions, cashflow, spending, balance.
       source: https://github.com/sussdorff/library-core/blob/main/skills/mm-cli/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -709,8 +685,6 @@ library:
     - name: linkedin
       description: LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles, reading feeds, writing recommendations, or searching people. Triggers on LinkedIn, profile extraction, connections, feed, LinkedIn search, recommendation.
       source: https://github.com/sussdorff/library-core/blob/main/skills/linkedin/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -721,8 +695,6 @@ library:
     - name: transcribe
       description: Transcribe audio files with speaker diarization via AssemblyAI. Supports local files and Plaud AI cloud recordings.
       source: https://github.com/sussdorff/library-core/blob/main/skills/transcribe/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -733,8 +705,6 @@ library:
     - name: hetzner-cloud
       description: Manage Hetzner Cloud infrastructure via hcloud CLI and Robot. Use when creating/modifying DNS records, managing servers, switching projects, or transferring domains. Triggers on hetzner, hcloud, dns zone, domain transfer.
       source: https://github.com/sussdorff/library-core/blob/main/skills/hetzner-cloud/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -745,8 +715,6 @@ library:
     - name: home-infra
       description: 'Home infrastructure overview: hardware, network, services, and CLI tools. Use when finding what runs where, choosing CLI tools, or planning infra changes. Triggers on home infra, home network, what devices, home server.'
       source: https://github.com/sussdorff/library-core/blob/main/skills/home-infra/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -757,8 +725,6 @@ library:
     - name: local-vm
       description: Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when SSH fails due to stopped VMs, or to start/stop/check VM status. Triggers on VM not running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox.
       source: https://github.com/sussdorff/library-core/blob/main/skills/local-vm/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -769,8 +735,6 @@ library:
     - name: paperless-cli
       description: Interact with Paperless-ngx document management via REST API. Use when searching documents, downloading PDFs, uploading scans, or querying tags. Triggers on paperless, scanned document, document archive.
       source: https://github.com/sussdorff/library-core/blob/main/skills/paperless-cli/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -781,8 +745,6 @@ library:
     - name: piler-cli
       description: CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when querying archived emails, searching mail history, or reading past messages. Triggers on mailpiler, mail archive, piler search, alte mails, email archiv.
       source: https://github.com/sussdorff/library-core/blob/main/skills/piler-cli/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:personal
         - tier:project
@@ -794,7 +756,6 @@ library:
       description: Save any URL to open-brain memory as curated_content. Detects content type (video/article/doc), extracts via the right tool, and persists with source_url, extraction_date, and content_type metadata.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ingest-content/SKILL.md
       requires:
-        - standard:english-only
         - mcp:open-brain
       tags:
         - origin:personal
@@ -808,7 +769,6 @@ library:
       description: Periodic memory maintenance for open-brain. Runs lifecycle pipeline during work hours, generates daily digest at end-of-day, weekly summary on Fridays.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/memory-heartbeat/SKILL.md
       requires:
-        - standard:english-only
         - mcp:open-brain
       tags:
         - origin:personal
@@ -822,7 +782,6 @@ library:
       description: Migrate knowledge into open-brain memory. Interactive (extract from prior chat) or batch (JSONL / Obsidian/Markdown file) mode.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-migrate/SKILL.md
       requires:
-        - standard:english-only
         - mcp:open-brain
       tags:
         - origin:personal
@@ -836,7 +795,6 @@ library:
       description: Search open-brain memory for past observations, session summaries, learnings. Use when "what did I learn", "past sessions", "recall", "remember".
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-search/SKILL.md
       requires:
-        - standard:english-only
         - mcp:open-brain
       tags:
         - origin:personal
@@ -850,7 +808,6 @@ library:
       description: Triage open-brain memories with human-in-the-loop review. Classifies into keep/merge/archive/delete/promote and asks for approval before executing.
       source: https://github.com/sussdorff/open-brain/blob/main/skills/ob-triage/SKILL.md
       requires:
-        - standard:english-only
         - mcp:open-brain
       tags:
         - origin:personal
@@ -866,8 +823,6 @@ library:
       repo: samurai-skills
       branch: master
       path: plugins/aidbox/skills/aidbox
-      requires:
-        - standard:english-only
       metadata:
         library:
           plane: dev
@@ -888,8 +843,6 @@ library:
       repo: samurai-skills
       branch: master
       path: plugins/aidbox-ig-development/skills/aidbox-ig-development
-      requires:
-        - standard:english-only
       metadata:
         library:
           plane: dev
@@ -910,8 +863,6 @@ library:
       repo: samurai-skills
       branch: master
       path: plugins/aidbox-sql-on-fhir/skills/aidbox-sql-on-fhir
-      requires:
-        - standard:english-only
       metadata:
         library:
           plane: dev
@@ -932,8 +883,6 @@ library:
       repo: samurai-skills
       branch: master
       path: plugins/atomic-generate-types/skills/atomic-generate-types
-      requires:
-        - standard:english-only
       metadata:
         library:
           plane: dev
@@ -954,8 +903,6 @@ library:
       repo: samurai-skills
       branch: master
       path: plugins/hs-search/skills/hs-search
-      requires:
-        - standard:english-only
       metadata:
         library:
           plane: dev
@@ -976,8 +923,6 @@ library:
       repo: samurai-skills
       branch: master
       path: plugins/samurai-skills/skills/fhir-validation
-      requires:
-        - standard:english-only
       metadata:
         library:
           plane: dev
@@ -1009,8 +954,6 @@ library:
     - name: adr-gap
       description: 'Audit a repo for ADR hoist debt and pre-trinity packages. Triggers on: adr gap, hoist debt, adr audit, pre-trinity packages, architecture drift.'
       source: https://github.com/cognovis/library-core/blob/main/skills/adr-gap/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1023,8 +966,6 @@ library:
     - name: angebotserstellung
       description: Professionelle Angebote fuer IT-Projekte und Beratungsleistungen erstellen. Use when writing proposals, revising offers, or calculating project pricing. Triggers on Angebot, proposal, Preiskalkulation, Angebotserstellung, offer, Beratungsangebot.
       source: https://github.com/cognovis/library-core/blob/main/skills/angebotserstellung/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:project
@@ -1047,8 +988,6 @@ library:
     - name: bd-release-notes
       description: Show beads (bd) release notes and changelog
       source: https://github.com/cognovis/library-core/blob/main/skills/bd-release-notes/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1071,8 +1010,6 @@ library:
         - standard:executive-pack
         - standard:workflow
         - standard:model-routing
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -1085,8 +1022,6 @@ library:
     - name: bead-metrics
       description: 'Query per-bead token cost metrics from the local agent metrics database. Shows cost table, impl:review ratios, most expensive beads, cost trend over time. Triggers on: bead metrics, token cost report, bead costs, /bead-metrics.'
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-metrics/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1099,8 +1034,6 @@ library:
     - name: bead-reviewer
       description: Review one live bead by ID against specification and target-repository reality
       source: https://github.com/cognovis/library-core/blob/main/skills/bead-reviewer/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1115,7 +1048,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/billing-reviewer/SKILL.md
       requires:
         - standard:healthcare-control-areas
-        - standard:english-only
       tags:
         - origin:original
         - tier:project
@@ -1129,8 +1061,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/binary-explorer/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1142,8 +1072,6 @@ library:
     - name: brand-forge
       description: Create, review, and manage voice/brand profiles for Claude Code skills. Use when creating brands, reviewing quality, or applying voice profiles. Triggers on create brand, voice profile, review brand, change tone. Not for skill creation.
       source: https://github.com/cognovis/library-core/blob/main/skills/brand-forge/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1157,8 +1085,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/bug-triage/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1170,8 +1096,6 @@ library:
     - name: claude-md-pruner
       description: Review CLAUDE.md files for instructions that newer models handle natively and suggest removals. Use after model updates to prune outdated instructions. Triggers on "prune claude-md", "post-update review", "prune instructions", "model update cleanup".
       source: https://github.com/cognovis/library-core/blob/main/skills/claude-md-pruner/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1183,8 +1107,6 @@ library:
     - name: cmux
       description: End-user control of cmux topology and routing (windows, workspaces, panes/surfaces, focus, moves, reorder, identify, trigger flash). Use when automation needs deterministic placement and navigation in a multi-pane cmux layout.
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1202,8 +1124,6 @@ library:
         - skill:cognovis-beads
         - agent:judge-default
         - standard:judge-layer
-        - standard:english-only
-        - standard:no-emoji
       scripts:
         - path: skills/cmux-bead-dispatch/scripts/cmux_bead_dispatch.py
           role: helper
@@ -1221,8 +1141,6 @@ library:
     - name: cmux-browser
       description: End-user browser automation with cmux. Use when you need to open sites, interact with pages, wait for state changes, and extract data from cmux browser surfaces.
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux-browser/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1234,8 +1152,6 @@ library:
     - name: cmux-markdown
       description: Open markdown files in a formatted viewer panel with live reload. Use when you need to display plans, documentation, or notes alongside the terminal with rich rendering (headings, code blocks, tables, lists).
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux-markdown/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1247,9 +1163,6 @@ library:
     - name: cmux-workspace
       description: 'use when: scoping cmux automation to the invoking terminal''s current workspace, panes, surfaces, sidebar state, or socket. NOT for: browser page interaction or broad cmux command discovery. boundary: cmux handles general topology and cmux-browser handles browser content; this skill owns live-caller workspace safety.'
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux-workspace/SKILL.md
-      requires:
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -1261,8 +1174,6 @@ library:
     - name: code-navigator
       description: 'use when: navigating source code by symbol — find where a function/class is defined (smart_search), see the structural skeleton of a file (smart_outline), or extract one specific function/class AST-bounded (smart_unfold). Works on Python with the built-in AST and uses lightweight structural fallbacks for TS/JS/Go/Rust. NOT for: full-text search inside function bodies (use Grep); files under ~100 lines where plain Read is cheaper than outline. boundary: code-navigator is for symbol-level navigation; Grep is for text; Read is for whole files. Especially useful in polaris and mira (TS).'
       source: https://github.com/cognovis/library-core/blob/main/skills/code-navigator/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1290,8 +1201,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/context-handoff/SKILL.md
       requires:
         - agent:judge-default
-        - standard:english-only
-        - standard:no-emoji
         - standard:judge-layer
       scripts:
         - path: scripts/resolve_handoff_path.py
@@ -1344,15 +1253,11 @@ library:
         - agent:judge-default
         - skill:bead-execution-loop
         - skill:executive-pack
-        - standard:english-only
         - standard:executive-pack
         - standard:judge-layer
-        - standard:no-emoji
     - name: collmex-cli
       description: CLI wrapper for Collmex Buchhaltung Pro API. Use when managing vendors, invoices, open items, bookings, or generating ZUGFeRD XML. Triggers on Collmex, accounting, invoices, payables, vendors, Buchhaltung, Lieferanten, offene Posten.
       source: https://github.com/cognovis/library-core/blob/main/skills/collmex-cli/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:project
@@ -1377,7 +1282,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/compound/SKILL.md
       requires:
         - mcp:open-brain
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1390,8 +1294,6 @@ library:
     - name: council
       description: Multi-perspective sequential document review. Orchestrates 4 specialized Haiku subagents that critique a document from different angles (End-User, Developer, Security, Product Owner for requirements; configurable per type). Produces a consolidated findings table sorted by severity. Use when reviewing specs, requirements, deliverables, or training materials.
       source: https://github.com/cognovis/library-core/blob/main/skills/council/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1403,8 +1305,6 @@ library:
     - name: daily-brief
       description: Generate and manage daily project briefs. Reads from and writes to open-brain as the system of record (type=daily_brief). Disk write is opt-in via --persist-disk. Use for daily summaries of git activity, bead progress, and open-brain entries across tracked projects.
       source: https://github.com/cognovis/library-core/blob/main/skills/daily-brief/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1416,8 +1316,6 @@ library:
     - name: entropy-scan
       description: 'Scan the agent harness (skills, hooks, agents, standards) for invariant violations and entropy. Produces a violation report with actionable fix instructions. Triggers on: entropy scan, harness check, harness validate, invariants check.'
       source: https://github.com/cognovis/library-core/blob/main/skills/entropy-scan/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1429,8 +1327,6 @@ library:
     - name: event-log
       description: Query the structured event log for any project. Shows tool use history, session starts, permission decisions, and errors from the centralized harness events database. Use when investigating session activity, debugging tool usage patterns, reviewing what happened in a session, or querying across projects.
       source: https://github.com/cognovis/library-core/blob/main/skills/event-log/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1448,9 +1344,7 @@ library:
         - agent:plan-reviewer
         - agent:doc-changelog-updater
         - standard:model-routing
-        - standard:english-only
         - standard:executive-pack
-        - standard:no-emoji
       scripts:
         - path: skills/executive-pack/scripts/pack_review_contract.py
           role: helper
@@ -1469,8 +1363,6 @@ library:
       description: 'use when: emitting or reviewing FHIR resources against installed IG StructureDefinitions — building/mapping resources, setting meta.profile, choosing a Coding.system or Coding.version, placing a Coding inside an extension, or consuming a new IG version / profile migration (e.g. "consume praxis X.Y", Praxis* -> KBV_*). NOT for: authoring IG artifacts (profiles, extensions, ValueSets, CodeSystems) — use fhir-ig-development; nor general Aidbox REST/runtime/API debugging. boundary: this is the emit-side conformance contract (what a producing adapter must satisfy so `$validate` passes); fhir-ig-development owns upstream authoring and publication preparation, while Aidbox skills cover server-specific behavior.'
       source: https://github.com/cognovis/library-core/blob/main/skills/fhir-emission/SKILL.md
       requires:
-        - standard:english-only
-        - standard:no-emoji
         - standard:fhir-ig-authoring
       tags:
         - origin:original
@@ -1486,8 +1378,6 @@ library:
         use when: authoring, consolidating, validating, or preparing publication of FHIR Implementation Guide profiles, extensions, CodeSystems, ValueSets, examples, and narrative content with FSH/SUSHI and IG Publisher. NOT for: mapping application data into an installed profile (use fhir-emission), or Aidbox-specific server installation and runtime debugging (use aidbox-ig-development). boundary: this skill owns the provider-neutral IG source workflow and publication evidence; fhir-ig-authoring supplies modeling rules, while neighboring skills own emitters and server-specific validation.
       source: https://github.com/cognovis/library-core/blob/main/skills/fhir-ig-development/SKILL.md
       requires:
-        - standard:english-only
-        - standard:no-emoji
         - standard:fhir-ig-authoring
         - standard:judge-layer
         - skill:fhir-emission
@@ -1506,9 +1396,6 @@ library:
       description: >-
         use when: checking whether a FHIR Implementation Guide or package already exists for a requirement before authoring new profiles, extensions, or terminology — searching the HL7 IG registry (registry.fhir.org) and the FHIR package registries (packages.fhir.org, packages2.fhir.org, packages.simplifier.net), evaluating candidates by canonical, FHIR version, maturity, and publisher, or answering "is there an IG for X" / "package vs IG". NOT for: authoring IG artifacts (use fhir-ig-development), installing packages into a server (use aidbox-ig-development), or mapping application data into installed profiles (use fhir-emission). boundary: this skill owns read-only pre-authoring discovery and returns a structured reuse verdict; fhir-ig-development starts only after this skill's verdict is author-new or derive.
       source: https://github.com/cognovis/library-core/blob/main/skills/fhir-registry-research/SKILL.md
-      requires:
-        - standard:english-only
-        - standard:no-emoji
       runtime_requirements:
         binaries:
           - uv
@@ -1578,8 +1465,6 @@ library:
     - name: infra-principles
       description: Infrastructure engineering principles for server work, deployments, and multi-agent collaboration. Use when working on servers, deploying services, writing deployment scripts, or coordinating parallel agent edits. Triggers on infrastructure, deploy, server, IaC, multi-agent, parallel edits.
       source: https://github.com/cognovis/library-core/blob/main/skills/infra-principles/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1605,7 +1490,6 @@ library:
       requires:
         - skill:executive-pack
         - skill:bug-triage
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1629,8 +1513,6 @@ library:
     - name: mail-send
       description: Send emails with attachments via Apple Mail AppleScript automation. Prepares a visible draft for user review before sending. Use when sending emails with file attachments. Triggers on send email, mail send, email with attachment, mail schicken.
       source: https://github.com/cognovis/library-core/blob/main/skills/mail-send/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1642,8 +1524,6 @@ library:
     - name: nbj-audit
       description: 'Audit a codebase against Nate''s 12 NBJ agent primitives and produce a scored scorecard with risk levels and delta tracking. Triggers on: nbj audit, agent primitives audit, harness audit, 12 primitives check, plumbing audit.'
       source: https://github.com/cognovis/library-core/blob/main/skills/nbj-audit/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1672,8 +1552,6 @@ library:
         - skill:cognovis-beads
         - mcp:lsp
         - standard:executive-pack
-        - standard:english-only
-        - standard:no-emoji
       scripts:
         - path: scripts/collect-beads.py
           role: helper
@@ -1714,8 +1592,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/playwright-cli/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1727,8 +1603,6 @@ library:
     - name: plugin-management
       description: Create, test, and distribute Claude Code plugins. Use when building plugins, converting skills to packages, or managing marketplace distribution. Triggers on create plugin, plugin, marketplace, distribute plugin, test plugin, plugin.json.
       source: https://github.com/cognovis/library-core/blob/main/skills/plugin-management/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1740,8 +1614,6 @@ library:
     - name: portless
       description: Set up named local dev server URLs (e.g. myapp.localhost) via portless proxy. Use when configuring dev server names, resolving port conflicts, or setting up .localhost domains. Triggers on portless, EADDRINUSE, dev server URL, localhost, dev proxy.
       source: https://github.com/cognovis/library-core/blob/main/skills/portless/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1755,8 +1627,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/project-context/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1770,8 +1640,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/project-health/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1785,8 +1653,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/project-setup/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1801,8 +1667,6 @@ library:
       version: 1.0.0
       requires:
         - standard:python-cli-patterns
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1817,8 +1681,6 @@ library:
       version: 1.0.0
       requires:
         - standard:python-cli-patterns
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1830,8 +1692,6 @@ library:
     - name: refactor-note
       description: Refactor Note
       source: https://github.com/cognovis/library-core/blob/main/skills/refactor-note/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1847,7 +1707,6 @@ library:
       requires:
         - mcp:open-brain
         - skill:bead-metrics
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1860,8 +1719,6 @@ library:
     - name: review-conventions
       description: Scan a project for undocumented coding conventions and propose new standards (HITL). Filters aggressively — most runs yield 0-2 proposals. Distinguishes industry standards (skip), anti-patterns (refactoring beads), and genuine team-specific conventions (propose). Triggers on "review conventions", "scan for conventions", "propose standards", "find undocumented patterns".
       source: https://github.com/cognovis/library-core/blob/main/skills/review-conventions/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -1904,8 +1761,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/spec-developer/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -1929,7 +1784,6 @@ library:
       description: Manage coding standards lifecycle - list, inject, create, sync, review. Use when loading standards, checking compliance, creating new standards, or syncing standards to projects. Triggers on standards, inject standards, load standards, check compliance, create standard, sync standards, review conventions, check patterns, apply patterns.
       source: https://github.com/cognovis/library-core/blob/main/skills/standards/SKILL.md
       requires:
-        - standard:english-only
         - skill:cognovis-beads
       tags:
         - origin:original
@@ -1953,8 +1807,6 @@ library:
     - name: summarize
       description: Content extraction and summarization via summarize CLI and Crawl4AI. Use for extracting web content, YouTube transcripts, podcasts, and generating AI summaries.
       source: https://github.com/cognovis/library-core/blob/main/skills/summarize/skill.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1966,8 +1818,6 @@ library:
     - name: sync-standards
       description: Synchronize global standards and commands into the current project for team sharing. Use when sharing standards with a team or copying conventions to a project. Triggers on sync standards, share standards, team standards, sync conventions.
       source: https://github.com/cognovis/library-core/blob/main/skills/sync-standards/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1979,8 +1829,6 @@ library:
     - name: token-cost
       description: Measure static context token overhead for agent sessions. Use when auditing context window usage, checking skill/agent/conventions token costs, or generating a ranked report of heaviest context contributors.
       source: https://github.com/cognovis/library-core/blob/main/skills/token-cost/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -1992,8 +1840,6 @@ library:
     - name: ui-cli
       description: CLI for querying UniFi network infrastructure. Use when finding devices, looking up client MAC/IP, checking network config, or listing WLANs. Triggers on UniFi, network clients, WiFi, AP, switch, gateway, device IP, device MAC.
       source: https://github.com/cognovis/library-core/blob/main/skills/ui-cli/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -2005,8 +1851,6 @@ library:
     - name: vision
       description: Unconstrained creative brainstorming and lateral thinking mode. No quality gates, no feasibility checks, no task tracking — pure idea generation. Use when the user says "vision", "brainstorm", "Kreativmodus", "was wäre wenn", "what if", or wants to explore possibilities without constraints.
       source: https://github.com/cognovis/library-core/blob/main/skills/vision/SKILL.md
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -2020,8 +1864,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/skills/vision-author/SKILL.md
       requires:
         - standard:tool-standards
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -2053,15 +1895,12 @@ library:
           inventory: convention-scan
           plane: dev
       requires:
-        - standard:english-only
-        - standard:no-emoji
         - standard:meta-parameters
     - name: workplan
       description: Triage the beads backlog into keep, fold, weed, move, and cluster decisions. Use when reviewing stale work, planning the next batch, or running backlog refinement.
       source: https://github.com/cognovis/library-core/blob/main/skills/workplan/SKILL.md
       requires:
         - skill:bead-reviewer
-        - standard:english-only
       tags:
         - origin:original
         - tier:core
@@ -2074,9 +1913,6 @@ library:
     - name: worktree-cleanup
       description: Inventory, classify, and conservatively clean Git worktrees and local branches across all repositories on a machine. Reports managed, provider-native, legacy, dirty, locked, active-bead, contained, patch-equivalent, and conflict-free merge candidates in human or JSON form. Use when worktrees have piled up, worktree placement needs auditing, or the user asks which branches can be merged or removed. Triggers on worktree cleanup, worktrees aufräumen, prune worktrees, stale worktrees, remove merged branches, and /worktree-cleanup.
       source: https://github.com/cognovis/library-core/blob/main/skills/worktree-cleanup/SKILL.md
-      requires:
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -2093,9 +1929,6 @@ library:
           role: helper
           entrypoint: true
           language: python
-      requires:
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -2159,8 +1992,6 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
-      requires:
-        - standard:english-only
       tags:
         - origin:original
         - tier:domain
@@ -2170,8 +2001,6 @@ library:
       requires:
         - standard:executive-pack
         - standard:workflow
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -2187,8 +2016,6 @@ library:
       requires:
         - standard:executive-pack
         - standard:model-routing
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -2203,8 +2030,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-depth-reviewer.md
       requires:
         - standard:executive-pack
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -2219,8 +2044,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-boundary-reviewer.md
       requires:
         - standard:executive-pack
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -2235,8 +2058,6 @@ library:
       source: https://github.com/cognovis/library-core/blob/main/agents/bead-review-adjudicator.md
       requires:
         - standard:executive-pack
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -2271,8 +2092,6 @@ library:
       tags:
         - origin:original
         - tier:domain
-      requires:
-        - standard:english-only
     - name: ci-monitor
       handlers:
         - agents/ci-monitor-handlers
@@ -2362,8 +2181,6 @@ library:
       requires:
         - skill:fhir-ig-development
         - standard:fhir-ig-authoring
-        - standard:english-only
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:domain
@@ -2527,7 +2344,6 @@ library:
         - script:triage/query_history
         - standard:bead-hygiene
         - standard:cross-bead-review
-        - standard:english-only
         - standard:triage-pattern
       metadata:
         library:
@@ -2583,9 +2399,7 @@ library:
         - skill:cmux
         - skill:cmux-workspace
         - skill:executive-pack
-        - standard:english-only
         - standard:executive-pack
-        - standard:no-emoji
       tags:
         - origin:original
         - tier:core
@@ -2623,19 +2437,6 @@ library:
       tags:
         - origin:original
         - tier:core
-        - category:standard
-    - name: english-only
-      description: All source code MUST be in English — including comments, identifiers, log messages, and string literals. This standard applies even when the user prompt is in German.
-      source: https://github.com/cognovis/library/blob/main/standards/workflow/english-only.md
-      tier: global
-      metadata:
-        library:
-          plane: dev
-          steward: library-platform
-          source_catalog: library-platform
-      tags:
-        - origin:original
-        - tier:global
         - category:standard
     - name: release-lifecycle
       description: 'Repo-agnostic release lifecycle contract (ADR-0008): bead metadata is release truth, pipelines supply evidence, release.version is write-once. Defines the release_note/release metadata schema, lifecycle states, per-repo gate declaration, and the release.* typed-tool surface (CL-ugwe.11). Single source for the release metadata shape — not duplicated into library.schema.json.'
@@ -2727,19 +2528,6 @@ library:
         - tier:domain
         - category:standard
         - workflow:beads
-    - name: no-emoji
-      description: Do not add emojis to source code files, configuration files, or technical documentation. Emojis degrade diff readability and cause encoding issues in some terminals.
-      source: https://github.com/cognovis/library/blob/main/standards/workflow/no-emoji.md
-      tier: global
-      metadata:
-        library:
-          plane: dev
-          steward: library-platform
-          source_catalog: library-platform
-      tags:
-        - origin:original
-        - tier:global
-        - category:standard
     - name: tool-standards
       description: Dev-tools agent tool standards — constraints for implementers, test authors, and validators. Defines allowed tools and information barrier rules.
       source: https://github.com/cognovis/library-core/blob/main/standards/dev-tools/tool-standards.md
@@ -4263,12 +4051,6 @@ library:
         - type: skill
           name: session-close
           catalog: core
-        - type: standard
-          name: english-only
-          catalog: platform
-        - type: standard
-          name: no-emoji
-          catalog: platform
       metadata:
         library:
           source_catalog: library-platform

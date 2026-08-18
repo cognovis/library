@@ -55,7 +55,7 @@ shared knowledge it just opened.
 | Field | Use when content is | Example |
 |-------|---------------------|---------|
 | `domain:` | A body of knowledge about a topic | `domain: python-cli-patterns`, `domain: healthcare-control-areas` |
-| `rule:` | A convention or prohibition that applies broadly | `rule: english-only`, `rule: no-emoji`, `rule: adr-location` |
+| `rule:` | A convention or prohibition that applies broadly | `rule: no-mock-data`, `rule: sql-safety` |
 
 ```yaml
 # Domain-style standard:
@@ -66,8 +66,8 @@ description: How to author Python CLIs with argparse, click, and the release flo
 
 # Rule-style standard:
 ---
-rule: english-only
-description: All source code is English; user-facing strings may be localized.
+rule: no-mock-data
+description: Production code uses real data boundaries and seed fixtures instead of hardcoded mock responses.
 ---
 ```
 
@@ -104,7 +104,7 @@ when parts of the standard can be enforced or automated deterministically.
 
 | Standard kind | Typical script role | Called by |
 |---------------|---------------------|-----------|
-| `rule:` | Enforcement — e.g. `scripts/check-english.py` scans source files and exits non-zero on violation | Pre-commit hooks, guardrails |
+| `rule:` | Enforcement — e.g. `scripts/check-mocks.py` scans source files and exits non-zero on violation | Pre-commit hooks, guardrails |
 | `domain:` | Tooling — e.g. `scripts/scaffold-cli.py` generates argparse boilerplate | Skills that consume the standard |
 
 Scripts are **not invoked by the standard itself** — the standard's `.md` remains

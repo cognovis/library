@@ -924,8 +924,6 @@ smoke_migration() {
     # -----------------------------------------------------------------------
     if [[ -d "${global_standards_dir}" ]]; then
         local required_standards=(
-            "english-only.md"
-            "no-emoji.md"
             "tool-standards.md"
             "healthcare-control-areas.md"
             "conventional-commits.md"

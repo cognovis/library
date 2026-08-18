@@ -56,14 +56,11 @@ def test_library_authoring_roots_resolve_standalone() -> None:
 
     closure = resolve_workspace_closure(catalog, workspace, REPO_ROOT, "project")
 
-    # english-only and no-emoji are owned members, not prerequisites: since the
-    # CL-9yok recut nothing in this closure is satisfied from outside the
-    # repository, so it carries no prerequisite at all.
+    # Since the CL-9yok recut nothing in this closure is satisfied from outside
+    # the repository, so it carries no prerequisite at all.
     assert set(closure.artifacts) == FORGE_ROOTS | {
         ("standard", "agentic-primitives"),
-        ("standard", "english-only"),
         ("standard", "judge-layer"),
-        ("standard", "no-emoji"),
         ("standard", "primitive-placement"),
     }
     assert set(closure.prerequisites) == set()
@@ -119,12 +116,10 @@ def test_platform_lock_registers_baseline_daily_python_and_authoring_workspaces(
         "skill:worktree-cleanup",
         "standard:agentic-primitives",
         "standard:bead-hygiene",
-        "standard:english-only",
         "standard:executive-pack",
         "standard:git",
         "standard:judge-layer",
         "standard:model-routing",
-        "standard:no-emoji",
         "standard:primitive-placement",
         "standard:python-cli-patterns",
         "standard:tool-standards",

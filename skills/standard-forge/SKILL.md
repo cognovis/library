@@ -9,7 +9,7 @@ description: >-
   Triggers on create standard, new standard, standard-forge, scaffold standard,
   validate standard, check standard, requires_standards.
 disableModelInvocation: true
-requires_standards: [agentic-primitives, primitive-placement, judge-layer, english-only, no-emoji]
+requires_standards: [agentic-primitives, primitive-placement, judge-layer]
 ---
 
 # Standard Forge
@@ -110,10 +110,10 @@ A dev-plane standard may reference the product surface via metadata.library.prod
 Ask the user (one question at a time, skip if already answered):
 
 1. **Identifier:** What is the standard's kebab-case identifier? (e.g.
-   `python-cli-patterns`, `english-only`)
+   `python-cli-patterns`, `no-mock-data`)
 2. **Kind:** Is the content a **domain** (body of knowledge about a topic — e.g.
    `python-cli-patterns`, `healthcare-control-areas`), a **rule** (broad
-   convention or prohibition — e.g. `english-only`, `no-emoji`), an
+   convention or prohibition — e.g. `no-mock-data`, `sql-safety`), an
    **action proposal schema**, or a **mandate schema**?
 3. **Description:** One sentence — what factual guidance does this provide?
 4. **Sub-topics?** If the content exceeds 600 tokens or has multiple sub-areas,
@@ -316,7 +316,7 @@ Field guidance:
 | Field | Values | Notes |
 |-------|--------|-------|
 | `name` | matches the file's `domain:`/`rule:` identifier | Catalog-internal identifier, kebab-case |
-| `tier` | `core` (forge-loaded core context), `domain` (topic-specific), `global` (always-applicable rule like `english-only`) | Use `global` only for cross-cutting rules; `domain` is the default |
+| `tier` | `core` (forge-loaded core context), `domain` (topic-specific), `global` (cross-cutting contract like `release-lifecycle`) | Use `global` only for cross-cutting rules; `domain` is the default |
 | `default_scope` | omit it | Library installs into the current Git repository, so there is nothing to select. The one legitimate `default_scope: global` in the catalog is `script:ccore`, where it marks an intrinsically machine-wide PATH tool; a standard is never that. |
 | `source` | `blob` URL to entry file for **single-entry** standards; `tree` URL to the folder for **folder-form-with-siblings** | Mismatch causes the installer to drop sibling files |
 
