@@ -13,7 +13,7 @@ catalogs:
     identity: https://github.com/cognovis/library-core
     pin:
       kind: commit
-      value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
+      value: f87ce1f3571a7d75f924aa5eed61df3b46a02f2a
 roots:
   # Backlog and triage
   - type: skill
