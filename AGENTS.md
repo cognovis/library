@@ -50,13 +50,13 @@ it is in `bd prime`.
 
 ## Repository-specific Conventions
 
-### Packaged Launchers (`cld` / `cdx`)
+### Harness Launchers (`cld` / `cdx` / `cra`)
 
-- **Packaged home:** `scripts/bin/` (this repo)
-  - `scripts/bin/cld` — Claude Code launcher (full-featured zsh wrapper)
-  - `scripts/bin/cdx` — Codex CLI launcher (parallel to `cld`)
-- **Install:** `bash install.sh`, then `library bootstrap install`. The first command installs the CLI and launchers with `uv tool`; the second safely creates the receipted product bootstrap without overwriting operator-owned files.
-- **Compatibility copies:** `bin/` remains synchronized with `scripts/bin/` for source-checkout users until the legacy launcher path is formally retired.
+- **Owner:** the `harness-cli` repository (distribution `cognovis-harness-cli`),
+  installed with `uv tool`. The legacy launcher generation in this repository
+  (`bin/cld`, `bin/cdx`, `scripts/bin/`, `scripts/launchers.py`) was retired
+  under CL-iv72; do not reintroduce launcher sources here.
+- **Install:** `bash install.sh`, then `library bootstrap install`. The first command installs the CLI with `uv tool`; the second safely creates the receipted product bootstrap without overwriting operator-owned files.
 
 ### `library.yaml` Schema Ownership (serialized)
 

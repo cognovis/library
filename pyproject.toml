@@ -13,8 +13,6 @@ dependencies = [
 
 [project.scripts]
 library = "scripts.library:main"
-cld = "scripts.launchers:cld"
-cdx = "scripts.launchers:cdx"
 
 [build-system]
 requires = ["setuptools>=68"]

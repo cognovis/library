@@ -40,12 +40,3 @@ def test_retired_runtime_entries_are_absent() -> None:
 
     assert retired_skill not in names["skills"]
     assert not retired_agents & names["agents"]
-
-
-def test_canonical_launchers_accept_coordinator_identity_flags() -> None:
-    for launcher in ("cld", "cdx"):
-        source = (ROOT / "bin" / launcher).read_text(encoding="utf-8")
-        assert "--coordinator-workspace)" in source
-        assert "--coordinator-surface)" in source
-        assert "--coordinator-workspace workspace:<n>" in source
-        assert "--coordinator-surface surface:<n>" in source

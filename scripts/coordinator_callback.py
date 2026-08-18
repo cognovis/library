@@ -7,11 +7,11 @@ variables -- for callback identity (workspace ref, surface ref, run id,
 event name). See docs/ARCHITECTURE.md "Coordinator callbacks" for the
 best-effort signaling contract this executor implements deterministically.
 
-This module is greenfield and standalone: it does not wire into bin/cld or
-bin/cdx (that lifecycle wiring is out of scope here; see sibling beads
-CL-gzvu / CL-eqiq). It exists so those launchers can eventually delegate to a
-single, tested, exactly-once delivery implementation instead of duplicating
-the current best-effort prose contract.
+This module is greenfield and standalone: it is not wired into the harness
+launchers (that lifecycle wiring lives in the `harness-cli` repository). It
+exists so the launchers can delegate to a single, tested, exactly-once
+delivery implementation instead of duplicating the current best-effort prose
+contract.
 
 Exit codes:
   0 - success: delivered now, already delivered (idempotent no-op), or no

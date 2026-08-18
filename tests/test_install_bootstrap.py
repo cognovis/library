@@ -125,7 +125,7 @@ def test_install_sh_leaves_historical_forge_link_outside_bootstrap_scope(
 
 
 def test_packaged_launcher_copies_remain_identical_to_compatibility_copies() -> None:
-    for relative in ("cld", "cdx", "lib/orchestrator-config-sync.zsh"):
+    for relative in ("lib/orchestrator-config-sync.zsh",):
         assert (REPO_ROOT / "bin" / relative).read_bytes() == (
             REPO_ROOT / "scripts" / "bin" / relative
         ).read_bytes()

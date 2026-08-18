@@ -7,11 +7,12 @@ make an agent session behave like the main checkout — installed skills under
 fresh worktree starts without them. Hygiene review, standards resolution, and
 session-close gates then behave differently from the main checkout.
 
-Both launchers bootstrap the same overlay set through this module:
+The harness launchers (now owned by the `harness-cli` repository) bootstrap
+the same overlay set through this module:
 
-* `bin/cdx` calls ``link`` after its own ``git worktree add``, because Codex has
+* `cdx` calls ``link`` after its own ``git worktree add``, because Codex has
   no worktree bootstrap of its own.
-* `bin/cld` calls ``resolve --from-index --directories-only --json`` before
+* `cld` calls ``resolve --from-index --directories-only --json`` before
   launch and hands the result to Claude Code's native
   ``worktree.symlinkDirectories`` setting, which does the linking during its
   native ``--worktree`` creation.
@@ -29,7 +30,7 @@ The two probes differ only in how "the worktree owns this path" is answered:
 `cdx` inspects the worktree it just created, `cld` inspects the Git index of the
 main checkout because its worktree does not exist yet.
 
-Standard library only: both launchers invoke it with the ambient `python3`
+Standard library only: the launchers invoke it with the ambient `python3`
 before any project environment is available.
 """
 

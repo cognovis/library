@@ -1,10 +1,11 @@
-"""Tests for the shared launcher worktree-overlay resolver.
+"""Tests for the shared worktree-overlay resolver.
 
 A fresh Git worktree does not carry the gitignored overlay directories that a
-main checkout has (`.agents/`, `.claude/skills/`, `.env`). Both launchers must
-bootstrap the same overlay set: `cdx` creates the symlinks itself after
-`git worktree add`, and `cld` hands the resolved directory list to Claude Code's
-native `worktree.symlinkDirectories` setting.
+main checkout has (`.agents/`, `.claude/skills/`, `.env`). The resolver emits
+the overlay set a worktree needs: `link` creates the symlinks after
+`git worktree add`, and `resolve --from-index --directories-only --json`
+produces the directory list for Claude Code's native
+`worktree.symlinkDirectories` setting.
 """
 
 from __future__ import annotations
@@ -22,8 +23,6 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = _REPO_ROOT / "scripts" / "worktree-overlays.py"
-_CDX_BIN = _REPO_ROOT / "bin" / "cdx"
-_CLD_BIN = _REPO_ROOT / "bin" / "cld"
 
 
 def _load_module() -> ModuleType:
@@ -189,19 +188,6 @@ def test_resolve_json_emits_directories_only_for_the_claude_setting(
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == [".agents", ".claude/skills"]
-
-
-def test_both_launchers_bootstrap_through_the_shared_resolver() -> None:
-    """AC2 parity: neither launcher may carry its own overlay list."""
-    cdx_source = _CDX_BIN.read_text(encoding="utf-8")
-    cld_source = _CLD_BIN.read_text(encoding="utf-8")
-
-    # cdx resolves its packaged resource dir first, so it references the shared
-    # resolver by name rather than by a hard-coded "scripts/" prefix.
-    assert "worktree-overlays.py" in cdx_source
-    assert "scripts/worktree-overlays.py" in cld_source
-    for source in (cdx_source, cld_source):
-        assert ".agents .claude/skills" not in source
 
 
 def test_link_skips_a_dangling_source_symlink(tmp_path: Path) -> None:

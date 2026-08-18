@@ -148,14 +148,13 @@ Marketplace repos are the exception. In this `meta/` repo and the library-core
 marketplaces, source content lives under top-level `skills/`, `standards/`,
 `agents/`, and `prompts/`; `.agents/` remains an ignored install destination.
 
-## Launchers (cld/cdx)
+## Launchers (cld/cdx/cra)
 
-The packaged source for all CLI launchers is `cognovis-library/scripts/bin/`:
-
-| File | Description |
-|------|-------------|
-| `scripts/bin/cld` | Claude Code launcher — full-featured zsh wrapper (~500 lines) |
-| `scripts/bin/cdx` | Codex CLI launcher — zsh wrapper, parallel to `cld` (bead `CL-tap`) |
+The launchers are owned by the `harness-cli` repository (distribution
+`cognovis-harness-cli`, installed via `uv tool`). The legacy launcher sources in
+this repository (`scripts/bin/cld`, `scripts/bin/cdx`, `bin/` compatibility
+copies) were retired under CL-iv72. The behavioral contract below is preserved
+by `harness-cli` and documented here as the integration boundary.
 
 **Deployment:** `uv tool install` owns the packaged Library control plane.
 `install.sh --fresh` is the machine bootstrap entrypoint: it prepares portable
@@ -179,7 +178,7 @@ terminal typed result record with a supported verdict. No metadata write occurs 
 malformed response or failed provider turn. The MCP transport is pinned to the local
 loopback endpoint.
 
-**Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch. `scripts/coordinator_callback.py` (CL-t32e) provides a standalone, tested exactly-once delivery executor for this contract (atomic lock + state file per `(run_id, event)`); it is not yet wired into `scripts/bin/cld`/`scripts/bin/cdx` — that lifecycle wiring is scoped to CL-gzvu (`cld`) and CL-eqiq (`cdx`), which will replace the best-effort prompt-injected contract described above with calls to this executor.
+**Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch. `scripts/coordinator_callback.py` (CL-t32e) provides a standalone, tested exactly-once delivery executor for this contract (atomic lock + state file per `(run_id, event)`); wiring the launchers to this executor is scoped to CL-gzvu (`cld`) and CL-eqiq (`cdx`) in `harness-cli`, which will replace the best-effort prompt-injected contract described above with calls to this executor.
 
 **Route profiles** (`--route-profile NAME`): Both launchers accept an optional `--route-profile` flag
 that selects a named profile from `orchestrator-config.yml`. The selected name is passed explicitly as a
