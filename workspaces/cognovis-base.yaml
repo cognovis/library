@@ -10,14 +10,14 @@ catalogs:
       kind: commit
       value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
   - alias: core
-    identity: https://github.com/cognovis/library-core
+    identity: https://git.cognovis.de/cognovis/library-core
     pin:
       kind: commit
       value: 32051847d40e3ed57900251369b47f908b3d9550
   # clc-i19u: the delivery closure reaches skill:acpx-dispatch, which ccore serves
   # beside the `ccore acpx` command it documents.
   - alias: ccore
-    identity: https://github.com/cognovis/ccore
+    identity: https://git.cognovis.de/cognovis/ccore
     pin:
       kind: commit
       value: fc6162a9a1734c77e7cb2733c3160665f71d5220
