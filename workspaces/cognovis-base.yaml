@@ -1,6 +1,6 @@
 schema_version: 2
 name: cognovis-base
-version: 0.2.0
+version: 0.2.1
 description: Minimal project-local baseline for Cognovis repositories using Library and Beads.
 status: stable
 catalogs:
@@ -13,7 +13,7 @@ catalogs:
     identity: https://github.com/cognovis/library-core
     pin:
       kind: commit
-      value: f87ce1f3571a7d75f924aa5eed61df3b46a02f2a
+      value: 32051847d40e3ed57900251369b47f908b3d9550
   # clc-i19u: the delivery closure reaches skill:acpx-dispatch, which ccore serves
   # beside the `ccore acpx` command it documents.
   - alias: ccore
@@ -22,10 +22,6 @@ catalogs:
       kind: commit
       value: fc6162a9a1734c77e7cb2733c3160665f71d5220
 roots:
-  # Library control plane
-  - type: skill
-    name: library
-    catalog: platform
   # Beads workflow
   - type: skill
     name: cognovis-beads
