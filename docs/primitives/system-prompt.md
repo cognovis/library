@@ -119,17 +119,13 @@ is not re-resolved when the user runs `/clear`, `/compact`, or `--resume`.
   often interact with the harness's permission and hook systems in
   undocumented ways. Strip-and-replace is for ergonomics, not for jailbreaking.
 
-**Status of the cld registry mechanism (2026-05-15).**
+**Status of the cld registry mechanism (2026-05-15, retired 2026-08-18).**
 
-Wired in `bin/cld` but inert in this checkout: `system-prompts/` directory
-and `registry.yml` do not exist, so the injection block at `bin/cld:156-200`
-no-ops and the vendor default is used. To activate, create
-`system-prompts/registry.yml` plus at least one prompt file.
+The legacy platform launcher that wired `system-prompts/registry.yml` has been
+removed. Orchestrator prompt injection is no longer owned by this repository.
 
 **Cross-references.**
 
 - [Agent](agent.md) — the OTHER primitive that has a system prompt (agent-level)
 - [Agent Base](agent-base.md) — Layer 1 of the agent system prompt
 - [Model-Standard](model-standard.md) — Layer 3 of the agent system prompt
-- `bin/cld` (lines 156-200) — orchestrator prompt injection wiring
-- `bin/lib/cld-system-prompt.zsh` — registry resolver

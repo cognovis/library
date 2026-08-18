@@ -150,55 +150,29 @@ marketplaces, source content lives under top-level `skills/`, `standards/`,
 
 ## Launchers (cld/cdx/cra)
 
-The launchers are owned by the `harness-cli` repository (distribution
-`cognovis-harness-cli`, installed via `uv tool`). The legacy launcher sources in
-this repository (`scripts/bin/cld`, `scripts/bin/cdx`, `bin/` compatibility
-copies) were retired under CL-iv72. The behavioral contract below is preserved
-by `harness-cli` and documented here as the integration boundary.
+The short commands `cld`, `cdx`, and `cra` are owned by `cognovis-harness-cli`.
+This repository installs that distribution through `install.sh` and checks that
+the three commands are on `PATH` as part of bootstrap health. It does not
+package a second launcher generation.
 
 **Deployment:** `uv tool install` owns the packaged Library control plane.
 `install.sh --fresh` is the machine bootstrap entrypoint: it prepares portable
 platform and core catalog checkouts in the XDG Library data directory, registers
-them for pinned Workspace resolution, delegates executable installation to
-`uv tool install`, and reconciles the enumerated bootstrap. It creates no global
-Library Skill projection. Plain `install.sh` remains the checkout-local upgrade
-route.
+them for pinned Workspace resolution, installs `library` from this repository
+and the launchers from `cognovis-harness-cli`, and reconciles the enumerated
+bootstrap. It creates no global Library Skill projection. Plain `install.sh`
+remains the checkout-local upgrade route. Pass `--harness-cli-source` to install
+harness-cli from a local checkout instead of the published Git URL.
 
-**Bead modes:** Both launchers are single-bead launchers with three exclusive bead-dispatch flags:
+Launcher behavior — bead modes, review envelopes, worktree overlays, route
+profiles, and permission posture — lives in `harness-cli`. The accepted
+behavior source is that repository's landed main.
 
-| Flag | Description |
-|------|-------------|
-| `-b`/`--bead <id>` | Full bead orchestrator run with session-close |
-| `-bq`/`--bead-quick <id>` | Quick-fix run (lighter orchestration) |
-| `-br`/`--bead-review <id>` | Thin adapter to the current Bead review path. Bead state is read with public `bd` commands and reviewer execution uses ACPX. Claude defaults to Opus and accepts an explicit `--model`; Codex accepts `-m`/`--model`. Bypass flags are rejected. Mutually exclusive with `-b`/`-bq`. |
+**Coordinator callbacks:** `scripts/coordinator_callback.py` remains a
+standalone, tested exactly-once `cmux trigger-flash` executor in this
+repository. It is not a launcher and is not packaged as `cld`/`cdx`/`cra`.
 
-The review client is the trust boundary: bead-authored fields are serialized into a
-bounded, provenance-tagged untrusted-data envelope; provider output must contain one
-terminal typed result record with a supported verdict. No metadata write occurs on a
-malformed response or failed provider turn. The MCP transport is pinned to the local
-loopback endpoint.
-
-**Coordinator callbacks** (`--coordinator-workspace workspace:<n> --coordinator-surface surface:<n>`): Both flags must be supplied together for `-b`/`-bq` runs. When present, a best-effort `cmux trigger-flash` signaling contract is injected into the first prompt so a coordinator pane is notified on blocking questions, terminal state, and the Phase 16 session-close event. Callback identity travels only via CLI parameters, never environment variables. Partial or malformed pairs fail with exit 2 before any harness launch. `scripts/coordinator_callback.py` (CL-t32e) provides a standalone, tested exactly-once delivery executor for this contract (atomic lock + state file per `(run_id, event)`); wiring the launchers to this executor is scoped to CL-gzvu (`cld`) and CL-eqiq (`cdx`) in `harness-cli`, which will replace the best-effort prompt-injected contract described above with calls to this executor.
-
-**Route profiles** (`--route-profile NAME`): Both launchers accept an optional `--route-profile` flag
-that selects a named profile from `orchestrator-config.yml`. The selected name is passed explicitly as a
-`route_profile` parameter to the deterministic `phase0-claim.py` preflight and threaded through the bead-orchestrator prompt text so
-downstream workflow entries resolve the matching `execution_plan` (slots, adapter, model, reasoning_effort,
-timeout). Built-in profiles: `cld-default`, `cdx-default`, `cdx-composer`. When omitted, `cld` passes
-`cld-default` and `cdx` passes `cdx-composer` as code-defined launcher defaults.
-
-**Forced tiers** (`--force-tier TIER`): `cld -b` and `cld -bq` pass the optional administrative override
-as the `force_tier` parameter to the deterministic `phase0-claim.py` preflight. Supported tiers are `quick`, `gsd`, `paul`,
-and `mcp`; the legacy `phase0-claim.py` path is not used by these launchers. GSD and PAUL use the named
-profile's full execution plan, while PAUL additionally enables architecture review and UAT. The typed
-path rejects `solo` because the unified orchestrator has no active-context implementation path yet.
-`--force-tier quick` is an administrative eligibility bypass and is not equivalent to bare `-bq`, which
-requests strict quick and fails closed when the bead is ineligible.
-
-`~/.local/bin/` must be in `$PATH`. The `~/.claude/scripts/` PATH entry has been removed from `~/.zshrc`
-(only `CMUX_BUNDLED_CLI_PATH` pointing to `~/.claude/scripts/cmux-shim.sh` remains).
-Note: the PATH change takes effect in **new shells only** — existing terminals that were launched before the edit still
-carry the old `~/.claude/scripts/` entry in their inherited environment. Open a new shell to verify AK5.
+`~/.local/bin/` must be in `$PATH`.
 
 ## Repo split
 

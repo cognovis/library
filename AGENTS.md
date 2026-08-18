@@ -10,9 +10,10 @@ This repository is the **library platform**. Its current checkout path is
 `/Users/malte/code/library/meta`, but the intended name is
 `library-platform/`.
 
-Use this repo for the tooling, scripts, schemas, launchers, installers, tests,
+Use this repo for the tooling, scripts, schemas, installers, tests,
 and documentation that power the library system. It is not itself a catalog of
-shareable skills or agents.
+shareable skills or agents. The short commands `cld`, `cdx`, and `cra` are
+owned by `cognovis-harness-cli`.
 
 Sibling catalog repositories:
 
@@ -52,11 +53,9 @@ it is in `bd prime`.
 
 ### Harness Launchers (`cld` / `cdx` / `cra`)
 
-- **Owner:** the `harness-cli` repository (distribution `cognovis-harness-cli`),
-  installed with `uv tool`. The legacy launcher generation in this repository
-  (`bin/cld`, `bin/cdx`, `scripts/bin/`, `scripts/launchers.py`) was retired
-  under CL-iv72; do not reintroduce launcher sources here.
-- **Install:** `bash install.sh`, then `library bootstrap install`. The first command installs the CLI with `uv tool`; the second safely creates the receipted product bootstrap without overwriting operator-owned files.
+- **Owner:** `cognovis-harness-cli` (`../harness-cli/`), not this repository.
+- **Install:** `bash install.sh`, then `library bootstrap install`. The first command installs the `library` CLI and the harness-cli short commands with `uv tool`; the second safely creates the receipted product bootstrap without overwriting operator-owned files.
+- **Checkout helper:** `bin/library` remains the source-checkout wrapper for the Library engine.
 
 ### `library.yaml` Schema Ownership (serialized)
 

@@ -7,11 +7,10 @@ variables -- for callback identity (workspace ref, surface ref, run id,
 event name). See docs/ARCHITECTURE.md "Coordinator callbacks" for the
 best-effort signaling contract this executor implements deterministically.
 
-This module is greenfield and standalone: it is not wired into the harness
-launchers (that lifecycle wiring lives in the `harness-cli` repository). It
-exists so the launchers can delegate to a single, tested, exactly-once
-delivery implementation instead of duplicating the current best-effort prose
-contract.
+This module is greenfield and standalone: it does not own the `cld`, `cdx`,
+or `cra` commands. Those short commands come from `cognovis-harness-cli`.
+This executor remains a tested exactly-once delivery primitive that a
+launcher or coordinator can call.
 
 Exit codes:
   0 - success: delivered now, already delivered (idempotent no-op), or no
