@@ -3676,7 +3676,7 @@ def _bootstrap_health(home: Path | None = None) -> dict[str, object]:
     """Report the exact bootstrap contract without treating it as desired state."""
     home = home or Path.home()
     manifest_path = _bootstrap_manifest_path(home)
-    required_commands = ("library", "cld", "cdx")
+    required_commands = ("library", "cld", "cdx", "cra")
     missing = [name for name in required_commands if shutil.which(name) is None]
     if not manifest_path.is_file():
         missing.append("bootstrap_manifest")

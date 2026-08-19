@@ -22,7 +22,7 @@ build-backend = "setuptools.build_meta"
 packages = ["scripts", "scripts.lib", "scripts.lib.installers", "scripts.lib.providers"]
 
 [tool.setuptools.package-data]
-scripts = ["library.yaml", "bin/*", "bin/lib/*"]
+scripts = ["library.yaml"]
 
 [project.optional-dependencies]
 dev = [

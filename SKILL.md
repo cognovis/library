@@ -11,10 +11,10 @@ Use this skill only when the user explicitly invokes Library distribution or
 asks what Library capabilities a repository should use.
 
 The Library has one desired state: the current Git repository. The enumerated
-Bootstrap is the deliberate exception, limited to the `library`, `cld`, and `cdx`
-executables, the `$HOME` instruction entrypoints, launcher runtime
-configuration, and the OpenBrain MCP singleton. It is not a
-primitive-installation scope.
+Bootstrap is the deliberate exception, limited to the `library` executable, the
+`cld`/`cdx`/`cra` commands from `cognovis-harness-cli`, the `$HOME` instruction
+entrypoints, launcher runtime configuration, and the OpenBrain MCP singleton.
+It is not a primitive-installation scope.
 
 ## Inspect and recommend
 

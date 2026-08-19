@@ -80,7 +80,7 @@ changes.
 |---|---|
 | .agents/standards/ | Domain-specific standards shared across harnesses |
 | .agents/skills/ | Repository-authored skills only; Library-installed receipt targets are generated and gitignored |
-| .agents/orchestrator-config.yml | Orchestrator routing configuration (project-local). The product bootstrap owns the optional global fallback `~/.agents/orchestrator-config.yml`; packaged launchers use `scripts/bin/lib/orchestrator-config-sync.zsh` for compatibility while the source-checkout copy remains synchronized. |
+| .agents/orchestrator-config.yml | Orchestrator routing configuration (project-local). The product bootstrap owns the optional global fallback `~/.agents/orchestrator-config.yml`. |
 
 **MUST NOT be committed:**
 
@@ -147,47 +147,11 @@ so a fresh bead worktree starts without them. Hygiene review, standards
 resolution, and session-close gates then behave differently from the main
 checkout for no reason the operator can see.
 
-Both packaged launchers bootstrap the same overlay set through one resolver,
-`scripts/worktree-overlays.py`, which never overwrites anything the worktree
-already owns and never links a source that is missing from the main checkout:
-
-| Launcher | Mechanism |
-|---|---|
-| `cdx` | Creates its worktree with `git worktree add`, then calls the resolver's `link` command. Codex has no worktree bootstrap of its own, so the launcher creates the relative symlinks itself. |
-| `cld` | Claude Code creates the worktree itself via native `--worktree`, so the wrapper cannot symlink into it afterwards. It resolves the overlay set up front and passes it as `worktree.symlinkDirectories` in `--settings`; Claude Code creates the symlinks during worktree creation. |
-
-The resolver applies one rule through two presence probes. `cdx` probes the
-worktree it just created; `cld` probes the main checkout's Git index, because a
-fresh worktree carries exactly the tracked paths and its own worktree does not
-exist yet.
-
-- A source missing from the main checkout is skipped, so no dangling symlink is
-  created.
-- An overlay path that will be absent from the worktree is linked whole.
-- An overlay path the worktree already owns is never replaced. When it is a
-  directory, resolution descends and links only the children that are missing.
-  This matters in marketplace repositories, where `.agents/` holds tracked
-  content while `.agents/skills/` is gitignored: linking only the root would
-  silently do nothing.
-
-Two limits are worth knowing before relying on the `cld` half:
-
-- Claude Code creates those symlinks itself and is not known to create a missing
-  parent directory. In a repository where nothing under `.claude/` is tracked,
-  the worktree has no `.claude/` for `.claude/skills` to land in and the overlay
-  may not appear. The resolver still emits the narrow path, because widening to
-  `.claude` would link the main checkout's own `.claude/worktrees` into the
-  worktree. The `cdx` half creates the parent itself and is unaffected.
-- `claude` takes a single `--settings` value and the last occurrence wins, so
-  `cld` skips the injection entirely — with a note on stderr — when the caller
-  passes its own `--settings`.
-
-Set `CDX_WORKTREE_OVERLAYS` or `CLD_WORKTREE_OVERLAYS` to a space-separated list
-to override the overlay set for a repository, or to an empty string to disable
-the bootstrap. The default set is `.agents .claude/skills .env`. Claude Code's
-`symlinkDirectories` accepts directories only, so `cld` omits `.env`; a project
-that wants `.env` in a Claude Code worktree copies it through `.worktreeinclude`
-instead, accepting that a copy duplicates the secret.
+`cognovis-harness-cli` bootstraps the overlay set for a fresh bead worktree.
+It never overwrites anything the worktree already owns and never links a
+source that is missing from the main checkout. The default set is
+`.agents`, `.claude/skills`, and `.env`. Overlay mechanics and any
+harness-specific limits live with that owner.
 
 ## .gitignore Patterns
 

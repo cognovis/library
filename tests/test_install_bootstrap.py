@@ -42,7 +42,9 @@ def test_bootstrap_receipts_ignore_retired_harness_skill_links(tmp_path: Path) -
     ]
 
 
-def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) -> None:
+def test_install_sh_links_only_irreducible_library_entrypoint(
+    tmp_path: Path, harness_cli_source: Path
+) -> None:
     home = tmp_path / "home"
     home.mkdir()
     (home / ".agents").mkdir()
@@ -52,10 +54,17 @@ def test_install_sh_links_only_irreducible_library_entrypoint(tmp_path: Path) ->
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["XDG_DATA_HOME"] = str(tmp_path / "xdg-data")
-    env["PATH"] = f"{home / '.local' / 'bin'}{os.pathsep}{env['PATH']}"
+    env["UV_TOOL_DIR"] = str(tmp_path / "tools")
+    env["UV_TOOL_BIN_DIR"] = str(tmp_path / "bin")
+    env["PATH"] = f"{tmp_path / 'bin'}{os.pathsep}{env['PATH']}"
 
     result = subprocess.run(
-        ["bash", str(REPO_ROOT / "install.sh")],
+        [
+            "bash",
+            str(REPO_ROOT / "install.sh"),
+            "--harness-cli-source",
+            str(harness_cli_source),
+        ],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -99,7 +108,7 @@ def test_bootstrap_documents_the_installed_cli_contract() -> None:
 
 
 def test_install_sh_leaves_historical_forge_link_outside_bootstrap_scope(
-    tmp_path: Path,
+    tmp_path: Path, harness_cli_source: Path
 ) -> None:
     home = tmp_path / "home"
     skill_root = home / ".agents" / "skills"
@@ -109,9 +118,17 @@ def test_install_sh_leaves_historical_forge_link_outside_bootstrap_scope(
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["XDG_DATA_HOME"] = str(tmp_path / "xdg-data")
+    env["UV_TOOL_DIR"] = str(tmp_path / "tools")
+    env["UV_TOOL_BIN_DIR"] = str(tmp_path / "bin")
+    env["PATH"] = f"{tmp_path / 'bin'}{os.pathsep}{env['PATH']}"
 
     result = subprocess.run(
-        ["bash", str(REPO_ROOT / "install.sh")],
+        [
+            "bash",
+            str(REPO_ROOT / "install.sh"),
+            "--harness-cli-source",
+            str(harness_cli_source),
+        ],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -122,13 +139,6 @@ def test_install_sh_leaves_historical_forge_link_outside_bootstrap_scope(
     assert "Installing the Library control plane with uv" in result.stdout
     assert historical.is_symlink()
     assert not (skill_root / "agent-forge").exists()
-
-
-def test_packaged_launcher_copies_remain_identical_to_compatibility_copies() -> None:
-    for relative in ("lib/orchestrator-config-sync.zsh",):
-        assert (REPO_ROOT / "bin" / relative).read_bytes() == (
-            REPO_ROOT / "scripts" / "bin" / relative
-        ).read_bytes()
 
 
 def test_changelog_documents_solo_and_executive_pack_launcher_contract() -> None:

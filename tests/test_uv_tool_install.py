@@ -6,19 +6,12 @@ import os
 import subprocess
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-
-
-def _write_executable(path: Path, content: str) -> Path:
-    path.write_text(content, encoding="utf-8")
-    path.chmod(0o755)
-    return path
 
 
 def _git_commit(repo: Path, message: str) -> str:
@@ -48,6 +41,8 @@ def _copy_tracked_platform(source: Path, target: Path) -> None:
             continue
         relative = Path(os.fsdecode(encoded))
         origin = source / relative
+        if not origin.exists() and not origin.is_symlink():
+            continue
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         if origin.is_symlink():
@@ -195,10 +190,11 @@ def test_uv_tool_install_exposes_the_bootstrap_console_scripts_without_source_li
     assert install.returncode == 0, install.stderr
     assert version.returncode == 0, version.stderr
     assert version.stdout.startswith("library 2.0.0")
-    for command in ("library",):
-        executable = bin_dir / command
-        assert executable.is_file()
-        assert not executable.resolve().is_relative_to(REPO_ROOT)
+    executable = bin_dir / "library"
+    assert executable.is_file()
+    assert not executable.resolve().is_relative_to(REPO_ROOT)
+    for command in ("cld", "cdx", "cra"):
+        assert not (bin_dir / command).exists()
     assert not (tool_dir / "library" / ".agents" / "skills" / "library").exists()
 
 
@@ -433,7 +429,7 @@ def test_uv_tool_install_init_ignores_consumer_cognovis_base_shadow(
 
 
 def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
-    tmp_path: Path,
+    tmp_path: Path, harness_cli_source: Path
 ) -> None:
     platform, core = _write_fresh_machine_sources(tmp_path)
     home = tmp_path / "home"
@@ -465,6 +461,8 @@ def test_fresh_machine_installer_bootstraps_sources_and_project_workspace(
             str(core),
             "--source-dir",
             str(source_dir),
+            "--harness-cli-source",
+            str(harness_cli_source),
             "--project",
             str(project),
         ],
@@ -765,7 +763,7 @@ def test_status_uses_the_bootstrap_manifest_to_report_mcp_drift(tmp_path: Path) 
     home = tmp_path / "home"
     command_dir = tmp_path / "commands"
     command_dir.mkdir()
-    for command in ("library", "cld", "cdx"):
+    for command in ("library", "cld", "cdx", "cra"):
         executable = command_dir / command
         executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         executable.chmod(0o755)
@@ -816,7 +814,7 @@ def test_bootstrap_status_and_repository_status_share_operator_safe_health(
     home = tmp_path / "home"
     command_dir = tmp_path / "commands"
     command_dir.mkdir()
-    for command_name in ("library", "cld", "cdx"):
+    for command_name in ("library", "cld", "cdx", "cra"):
         executable = command_dir / command_name
         executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         executable.chmod(0o755)

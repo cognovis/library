@@ -35,8 +35,9 @@ machine or an existing platform checkout. This is not a catalog fork workflow.
    library --help
    ```
 
-The installer delegates to `uv tool install` for the deterministic `library`,
-`cld`, and `cdx` executables. Fresh bootstrap records only its enumerated product
+The installer delegates to `uv tool install` for the deterministic `library`
+executable and, separately, for `cognovis-harness-cli`, which owns `cld`,
+`cdx`, and `cra`. Fresh bootstrap records only its enumerated product
 targets, adopts existing operator-owned instruction entrypoints without changing
 their content, and adds the OpenBrain singleton where compatible. Managed source
 checkouts are input catalogs, not global primitive projections, and no checkout

@@ -2,6 +2,17 @@
 
 ### Removed
 
+- *(CL-iv72, launchers)* Retire the legacy `cld`/`cdx` generation from this
+  repository. The short commands `cld`, `cdx`, and `cra` now come from
+  `cognovis-harness-cli`; `install.sh` installs that distribution beside the
+  `library` CLI. Removed both source and packaged copies of the zsh launchers,
+  the `scripts.launchers` console-entry wrappers, and the launcher-only helpers
+  (`bead-loop-authority.zsh`, `orchestrator-config-sync.zsh`,
+  `compact-bead-context.py`, `filter-codex-jsonl.py`, `worktree-overlays.py`,
+  `cdx-bead-workflow.py`). `scripts/coordinator_callback.py` stays: it is a
+  standalone primitive with its own tests and is not a command owner.
+  Bootstrap health now also requires `cra` on `PATH`.
+
 - *(CL-hf2g, cdx)* Retire the two server-mode knobs from bead-launch permission
   arguments. `cdx` bead, delivery, quick, and dangerous-full-auto launches no
   longer pass `-c mcp_servers.beads.required=true` (superseding the clc-6kuz

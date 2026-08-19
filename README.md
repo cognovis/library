@@ -15,24 +15,26 @@ This repository publishes exactly three things:
 1. **The `library` command** — install skills and other primitives into a
    repository from central catalog management, repository-locally, with
    receipts. This is the product.
-2. **`cld` and `cdx`** — deliberately lightweight launchers. They resolve a
-   worktree, compose an initial prompt, and start a harness session. Delivery
-   logic, review policy, and orchestration live in catalog skills
-   (cognovis-core), never in the launchers.
+2. **The install handoff for `cld`, `cdx`, and `cra`** — `install.sh` installs
+   those short commands from `cognovis-harness-cli`. This repository does not
+   own launcher behavior.
 3. **The docs and tests** that keep 1 and 2 trustworthy.
 
 Every piece of work here must answer one question: *does it make installing
-capabilities from central management into a repository better, or keep the
-launchers thin?* If the answer is no, it does not belong in this repository's
-backlog. In particular, these are **not** this repository's job:
+capabilities from central management into a repository better?* If the answer
+is no, it does not belong in this repository's backlog. In particular, these
+are **not** this repository's job:
 
+- launcher behavior, bead modes, review envelopes, or permission posture
+  (`cognovis-harness-cli` owns those);
 - orchestration features, review workflows, or delivery lifecycles (catalog
   skills own those);
 - harness tuning and coordinator wiring beyond starting a session;
 - catalog *content* (skills, agents, standards live in marketplace repos);
 - installing primitives outside a repository — the enumerated Bootstrap (the
-  `library` executable, the launchers, the harness entrypoints, launcher runtime
-  configuration, the OpenBrain MCP server) is the only machine-wide surface.
+  `library` executable, the `cognovis-harness-cli` short commands, the harness
+  entrypoints, launcher runtime configuration, the OpenBrain MCP server) is the
+  only machine-wide surface.
 
 One request is one bead. Side observations go into the conversation, not the
 tracker.
@@ -189,12 +191,15 @@ secrets, customer facts, routing profiles, or repository-specific policy.
 
 ## Launchers
 
-Packaged harness launchers live in `scripts/bin/`:
+The short commands `cld`, `cdx`, and `cra` are owned by
+`cognovis-harness-cli`. This repository installs that distribution beside the
+`library` CLI; it does not ship a second launcher generation.
 
-| Launcher | Harness |
-|----------|---------|
-| `scripts/bin/cld` | Claude Code |
-| `scripts/bin/cdx` | Codex CLI |
+| Command | Harness | Owner |
+|---------|---------|-------|
+| `cld` | Claude Code | `cognovis-harness-cli` |
+| `cdx` | Codex CLI | `cognovis-harness-cli` |
+| `cra` | Cursor Agent | `cognovis-harness-cli` |
 
 Install them with:
 
@@ -203,7 +208,7 @@ bash install.sh --fresh
 ```
 
 `bash install.sh` upgrades the global control plane: the `library` CLI and the
-`cld` and `cdx` launchers. It does not install global desired-state Skills and
+harness-cli launchers. It does not install global desired-state Skills and
 must not overwrite `~/.agents/skills`. After that control-plane upgrade,
 `library init` or Workspace sync installs project-local Skills. For an existing
 project using the default Workspace, reconcile them with:

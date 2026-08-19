@@ -8,6 +8,8 @@ fresh=false
 project=""
 platform_source="https://github.com/cognovis/library.git"
 core_source="https://github.com/cognovis/library-core.git"
+harness_cli_default="git+https://git.cognovis.de/cognovis/harness-cli.git"
+harness_cli_source=""
 source_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/library/sources"
 
 while test "$#" -gt 0; do
@@ -31,6 +33,11 @@ while test "$#" -gt 0; do
       core_source="$2"
       shift 2
       ;;
+    --harness-cli-source)
+      test "$#" -ge 2 || { echo "Error: --harness-cli-source requires a path or Git URL" >&2; exit 2; }
+      harness_cli_source="$2"
+      shift 2
+      ;;
     --source-dir)
       test "$#" -ge 2 || { echo "Error: --source-dir requires a path" >&2; exit 2; }
       source_dir="$2"
@@ -39,6 +46,7 @@ while test "$#" -gt 0; do
     -h|--help)
       echo "Usage: install.sh [--fresh] [--project PATH] [--source-dir PATH]"
       echo "                  [--platform-source GIT_URL] [--core-source GIT_URL]"
+      echo "                  [--harness-cli-source PATH_OR_GIT_URL]"
       exit 0
       ;;
     *)
@@ -117,10 +125,32 @@ PY
   mv -f "$temporary_registry" "$registry"
 fi
 
+if test -z "$harness_cli_source"; then
+  sibling="$(cd "$script_dir/.." && pwd)/harness-cli"
+  if test "$fresh" != true && test -f "$sibling/pyproject.toml"; then
+    harness_cli_source="$sibling"
+  else
+    harness_cli_source="$harness_cli_default"
+  fi
+fi
+
 echo "Installing the Library control plane with uv"
 uv tool install --upgrade "$install_source"
 
-library_bin="${UV_TOOL_BIN_DIR:-${HOME}/.local/bin}/library"
+echo "Installing harness-cli launchers with uv"
+uv tool install --upgrade "$harness_cli_source"
+
+if test -n "${UV_TOOL_BIN_DIR:-}"; then
+  tool_bin="$UV_TOOL_BIN_DIR"
+elif test -n "${XDG_DATA_HOME:-}"; then
+  tool_bin="$(cd "$(dirname "$XDG_DATA_HOME")" && pwd)/bin"
+else
+  tool_bin="${HOME}/.local/bin"
+fi
+PATH="$tool_bin${PATH:+:$PATH}"
+export PATH
+
+library_bin="$tool_bin/library"
 if ! test -x "$library_bin"; then
   library_bin="$(command -v library || true)"
 fi
@@ -128,6 +158,13 @@ if ! test -x "$library_bin"; then
   echo "Error: uv installed Library but its executable is not available" >&2
   exit 1
 fi
+
+for command in cld cdx cra; do
+  if ! test -x "$tool_bin/$command" && ! command -v "$command" >/dev/null 2>&1; then
+    echo "Error: harness-cli did not install $command" >&2
+    exit 1
+  fi
+done
 
 if test "$fresh" = true; then
   "$library_bin" bootstrap install
@@ -139,9 +176,10 @@ if test -n "$project"; then
 fi
 
 echo ""
-echo "The global bootstrap contains only the Library executable and its product"
-echo "launchers/instruction/runtime prerequisites. It does not install a Library"
-echo "skill or any other Library primitive globally."
+echo "The global bootstrap contains the Library executable plus product"
+echo "instruction/runtime prerequisites. The short commands cld, cdx, and cra"
+echo "come from cognovis-harness-cli, not from this package. It does not"
+echo "install a Library skill or any other Library primitive globally."
 echo ""
 echo "Next steps:"
 echo "  library --help"

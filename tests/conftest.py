@@ -21,8 +21,30 @@ from pathlib import Path
 
 import pytest
 
-REAL_GLOBAL_LOCKFILE = Path.home() / ".config" / "library" / "global.lock"
-REAL_MODEL_STANDARDS = Path.home() / ".agents" / "model-standards"
+OPERATOR_HOME = Path.home()
+REAL_GLOBAL_LOCKFILE = OPERATOR_HOME / ".config" / "library" / "global.lock"
+REAL_MODEL_STANDARDS = OPERATOR_HOME / ".agents" / "model-standards"
+
+
+def harness_cli_checkout() -> Path:
+    """Return the operator harness-cli checkout, ignoring the isolated test HOME."""
+    env = os.environ.get("HARNESS_CLI_SOURCE")
+    candidates = []
+    if env:
+        candidates.append(Path(env))
+    candidates.append(OPERATOR_HOME / "code" / "library" / "harness-cli")
+    for candidate in candidates:
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    raise FileNotFoundError(
+        "harness-cli checkout required; set HARNESS_CLI_SOURCE or keep "
+        f"{OPERATOR_HOME / 'code' / 'library' / 'harness-cli'}"
+    )
+
+
+@pytest.fixture
+def harness_cli_source() -> Path:
+    return harness_cli_checkout()
 
 
 def _fingerprint(path: Path) -> str | None:
