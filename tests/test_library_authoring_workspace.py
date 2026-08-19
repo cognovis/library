@@ -23,9 +23,21 @@ FORGE_ROOTS = {
 }
 
 
+def _core_root() -> Path:
+    candidates = (
+        Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
+        Path("/Users/malte/code/library/cognovis-core"),
+    )
+    return next(
+        path
+        for path in candidates
+        if (path / "workspaces" / "library-authoring.yaml").is_file()
+    )
+
+
 def test_library_authoring_manifest_has_exact_platform_forge_roots() -> None:
     manifest = yaml.safe_load(
-        (REPO_ROOT / "workspaces" / "library-authoring.yaml").read_text()
+        (_core_root() / "workspaces" / "library-authoring.yaml").read_text()
     )
 
     assert manifest["status"] == "stable"
@@ -52,7 +64,7 @@ def test_library_authoring_stable_evidence_names_distinct_consumers() -> None:
 
 def test_library_authoring_roots_resolve_standalone() -> None:
     catalog = load_catalog(REPO_ROOT)
-    workspace = resolve_workspace(catalog, "library-platform:library-authoring")
+    workspace = resolve_workspace(catalog, "cognovis-library-core:library-authoring")
 
     closure = resolve_workspace_closure(catalog, workspace, REPO_ROOT, "project")
 

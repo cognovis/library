@@ -486,10 +486,10 @@ library:
   skills:
     - name: library
       description: Inspect a repository's Library state and recommend explicit project-local Workspaces or primitives before installation.
-      source: https://github.com/cognovis/library/blob/main/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/library/SKILL.md
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
           skill_bundle: file
@@ -522,36 +522,36 @@ library:
         - apache-2.0
     - name: agent-forge
       description: Create and review agents (subagents). Use when creating specialized AI assistants, reviewing/auditing existing agents, deciding between agent vs skill vs command, scaffolding judge agents, or asking about agent best practices, multi-agent pipelines, and model selection. Also use when separating provider-neutral core prompts from harness adapters. MUST BE USED when the user says "create agent", "new subagent", "review agent", "audit agent", "agent vs skill", or asks about multi-agent architecture.
-      source: https://github.com/cognovis/library/blob/main/skills/agent-forge/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/agent-forge/SKILL.md
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
         - standard:judge-layer
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           plane: dev
-          steward: library-platform
+          steward: cognovis-library-core
       tags:
         - origin:original
         - tier:core
     - name: hook-forge
       description: Create and manage Claude Code lifecycle hooks. Use when adding security hooks, lifecycle automation, or troubleshooting PreToolUse/PostToolUse. Triggers on create hook, hook-forge, hook-creator, hooks. Enforces 0=info/pass, 1=hook-error, 2=block.
-      source: https://github.com/cognovis/library/blob/main/skills/hook-forge/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/hook-forge/SKILL.md
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           plane: dev
-          steward: library-platform
+          steward: cognovis-library-core
       tags:
         - origin:original
         - tier:domain
     - name: mcp-forge
       description: 'use when: creating a Python MCP server or migrating a Python MCP server to the stateless 2026-07-28 protocol with the official Python SDK v2. NOT for: non-Python servers. boundary: this skill owns generic Python MCP server architecture, implementation, migration, and conformance.'
-      source: https://github.com/cognovis/library/blob/main/skills/mcp-forge/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/mcp-forge/SKILL.md
       requires:
         - standard:python
         - standard:judge-layer
@@ -566,30 +566,30 @@ library:
           output_contract: json-envelope
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           plane: dev
-          steward: library-platform
+          steward: cognovis-library-core
       tags:
         - origin:original
         - tier:domain
     - name: skill-forge
       description: 'Create, validate, and audit skills (SKILL.md files). Use when creating a new skill, validating an existing skill for quality and extractable-code violations, or running a full fleet audit. Triggers on: create skill, skill-forge, new skill, validate skill, check skill, audit skills, skill health check, fleet quality, skill creation, action_boundary declarations, script declarations, provider-neutral skill design.'
-      source: https://github.com/cognovis/library/blob/main/skills/skill-forge/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/skill-forge/SKILL.md
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
         - standard:judge-layer
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           plane: dev
-          steward: library-platform
+          steward: cognovis-library-core
       tags:
         - origin:original
         - tier:domain
     - name: script-forge
       description: Create, validate, and catalog first-class Python script primitives for the Library. Use when deterministic helper logic should be reusable across skills, agents, hooks, standards, or commands. Triggers on create script, script-forge, first-class script, Python helper, reusable validation script, doctor script, or formula script.
-      source: https://github.com/cognovis/library/blob/main/skills/script-forge/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/script-forge/SKILL.md
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
@@ -601,24 +601,24 @@ library:
           output_contract: bare-value
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           plane: dev
-          steward: library-platform
+          steward: cognovis-library-core
       tags:
         - origin:original
         - tier:domain
     - name: standard-forge
       description: Scaffold or validate a Library standard — a factual, harness-injected markdown context file that skills and agents declare via `requires_standards`. Use when creating a new standard, validating an existing one, deciding "is this a standard or a skill?", scaffolding judge-layer Action Proposal or Mandate standards, or wiring `requires_standards:` into a skill. Triggers on create standard, new standard, standard-forge, scaffold standard, validate standard, check standard, requires_standards.
-      source: https://github.com/cognovis/library/blob/main/skills/standard-forge/SKILL.md
+      source: https://github.com/cognovis/library-core/blob/main/skills/standard-forge/SKILL.md
       requires:
         - standard:agentic-primitives
         - standard:primitive-placement
         - standard:judge-layer
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           plane: dev
-          steward: library-platform
+          steward: cognovis-library-core
       tags:
         - origin:original
         - tier:domain
@@ -2412,42 +2412,42 @@ library:
   standards:
     - name: agentic-primitives
       description: Decision-tree standard for choosing the right invocation primitive (skill, command, agent, hook). Distills PRIMITIVES.md §3 C1-C6 agent-justification criteria plus counter-examples into an in-context briefing for the *-forge skills. Loaded via requires_standards by skill-forge, agent-forge, hook-forge, and standard-forge so primitive-type selection is consistent and self-correcting.
-      source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/agentic-primitives.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives/agentic-primitives.md
       tier: core
       default_scope: ask
       metadata:
         library:
           plane: dev
-          steward: library-platform
-          source_catalog: library-platform
+          steward: cognovis-library-core
+          source_catalog: cognovis-library-core
       tags:
         - origin:original
         - tier:core
         - category:standard
     - name: primitive-placement
       description: Placement rubric for Library primitives, product counterparts, repo-local overlays, and deterministic scripts.
-      source: https://github.com/cognovis/library/blob/main/standards/agentic-primitives/primitive-placement.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/agentic-primitives/primitive-placement.md
       tier: core
       default_scope: ask
       metadata:
         library:
           plane: dev
-          steward: library-platform
-          source_catalog: library-platform
+          steward: cognovis-library-core
+          source_catalog: cognovis-library-core
       tags:
         - origin:original
         - tier:core
         - category:standard
     - name: release-lifecycle
       description: 'Repo-agnostic release lifecycle contract (ADR-0008): bead metadata is release truth, pipelines supply evidence, release.version is write-once. Defines the release_note/release metadata schema, lifecycle states, per-repo gate declaration, and the release.* typed-tool surface (CL-ugwe.11). Single source for the release metadata shape — not duplicated into library.schema.json.'
-      source: https://github.com/cognovis/library/blob/main/standards/release/release-lifecycle.md
+      source: https://github.com/cognovis/library-core/blob/main/standards/release/release-lifecycle.md
       tier: global
       default_scope: ask
       metadata:
         library:
           plane: dev
-          steward: library-platform
-          source_catalog: library-platform
+          steward: cognovis-library-core
+          source_catalog: cognovis-library-core
       tags:
         - origin:original
         - tier:global
@@ -4012,9 +4012,9 @@ library:
   workspaces:
     - name: cognovis-base
       description: Minimal project-local baseline for Cognovis repositories using Library and Beads.
-      source: https://github.com/cognovis/library/blob/main/workspaces/cognovis-base.yaml
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/cognovis-base.yaml
       schema_version: 2
-      version: 0.2.0
+      version: 0.2.1
       status: stable
       catalogs:
         - alias: platform
@@ -4026,16 +4026,13 @@ library:
           identity: https://github.com/cognovis/library-core
           pin:
             kind: commit
-            value: a4e69a2b0d971ff4023103aaf2457bf04859bc5f
+            value: 32051847d40e3ed57900251369b47f908b3d9550
         - alias: ccore
           identity: https://github.com/cognovis/ccore
           pin:
             kind: commit
             value: fc6162a9a1734c77e7cb2733c3160665f71d5220
       roots:
-        - type: skill
-          name: library
-          catalog: platform
         - type: skill
           name: cognovis-beads
           catalog: core
@@ -4053,26 +4050,21 @@ library:
           catalog: core
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           inventory: manual
           source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
     - name: cognovis-daily
       description: Daily operator tooling and working standards for Cognovis repositories.
-      source: https://github.com/cognovis/library/blob/main/workspaces/cognovis-daily.yaml
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/cognovis-daily.yaml
       schema_version: 2
       version: 0.1.0
       status: stable
       catalogs:
-        - alias: platform
-          identity: https://github.com/cognovis/library
-          pin:
-            kind: commit
-            value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
         - alias: core
-          identity: https://github.com/cognovis/library-core
+          identity: https://git.cognovis.de/cognovis/library-core
           pin:
             kind: commit
-            value: 922d83965d92836b4eae4ef6aea0ffe7c08f4b79
+            value: f87ce1f3571a7d75f924aa5eed61df3b46a02f2a
       roots:
         - type: skill
           name: intake
@@ -4103,12 +4095,12 @@ library:
           catalog: core
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           inventory: manual
           source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
     - name: library-authoring
       description: Shared authoring baseline for Library primitive repositories.
-      source: https://github.com/cognovis/library/blob/main/workspaces/library-authoring.yaml
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/library-authoring.yaml
       schema_version: 1
       version: 0.1.0
       status: stable
@@ -4125,7 +4117,7 @@ library:
           name: hook-forge
       metadata:
         library:
-          source_catalog: library-platform
+          source_catalog: cognovis-library-core
           inventory: manual
           source_commit: c169a8e5cde0dcd1668967593a902f1cc1bd3259
     - name: fhir-ig

@@ -313,7 +313,7 @@ def test_workspace_renderer_accepts_string_workspace_identities(capsys) -> None:
         {
             "operation": "sync",
             "status": "applied",
-            "workspaces": ["library-platform:library-authoring"],
+            "workspaces": ["cognovis-library-core:library-authoring"],
             "prerequisites": [
                 {
                     "id": "standard:python-cli-patterns",
@@ -329,7 +329,7 @@ def test_workspace_renderer_accepts_string_workspace_identities(capsys) -> None:
     )
 
     output = capsys.readouterr().out
-    assert "library-platform:library-authoring" in output
+    assert "cognovis-library-core:library-authoring" in output
     assert "standard:python-cli-patterns" in output
     assert "requested by: workspace:https://github.com/cognovis/library#library-authoring" in output
     assert "{'id':" not in output

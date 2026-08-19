@@ -44,16 +44,34 @@ def test_command_prompts_remain_registered_as_prompts() -> None:
 
 def test_platform_forge_descriptions_match_checked_in_frontmatter() -> None:
     catalog = load_catalog()["library"]
-    platform_skills = {
+    core_candidates = (
+        Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
+        Path("/Users/malte/code/library/cognovis-core"),
+    )
+    core_root = next(
+        path
+        for path in core_candidates
+        if (path / "skills" / "agent-forge" / "SKILL.md").is_file()
+    )
+    moved_skills = {
         entry["name"]: entry
         for entry in catalog["skills"]
         if ((entry.get("metadata") or {}).get("library") or {}).get("source_catalog")
-        == "library-platform"
-        and (REPO_ROOT / "skills" / entry["name"] / "SKILL.md").is_file()
+        == "cognovis-library-core"
+        and (core_root / "skills" / entry["name"] / "SKILL.md").is_file()
+        and entry["name"].endswith("-forge")
     }
-    for name, entry in platform_skills.items():
+    assert {
+        "agent-forge",
+        "hook-forge",
+        "mcp-forge",
+        "skill-forge",
+        "script-forge",
+        "standard-forge",
+    } <= set(moved_skills)
+    for name, entry in moved_skills.items():
         frontmatter = yaml.safe_load(
-            (REPO_ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[1]
+            (core_root / "skills" / name / "SKILL.md").read_text().split("---", 2)[1]
         )
         assert entry["description"] == frontmatter["description"]
 
