@@ -32,7 +32,6 @@ EXPECTED_ARTIFACTS = {
     ("skill", "cognovis-beads"),
     ("skill", "executive-pack"),
     ("skill", "inject-standards"),
-    ("skill", "library"),
     ("skill", "ob-cli"),
     ("skill", "session-close"),
     ("standard", "executive-pack"),
@@ -55,7 +54,7 @@ EXPECTED_GLOBAL_PREREQUISITES = set()
 
 def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -> None:
     catalog = load_catalog(REPO_ROOT)
-    workspace = resolve_workspace(catalog, "library-platform:cognovis-base")
+    workspace = resolve_workspace(catalog, "cognovis-library-core:cognovis-base")
 
     assert workspace.entry["catalogs"] == [
         {
@@ -71,7 +70,7 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
             "identity": "https://github.com/cognovis/library-core",
             "pin": {
                 "kind": "commit",
-                "value": "a4e69a2b0d971ff4023103aaf2457bf04859bc5f",
+                "value": "32051847d40e3ed57900251369b47f908b3d9550",
             },
         },
         # clc-i19u: the closure reaches skill:acpx-dispatch, which ccore serves
@@ -89,7 +88,6 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
         (root["type"], root["name"], root["catalog"])
         for root in workspace.entry["roots"]
     } == {
-        ("skill", "library", "platform"),
         ("skill", "cognovis-beads", "core"),
         ("skill", "inject-standards", "core"),
         ("skill", "ob-cli", "core"),
@@ -136,8 +134,17 @@ def test_readme_documents_the_launcher_and_propagation_contract() -> None:
     ):
         assert contract in readme
 
+    core_candidates = (
+        Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
+        Path("/Users/malte/code/library/cognovis-core"),
+    )
+    core_root = next(
+        path
+        for path in core_candidates
+        if (path / "workspaces" / "cognovis-base.yaml").is_file()
+    )
     manifest = yaml.safe_load(
-        (REPO_ROOT / "workspaces" / "cognovis-base.yaml").read_text(encoding="utf-8")
+        (core_root / "workspaces" / "cognovis-base.yaml").read_text(encoding="utf-8")
     )
     assert {root["name"] for root in manifest["roots"]} >= {
         "executive-pack",

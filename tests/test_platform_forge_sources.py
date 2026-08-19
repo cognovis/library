@@ -17,13 +17,24 @@ FORGE_NAMES = (
     "script-forge",
     "hook-forge",
 )
-PLATFORM_STANDARD_PATHS = {
+CORE_STANDARD_PATHS = {
     "agentic-primitives": "standards/agentic-primitives/agentic-primitives.md",
     "primitive-placement": "standards/agentic-primitives/primitive-placement.md",
 }
-PLATFORM_STANDARD_REQUIRES = {
-    f"standard:{name}" for name in PLATFORM_STANDARD_PATHS
+CORE_STANDARD_REQUIRES = {
+    f"standard:{name}" for name in CORE_STANDARD_PATHS
 }
+CORE_CHECKOUTS = (
+    Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
+    Path("/Users/malte/code/library/cognovis-core"),
+)
+
+
+def _core_root() -> Path:
+    for candidate in CORE_CHECKOUTS:
+        if (candidate / "skills" / "agent-forge" / "SKILL.md").is_file():
+            return candidate
+    raise AssertionError(f"moved forge skills not found in {CORE_CHECKOUTS}")
 
 
 def _library_entries(section: str) -> dict[str, dict[str, object]]:
@@ -34,27 +45,31 @@ def _library_entries(section: str) -> dict[str, dict[str, object]]:
 
 def test_platform_forge_source_urls_match_checked_in_files() -> None:
     entries = _library_entries("skills")
+    core_root = _core_root()
 
     for name in FORGE_NAMES:
         source = str(entries[name]["source"])
-        expected = f"https://github.com/cognovis/library/blob/main/skills/{name}/SKILL.md"
+        expected = (
+            f"https://github.com/cognovis/library-core/blob/main/skills/{name}/SKILL.md"
+        )
         assert source == expected
-        assert (REPO_ROOT / "skills" / name / "SKILL.md").is_file()
+        assert (core_root / "skills" / name / "SKILL.md").is_file()
 
 
 def test_platform_standard_source_urls_match_checked_in_files() -> None:
     entries = _library_entries("standards")
+    core_root = _core_root()
 
-    for name, path in PLATFORM_STANDARD_PATHS.items():
+    for name, path in CORE_STANDARD_PATHS.items():
         entry = entries[name]
         source = str(entry["source"])
-        expected = f"https://github.com/cognovis/library/blob/main/{path}"
+        expected = f"https://github.com/cognovis/library-core/blob/main/{path}"
         metadata = entry["metadata"]["library"]
 
         assert source == expected
-        assert metadata["steward"] == "library-platform"
-        assert metadata["source_catalog"] == "library-platform"
-        assert (REPO_ROOT / path).is_file()
+        assert metadata["steward"] == "cognovis-library-core"
+        assert metadata["source_catalog"] == "cognovis-library-core"
+        assert (core_root / path).is_file()
 
 
 def test_platform_forge_requirements_resolve_to_platform_standard_sources() -> None:
@@ -63,22 +78,24 @@ def test_platform_forge_requirements_resolve_to_platform_standard_sources() -> N
 
     for forge_name in FORGE_NAMES:
         requires = set(skill_entries[forge_name].get("requires", []))
-        assert PLATFORM_STANDARD_REQUIRES <= requires
+        assert CORE_STANDARD_REQUIRES <= requires
 
-    for standard_name in PLATFORM_STANDARD_PATHS:
+    for standard_name in CORE_STANDARD_PATHS:
         entry = standard_entries[standard_name]
-        assert str(entry["source"]).startswith("https://github.com/cognovis/library/")
-        assert "cognovis/library-core" not in str(entry["source"])
+        assert "cognovis/library-core" in str(entry["source"])
+        assert "github.com/cognovis/library/" not in str(entry["source"])
 
 
 def test_platform_forges_install_and_sync_from_local_catalog(tmp_path: Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
 
+    core_root = _core_root()
     skill_entries = "\n".join(
         f"""    - name: {name}
       description: Platform forge fixture for {name}
-      source: {REPO_ROOT / "skills" / name / "SKILL.md"}
+      source: {core_root / "skills" / name / "SKILL.md"}
 """
         for name in FORGE_NAMES
     )
@@ -122,13 +139,15 @@ library:
 def test_platform_standards_install_and_sync_from_local_catalog(tmp_path: Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
 
+    core_root = _core_root()
     standard_entries = "\n".join(
         f"""    - name: {name}
       description: Platform standard fixture for {name}
-      source: {REPO_ROOT / path}
+      source: {core_root / path}
 """
-        for name, path in PLATFORM_STANDARD_PATHS.items()
+        for name, path in CORE_STANDARD_PATHS.items()
     )
     (project / "library.yaml").write_text(
         f"""default_dirs:
@@ -144,7 +163,7 @@ library:
 """
     )
 
-    for name, path in PLATFORM_STANDARD_PATHS.items():
+    for name, path in CORE_STANDARD_PATHS.items():
         result = subprocess.run(
             [sys.executable, str(LIBRARY_PY), "standard", "use", name, "--json"],
             cwd=project,
@@ -164,5 +183,5 @@ library:
     sync_payload = json.loads(sync_result.stdout)
     assert sync_payload["status"] == "ok"
     assert sorted(sync_payload["data"]["synced"]) == sorted(
-        f"standard:{name}" for name in PLATFORM_STANDARD_PATHS
+        f"standard:{name}" for name in CORE_STANDARD_PATHS
     )

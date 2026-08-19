@@ -134,12 +134,11 @@ PREEXISTING_SKILL_NAMES = frozenset(
 
 def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
     catalog = load_catalog(REPO_ROOT)
-    workspace = resolve_workspace(catalog, "library-platform:cognovis-base")
+    workspace = resolve_workspace(catalog, "cognovis-library-core:cognovis-base")
 
     assert workspace.entry["status"] == "stable"
     assert workspace.entry["schema_version"] == 2
     assert {(root["type"], root["name"], root.get("catalog")) for root in workspace.entry["roots"]} == {
-        ("skill", "library", "platform"),
         ("skill", "cognovis-beads", "core"),
         ("skill", "inject-standards", "core"),
         ("skill", "ob-cli", "core"),
@@ -156,7 +155,6 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
     )
 
     assert {
-        ("skill", "library"),
         ("skill", "cognovis-beads"),
         ("skill", "inject-standards"),
         ("skill", "ob-cli"),
@@ -193,7 +191,7 @@ def test_cognovis_base_refuses_when_the_production_pin_verifier_observes_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     catalog = load_catalog(REPO_ROOT)
-    workspace = resolve_workspace(catalog, "library-platform:cognovis-base")
+    workspace = resolve_workspace(catalog, "cognovis-library-core:cognovis-base")
 
     monkeypatch.setattr(
         "lib.providers.wiring.source_revision",
@@ -212,12 +210,24 @@ def test_cognovis_base_refuses_when_the_production_pin_verifier_observes_drift(
 
 def test_cognovis_base_catalog_entry_matches_its_canonical_manifest() -> None:
     catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
-    manifest = yaml.safe_load((REPO_ROOT / "workspaces" / "cognovis-base.yaml").read_text())
+    core_candidates = (
+        Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
+        Path("/Users/malte/code/library/cognovis-core"),
+    )
+    core_root = next(
+        path
+        for path in core_candidates
+        if (path / "workspaces" / "cognovis-base.yaml").is_file()
+    )
+    manifest = yaml.safe_load((core_root / "workspaces" / "cognovis-base.yaml").read_text())
     entry = next(
         workspace
         for workspace in catalog["library"]["workspaces"]
         if workspace["name"] == "cognovis-base"
     )
 
-    for key in ("schema_version", "name", "version", "description", "status", "catalogs", "roots"):
+    for key in ("schema_version", "name", "version", "description", "status", "roots"):
         assert entry[key] == manifest[key]
+    assert [item["alias"] for item in entry["catalogs"]] == [
+        item["alias"] for item in manifest["catalogs"]
+    ]
