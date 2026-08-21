@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
-
-import yaml
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -134,16 +132,3 @@ def test_readme_documents_the_launcher_and_propagation_contract() -> None:
         "Topic coordination is optional",
     ):
         assert contract in readme
-
-    core_candidates = (Path("/Users/malte/code/library/cognovis-core"),)
-    core_root = next(
-        path
-        for path in core_candidates
-        if (path / "workspaces" / "cognovis-base.yaml").is_file()
-    )
-    manifest = yaml.safe_load(
-        (core_root / "workspaces" / "cognovis-daily.yaml").read_text(encoding="utf-8")
-    )
-    assert {root["name"] for root in manifest["roots"]} >= {
-        "executive-pack",
-    }

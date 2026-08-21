@@ -166,7 +166,7 @@ sources:
       visibility: private
       owner: cognovis
       audience: team
-      local_path: /Users/malte/code/ccore
+      local_path: /Users/malte/code/library/ccore
       writable: true
       content_types:
         - scripts
@@ -434,7 +434,7 @@ library:
   scripts:
     - name: ccore
       description: Installable Cognovis developer-workflow CLI with shared deterministic capabilities.
-      source: https://github.com/cognovis/ccore
+      source: https://git.cognovis.de/cognovis/ccore
       version: 2026.8.0
       language: python
       output_contract: json-envelope
@@ -964,7 +964,7 @@ library:
         - domain:fhir
     - name: acpx-dispatch
       description: Use for agent-shell ACPX execution and session-status inspection through the installed `ccore acpx` command. Run mode owns session preparation, output extraction, telemetry, and approve-all worktree confinement; status mode is read-only. Never use this skill for model/provider routing, prompt composition, review policy, verdict validation, or adapter updates.
-      source: https://github.com/cognovis/ccore/blob/main/skills/acpx-dispatch/SKILL.md
+      source: https://git.cognovis.de/cognovis/ccore/raw/branch/main/skills/acpx-dispatch/SKILL.md
       requires:
         - standard:mcp-client-timeout
       tags:
@@ -1850,7 +1850,7 @@ library:
           inventory: convention-scan
           plane: dev
     - name: session-capture
-      description: Capture durable non-coding session decisions and learnings in Open Brain without running coding finalization.
+      description: 'use when: closing a non-coding or analysis session that produced durable decisions, discoveries, or learnings. Captures them to Open Brain without Git, Beads, Docker, worktree cleanup, or ccore Session Close.'
       source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/skills/session-capture/SKILL.md
       requires:
         - skill:ob-cli

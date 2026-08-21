@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -135,6 +136,7 @@ PREEXISTING_SKILL_NAMES = frozenset(
     youtube-slide-extractor
     """.split()
 )
+CORE_WORKSPACE_SOURCE_COMMIT = "e329ee68c6a7d34a9aec8cc523659c9e7b79ff26"
 
 
 def _core_root() -> Path:
@@ -156,7 +158,7 @@ def _core_root() -> Path:
     )
 
 
-def _library_cli_root() -> Path | None:
+def _library_cli_root() -> Path:
     candidates = []
     configured = os.environ.get("LIBRARY_CLI_ROOT")
     if configured:
@@ -168,7 +170,7 @@ def _library_cli_root() -> Path | None:
             REPO_ROOT.parents[2] / "library" / "library-cli",
         )
     )
-    return next(
+    match = next(
         (
             path
             for path in candidates
@@ -177,6 +179,27 @@ def _library_cli_root() -> Path | None:
         ),
         None,
     )
+    if match is None:
+        raise AssertionError(
+            "the separately shipped library-cli checkout is required for Workspace MoC"
+        )
+    return match
+
+
+def _core_manifest_at(name: str) -> dict:
+    result = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{CORE_WORKSPACE_SOURCE_COMMIT}:workspaces/{name}.yaml",
+        ],
+        cwd=_core_root(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return yaml.safe_load(result.stdout)
 
 
 def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
@@ -263,10 +286,7 @@ def test_cognovis_base_refuses_when_the_production_pin_verifier_observes_drift(
 @pytest.mark.parametrize("name", ("cognovis-base", "cognovis-daily"))
 def test_cognovis_project_workspace_matches_its_current_core_manifest(name: str) -> None:
     catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
-    core_root = _core_root()
-    manifest = yaml.safe_load(
-        (core_root / "workspaces" / f"{name}.yaml").read_text(encoding="utf-8")
-    )
+    manifest = _core_manifest_at(name)
     entry = next(
         workspace
         for workspace in catalog["library"]["workspaces"]
@@ -281,12 +301,12 @@ def test_cognovis_project_workspace_matches_its_current_core_manifest(name: str)
     expected_metadata["library"] = {
         "source_catalog": "cognovis-library-core",
         "inventory": "manual",
-        "source_commit": "e329ee68c6a7d34a9aec8cc523659c9e7b79ff26",
+        "source_commit": CORE_WORKSPACE_SOURCE_COMMIT,
     }
     assert entry["metadata"] == expected_metadata
     assert entry["source"] == (
         "https://git.cognovis.de/cognovis/library-core/raw/commit/"
-        f"e329ee68c6a7d34a9aec8cc523659c9e7b79ff26/workspaces/{name}.yaml"
+        f"{CORE_WORKSPACE_SOURCE_COMMIT}/workspaces/{name}.yaml"
     )
 
 
@@ -295,8 +315,6 @@ def test_external_library_cli_validates_current_project_workspace(
     name: str, tmp_path: Path
 ) -> None:
     cli_root = _library_cli_root()
-    if cli_root is None:
-        pytest.skip("separately shipped library-cli checkout is unavailable")
 
     result = subprocess.run(
         [
@@ -327,6 +345,20 @@ def test_external_library_cli_validates_current_project_workspace(
     project = tmp_path / name
     project.mkdir()
     subprocess.run(["git", "init", "--quiet", str(project)], check=True)
+    isolated_home = tmp_path / "home"
+    shutil.copytree(
+        _core_root() / "agent-bases",
+        isolated_home / ".agents" / "agent-bases",
+    )
+    environment = {
+        **os.environ,
+        "HOME": str(isolated_home),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"),
+        "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_DATA_HOME": str(tmp_path / "data"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+    }
+    environment.pop("VIRTUAL_ENV", None)
     dry_run = subprocess.run(
         [
             "uv",
@@ -344,6 +376,7 @@ def test_external_library_cli_validates_current_project_workspace(
             "--dry-run",
             "--json",
         ],
+        env=environment,
         capture_output=True,
         text=True,
         check=False,
@@ -352,3 +385,27 @@ def test_external_library_cli_validates_current_project_workspace(
     payload = json.loads(dry_run.stdout)
     assert payload["status"] == "dry-run"
     assert payload["blockers"] == []
+
+    applied = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(cli_root),
+            "library",
+            "--catalog",
+            str(REPO_ROOT / "library.yaml"),
+            "workspace",
+            "use",
+            f"cognovis-library-core:{name}",
+            "--target-project",
+            str(project),
+            "--json",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert json.loads(applied.stdout)["status"] == "applied"
