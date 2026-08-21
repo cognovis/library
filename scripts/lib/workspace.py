@@ -423,8 +423,8 @@ def validate_workspace_manifest(manifest: dict[str, Any]) -> None:
     ):
         raise LibraryError("Workspace description must be non-empty")
     roots = manifest.get("roots")
-    if not isinstance(roots, list) or not 2 <= len(roots) <= 10:
-        raise LibraryError("Workspace must declare 2-10 direct roots")
+    if not isinstance(roots, list) or not 2 <= len(roots) <= 20:
+        raise LibraryError("Workspace must declare 2-20 direct roots")
     seen: set[str] = set()
     for item in roots:
         if not isinstance(item, dict):

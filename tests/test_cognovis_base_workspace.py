@@ -135,7 +135,7 @@ PREEXISTING_SKILL_NAMES = frozenset(
     youtube-slide-extractor
     """.split()
 )
-CORE_WORKSPACE_SOURCE_COMMIT = "84c76a33e3c37ee26ca1dbae559da02f2e7d5667"
+CORE_WORKSPACE_SOURCE_COMMIT = "c4d37b679775652b27a79d7801bb1718802b73ff"
 
 
 def _core_root() -> Path:

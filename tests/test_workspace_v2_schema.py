@@ -35,6 +35,9 @@ from workspace_v2_fixtures import v1_manifest, v2_manifest  # noqa: E402
 SCHEMA = json.loads(
     (REPO_ROOT / "docs" / "schema" / "workspace.schema.json").read_text()
 )
+LIBRARY_SCHEMA = json.loads(
+    (REPO_ROOT / "docs" / "schema" / "library.schema.json").read_text()
+)
 
 
 def _refuses(manifest: dict, match: str) -> None:
@@ -50,6 +53,51 @@ def test_accepts_pinned_cross_catalog_manifest() -> None:
 
     jsonschema.validate(manifest, SCHEMA)
     validate_workspace_manifest(manifest)
+
+
+def test_direct_root_limit_accepts_20_and_rejects_21_in_both_schemas() -> None:
+    manifest = v2_manifest()
+    workspace_v2_schema = {
+        "$ref": "#/$defs/v2",
+        "$defs": SCHEMA["$defs"],
+    }
+    manifest["roots"] = [
+        {"type": "skill", "name": f"bounded-root-{index}", "catalog": "core"}
+        for index in range(20)
+    ]
+
+    jsonschema.validate(manifest, SCHEMA)
+    validate_workspace_manifest(manifest)
+    embedded = deepcopy(manifest)
+    embedded["source"] = "https://example.invalid/core/blob/main/workspaces/engineering.yaml"
+    embedded["catalogs"][1]["pin"] = {
+        "kind": "commit",
+        "value": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2",
+    }
+    jsonschema.validate(
+        embedded,
+        {
+            "$ref": "#/$defs/workspace_entry_v2",
+            "$defs": LIBRARY_SCHEMA["$defs"],
+        },
+    )
+
+    manifest["roots"].append(
+        {"type": "skill", "name": "bounded-root-20", "catalog": "core"}
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(manifest, workspace_v2_schema)
+    with pytest.raises(LibraryError, match="2-20 direct roots"):
+        validate_workspace_manifest(manifest)
+    embedded["roots"] = deepcopy(manifest["roots"])
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            embedded,
+            {
+                "$ref": "#/$defs/workspace_entry_v2",
+                "$defs": LIBRARY_SCHEMA["$defs"],
+            },
+        )
 
 
 def test_v1_manifest_remains_valid_and_unchanged() -> None:
