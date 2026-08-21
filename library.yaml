@@ -1131,6 +1131,7 @@ library:
           plane: dev
     - name: cmux
       description: End-user control of cmux topology and routing (windows, workspaces, panes/surfaces, focus, moves, reorder, identify, trigger flash). Use when automation needs deterministic placement and navigation in a multi-pane cmux layout.
+      source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
       path: skills/cmux
@@ -1169,6 +1170,7 @@ library:
           plane: dev
     - name: cmux-browser
       description: End-user browser automation with cmux. Use when you need to open sites, interact with pages, wait for state changes, and extract data from cmux browser surfaces.
+      source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-browser/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
       path: skills/cmux-browser
@@ -1184,6 +1186,7 @@ library:
           steward: manaflow-ai
     - name: cmux-markdown
       description: Open markdown files in a formatted viewer panel with live reload. Use when you need to display plans, documentation, or notes alongside the terminal with rich rendering (headings, code blocks, tables, lists).
+      source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-markdown/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
       path: skills/cmux-markdown
@@ -1199,6 +1202,7 @@ library:
           steward: manaflow-ai
     - name: cmux-workspace
       description: 'use when: scoping cmux automation to the invoking terminal''s current workspace, panes, surfaces, sidebar state, or socket. NOT for: browser page interaction or broad cmux command discovery. boundary: cmux handles general topology and cmux-browser handles browser content; this skill owns live-caller workspace safety.'
+      source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-workspace/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
       path: skills/cmux-workspace
@@ -1214,6 +1218,7 @@ library:
           steward: manaflow-ai
     - name: cmux-settings
       description: View and edit CMUX settings in ~/.config/cmux/cmux.json. Use when changing preferences, validating the file, or looking up supported settings keys.
+      source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-settings/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
       path: skills/cmux-settings
@@ -1229,6 +1234,7 @@ library:
           steward: manaflow-ai
     - name: cmux-customization
       description: Customize CMUX for an end user, including actions, commands, layouts, settings, shortcuts, notifications, and terminal preferences.
+      source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-customization/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
       path: skills/cmux-customization
@@ -1244,6 +1250,7 @@ library:
           steward: manaflow-ai
     - name: cmux-diagnostics
       description: Run end-user CMUX diagnostics for hooks, notifications, session restore, settings, browser automation, socket access, and agent resume behavior.
+      source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-diagnostics/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
       path: skills/cmux-diagnostics

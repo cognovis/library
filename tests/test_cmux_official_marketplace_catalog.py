@@ -68,7 +68,10 @@ def test_official_cmux_skills_have_foreign_pinned_provenance_without_local_copie
 
     assert set(skills) == OFFICIAL_SKILLS
     for name, entry in skills.items():
-        assert "source" not in entry
+        assert entry["source"] == (
+            "https://github.com/manaflow-ai/cmux/blob/"
+            f"{CMUX_PIN}/skills/{name}/SKILL.md"
+        )
         assert entry["from_marketplace"] == "cmux-official"
         assert entry["repo"] == "cmux"
         assert entry["path"] == f"skills/{name}"
