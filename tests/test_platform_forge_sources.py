@@ -50,7 +50,8 @@ def test_platform_forge_source_urls_match_checked_in_files() -> None:
     for name in FORGE_NAMES:
         source = str(entries[name]["source"])
         expected = (
-            f"https://github.com/cognovis/library-core/blob/main/skills/{name}/SKILL.md"
+            "https://git.cognovis.de/cognovis/library-core/raw/branch/main/"
+            f"skills/{name}/SKILL.md"
         )
         assert source == expected
         assert (core_root / "skills" / name / "SKILL.md").is_file()
@@ -63,7 +64,10 @@ def test_platform_standard_source_urls_match_checked_in_files() -> None:
     for name, path in CORE_STANDARD_PATHS.items():
         entry = entries[name]
         source = str(entry["source"])
-        expected = f"https://github.com/cognovis/library-core/blob/main/{path}"
+        expected = (
+            "https://git.cognovis.de/cognovis/library-core/raw/branch/main/"
+            f"{path}"
+        )
         metadata = entry["metadata"]["library"]
 
         assert source == expected

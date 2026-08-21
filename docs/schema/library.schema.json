@@ -2347,6 +2347,12 @@
           "type": "string",
           "minLength": 1
         },
+        "registry": {
+          "description": "Source registry that owns the declared identity. Omitted values retain the first-party catalogs default; Marketplace sources must be explicit.",
+          "type": "string",
+          "enum": ["catalogs", "marketplaces"],
+          "default": "catalogs"
+        },
         "pin": {
           "type": "object",
           "required": ["kind", "value"],
