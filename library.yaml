@@ -113,7 +113,7 @@ sources:
         - first-party
         - personal
     - name: cognovis-library-core
-      source: https://github.com/cognovis/library-core
+      source: https://git.cognovis.de/cognovis/library-core
       description: Cognovis team agentic content (skills, agents, commands, hooks)
       visibility: private
       owner: cognovis
@@ -344,6 +344,31 @@ sources:
           - public
           - skills
           - engineering
+        excludes:
+          - private
+    - name: cmux-official
+      source: https://github.com/manaflow-ai/cmux
+      description: Official CMUX end-user skills maintained by Manaflow AI.
+      type: git
+      provider_kind: git-repo
+      branch: main
+      rights:
+        fetch_authorization: granted
+        install_rights: granted
+        redistribution_rights: granted
+        derivative_rights: granted
+        evidence_source: >-
+          upstream LICENSE (GPL-3.0-or-later), reviewed at a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee on 2026-08-21
+      local_path: null
+      writable: false
+      content_types:
+        - skills
+      scope:
+        topics:
+          - cmux
+          - terminal
+          - workspace
+          - browser
         excludes:
           - private
     - name: executive-circle
@@ -1106,15 +1131,19 @@ library:
           plane: dev
     - name: cmux
       description: End-user control of cmux topology and routing (windows, workspaces, panes/surfaces, focus, moves, reorder, identify, trigger flash). Use when automation needs deterministic placement and navigation in a multi-pane cmux layout.
-      source: https://github.com/cognovis/library-core/blob/main/skills/cmux/SKILL.md
+      from_marketplace: cmux-official
+      repo: cmux
+      path: skills/cmux
+      branch: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
       tags:
-        - origin:original
+        - origin:third-party
         - tier:domain
       metadata:
         library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
+          source_catalog: cmux-official
+          inventory: marketplace
           plane: dev
+          steward: manaflow-ai
     - name: cmux-bead-dispatch
       description: 'use when: the active long-running agent in cmux must implement one or more explicit beads with one fresh surface per bead and dependency-safe advancement. NOT for: dispatch outside cmux, one session for multiple beads, or durable unattended scheduling. boundary: cmux-workspace owns live-caller topology; cognovis-beads owns bead state; cld/cdx own each single-bead worktree and workflow.'
       source: https://github.com/cognovis/library-core/blob/main/skills/cmux-bead-dispatch/SKILL.md
@@ -1140,37 +1169,94 @@ library:
           plane: dev
     - name: cmux-browser
       description: End-user browser automation with cmux. Use when you need to open sites, interact with pages, wait for state changes, and extract data from cmux browser surfaces.
-      source: https://github.com/cognovis/library-core/blob/main/skills/cmux-browser/SKILL.md
+      from_marketplace: cmux-official
+      repo: cmux
+      path: skills/cmux-browser
+      branch: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
       tags:
-        - origin:original
+        - origin:third-party
         - tier:domain
       metadata:
         library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
+          source_catalog: cmux-official
+          inventory: marketplace
           plane: dev
+          steward: manaflow-ai
     - name: cmux-markdown
       description: Open markdown files in a formatted viewer panel with live reload. Use when you need to display plans, documentation, or notes alongside the terminal with rich rendering (headings, code blocks, tables, lists).
-      source: https://github.com/cognovis/library-core/blob/main/skills/cmux-markdown/SKILL.md
+      from_marketplace: cmux-official
+      repo: cmux
+      path: skills/cmux-markdown
+      branch: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
       tags:
-        - origin:original
+        - origin:third-party
         - tier:domain
       metadata:
         library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
+          source_catalog: cmux-official
+          inventory: marketplace
           plane: dev
+          steward: manaflow-ai
     - name: cmux-workspace
       description: 'use when: scoping cmux automation to the invoking terminal''s current workspace, panes, surfaces, sidebar state, or socket. NOT for: browser page interaction or broad cmux command discovery. boundary: cmux handles general topology and cmux-browser handles browser content; this skill owns live-caller workspace safety.'
-      source: https://github.com/cognovis/library-core/blob/main/skills/cmux-workspace/SKILL.md
+      from_marketplace: cmux-official
+      repo: cmux
+      path: skills/cmux-workspace
+      branch: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
       tags:
-        - origin:original
+        - origin:third-party
         - tier:core
       metadata:
         library:
-          source_catalog: cognovis-library-core
-          inventory: convention-scan
+          source_catalog: cmux-official
+          inventory: marketplace
           plane: dev
+          steward: manaflow-ai
+    - name: cmux-settings
+      description: View and edit CMUX settings in ~/.config/cmux/cmux.json. Use when changing preferences, validating the file, or looking up supported settings keys.
+      from_marketplace: cmux-official
+      repo: cmux
+      path: skills/cmux-settings
+      branch: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
+      tags:
+        - origin:third-party
+        - tier:domain
+      metadata:
+        library:
+          source_catalog: cmux-official
+          inventory: marketplace
+          plane: dev
+          steward: manaflow-ai
+    - name: cmux-customization
+      description: Customize CMUX for an end user, including actions, commands, layouts, settings, shortcuts, notifications, and terminal preferences.
+      from_marketplace: cmux-official
+      repo: cmux
+      path: skills/cmux-customization
+      branch: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
+      tags:
+        - origin:third-party
+        - tier:domain
+      metadata:
+        library:
+          source_catalog: cmux-official
+          inventory: marketplace
+          plane: dev
+          steward: manaflow-ai
+    - name: cmux-diagnostics
+      description: Run end-user CMUX diagnostics for hooks, notifications, session restore, settings, browser automation, socket access, and agent resume behavior.
+      from_marketplace: cmux-official
+      repo: cmux
+      path: skills/cmux-diagnostics
+      branch: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
+      tags:
+        - origin:third-party
+        - tier:domain
+      metadata:
+        library:
+          source_catalog: cmux-official
+          inventory: marketplace
+          plane: dev
+          steward: manaflow-ai
     - name: code-navigator
       description: 'use when: navigating source code by symbol — find where a function/class is defined (smart_search), see the structural skeleton of a file (smart_outline), or extract one specific function/class AST-bounded (smart_unfold). Works on Python with the built-in AST and uses lightweight structural fallbacks for TS/JS/Go/Rust. NOT for: full-text search inside function bodies (use Grep); files under ~100 lines where plain Read is cheaper than outline. boundary: code-navigator is for symbol-level navigation; Grep is for text; Read is for whole files. Especially useful in polaris and mira (TS).'
       source: https://github.com/cognovis/library-core/blob/main/skills/code-navigator/SKILL.md
@@ -4023,7 +4109,7 @@ library:
             kind: commit
             value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
         - alias: core
-          identity: https://github.com/cognovis/library-core
+          identity: https://git.cognovis.de/cognovis/library-core
           pin:
             kind: commit
             value: 32051847d40e3ed57900251369b47f908b3d9550
@@ -4098,6 +4184,79 @@ library:
           source_catalog: cognovis-library-core
           inventory: manual
           source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
+    - name: cognovis-cmux
+      description: Explicit project-local CMUX interaction support for selected repositories.
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/cognovis-cmux.yaml
+      schema_version: 2
+      version: 0.1.0
+      status: experimental
+      catalogs:
+        - alias: cmux
+          registry: marketplaces
+          identity: https://github.com/manaflow-ai/cmux
+          pin:
+            kind: commit
+            value: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
+      roots:
+        - type: skill
+          name: cmux
+          catalog: cmux
+        - type: skill
+          name: cmux-workspace
+          catalog: cmux
+        - type: skill
+          name: cmux-settings
+          catalog: cmux
+        - type: skill
+          name: cmux-customization
+          catalog: cmux
+        - type: skill
+          name: cmux-diagnostics
+          catalog: cmux
+        - type: skill
+          name: cmux-browser
+          catalog: cmux
+        - type: skill
+          name: cmux-markdown
+          catalog: cmux
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          source_commit: 8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e
+    - name: cognovis-cmux-dispatch
+      description: Explicit project-local Cognovis Bead dispatch for a CMUX caller.
+      source: https://github.com/cognovis/library-core/blob/main/workspaces/cognovis-cmux-dispatch.yaml
+      schema_version: 2
+      version: 0.1.0
+      status: experimental
+      catalogs:
+        - alias: core
+          identity: https://git.cognovis.de/cognovis/library-core
+          pin:
+            kind: commit
+            value: fdce06424f7fe12ea4e89e98480982cb197dad22
+        - alias: cmux
+          registry: marketplaces
+          identity: https://github.com/manaflow-ai/cmux
+          pin:
+            kind: commit
+            value: a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee
+      roots:
+        - type: skill
+          name: cmux-bead-dispatch
+          catalog: core
+        - type: skill
+          name: cmux
+          catalog: cmux
+        - type: skill
+          name: cmux-workspace
+          catalog: cmux
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          source_commit: 8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e
     - name: library-authoring
       description: Shared authoring baseline for Library primitive repositories.
       source: https://github.com/cognovis/library-core/blob/main/workspaces/library-authoring.yaml

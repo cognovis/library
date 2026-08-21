@@ -45,7 +45,10 @@ PREEXISTING_SKILL_NAMES = frozenset(
     cmux
     cmux-bead-dispatch
     cmux-browser
+    cmux-customization
+    cmux-diagnostics
     cmux-markdown
+    cmux-settings
     cmux-workspace
     code-navigator
     cohesive-bead-chain
@@ -173,7 +176,7 @@ def test_cognovis_base_publication_preserves_preexisting_catalog_skills() -> Non
 
     names = {entry["name"] for entry in catalog["library"]["skills"]}
     assert PREEXISTING_SKILL_NAMES <= names
-    assert len(names) == 109
+    assert len(names) == 112
     assert "library" in names
 
 
