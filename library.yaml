@@ -4154,7 +4154,7 @@ library:
   workspaces:
     - name: cognovis-base
       description: Project-local Beads, standards, and memory baseline for curated Cognovis repositories.
-      source: https://git.cognovis.de/cognovis/library-core/raw/commit/84c76a33e3c37ee26ca1dbae559da02f2e7d5667/workspaces/cognovis-base.yaml
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/c4d37b679775652b27a79d7801bb1718802b73ff/workspaces/cognovis-base.yaml
       schema_version: 2
       version: 0.3.0
       status: experimental
@@ -4193,12 +4193,12 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-          source_commit: 84c76a33e3c37ee26ca1dbae559da02f2e7d5667
+          source_commit: c4d37b679775652b27a79d7801bb1718802b73ff
     - name: cognovis-daily
-      description: Coding delivery, Session Close, and daily working standards for Cognovis repositories.
-      source: https://git.cognovis.de/cognovis/library-core/raw/commit/84c76a33e3c37ee26ca1dbae559da02f2e7d5667/workspaces/cognovis-daily.yaml
+      description: Complete Base plus coding delivery, Session Close, and daily working standards for Cognovis repositories.
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/c4d37b679775652b27a79d7801bb1718802b73ff/workspaces/cognovis-daily.yaml
       schema_version: 2
-      version: 0.2.0
+      version: 0.3.0
       status: experimental
       catalogs:
         - alias: core
@@ -4227,10 +4227,31 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-          source_commit: 84c76a33e3c37ee26ca1dbae559da02f2e7d5667
+          source_commit: c4d37b679775652b27a79d7801bb1718802b73ff
       roots:
         - type: agent-base
           name: cognovis-project-composition
+          catalog: core
+        - type: skill
+          name: cognovis-beads
+          catalog: core
+        - type: skill
+          name: inject-standards
+          catalog: core
+        - type: skill
+          name: ob-cli
+          catalog: core
+        - type: skill
+          name: session-capture
+          catalog: core
+        - type: skill
+          name: summarize
+          catalog: core
+        - type: skill
+          name: context-handoff
+          catalog: core
+        - type: standard
+          name: workflow/agent-session-capture
           catalog: core
         - type: skill
           name: executive-pack

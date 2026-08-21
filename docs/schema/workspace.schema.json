@@ -73,7 +73,7 @@
         "roots": {
           "type": "array",
           "minItems": 2,
-          "maxItems": 10,
+          "maxItems": 20,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/v1Root"}
         }
@@ -122,7 +122,7 @@
         "roots": {
           "type": "array",
           "minItems": 2,
-          "maxItems": 10,
+          "maxItems": 20,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/v2Root"}
         }

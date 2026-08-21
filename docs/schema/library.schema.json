@@ -2214,7 +2214,7 @@
         "roots": {
           "type": "array",
           "minItems": 2,
-          "maxItems": 10,
+          "maxItems": 20,
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/workspace_root"
@@ -2320,7 +2320,7 @@
         "roots": {
           "type": "array",
           "minItems": 2,
-          "maxItems": 10,
+          "maxItems": 20,
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/workspace_root_v2"}
         },
