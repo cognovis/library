@@ -2969,7 +2969,7 @@ library:
         - category:standard
     - name: judge-layer
       description: Shared judge-layer contracts for action proposals, outcomes, provenance labels, mandates, decision gates, and judge evaluation suites.
-      source: https://github.com/cognovis/library-core/tree/main/standards/judge-layer/
+      source: https://github.com/cognovis/library-core/tree/main/standards/judge-layer
       tier: domain
       default_scope: ask
       tags:

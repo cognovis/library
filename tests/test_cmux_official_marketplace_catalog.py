@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -66,6 +67,14 @@ OFFICIAL_DESCRIPTIONS = {
         "terminal with rich rendering (headings, code blocks, tables, lists)."
     ),
 }
+DISPATCH_CLOSURE_MEMBERS = (
+    ("skills", "cmux"),
+    ("skills", "cmux-workspace"),
+    ("skills", "cognovis-beads"),
+    ("standards", "judge-layer"),
+    ("agents", "judge-default"),
+    ("skills", "cmux-bead-dispatch"),
+)
 
 
 def _catalog() -> dict:
@@ -144,6 +153,22 @@ def test_dispatch_remains_cognovis_owned_but_depends_on_official_cmux_skills() -
 
     assert dispatch["metadata"]["library"]["source_catalog"] == "cognovis-library-core"
     assert {"skill:cmux", "skill:cmux-workspace"} <= set(dispatch["requires"])
+
+
+def test_dispatch_closure_sources_have_safe_nonempty_repository_paths() -> None:
+    """Pinned Workspace reads must not receive an empty tree-path segment."""
+    catalog = _catalog()
+
+    for kind, name in DISPATCH_CLOSURE_MEMBERS:
+        source = str(_entry(catalog, kind, name)["source"])
+        parsed = urlsplit(source)
+        segments = tuple(segment for segment in parsed.path.split("/") if segment)
+
+        assert parsed.scheme == "https"
+        assert source.endswith("/") is False
+        assert segments
+        assert segments[-1] not in {".", ".."}
+        assert ".." not in segments
 
 
 def test_cognovis_core_uses_its_canonical_forgejo_identity() -> None:
