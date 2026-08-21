@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import jsonschema
@@ -133,20 +135,87 @@ PREEXISTING_SKILL_NAMES = frozenset(
     youtube-slide-extractor
     """.split()
 )
+CORE_WORKSPACE_SOURCE_COMMIT = "84c76a33e3c37ee26ca1dbae559da02f2e7d5667"
+
+
+def _core_root() -> Path:
+    candidates = []
+    configured = os.environ.get("COGNOVIS_CORE")
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend(
+        (
+            REPO_ROOT.parent / "cognovis-core",
+            REPO_ROOT.parents[1] / "cognovis-core",
+            REPO_ROOT.parents[2] / "library" / "cognovis-core",
+        )
+    )
+    return next(
+        path
+        for path in candidates
+        if (path / "workspaces" / "cognovis-base.yaml").is_file()
+    )
+
+
+def _library_cli_root() -> Path:
+    candidates = []
+    configured = os.environ.get("LIBRARY_CLI_ROOT")
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend(
+        (
+            REPO_ROOT.parent / "library-cli",
+            REPO_ROOT.parents[1] / "library-cli",
+            REPO_ROOT.parents[2] / "library" / "library-cli",
+        )
+    )
+    match = next(
+        (
+            path
+            for path in candidates
+            if (path / "pyproject.toml").is_file()
+            and (path / "scripts" / "library.py").is_file()
+        ),
+        None,
+    )
+    if match is None:
+        raise AssertionError(
+            "the separately shipped library-cli checkout is required for Workspace MoC"
+        )
+    return match
+
+
+def _core_manifest_at(name: str) -> dict:
+    result = subprocess.run(
+        [
+            "git",
+            "show",
+            f"{CORE_WORKSPACE_SOURCE_COMMIT}:workspaces/{name}.yaml",
+        ],
+        cwd=_core_root(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return yaml.safe_load(result.stdout)
 
 
 def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
     catalog = load_catalog(REPO_ROOT)
     workspace = resolve_workspace(catalog, "cognovis-library-core:cognovis-base")
 
-    assert workspace.entry["status"] == "stable"
+    assert workspace.entry["status"] == "experimental"
     assert workspace.entry["schema_version"] == 2
     assert {(root["type"], root["name"], root.get("catalog")) for root in workspace.entry["roots"]} == {
         ("skill", "cognovis-beads", "core"),
         ("skill", "inject-standards", "core"),
         ("skill", "ob-cli", "core"),
-        ("skill", "executive-pack", "core"),
-        ("skill", "session-close", "core"),
+        ("skill", "session-capture", "core"),
+        ("skill", "summarize", "core"),
+        ("skill", "context-handoff", "core"),
+        ("standard", "workflow/agent-session-capture", "core"),
+        ("agent-base", "cognovis-project-composition", "core"),
     }
 
     closure = resolve_workspace_closure(
@@ -161,7 +230,11 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "cognovis-beads"),
         ("skill", "inject-standards"),
         ("skill", "ob-cli"),
-        ("skill", "executive-pack"),
+        ("skill", "session-capture"),
+        ("skill", "summarize"),
+        ("skill", "context-handoff"),
+        ("standard", "workflow/agent-session-capture"),
+        ("agent-base", "cognovis-project-composition"),
     } <= set(closure.artifacts)
     assert set(closure.prerequisites) == set()
 
@@ -176,7 +249,7 @@ def test_cognovis_base_publication_preserves_preexisting_catalog_skills() -> Non
 
     names = {entry["name"] for entry in catalog["library"]["skills"]}
     assert PREEXISTING_SKILL_NAMES <= names
-    assert len(names) == 112
+    assert len(names) == 113
     assert "library" in names
 
 
@@ -211,26 +284,149 @@ def test_cognovis_base_refuses_when_the_production_pin_verifier_observes_drift(
         )
 
 
-def test_cognovis_base_catalog_entry_matches_its_canonical_manifest() -> None:
+@pytest.mark.parametrize("name", ("cognovis-base", "cognovis-daily"))
+def test_cognovis_project_workspace_matches_its_current_core_manifest(name: str) -> None:
     catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
-    core_candidates = (
-        Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
-        Path("/Users/malte/code/library/cognovis-core"),
-    )
-    core_root = next(
-        path
-        for path in core_candidates
-        if (path / "workspaces" / "cognovis-base.yaml").is_file()
-    )
-    manifest = yaml.safe_load((core_root / "workspaces" / "cognovis-base.yaml").read_text())
+    manifest = _core_manifest_at(name)
     entry = next(
         workspace
         for workspace in catalog["library"]["workspaces"]
-        if workspace["name"] == "cognovis-base"
+        if workspace["name"] == name
     )
 
-    for key in ("schema_version", "name", "version", "description", "status", "roots"):
-        assert entry[key] == manifest[key]
-    assert [item["alias"] for item in entry["catalogs"]] == [
-        item["alias"] for item in manifest["catalogs"]
-    ]
+    for key, value in manifest.items():
+        if key == "metadata":
+            continue
+        assert entry[key] == value
+    expected_metadata = dict(manifest.get("metadata") or {})
+    expected_metadata["library"] = {
+        "source_catalog": "cognovis-library-core",
+        "inventory": "manual",
+        "source_commit": CORE_WORKSPACE_SOURCE_COMMIT,
+    }
+    assert entry["metadata"] == expected_metadata
+    assert entry["source"] == (
+        "https://git.cognovis.de/cognovis/library-core/raw/commit/"
+        f"{CORE_WORKSPACE_SOURCE_COMMIT}/workspaces/{name}.yaml"
+    )
+
+
+@pytest.mark.parametrize("name", ("cognovis-base", "cognovis-daily"))
+def test_external_library_cli_validates_current_project_workspace(
+    name: str, tmp_path: Path
+) -> None:
+    cli_root = _library_cli_root()
+
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(cli_root),
+            "library",
+            "--catalog",
+            str(REPO_ROOT / "library.yaml"),
+            "workspace",
+            "validate",
+            f"cognovis-library-core:{name}",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert json.loads(result.stdout) == {
+        "operation": "validate",
+        "status": "valid",
+        "reference": f"cognovis-library-core:{name}",
+    }
+
+    project = tmp_path / name
+    project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
+    isolated_home = tmp_path / "home"
+    environment = {
+        **os.environ,
+        "HOME": str(isolated_home),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"),
+        "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_DATA_HOME": str(tmp_path / "data"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+    }
+    for inherited in ("AGENT_BASES_DIR", "MODEL_STANDARDS_DIR", "VIRTUAL_ENV"):
+        environment.pop(inherited, None)
+    dry_run = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(cli_root),
+            "library",
+            "--catalog",
+            str(REPO_ROOT / "library.yaml"),
+            "workspace",
+            "use",
+            f"cognovis-library-core:{name}",
+            "--target-project",
+            str(project),
+            "--dry-run",
+            "--json",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert dry_run.returncode == 0, dry_run.stderr or dry_run.stdout
+    payload = json.loads(dry_run.stdout)
+    assert payload["status"] == "dry-run"
+    assert payload["blockers"] == []
+
+    applied = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(cli_root),
+            "library",
+            "--catalog",
+            str(REPO_ROOT / "library.yaml"),
+            "workspace",
+            "use",
+            f"cognovis-library-core:{name}",
+            "--target-project",
+            str(project),
+            "--json",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert json.loads(applied.stdout)["status"] == "applied"
+    assert {
+        path.stem
+        for path in (project / ".agents" / "agent-bases").glob("*.md")
+    } >= {
+        "cognovis-project-composition",
+        "claude-agent-base",
+        "codex-agent-base",
+    }
+    assert {
+        path.stem
+        for path in (project / ".agents" / "model-standards").glob("*.md")
+    } == {
+        "fable",
+        "gpt-5.6-luna",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "haiku",
+        "opus",
+        "sonnet",
+    }
+    assert not (isolated_home / ".agents").exists()
+    assert not (isolated_home / ".claude").exists()
+    assert not (isolated_home / ".codex").exists()

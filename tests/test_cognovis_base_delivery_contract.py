@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
-
-import yaml
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -16,6 +14,9 @@ import library as library_cli  # noqa: E402
 
 
 EXPECTED_ARTIFACTS = {
+    ("agent-base", "claude-agent-base"),
+    ("agent-base", "codex-agent-base"),
+    ("agent-base", "cognovis-project-composition"),
     ("agent", "bead-boundary-reviewer"),
     ("agent", "bead-change-reviewer"),
     ("agent", "bead-depth-reviewer"),
@@ -29,12 +30,26 @@ EXPECTED_ARTIFACTS = {
     ("agent", "plan-reviewer"),
     ("skill", "acpx-dispatch"),
     ("skill", "bead-execution-loop"),
+    ("skill", "bead-metrics"),
+    ("skill", "bead-reviewer"),
+    ("skill", "bug-triage"),
     ("skill", "cognovis-beads"),
+    ("skill", "context-discovery"),
     ("skill", "executive-pack"),
     ("skill", "inject-standards"),
-    ("skill", "ob-cli"),
+    ("skill", "intake"),
     ("skill", "session-close"),
+    ("skill", "workplan"),
+    ("skill", "worktree-cleanup"),
+    ("model-standard", "fable"),
+    ("model-standard", "gpt-5.6-luna"),
+    ("model-standard", "gpt-5.6-sol"),
+    ("model-standard", "gpt-5.6-terra"),
+    ("model-standard", "haiku"),
+    ("model-standard", "opus"),
+    ("model-standard", "sonnet"),
     ("standard", "executive-pack"),
+    ("standard", "git"),
     # clc-i19u: the transport skill declares `requires_standards:
     # [mcp-client-timeout]` and nothing else, so aligning its catalog entry with
     # that contract is what pulls this standard into the closure -- and what drops
@@ -43,6 +58,7 @@ EXPECTED_ARTIFACTS = {
     # never declared; no other member of this Workspace requires them.
     ("standard", "mcp-client-timeout"),
     ("standard", "model-routing"),
+    ("standard", "tool-standards"),
     ("standard", "workflow"),
 }
 
@@ -52,35 +68,25 @@ EXPECTED_ARTIFACTS = {
 EXPECTED_GLOBAL_PREREQUISITES = set()
 
 
-def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -> None:
+def test_cognovis_daily_resolves_the_complete_solo_and_pack_delivery_contract() -> None:
     catalog = load_catalog(REPO_ROOT)
-    workspace = resolve_workspace(catalog, "cognovis-library-core:cognovis-base")
+    workspace = resolve_workspace(catalog, "cognovis-library-core:cognovis-daily")
 
     assert workspace.entry["catalogs"] == [
         {
-            "alias": "platform",
-            "identity": "https://github.com/cognovis/library",
-            "pin": {
-                "kind": "commit",
-                "value": "aaca41ffea3e1db9937054f6a8f7f597f729cfb6",
-            },
-        },
-        {
             "alias": "core",
-            "identity": "https://github.com/cognovis/library-core",
+            "identity": "https://git.cognovis.de/cognovis/library-core",
             "pin": {
                 "kind": "commit",
-                "value": "32051847d40e3ed57900251369b47f908b3d9550",
+                "value": "cbb583378386f699756b3ed14f24e01cfd3da48a",
             },
         },
-        # clc-i19u: the closure reaches skill:acpx-dispatch, which ccore serves
-        # beside the `ccore acpx` command the skill documents.
         {
             "alias": "ccore",
-            "identity": "https://github.com/cognovis/ccore",
+            "identity": "https://git.cognovis.de/cognovis/ccore",
             "pin": {
                 "kind": "commit",
-                "value": "fc6162a9a1734c77e7cb2733c3160665f71d5220",
+                "value": "c377fb05b3cd2273f037b2f3c589e05bfd441c8d",
             },
         },
     ]
@@ -88,11 +94,16 @@ def test_cognovis_base_resolves_the_complete_solo_and_pack_delivery_contract() -
         (root["type"], root["name"], root["catalog"])
         for root in workspace.entry["roots"]
     } == {
-        ("skill", "cognovis-beads", "core"),
-        ("skill", "inject-standards", "core"),
-        ("skill", "ob-cli", "core"),
         ("skill", "executive-pack", "core"),
         ("skill", "session-close", "core"),
+        ("skill", "context-discovery", "core"),
+        ("skill", "intake", "core"),
+        ("skill", "workplan", "core"),
+        ("skill", "worktree-cleanup", "core"),
+        ("skill", "bead-reviewer", "core"),
+        ("skill", "bead-metrics", "core"),
+        ("standard", "git", "core"),
+        ("agent-base", "cognovis-project-composition", "core"),
     }
 
     closure = resolve_workspace_closure(
@@ -133,19 +144,3 @@ def test_readme_documents_the_launcher_and_propagation_contract() -> None:
         "Topic coordination is optional",
     ):
         assert contract in readme
-
-    core_candidates = (
-        Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
-        Path("/Users/malte/code/library/cognovis-core"),
-    )
-    core_root = next(
-        path
-        for path in core_candidates
-        if (path / "workspaces" / "cognovis-base.yaml").is_file()
-    )
-    manifest = yaml.safe_load(
-        (core_root / "workspaces" / "cognovis-base.yaml").read_text(encoding="utf-8")
-    )
-    assert {root["name"] for root in manifest["roots"]} >= {
-        "executive-pack",
-    }

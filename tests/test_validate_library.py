@@ -235,6 +235,30 @@ def test_m3_valid_entry_passes():
     )
 
 
+def test_m3_namespaced_standard_name_passes() -> None:
+    entry = {
+        "name": "workflow/agent-session-capture",
+        "description": "A namespaced workflow standard.",
+        "source": "https://example.com/standards/workflow/agent-session-capture.md",
+    }
+
+    result = _run_validator(_make_library_yaml_with_standard(entry))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_m3_namespaced_standard_refuses_parent_traversal() -> None:
+    entry = {
+        "name": "workflow/../agent-session-capture",
+        "description": "An unsafe namespaced workflow standard.",
+        "source": "https://example.com/standards/workflow/agent-session-capture.md",
+    }
+
+    result = _run_validator(_make_library_yaml_with_standard(entry))
+
+    assert result.returncode == 1
+
+
 def test_m3_name_with_trailing_hyphen():
     """Skill with name 'bad-name-' (trailing hyphen) must fail (exit 1) and mention 'trailing hyphen'."""
     entry = _base_skill_entry()

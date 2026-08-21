@@ -53,7 +53,7 @@ def find_repo_root() -> Path:
 
 
 _NAME_PATTERN = re.compile(r'^[a-z][a-z0-9-]*$')
-_SCRIPT_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)*$')
+_NAMESPACED_NAME_PATTERN = re.compile(r'^[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)*$')
 
 
 def _validate_agentskills_rules(data: dict) -> list:
@@ -89,12 +89,14 @@ def _validate_agentskills_rules(data: dict) -> list:
                 errors.append(f"{prefix} name exceeds 64 chars (got {len(name)})")
 
             name_pattern = (
-                _SCRIPT_NAME_PATTERN if primitive_name == "script" else _NAME_PATTERN
+                _NAMESPACED_NAME_PATTERN
+                if primitive_name in {"script", "standard"}
+                else _NAME_PATTERN
             )
             if primitive_name != "model-standard" and not name_pattern.match(name):
                 expected = (
                     "[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)*"
-                    if primitive_name == "script"
+                    if primitive_name in {"script", "standard"}
                     else "[a-z][a-z0-9-]*"
                 )
                 errors.append(
