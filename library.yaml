@@ -4193,7 +4193,7 @@ library:
           source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
     - name: cognovis-cmux
       description: Explicit project-local CMUX interaction support for selected repositories.
-      source: https://github.com/cognovis/library-core/blob/main/workspaces/cognovis-cmux.yaml
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e/workspaces/cognovis-cmux.yaml
       schema_version: 2
       version: 0.1.0
       status: experimental

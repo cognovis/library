@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import yaml
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CMUX_PIN = "a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee"
+CMUX_WORKSPACE_SOURCE_COMMIT = "8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e"
 CORE_SOURCE_COMMIT = "eea6dabedf995925f416f74c41f36bf5c26a37d7"
 OFFICIAL_SKILLS = frozenset(
     {
@@ -83,6 +88,49 @@ def _catalog() -> dict:
 
 def _entry(catalog: dict, kind: str, name: str) -> dict:
     return next(entry for entry in catalog["library"][kind] if entry["name"] == name)
+
+
+def _core_root() -> Path:
+    """Locate the checked-out Core catalog without binding tests to one operator."""
+    candidates = []
+    configured = os.environ.get("COGNOVIS_CORE")
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend(
+        (
+            ROOT.parent / "cognovis-core",
+            ROOT.parents[1] / "cognovis-core",
+            ROOT.parents[2] / "library" / "cognovis-core",
+        )
+    )
+    for candidate in candidates:
+        if (candidate / "workspaces" / "cognovis-cmux.yaml").is_file():
+            return candidate
+    raise AssertionError(f"cognovis-core checkout not found in {candidates}")
+
+
+def _library_cli_root() -> Path | None:
+    """Return the separately shipped Library runtime when the checkout is present."""
+    candidates = []
+    configured = os.environ.get("LIBRARY_CLI_ROOT")
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend(
+        (
+            ROOT.parent / "library-cli",
+            ROOT.parents[1] / "library-cli",
+            ROOT.parents[2] / "library" / "library-cli",
+        )
+    )
+    return next(
+        (
+            candidate
+            for candidate in candidates
+            if (candidate / "pyproject.toml").is_file()
+            and (candidate / "scripts" / "library.py").is_file()
+        ),
+        None,
+    )
 
 
 def test_cmux_official_is_one_remote_git_marketplace_with_gpl_evidence() -> None:
@@ -186,7 +234,7 @@ def test_cognovis_core_uses_its_canonical_forgejo_identity() -> None:
 
 def test_cmux_workspaces_are_published_from_core_with_their_exact_manifests() -> None:
     catalog = _catalog()
-    core_root = Path("/Users/malte/code/library/cognovis-core")
+    core_root = _core_root()
 
     for name in ("cognovis-cmux", "cognovis-cmux-dispatch"):
         manifest = yaml.safe_load(
@@ -204,7 +252,7 @@ def test_cmux_workspaces_are_published_from_core_with_their_exact_manifests() ->
             "source_commit": (
                 CORE_SOURCE_COMMIT
                 if name == "cognovis-cmux-dispatch"
-                else "8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e"
+                else CMUX_WORKSPACE_SOURCE_COMMIT
             ),
         }
         assert entry["metadata"] == expected_metadata
@@ -214,3 +262,41 @@ def test_cmux_workspaces_are_published_from_core_with_their_exact_manifests() ->
                 "https://git.cognovis.de/cognovis/library-core/raw/commit/"
                 f"{CORE_SOURCE_COMMIT}/workspaces/cognovis-cmux-dispatch.yaml"
             )
+        else:
+            assert entry["source"] == (
+                "https://git.cognovis.de/cognovis/library-core/raw/commit/"
+                f"{CMUX_WORKSPACE_SOURCE_COMMIT}/workspaces/cognovis-cmux.yaml"
+            )
+
+
+def test_external_library_cli_validates_both_cmux_workspaces() -> None:
+    """The active Library runtime, not archived catalog code, owns Workspace validation."""
+    cli_root = _library_cli_root()
+    if cli_root is None:
+        pytest.skip("separately shipped library-cli checkout is unavailable")
+
+    for workspace in ("cognovis-cmux", "cognovis-cmux-dispatch"):
+        result = subprocess.run(
+            [
+                "uv",
+                "run",
+                "--project",
+                str(cli_root),
+                "library",
+                "--catalog",
+                str(ROOT / "library.yaml"),
+                "workspace",
+                "validate",
+                f"cognovis-library-core:{workspace}",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr or result.stdout
+        assert json.loads(result.stdout) == {
+            "operation": "validate",
+            "status": "valid",
+            "reference": f"cognovis-library-core:{workspace}",
+        }
