@@ -9,6 +9,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CMUX_PIN = "a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee"
+CORE_SOURCE_COMMIT = "eea6dabedf995925f416f74c41f36bf5c26a37d7"
 OFFICIAL_SKILLS = frozenset(
     {
         "cmux",
@@ -167,14 +168,24 @@ def test_cmux_workspaces_are_published_from_core_with_their_exact_manifests() ->
             (core_root / "workspaces" / f"{name}.yaml").read_text(encoding="utf-8")
         )
         entry = _entry(catalog, "workspaces", name)
-        for key in (
-            "schema_version",
-            "name",
-            "version",
-            "description",
-            "status",
-            "catalogs",
-            "roots",
-        ):
-            assert entry[key] == manifest[key]
-        assert entry["metadata"]["library"]["source_catalog"] == "cognovis-library-core"
+        for key, value in manifest.items():
+            if key == "metadata":
+                continue
+            assert entry[key] == value
+        expected_metadata = dict(manifest.get("metadata") or {})
+        expected_metadata["library"] = {
+            "source_catalog": "cognovis-library-core",
+            "inventory": "manual",
+            "source_commit": (
+                CORE_SOURCE_COMMIT
+                if name == "cognovis-cmux-dispatch"
+                else "8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e"
+            ),
+        }
+        assert entry["metadata"] == expected_metadata
+
+        if name == "cognovis-cmux-dispatch":
+            assert entry["source"] == (
+                "https://git.cognovis.de/cognovis/library-core/raw/commit/"
+                f"{CORE_SOURCE_COMMIT}/workspaces/cognovis-cmux-dispatch.yaml"
+            )

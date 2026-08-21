@@ -4233,7 +4233,7 @@ library:
           source_commit: 8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e
     - name: cognovis-cmux-dispatch
       description: Explicit project-local Cognovis Bead dispatch for a CMUX caller.
-      source: https://github.com/cognovis/library-core/blob/main/workspaces/cognovis-cmux-dispatch.yaml
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/eea6dabedf995925f416f74c41f36bf5c26a37d7/workspaces/cognovis-cmux-dispatch.yaml
       schema_version: 2
       version: 0.1.0
       status: experimental
@@ -4260,10 +4260,19 @@ library:
           name: cmux-workspace
           catalog: cmux
       metadata:
+        providers:
+          - dependency: skill:cmux
+            catalog: cmux
+            artifact: skills/cmux/SKILL.md
+            sha256: f9343b1e05a2560cee8e4141fd7f5038e0dfd5f6d8c67ca9c7b9c27f64b84506
+          - dependency: skill:cmux-workspace
+            catalog: cmux
+            artifact: skills/cmux-workspace/SKILL.md
+            sha256: 1c8e787a74c4694a4c392cf0ddff526af7d9f115f745e5d4c1c1d1328cf31c1c
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-          source_commit: 8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e
+          source_commit: eea6dabedf995925f416f74c41f36bf5c26a37d7
     - name: library-authoring
       description: Shared authoring baseline for Library primitive repositories.
       source: https://github.com/cognovis/library-core/blob/main/workspaces/library-authoring.yaml
