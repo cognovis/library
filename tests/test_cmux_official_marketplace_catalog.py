@@ -20,6 +20,51 @@ OFFICIAL_SKILLS = frozenset(
         "cmux-markdown",
     }
 )
+OFFICIAL_DESCRIPTIONS = {
+    "cmux": (
+        "End-user control of cmux topology and routing (windows, workspaces, "
+        "panes/surfaces, focus, moves, reorder, identify, trigger flash). Use "
+        "when automation needs deterministic placement and navigation in a "
+        "multi-pane cmux layout."
+    ),
+    "cmux-workspace": (
+        "Work inside the current cmux workspace and terminal. Use for cmux "
+        "workspace, current workspace, caller surface, panes, surfaces, socket "
+        "targeting, and non-interfering cmux automation."
+    ),
+    "cmux-settings": (
+        "View and edit cmux settings in ~/.config/cmux/cmux.json. Use when the "
+        "user wants to change cmux preferences (appearance, sidebar, "
+        "notifications, automation, browser, shortcuts), set a value by JSON "
+        "path, validate the file, open it in an editor, or look up which keys "
+        "cmux recognizes. Triggers on '/cmux-settings', 'change cmux setting', "
+        "'set <something> in cmux', 'cmux config', 'cmux.json', or 'rebind a "
+        "cmux shortcut'."
+    ),
+    "cmux-customization": (
+        "Customize cmux for an end user. Use when changing cmux.json actions, "
+        "custom commands, workspace layouts, plus-button behavior, surface tab "
+        "bar buttons, Command Palette entries, Dock controls, sidebar and app "
+        "settings, shortcuts, notifications, browser routing, examples-library "
+        "presets, or Ghostty-backed terminal preferences."
+    ),
+    "cmux-diagnostics": (
+        "Run end-user cmux diagnostics. Use when cmux hooks, notifications, "
+        "session restore, settings, browser automation, socket access, CLI "
+        "control, or agent resume behavior is not working, or when the user asks "
+        "for a cmux health check, doctor report, or support-safe debug summary."
+    ),
+    "cmux-browser": (
+        "End-user browser automation with cmux. Use when you need to open sites, "
+        "interact with pages, wait for state changes, and extract data from cmux "
+        "browser surfaces."
+    ),
+    "cmux-markdown": (
+        "Open markdown files in a formatted viewer panel with live reload. Use "
+        "when you need to display plans, documentation, or notes alongside the "
+        "terminal with rich rendering (headings, code blocks, tables, lists)."
+    ),
+}
 
 
 def _catalog() -> dict:
@@ -67,7 +112,9 @@ def test_official_cmux_skills_have_foreign_pinned_provenance_without_local_copie
     }
 
     assert set(skills) == OFFICIAL_SKILLS
+    assert set(OFFICIAL_DESCRIPTIONS) == OFFICIAL_SKILLS
     for name, entry in skills.items():
+        assert entry["description"] == OFFICIAL_DESCRIPTIONS[name]
         assert entry["source"] == (
             "https://github.com/manaflow-ai/cmux/blob/"
             f"{CMUX_PIN}/skills/{name}/SKILL.md"

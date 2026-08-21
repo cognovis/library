@@ -1201,7 +1201,7 @@ library:
           plane: dev
           steward: manaflow-ai
     - name: cmux-workspace
-      description: 'use when: scoping cmux automation to the invoking terminal''s current workspace, panes, surfaces, sidebar state, or socket. NOT for: browser page interaction or broad cmux command discovery. boundary: cmux handles general topology and cmux-browser handles browser content; this skill owns live-caller workspace safety.'
+      description: Work inside the current cmux workspace and terminal. Use for cmux workspace, current workspace, caller surface, panes, surfaces, socket targeting, and non-interfering cmux automation.
       source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-workspace/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
@@ -1217,7 +1217,7 @@ library:
           plane: dev
           steward: manaflow-ai
     - name: cmux-settings
-      description: View and edit CMUX settings in ~/.config/cmux/cmux.json. Use when changing preferences, validating the file, or looking up supported settings keys.
+      description: "View and edit cmux settings in ~/.config/cmux/cmux.json. Use when the user wants to change cmux preferences (appearance, sidebar, notifications, automation, browser, shortcuts), set a value by JSON path, validate the file, open it in an editor, or look up which keys cmux recognizes. Triggers on '/cmux-settings', 'change cmux setting', 'set <something> in cmux', 'cmux config', 'cmux.json', or 'rebind a cmux shortcut'."
       source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-settings/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
@@ -1233,7 +1233,7 @@ library:
           plane: dev
           steward: manaflow-ai
     - name: cmux-customization
-      description: Customize CMUX for an end user, including actions, commands, layouts, settings, shortcuts, notifications, and terminal preferences.
+      description: "Customize cmux for an end user. Use when changing cmux.json actions, custom commands, workspace layouts, plus-button behavior, surface tab bar buttons, Command Palette entries, Dock controls, sidebar and app settings, shortcuts, notifications, browser routing, examples-library presets, or Ghostty-backed terminal preferences."
       source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-customization/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
@@ -1249,7 +1249,7 @@ library:
           plane: dev
           steward: manaflow-ai
     - name: cmux-diagnostics
-      description: Run end-user CMUX diagnostics for hooks, notifications, session restore, settings, browser automation, socket access, and agent resume behavior.
+      description: "Run end-user cmux diagnostics. Use when cmux hooks, notifications, session restore, settings, browser automation, socket access, CLI control, or agent resume behavior is not working, or when the user asks for a cmux health check, doctor report, or support-safe debug summary."
       source: https://github.com/manaflow-ai/cmux/blob/a4c2ce93a461cf784dd3bd1bcc03e2a7cd2420ee/skills/cmux-diagnostics/SKILL.md
       from_marketplace: cmux-official
       repo: cmux
