@@ -161,7 +161,7 @@ sources:
         - first-party
         - team
     - name: cognovis-ccore
-      source: https://github.com/cognovis/ccore
+      source: https://git.cognovis.de/cognovis/ccore
       description: Standalone Cognovis developer-workflow CLI and the skills that document its commands.
       visibility: private
       owner: cognovis
@@ -1849,6 +1849,20 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: session-capture
+      description: Capture durable non-coding session decisions and learnings in Open Brain without running coding finalization.
+      source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/skills/session-capture/SKILL.md
+      requires:
+        - skill:ob-cli
+        - standard:workflow/agent-session-capture
+      tags:
+        - origin:original
+        - tier:core
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: spec-developer
       description: Deep feature specification through adaptive Q&A. Use when planning complex features needing thorough requirements exploration before implementation. Triggers on "spec developer", "feature spec", "deep spec", "requirements spec".
       source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/skills/spec-developer/SKILL.md
@@ -2996,6 +3010,20 @@ library:
           source_catalog: cognovis-library-core
           inventory: convention-scan
           plane: dev
+    - name: workflow/agent-session-capture
+      description: Shared capture semantics for durable agent-session decisions, discoveries, and learnings.
+      source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/standards/workflow/agent-session-capture.md
+      tier: domain
+      default_scope: ask
+      tags:
+        - origin:original
+        - tier:domain
+        - category:standard
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: convention-scan
+          plane: dev
     - name: model-routing
       description: Model Routing
       source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/standards/dispatch/model-routing.md
@@ -4104,27 +4132,17 @@ library:
         - tier:core
   workspaces:
     - name: cognovis-base
-      description: Minimal project-local baseline for Cognovis repositories using Library and Beads.
-      source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/workspaces/cognovis-base.yaml
+      description: Project-local Beads, standards, and memory baseline for curated Cognovis repositories.
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/e329ee68c6a7d34a9aec8cc523659c9e7b79ff26/workspaces/cognovis-base.yaml
       schema_version: 2
-      version: 0.2.1
-      status: stable
+      version: 0.3.0
+      status: experimental
       catalogs:
-        - alias: platform
-          identity: https://github.com/cognovis/library
-          pin:
-            kind: commit
-            value: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
         - alias: core
           identity: https://git.cognovis.de/cognovis/library-core
           pin:
             kind: commit
-            value: 32051847d40e3ed57900251369b47f908b3d9550
-        - alias: ccore
-          identity: https://github.com/cognovis/ccore
-          pin:
-            kind: commit
-            value: fc6162a9a1734c77e7cb2733c3160665f71d5220
+            value: 8f3adbcef7d6bf5173605210987e9f219bceffdd
       roots:
         - type: skill
           name: cognovis-beads
@@ -4136,29 +4154,66 @@ library:
           name: ob-cli
           catalog: core
         - type: skill
-          name: executive-pack
+          name: session-capture
           catalog: core
         - type: skill
-          name: session-close
+          name: summarize
+          catalog: core
+        - type: skill
+          name: context-handoff
+          catalog: core
+        - type: standard
+          name: workflow/agent-session-capture
           catalog: core
       metadata:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-          source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
+          source_commit: e329ee68c6a7d34a9aec8cc523659c9e7b79ff26
     - name: cognovis-daily
-      description: Daily operator tooling and working standards for Cognovis repositories.
-      source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/workspaces/cognovis-daily.yaml
+      description: Coding delivery, Session Close, and daily working standards for Cognovis repositories.
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/e329ee68c6a7d34a9aec8cc523659c9e7b79ff26/workspaces/cognovis-daily.yaml
       schema_version: 2
-      version: 0.1.0
-      status: stable
+      version: 0.2.0
+      status: experimental
       catalogs:
         - alias: core
           identity: https://git.cognovis.de/cognovis/library-core
           pin:
             kind: commit
-            value: f87ce1f3571a7d75f924aa5eed61df3b46a02f2a
+            value: 8f3adbcef7d6bf5173605210987e9f219bceffdd
+        - alias: ccore
+          identity: https://git.cognovis.de/cognovis/ccore
+          pin:
+            kind: commit
+            value: c377fb05b3cd2273f037b2f3c589e05bfd441c8d
+      metadata:
+        providers:
+          - dependency: skill:acpx-dispatch
+            catalog: ccore
+            artifact: skills/acpx-dispatch/SKILL.md
+            sha256: 1e424106b4c3dfb67e704ce27e853dbdcc6c1715d58645af6f206c46f918c8a2
+          - dependency: script:ccore
+            catalog: ccore
+            artifact: src/ccore/cli.py
+            sha256: e3fc9772716d97fd9c020d1aa4767aa85de4bf2c51983cb33904189e51f727b2
+          - dependency: standard:mcp-client-timeout
+            catalog: core
+            artifact: standards/mcp-client-timeout/mcp-client-timeout.md
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          source_commit: e329ee68c6a7d34a9aec8cc523659c9e7b79ff26
       roots:
+        - type: skill
+          name: executive-pack
+          catalog: core
+        - type: skill
+          name: session-close
+          catalog: core
+        - type: skill
+          name: context-discovery
+          catalog: core
         - type: skill
           name: intake
           catalog: core
@@ -4166,31 +4221,17 @@ library:
           name: workplan
           catalog: core
         - type: skill
-          name: summarize
-          catalog: core
-        - type: skill
-          name: playwright-cli
-          catalog: core
-        - type: skill
           name: worktree-cleanup
           catalog: core
         - type: skill
-          name: context-handoff
+          name: bead-reviewer
           catalog: core
-        - type: standard
-          name: bead-hygiene
+        - type: skill
+          name: bead-metrics
           catalog: core
         - type: standard
           name: git
           catalog: core
-        - type: standard
-          name: worktree-subagent-discipline
-          catalog: core
-      metadata:
-        library:
-          source_catalog: cognovis-library-core
-          inventory: manual
-          source_commit: aaca41ffea3e1db9937054f6a8f7f597f729cfb6
     - name: cognovis-cmux
       description: Explicit project-local CMUX interaction support for selected repositories.
       source: https://git.cognovis.de/cognovis/library-core/raw/commit/8576dcb10d4256a1aae68b2b9ebb55397a4a9c4e/workspaces/cognovis-cmux.yaml

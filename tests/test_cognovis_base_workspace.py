@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import jsonschema
@@ -135,18 +137,62 @@ PREEXISTING_SKILL_NAMES = frozenset(
 )
 
 
+def _core_root() -> Path:
+    candidates = []
+    configured = os.environ.get("COGNOVIS_CORE")
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend(
+        (
+            REPO_ROOT.parent / "cognovis-core",
+            REPO_ROOT.parents[1] / "cognovis-core",
+            REPO_ROOT.parents[2] / "library" / "cognovis-core",
+        )
+    )
+    return next(
+        path
+        for path in candidates
+        if (path / "workspaces" / "cognovis-base.yaml").is_file()
+    )
+
+
+def _library_cli_root() -> Path | None:
+    candidates = []
+    configured = os.environ.get("LIBRARY_CLI_ROOT")
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend(
+        (
+            REPO_ROOT.parent / "library-cli",
+            REPO_ROOT.parents[1] / "library-cli",
+            REPO_ROOT.parents[2] / "library" / "library-cli",
+        )
+    )
+    return next(
+        (
+            path
+            for path in candidates
+            if (path / "pyproject.toml").is_file()
+            and (path / "scripts" / "library.py").is_file()
+        ),
+        None,
+    )
+
+
 def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
     catalog = load_catalog(REPO_ROOT)
     workspace = resolve_workspace(catalog, "cognovis-library-core:cognovis-base")
 
-    assert workspace.entry["status"] == "stable"
+    assert workspace.entry["status"] == "experimental"
     assert workspace.entry["schema_version"] == 2
     assert {(root["type"], root["name"], root.get("catalog")) for root in workspace.entry["roots"]} == {
         ("skill", "cognovis-beads", "core"),
         ("skill", "inject-standards", "core"),
         ("skill", "ob-cli", "core"),
-        ("skill", "executive-pack", "core"),
-        ("skill", "session-close", "core"),
+        ("skill", "session-capture", "core"),
+        ("skill", "summarize", "core"),
+        ("skill", "context-handoff", "core"),
+        ("standard", "workflow/agent-session-capture", "core"),
     }
 
     closure = resolve_workspace_closure(
@@ -161,7 +207,10 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "cognovis-beads"),
         ("skill", "inject-standards"),
         ("skill", "ob-cli"),
-        ("skill", "executive-pack"),
+        ("skill", "session-capture"),
+        ("skill", "summarize"),
+        ("skill", "context-handoff"),
+        ("standard", "workflow/agent-session-capture"),
     } <= set(closure.artifacts)
     assert set(closure.prerequisites) == set()
 
@@ -176,7 +225,7 @@ def test_cognovis_base_publication_preserves_preexisting_catalog_skills() -> Non
 
     names = {entry["name"] for entry in catalog["library"]["skills"]}
     assert PREEXISTING_SKILL_NAMES <= names
-    assert len(names) == 112
+    assert len(names) == 113
     assert "library" in names
 
 
@@ -211,26 +260,95 @@ def test_cognovis_base_refuses_when_the_production_pin_verifier_observes_drift(
         )
 
 
-def test_cognovis_base_catalog_entry_matches_its_canonical_manifest() -> None:
+@pytest.mark.parametrize("name", ("cognovis-base", "cognovis-daily"))
+def test_cognovis_project_workspace_matches_its_current_core_manifest(name: str) -> None:
     catalog = yaml.safe_load((REPO_ROOT / "library.yaml").read_text())
-    core_candidates = (
-        Path("/Users/malte/code/.worktrees/cognovis-core/clc-1wis"),
-        Path("/Users/malte/code/library/cognovis-core"),
+    core_root = _core_root()
+    manifest = yaml.safe_load(
+        (core_root / "workspaces" / f"{name}.yaml").read_text(encoding="utf-8")
     )
-    core_root = next(
-        path
-        for path in core_candidates
-        if (path / "workspaces" / "cognovis-base.yaml").is_file()
-    )
-    manifest = yaml.safe_load((core_root / "workspaces" / "cognovis-base.yaml").read_text())
     entry = next(
         workspace
         for workspace in catalog["library"]["workspaces"]
-        if workspace["name"] == "cognovis-base"
+        if workspace["name"] == name
     )
 
-    for key in ("schema_version", "name", "version", "description", "status", "roots"):
-        assert entry[key] == manifest[key]
-    assert [item["alias"] for item in entry["catalogs"]] == [
-        item["alias"] for item in manifest["catalogs"]
-    ]
+    for key, value in manifest.items():
+        if key == "metadata":
+            continue
+        assert entry[key] == value
+    expected_metadata = dict(manifest.get("metadata") or {})
+    expected_metadata["library"] = {
+        "source_catalog": "cognovis-library-core",
+        "inventory": "manual",
+        "source_commit": "e329ee68c6a7d34a9aec8cc523659c9e7b79ff26",
+    }
+    assert entry["metadata"] == expected_metadata
+    assert entry["source"] == (
+        "https://git.cognovis.de/cognovis/library-core/raw/commit/"
+        f"e329ee68c6a7d34a9aec8cc523659c9e7b79ff26/workspaces/{name}.yaml"
+    )
+
+
+@pytest.mark.parametrize("name", ("cognovis-base", "cognovis-daily"))
+def test_external_library_cli_validates_current_project_workspace(
+    name: str, tmp_path: Path
+) -> None:
+    cli_root = _library_cli_root()
+    if cli_root is None:
+        pytest.skip("separately shipped library-cli checkout is unavailable")
+
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(cli_root),
+            "library",
+            "--catalog",
+            str(REPO_ROOT / "library.yaml"),
+            "workspace",
+            "validate",
+            f"cognovis-library-core:{name}",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    assert json.loads(result.stdout) == {
+        "operation": "validate",
+        "status": "valid",
+        "reference": f"cognovis-library-core:{name}",
+    }
+
+    project = tmp_path / name
+    project.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(project)], check=True)
+    dry_run = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(cli_root),
+            "library",
+            "--catalog",
+            str(REPO_ROOT / "library.yaml"),
+            "workspace",
+            "use",
+            f"cognovis-library-core:{name}",
+            "--target-project",
+            str(project),
+            "--dry-run",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert dry_run.returncode == 0, dry_run.stderr or dry_run.stdout
+    payload = json.loads(dry_run.stdout)
+    assert payload["status"] == "dry-run"
+    assert payload["blockers"] == []
