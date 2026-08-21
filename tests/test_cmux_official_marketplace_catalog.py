@@ -300,3 +300,63 @@ def test_external_library_cli_validates_both_cmux_workspaces() -> None:
             "status": "valid",
             "reference": f"cognovis-library-core:{workspace}",
         }
+
+
+def test_external_library_cli_attributes_all_declared_catalog_sources(
+    tmp_path: Path,
+) -> None:
+    """Every declared source must cover its Core and Marketplace entry origins."""
+    cli_root = _library_cli_root()
+    if cli_root is None:
+        pytest.skip("separately shipped library-cli checkout is unavailable")
+
+    catalog = _catalog()
+    registry_dir = tmp_path / "config" / "library"
+    registry_dir.mkdir(parents=True)
+    declared_sources = [
+        *catalog["sources"].get("catalogs", []),
+        *catalog["sources"].get("marketplaces", []),
+    ]
+    registry_sources = []
+    for source in declared_sources:
+        checkout = tmp_path / "checkouts" / source["name"]
+        checkout.mkdir(parents=True)
+        registry_sources.append(
+            {"identity": source["source"], "checkout": str(checkout)}
+        )
+    registry_dir.joinpath("catalog-sources.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "catalogs": registry_sources,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    environment = {**os.environ, "XDG_CONFIG_HOME": str(tmp_path / "config")}
+    environment.pop("VIRTUAL_ENV", None)
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(cli_root),
+            "library",
+            "--catalog",
+            str(ROOT / "library.yaml"),
+            "catalog",
+            "sources",
+            "--json",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["unattributed"] == []
+    assert payload["unregistered"] == []
