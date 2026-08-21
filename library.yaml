@@ -3729,6 +3729,27 @@ library:
       version: 2026.05.15
       tags:
         - origin:original
+    - name: cognovis-project-composition
+      description: Project-local dependency bundle for Cognovis agent composition across supported Claude and Codex harnesses.
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/cbb583378386f699756b3ed14f24e01cfd3da48a/agent-bases/cognovis-project-composition.md
+      requires:
+        - agent-base:claude-agent-base
+        - agent-base:codex-agent-base
+        - model-standard:fable
+        - model-standard:gpt-5.6-luna
+        - model-standard:gpt-5.6-sol
+        - model-standard:gpt-5.6-terra
+        - model-standard:haiku
+        - model-standard:opus
+        - model-standard:sonnet
+      metadata:
+        library:
+          source_catalog: cognovis-library-core
+          inventory: manual
+          source_commit: cbb583378386f699756b3ed14f24e01cfd3da48a
+      version: 2026.08.21
+      tags:
+        - origin:original
     - name: cognovis-runtime
       description: Shared working context for runtime roles that answer a request inside a harness (Fusion workers, fuser and opinion agents, provider-backed roles). States that beads owns issue state and open-brain owns durable memory, that claims are cited as file:line, and that source is English. Carries no enforcement rules, which differ per harness, and says nothing about the harness running it.
       source: https://git.cognovis.de/cognovis/library-core/raw/branch/main/agent-bases/cognovis-runtime.md
@@ -4133,7 +4154,7 @@ library:
   workspaces:
     - name: cognovis-base
       description: Project-local Beads, standards, and memory baseline for curated Cognovis repositories.
-      source: https://git.cognovis.de/cognovis/library-core/raw/commit/e329ee68c6a7d34a9aec8cc523659c9e7b79ff26/workspaces/cognovis-base.yaml
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/84c76a33e3c37ee26ca1dbae559da02f2e7d5667/workspaces/cognovis-base.yaml
       schema_version: 2
       version: 0.3.0
       status: experimental
@@ -4142,8 +4163,11 @@ library:
           identity: https://git.cognovis.de/cognovis/library-core
           pin:
             kind: commit
-            value: 8f3adbcef7d6bf5173605210987e9f219bceffdd
+            value: cbb583378386f699756b3ed14f24e01cfd3da48a
       roots:
+        - type: agent-base
+          name: cognovis-project-composition
+          catalog: core
         - type: skill
           name: cognovis-beads
           catalog: core
@@ -4169,10 +4193,10 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-          source_commit: e329ee68c6a7d34a9aec8cc523659c9e7b79ff26
+          source_commit: 84c76a33e3c37ee26ca1dbae559da02f2e7d5667
     - name: cognovis-daily
       description: Coding delivery, Session Close, and daily working standards for Cognovis repositories.
-      source: https://git.cognovis.de/cognovis/library-core/raw/commit/e329ee68c6a7d34a9aec8cc523659c9e7b79ff26/workspaces/cognovis-daily.yaml
+      source: https://git.cognovis.de/cognovis/library-core/raw/commit/84c76a33e3c37ee26ca1dbae559da02f2e7d5667/workspaces/cognovis-daily.yaml
       schema_version: 2
       version: 0.2.0
       status: experimental
@@ -4181,7 +4205,7 @@ library:
           identity: https://git.cognovis.de/cognovis/library-core
           pin:
             kind: commit
-            value: 8f3adbcef7d6bf5173605210987e9f219bceffdd
+            value: cbb583378386f699756b3ed14f24e01cfd3da48a
         - alias: ccore
           identity: https://git.cognovis.de/cognovis/ccore
           pin:
@@ -4203,8 +4227,11 @@ library:
         library:
           source_catalog: cognovis-library-core
           inventory: manual
-          source_commit: e329ee68c6a7d34a9aec8cc523659c9e7b79ff26
+          source_commit: 84c76a33e3c37ee26ca1dbae559da02f2e7d5667
       roots:
+        - type: agent-base
+          name: cognovis-project-composition
+          catalog: core
         - type: skill
           name: executive-pack
           catalog: core

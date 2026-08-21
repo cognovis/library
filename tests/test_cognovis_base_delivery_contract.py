@@ -10,9 +10,13 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from lib.catalog import load_catalog  # noqa: E402
 from lib.workspace import resolve_workspace, resolve_workspace_closure  # noqa: E402
+import library as library_cli  # noqa: E402
 
 
 EXPECTED_ARTIFACTS = {
+    ("agent-base", "claude-agent-base"),
+    ("agent-base", "codex-agent-base"),
+    ("agent-base", "cognovis-project-composition"),
     ("agent", "bead-boundary-reviewer"),
     ("agent", "bead-change-reviewer"),
     ("agent", "bead-depth-reviewer"),
@@ -37,6 +41,13 @@ EXPECTED_ARTIFACTS = {
     ("skill", "session-close"),
     ("skill", "workplan"),
     ("skill", "worktree-cleanup"),
+    ("model-standard", "fable"),
+    ("model-standard", "gpt-5.6-luna"),
+    ("model-standard", "gpt-5.6-sol"),
+    ("model-standard", "gpt-5.6-terra"),
+    ("model-standard", "haiku"),
+    ("model-standard", "opus"),
+    ("model-standard", "sonnet"),
     ("standard", "executive-pack"),
     ("standard", "git"),
     # clc-i19u: the transport skill declares `requires_standards:
@@ -67,7 +78,7 @@ def test_cognovis_daily_resolves_the_complete_solo_and_pack_delivery_contract() 
             "identity": "https://git.cognovis.de/cognovis/library-core",
             "pin": {
                 "kind": "commit",
-                "value": "8f3adbcef7d6bf5173605210987e9f219bceffdd",
+                "value": "cbb583378386f699756b3ed14f24e01cfd3da48a",
             },
         },
         {
@@ -92,6 +103,7 @@ def test_cognovis_daily_resolves_the_complete_solo_and_pack_delivery_contract() 
         ("skill", "bead-reviewer", "core"),
         ("skill", "bead-metrics", "core"),
         ("standard", "git", "core"),
+        ("agent-base", "cognovis-project-composition", "core"),
     }
 
     closure = resolve_workspace_closure(
@@ -99,7 +111,7 @@ def test_cognovis_daily_resolves_the_complete_solo_and_pack_delivery_contract() 
         workspace,
         REPO_ROOT,
         "project",
-        pin_verifier=lambda declared: declared.pin.value,
+        pin_verifier=library_cli._workspace_pin_verifier(catalog),
     )
 
     assert set(closure.artifacts) == EXPECTED_ARTIFACTS

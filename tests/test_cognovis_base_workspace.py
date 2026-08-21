@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -136,7 +135,7 @@ PREEXISTING_SKILL_NAMES = frozenset(
     youtube-slide-extractor
     """.split()
 )
-CORE_WORKSPACE_SOURCE_COMMIT = "e329ee68c6a7d34a9aec8cc523659c9e7b79ff26"
+CORE_WORKSPACE_SOURCE_COMMIT = "84c76a33e3c37ee26ca1dbae559da02f2e7d5667"
 
 
 def _core_root() -> Path:
@@ -216,6 +215,7 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "summarize", "core"),
         ("skill", "context-handoff", "core"),
         ("standard", "workflow/agent-session-capture", "core"),
+        ("agent-base", "cognovis-project-composition", "core"),
     }
 
     closure = resolve_workspace_closure(
@@ -234,6 +234,7 @@ def test_cognovis_base_is_a_minimal_cross_catalog_project_workspace() -> None:
         ("skill", "summarize"),
         ("skill", "context-handoff"),
         ("standard", "workflow/agent-session-capture"),
+        ("agent-base", "cognovis-project-composition"),
     } <= set(closure.artifacts)
     assert set(closure.prerequisites) == set()
 
@@ -346,10 +347,6 @@ def test_external_library_cli_validates_current_project_workspace(
     project.mkdir()
     subprocess.run(["git", "init", "--quiet", str(project)], check=True)
     isolated_home = tmp_path / "home"
-    shutil.copytree(
-        _core_root() / "agent-bases",
-        isolated_home / ".agents" / "agent-bases",
-    )
     environment = {
         **os.environ,
         "HOME": str(isolated_home),
@@ -358,7 +355,8 @@ def test_external_library_cli_validates_current_project_workspace(
         "XDG_DATA_HOME": str(tmp_path / "data"),
         "XDG_STATE_HOME": str(tmp_path / "state"),
     }
-    environment.pop("VIRTUAL_ENV", None)
+    for inherited in ("AGENT_BASES_DIR", "MODEL_STANDARDS_DIR", "VIRTUAL_ENV"):
+        environment.pop(inherited, None)
     dry_run = subprocess.run(
         [
             "uv",
@@ -409,3 +407,26 @@ def test_external_library_cli_validates_current_project_workspace(
     )
     assert applied.returncode == 0, applied.stdout + applied.stderr
     assert json.loads(applied.stdout)["status"] == "applied"
+    assert {
+        path.stem
+        for path in (project / ".agents" / "agent-bases").glob("*.md")
+    } >= {
+        "cognovis-project-composition",
+        "claude-agent-base",
+        "codex-agent-base",
+    }
+    assert {
+        path.stem
+        for path in (project / ".agents" / "model-standards").glob("*.md")
+    } == {
+        "fable",
+        "gpt-5.6-luna",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "haiku",
+        "opus",
+        "sonnet",
+    }
+    assert not (isolated_home / ".agents").exists()
+    assert not (isolated_home / ".claude").exists()
+    assert not (isolated_home / ".codex").exists()
